@@ -1,0 +1,30 @@
+{
+  "name": "ferrocast-web",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "pnpm --filter @ferrocast/overlays build && pnpm --filter @ferrocast/dashboard build && pnpm --filter @ferrocast/site build",
+    "build:embed": "pnpm --filter @ferrocast/overlays build && pnpm --filter @ferrocast/dashboard build",
+    "dev": "pnpm --filter @ferrocast/dashboard dev",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-astro": "^1.1.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.2"
+  }
+}

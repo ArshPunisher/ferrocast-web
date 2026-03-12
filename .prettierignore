@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+pnpm-lock.yaml
+*.md
+LICENSE
+test-results/
+playwright-report/
+apps/site/public/media/
+apps/video/out/
+brand/png/
+.claude/

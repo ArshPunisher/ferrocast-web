@@ -1,0 +1,31 @@
+{
+  "name": "@ferrocast/overlays",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/overlay.css"
+  },
+  "scripts": {
+    "dev": "vite --port 5290 --strictPort",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@ferrocast/api": "workspace:*",
+    "@ferrocast/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "happy-dom": "^21.0.3",
+    "typescript": "5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}
