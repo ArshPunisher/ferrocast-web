@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b1f26"/>
+      <stop offset="0.55" stop-color="#0c0e12"/>
+      <stop offset="1" stop-color="#07080a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="900" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3461f5" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3461f5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="512" cy="251.8125" r="144.8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8eaaff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8eaaff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.3" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+    
+  <linearGradient id="ai-chrome" x1="0" y1="10" x2="0" y2="58" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="0.32" stop-color="#c3cad6"/>
+    <stop offset="0.62" stop-color="#4a515d"/>
+    <stop offset="0.82" stop-color="#14171c"/>
+    <stop offset="1" stop-color="#2c323b"/>
+  </linearGradient>
+  <linearGradient id="ai-sheen" x1="10" y1="0" x2="54" y2="0" gradientUnits="userSpaceOnUse">
+    <stop offset="0.2" stop-color="#ffffff" stop-opacity="0"/>
+    <stop offset="0.38" stop-color="#ffffff" stop-opacity="0.35"/>
+    <stop offset="0.56" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="ai-rim" x1="0" y1="50" x2="0" y2="60" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#3461f5" stop-opacity="0"/>
+    <stop offset="1" stop-color="#3461f5" stop-opacity="0.55"/>
+  </linearGradient>
+  <clipPath id="ai-clip"><path d="M4 49 C6.94 49 9.6 40.42 11 37 C12.05 40.42 14.05 46 16.25 46 C18.45 46 20.45 34.84 21.5 28 C22.55 34.84 24.55 46 26.75 46 C28.96 46 30.95 28.64 32 18 C33.05 28.64 35.05 46 37.25 46 C39.46 46 41.45 34.84 42.5 28 C43.55 34.84 45.55 46 47.75 46 C49.96 46 51.95 40.42 53 37 C54.4 40.42 57.06 49 60 49 C60 57 48 59 32 59 C16 59 4 57 4 49 Z"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="230" fill="url(#glow)"/>
+  <circle cx="512" cy="251.8125" r="144.8" fill="url(#halo)"/>
+  <g transform="translate(150 168) scale(11.3125)">
+  <g>
+    <path d="M4 49 C6.94 49 9.6 40.42 11 37 C12.05 40.42 14.05 46 16.25 46 C18.45 46 20.45 34.84 21.5 28 C22.55 34.84 24.55 46 26.75 46 C28.96 46 30.95 28.64 32 18 C33.05 28.64 35.05 46 37.25 46 C39.46 46 41.45 34.84 42.5 28 C43.55 34.84 45.55 46 47.75 46 C49.96 46 51.95 40.42 53 37 C54.4 40.42 57.06 49 60 49 C60 57 48 59 32 59 C16 59 4 57 4 49 Z" fill="url(#ai-chrome)"/>
+    <g clip-path="url(#ai-clip)">
+      <rect x="0" y="0" width="64" height="64" fill="url(#ai-sheen)" opacity="0.5"/>
+      <rect x="0" y="40" width="64" height="24" fill="url(#ai-rim)"/>
+    </g>
+    <circle cx="32" cy="9" r="4" fill="#3461f5"/>
+  </g></g>
+  <rect x="3" y="3" width="1018" height="1018" rx="227" fill="none" stroke="url(#edge)" stroke-width="6"/>
+</svg>
