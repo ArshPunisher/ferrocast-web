@@ -1,0 +1,108 @@
+/* Small global helpers the shared components rely on. Import after the tokens. */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--fc-bg);
+  color: var(--fc-text);
+  font-family: var(--fc-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fc-press {
+  touch-action: manipulation;
+}
+.fc-press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button,
+[role='button'],
+label,
+summary {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.fc-busy {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.8;
+  animation: fc-spin 0.7s linear infinite;
+}
+@keyframes fc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fc-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 256 256'%3E%3Cpath fill='%238a919d' d='M213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.fc-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fc-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent);
+    animation: fc-shimmer 1.4s ease-in-out infinite;
+  }
+}
+@keyframes fc-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.fc-dialog::backdrop {
+  background: rgb(4 5 8 / 0.62);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fc-dialog[open]::backdrop {
+    animation: fc-fade 0.2s ease-out;
+  }
+}
+@keyframes fc-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Chrome text for the rare display moment (one per screen at most). */
+.fc-chrome-text {
+  background: var(--fc-chrome);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+::selection {
+  background: var(--fc-accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

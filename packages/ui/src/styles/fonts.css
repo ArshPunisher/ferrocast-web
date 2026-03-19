@@ -1,0 +1,4 @@
+/* Self-hosted variable fonts (no font CDN: the desktop app works offline, R-01, R-52). */
+@import '@fontsource-variable/bricolage-grotesque/wght.css';
+@import '@fontsource-variable/hanken-grotesk/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';

@@ -1,0 +1,45 @@
+/* Tailwind 4 theme mapping onto the Ferrocast tokens. Import after `tailwindcss`. */
+
+@theme inline {
+  --color-bg: var(--fc-bg);
+  --color-surface-1: var(--fc-surface-1);
+  --color-surface-2: var(--fc-surface-2);
+  --color-surface-3: var(--fc-surface-3);
+  --color-inset: var(--fc-surface-inset);
+  --color-line: var(--fc-line);
+  --color-line-strong: var(--fc-line-strong);
+  --color-text: var(--fc-text);
+  --color-text-2: var(--fc-text-2);
+  --color-text-3: var(--fc-text-3);
+  --color-accent: var(--fc-accent);
+  --color-accent-strong: var(--fc-accent-strong);
+  --color-accent-text: var(--fc-accent-text);
+  --color-accent-soft: var(--fc-accent-soft);
+  --color-accent-line: var(--fc-accent-line);
+  --color-on-accent: var(--fc-on-accent);
+  --color-ok: var(--fc-ok);
+  --color-ok-soft: var(--fc-ok-soft);
+  --color-warn: var(--fc-warn);
+  --color-warn-soft: var(--fc-warn-soft);
+  --color-danger: var(--fc-danger);
+  --color-danger-fill: var(--fc-danger-fill);
+  --color-danger-soft: var(--fc-danger-soft);
+  --color-twitch: var(--fc-twitch);
+  --color-youtube: var(--fc-youtube);
+  --color-kick: var(--fc-kick);
+  --color-tips: var(--fc-tips);
+
+  --font-display: var(--fc-font-display);
+  --font-sans: var(--fc-font-sans);
+  --font-mono: var(--fc-font-mono);
+
+  --radius-control: var(--fc-radius-control);
+  --radius-panel: var(--fc-radius-panel);
+
+  --shadow-1: var(--fc-shadow-1);
+  --shadow-2: var(--fc-shadow-2);
+  --shadow-pop: var(--fc-shadow-pop);
+
+  --ease-out-fc: var(--fc-ease-out);
+  --ease-drawer: var(--fc-ease-drawer);
+}

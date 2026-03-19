@@ -1,0 +1,42 @@
+{
+  "name": "@ferrocast/ui",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./theme.css": "./src/styles/theme.css",
+    "./fonts.css": "./src/styles/fonts.css",
+    "./base.css": "./src/styles/base.css",
+    "./ferro": "./src/ferro/index.ts",
+    "./mark": "./src/ferro/mark.ts",
+    "./platform-icons": "./src/platform-icons.ts",
+    "./brand": "./src/brand.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "motion": "^14.3.0"
+  },
+  "devDependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "motion": "^14.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "simple-icons": "^16.35.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
