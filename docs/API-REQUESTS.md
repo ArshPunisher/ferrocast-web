@@ -136,3 +136,8 @@ Until then the dashboard shows held messages with Delete, Time out and Ban only.
 
 - `panic.plan` is the `PanicConfig` from R3, so every open dashboard shows the same switches.
 - The held message itself still arrives as a normal `event` frame first (so the dashboard can show its text), and never reaches overlays.
+
+## R18. Close unknown overlay sockets with 4404
+
+When `/o/<token>/ws` is opened with a token the engine doesn't know (the URL was regenerated or the overlay deleted while the page was offline, so it never got the `revoked` frame), close the WebSocket with code **4404** (or 4401 for "not allowed"). The overlay page treats either code like `revoked`: it clears itself and stops reconnecting, instead of knocking forever.
+

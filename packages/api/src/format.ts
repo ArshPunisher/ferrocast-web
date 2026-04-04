@@ -225,6 +225,12 @@ export function describeEvent(e: FerroEvent): { title: string; detail: string | 
       return { title: `Payment ${k.reason}`, detail: null }
     case 'unknown':
       return { title: `Unknown event (${k.name})`, detail: null }
+    default:
+      // A newer engine may send kinds this dashboard doesn't know yet.
+      return {
+        title: `New kind of event (${String((k as { type?: unknown }).type ?? 'unknown')})`,
+        detail: null,
+      }
   }
 }
 

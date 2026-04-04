@@ -144,6 +144,33 @@ describe('ReconnectingSocket', () => {
     rs.stop()
   })
 
+  it('stops for good when onClose says so (e.g. 4404 unknown token)', () => {
+    const codes: number[] = []
+    const rs = new ReconnectingSocket({
+      url: () => 'ws://x',
+      factory: (u) => new MockSocket(u),
+      onMessage: () => {},
+      onClose: (code) => {
+        codes.push(code)
+        return code === 4404 ? 'stop' : undefined
+      },
+      random: () => 0,
+    })
+    rs.start()
+    const first = MockSocket.all[0]!
+    first.open()
+    first.onclose?.({ code: 1006 })
+    vi.advanceTimersByTime(300)
+    expect(MockSocket.all).toHaveLength(2)
+    const second = MockSocket.all[1]!
+    second.open()
+    second.onclose?.({ code: 4404 })
+    vi.advanceTimersByTime(120_000)
+    expect(MockSocket.all).toHaveLength(2)
+    expect(codes).toEqual([1006, 4404])
+    expect(rs.state).toBe('closed')
+  })
+
   it('ignores events from a socket it already replaced', () => {
     const got: unknown[] = []
     const rs = new ReconnectingSocket({

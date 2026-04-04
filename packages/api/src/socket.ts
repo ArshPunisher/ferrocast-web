@@ -41,6 +41,11 @@ export interface ReconnectingOptions {
   onState?: (state: ConnectionState, attempt: number) => void
   /** Sent right after each (re)connect, e.g. the overlay `hello { since_seq }`. */
   onOpen?: (send: (data: string) => void) => void
+  /**
+   * Called when the server closes the socket, with the close code (0 when unknown).
+   * Return 'stop' to give up for good, e.g. 4404 "this overlay token is gone".
+   */
+  onClose?: (code: number) => 'stop' | void
   tuning?: Partial<ReconnectTuning>
   /** Injectable clock for tests. */
   timers?: {
@@ -138,9 +143,14 @@ export class ReconnectingSocket {
     s.onerror = () => {
       // onclose follows; nothing to do here.
     }
-    s.onclose = () => {
+    s.onclose = (ev) => {
       if (this.sock !== s) return
       this.sock = null
+      const raw = (ev as { code?: unknown } | null)?.code
+      if (this.opts.onClose?.(typeof raw === 'number' ? raw : 0) === 'stop') {
+        this.stop()
+        return
+      }
       this.scheduleRetry()
     }
   }
