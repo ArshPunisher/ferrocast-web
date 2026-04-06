@@ -23,6 +23,9 @@ function hexToRgb(hex: string): [number, number, number] {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
 }
 
+const releases = new WeakMap<HTMLCanvasElement, ReturnType<typeof setTimeout>>()
+let supportCache: boolean | null = null
+
 /**
  * Draws the ferrofluid scene into a canvas with WebGL 1. Pure in its inputs: the same time
  * and magnet always give the same frame, so the site, the dashboard and the Remotion videos
@@ -32,16 +35,23 @@ export class Ferrofluid {
   private readonly gl: WebGLRenderingContext
   private readonly prog: WebGLProgram
   private readonly u: Record<string, WebGLUniformLocation | null>
+  private shaders: WebGLShader[] = []
+  private buf: WebGLBuffer | null = null
   private colors: { bg: [number, number, number]; accent: [number, number, number]; light: number }
   spike = 1
 
+  /** Whether WebGL works here. Probed once per page (each probe costs a context). */
   static supported(): boolean {
+    if (supportCache !== null) return supportCache
     try {
       const c = document.createElement('canvas')
-      return !!c.getContext('webgl')
+      const gl = c.getContext('webgl')
+      supportCache = !!gl
+      gl?.getExtension('WEBGL_lose_context')?.loseContext()
     } catch {
-      return false
+      supportCache = false
     }
+    return supportCache
   }
 
   constructor(
@@ -58,6 +68,13 @@ export class Ferrofluid {
       preserveDrawingBuffer: opts.preserveDrawingBuffer ?? false,
     })
     if (!gl) throw new Error('WebGL is not available')
+    // A renderer was just disposed on this canvas and is about to release the context:
+    // keep it, we're reusing it (React StrictMode and fast refresh remount like this).
+    const pendingRelease = releases.get(canvas)
+    if (pendingRelease !== undefined) {
+      clearTimeout(pendingRelease)
+      releases.delete(canvas)
+    }
     this.gl = gl
     const compile = (type: number, src: string) => {
       const s = gl.createShader(type)
@@ -70,14 +87,18 @@ export class Ferrofluid {
     }
     const prog = gl.createProgram()
     if (!prog) throw new Error('program')
-    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT))
-    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG))
+    const vs = compile(gl.VERTEX_SHADER, VERT)
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG)
+    gl.attachShader(prog, vs)
+    gl.attachShader(prog, fs)
+    this.shaders = [vs, fs]
     gl.linkProgram(prog)
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
       throw new Error(gl.getProgramInfoLog(prog) ?? 'link')
     this.prog = prog
     gl.useProgram(prog)
     const buf = gl.createBuffer()
+    this.buf = buf
     gl.bindBuffer(gl.ARRAY_BUFFER, buf)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
     const loc = gl.getAttribLocation(prog, 'aPos')
@@ -121,14 +142,32 @@ export class Ferrofluid {
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
 
+  /**
+   * Frees the GPU objects now and releases the context on the next tick, unless a new
+   * renderer claims the same canvas first (a lost context can't compile shaders again).
+   * Browsers cap live WebGL contexts at about 16, so unmounted canvases must let go.
+   */
   dispose(): void {
-    this.gl.getExtension('WEBGL_lose_context')?.loseContext()
+    const gl = this.gl
+    gl.deleteProgram(this.prog)
+    for (const sh of this.shaders) gl.deleteShader(sh)
+    if (this.buf) gl.deleteBuffer(this.buf)
+    const canvas = this.canvas
+    releases.set(
+      canvas,
+      setTimeout(() => {
+        releases.delete(canvas)
+        gl.getExtension('WEBGL_lose_context')?.loseContext()
+      }, 0),
+    )
   }
 }
 
 export interface InteractiveOptions extends FerroColors {
   /** Start rendering only when visible; stop when scrolled away or the tab is hidden. */
   reducedMotion?: boolean
+  /** Stop animating after this long without pointer input (pointer movement resumes it). */
+  idlePauseMs?: number
   /** Fraction of CSS pixels to render (adapts down if frames are slow). */
   scale?: number
   onReady?: () => void
@@ -157,6 +196,8 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   let fast = 0
   const start = last
   let ready = false
+  let lastInput = performance.now()
+  let lastT = 1.2
 
   const size = () => {
     const r = canvas.getBoundingClientRect()
@@ -172,7 +213,8 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
     mag.x += (target.x - mag.x) * k
     mag.z += (target.z - mag.z) * k
     mag.strength += (target.strength - mag.strength) * k
-    ff.render((now - start) / 1000, mag)
+    lastT = (now - start) / 1000
+    ff.render(lastT, mag)
     if (!ready) {
       ready = true
       opts.onReady?.()
@@ -183,12 +225,15 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
       scale *= 0.8
       slow = fast = 0
       size()
+      ff.render(lastT, mag)
     } else if (fast > 240 && scale < 0.75 * dpr) {
       scale = Math.min(0.75 * dpr, scale * 1.1)
       slow = fast = 0
       size()
+      ff.render(lastT, mag)
     }
-    if (visible && !opts.reducedMotion) raf = requestAnimationFrame(frame)
+    const idle = opts.idlePauseMs !== undefined && now - lastInput > opts.idlePauseMs
+    if (visible && !opts.reducedMotion && !idle) raf = requestAnimationFrame(frame)
   }
   const kick = () => {
     if (!raf && visible) {
@@ -207,6 +252,8 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
     target.x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1))
     target.z = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1.1))
     target.strength = 1
+    lastInput = performance.now()
+    if (!opts.reducedMotion) kick()
   }
   const onLeave = () => {
     target.x = 0
@@ -224,7 +271,8 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   }
   const ro = new ResizeObserver(() => {
     size()
-    if (opts.reducedMotion) ff.render(1.2, mag)
+    // Resizing clears the canvas: redraw now unless a frame is already on its way.
+    if (!raf) ff.render(opts.reducedMotion ? 1.2 : lastT, mag)
   })
   ro.observe(canvas)
   window.addEventListener('pointermove', onMove, { passive: true })

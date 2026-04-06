@@ -62,8 +62,8 @@ vec3 studio(vec3 d) {
   float k3 = max(dot(d, L3), 0.0);
   col += vec3(1.0) * (pow(k1, 70.0) * 3.2 + pow(k1, 9.0) * 0.08);
   col += vec3(0.85, 0.9, 1.0) * pow(k2, 34.0) * (1.1 + uLight * 0.6);
-  col += toLin(uAccent) * (pow(k3, 7.0) * 2.4 + pow(k3, 2.0) * 0.18);
-  col += toLin(uAccent) * 0.35 * exp(-abs(y) * 22.0);
+  col += toLin(uAccent) * (pow(k3, 16.0) * 2.0 + pow(k3, 3.0) * 0.012);
+  col += toLin(uAccent) * 0.05 * exp(-abs(y) * 30.0);
   return col;
 }
 
@@ -93,6 +93,8 @@ void main() {
       if (t > 14.0) break;
     }
   }
+  // Rays skimming the floor near the horizon can run out of steps: they hit the floor.
+  if (!hit && rd.y < 0.0) { t = -ro.y / rd.y; hit = true; }
   if (hit) {
     // Two bisection steps to stop banding on the spike walls.
     float lo = t - 0.01, hi = t;
