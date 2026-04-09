@@ -162,19 +162,10 @@ export function Toaster() {
   const list = useSyncExternalStore(subscribe, snapshot, snapshot)
   const reduce = useReducedMotion()
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[70] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-4 sm:bottom-4 sm:left-auto sm:items-end">
-      <div className="sr-only" aria-live="polite">
-        {list
-          .filter((t) => t.tone !== 'error')
-          .map((t) => `${t.message} ${t.hint ?? ''}`)
-          .join('. ')}
-      </div>
-      <div className="sr-only" aria-live="assertive">
-        {list
-          .filter((t) => t.tone === 'error')
-          .map((t) => `${t.message} ${t.hint ?? ''}`)
-          .join('. ')}
-      </div>
+    <section
+      aria-label="Notifications"
+      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[70] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-4 sm:bottom-4 sm:left-auto sm:items-end"
+    >
       <AnimatePresence initial={false}>
         {list.map((t) => (
           <motion.div
@@ -186,6 +177,7 @@ export function Toaster() {
               reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, transition: { duration: 0.14 } }
             }
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            role={t.tone === 'error' ? 'alert' : 'status'}
             className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-panel border border-line-strong bg-surface-1 p-3.5 pr-2 shadow-pop"
           >
             <span className="mt-px">{icons[t.tone]}</span>
@@ -218,7 +210,7 @@ export function Toaster() {
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
+    </section>
   )
 }
 

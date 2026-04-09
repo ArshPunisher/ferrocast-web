@@ -208,7 +208,9 @@ const inputBase =
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...rest }, ref) {
-    return <input ref={ref} className={cx(inputBase, 'h-10', className)} {...rest} />
+    return (
+      <input ref={ref} autoComplete="off" className={cx(inputBase, 'h-10', className)} {...rest} />
+    )
   },
 )
 
@@ -219,7 +221,8 @@ export const Textarea = forwardRef<
   return (
     <textarea
       ref={ref}
-      className={cx(inputBase, 'min-h-20 py-2 leading-relaxed', className)}
+      rows={3}
+      className={cx(inputBase, 'py-2 leading-relaxed', className)}
       {...rest}
     />
   )

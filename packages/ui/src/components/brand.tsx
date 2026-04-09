@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ICON_PATHS, type IconName } from '../platform-icons'
 import { MARK_MAGNET, MARK_SPIKES, SPIKE_MARK_PATH, spikePath, type SpikeSpec } from '../ferro/mark'
-import { mountFerrofluid } from '../ferro/ferrofluid'
+import { Ferrofluid, mountFerrofluid } from '../ferro/ferrofluid'
 import { cx } from '../cx'
 
 type PlatformName = 'twitch' | 'youtube' | 'kick' | 'tips' | 'ferrocast'
@@ -140,7 +140,7 @@ export function LogoMark({
 
 export function Wordmark({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' }) {
   return (
-    <span className={cx('inline-flex items-center gap-2', className)}>
+    <span translate="no" className={cx('inline-flex items-center gap-2', className)}>
       <LogoMark size={size === 'sm' ? 22 : 28} />
       <span
         className={cx(
@@ -250,12 +250,7 @@ export function FerroCanvas({
   useEffect(() => {
     const c = ref.current
     if (!c) return
-    let ok: boolean
-    try {
-      ok = !!document.createElement('canvas').getContext('webgl')
-    } catch {
-      ok = false
-    }
+    const ok = Ferrofluid.supported()
     if (!ok) {
       setFailed(true)
       return
