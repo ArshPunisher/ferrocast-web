@@ -1,0 +1,530 @@
+/*
+ * Ferrocast overlay widgets. Every selector lives under .fc-ov so the same file works on
+ * the OBS page and inside the dashboard's Shadow DOM previews without leaking.
+ *
+ * Budget: OBS browser sources are slow (especially on Linux). Only transform and opacity
+ * animate, no backdrop blur, no infinite animations (R-38). Alerts have their own sheet
+ * (alert.css) inside a per-alert shadow root.
+ */
+
+.fc-ov {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: #eef0f4;
+  font-family:
+    'Hanken Grotesk Variable',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  contain: layout paint;
+}
+
+.fc-ov *,
+.fc-ov *::before,
+.fc-ov *::after {
+  box-sizing: border-box;
+}
+
+.fc-ov .fc-ov-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.fc-ov .fc-w {
+  position: absolute;
+  margin: 0;
+  /* Theme variables: molten (liquid metal) is the default. */
+  --t-surface: linear-gradient(180deg, rgb(32 36 44 / 0.94), rgb(10 11 14 / 0.95));
+  --t-flat: rgb(14 16 20 / 0.86);
+  --t-text: #eef0f4;
+  --t-text-2: #b8bec9;
+  --t-accent: #8eaaff;
+  --t-fill: linear-gradient(90deg, #284fd8, #3461f5 60%, #8eaaff);
+  --t-track: rgb(255 255 255 / 0.1);
+  --t-radius: 14px;
+  --t-border: 1px solid rgb(255 255 255 / 0.07);
+  --t-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 0 rgb(52 97 245 / 0.6),
+    0 12px 32px -14px rgb(0 0 0 / 0.75);
+  --t-text-shadow: none;
+  --t-display:
+    'Bricolage Grotesque Variable', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --t-name-weight: 700;
+  --t-case: none;
+}
+.fc-ov .fc-w[hidden] {
+  display: none;
+}
+
+.fc-ov .fc-w[data-theme='daylight'] {
+  --t-surface: rgb(255 255 255 / 0.97);
+  --t-flat: rgb(255 255 255 / 0.95);
+  --t-text: #0e1014;
+  --t-text-2: #454b56;
+  --t-accent: #2347c4;
+  --t-fill: linear-gradient(90deg, #2149c9, #2e5be8);
+  --t-track: rgb(14 16 20 / 0.09);
+  --t-radius: 14px;
+  --t-border: 1px solid rgb(14 16 20 / 0.08);
+  --t-shadow: 0 10px 28px -12px rgb(8 12 24 / 0.45);
+}
+
+.fc-ov .fc-w[data-theme='arcade'] {
+  --t-surface: #101216;
+  --t-flat: #101216;
+  --t-text: #f4f6fa;
+  --t-text-2: #c3c9d4;
+  --t-accent: #8eaaff;
+  --t-fill: repeating-linear-gradient(90deg, #3461f5 0 14px, #284fd8 14px 18px);
+  --t-track: #262b33;
+  --t-radius: 6px;
+  --t-border: 3px solid #eef0f4;
+  --t-shadow: 5px 5px 0 #3461f5;
+  --t-name-weight: 800;
+  --t-case: uppercase;
+}
+
+.fc-ov .fc-w[data-theme='minimal'] {
+  --t-surface: transparent;
+  --t-flat: transparent;
+  --t-text: #ffffff;
+  --t-text-2: #e9ecf2;
+  --t-accent: #b9caff;
+  --t-fill: #ffffff;
+  --t-track: rgb(255 255 255 / 0.28);
+  --t-radius: 0;
+  --t-border: 0 solid transparent;
+  --t-shadow: none;
+  --t-text-shadow:
+    0 1px 1px rgb(0 0 0 / 0.9), 0 0 2px rgb(0 0 0 / 0.65), 0 2px 10px rgb(0 0 0 / 0.4);
+}
+
+.fc-ov .fc-w[data-theme='sticker'] {
+  --t-surface: #ffffff;
+  --t-flat: #ffffff;
+  --t-text: #0e1014;
+  --t-text-2: #31363f;
+  --t-accent: #2347c4;
+  --t-fill: #3461f5;
+  --t-track: #e4e7ec;
+  --t-radius: 16px;
+  --t-border: 3px solid #0e1014;
+  --t-shadow: 4px 4px 0 #0e1014;
+  --t-name-weight: 800;
+}
+
+/*
+ * Custom alert CSS can't leave the alert box: layout containment makes the widget the
+ * containing block for anything fixed, paint containment clips whatever is moved out
+ * (even `:host { transform } !important`, which beats page styles from inside the shadow).
+ */
+.fc-ov .fc-w-alerts {
+  contain: layout paint;
+}
+/* Page styles beat `:host` rules from inside the shadow root, so the host stays put. */
+.fc-ov .fc-alert-host {
+  position: absolute !important;
+  inset: 0 !important;
+  transform: none !important;
+  contain: layout;
+}
+
+/* ------------------------------------------------------------------ glyphs */
+
+.fc-ov .fc-glyph {
+  flex: none;
+  display: inline-block;
+  vertical-align: -0.12em;
+}
+.fc-ov .fc-glyph-twitch {
+  color: #a970ff;
+}
+.fc-ov .fc-glyph-youtube {
+  color: #ff3b4e;
+}
+.fc-ov .fc-glyph-kick {
+  color: #53fc18;
+}
+.fc-ov [data-theme='daylight'] .fc-glyph-twitch,
+.fc-ov [data-theme='sticker'] .fc-glyph-twitch {
+  color: #7d3be3;
+}
+.fc-ov [data-theme='daylight'] .fc-glyph-youtube,
+.fc-ov [data-theme='sticker'] .fc-glyph-youtube {
+  color: #e0001f;
+}
+.fc-ov [data-theme='daylight'] .fc-glyph-kick,
+.fc-ov [data-theme='sticker'] .fc-glyph-kick {
+  color: #1f8f00;
+}
+
+/* ------------------------------------------------------------------ chat */
+
+.fc-ov .fc-w-chat {
+  --chat-size: 22px;
+  font-size: var(--chat-size);
+  line-height: 1.35;
+}
+.fc-ov .fc-chat-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.3em;
+  height: 100%;
+  overflow: hidden;
+  /* Old lines dissolve at the top instead of being sliced in half. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 3.2em);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 3.2em);
+}
+.fc-ov .fc-msg {
+  flex: none;
+  max-width: 100%;
+  padding: 0.38em 0.62em 0.42em;
+  color: var(--t-text);
+  background: var(--t-flat);
+  border: var(--t-border);
+  border-radius: calc(var(--t-radius) * 0.8);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  transition: opacity 0.4s ease;
+}
+.fc-ov [data-theme='molten'] .fc-msg {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 6px 18px -10px rgb(0 0 0 / 0.7);
+}
+.fc-ov [data-theme='arcade'] .fc-msg {
+  border-width: 2px;
+  box-shadow: 3px 3px 0 #3461f5;
+}
+.fc-ov [data-theme='sticker'] .fc-msg {
+  border-width: 2px;
+  box-shadow: 3px 3px 0 #0e1014;
+}
+.fc-ov [data-theme='minimal'] .fc-msg {
+  padding: 0.1em 0;
+}
+.fc-ov .fc-msg > .fc-glyph {
+  margin-right: 0.35em;
+}
+.fc-ov .fc-badge {
+  width: 1em;
+  height: 1em;
+  margin-right: 0.25em;
+  vertical-align: -0.14em;
+  border-radius: 3px;
+}
+.fc-ov .fc-name {
+  display: inline-block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-weight: var(--t-name-weight);
+  text-transform: var(--t-case);
+  color: var(--t-accent);
+  margin-right: 0.45em;
+}
+.fc-ov .fc-text {
+  color: var(--t-text);
+}
+.fc-ov .fc-text.is-action {
+  font-style: italic;
+}
+.fc-ov .fc-emote {
+  height: 1.6em;
+  width: auto;
+  max-width: 6em;
+  margin: -0.3em 0.08em;
+  vertical-align: middle;
+}
+.fc-ov .fc-emote.is-zw {
+  margin-left: -1.7em;
+}
+.fc-ov .fc-mention {
+  font-weight: 700;
+  color: var(--t-accent);
+}
+.fc-ov .fc-link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  opacity: 0.85;
+}
+.fc-ov .fc-msg.is-gone {
+  opacity: 0;
+}
+
+@keyframes fc-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fc-ov .fc-msg.is-new {
+  animation: fc-line-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ------------------------------------------------------------------ events */
+
+.fc-ov .fc-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 19px;
+}
+.fc-ov .fc-ev {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 14px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: var(--t-radius);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+}
+.fc-ov [data-theme='minimal'] .fc-ev {
+  padding: 2px 0;
+}
+.fc-ov .fc-ev-name {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--t-name-weight);
+  text-transform: var(--t-case);
+}
+.fc-ov .fc-ev-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-text-2);
+}
+@keyframes fc-ev-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fc-ov .fc-ev.is-new {
+  animation: fc-ev-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ------------------------------------------------------------------ goal */
+
+.fc-ov .fc-w-goal {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: var(--t-radius);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+}
+.fc-ov .fc-w-goal[data-theme='minimal'] {
+  padding: 0;
+}
+.fc-ov .fc-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+.fc-ov .fc-goal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--t-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.015em;
+  text-transform: var(--t-case);
+}
+.fc-ov .fc-goal-nums {
+  flex: none;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-text-2);
+}
+.fc-ov .fc-goal-bar {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--t-track);
+}
+.fc-ov [data-theme='arcade'] .fc-goal-bar {
+  border-radius: 2px;
+  height: 14px;
+}
+.fc-ov [data-theme='sticker'] .fc-goal-bar {
+  border: 2px solid #0e1014;
+  height: 16px;
+}
+.fc-ov .fc-goal-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--t-fill);
+  border-radius: inherit;
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fc-ov [data-theme='molten'] .fc-goal-fill {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+@keyframes fc-goal-done {
+  0% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.fc-ov .fc-w-goal.is-done .fc-goal-fill {
+  animation: fc-goal-done 900ms ease-in-out 2;
+}
+
+/* ------------------------------------------------------------------ label */
+
+.fc-ov .fc-w-label {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: var(--t-radius);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+}
+.fc-ov .fc-w-label[data-theme='minimal'] {
+  padding: 0;
+}
+.fc-ov .fc-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--t-display);
+  font-weight: 650;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  text-transform: var(--t-case);
+}
+
+/* ------------------------------------------------------------------ viewers */
+
+.fc-ov .fc-w-viewers {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: 999px;
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+}
+.fc-ov .fc-w-viewers[data-theme='arcade'] {
+  border-radius: var(--t-radius);
+}
+.fc-ov .fc-w-viewers[data-theme='minimal'] {
+  padding: 0;
+}
+.fc-ov .fc-w-viewers[data-theme='minimal'] .fc-viewers-marks {
+  margin-left: 4px;
+}
+.fc-ov .fc-live-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ff3b4e;
+  box-shadow: 0 0 0 3px rgb(255 59 78 / 0.25);
+}
+.fc-ov .fc-viewers-count {
+  font-family: var(--t-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.fc-ov .fc-viewers-marks {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ motion */
+
+.fc-ov.is-low .fc-msg.is-new,
+.fc-ov.is-low .fc-ev.is-new {
+  animation: fc-fade-in 200ms ease-out both;
+}
+.fc-ov.is-low .fc-goal-fill {
+  transition: none;
+}
+.fc-ov.is-low .fc-w-goal.is-done .fc-goal-fill {
+  animation: none;
+}
+@keyframes fc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-ov .fc-msg.is-new,
+  .fc-ov .fc-ev.is-new {
+    animation: fc-fade-in 200ms ease-out both;
+  }
+  .fc-ov .fc-goal-fill {
+    transition: none;
+  }
+}
+
+/* OBS hid the source: freeze everything until it is shown again. */
+.fc-ov.is-hidden *,
+.fc-ov.is-hidden *::before,
+.fc-ov.is-hidden *::after {
+  animation-play-state: paused !important;
+}

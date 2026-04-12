@@ -1,0 +1,368 @@
+/*
+ * One alert, inside its own shadow root (so streamer CSS stays in here).
+ * The arrival is a liquid rise: the card swells up from its base with a little overshoot,
+ * the ferrofluid spikes climb out of its top edge toward the cobalt magnet, then the text
+ * settles. Exit sinks and fades in 300 ms. Low motion: fades only.
+ */
+
+:host {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  /* Containing block for anything fixed inside: custom CSS stays in the widget box. */
+  contain: layout;
+}
+
+.al {
+  --a-surface: linear-gradient(180deg, #20242c 0%, #121419 58%, #0b0c0f 100%);
+  --a-border: 1px solid rgb(255 255 255 / 0.08);
+  --a-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -3px 0 #3461f5,
+    0 24px 60px -18px rgb(0 0 0 / 0.85), 0 0 0 1px rgb(0 0 0 / 0.35);
+  --a-title: linear-gradient(180deg, #ffffff 30%, #c6ccd8 100%);
+  --a-title-solid: #f4f6fa;
+  --a-body: #c3c9d4;
+  --a-radius: 22px;
+  --a-text-shadow: none;
+  --al-spike-1: #ffffff;
+  --al-spike-2: #c3cad6;
+  --al-spike-3: #4a515d;
+  --al-spike-4: #14171c;
+  --a-magnet: #3461f5;
+  --a-rotate: 0deg;
+  --a-case: none;
+  --a-weight: 750;
+
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Room for the spikes above and the shadow below: the widget box clips paint. */
+  padding: 84px 28px 40px;
+  font-family:
+    'Hanken Grotesk Variable',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.al[data-theme='daylight'] {
+  --a-surface: #ffffff;
+  --a-border: 1px solid rgb(14 16 20 / 0.08);
+  --a-shadow: inset 0 -3px 0 #2e5be8, 0 22px 50px -18px rgb(8 12 24 / 0.5);
+  --a-title: none;
+  --a-title-solid: #0e1014;
+  --a-body: #454b56;
+  --al-spike-1: #8b93a1;
+  --al-spike-2: #4a515d;
+  --al-spike-3: #1d2127;
+  --al-spike-4: #0e1014;
+  --a-magnet: #2e5be8;
+}
+.al[data-theme='arcade'] {
+  --a-surface: #101216;
+  --a-border: 4px solid #eef0f4;
+  --a-shadow: 8px 8px 0 #3461f5;
+  --a-title: none;
+  --a-title-solid: #f4f6fa;
+  --a-body: #c3c9d4;
+  --a-radius: 8px;
+  --a-case: uppercase;
+  --a-weight: 800;
+}
+.al[data-theme='minimal'] {
+  --a-surface: transparent;
+  --a-border: 0 solid transparent;
+  --a-shadow: none;
+  --a-title: none;
+  --a-title-solid: #ffffff;
+  --a-body: #eef0f4;
+  --a-text-shadow: 0 1px 2px rgb(0 0 0 / 0.95), 0 3px 12px rgb(0 0 0 / 0.75);
+}
+.al[data-theme='sticker'] {
+  --a-surface: #ffffff;
+  --a-border: 4px solid #0e1014;
+  --a-shadow: 7px 7px 0 #3461f5;
+  --a-title: none;
+  --a-title-solid: #0e1014;
+  --a-body: #31363f;
+  --a-radius: 24px;
+  --a-rotate: -2deg;
+  --a-weight: 800;
+  --al-spike-1: #3461f5;
+  --al-spike-2: #2a51d6;
+  --al-spike-3: #1b2f80;
+  --al-spike-4: #0e1014;
+  --a-magnet: #0e1014;
+}
+
+.al-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 26px 36px 28px;
+  text-align: center;
+  background: var(--a-surface);
+  border: var(--a-border);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow);
+  transform: rotate(var(--a-rotate));
+  transform-origin: 50% 100%;
+}
+.al[data-theme='minimal'] .al-inner {
+  padding: 8px 0;
+}
+
+.al-spikes {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 27px);
+  width: 136px;
+  height: 136px;
+  margin-left: -68px;
+  overflow: visible;
+  transform-origin: 50% 88%;
+  pointer-events: none;
+}
+.al-magnet {
+  fill: var(--a-magnet);
+}
+.al[data-theme='minimal'] .al-spikes {
+  display: none;
+}
+.al[data-theme='arcade'] .al-spikes,
+.al[data-theme='sticker'] .al-spikes {
+  bottom: calc(100% - 18px);
+}
+
+.al-media {
+  flex: none;
+  display: flex;
+  justify-content: center;
+}
+.al-media img,
+.al-media video {
+  display: block;
+  max-width: 280px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.al-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.al-title {
+  font-family:
+    'Bricolage Grotesque Variable', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: 44px;
+  line-height: 1.08;
+  font-weight: var(--a-weight);
+  letter-spacing: -0.025em;
+  text-transform: var(--a-case);
+  color: var(--a-title-solid);
+  text-shadow: var(--a-text-shadow);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-bottom: 0.06em;
+  text-wrap: balance;
+}
+.al:not([data-theme='daylight']):not([data-theme='arcade']):not([data-theme='minimal']):not(
+    [data-theme='sticker']
+  )
+  .al-title {
+  background: var(--a-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.al-body {
+  font-size: 25px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: var(--a-body);
+  text-shadow: var(--a-text-shadow);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Layouts */
+.al[data-layout='side'] .al-inner {
+  flex-direction: row;
+  text-align: left;
+  gap: 22px;
+}
+.al[data-layout='side'] .al-media img,
+.al[data-layout='side'] .al-media video {
+  max-width: 180px;
+  max-height: 180px;
+}
+.al[data-layout='banner'] {
+  align-items: flex-end;
+  padding: 56px 0 0;
+}
+.al[data-layout='banner'] .al-inner {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  text-align: left;
+  padding: 18px 32px 20px;
+  gap: 20px;
+}
+.al[data-layout='banner'] .al-text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 18px;
+}
+.al[data-layout='banner'] .al-title {
+  font-size: 38px;
+  -webkit-line-clamp: 1;
+}
+.al[data-layout='banner'] .al-body {
+  font-size: 24px;
+  -webkit-line-clamp: 1;
+}
+.al[data-layout='banner'] .al-media img,
+.al[data-layout='banner'] .al-media video {
+  max-height: 72px;
+  max-width: 120px;
+}
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes al-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.94, 0.55) rotate(var(--a-rotate));
+  }
+  45% {
+    opacity: 1;
+  }
+  62% {
+    transform: translateY(-4px) scale(0.99, 1.045) rotate(var(--a-rotate));
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--a-rotate));
+  }
+}
+@keyframes al-spike {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.05);
+  }
+  30% {
+    opacity: 1;
+  }
+  70% {
+    transform: scaleY(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+@keyframes al-magnet {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+@keyframes al-text {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes al-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97, 0.9) rotate(var(--a-rotate));
+  }
+}
+@keyframes al-spikes-down {
+  to {
+    opacity: 0;
+    transform: scaleY(0.1);
+  }
+}
+@keyframes al-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes al-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.al[data-motion='full'] .al-inner {
+  animation: al-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.al[data-motion='full'] .al-spikes {
+  animation: al-spike 720ms 140ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+.al[data-motion='full'] .al-magnet {
+  animation: al-magnet 480ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.al[data-motion='full'] .al-title {
+  animation: al-text 420ms 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.al[data-motion='full'] .al-body,
+.al[data-motion='full'] .al-media {
+  animation: al-text 420ms 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.al[data-motion='full'].is-out .al-inner {
+  animation: al-sink 300ms cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+.al[data-motion='full'].is-out .al-spikes {
+  animation: al-spikes-down 220ms ease-in both;
+}
+
+.al[data-motion='low'] .al-inner {
+  animation: al-fade-in 200ms ease-out both;
+}
+.al[data-motion='low'].is-out .al-inner {
+  animation: al-fade-out 200ms ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al .al-inner,
+  .al .al-spikes,
+  .al .al-magnet,
+  .al .al-title,
+  .al .al-body,
+  .al .al-media {
+    animation: al-fade-in 200ms ease-out both !important;
+  }
+  .al.is-out .al-inner {
+    animation: al-fade-out 200ms ease-in both !important;
+  }
+}
+
+.al.is-paused,
+.al.is-paused * {
+  animation-play-state: paused !important;
+}
