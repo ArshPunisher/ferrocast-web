@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+@import '@ferrocast/ui/fonts.css';
+@import '@ferrocast/ui/tokens.css';
+@import '@ferrocast/ui/theme.css';
+@import '@ferrocast/ui/base.css';
+
+@source '../../../packages/ui/src';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Long chat lists stay cheap: offscreen rows skip layout and paint (R-54). */
+.fc-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
+.fc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fc-line-strong) transparent;
+}
+
+input[type='range'] {
+  accent-color: var(--fc-accent);
+}
+
+.fc-blur-url {
+  filter: blur(5px);
+  user-select: none;
+}
