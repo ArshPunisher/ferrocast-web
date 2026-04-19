@@ -51,4 +51,4 @@ Controls (buttons, inputs) **10 px**, panels and cards **16 px**, chips, switche
 
 ## Voice
 
-Plain, warm, specific. Say what happened and what to do. Never lead with "AI" (call it smart filters), never upsell to the audience, mark Pro calmly with an outline chip. "Your legal name is never shown" for tips. No em dashes in UI copy.
+Plain, warm, specific. Say what happened and what to do. Never lead with "AI" (call it smart filters), never upsell to the audience, mark Pro calmly with an outline chip. "Your legal name stays off your tip page and alerts" for tips (the payment provider's own receipt may still show it). No em dashes in UI copy.

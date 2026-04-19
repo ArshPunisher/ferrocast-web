@@ -272,7 +272,7 @@ test.describe('moderation and bot', () => {
 test.describe('tips and settings', () => {
   test('tip page promises the legal name stays private', async ({ page }) => {
     await open(page, 'tips')
-    await expect(page.getByText(/legal name/).first()).toBeVisible()
+    await expect(page.getByText(/legal name stays off the page/)).toBeVisible()
     await page.getByLabel('Name tippers see').fill('')
     await expect(page.getByText(/Tippers need a name/)).toBeVisible()
   })

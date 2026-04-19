@@ -89,7 +89,7 @@ export function Tips() {
               />
               <Field
                 label="Name tippers see"
-                hint="Your stream name is perfect. Your legal name from the payment account is never shown."
+                hint="Your stream name is perfect. It’s the only name on your tip page and in alerts."
                 error={
                   t.display_name.trim()
                     ? null
@@ -222,8 +222,8 @@ export function Tips() {
             {[
               [
                 EyeSlash,
-                'Your legal name stays private',
-                'Tippers see the name you choose above. The name on your payment account is never shown to them.',
+                'Your legal name stays off the page',
+                'Your tip page and alerts only show the name you choose above. The payment provider’s own checkout or receipt shows the name on that account, so use a business name there if you want it private.',
               ],
               [
                 Lock,
