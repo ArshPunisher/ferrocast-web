@@ -194,10 +194,11 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   let last = performance.now()
   let slow = 0
   let fast = 0
-  const start = last
   let ready = false
   let lastInput = performance.now()
-  let lastT = 1.2
+  // Scene time advances only while frames run, so pauses (idle, hidden, off screen) never
+  // make the fluid jump when it resumes.
+  let clock = 1.2
 
   const size = () => {
     const r = canvas.getBoundingClientRect()
@@ -213,8 +214,8 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
     mag.x += (target.x - mag.x) * k
     mag.z += (target.z - mag.z) * k
     mag.strength += (target.strength - mag.strength) * k
-    lastT = (now - start) / 1000
-    ff.render(lastT, mag)
+    clock += dt
+    ff.render(clock, mag)
     if (!ready) {
       ready = true
       opts.onReady?.()
@@ -225,12 +226,12 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
       scale *= 0.8
       slow = fast = 0
       size()
-      ff.render(lastT, mag)
+      ff.render(clock, mag)
     } else if (fast > 240 && scale < 0.75 * dpr) {
       scale = Math.min(0.75 * dpr, scale * 1.1)
       slow = fast = 0
       size()
-      ff.render(lastT, mag)
+      ff.render(clock, mag)
     }
     const idle = opts.idlePauseMs !== undefined && now - lastInput > opts.idlePauseMs
     if (visible && !opts.reducedMotion && !idle) raf = requestAnimationFrame(frame)
@@ -272,7 +273,7 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   const ro = new ResizeObserver(() => {
     size()
     // Resizing clears the canvas: redraw now unless a frame is already on its way.
-    if (!raf) ff.render(opts.reducedMotion ? 1.2 : lastT, mag)
+    if (!raf) ff.render(clock, mag)
   })
   ro.observe(canvas)
   window.addEventListener('pointermove', onMove, { passive: true })
