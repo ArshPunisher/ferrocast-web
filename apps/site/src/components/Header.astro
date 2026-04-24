@@ -1,0 +1,315 @@
+---
+import Logo from './Logo.astro'
+import Icon from './Icon.astro'
+import BrandMark from './BrandMark.astro'
+import { COMPANY } from '../data/company'
+
+const links = [
+  { href: '/features/', label: 'Features' },
+  { href: '/pricing/', label: 'Pricing' },
+  { href: '/compare/', label: 'Compare' },
+  { href: '/docs/getting-started/', label: 'Docs' },
+  { href: '/faq/', label: 'FAQ' },
+]
+const here = Astro.url.pathname
+const isCurrent = (href: string) => here === href || (href !== '/' && here.startsWith(href))
+---
+
+<header class="site-header">
+  <div class="container bar">
+    <a href="/" class="brand" aria-label="Ferrocast home">
+      <Logo id="hdr" height={24} />
+    </a>
+
+    <nav aria-label="Main" class="desktop-nav">
+      <ul>
+        {links.map((l) => (
+          <li>
+            <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>
+              {l.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="actions">
+      <button type="button" class="icon-btn" data-theme-toggle aria-label="Switch to light theme">
+        <span class="moon">
+          <Icon name="moon" size={18} />
+        </span>
+        <span class="sun">
+          <Icon name="sun" size={18} />
+        </span>
+      </button>
+      <a href={COMPANY.github} class="icon-btn gh" aria-label="Ferrocast on GitHub" rel="noopener">
+        <BrandMark name="github" size={18} />
+      </a>
+      <a href="/download/" class="btn btn-primary btn-sm cta">
+        Download
+      </a>
+      <button
+        type="button"
+        class="icon-btn menu-btn"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        data-menu-toggle
+      >
+        <span class="sr-only">Menu</span>
+        <span class="open-i">
+          <Icon name="list" size={22} />
+        </span>
+        <span class="close-i">
+          <Icon name="x" size={22} />
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobile-menu" class="mobile-menu" hidden>
+    <nav aria-label="Main mobile" class="container">
+      <ul>
+        {links.map((l) => (
+          <li>
+            <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>
+              {l.label}
+              <Icon name="arrow-right" size={18} />
+            </a>
+          </li>
+        ))}
+        <li>
+          <a href={COMPANY.github} rel="noopener">
+            GitHub
+            <Icon name="arrow-up-right" size={18} />
+          </a>
+        </li>
+      </ul>
+      <a href="/download/" class="btn btn-primary mobile-cta">
+        Download Ferrocast
+      </a>
+    </nav>
+  </div>
+</header>
+
+<script>
+  const btn = document.querySelector<HTMLButtonElement>('[data-menu-toggle]')
+  const menu = document.getElementById('mobile-menu')
+  const setOpen = (open: boolean) => {
+    if (!btn || !menu) return
+    btn.setAttribute('aria-expanded', String(open))
+    menu.hidden = !open
+  }
+  btn?.addEventListener('click', () => setOpen(btn.getAttribute('aria-expanded') !== 'true'))
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && btn?.getAttribute('aria-expanded') === 'true') {
+      setOpen(false)
+      btn.focus()
+    }
+  })
+  window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => {
+    if (e.matches) setOpen(false)
+  })
+
+  const toggle = document.querySelector<HTMLButtonElement>('[data-theme-toggle]')
+  const current = () =>
+    document.documentElement.dataset.theme ??
+    (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+  const label = () => {
+    toggle?.setAttribute(
+      'aria-label',
+      current() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+    )
+  }
+  label()
+  toggle?.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark'
+    document.documentElement.dataset.theme = next
+    // An explicit choice overrides the OS-based browser chrome colour.
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((m) => m.setAttribute('content', next === 'light' ? '#f2f3f6' : '#0a0b0d'))
+    try {
+      localStorage.setItem('fc-theme', next)
+    } catch {
+      /* private mode: the choice lasts for this page only */
+    }
+    label()
+    document.dispatchEvent(new CustomEvent('fc-theme', { detail: next }))
+  })
+</script>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--fc-bg) 86%, transparent);
+    backdrop-filter: saturate(140%) blur(12px);
+    -webkit-backdrop-filter: saturate(140%) blur(12px);
+    border-bottom: 1px solid color-mix(in srgb, var(--fc-line) 70%, transparent);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .site-header {
+      background: var(--fc-bg);
+    }
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 64px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    color: var(--fc-text);
+    text-decoration: none;
+    margin-right: auto;
+    border-radius: 8px;
+  }
+  .desktop-nav {
+    display: none;
+  }
+  .desktop-nav ul {
+    display: flex;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .desktop-nav a {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding-inline: 12px;
+    border-radius: 8px;
+    color: var(--fc-text-2);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    font-weight: 550;
+    transition: color 160ms var(--fc-ease-out);
+  }
+  .desktop-nav a[aria-current='page'] {
+    color: var(--fc-text);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .desktop-nav a:hover {
+      color: var(--fc-text);
+    }
+    .icon-btn:hover {
+      color: var(--fc-text);
+      background: var(--fc-surface-2);
+    }
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--fc-radius-control);
+    color: var(--fc-text-2);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      color 160ms var(--fc-ease-out),
+      background-color 160ms var(--fc-ease-out);
+  }
+  .icon-btn:active {
+    transform: scale(0.94);
+  }
+  .sun,
+  .moon,
+  .open-i,
+  .close-i {
+    display: inline-flex;
+  }
+  :global(html[data-theme='light']) .moon,
+  :global(html:not([data-theme='light'])) .sun {
+    display: none;
+  }
+  @media (prefers-color-scheme: light) {
+    :global(html:not([data-theme])) .moon {
+      display: none;
+    }
+    :global(html:not([data-theme])) .sun {
+      display: inline-flex;
+    }
+  }
+  .close-i {
+    display: none;
+  }
+  [aria-expanded='true'] .open-i {
+    display: none;
+  }
+  [aria-expanded='true'] .close-i {
+    display: inline-flex;
+  }
+  .gh,
+  .cta {
+    display: none;
+  }
+  .mobile-menu {
+    border-top: 1px solid var(--fc-line);
+    background: var(--fc-bg);
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .mobile-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+  }
+  .mobile-menu li a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    color: var(--fc-text);
+    text-decoration: none;
+    font-family: var(--fc-font-display);
+    font-size: 1.375rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    border-bottom: 1px solid var(--fc-line);
+  }
+  .mobile-menu li a :global(svg) {
+    color: var(--fc-text-3);
+  }
+  .mobile-cta {
+    width: 100%;
+    margin: 16px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 560px) {
+    .cta {
+      display: inline-flex;
+    }
+  }
+  @media (min-width: 900px) {
+    .desktop-nav {
+      display: block;
+    }
+    .gh {
+      display: inline-flex;
+    }
+    .menu-btn,
+    .mobile-menu {
+      display: none !important;
+    }
+    .brand {
+      margin-right: 24px;
+    }
+    .desktop-nav {
+      margin-right: auto;
+    }
+  }
+</style>

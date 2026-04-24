@@ -1,0 +1,132 @@
+---
+import '../styles/global.css'
+import hanken from '@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2?url'
+import bricolage from '@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url'
+import Header from '../components/Header.astro'
+import Footer from '../components/Footer.astro'
+import { PAGES, ogSlug, type PageMeta } from '../data/pages'
+import { COMPANY, SITE } from '../data/company'
+
+interface Props {
+  page: PageMeta
+  /** Extra JSON-LD objects for this page. */
+  schema?: Record<string, unknown>[]
+  /** Page type for Open Graph. */
+  ogType?: 'website' | 'article'
+  /** Error pages: no canonical, not indexed. */
+  noindex?: boolean
+}
+const { page, schema = [], ogType = 'website', noindex = false } = Astro.props
+const canonical = new URL(page.path, SITE.url).href
+const known = Object.values(PAGES).some((p) => p.path === page.path)
+const ogImage = new URL(`/og/${known ? ogSlug(page.path) : 'home'}.png`, SITE.url).href
+
+const parent = page.parent ? Object.values(PAGES).find((p) => p.path === page.parent) : undefined
+const crumbs =
+  page.path === '/' || noindex
+    ? []
+    : [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: [PAGES.home, ...(parent ? [parent] : []), page].map((p, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            name: p.crumb,
+            item: new URL(p.path, SITE.url).href,
+          })),
+        },
+      ]
+const blocks = [...schema, ...crumbs]
+// JSON inside <script>: escape "<" so no string can close the tag.
+const ld = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c')
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{page.title}</title>
+    <meta name="description" content={page.description} />
+    {!noindex && <link rel="canonical" href={canonical} />}
+    <meta
+      name="robots"
+      content={noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}
+    />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0b0d" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f6" />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={page.title} />
+    <meta property="og:description" content={page.description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${page.ogKicker}: ${page.ogTitle}`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={page.title} />
+    <meta name="twitter:description" content={page.description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <link rel="preload" href={hanken} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={bricolage} as="font" type="font/woff2" crossorigin />
+    <meta name="author" content={COMPANY.name} />
+
+    <script is:inline>
+      // Theme before first paint (no flash): saved choice, else the OS setting via CSS.
+      // A saved choice also sets the browser chrome colour (theme-color) to match.
+      try {
+        var t = localStorage.getItem('fc-theme')
+        if (t === 'dark' || t === 'light') {
+          document.documentElement.dataset.theme = t
+          var metas = document.querySelectorAll('meta[name="theme-color"]')
+          for (var i = 0; i < metas.length; i++)
+            metas[i].setAttribute('content', t === 'light' ? '#f2f3f6' : '#0a0b0d')
+        }
+      } catch (e) {}
+      document.documentElement.classList.add('js')
+    </script>
+    {blocks.map((b) => (
+      <script type="application/ld+json" set:html={ld(b)} />
+    ))}
+  </head>
+  <body>
+    <a class="skip-link" href="#main">
+      Skip to content
+    </a>
+    <Header />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer />
+    <script>
+      // Reveal sections as they scroll in. Content is visible without JS (the CSS only
+      // hides .reveal when the html has the "js" class).
+      const els = document.querySelectorAll('.reveal')
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const e of entries)
+              if (e.isIntersecting) {
+                e.target.classList.add('in')
+                io.unobserve(e.target)
+              }
+          },
+          { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+        )
+        els.forEach((el) => io.observe(el))
+      } else els.forEach((el) => el.classList.add('in'))
+    </script>
+  </body>
+</html>

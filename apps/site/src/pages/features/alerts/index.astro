@@ -1,0 +1,9 @@
+---
+import FeaturePage from '../../../components/FeaturePage.astro'
+import { featureByKey } from '../../../data/features'
+
+const feature = featureByKey('alerts')
+if (!feature) throw new Error('missing feature: alerts')
+---
+
+<FeaturePage feature={feature} />

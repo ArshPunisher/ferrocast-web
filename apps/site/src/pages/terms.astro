@@ -1,0 +1,143 @@
+---
+import Legal from '../layouts/Legal.astro'
+import Address from '../components/Address.astro'
+import { PAGES } from '../data/pages'
+import { COMPANY, PRO, inr } from '../data/company'
+
+const monthly = inr(PRO.monthlyInr)
+const yearly = inr(PRO.yearlyInr)
+---
+
+<Legal
+  page={PAGES.terms}
+  h1="Terms of service"
+  intro="These terms cover the Ferrocast app, this website and the optional Ferrocast Pro subscription. They are written to be read, not skimmed past."
+>
+  <h2>Who we are</h2>
+  <!-- prettier-ignore -->
+  <p>
+    Ferrocast is made by {COMPANY.legalName} (“{COMPANY.name}”, “we”), a {COMPANY.entityType} based in India. You can reach us at <a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a> or through the <a href="/contact/">contact page</a>.
+  </p>
+
+  <h2>The app is free software</h2>
+  <!-- prettier-ignore -->
+  <p>
+    The Ferrocast desktop app, its dashboard and overlays are released under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" rel="noopener">GNU General Public License, version 3</a>. The licence, not these terms, decides what you may do with the code: use it for any purpose, study it, change it and share it under the same licence. Nothing here limits those rights.
+  </p>
+  <p>
+    “Ferrocast” and the Ferrocast logo are trademarks of {COMPANY.name}. If you share a modified
+    version, give it a different name so people can tell it apart from ours.
+  </p>
+
+  <h2>Using Ferrocast with streaming platforms</h2>
+  <p>
+    Ferrocast connects to Twitch, YouTube and Kick with the permissions you approve. You stay
+    responsible for following each platform’s rules, and for what your bot, alerts and overlays
+    show. We are not affiliated with any platform, and a platform may change or end its service in
+    ways that affect Ferrocast.
+  </p>
+  <!-- prettier-ignore -->
+  <p>
+    If you connect YouTube, you also agree to be bound by the <a href="https://www.youtube.com/t/terms" rel="noopener">YouTube Terms of Service</a>, because Ferrocast uses YouTube API Services. Our <a href="/privacy/">privacy policy</a> explains what that means for your data.
+  </p>
+
+  <h2>Tips</h2>
+  <p>
+    When you set up a tip page, viewers pay through your own account with a payment provider such as
+    Razorpay, Stripe, PayPal or Ko-fi. The payment is between the viewer, you and that provider. We
+    never hold, receive or pass on the money and take no cut. Refunds and disputes for tips are
+    handled by you and your provider under the provider’s terms.
+  </p>
+
+  <h2>Ferrocast Pro</h2>
+  <p>
+    Pro is an optional subscription for services we run on our servers, such as a 24/7 cloud bot,
+    sync and smart filters. Pro is not on sale yet. When it is:
+  </p>
+  <ul>
+    <li>
+      Prices are in Indian rupees ({monthly} a month or {yearly} a year at launch) and include GST
+      where applicable. Payments are processed by Razorpay. Other currencies are shown only as an
+      estimate.
+    </li>
+    <li>
+      You must be 18 or over to buy Pro, or have the consent of a parent or lawful guardian who
+      agrees to these terms for you.
+    </li>
+    <li>
+      Subscriptions renew automatically until you cancel. You can cancel any time from your account.
+    </li>
+    <li>
+      If we change the price, we will tell you at least 60 days before it applies to you, and you
+      keep your price for at least 12 months from the start of your subscription.
+    </li>
+    <li>
+      We will never move a free feature into Pro, and never remove a feature from a plan you pay
+      for, except as described under <a href="#closing">If we close a cloud service</a>.
+    </li>
+    <li>
+      Refunds follow our <a href="/refunds/">refund and cancellation policy</a>.
+    </li>
+  </ul>
+
+  <h2>Delivery</h2>
+  <p>
+    Pro is a digital service. It is activated on your Ferrocast account right after a successful
+    payment, and you get a receipt by email. Nothing is shipped.
+  </p>
+
+  <h2 id="closing">If we close a cloud service</h2>
+  <p>
+    If we ever shut down a service that runs on our servers, we will give at least 180 days’ notice,
+    keep export available until the end, and refund any unused prepaid time.
+  </p>
+
+  <h2>Acceptable use</h2>
+  <p>Do not use Ferrocast’s hosted services (the relay, tip pages and Pro) to:</p>
+  <ul>
+    <li>break the law, or the rules of the platforms you stream on;</li>
+    <li>harass, threaten or dox anyone, or run hate raids;</li>
+    <li>attack, overload or try to get around the security of our servers;</li>
+    <li>collect money for anything illegal or for goods you do not deliver.</li>
+  </ul>
+  <p>We may suspend hosted services for an account that does, and will tell you why when we can.</p>
+
+  <h2>Age</h2>
+  <p>
+    The hosted services are for people aged 18 or over. If you are under 18, you may use them only
+    with the consent of a parent or lawful guardian, who agrees to these terms for you.
+  </p>
+
+  <h2>No warranty</h2>
+  <p>
+    The app is provided as is, as the GPL-3.0 says. We work hard to keep it reliable, but we cannot
+    promise it will be free of bugs or that platforms will keep their APIs working. Keep your own
+    exports and backups.
+  </p>
+
+  <h2>Limit of liability</h2>
+  <p>
+    As far as the law allows, we are not liable for indirect or consequential losses, such as lost
+    revenue from a stream. For Pro, our total liability is limited to what you paid us in the 12
+    months before the claim. Nothing here limits rights you have under consumer law that cannot be
+    limited.
+  </p>
+
+  <h2>Changes to these terms</h2>
+  <p>
+    If we change these terms in a way that matters, we will update the date above and, for Pro
+    subscribers, email you at least 30 days before the change applies.
+  </p>
+
+  <h2>Law and disputes</h2>
+  <p>
+    These terms are governed by the laws of India. Disputes go to {COMPANY.jurisdiction}. Before
+    that, please write to us; most problems are solved by talking.
+  </p>
+
+  <h2>Contact</h2>
+  <Address />
+  <p>
+    Email: <a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a>
+  </p>
+</Legal>

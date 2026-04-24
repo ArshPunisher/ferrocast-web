@@ -1,0 +1,293 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Icon from '../components/Icon.astro'
+import BrandMark from '../components/BrandMark.astro'
+import { PAGES } from '../data/pages'
+import { COMPANY, SITE } from '../data/company'
+import { webPage } from '../data/schema'
+
+const page = PAGES.download
+const platforms = [
+  {
+    os: 'mac',
+    name: 'macOS',
+    icon: 'apple-logo',
+    builds: ['Apple Silicon (M1 and later)', 'Intel'],
+    format: 'Disk image (.dmg)',
+    plan: 'Planned: signed with an Apple Developer ID and notarised, so it opens without warnings.',
+  },
+  {
+    os: 'windows',
+    name: 'Windows',
+    icon: 'windows-logo',
+    builds: ['Windows 10 and 11, 64-bit'],
+    format: 'Installer for your user account, no admin needed',
+    plan: 'Planned: code-signed through the SignPath Foundation programme for open-source projects.',
+  },
+  {
+    os: 'linux',
+    name: 'Linux',
+    icon: 'linux-logo',
+    builds: ['x86-64 and ARM64'],
+    format: 'Flatpak, .deb, .rpm and AppImage',
+    plan: 'Planned: works on X11 and Wayland, including NVIDIA cards on Wayland.',
+  },
+]
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Ferrocast is almost here.</h1>
+      <p class="lede">
+        The first version is being built in the open. It will be free on macOS, Windows and Linux,
+        with nothing to sign up for.
+      </p>
+    </div>
+  </section>
+
+  <section class="container">
+    <h2 class="sr-only">Downloads by operating system</h2>
+    <ul class="oses">
+      {platforms.map((p) => (
+        <li class="os" data-os={p.os}>
+          <div class="os-top">
+            <Icon name={p.icon} size={32} weight="fill" />
+            <span class="yours" hidden>
+              Your system
+            </span>
+          </div>
+          <h3>{p.name}</h3>
+          <ul class="builds">
+            {p.builds.map((b) => (
+              <li>{b}</li>
+            ))}
+          </ul>
+          <p class="format">{p.format}</p>
+          <p class="plan">{p.plan}</p>
+          <span class="soon">
+            <Icon name="hourglass-medium" size={16} />
+            <span class="sr-only">{p.name} download:</span>
+            Coming soon
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="notify">
+        <div class="notify-copy">
+          <h2 class="display-3">Hear the moment it ships.</h2>
+          <p class="lede">
+            No mailing list needed. Follow releases on GitHub, or add the release feed to any feed
+            reader.
+          </p>
+        </div>
+        <div class="notify-actions">
+          <a href={`${COMPANY.github}/releases`} class="btn btn-primary" rel="noopener">
+            <BrandMark name="github" size={18} />
+            Watch releases on GitHub
+          </a>
+          <a href={`${COMPANY.github}/releases.atom`} class="btn btn-secondary" rel="noopener">
+            <Icon name="rss" size={18} />
+            Release feed (Atom)
+          </a>
+          <p class="hint">
+            On GitHub, choose <strong>Watch</strong>, then <strong>Custom</strong>, then
+            <strong>Releases</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section build">
+    <div class="container build-grid">
+      <h2 class="display-3">Rather build it yourself?</h2>
+      <div class="prose">
+        <p>
+          Ferrocast is GPL-3.0 and the source is public. The engine is written in Rust, the
+          dashboard and overlays in TypeScript. Build instructions live in the repository README.
+        </p>
+        <!-- prettier-ignore -->
+        <p><a href={COMPANY.github} rel="noopener">Engine and desktop app</a> · <a href={COMPANY.githubWeb} rel="noopener">Dashboard, overlays and this website</a></p>
+        <p>
+          New to Ferrocast? The <a href="/docs/getting-started/">getting started guide</a> shows
+          what setup looks like.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  // Highlight the visitor's OS. Only a hint: every download stays visible.
+  // iPads ask for desktop sites with a Mac user agent; touch support gives them away.
+  // Phones, tablets and ChromeOS get no highlight, since none of them run the app.
+  const ua = navigator.userAgent
+  const touchMac = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1
+  const os =
+    /iPhone|iPad|iPod|Android|CrOS/i.test(ua) || touchMac
+      ? null
+      : /Mac/i.test(ua)
+        ? 'mac'
+        : /Win/i.test(ua)
+          ? 'windows'
+          : /Linux|X11/i.test(ua)
+            ? 'linux'
+            : null
+  if (os) {
+    const card = document.querySelector<HTMLElement>(`[data-os="${os}"]`)
+    card?.classList.add('mine')
+    card?.querySelector<HTMLElement>('.yours')?.removeAttribute('hidden')
+  }
+</script>
+
+<style>
+  .head {
+    padding-block: 40px 32px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 48px;
+    }
+  }
+  .oses {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+  @media (min-width: 900px) {
+    .oses {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .os {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+  }
+  .os.mine {
+    border-color: var(--fc-accent-line);
+    background:
+      radial-gradient(80% 60% at 100% 0%, var(--fc-accent-soft), transparent 70%),
+      var(--fc-surface-1);
+  }
+  .os-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--fc-text);
+    margin-bottom: 4px;
+  }
+  .yours {
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--fc-accent-text);
+    border: 1px solid var(--fc-accent-line);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
+  .yours[hidden] {
+    display: none;
+  }
+  .os h3 {
+    font-size: 1.5rem;
+  }
+  .builds {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: var(--fc-text);
+    font-weight: 550;
+  }
+  .format {
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+  }
+  .plan {
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .soon {
+    margin-top: auto;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding-inline: 14px;
+    border-radius: var(--fc-radius-control);
+    border: 1px dashed var(--fc-line-strong);
+    color: var(--fc-text-2);
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  .notify {
+    display: grid;
+    gap: 28px;
+    padding: 32px 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background:
+      radial-gradient(70% 90% at 0% 100%, var(--fc-accent-soft), transparent 70%),
+      var(--fc-surface-1);
+  }
+  .notify-copy {
+    display: grid;
+    gap: 12px;
+  }
+  .notify-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-content: center;
+  }
+  .hint {
+    width: 100%;
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  @media (min-width: 900px) {
+    .notify {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      padding: 48px;
+    }
+  }
+  @media (max-width: 480px) {
+    .notify-actions .btn {
+      width: 100%;
+    }
+  }
+  .build {
+    padding-top: 0;
+  }
+  .build-grid {
+    display: grid;
+    gap: 20px;
+  }
+  @media (min-width: 900px) {
+    .build-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: 48px;
+    }
+  }
+</style>

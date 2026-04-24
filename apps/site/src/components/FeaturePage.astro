@@ -1,0 +1,246 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from './Breadcrumbs.astro'
+import VideoSlot from './VideoSlot.astro'
+import Icon from './Icon.astro'
+import { PAGES } from '../data/pages'
+import { FEATURES, type Feature } from '../data/features'
+import { SITE } from '../data/company'
+import { webPage } from '../data/schema'
+
+interface Props {
+  feature: Feature
+}
+const { feature } = Astro.props
+const page = PAGES[feature.key]
+const others = FEATURES.filter((f) => f.key !== feature.key)
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">{feature.h1}</h1>
+      <p class="lede">{feature.intro}</p>
+      <div class="ctas">
+        <a href="/download/" class="btn btn-primary">
+          Download
+        </a>
+        <a href="/docs/getting-started/" class="btn btn-secondary">
+          Getting started
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {feature.video && (
+    <div class="container video reveal">
+      <VideoSlot name={feature.video.name} label={feature.video.label} />
+    </div>
+  )}
+
+  <div class="container groups">
+    {feature.groups.map((g) => (
+      <section class="group">
+        <div class="group-head">
+          <Icon name={g.icon} size={28} />
+          <h2 class="display-3">{g.title}</h2>
+        </div>
+        <dl class="items">
+          {g.items.map((it, i) => (
+            <div class="item reveal" style={`--i: ${i % 2}`}>
+              <dt>{it.title}</dt>
+              <dd>{it.body}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    ))}
+  </div>
+
+  {feature.notes.length > 0 && (
+    <aside class="container notes-wrap" aria-labelledby="good-to-know">
+      <div class="notes">
+        <h2 id="good-to-know">
+          <Icon name="info" size={20} /> Good to know
+        </h2>
+        <ul>
+          {feature.notes.map((n) => (
+            <li>{n}</li>
+          ))}
+        </ul>
+      </div>
+    </aside>
+  )}
+
+  <section class="section more">
+    <div class="container">
+      <h2 class="display-3">More of what Ferrocast does</h2>
+      <ul class="more-list">
+        {others.map((f) => (
+          <li>
+            <a href={PAGES[f.key].path}>
+              <Icon name={f.icon} size={22} />
+              <span>{PAGES[f.key].crumb}</span>
+              <Icon name="arrow-right" size={18} class="arrow" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 40px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .head h1 {
+    max-width: 20ch;
+  }
+  .ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 56px;
+    }
+  }
+  .video {
+    margin-bottom: 24px;
+  }
+  .groups {
+    display: grid;
+  }
+  .group {
+    display: grid;
+    gap: 24px;
+    padding-block: 48px;
+    border-top: 1px solid var(--fc-line);
+  }
+  .group:first-child {
+    border-top: 0;
+  }
+  .group-head {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .group-head :global(svg) {
+    color: var(--fc-accent-text);
+  }
+  .items {
+    display: grid;
+    gap: 28px 40px;
+    margin: 0;
+  }
+  .item dt {
+    font-family: var(--fc-font-display);
+    font-weight: 650;
+    font-size: 1.125rem;
+    letter-spacing: -0.015em;
+    color: var(--fc-text);
+    margin-bottom: 6px;
+  }
+  .item dd {
+    margin: 0;
+    color: var(--fc-text-2);
+  }
+  @media (min-width: 900px) {
+    .group {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: 48px;
+      padding-block: 64px;
+    }
+    .group-head {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }
+    .items {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .notes-wrap {
+    margin-top: 8px;
+  }
+  .notes {
+    border: 1px solid var(--fc-line);
+    border-left: 3px solid var(--fc-accent);
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-surface-1);
+    padding: 24px;
+  }
+  .notes h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--fc-font-sans);
+    font-size: 1rem;
+    letter-spacing: 0;
+    margin-bottom: 12px;
+  }
+  .notes h2 :global(svg) {
+    color: var(--fc-accent-text);
+  }
+  .notes ul {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--fc-text-2);
+    display: grid;
+    gap: 8px;
+  }
+  .more h2 {
+    margin-bottom: 24px;
+  }
+  .more-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 8px;
+  }
+  @media (min-width: 640px) {
+    .more-list {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+  }
+  .more-list a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 0 16px;
+    border-radius: var(--fc-radius-control);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+    text-decoration: none;
+    font-weight: 600;
+    transition: border-color 160ms var(--fc-ease-out);
+  }
+  .more-list a :global(svg) {
+    color: var(--fc-accent-text);
+    flex-shrink: 0;
+  }
+  .more-list a :global(.arrow) {
+    margin-left: auto;
+    color: var(--fc-text-3);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .more-list a:hover {
+      border-color: var(--fc-line-strong);
+    }
+  }
+</style>

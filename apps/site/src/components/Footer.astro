@@ -1,0 +1,162 @@
+---
+import Logo from './Logo.astro'
+import BrandMark from './BrandMark.astro'
+import { COMPANY } from '../data/company'
+
+const cols = [
+  {
+    title: 'Product',
+    links: [
+      { href: '/features/', label: 'Features' },
+      { href: '/download/', label: 'Download' },
+      { href: '/pricing/', label: 'Pricing' },
+      { href: '/compare/', label: 'Compare' },
+    ],
+  },
+  {
+    title: 'Help',
+    links: [
+      { href: '/docs/getting-started/', label: 'Getting started' },
+      { href: '/faq/', label: 'FAQ' },
+      { href: '/contact/', label: 'Contact' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { href: '/terms/', label: 'Terms of service' },
+      { href: '/privacy/', label: 'Privacy policy' },
+      { href: '/refunds/', label: 'Refunds and cancellation' },
+    ],
+  },
+]
+---
+
+<footer class="site-footer">
+  <div class="container grid">
+    <div class="about">
+      <a href="/" class="brand" aria-label="Ferrocast home">
+        <Logo id="ftr" height={26} />
+      </a>
+      <p>
+        Free, open-source stream tools that run on your own computer. Licensed under GPL-3.0. Free
+        stays free.
+      </p>
+      <a href={COMPANY.github} class="gh" rel="noopener">
+        <BrandMark name="github" size={18} />
+        Source on GitHub
+      </a>
+    </div>
+    {cols.map((c) => (
+      <nav aria-label={c.title} class="col">
+        <h2>{c.title}</h2>
+        <ul>
+          {c.links.map((l) => (
+            <li>
+              <a href={l.href}>{l.label}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+  <div class="container base">
+    <!-- prettier-ignore -->
+    <p>Made by <a href={COMPANY.url} rel="noopener">{COMPANY.name}</a></p>
+    <p>© 2026 {COMPANY.legalName}</p>
+    <p class="tm">
+      Twitch, YouTube, Kick, OBS and other names are trademarks of their owners and are used only to
+      say what Ferrocast works with. Ferrocast is not affiliated with or endorsed by them.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--fc-line);
+    background: var(--fc-surface-inset);
+    padding-top: 56px;
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    font-size: 0.9375rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px 24px;
+  }
+  .about {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 38ch;
+    color: var(--fc-text-2);
+  }
+  .brand {
+    color: var(--fc-text);
+    width: fit-content;
+    border-radius: 8px;
+  }
+  .gh {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fc-text);
+    text-decoration: none;
+    font-weight: 600;
+    width: fit-content;
+  }
+  h2 {
+    font-family: var(--fc-font-sans);
+    font-size: 0.875rem;
+    font-weight: 650;
+    letter-spacing: 0;
+    color: var(--fc-text);
+    margin-bottom: 12px;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .col a {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .col a:hover,
+    .gh:hover {
+      color: var(--fc-text);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+  .base {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--fc-line);
+    display: grid;
+    gap: 8px;
+    color: var(--fc-text-3);
+    font-size: 0.8125rem;
+  }
+  .base a {
+    color: var(--fc-text-2);
+  }
+  .tm {
+    max-width: 80ch;
+  }
+  @media (min-width: 768px) {
+    .grid {
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+    }
+    .about {
+      grid-column: auto;
+    }
+  }
+</style>

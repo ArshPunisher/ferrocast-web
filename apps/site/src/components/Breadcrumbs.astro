@@ -1,0 +1,57 @@
+---
+import type { PageMeta } from '../data/pages'
+import { PAGES } from '../data/pages'
+interface Props {
+  page: PageMeta
+}
+const { page } = Astro.props
+const parent = page.parent ? Object.values(PAGES).find((p) => p.path === page.parent) : undefined
+const trail = [PAGES.home, ...(parent ? [parent] : []), page]
+---
+
+<nav aria-label="Breadcrumb" class="crumbs">
+  <ol>
+    {trail.map((p, i) => (
+      <li>
+        {i < trail.length - 1 ? (
+          <a href={p.path}>{p.crumb}</a>
+        ) : (
+          <span aria-current="page">{p.crumb}</span>
+        )}
+      </li>
+    ))}
+  </ol>
+</nav>
+
+<style>
+  .crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.875rem;
+    color: var(--fc-text-3);
+  }
+  .crumbs li + li::before {
+    /* Decorative: screen readers already hear the list structure. */
+    content: '/';
+    content: '/' / '';
+    margin-right: 6px;
+    color: var(--fc-line-strong);
+  }
+  .crumbs a {
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .crumbs a:hover {
+      color: var(--fc-text);
+      text-decoration: underline;
+    }
+  }
+  .crumbs [aria-current] {
+    color: var(--fc-text);
+  }
+</style>

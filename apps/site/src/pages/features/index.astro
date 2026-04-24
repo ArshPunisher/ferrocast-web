@@ -1,0 +1,160 @@
+---
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import VideoSlot from '../../components/VideoSlot.astro'
+import Icon from '../../components/Icon.astro'
+import { PAGES } from '../../data/pages'
+import { FEATURES } from '../../data/features'
+import { SITE } from '../../data/company'
+
+const page = PAGES.features
+const itemList = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'Ferrocast features',
+  itemListElement: FEATURES.map((f, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: PAGES[f.key].crumb,
+    url: new URL(PAGES[f.key].path, SITE.url).href,
+  })),
+}
+---
+
+<Base page={page} schema={[itemList]}>
+  <section class="head">
+    <div class="container head-grid">
+      <div class="head-copy">
+        <Breadcrumbs page={page} />
+        <h1 class="display-2">Everything a stream needs between OBS and your chat.</h1>
+        <p class="lede">
+          Alerts, overlays, merged chat, moderation, a bot and tips in one free app that runs on
+          your computer.
+        </p>
+      </div>
+      <div class="reveal">
+        <VideoSlot name="hero-loop" label="Ferrocast's ferrofluid mark reacting to an alert" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section tiles-wrap">
+    <div class="container">
+      <h2 class="sr-only">All features</h2>
+      <ul class="tiles">
+        {FEATURES.map((f, i) => (
+          <li class:list={['tile reveal', `t${i}`]} style={`--i: ${i % 3}`}>
+            <a href={PAGES[f.key].path}>
+              <Icon name={f.icon} size={i < 2 ? 34 : 26} />
+              <h3>{PAGES[f.key].crumb}</h3>
+              <p>{f.summary}</p>
+              <span class="more">
+                Learn more <Icon name="arrow-right" size={16} />
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 0;
+  }
+  .head-grid {
+    display: grid;
+    gap: 32px;
+    align-items: center;
+  }
+  .head-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 900px) {
+    .head {
+      padding-top: 72px;
+    }
+    .head-grid {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 56px;
+    }
+  }
+  .tiles {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+  .tile a {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+    text-decoration: none;
+    transition:
+      border-color 200ms var(--fc-ease-out),
+      transform 200ms var(--fc-ease-out);
+  }
+  .tile a > :global(svg) {
+    color: var(--fc-accent-text);
+    margin-bottom: 6px;
+  }
+  .tile h3 {
+    font-size: 1.3rem;
+  }
+  .tile p {
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+  }
+  .more {
+    margin-top: auto;
+    padding-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--fc-accent-text);
+  }
+  .t0 a {
+    background:
+      radial-gradient(70% 80% at 85% 10%, rgb(52 97 245 / 0.22), transparent 70%),
+      var(--fc-surface-1);
+  }
+  .t1 a {
+    background: linear-gradient(200deg, var(--fc-surface-2), var(--fc-surface-1) 70%);
+  }
+  .t0 h3,
+  .t1 h3 {
+    font-size: 1.75rem;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .tile a:hover {
+      border-color: var(--fc-line-strong);
+      transform: translateY(-2px);
+    }
+  }
+  @media (min-width: 768px) {
+    .tiles {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .t0,
+    .t1 {
+      grid-column: span 2;
+    }
+    .t0 a,
+    .t1 a {
+      min-height: 280px;
+      padding: 32px;
+    }
+  }
+</style>

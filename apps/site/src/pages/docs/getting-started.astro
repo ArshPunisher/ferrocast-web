@@ -1,0 +1,267 @@
+---
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import VideoSlot from '../../components/VideoSlot.astro'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+
+const page = PAGES.start
+const url = new URL(page.path, SITE.url).href
+const steps = [
+  {
+    id: 'install',
+    name: 'Install Ferrocast',
+    text: 'Download Ferrocast for macOS, Windows or Linux and open it. The dashboard opens in its own window.',
+  },
+  {
+    id: 'connect',
+    name: 'Connect your accounts',
+    text: 'Click Connect next to Twitch, YouTube or Kick. Twitch shows a short code to approve in your browser; YouTube and Kick open their sign-in page.',
+  },
+  {
+    id: 'look',
+    name: 'Pick a look',
+    text: 'Choose one of five themes. Each one previews live with sample alerts and chat.',
+  },
+  {
+    id: 'obs',
+    name: 'Add the overlay to OBS',
+    text: 'Click Add to OBS and Ferrocast creates the browser source in your current scene. Or copy the URL and add a Browser Source at 1920 by 1080.',
+  },
+  {
+    id: 'test',
+    name: 'Test an alert',
+    text: 'On the Home screen, click a test button such as Follow or Tip and watch it play in OBS.',
+  },
+  {
+    id: 'panic',
+    name: 'Learn the panic mode hotkey',
+    text: 'Ctrl+Shift+P (Cmd+Shift+P on Mac) locks chat down on every platform and pauses alerts. Press it again to undo.',
+  },
+]
+const howTo = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Set up Ferrocast for your stream',
+  description: page.description,
+  url,
+  totalTime: 'PT5M',
+  tool: [{ '@type': 'HowToTool', name: 'OBS Studio' }],
+  step: steps.map((s, i) => ({
+    '@type': 'HowToStep',
+    position: i + 1,
+    name: s.name,
+    text: s.text,
+    url: `${url}#${s.id}`,
+  })),
+}
+---
+
+<Base page={page} schema={[howTo]} ogType="article">
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Getting started</h1>
+      <p class="lede">
+        From install to your first alert on stream in about five minutes. Three of those steps are
+        single clicks.
+      </p>
+    </div>
+  </section>
+
+  <div class="container doc">
+    <nav aria-label="On this page" class="toc">
+      <p class="toc-title">On this page</p>
+      <ol>
+        {steps.map((s) => (
+          <li>
+            <a href={`#${s.id}`}>{s.name}</a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+
+    <article class="prose">
+      <p class="callout">
+        <Icon name="hourglass-medium" size={18} />
+        <span>
+          Ferrocast is not released yet. This guide shows how setup works in version 1; the
+          <a href="/download/">download page</a> says when it ships.
+        </span>
+      </p>
+
+      <h2 id="install">Install Ferrocast</h2>
+      <p>
+        Download the installer for your system from the <a href="/download/">download page</a> and
+        open it. On Windows the installer needs no admin rights. On Linux, Flatpak is the easiest
+        option.
+      </p>
+      <p>
+        Ferrocast starts a small engine in the background and opens the dashboard. Closing the
+        window keeps it running in the tray, so alerts keep working while you play.
+      </p>
+
+      <h2 id="connect">Connect your accounts</h2>
+      <p>
+        Each platform is one click. Ferrocast never asks for your password; you sign in on the
+        platform’s own site.
+      </p>
+      <ul>
+        <li>
+          <strong>Twitch</strong> shows a short code like <code>FRRO-4821</code>. Your browser opens
+          twitch.tv/activate, you check the code matches and approve.
+        </li>
+        <li>
+          <strong>YouTube</strong> and <strong>Kick</strong> open their sign-in page in your
+          browser.
+        </li>
+      </ul>
+      <p>
+        Your sign-in is stored in your operating system’s keychain. You can disconnect any platform
+        in Settings → Accounts.
+      </p>
+
+      <h2 id="look">Pick a look</h2>
+      <p>
+        Choose a theme for every widget at once: Molten, Daylight, Arcade, Minimal or Sticker. Each
+        previews live with sample alerts and chat, so you see it before your viewers do. You can
+        change it any time.
+      </p>
+
+      <h2 id="obs">Add the overlay to OBS</h2>
+      <p>
+        Click <strong>Add to OBS</strong>. Ferrocast talks to OBS through its WebSocket server and
+        creates a browser source called “Ferrocast” in the scene you are on.
+      </p>
+      <p>No WebSocket set up? Copy the URL instead and add it in three steps:</p>
+      <ol>
+        <li>
+          In OBS, click <strong>+</strong> under Sources and choose <strong>Browser</strong>.
+        </li>
+        <li>
+          Paste the overlay URL and set the size to <strong>1920</strong> by <strong>1080</strong>.
+        </li>
+        <li>
+          Click OK. Leave “Shutdown source when not visible” on; the overlay pauses itself when
+          hidden.
+        </li>
+      </ol>
+      <p>
+        Keep the URL private. If it ever shows on stream, open Overlays and click
+        <strong>New URL</strong>; the old one stops working at once.
+      </p>
+
+      <div class="video">
+        <VideoSlot
+          name="setup-3-clicks"
+          label="Signing in, picking a look and adding the overlay to OBS"
+        />
+      </div>
+
+      <h2 id="test">Test an alert</h2>
+      <p>
+        On the Home screen, click any test button: Follow, Sub, Raid, Tip and more. A sample plays
+        in OBS straight away, even before you have connected an account. If an alert ever doesn’t
+        play during a stream, open the event and click <strong>Why didn’t this alert fire?</strong>
+      </p>
+
+      <h2 id="panic">Learn the panic mode hotkey</h2>
+      <p>
+        If a hate raid starts, press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (<kbd>Cmd</kbd>+
+        <kbd>Shift</kbd>+<kbd>P</kbd> on Mac) or the big button on Home. Ferrocast turns on
+        followers-only and slow mode, holds messages from new accounts and pauses alerts and
+        text-to-speech on every platform. Press it again to go back to normal. You can change what
+        panic mode does in Moderation.
+      </p>
+
+      <h2>Next</h2>
+      <p>
+        Read about <a href="/features/alerts/">alerts</a>,
+        <a href="/features/chat-moderation/">chat and moderation</a> or
+        <a href="/features/own-your-data/">importing your old setup</a>, or check the{' '}
+        <a href="/faq/">FAQ</a>.
+      </p>
+    </article>
+  </div>
+  <div class="spacer"></div>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 24px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 40px;
+    }
+  }
+  .doc {
+    display: grid;
+    gap: 32px;
+  }
+  .toc-title {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--fc-text-3);
+    margin-bottom: 8px;
+  }
+  .toc ol {
+    margin: 0;
+    padding-left: 1.2em;
+    display: grid;
+    gap: 6px;
+    color: var(--fc-text-3);
+  }
+  .toc a {
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .toc a:hover {
+      color: var(--fc-text);
+      text-decoration: underline;
+    }
+  }
+  @media (min-width: 900px) {
+    .doc {
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 64px;
+    }
+    .toc {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }
+  }
+  .callout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-radius: var(--fc-radius-control);
+    border: 1px solid var(--fc-line);
+    border-left: 3px solid var(--fc-accent);
+    background: var(--fc-surface-1);
+    font-size: 0.9375rem;
+  }
+  .callout :global(svg) {
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--fc-accent-text);
+  }
+  .prose h2:first-of-type {
+    margin-top: 1.6em;
+  }
+  .video {
+    margin-block: 2em;
+  }
+  .spacer {
+    height: 96px;
+  }
+</style>

@@ -1,0 +1,384 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Icon from '../components/Icon.astro'
+import { PAGES } from '../data/pages'
+import { COMPANY, PRO, inr } from '../data/company'
+
+const page = PAGES.pricing
+const usd = (amount: string) => `US$${amount}`
+
+const free = [
+  'Alerts with variations, sounds and test buttons',
+  'Every overlay widget, every theme in the box',
+  'Merged chat for Twitch, YouTube and Kick',
+  'Ban everywhere, panic mode, filters and viewer notes',
+  'Chatbot with commands and timers on your PC',
+  'Tip page with zero cut; your legal name stays off it',
+  'Text-to-speech with offline voices',
+  'Import from StreamElements and Streamlabs, export everything',
+]
+const pro = [
+  { t: '24/7 cloud bot', d: 'Commands and timers keep running when your PC is off.' },
+  { t: 'Sync and web dashboard', d: 'Your setup on every computer; mods sign in from anywhere.' },
+  { t: 'Smart filters', d: 'Spam and scam detection that learns from your own bans.' },
+  { t: 'Premium voices', d: 'Studio-quality text-to-speech voices that run on our servers.' },
+  { t: 'Custom tip page domain', d: 'Your own domain and design for the tip page.' },
+]
+const promises = [
+  {
+    icon: 'lock-simple-open',
+    t: 'Free stays free',
+    d: 'Nothing that is free today will move behind Pro later.',
+  },
+  {
+    icon: 'calendar-check',
+    t: 'Your price is locked',
+    d: 'You keep your price for at least 12 months from the day you subscribe.',
+  },
+  {
+    icon: 'bell-simple',
+    t: '60 days’ notice',
+    d: 'Any price change is announced at least 60 days ahead.',
+  },
+  {
+    icon: 'chat-slash',
+    t: 'Never in your chat',
+    d: 'Pro never posts to your audience and never brands your overlays.',
+  },
+]
+---
+
+<Base page={page}>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Free forever. Pro for the parts that cost us money.</h1>
+      <p class="lede">
+        The app does everything on your computer, so it costs us nothing to give away. Pro sells
+        only what needs our servers.
+      </p>
+    </div>
+  </section>
+
+  <section class="container plans">
+    <article class="plan plan-free">
+      <header>
+        <h2>Free</h2>
+        <p class="price">
+          <span class="amount">₹0</span>
+          <span class="per">forever</span>
+        </p>
+        <p class="muted">The whole app. No account, no trial, no limits on streams.</p>
+      </header>
+      <ul class="checks">
+        {free.map((f) => (
+          <li>
+            <Icon name="check" size={18} weight="bold" />
+            {f}
+          </li>
+        ))}
+      </ul>
+      <a href="/download/" class="btn btn-primary">
+        Download
+      </a>
+    </article>
+
+    <article class="plan plan-pro">
+      <header>
+        <h2>
+          Pro <span class="chip">Launches after version 1</span>
+        </h2>
+        <p class="price">
+          <span class="amount">{inr(PRO.monthlyInr)}</span>
+          <span class="per">a month</span>
+        </p>
+        <p class="muted">
+          {`or ${inr(PRO.yearlyInr)} a year. Approx. ${usd(PRO.monthlyUsdApprox)} a month or ${usd(PRO.yearlyUsdApprox)} a year.`}
+          Billed in INR through Razorpay, GST included where applicable.
+        </p>
+      </header>
+      <dl class="pro-list">
+        {pro.map((p) => (
+          <div>
+            <dt>{p.t}</dt>
+            <dd>{p.d}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="not-yet">
+        <Icon name="hourglass-medium" size={18} />
+        Not on sale yet. Everything in Free works without it.
+      </p>
+    </article>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="display-3 promises-title">Promises you can hold us to</h2>
+      <ul class="promises">
+        {promises.map((p) => (
+          <li class="reveal">
+            <Icon name={p.icon} size={26} />
+            <h3>{p.t}</h3>
+            <p>{p.d}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section qa-wrap">
+    <div class="container qa">
+      <h2 class="display-3">Pricing questions</h2>
+      <div class="qa-list">
+        <details>
+          <summary>Why is Pro priced in rupees?</summary>
+          <p>
+            Ferrocast is made in India and priced for India and other emerging markets first. You
+            pay in INR through Razorpay; banks outside India convert at their own rate, so the
+            dollar figure is an estimate.
+          </p>
+        </details>
+        <details>
+          <summary>Will a free feature ever become Pro?</summary>
+          <p>
+            No. Pro only adds things that run on our servers. The desktop app is GPL-3.0, so its
+            features can’t be taken back.
+          </p>
+        </details>
+        <details>
+          <summary>Do you take a cut of my tips?</summary>
+          <p>
+            No, on Free or Pro. Tips go straight into your own payment account and the provider
+            charges its usual fees.
+          </p>
+        </details>
+        <details>
+          <summary>How do refunds work?</summary>
+          <p>
+            See the <a href="/refunds/">refund and cancellation policy</a>. You can cancel any time
+            and keep Pro until the end of the period you paid for.
+          </p>
+        </details>
+      </div>
+      <!-- prettier-ignore -->
+      <p class="muted more-q">More in the <a href="/faq/" class="text-link">FAQ</a>, or <a href="/contact/" class="text-link">contact {COMPANY.name}</a>.</p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 32px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .head h1 {
+    max-width: 22ch;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 48px;
+    }
+  }
+  .plans {
+    display: grid;
+    gap: 12px;
+  }
+  @media (min-width: 900px) {
+    .plans {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    }
+  }
+  .plan {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 28px 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+  }
+  @media (min-width: 640px) {
+    .plan {
+      padding: 36px;
+    }
+  }
+  .plan-free {
+    border-color: var(--fc-accent-line);
+    background:
+      radial-gradient(80% 60% at 100% 0%, var(--fc-accent-soft), transparent 70%),
+      var(--fc-surface-1);
+  }
+  .plan header {
+    display: grid;
+    gap: 10px;
+  }
+  .plan h2 {
+    font-size: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .plan h2 .chip {
+    font-family: var(--fc-font-sans);
+    letter-spacing: 0;
+  }
+  .price {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .amount {
+    font-family: var(--fc-font-display);
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--fc-text);
+    line-height: 1;
+  }
+  .per {
+    color: var(--fc-text-2);
+  }
+  .checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+  .checks li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    color: var(--fc-text);
+  }
+  .checks :global(svg) {
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--fc-ok);
+  }
+  .plan-free .btn {
+    margin-top: auto;
+    align-self: flex-start;
+  }
+  .pro-list {
+    margin: 0;
+    display: grid;
+    gap: 16px;
+  }
+  .pro-list dt {
+    font-weight: 650;
+    color: var(--fc-text);
+  }
+  .pro-list dd {
+    margin: 2px 0 0;
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+  }
+  .not-yet {
+    margin-top: auto;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+    padding: 12px 14px;
+    border-radius: var(--fc-radius-control);
+    border: 1px dashed var(--fc-line-strong);
+  }
+  .promises-title {
+    margin-bottom: 32px;
+  }
+  .promises {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 28px;
+  }
+  .promises li {
+    display: grid;
+    gap: 8px;
+  }
+  .promises :global(svg) {
+    color: var(--fc-accent-text);
+  }
+  .promises h3 {
+    font-size: 1.15rem;
+  }
+  .promises p {
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+  }
+  @media (min-width: 768px) {
+    .promises {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 40px 48px;
+    }
+  }
+  @media (min-width: 1100px) {
+    .promises {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .qa-wrap {
+    padding-top: 0;
+  }
+  .qa {
+    display: grid;
+    gap: 24px;
+  }
+  .qa-list {
+    border-top: 1px solid var(--fc-line);
+  }
+  details {
+    border-bottom: 1px solid var(--fc-line);
+  }
+  summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    min-height: 60px;
+    font-weight: 650;
+    color: var(--fc-text);
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary::after {
+    content: '+';
+    font-family: var(--fc-font-mono);
+    color: var(--fc-text-3);
+    font-size: 1.25rem;
+    transition: transform 200ms var(--fc-ease-out);
+  }
+  details[open] summary::after {
+    transform: rotate(45deg);
+  }
+  details p {
+    color: var(--fc-text-2);
+    padding-bottom: 20px;
+    max-width: 70ch;
+  }
+  details a {
+    color: var(--fc-accent-text);
+  }
+  @media (min-width: 900px) {
+    .qa {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: 48px;
+    }
+    .more-q {
+      grid-column: 2;
+    }
+  }
+</style>

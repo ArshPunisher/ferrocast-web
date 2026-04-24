@@ -1,0 +1,195 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Address from '../components/Address.astro'
+import Icon from '../components/Icon.astro'
+import BrandMark from '../components/BrandMark.astro'
+import { PAGES } from '../data/pages'
+import { COMPANY, SITE, confirmed } from '../data/company'
+import { orgFacts } from '../data/schema'
+
+const page = PAGES.contact
+// Only confirmed inboxes go into JSON-LD.
+const contactPoints = [
+  confirmed('email') && {
+    '@type': 'ContactPoint',
+    contactType: 'customer support',
+    email: COMPANY.email,
+    availableLanguage: ['English', 'Hindi'],
+  },
+  confirmed('billingEmail') && {
+    '@type': 'ContactPoint',
+    contactType: 'billing support',
+    email: COMPANY.billingEmail,
+  },
+].filter(Boolean)
+const contactPage = {
+  '@context': 'https://schema.org',
+  '@type': 'ContactPage',
+  name: page.title,
+  url: new URL(page.path, SITE.url).href,
+  mainEntity: {
+    '@type': 'Organization',
+    ...orgFacts(),
+    ...(contactPoints.length > 0 && { contactPoint: contactPoints }),
+  },
+}
+const channels = [
+  {
+    icon: 'lifebuoy',
+    title: 'Help with the app',
+    body: 'Setup questions, bugs, something that doesn’t work.',
+    href: `mailto:${COMPANY.email}`,
+    label: COMPANY.email,
+  },
+  {
+    icon: 'receipt',
+    title: 'Billing and refunds',
+    body: 'Pro payments, cancellations and refunds.',
+    href: `mailto:${COMPANY.billingEmail}`,
+    label: COMPANY.billingEmail,
+  },
+  {
+    icon: 'shield-check',
+    title: 'Privacy requests',
+    body: 'See, correct or delete your data.',
+    href: `mailto:${COMPANY.privacyEmail}`,
+    label: COMPANY.privacyEmail,
+  },
+  {
+    icon: 'scales',
+    title: 'Grievance officer',
+    body: 'Complaints under Indian law.',
+    href: `mailto:${COMPANY.grievanceOfficer.email}`,
+    label: COMPANY.grievanceOfficer.email,
+  },
+]
+---
+
+<Base page={page} schema={[contactPage]}>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Talk to the people who build Ferrocast.</h1>
+      <p class="lede">
+        A small team at {COMPANY.name}. We answer every message, usually within{' '}
+        {COMPANY.responseDays} working days.
+      </p>
+    </div>
+  </section>
+
+  <div class="container grid">
+    <ul class="channels">
+      {channels.map((c) => (
+        <li>
+          <Icon name={c.icon} size={24} />
+          <div>
+            <h2>{c.title}</h2>
+            <p>{c.body}</p>
+            <a href={c.href} class="text-link">
+              {c.label}
+            </a>
+          </div>
+        </li>
+      ))}
+    </ul>
+    <aside class="side">
+      <div class="panel box">
+        <h2>Bugs and ideas in public</h2>
+        <p>Found a bug or want a feature? Open an issue on GitHub so others can follow it too.</p>
+        <a href={`${COMPANY.github}/issues`} class="btn btn-secondary btn-sm" rel="noopener">
+          <BrandMark name="github" size={16} />
+          Open an issue
+        </a>
+      </div>
+      <div class="panel box">
+        <h2>Security</h2>
+        <p>
+          Please report security problems privately to{' '}
+          <a href={`mailto:${COMPANY.email}`} class="text-link">
+            {COMPANY.email}
+          </a>{' '}
+          with “Security” in the subject, not in a public issue.
+        </p>
+      </div>
+      <div class="panel box">
+        <h2>Postal address</h2>
+        <Address />
+      </div>
+    </aside>
+  </div>
+  <div class="spacer"></div>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 32px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 48px;
+    }
+  }
+  .grid {
+    display: grid;
+    gap: 40px;
+  }
+  @media (min-width: 900px) {
+    .grid {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 64px;
+    }
+  }
+  .channels {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .channels li {
+    display: flex;
+    gap: 16px;
+    padding-block: 24px;
+    border-top: 1px solid var(--fc-line);
+  }
+  .channels li:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .channels :global(svg) {
+    color: var(--fc-accent-text);
+    flex-shrink: 0;
+  }
+  .channels h2,
+  .box h2 {
+    font-size: 1.15rem;
+    margin-bottom: 4px;
+  }
+  .channels p,
+  .box p {
+    color: var(--fc-text-2);
+    margin-bottom: 8px;
+  }
+  .channels a {
+    word-break: break-word;
+  }
+  .side {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+  }
+  .box {
+    padding: 24px;
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+  }
+  .spacer {
+    height: 96px;
+  }
+</style>

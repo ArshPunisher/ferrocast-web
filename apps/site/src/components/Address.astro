@@ -1,0 +1,58 @@
+---
+// The postal block for legal and contact pages. Fields the owner has not confirmed yet
+// show a clearly marked line instead of a made-up value.
+import { COMPANY, confirmed } from '../data/company'
+const a = COMPANY.address
+---
+
+<address class="addr">
+  <strong>{COMPANY.legalName}</strong>
+  <br />
+  {confirmed('address') ? (
+    <>
+      {a.street}
+      <br />
+      {a.city}, {a.region} {a.postalCode}
+      <br />
+      {a.country}
+    </>
+  ) : (
+    <span class="pending">Registered address: being confirmed</span>
+  )}
+  {confirmed('gstin') ? (
+    COMPANY.gstin && (
+      <>
+        <br />
+        GSTIN: {COMPANY.gstin}
+      </>
+    )
+  ) : (
+    <>
+      <br />
+      <span class="pending">GSTIN: being confirmed</span>
+    </>
+  )}
+  {confirmed('phone') && (
+    <>
+      <br />
+      Phone: <a href={`tel:${COMPANY.phone.replace(/\s/g, '')}`}>{COMPANY.phone}</a>
+    </>
+  )}
+</address>
+
+<style>
+  .addr {
+    font-style: normal;
+    color: var(--fc-text-2);
+    line-height: 1.7;
+  }
+  .pending {
+    display: inline-block;
+    margin-block: 2px;
+    padding: 0 8px;
+    border: 1px dashed var(--fc-line-strong);
+    border-radius: 6px;
+    color: var(--fc-text-3);
+    font-size: 0.9375em;
+  }
+</style>

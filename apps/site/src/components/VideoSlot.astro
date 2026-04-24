@@ -1,0 +1,208 @@
+---
+// A product loop rendered by apps/video (Remotion). Only sources that exist at build
+// time are linked, so the page never points at a missing file. Plays when on screen,
+// pauses off screen, never autoplays under reduced motion (the poster stays).
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import Icon from './Icon.astro'
+
+interface Props {
+  name: string
+  label: string
+  width?: number
+  height?: number
+  class?: string
+}
+const { name, label, width = 1280, height = 720, class: className } = Astro.props
+// Astro builds from the package directory; public/ is resolved from there.
+const pub = (f: string) => join(process.cwd(), 'public', 'media', f)
+const webm = existsSync(pub(`${name}.webm`))
+const mp4 = existsSync(pub(`${name}.mp4`))
+const poster = existsSync(pub(`${name}-poster.jpg`)) ? `/media/${name}-poster.jpg` : null
+---
+
+<figure class:list={['video-slot', className]} style={`aspect-ratio: ${width} / ${height}`}>
+  {webm || mp4 ? (
+    <>
+      <video
+        data-autoplay
+        muted
+        loop
+        playsinline
+        preload="none"
+        width={width}
+        height={height}
+        data-poster={poster ?? undefined}
+        aria-label={label}
+      >
+        {webm && <source src={`/media/${name}.webm`} type="video/webm" />}
+        {mp4 && <source src={`/media/${name}.mp4`} type="video/mp4" />}
+      </video>
+      {/* Without JS the poster never gets set on the video, so show it as an image. */}
+      {poster && (
+        <noscript>
+          <img class="nojs-poster" src={poster} alt="" width={width} height={height} />
+        </noscript>
+      )}
+    </>
+  ) : poster ? (
+    <img src={poster} alt={label} width={width} height={height} loading="lazy" decoding="async" />
+  ) : (
+    <div class="empty" role="img" aria-label={label} />
+  )}
+  {(webm || mp4) && (
+    <button
+      type="button"
+      class="vt"
+      data-video-toggle
+      data-name={label}
+      aria-label={`Play video: ${label}`}
+      hidden
+    >
+      <span class="i-play">
+        <Icon name="play" size={16} weight="fill" />
+      </span>
+      <span class="i-pause">
+        <Icon name="pause" size={16} weight="fill" />
+      </span>
+    </button>
+  )}
+</figure>
+
+<script>
+  // Loops play while on screen and pause off screen. Every loop has a pause button
+  // (WCAG 2.2.2); under reduced motion nothing plays until the viewer presses play.
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)')
+  const slots = document.querySelectorAll<HTMLElement>('.video-slot')
+  const userPaused = new WeakSet<HTMLVideoElement>()
+  const sync = (v: HTMLVideoElement, btn: HTMLButtonElement | null) => {
+    if (!btn) return
+    btn.dataset.playing = String(!v.paused)
+    btn.setAttribute(
+      'aria-label',
+      `${v.paused ? 'Play' : 'Pause'} video: ${btn.dataset.name ?? ''}`,
+    )
+  }
+  const play = (v: HTMLVideoElement) => {
+    if (v.preload === 'none') v.preload = 'auto'
+    v.play().catch(() => {
+      /* autoplay refused: the poster stays */
+    })
+  }
+  // Posters load only when a loop gets near the screen, so they never compete with the
+  // headline and fonts on first load.
+  const near =
+    'IntersectionObserver' in window
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const e of entries) {
+              if (!e.isIntersecting) continue
+              const v = e.target as HTMLVideoElement
+              if (v.dataset.poster) v.poster = v.dataset.poster
+              near?.unobserve(v)
+            }
+          },
+          { rootMargin: '600px 0px' },
+        )
+      : null
+  const io =
+    'IntersectionObserver' in window
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const e of entries) {
+              const v = e.target as HTMLVideoElement
+              if (e.isIntersecting && !reduce.matches && !userPaused.has(v)) play(v)
+              else if (!e.isIntersecting) v.pause()
+            }
+          },
+          { threshold: 0.35 },
+        )
+      : null
+  slots.forEach((slot) => {
+    const v = slot.querySelector<HTMLVideoElement>('video[data-autoplay]')
+    const btn = slot.querySelector<HTMLButtonElement>('[data-video-toggle]')
+    if (!v) return
+    btn?.removeAttribute('hidden')
+    v.addEventListener('play', () => sync(v, btn))
+    v.addEventListener('pause', () => sync(v, btn))
+    btn?.addEventListener('click', () => {
+      if (v.paused) {
+        userPaused.delete(v)
+        play(v)
+      } else {
+        userPaused.add(v)
+        v.pause()
+      }
+    })
+    if (near) near.observe(v)
+    else if (v.dataset.poster) v.poster = v.dataset.poster
+    io?.observe(v)
+  })
+  reduce.addEventListener('change', () => {
+    if (reduce.matches) document.querySelectorAll('video').forEach((v) => v.pause())
+  })
+</script>
+
+<style>
+  .video-slot {
+    margin: 0;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: #07080a;
+    box-shadow: var(--fc-shadow-2);
+  }
+  .vt {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    background: rgb(10 11 13 / 0.72);
+    color: #fff;
+    cursor: pointer;
+    touch-action: manipulation;
+    opacity: 0.85;
+    transition:
+      opacity 160ms var(--fc-ease-out),
+      transform 120ms var(--fc-ease-out);
+  }
+  .vt[hidden] {
+    display: none;
+  }
+  .vt:active {
+    transform: scale(0.94);
+  }
+  .vt .i-pause,
+  .vt[data-playing='true'] .i-play {
+    display: none;
+  }
+  .vt[data-playing='true'] .i-pause {
+    display: inline-flex;
+  }
+  .vt .i-play {
+    display: inline-flex;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .vt:hover {
+      opacity: 1;
+    }
+  }
+  .nojs-poster {
+    position: absolute;
+    inset: 0;
+  }
+  .video-slot video,
+  .video-slot img,
+  .video-slot .empty {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+</style>

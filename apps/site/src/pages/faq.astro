@@ -1,0 +1,185 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import { PAGES } from '../data/pages'
+import { FAQ, ALL_QA } from '../data/faq'
+import { faqPage } from '../data/schema'
+
+const page = PAGES.faq
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+---
+
+<Base page={page} schema={[faqPage(ALL_QA)]}>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Questions, answered.</h1>
+      <!-- prettier-ignore -->
+      <p class="lede">The things streamers ask most. Something missing? <a href="/contact/" class="text-link">Ask us</a>.</p>
+    </div>
+  </section>
+
+  <div class="container faq">
+    <nav aria-label="FAQ topics" class="toc">
+      <ul>
+        {FAQ.map((g) => (
+          <li>
+            <a href={`#${slug(g.title)}`}>{g.title}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+    <div class="groups">
+      {FAQ.map((g) => (
+        <section id={slug(g.title)} aria-labelledby={`${slug(g.title)}-h`}>
+          <h2 id={`${slug(g.title)}-h`} class="display-3">
+            {g.title}
+          </h2>
+          <div class="list">
+            {g.items.map((qa) => (
+              <details id={slug(qa.q)}>
+                <summary>
+                  <h3>{qa.q}</h3>
+                </summary>
+                <p>{qa.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  </div>
+  <div class="section-spacer"></div>
+</Base>
+
+<script>
+  // Open the question a link points at.
+  const open = () => {
+    const id = decodeURIComponent(location.hash.slice(1))
+    const el = id ? document.getElementById(id) : null
+    if (el instanceof HTMLDetailsElement) el.open = true
+  }
+  open()
+  addEventListener('hashchange', open)
+</script>
+
+<style>
+  .head {
+    padding-block: 40px 24px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 40px;
+    }
+  }
+  .faq {
+    display: grid;
+    gap: 32px;
+  }
+  .toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toc a {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding-inline: 14px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line-strong);
+    color: var(--fc-text-2);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .toc a:hover {
+      color: var(--fc-text);
+    }
+  }
+  @media (min-width: 900px) {
+    .faq {
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 64px;
+    }
+    .toc {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }
+    .toc ul {
+      flex-direction: column;
+    }
+    .toc a {
+      border: 0;
+      padding-inline: 0;
+      height: 32px;
+      border-radius: 6px;
+    }
+  }
+  .groups {
+    display: grid;
+    gap: 56px;
+  }
+  .groups h2 {
+    margin-bottom: 16px;
+  }
+  .list {
+    border-top: 1px solid var(--fc-line);
+  }
+  details {
+    border-bottom: 1px solid var(--fc-line);
+  }
+  summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    min-height: 64px;
+    padding-block: 12px;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary h3 {
+    font-family: var(--fc-font-sans);
+    font-size: 1.0625rem;
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1.4;
+  }
+  summary::after {
+    content: '+';
+    flex-shrink: 0;
+    font-family: var(--fc-font-mono);
+    color: var(--fc-text-3);
+    font-size: 1.25rem;
+    transition: transform 200ms var(--fc-ease-out);
+  }
+  details[open] summary::after {
+    transform: rotate(45deg);
+  }
+  details p {
+    color: var(--fc-text-2);
+    padding-bottom: 22px;
+    max-width: 70ch;
+  }
+  .section-spacer {
+    height: 96px;
+  }
+</style>

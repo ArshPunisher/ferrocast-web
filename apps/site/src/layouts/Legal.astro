@@ -1,0 +1,59 @@
+---
+import Base from './Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import type { PageMeta } from '../data/pages'
+import { COMPANY, SITE } from '../data/company'
+import { webPage } from '../data/schema'
+
+interface Props {
+  page: PageMeta
+  h1: string
+  intro: string
+}
+const { page, h1, intro } = Astro.props
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+  ogType="article"
+>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">{h1}</h1>
+      <p class="lede">{intro}</p>
+      <p class="updated">
+        Last updated <time datetime={COMPANY.legalUpdatedIso}>{COMPANY.legalUpdated}</time>
+      </p>
+    </div>
+  </section>
+  <div class="container body">
+    <article class="prose">
+      <slot />
+    </article>
+  </div>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 16px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 24px;
+    }
+  }
+  .updated {
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .body {
+    padding-bottom: 96px;
+  }
+</style>

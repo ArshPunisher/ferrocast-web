@@ -1,0 +1,33 @@
+---
+// Phosphor icon, inlined at build time from @phosphor-icons/core (no runtime JS, no
+// requests). Decorative unless a label is given.
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+
+interface Props {
+  name: string
+  size?: number
+  weight?: 'regular' | 'bold' | 'fill' | 'duotone' | 'light'
+  label?: string
+  class?: string
+}
+const { name, size = 20, weight = 'regular', label, class: className } = Astro.props
+const require = createRequire(import.meta.url)
+const file = weight === 'regular' ? `${name}.svg` : `${name}-${weight}.svg`
+const raw = readFileSync(require.resolve(`@phosphor-icons/core/assets/${weight}/${file}`), 'utf8')
+const inner = raw.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 256 256"
+  width={size}
+  height={size}
+  fill="currentColor"
+  class:list={['icon', className]}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  aria-hidden={label ? undefined : 'true'}
+  focusable="false"
+  set:html={inner}
+/>

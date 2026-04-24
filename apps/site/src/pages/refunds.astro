@@ -1,0 +1,81 @@
+---
+import Legal from '../layouts/Legal.astro'
+import Address from '../components/Address.astro'
+import { PAGES } from '../data/pages'
+import { COMPANY } from '../data/company'
+---
+
+<Legal
+  page={PAGES.refunds}
+  h1="Refund and cancellation policy"
+  intro="The Ferrocast app is free, so this policy only applies to Ferrocast Pro, which is billed in Indian rupees through Razorpay."
+>
+  <h2>Delivery</h2>
+  <p>
+    Pro is a digital service. It is activated on your Ferrocast account right after a successful
+    payment, and you get a receipt by email. Nothing is shipped.
+  </p>
+
+  <h2>Cancelling</h2>
+  <ul>
+    <li>
+      You can cancel Pro at any time from your account, or by emailing{' '}
+      <a href={`mailto:${COMPANY.billingEmail}`}>{COMPANY.billingEmail}</a>.
+    </li>
+    <li>
+      Cancelling stops the next renewal. You keep Pro until the end of the period you already paid
+      for.
+    </li>
+    <li>
+      Nothing in the free app is affected. Your setup stays on your computer and keeps working.
+    </li>
+  </ul>
+
+  <h2>Refunds</h2>
+  <ul>
+    <li>
+      <strong>Within 7 days of your first payment</strong> for a monthly or yearly plan, you can ask
+      for a full refund for any reason.
+    </li>
+    <li>
+      <strong>Yearly plans after 7 days</strong>: if you cancel, we refund the unused whole months
+      on request.
+    </li>
+    <li>
+      <strong>Charged by mistake</strong> (a renewal after you cancelled, or a double charge): we
+      refund the full amount.
+    </li>
+    <li>
+      <strong>If we shut down a Pro service</strong>, we refund any unused prepaid time without you
+      having to ask.
+    </li>
+  </ul>
+  <p>
+    Monthly renewals after the first 7 days are not refunded, but you can cancel so they don’t
+    renew.
+  </p>
+
+  <h2>How refunds are paid</h2>
+  <p>
+    Refunds go back to the original payment method through Razorpay. Once we approve a refund,
+    Razorpay usually processes it within 5 to 7 working days; your bank or card issuer may take a
+    few days more to show it. UPI refunds are often faster.
+  </p>
+
+  <h2>Tips are not covered here</h2>
+  <p>
+    Tips go straight from viewers to the streamer’s own payment account. We never receive tip money,
+    so we cannot refund it. A viewer who wants a tip refunded should contact the streamer; streamers
+    can refund through their payment provider.
+  </p>
+
+  <h2>How to ask</h2>
+  <p>
+    Email <a href={`mailto:${COMPANY.billingEmail}`}>{COMPANY.billingEmail}</a> with the email on
+    your account and the Razorpay payment id from your receipt. We reply within{' '}
+    {COMPANY.responseDays} working days.
+  </p>
+
+  <h2>Contact</h2>
+  <Address />
+</Legal>
