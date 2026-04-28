@@ -454,7 +454,8 @@ export interface TtsVoice {
   id: string
   name: string
   language: string
-  pro: boolean
+  /** Not in API.md yet: studio voices that need Pro. Absent means free. */
+  pro?: boolean
 }
 /** Pending TTS item. Shape proposed in docs/API-REQUESTS.md (R4). */
 export interface TtsPending {
@@ -619,7 +620,7 @@ export type OverlayServerFrame =
   | { v: 1; seq: number; type: 'delete_message'; data: { platform: Platform; message_id: string } }
   | { v: 1; seq: number; type: 'delete_user'; data: { platform: Platform; user_id: string } }
   | { v: 1; seq: number; type: 'clear_chat'; data: { platform: Platform | null } }
-  | { v: 1; seq: number; type: 'tts'; data: { id: string; text: string } }
+  | { v: 1; seq: number; type: 'tts'; data: { id: string; text: string; audio: string | null } }
   | { v: 1; seq: number; type: 'revoked'; data: Record<string, never> }
 
 export type AckPhase = 'started' | 'finished' | 'failed'

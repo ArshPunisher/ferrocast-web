@@ -791,7 +791,7 @@ export class DemoEngine {
               .find((o) => o.id === s.overlayId)
               ?.widgets.some((w) => w.kind === 'alerts')
           )
-            this.sendOverlay(s, 'tts', { id: item.id, text: item.text })
+            this.sendOverlay(s, 'tts', { id: item.id, text: item.text, audio: null })
       this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
       return undefined
     }

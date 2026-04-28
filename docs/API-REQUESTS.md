@@ -110,7 +110,9 @@ type SessionStats = { started_at: number | null; follows: number; subs: number; 
 
 The overlay page opened as `/o/<token>/?test` connects to `/o/<token>/ws?test`. The server then sends sample `alert` and `event` frames for that socket only (every ~6 s), never touching the real queue. Test alerts from `POST /api/v1/test` are not sent to sockets in test mode.
 
-## R13. Media in `RenderedAlert`
+## R13. Media in `RenderedAlert` (resolved differently)
+
+API.md now sends media **ids** (including `tts_audio`). The overlay resolves a bare id to `media/<id>` next to the page and still accepts URLs, so either works. Original proposal:
 
 `RenderedAlert.sound` / `image` on the **overlay socket** should be URLs relative to the overlay page (`media/<id>`), not media ids, so the overlay can play them without knowing the id scheme. On the dashboard API they stay ids.
 
