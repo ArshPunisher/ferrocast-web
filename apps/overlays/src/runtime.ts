@@ -8,7 +8,7 @@ import type {
   RenderedAlert,
   Widget,
 } from '@ferrocast/api/types'
-import { el, safeText, warnOnce } from './dom'
+import { el, mediaRef, speakText, warnOnce } from './dom'
 import { emptyState, type WidgetContext, type WidgetView } from './widget'
 import { AlertsWidget } from './widgets/alerts'
 import { ChatWidget } from './widgets/chat'
@@ -160,19 +160,24 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     }
   }
 
-  function speak(id: string, text: string): void {
+  function speak(id: string, text: string, audio: unknown): void {
     // An approved TTS message (R-48). Never while OBS hides the source, never twice.
     if (spoken.has(id) || opts.audio === false || !visible) return
     spoken.add(id)
     if (spoken.size > 200) spoken.delete(spoken.values().next().value as string)
-    const synth = globalThis.speechSynthesis
-    const Utter = globalThis.SpeechSynthesisUtterance
-    if (!synth || typeof Utter !== 'function') return
-    try {
-      synth.speak(new Utter(safeText(text, 500)))
-    } catch (e) {
-      warnOnce('text to speech is not available here', e)
+    // Prefer the WAV the engine rendered with the computer's voices (OBS captures it);
+    // fall back to the browser's voice when there is none (API.md §6 `tts`).
+    const url = mediaRef(audio)
+    if (url) {
+      try {
+        const a = new Audio(url)
+        void a.play().catch(() => speakText(text))
+        return
+      } catch {
+        // fall through to speech
+      }
     }
+    speakText(text)
   }
 
   function apply(frame: OverlayServerFrame): void {
@@ -263,7 +268,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       }
       case 'tts':
         if (typeof frame.data.id === 'string' && typeof frame.data.text === 'string')
-          speak(frame.data.id, frame.data.text)
+          speak(frame.data.id, frame.data.text, (frame.data as { audio?: unknown }).audio)
         break
       default:
         warnOnce(`ignored frame type ${String((frame as { type: unknown }).type)}`)

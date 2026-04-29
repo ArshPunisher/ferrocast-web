@@ -9,7 +9,7 @@ import { ackFrame } from '@ferrocast/api/overlay-protocol'
 import type { AlertsConfig, RenderedAlert, Widget } from '@ferrocast/api/types'
 import { spikePath, MARK_SPIKES, MARK_MAGNET } from '@ferrocast/ui/mark'
 import alertCss from '../styles/alert.css?inline'
-import { el, safeImageUrl, safeMediaUrl, safeText, themeOf, warnOnce } from '../dom'
+import { el, mediaRef, safeText, speakText, themeOf, warnOnce } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -97,7 +97,7 @@ export function buildAlert(a: RenderedAlert, theme: string, lowMotion: boolean):
   const inner = el('div', 'al-inner')
   inner.appendChild(spikes())
 
-  const img = safeImageUrl(a.image)
+  const img = mediaRef(a.image)
   if (a.image && img) {
     const media = el('div', 'al-media')
     if (isVideo(img)) {
@@ -295,8 +295,14 @@ export class AlertsWidget implements WidgetView {
 
   private playSound(p: Playing): void {
     if (!this.ctx.audio) return
-    const sound = safeMediaUrl(p.alert.sound)
-    const tts = safeMediaUrl(p.alert.tts_audio)
+    const sound = mediaRef(p.alert.sound)
+    // tts_audio is a WAV the engine rendered with the computer's voices; while it isn't
+    // ready (or can't be made) the overlay speaks tts_text itself (API.md §3).
+    const tts = mediaRef(p.alert.tts_audio)
+    const ttsText =
+      !tts && typeof p.alert.tts_text === 'string' && p.alert.tts_text.trim()
+        ? p.alert.tts_text
+        : null
     const vol = Number.isFinite(p.alert.volume)
       ? Math.min(Math.max(p.alert.volume, 0), 100) / 100
       : 0.7
@@ -326,9 +332,11 @@ export class AlertsWidget implements WidgetView {
       this.tryPlay(a, after)
     }
     const playTts = () => {
-      if (tts && this.playing === p && !p.leaving) play(tts)
+      if (this.playing !== p || p.leaving) return
+      if (tts) play(tts)
+      else if (ttsText) speakText(ttsText)
     }
-    if (sound) play(sound, tts ? playTts : undefined)
+    if (sound) play(sound, tts || ttsText ? playTts : undefined)
     else playTts()
   }
 

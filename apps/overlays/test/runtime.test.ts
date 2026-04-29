@@ -562,16 +562,16 @@ describe('tts and revoked frames', () => {
     }
     const talk = createOverlay(document.createElement('div'), { audio: true })
     talk.apply(snapshot())
-    talk.apply(frame('tts', { id: 't1', text: 'Keep it up <script>' }))
-    talk.apply(frame('tts', { id: 't1', text: 'Keep it up <script>' }))
+    talk.apply(frame('tts', { id: 't1', text: 'Keep it up <script>', audio: null }))
+    talk.apply(frame('tts', { id: 't1', text: 'Keep it up <script>', audio: null }))
     expect(speak).toHaveBeenCalledTimes(1)
     expect((speak.mock.calls[0]?.[0] as { text: string }).text).toBe('Keep it up <script>')
     talk.setVisible(false)
     expect(cancel).toHaveBeenCalled()
-    talk.apply(frame('tts', { id: 't2', text: 'hidden' }))
+    talk.apply(frame('tts', { id: 't2', text: 'hidden', audio: null }))
     expect(speak).toHaveBeenCalledTimes(1)
     talk.setVisible(true)
-    talk.apply(frame('tts', { id: 't3', text: 'x'.repeat(5000) }))
+    talk.apply(frame('tts', { id: 't3', text: 'x'.repeat(5000), audio: null }))
     expect((speak.mock.calls[1]?.[0] as { text: string }).text.length).toBeLessThanOrEqual(500)
     talk.destroy()
     ;[g.speechSynthesis, g.SpeechSynthesisUtterance] = prev
@@ -579,7 +579,7 @@ describe('tts and revoked frames', () => {
 
   it('tts without speech synthesis is ignored quietly', () => {
     rt.apply(snapshot())
-    expect(() => rt.apply(frame('tts', { id: 'n', text: 'hello' }))).not.toThrow()
+    expect(() => rt.apply(frame('tts', { id: 'n', text: 'hello', audio: null }))).not.toThrow()
   })
 
   it('revoked clears the page for good and sends nothing more', () => {
@@ -746,6 +746,56 @@ describe('review fixes', () => {
     expect(urls).toEqual(['media/ding.mp3', 'media/tts.wav'])
     loud.destroy()
     globalThis.Audio = OrigAudio
+  })
+
+  it('engine media ids resolve under the overlay page; no WAV yet means the browser speaks tts_text', async () => {
+    const urls: string[] = []
+    const spoken: string[] = []
+    const g = globalThis as unknown as {
+      speechSynthesis?: unknown
+      SpeechSynthesisUtterance?: unknown
+    }
+    const prev = [g.speechSynthesis, g.SpeechSynthesisUtterance]
+    g.speechSynthesis = { speak: (u: { text: string }) => spoken.push(u.text), cancel: () => {} }
+    g.SpeechSynthesisUtterance = function (this: { text: string }, t: string) {
+      this.text = t
+    }
+    const OrigAudio = globalThis.Audio
+    globalThis.Audio = vi.fn(function (
+      this: { addEventListener: unknown; play: unknown; pause: unknown; volume: number },
+      url: string,
+    ) {
+      urls.push(url)
+      const listeners: Record<string, () => void> = {}
+      this.volume = 1
+      this.pause = () => {}
+      this.addEventListener = (t: string, f: () => void) => {
+        listeners[t] = f
+      }
+      this.play = () => {
+        queueMicrotask(() => listeners.ended?.())
+        return Promise.resolve()
+      }
+    }) as unknown as typeof Audio
+    const loud = createOverlay(document.createElement('div'), { audio: true })
+    loud.apply(snapshot())
+    loud.apply(
+      frame('alert', alert('id1', { sound: 'm-chime', tts_audio: null, tts_text: 'Keep it up!' })),
+    )
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    expect(urls).toEqual(['media/m-chime'])
+    expect(spoken).toEqual(['Keep it up!'])
+    // An approved TTS frame with a rendered WAV plays it instead of speaking.
+    loud.apply(frame('tts', { id: 'w1', text: 'read me', audio: 'tts-42' }))
+    expect(urls.at(-1)).toBe('media/tts-42')
+    expect(spoken).toEqual(['Keep it up!'])
+    // A hostile audio value is refused and the text is spoken instead.
+    loud.apply(frame('tts', { id: 'w2', text: 'fallback', audio: 'javascript:alert(1)' }))
+    expect(urls).not.toContain('javascript:alert(1)')
+    expect(spoken).toContain('fallback')
+    loud.destroy()
+    globalThis.Audio = OrigAudio
+    ;[g.speechSynthesis, g.SpeechSynthesisUtterance] = prev
   })
 
   it('removing the alerts widget acks queued alerts as failed', () => {

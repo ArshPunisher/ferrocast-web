@@ -74,6 +74,29 @@ export function safeMediaUrl(url: unknown): string | null {
   return safeImageUrl(url)
 }
 
+/**
+ * A media reference from the engine: a bare media id (API.md §6, served at
+ * `/o/<token>/media/<id>`, relative to this page) or a URL the safety rules allow.
+ */
+export function mediaRef(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  if (/^[A-Za-z0-9_-]{1,128}$/.test(s)) return `media/${encodeURIComponent(s)}`
+  return safeMediaUrl(s)
+}
+
+/** Speaks text with the browser's own voice; quietly does nothing where unsupported. */
+export function speakText(text: string): void {
+  const synth = globalThis.speechSynthesis
+  const Utter = globalThis.SpeechSynthesisUtterance
+  if (!synth || typeof Utter !== 'function') return
+  try {
+    synth.speak(new Utter(safeText(text, 500)))
+  } catch (e) {
+    warnOnce('text to speech is not available here', e)
+  }
+}
+
 /** A platform glyph (Simple Icons path) built as real SVG nodes. */
 export function platformGlyph(platform: string, size: number): SVGSVGElement | null {
   const path = (ICON_PATHS as Record<string, string>)[platform]
