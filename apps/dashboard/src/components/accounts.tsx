@@ -116,6 +116,19 @@ export function useConnect(): {
           </div>
         </div>
       )}
+      {flow.flow.flow === 'browser' && !done && (
+        <p className="pb-1 text-center text-[13px] text-text-3">
+          Nothing opened?{' '}
+          <a
+            href={flow.flow.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-accent-text hover:underline"
+          >
+            Open the sign-in page
+          </a>
+        </p>
+      )}
       <div role="status" className="flex items-center justify-center gap-3 py-3">
         {done ? (
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-ok">
