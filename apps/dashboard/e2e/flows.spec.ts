@@ -307,6 +307,8 @@ test.describe('tips and settings', () => {
 
 test.describe('first run', () => {
   test('connect, pick a look, add to OBS, done', async ({ page }) => {
+    // Waits on the simulated sign-in (a few seconds), so give slow CI runners room.
+    test.slow()
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
     await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
     await page

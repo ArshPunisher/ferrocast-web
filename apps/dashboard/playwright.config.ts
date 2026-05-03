@@ -6,7 +6,7 @@ const port = Number(process.env.FC_DASH_PORT ?? 5281)
 
 export default defineConfig({
   testDir: 'e2e',
-  timeout: 30_000,
+  timeout: process.env.CI ? 45_000 : 30_000,
   expect: { timeout: 7_000 },
   fullyParallel: true,
   retries: 0,
