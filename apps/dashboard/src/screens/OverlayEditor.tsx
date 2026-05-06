@@ -284,7 +284,7 @@ function Canvas({
               sel
                 ? 'border-accent-text bg-accent-soft/40'
                 : preview
-                  ? 'border-transparent hover:border-line-strong'
+                  ? 'border-dashed border-line-strong/70 hover:border-text-3'
                   : 'border-line-strong bg-surface-1/70 hover:border-text-3',
             )}
             style={{ left: w.x * scale, top: w.y * scale, width: w.w * scale, height: w.h * scale }}

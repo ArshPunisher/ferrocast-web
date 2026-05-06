@@ -210,6 +210,21 @@ test.describe('overlays', () => {
     await expect(page.getByText('Overlay saved. OBS updates by itself.')).toBeVisible()
   })
 
+  test('layout editor: the live view renders the real overlay', async ({ page }) => {
+    await open(page, 'overlays/ov-main')
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = [...document.querySelectorAll('div')].find((d) =>
+            d.shadowRoot?.querySelector('.fc-ov'),
+          )
+          const r = host?.getBoundingClientRect()
+          return r ? Math.round(r.height) : 0
+        }),
+      )
+      .toBeGreaterThan(100)
+  })
+
   test('layout editor: drag a widget', async ({ page }) => {
     await open(page, 'overlays/ov-brb')
     const w = page.getByRole('button', { name: /Alerts widget at/ })

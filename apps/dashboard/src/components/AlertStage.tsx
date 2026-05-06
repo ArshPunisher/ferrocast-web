@@ -152,7 +152,7 @@ export function OverlayPreview({
   useEffect(() => schedule('config'), [overlay])
   useEffect(() => schedule('snapshot'), [state])
   return (
-    <div className={cx('relative overflow-hidden', className)}>
+    <div className={cx('overflow-hidden', className ?? 'relative')}>
       <div ref={host} className="absolute inset-0" />
     </div>
   )
