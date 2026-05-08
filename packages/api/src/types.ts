@@ -468,18 +468,57 @@ export interface TtsPending {
   received_at: Millis
 }
 
-export interface TipProviders {
-  razorpay?: { connected: boolean; account: string | null; upi: boolean }
-  kofi?: { connected: boolean; page: string | null }
-  stripe?: { connected: boolean; account: string | null }
+/**
+ * Tips (engine `GET/PUT/DELETE /api/v1/tips`). Ferrocast never touches the money: the
+ * streamer makes their own payment page with each provider ("customer chooses amount"),
+ * points that provider's webhook at the relay, and the relay shows a public tip page with
+ * one button per provider. Webhook secrets go to the relay and never come back.
+ */
+export type TipProviderKey = 'razorpay' | 'kofi' | 'stripe'
+
+/** A provider as saved. The secret itself is never returned, only whether one is stored. */
+export interface TipProviderState {
+  page_url: string
+  /** Payment Link id (`plink_…`, Razorpay and Stripe): only payments through it alert. */
+  page_id: string | null
+  /** Accept the provider's test notices (they alert like real tips). */
+  test_mode: boolean
+  has_secret: boolean
 }
+
+/** `GET /api/v1/tips`. Never contains secrets. */
 export interface TipSettings {
-  enabled: boolean
+  /** Tip page name: 3–30 of a-z 0-9 - _, lower-cased and trimmed by the server. */
+  handle: string
+  /** 1–40 characters, the only name viewers see. */
   display_name: string
+  /** Up to 280 characters, shown on the tip page. */
+  message: string
+  /** The public tip page; null until first saved. */
   page_url: string | null
-  currency: string
-  min_amount: number
-  providers: TipProviders
+  /** Where each provider's webhook should point; null until first saved. */
+  webhooks: Record<TipProviderKey, string> | null
+  razorpay: TipProviderState | null
+  kofi: TipProviderState | null
+  stripe: TipProviderState | null
+}
+
+/** A provider in a save. `secret` blank or left out keeps the saved one. */
+export interface TipProviderInput {
+  page_url: string
+  page_id?: string | null
+  test_mode?: boolean
+  secret?: string
+}
+
+/** `PUT /api/v1/tips` body. A provider set to null is turned off. */
+export interface TipSettingsInput {
+  handle: string
+  display_name: string
+  message: string
+  razorpay: TipProviderInput | null
+  kofi: TipProviderInput | null
+  stripe: TipProviderInput | null
 }
 
 export type MediaKind = 'image' | 'sound' | 'video'

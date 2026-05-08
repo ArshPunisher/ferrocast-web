@@ -35,23 +35,41 @@ import type {
   SessionStats,
   Settings,
   Timer,
+  TipProviderInput,
+  TipProviderKey,
+  TipProviderState,
   TipSettings,
   TtsPending,
   TtsSettings,
   ViewerCard,
   Widget,
 } from '../types'
+import {
+  TIP_LIMITS,
+  TIP_PROVIDER_KEYS,
+  checkedTipPage,
+  cleanTipText,
+  normaliseTipHandle,
+  tipDisplayNameProblem,
+  tipHandleProblem,
+  tipLinkProblem,
+  tipMessageProblem,
+  tipPageIdProblem,
+  tipSecretProblem,
+} from '../tips'
 import { chimeDataUrl } from './chime'
 import {
   CHATTERS,
   FILTERS,
   MESSAGES,
+  NO_TIPS,
   PANIC,
   SETTINGS,
   THEMES,
   TIPS,
   TTS,
   VOICES,
+  DEMO_RELAY,
   presetWidgets,
   seedBans,
   seedCommands,
@@ -59,6 +77,7 @@ import {
   seedOverlays,
   seedRules,
   seedTimers,
+  tipWebhooks,
 } from './seed'
 
 export interface Fault {
@@ -85,7 +104,14 @@ export interface DemoOptions {
   latencyMs?: number
   /** Accept any pairing code except these special ones (see `pair`). */
   token?: string
+  /** Whether this build has a relay (default true). Without one, saving tips is a 422. */
+  relay?: boolean
+  /** Start with a tip page set up (default) or none saved yet. */
+  tips?: 'set' | 'empty'
 }
+
+/** Tip page names someone else already has, for trying the 409 in the demo. */
+export const DEMO_TAKEN_HANDLES: readonly string[] = ['asha', 'rohanlive', 'meghna']
 
 export const DEMO_TOKEN = 'demo-session'
 /** Pairing codes the demo treats specially, for tests of the pairing screen. */
@@ -233,6 +259,13 @@ export class DemoEngine {
   private tts: TtsSettings = clone(TTS)
   private ttsPending: TtsPending[] = []
   private tips: TipSettings = clone(TIPS)
+  /** Webhook secrets as the relay keeps them. Never sent back. */
+  private tipSecrets: Partial<Record<TipProviderKey, string>> = {
+    razorpay: 'demo-razorpay-secret',
+  }
+  /** When the tip page name changed, for the 3-a-day limit. */
+  private tipHandleChanges: number[] = []
+  private relayOn: boolean
   private media: Media[] = []
   private obs: ObsState = {
     state: 'connected',
@@ -257,6 +290,8 @@ export class DemoEngine {
     this.latency = opts.latencyMs ?? null
     this.setupDone = opts.setupDone ?? true
     this.token = opts.token ?? DEMO_TOKEN
+    this.relayOn = opts.relay ?? true
+    if (opts.tips === 'empty') this.resetTips()
     const now = Date.now()
     const on = this.setupDone
     this.connectors = {
@@ -349,6 +384,18 @@ export class DemoEngine {
   }
 
   // ---------------------------------------------------------------- test hooks
+
+  /** Builds with and without a relay (saving tips without one is a 422). */
+  setRelay(on: boolean): void {
+    this.relayOn = on
+  }
+
+  /** Back to "no tip page ever saved" (tests of the first-time setup). */
+  resetTips(): void {
+    this.tips = clone(NO_TIPS)
+    this.tipSecrets = {}
+    this.tipHandleChanges = []
+  }
 
   addFault(f: Fault): void {
     this.faults.push({ ...f, left: f.times ?? 1 })
@@ -569,6 +616,115 @@ export class DemoEngine {
     }
     if (e.hint) error.hint = e.hint
     return new Response(JSON.stringify({ error }), { status: e.status, headers })
+  }
+
+  // ---------------------------------------------------------------- tips
+
+  private resetTipsKeepingChanges(): void {
+    const changes = this.tipHandleChanges
+    this.resetTips()
+    this.tipHandleChanges = changes
+  }
+
+  /** `PUT /api/v1/tips`, checked in the engine's and relay's order. */
+  private saveTips(body: unknown): TipSettings {
+    if (typeof body !== 'object' || body === null || Array.isArray(body))
+      throw new HttpError(
+        400,
+        'invalid',
+        'The tip page settings must be an object.',
+        'Send { handle, display_name, message, razorpay?, kofi?, stripe? }.',
+      )
+    if (!this.relayOn)
+      throw new HttpError(
+        422,
+        'unavailable',
+        'This build of Ferrocast has no relay set up, so the tip page can’t be saved.',
+        'Use an official Ferrocast build, or set a relay URL when building it.',
+      )
+    const b = body as Record<string, unknown>
+    const str = (v: unknown, field: string): string => {
+      if (v === undefined || v === null) return ''
+      if (typeof v !== 'string')
+        throw new HttpError(400, 'invalid', `The settings aren’t valid: ${field} must be text.`)
+      return v
+    }
+    const bad = (m: string) => new HttpError(400, 'invalid', m)
+    const handle = normaliseTipHandle(str(b.handle, 'handle'))
+    const handleProblem = tipHandleProblem(handle)
+    if (handleProblem) throw bad(handleProblem)
+    const rawName = str(b.display_name, 'display_name')
+    const nameProblem = tipDisplayNameProblem(rawName)
+    if (nameProblem) throw bad(nameProblem)
+    const rawMessage = str(b.message, 'message')
+    const messageProblem = tipMessageProblem(rawMessage)
+    if (messageProblem) throw bad(messageProblem)
+
+    const next: Partial<Record<TipProviderKey, TipProviderState | null>> = {}
+    const secrets: Partial<Record<TipProviderKey, string>> = {}
+    for (const key of TIP_PROVIDER_KEYS) {
+      const raw = b[key]
+      if (raw === undefined || raw === null) {
+        next[key] = null
+        continue
+      }
+      if (typeof raw !== 'object' || Array.isArray(raw))
+        throw bad(`The settings aren’t valid: ${key} must be an object or null.`)
+      const p = raw as Partial<Record<keyof TipProviderInput, unknown>>
+      const rawUrl = str(p.page_url, `${key}.page_url`)
+      const pageUrl = checkedTipPage(key, rawUrl)
+      if (!pageUrl) throw bad(tipLinkProblem(key, rawUrl) ?? 'That payment link isn’t valid.')
+      let secret = str(p.secret, `${key}.secret`).trim()
+      if (secret === '') secret = this.tipSecrets[key] ?? ''
+      const secretProblem = tipSecretProblem(key, secret, false)
+      if (secretProblem) throw bad(secretProblem)
+      const rawId =
+        p.page_id === undefined || p.page_id === null ? '' : str(p.page_id, `${key}.page_id`)
+      const idProblem = tipPageIdProblem(key, rawId)
+      if (idProblem) throw bad(idProblem)
+      if (p.test_mode !== undefined && typeof p.test_mode !== 'boolean')
+        throw bad(`The settings aren’t valid: ${key}.test_mode must be true or false.`)
+      next[key] = {
+        page_url: pageUrl,
+        page_id: rawId.trim() || null,
+        test_mode: p.test_mode === true,
+        has_secret: true,
+      }
+      secrets[key] = secret
+    }
+
+    // The relay: someone else's name is a 409 before the daily limit is counted.
+    if (DEMO_TAKEN_HANDLES.includes(handle))
+      throw new HttpError(
+        409,
+        'taken',
+        'That tip page name is taken.',
+        'Pick another name; names someone just let go stay with them for 30 days.',
+      )
+    if (handle !== this.tips.handle) {
+      const now = Date.now()
+      this.tipHandleChanges = this.tipHandleChanges.filter((t) => now - t < 86_400_000)
+      if (this.tipHandleChanges.length >= TIP_LIMITS.handleChangesPerDay)
+        throw new HttpError(
+          429,
+          'rate_limited',
+          'You changed your tip page name too often today.',
+          'Try again tomorrow. Your current name keeps working.',
+        )
+      this.tipHandleChanges.push(now)
+    }
+    this.tipSecrets = secrets
+    this.tips = {
+      handle,
+      display_name: cleanTipText(rawName),
+      message: cleanTipText(rawMessage, TIP_LIMITS.messageMax),
+      page_url: `${DEMO_RELAY}/t/${handle}`,
+      webhooks: tipWebhooks(),
+      razorpay: next.razorpay ?? null,
+      kofi: next.kofi ?? null,
+      stripe: next.stripe ?? null,
+    }
+    return clone(this.tips)
   }
 
   // ---------------------------------------------------------------- routes
@@ -798,16 +954,18 @@ export class DemoEngine {
 
     // tips
     if (is('GET', 'tips')) return clone(this.tips)
-    if (is('PUT', 'tips')) {
-      const t = requireObj(body) as TipSettings
-      if (typeof t.display_name === 'string' && t.display_name.trim() === '')
+    if (is('PUT', 'tips')) return this.saveTips(body)
+    if (is('DELETE', 'tips')) {
+      if (!this.relayOn)
         throw new HttpError(
-          400,
-          'invalid',
-          'display_name: tippers need a name to see. It can be your stream name.',
+          422,
+          'unavailable',
+          'This build of Ferrocast has no relay set up, so the tip page can’t be taken down.',
+          'Use an official Ferrocast build, or set a relay URL when building it.',
         )
-      this.tips = { ...this.tips, ...t }
-      return clone(this.tips)
+      // The page goes; the name stays held for this install (the relay keeps it 30 days).
+      this.resetTipsKeepingChanges()
+      return undefined
     }
 
     // media

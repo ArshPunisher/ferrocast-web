@@ -288,8 +288,9 @@ test.describe('tips and settings', () => {
   test('tip page promises the legal name stays private', async ({ page }) => {
     await open(page, 'tips')
     await expect(page.getByText(/legal name stays off the page/)).toBeVisible()
-    await page.getByLabel('Name tippers see').fill('')
-    await expect(page.getByText(/Tippers need a name/)).toBeVisible()
+    await page.getByLabel('Name viewers see').fill('')
+    await page.getByRole('button', { name: 'Save changes' }).first().click()
+    await expect(page.getByText('The display name must be 1 to 40 characters.')).toBeVisible()
   })
 
   test('export downloads a ferropack', async ({ page }) => {

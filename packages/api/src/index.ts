@@ -8,6 +8,7 @@ export * from './format'
 export * from './template'
 export * from './samples'
 export * from './queue'
+export * from './tips'
 export {
   amountOf,
   appliesTo,

@@ -371,7 +371,8 @@ export function seedTimers(): Timer[] {
     {
       id: 't-socials',
       name: 'Socials',
-      message: 'New videos every Friday on YouTube. Tips go straight to me: ferrocast.tips/example',
+      message:
+        'New videos every Friday on YouTube. Tips go straight to me: ferrocast-relay.clearcraftlabs.com/t/novaplays',
       every_min: 45,
       min_chat_lines: 20,
       platforms: [],
@@ -396,17 +397,45 @@ export const VOICES: TtsVoice[] = [
   { id: 'studio-aria', name: 'Aria (studio)', language: 'English (US)', pro: true },
 ]
 
+/** The relay the demo pretends to use, and this install's id on it. */
+export const DEMO_RELAY = 'https://ferrocast-relay.clearcraftlabs.com'
+export const DEMO_INSTALL = 'ins_7q2kx9m4'
+
+export function tipWebhooks(base = DEMO_RELAY, install = DEMO_INSTALL) {
+  return {
+    razorpay: `${base}/v1/tips/razorpay/${install}`,
+    kofi: `${base}/v1/tips/kofi/${install}`,
+    stripe: `${base}/v1/tips/stripe/${install}`,
+  }
+}
+
+/** A tip page with Razorpay set up; Ko-fi and Stripe not added yet. */
 export const TIPS: TipSettings = {
-  enabled: true,
+  handle: 'novaplays',
   display_name: 'NovaPlays',
-  page_url: 'https://ferrocast.tips/novaplays',
-  currency: 'INR',
-  min_amount: 20,
-  providers: {
-    razorpay: { connected: true, account: 'acc_••••7Q2', upi: true },
-    kofi: { connected: false, page: null },
-    stripe: { connected: false, account: null },
+  message: 'Thanks for hanging out. Every tip goes into the new mic fund.',
+  page_url: `${DEMO_RELAY}/t/novaplays`,
+  webhooks: tipWebhooks(),
+  razorpay: {
+    page_url: 'https://razorpay.me/@novaplays',
+    page_id: null,
+    test_mode: false,
+    has_secret: true,
   },
+  kofi: null,
+  stripe: null,
+}
+
+/** What the engine returns before a tip page was ever saved. */
+export const NO_TIPS: TipSettings = {
+  handle: '',
+  display_name: '',
+  message: '',
+  page_url: null,
+  webhooks: null,
+  razorpay: null,
+  kofi: null,
+  stripe: null,
 }
 
 export const SETTINGS: Settings = {

@@ -27,6 +27,7 @@ import type {
   Theme,
   Timer,
   TipSettings,
+  TipSettingsInput,
   TtsPending,
   TtsSettings,
   TtsVoice,
@@ -271,7 +272,10 @@ export class FerroClient {
 
   // Tips
   tips = () => this.get<TipSettings>('/api/v1/tips')
-  saveTips = (t: TipSettings) => this.put<TipSettings>('/api/v1/tips', t)
+  /** Saves the tip page; blank secrets keep the saved ones. Resolves with the normalised page. */
+  saveTips = (t: TipSettingsInput) => this.put<TipSettings>('/api/v1/tips', t)
+  /** Takes the tip page down (204). The name stays reserved for this install for 30 days. */
+  deleteTips = () => this.del('/api/v1/tips')
 
   // Media
   media = () => this.get<Media[]>('/api/v1/media')
