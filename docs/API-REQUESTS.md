@@ -143,3 +143,13 @@ Until then the dashboard shows held messages with Delete, Time out and Ban only.
 
 When `/o/<token>/ws` is opened with a token the engine doesn't know (the URL was regenerated or the overlay deleted while the page was offline, so it never got the `revoked` frame), close the WebSocket with code **4404** (or 4401 for "not allowed"). The overlay page treats either code like `revoked`: it clears itself and stops reconnecting, instead of knocking forever.
 
+
+## R19. Tips: take the page down, and API.md's tips section
+
+The engine and relay already save tip pages (`PUT /api/v1/tips` → relay `PUT /v1/tips/config`), and the relay has `DELETE /v1/tips/config`, but the engine has no route for it. Proposed:
+
+- `DELETE /api/v1/tips` → 204: calls the relay's delete and clears the saved `tips` setting, so `GET /api/v1/tips` returns the empty shape again (`page_url: null, webhooks: null`, providers null). The name stays held for this install for 30 days (the relay already does this).
+- 422 `unavailable` when the build has no relay, like the save.
+- Worth a look on the relay side: taking your own name back after a take-down counts as one of the 3 name changes a day (`set_tip_config` sees no current page, so any name is "new"). The demo copies this; consider not counting a name that is held for the same install.
+
+API.md §Tips still lists the old placeholder shape (`enabled, currency, min_amount, providers`). The dashboard follows what the server really sends (`handle, display_name, message, page_url, webhooks, razorpay|kofi|stripe: { page_url, page_id, test_mode, has_secret } | null`; see `packages/api/src/types.ts`). Please update API.md to match.
