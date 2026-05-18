@@ -316,7 +316,7 @@ export const PANIC: PanicConfig = {
   hold_new_accounts: true,
   pause_alerts: true,
   pause_tts: true,
-  hotkey: 'Ctrl+Shift+P',
+  hotkey: 'Ctrl+Alt+Shift+P',
 }
 
 export function seedCommands(): Command[] {
@@ -448,4 +448,5 @@ export const SETTINGS: Settings = {
   launch_at_login: true,
   close_to_tray: true,
   language: 'en',
+  currency: 'INR',
 }

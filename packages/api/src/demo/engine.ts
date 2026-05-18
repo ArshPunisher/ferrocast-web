@@ -265,6 +265,8 @@ export class DemoEngine {
   }
   /** When the tip page name changed, for the 3-a-day limit. */
   private tipHandleChanges: number[] = []
+  /** The name of a page this install took down; putting it back isn't a new name. */
+  private releasedTipHandle: string | null = null
   private relayOn: boolean
   private media: Media[] = []
   private obs: ObsState = {
@@ -621,6 +623,7 @@ export class DemoEngine {
   // ---------------------------------------------------------------- tips
 
   private resetTipsKeepingChanges(): void {
+    if (this.tips.handle) this.releasedTipHandle = this.tips.handle
     const changes = this.tipHandleChanges
     this.resetTips()
     this.tipHandleChanges = changes
@@ -701,7 +704,8 @@ export class DemoEngine {
         'That tip page name is taken.',
         'Pick another name; names someone just let go stay with them for 30 days.',
       )
-    if (handle !== this.tips.handle) {
+    const reclaiming = this.tips.handle === '' && handle === this.releasedTipHandle
+    if (handle !== this.tips.handle && !reclaiming) {
       const now = Date.now()
       this.tipHandleChanges = this.tipHandleChanges.filter((t) => now - t < 86_400_000)
       if (this.tipHandleChanges.length >= TIP_LIMITS.handleChangesPerDay)
@@ -921,13 +925,13 @@ export class DemoEngine {
     if (a === 'timers') return this.crud(method, seg, body, this.timersList, 'timer', validateTimer)
 
     // tts
-    if (is('GET', 'tts')) return clone(this.tts)
+    if (is('GET', 'tts')) return { ...clone(this.tts), currency: this.settings.currency }
     if (is('PUT', 'tts')) {
       const t = requireObj(body) as TtsSettings
       if (t.max_chars !== undefined && (t.max_chars < 10 || t.max_chars > 500))
         throw new HttpError(400, 'invalid', 'max_chars: must be between 10 and 500.')
       this.tts = { ...this.tts, ...t }
-      return clone(this.tts)
+      return { ...clone(this.tts), currency: this.settings.currency }
     }
     if (is('GET', 'tts', 'voices')) return clone(VOICES)
     if (is('GET', 'tts', 'pending')) return clone(this.ttsPending)

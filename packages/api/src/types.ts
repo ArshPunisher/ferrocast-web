@@ -449,6 +449,8 @@ export interface TtsSettings {
   max_chars: number
   hold_for_approval: boolean
   read_names: boolean
+  /** Read-only echo of Settings.currency: `min_amount` is in it. */
+  currency?: string
 }
 export interface TtsVoice {
   id: string
@@ -549,6 +551,8 @@ export interface Settings {
   launch_at_login: boolean
   close_to_tray: boolean
   language: string
+  /** The main currency (ISO 4217); the TTS minimum is in it. From the computer's region by default. */
+  currency: string
 }
 
 export interface Backup {
