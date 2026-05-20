@@ -4,9 +4,13 @@ import { cx, toast } from '@ferrocast/ui'
 import { describeError } from '@ferrocast/api'
 import { useLive } from '../lib/store'
 
-/** Ctrl+Shift+P on Windows/Linux, Cmd+Shift+P on macOS. The engine also has a global hotkey. */
+/**
+ * Ctrl+Alt+Shift+P everywhere, the same as the engine's global default, so it never
+ * clashes with Cmd/Ctrl+Shift+P in browsers and editors. `code`, not `key`: Alt changes
+ * the character on a Mac.
+ */
 export function isPanicHotkey(e: KeyboardEvent): boolean {
-  return (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p'
+  return e.ctrlKey && e.altKey && e.shiftKey && !e.metaKey && e.code === 'KeyP'
 }
 
 export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
@@ -62,13 +66,13 @@ export function PanicButton() {
     return () => window.removeEventListener('keydown', onKey)
   }, [toggle])
   const mac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
-  const keys = mac ? '⌘⇧P' : 'Ctrl+Shift+P'
+  const keys = mac ? '⌃⌥⇧P' : 'Ctrl+Alt+Shift+P'
   return (
     <button
       type="button"
       onClick={() => void toggle()}
       aria-pressed={on}
-      aria-keyshortcuts={mac ? 'Meta+Shift+P' : 'Control+Shift+P'}
+      aria-keyshortcuts="Control+Alt+Shift+P"
       title={
         on
           ? `Turn panic mode off (${keys})`

@@ -247,7 +247,7 @@ test.describe('moderation and bot', () => {
       'aria-pressed',
       'true',
     )
-    await page.keyboard.press('ControlOrMeta+Shift+P')
+    await page.keyboard.press('Control+Alt+Shift+KeyP')
     await expect(page.getByRole('button', { name: /^Panic/ }).first()).toHaveAttribute(
       'aria-pressed',
       'false',

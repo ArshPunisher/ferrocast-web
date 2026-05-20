@@ -87,9 +87,11 @@ function PanicCard() {
             once and pauses alerts. It runs on your computer, so it works even if our servers don’t.
           </p>
           <p className="mt-2 flex items-center gap-1.5 text-[13px] text-text-3">
-            Shortcut <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
+            Shortcut <Kbd>Ctrl</Kbd>
+            <Kbd>{mac ? 'Option' : 'Alt'}</Kbd>
             <Kbd>Shift</Kbd>
-            <Kbd>P</Kbd> works while this window is open; the app also has a global hotkey.
+            <Kbd>P</Kbd> works in this window, and anywhere on the computer running the Ferrocast
+            app.
           </p>
         </div>
         <Button

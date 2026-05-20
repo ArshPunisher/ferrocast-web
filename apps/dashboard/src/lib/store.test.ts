@@ -91,7 +91,7 @@ describe('live store', () => {
             hold_new_accounts: true,
             pause_alerts: true,
             pause_tts: true,
-            hotkey: 'Ctrl+Shift+P',
+            hotkey: 'Ctrl+Alt+Shift+P',
           },
         },
       },

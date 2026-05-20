@@ -57,7 +57,7 @@ test('keyboard only: skip link, test alert menu and panic', async ({ page }) => 
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')
   await expect(page.getByText(/Test sub sent/)).toBeVisible()
-  await page.keyboard.press('ControlOrMeta+Shift+P')
+  await page.keyboard.press('Control+Alt+Shift+KeyP')
   await expect(page.getByText('Panic mode is on.').first()).toBeVisible()
 })
 
