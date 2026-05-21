@@ -2,7 +2,15 @@
 
 Things the dashboard and overlays need that `ferrocast/docs/API.md` doesn't define yet. The demo engine (`packages/api/src/demo/engine.ts`) already implements each one exactly as proposed here, and the types live in `packages/api/src/types.ts`, so the engine can copy the shapes.
 
-Status: **proposed** unless marked otherwise.
+Status: R1–R19 are **done** in the engine (17 Oct 2026); `docs/API.md` there is the contract now, and `packages/api/test/contract.test.ts` checks a real engine against the demo's shapes. Differences from the proposals:
+
+- R4: `amount` reads "₹500" (no trailing zeros), and pending items keep their sender even for test events.
+- R5: Settings also has `currency` (the main currency, from the computer's region by default); TTS `min_amount` is in it, and `GET /tts` echoes it as `currency`.
+- R3/R17: the default panic hotkey is `Ctrl+Alt+Shift+P` (a global Cmd/Ctrl+Shift+P would take a browser and editor shortcut); the dashboard's own shortcut matches.
+- R11: `resync.missed` is `0` when the count is unknown; `hello.seq` equals `since` while replaying. Seqs start from the clock and only grow.
+- R12: the preview snapshot has no real chat, events or labels.
+- R19: reclaiming your own name after a take-down no longer counts as a name change.
+- OBS `version` is the bare number ("31.1.2").
 
 ## R1. Shared ban list entry
 
