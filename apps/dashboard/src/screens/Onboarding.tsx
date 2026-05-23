@@ -56,10 +56,13 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     setStep(n)
   }
   const applyTheme = async () => {
-    if (!main) return goTo(2)
+    // A fresh install has no overlay yet: make the starter one, then give it the look.
+    const base = main ?? (await run('theme', () => client.createOverlay('Main', 'starter')))
+    if (!base) return
+    if (!main) overlays.set((p) => [...(p ?? []), base])
     const next: Overlay = {
-      ...main,
-      widgets: main.widgets.map((w) => ({ ...w, config: { ...w.config, theme } }) as typeof w),
+      ...base,
+      widgets: base.widgets.map((w) => ({ ...w, config: { ...w.config, theme } }) as typeof w),
     }
     const saved = await run('theme', () => client.saveOverlay(next))
     if (saved) overlays.set((p) => (p ?? []).map((o) => (o.id === saved.id ? saved : o)))

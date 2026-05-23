@@ -344,7 +344,8 @@ export class DemoEngine {
           },
         ]
       : []
-    this.overlays = seedOverlays(this.base, (id) => this.tokenFor(id), now)
+    // A fresh install has no overlay yet; first run makes one (like the real engine).
+    this.overlays = this.setupDone ? seedOverlays(this.base, (id) => this.tokenFor(id), now) : []
     this.rules = seedRules()
     this.goals = seedGoals(now)
     this.bans = seedBans(now)

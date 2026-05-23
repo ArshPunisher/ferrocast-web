@@ -127,8 +127,10 @@ describe('demo engine: overlays', () => {
     await expect(client.addToObs(o!.id)).resolves.toMatchObject({ scene: 'Gameplay' })
     const fresh = new DemoEngine({ autoplay: false, latencyMs: 0, setupDone: false })
     const c = new FerroClient({ base: fresh.base, token: DEMO_TOKEN, fetch: fresh.fetch })
-    const [o2] = await c.overlays()
-    const e = (await c.addToObs(o2!.id).catch((x: unknown) => x)) as ApiError
+    // A fresh install starts with no overlay, like the real engine.
+    expect(await c.overlays()).toEqual([])
+    const o2 = await c.createOverlay('Main', 'starter')
+    const e = (await c.addToObs(o2.id).catch((x: unknown) => x)) as ApiError
     expect(e.status).toBe(422)
     expect(e.hint).toMatch(/copy the URL/i)
     fresh.dispose()
