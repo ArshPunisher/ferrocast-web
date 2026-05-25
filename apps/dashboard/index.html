@@ -11,13 +11,8 @@
     <link rel="icon" href="/app/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/app/apple-touch-icon.png" />
     <title>Ferrocast</title>
-    <script>
-      // Apply the saved theme before first paint so there is no flash.
-      try {
-        var t = localStorage.getItem('fc-theme')
-        if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t
-      } catch (e) {}
-    </script>
+    <!-- A file, not inline: the engine's CSP allows scripts from itself only. -->
+    <script src="/app/theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>
