@@ -319,6 +319,16 @@ test.describe('tips and settings', () => {
     await open(page, 'settings/updates')
     await expect(page.getByRole('button', { name: 'After stream' })).toBeDisabled()
   })
+
+  test('the main currency is saved and the TTS minimum uses it', async ({ page }) => {
+    await open(page, 'settings/appearance')
+    await page.getByLabel('Main currency').selectOption('USD')
+    await expect(page.getByLabel('Main currency')).toHaveValue('USD')
+    // The TTS minimum's hint follows straight away, without a reload.
+    await expect(page.getByText('In USD, your main currency (Appearance).')).toBeVisible()
+    await page.getByRole('link', { name: 'Text-to-speech' }).click()
+    await expect(page.getByLabel('Main currency')).toHaveValue('USD')
+  })
 })
 
 test.describe('first run', () => {

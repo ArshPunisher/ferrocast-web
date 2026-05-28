@@ -196,7 +196,8 @@ function Obs() {
   )
 }
 
-function Tts() {
+/** `currency`: the main currency from Settings, so the hint follows a change at once. */
+function Tts({ currency }: { currency?: string | undefined }) {
   const client = useClient()
   const res = useResource((c) => c.tts())
   const voices = useResource((c) => c.ttsVoices())
@@ -256,7 +257,14 @@ function Tts() {
                   </Select>
                 )}
               </Field>
-              <Field label="Minimum amount" hint="In your tip currency.">
+              <Field
+                label="Minimum amount"
+                hint={
+                  (currency ?? t.currency)
+                    ? `In ${currency ?? t.currency}, your main currency (Appearance).`
+                    : 'In your main currency (Appearance).'
+                }
+              >
                 {(p) => (
                   <Input
                     {...p}
@@ -293,6 +301,34 @@ function Tts() {
     </Section>
   )
 }
+
+/** Currencies streamers on Twitch, YouTube and Kick tip in most; INR first. */
+const CURRENCIES = [
+  'INR',
+  'USD',
+  'EUR',
+  'GBP',
+  'BRL',
+  'CAD',
+  'AUD',
+  'NZD',
+  'JPY',
+  'KRW',
+  'MXN',
+  'IDR',
+  'PHP',
+  'TRY',
+  'PLN',
+  'SEK',
+  'NOK',
+  'DKK',
+  'CHF',
+  'SGD',
+  'AED',
+  'ZAR',
+  'PKR',
+  'BDT',
+]
 
 function Appearance({
   settings,
@@ -337,6 +373,28 @@ function Appearance({
           label="Light overlays"
           description="Overlays fade instead of moving. Use it if OBS stutters, especially on Linux."
         />
+        <Field
+          label="Main currency"
+          hint="The TTS minimum uses it. Tips in other currencies still show as sent, never converted."
+        >
+          {(p) => (
+            <Select
+              {...p}
+              className="sm:max-w-[16rem]"
+              value={settings.currency}
+              onChange={(e) => save({ ...settings, currency: e.target.value })}
+            >
+              {(CURRENCIES.includes(settings.currency)
+                ? CURRENCIES
+                : [settings.currency, ...CURRENCIES]
+              ).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
     </Section>
   )
@@ -709,7 +767,7 @@ export function Settings({ section }: { section?: string | undefined }) {
         <div className="flex min-w-0 flex-col gap-5">
           <Accounts />
           <Obs />
-          <Tts />
+          <Tts currency={res.data?.currency} />
           {res.error ? (
             <LoadError error={res.error} onRetry={res.reload} />
           ) : !res.data ? (
