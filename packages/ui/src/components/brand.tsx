@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ICON_PATHS, type IconName } from '../platform-icons'
-import { MARK_MAGNET, MARK_SPIKES, SPIKE_MARK_PATH, spikePath, type SpikeSpec } from '../ferro/mark'
+import { MARK_MAGNET, MARK_SPIKES, spikePath, type SpikeSpec } from '../ferro/mark'
+import { SPARK, SPARK_SMALL, WORDMARK_BOX, WORDMARK_LETTERS, WORDMARK_LIVE, WORDMARK_O } from '../brand'
 import { Ferrofluid, mountFerrofluid } from '../ferro/ferrofluid'
 import { cx } from '../cx'
 
@@ -80,7 +81,13 @@ export function BrandIcon({
   )
 }
 
-/** Single-colour mark for small sizes. */
+// The Spark mark (packages/ui/src/brand.ts): the f is ink (currentColor), the shard's upper
+// half molten amber and lower half arc cyan, both from the theme tokens.
+const MOLTEN = { fill: 'var(--fc-brand-molten)' }
+const ARC = { fill: 'var(--fc-brand-arc)' }
+const safeId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '')
+
+/** Single-colour mark for small sizes (the heavier small-size drawing). */
 export function FerroGlyph({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -91,13 +98,13 @@ export function FerroGlyph({ size = 16, className }: { size?: number; className?
       className={className}
       fill="currentColor"
     >
-      <path d={SPIKE_MARK_PATH} />
-      <circle cx={MARK_MAGNET.cx} cy={MARK_MAGNET.cy} r={MARK_MAGNET.r} />
+      <path d={SPARK_SMALL.f} />
+      <path d={SPARK_SMALL.bolt} />
     </svg>
   )
 }
 
-/** The colour mark: chrome spikes and the cobalt magnet. */
+/** The colour mark. The f takes the text colour; the shard follows the theme. */
 export function LogoMark({
   size = 28,
   className,
@@ -107,56 +114,119 @@ export function LogoMark({
   className?: string
   title?: string
 }) {
-  const id = useRef(`lm${Math.random().toString(36).slice(2, 8)}`).current
+  const small = size <= 20
   return (
     <svg
       viewBox="0 0 64 64"
       width={size}
       height={size}
-      className={className}
+      className={cx('shrink-0 text-text', className)}
       role={title ? 'img' : undefined}
       aria-label={title}
       aria-hidden={title ? undefined : true}
     >
-      <defs>
-        <linearGradient id={`${id}c`} x1="0" y1="14" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.32" stopColor="#c3cad6" />
-          <stop offset="0.62" stopColor="#4a515d" />
-          <stop offset="0.82" stopColor="#14171c" />
-          <stop offset="1" stopColor="#2c323b" />
-        </linearGradient>
-        <linearGradient id={`${id}r`} x1="0" y1="50" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#3461f5" stopOpacity="0" />
-          <stop offset="1" stopColor="#3461f5" stopOpacity="0.55" />
-        </linearGradient>
-      </defs>
-      <path d={SPIKE_MARK_PATH} fill={`url(#${id}c)`} />
-      <path d={SPIKE_MARK_PATH} fill={`url(#${id}r)`} />
-      <circle cx={MARK_MAGNET.cx} cy={MARK_MAGNET.cy} r={MARK_MAGNET.r} fill="#3461f5" />
+      {small ? (
+        <>
+          <path d={SPARK_SMALL.f} fill="currentColor" />
+          <path d={SPARK_SMALL.bolt} style={ARC} />
+        </>
+      ) : (
+        <>
+          <path d={SPARK.f} fill="currentColor" />
+          <path d={SPARK.boltTop} style={MOLTEN} />
+          <path d={SPARK.boltBottom} style={ARC} />
+        </>
+      )}
     </svg>
   )
 }
 
+/** The outlined "ferrocast" wordmark; the live dot in the o is molten amber. */
+export function WordmarkText({ height = 16, className }: { height?: number; className?: string }) {
+  const id = `wm${safeId(useId())}`
+  const b = WORDMARK_BOX
+  const w = b.width + 20
+  return (
+    <svg
+      viewBox={`-10 ${b.y} ${w} ${b.height}`}
+      height={height}
+      width={Math.round((w / b.height) * height * 10) / 10}
+      className={cx('shrink-0 text-text', className)}
+      aria-hidden="true"
+    >
+      <defs>
+        <mask id={id} maskUnits="userSpaceOnUse" x={-50} y={0} width={b.width + 100} height={800}>
+          <rect x={-50} width={b.width + 100} height={800} fill="#fff" />
+          <circle cx={WORDMARK_LIVE.cx} cy={WORDMARK_LIVE.cy} r={WORDMARK_LIVE.notch} fill="#000" />
+        </mask>
+      </defs>
+      <path d={WORDMARK_LETTERS} fill="currentColor" />
+      <path d={WORDMARK_O} fill="currentColor" mask={`url(#${id})`} />
+      <circle cx={WORDMARK_LIVE.cx} cy={WORDMARK_LIVE.cy} r={WORDMARK_LIVE.dot} style={MOLTEN} />
+    </svg>
+  )
+}
+
+/** Mark + outlined wordmark. The last child is the text, so headers can hide it on phones. */
 export function Wordmark({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' }) {
   return (
-    <span translate="no" className={cx('inline-flex items-center gap-2', className)}>
-      <LogoMark size={size === 'sm' ? 22 : 28} />
-      <span
-        className={cx(
-          'font-display font-bold tracking-[-0.03em] text-text',
-          size === 'sm' ? 'text-[17px]' : 'text-xl',
-        )}
-      >
-        ferrocast
+    <span
+      translate="no"
+      role="img"
+      aria-label="Ferrocast"
+      className={cx('inline-flex items-center gap-1.5 text-text', className)}
+    >
+      <LogoMark size={size === 'sm' ? 22 : 26} />
+      <span className="inline-flex">
+        <WordmarkText height={size === 'sm' ? 13.5 : 16} />
       </span>
     </span>
   )
 }
 
 /**
- * The mark with live spikes for empty states and onboarding: they rise once when it
- * appears (a magnet arriving), then sit still. No infinite loop.
+ * The mark for empty states, loading and onboarding: the f settles and the two halves of
+ * the shard land once, a beat apart. Never loops; still under reduced motion.
+ */
+export function SparkMark({ size = 96, className }: { size?: number; className?: string }) {
+  const reduce = useReducedMotion()
+  const spring = { type: 'spring' as const, stiffness: 260, damping: 18, mass: 0.7 }
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      className={cx('shrink-0 text-text', className)}
+      aria-hidden="true"
+    >
+      <motion.path
+        d={SPARK.f}
+        fill="currentColor"
+        initial={reduce ? false : { opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <motion.path
+        d={SPARK.boltTop}
+        style={MOLTEN}
+        initial={reduce ? false : { opacity: 0, x: 5, y: -7 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        transition={{ ...spring, delay: 0.18 }}
+      />
+      <motion.path
+        d={SPARK.boltBottom}
+        style={ARC}
+        initial={reduce ? false : { opacity: 0, x: -5, y: 7 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        transition={{ ...spring, delay: 0.28 }}
+      />
+    </svg>
+  )
+}
+
+/**
+ * The ferrofluid's spikes rising once toward a magnet. Only the fallback for the WebGL
+ * ferrofluid (FerroCanvas) uses it now; the logo is the Spark mark above.
  */
 export function FerroSpikes({
   size = 96,
@@ -219,7 +289,7 @@ export function EmptyState({
         className,
       )}
     >
-      <FerroSpikes size={compact ? 52 : 84} />
+      <SparkMark size={compact ? 52 : 84} />
       <h3 className="font-display text-base font-semibold tracking-tight text-text">{title}</h3>
       {children && (
         <div className="max-w-[42ch] text-sm leading-relaxed text-text-3">{children}</div>

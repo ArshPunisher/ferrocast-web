@@ -1,6 +1,6 @@
-// The Ferrocast mark: a drop of ferrofluid rising into five spikes toward a magnet.
-// Generated, not hand-drawn, so empty states can animate the spike heights and the logo,
-// the app icon and the favicon all come from the same geometry.
+// The ferrofluid motif: a drop rising into five spikes toward a magnet. Used by the SVG
+// fallback for the WebGL ferrofluid and by the overlay alert's spike flourish. (This was the
+// old logo; the logo is now the Spark mark in ../brand.ts.)
 
 export interface SpikeSpec {
   /** Centre x of the spike. */
@@ -45,7 +45,7 @@ export function spikePath(
   return d
 }
 
-/** The logo geometry: tallest spike in the middle, reaching for the magnet dot. */
+/** The motif geometry: tallest spike in the middle, reaching for the magnet dot. */
 export const MARK_SPIKES: SpikeSpec[] = [
   { x: 11, h: 9 },
   { x: 21.5, h: 18 },
@@ -55,5 +55,5 @@ export const MARK_SPIKES: SpikeSpec[] = [
 ]
 
 export const SPIKE_MARK_PATH = spikePath(MARK_SPIKES)
-/** The magnet: a cobalt dot above the tallest spike. */
+/** The magnet: a dot above the tallest spike. */
 export const MARK_MAGNET = { cx: 32, cy: 9, r: 4 }

@@ -10,9 +10,18 @@ Dials (taste skill): site 7 / 6 / 4 (variance / motion / density); dashboard 4 /
 
 **Ferrofluid**: black liquid that rises into spikes under a magnet (the Rosensweig instability). Ferro = iron, cast = broadcast. It appears as:
 
-- the **logo mark**: a puddle with five concave spikes reaching for a cobalt dot (the magnet). Geometry in `packages/ui/src/ferro/mark.ts`; every brand file is generated from it (`brand/build.mjs`).
 - the **WebGL scene** (`packages/ui/src/ferro/`): a raymarched puddle whose spike field follows the pointer like a magnet. Site hero, first-run screen, video renders. Pauses off screen, adapts resolution, one still frame under reduced motion, SVG fallback without WebGL.
-- **`FerroSpikes`**: the SVG mark whose spikes rise once (spring) when an empty state appears. Never loops.
+- **`FerroSpikes`**: the SVG fallback for the WebGL scene when WebGL is missing.
+- the **alert flourish** on the overlays (spikes rising out of the card).
+
+## The logo
+
+**Spark**: a liquid lowercase f (ferro, cast metal) throwing a lightning shard that is split along its own diagonal. Geometry and the outlined wordmark live in `packages/ui/src/brand.ts`; every brand file (mark, lockups, app icons, tray icon, favicons) is generated from it by `brand/build.mjs`.
+
+- The f is ink (`currentColor`). The shard's upper half is **molten amber**, the lower half **arc cyan**: `--fc-brand-molten` / `--fc-brand-arc` (dark `#ffa424` / `#33d4ff`, light `#cf7400` / `#0888b8`). These two are for the logo only; UI accents stay cobalt.
+- The wordmark is Bricolage Grotesque 700, outlined and hand-kerned. The o carries a live dot (molten) set into a notch on its shoulder.
+- The heavier small-size drawing (thicker f, one unsplit shard) is for the favicons, the tray icon, the 16 to 64 px app icons, the mono `FerroGlyph`, and `LogoMark` at 20 px and below. The colour `LogoMark` keeps the split two-colour shard from 21 px up (the Wordmark uses 22 and 26 px).
+- Components: `LogoMark`, `Wordmark` (mark + outlined text), `WordmarkText`, `FerroGlyph` (mono), `SparkMark` (empty states and loading: the f settles and the two halves of the shard land once; still under reduced motion).
 
 ## Colour
 

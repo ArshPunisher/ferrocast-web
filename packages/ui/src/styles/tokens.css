@@ -29,6 +29,9 @@
   /* Cobalt. --fc-accent is for fills with white text (AA 4.5:1+),
      --fc-accent-text for text and icons on dark surfaces. */
   --fc-accent: #3461f5;
+  /* Logo only (the Spark mark): molten amber + arc cyan. Not for UI accents. */
+  --fc-brand-molten: #ffa424;
+  --fc-brand-arc: #33d4ff;
   --fc-accent-strong: #284fd8;
   --fc-accent-text: #8eaaff;
   --fc-accent-soft: rgb(52 97 245 / 0.16);
@@ -112,6 +115,8 @@
   --fc-youtube: #e0001f;
   --fc-kick: #23a100;
   --fc-tips: #946200;
+  --fc-brand-molten: #cf7400;
+  --fc-brand-arc: #0888b8;
   --fc-chrome: linear-gradient(
     180deg,
     #ffffff 0%,
@@ -155,6 +160,8 @@
     --fc-youtube: #e0001f;
     --fc-kick: #23a100;
     --fc-tips: #946200;
+    --fc-brand-molten: #cf7400;
+    --fc-brand-arc: #0888b8;
     --fc-chrome: linear-gradient(
       180deg,
       #ffffff 0%,
