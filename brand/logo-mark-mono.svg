@@ -1,4 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Ferrocast">
-  <path d="M4 49 C6.94 49 9.6 40.42 11 37 C12.05 40.42 14.05 46 16.25 46 C18.45 46 20.45 34.84 21.5 28 C22.55 34.84 24.55 46 26.75 46 C28.96 46 30.95 28.64 32 18 C33.05 28.64 35.05 46 37.25 46 C39.46 46 41.45 34.84 42.5 28 C43.55 34.84 45.55 46 47.75 46 C49.96 46 51.95 40.42 53 37 C54.4 40.42 57.06 49 60 49 C60 57 48 59 32 59 C16 59 4 57 4 49 Z" fill="currentColor"/>
-  <circle cx="32" cy="9" r="4" fill="currentColor"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Ferrocast"><path d="M13.9 54.88V25.38A16.25 16.25 0 0 1 30.15 9.13H35.15V19.63H30.15A5.75 5.75 0 0 0 24.4 25.38V54.88ZM8.15 25.38H29.15V34.38H8.15Z" style="fill:currentColor"/><path d="M48.65 19.77L31.85 40.17L42.65 40.17L38.45 53.38L55.85 32.98L45.05 32.98Z" style="fill:currentColor"/></svg>
