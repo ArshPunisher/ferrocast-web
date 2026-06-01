@@ -11,7 +11,7 @@ import {
   Badge,
   Button,
   Dialog,
-  FerroSpikes,
+  SparkMark,
   PlatformMark,
   copyText,
   cx,
@@ -136,7 +136,7 @@ export function useConnect(): {
           </span>
         ) : (
           <>
-            <FerroSpikes size={40} />
+            <SparkMark size={40} />
             <span className="text-sm text-text-3">Waiting for you to approve…</span>
           </>
         )}

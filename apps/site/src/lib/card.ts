@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import satori from 'satori'
 import { Resvg } from '@resvg/resvg-js'
-import { SPIKE_MARK_PATH, MARK_MAGNET } from '../../../../packages/ui/src/ferro/mark.ts'
+import { BRAND_PAINT, lockupParts, lockupSvg, sparkSvg } from '../../../../packages/ui/src/brand.ts'
 
 const require = createRequire(import.meta.url)
 const font = (family: string, weight: number) =>
@@ -21,19 +21,14 @@ function loadFonts() {
   return fonts
 }
 
-const markSvg = (size: number) =>
-  `data:image/svg+xml;base64,${Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}">
-      <defs><linearGradient id="c" x1="0" y1="14" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#ffffff"/><stop offset="0.32" stop-color="#c3cad6"/>
-        <stop offset="0.62" stop-color="#4a515d"/><stop offset="0.82" stop-color="#14171c"/>
-        <stop offset="1" stop-color="#2c323b"/></linearGradient>
-      <linearGradient id="r" x1="0" y1="50" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#3461f5" stop-opacity="0"/><stop offset="1" stop-color="#3461f5" stop-opacity="0.55"/></linearGradient></defs>
-      <path d="${SPIKE_MARK_PATH}" fill="url(#c)"/><path d="${SPIKE_MARK_PATH}" fill="url(#r)"/>
-      <circle cx="${MARK_MAGNET.cx}" cy="${MARK_MAGNET.cy}" r="${MARK_MAGNET.r}" fill="#3461f5"/>
-    </svg>`,
-  ).toString('base64')}`
+const dataUri = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+const markSvg = (size: number) => dataUri(sparkSvg(BRAND_PAINT.dark, { size }))
+const LOCKUP_H = 56
+const lockupRatio = (() => {
+  const l = lockupParts(BRAND_PAINT.dark, 'card-o')
+  return l.width / l.height
+})()
+const lockup = (h: number) => dataUri(lockupSvg(BRAND_PAINT.dark, { id: 'card-o', height: h }))
 
 type Node = { type: string; props: Record<string, unknown> }
 const h = (
@@ -72,7 +67,7 @@ export async function renderCard({
       padding: 72 * scale,
       backgroundColor: '#0a0b0d',
       backgroundImage:
-        'radial-gradient(circle at 82% 78%, rgba(52,97,245,0.38) 0%, rgba(52,97,245,0) 42%), linear-gradient(160deg, #15181d 0%, #0a0b0d 55%, #07080a 100%)',
+        'radial-gradient(circle at 80% 46%, rgba(255,164,36,0.16) 0%, rgba(255,164,36,0) 40%), linear-gradient(160deg, #15181d 0%, #0a0b0d 55%, #07080a 100%)',
       color: '#eef0f4',
       fontFamily: 'Hanken',
       position: 'relative',
@@ -88,17 +83,12 @@ export async function renderCard({
           height: 330 * scale,
         },
       ),
-      h('div', { display: 'flex', alignItems: 'center', gap: 18 * scale }, [
-        h('img', { width: 64 * scale, height: 64 * scale }, undefined, {
-          src: markSvg(64),
-          width: 64 * scale,
-          height: 64 * scale,
+      h('div', { display: 'flex' }, [
+        h('img', { width: LOCKUP_H * lockupRatio * scale, height: LOCKUP_H * scale }, undefined, {
+          src: lockup(Math.round(LOCKUP_H * scale)),
+          width: LOCKUP_H * lockupRatio * scale,
+          height: LOCKUP_H * scale,
         }),
-        h(
-          'div',
-          { fontFamily: 'Bricolage', fontSize: 40 * scale, letterSpacing: -1.2 * scale },
-          'ferrocast',
-        ),
       ]),
       h(
         'div',

@@ -1,5 +1,6 @@
 import type React from 'react'
 import { spikePath } from '@ferrocast/ui/ferro'
+import { SPARK_SMALL } from '@ferrocast/ui/brand'
 import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
 import { C } from '../theme'
 
@@ -13,7 +14,8 @@ const COLORS: Record<Platform, string> = {
   obs: C.text,
 }
 
-// The logo geometry (packages/ui/src/ferro/mark.ts): five spikes, tallest in the middle.
+// The ferrofluid spikes (packages/ui/src/ferro/mark.ts), used only by the alert's spike
+// flourish below. The logo itself is the Spark mark (packages/ui/src/brand.ts).
 const SPIKES = [
   { x: 11, h: 9 },
   { x: 21.5, h: 18 },
@@ -23,7 +25,7 @@ const SPIKES = [
 ]
 const MAGNET = { cx: 32, cy: 9, r: 4 }
 
-/** A platform glyph in its colour. Tips use the Ferrocast drop. */
+/** A platform glyph in its colour. Tips use the Ferrocast mark. */
 export const PlatformGlyph: React.FC<{ platform: Platform; size: number; color?: string }> = ({
   platform,
   size,
@@ -39,8 +41,8 @@ export const PlatformGlyph: React.FC<{ platform: Platform; size: number; color?:
 
 export const FerroGlyph: React.FC<{ size: number; color: string }> = ({ size, color }) => (
   <svg viewBox="0 0 64 64" width={size} height={size} style={{ flexShrink: 0 }}>
-    <path d={spikePath(SPIKES)} fill={color} />
-    <circle cx={MAGNET.cx} cy={MAGNET.cy} r={MAGNET.r} fill={color} />
+    <path d={SPARK_SMALL.f} fill={color} />
+    <path d={SPARK_SMALL.bolt} fill={color} />
   </svg>
 )
 

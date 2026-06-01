@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { ApiError, describeError, type FerroEvent } from '@ferrocast/api'
-import { Button, FerroSpikes, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
+import { Button, SparkMark, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
 import { clearSession, connect, demo, pair, type Connection } from './lib/boot'
 import { startLive, stopLive, useLive } from './lib/store'
 import { useRoute } from './lib/router'
@@ -251,7 +251,7 @@ function Splash() {
       role="status"
       aria-label="Starting Ferrocast"
     >
-      <FerroSpikes size={72} />
+      <SparkMark size={72} />
       <p className="text-sm text-text-3">Connecting to Ferrocast…</p>
     </div>
   )

@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro'
-import { SPIKE_MARK_PATH, MARK_MAGNET } from '../../../../packages/ui/src/ferro/mark.ts'
+import { SPARK } from '../../../../packages/ui/src/brand.ts'
 
 const page = {
   path: '/404/',
@@ -16,13 +16,9 @@ const page = {
 <Base page={page} noindex>
   <section class="nf container">
     <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden="true">
-      <path d={SPIKE_MARK_PATH} fill="var(--fc-text-3)" opacity="0.5"></path>
-      <circle
-        cx={MARK_MAGNET.cx}
-        cy={MARK_MAGNET.cy}
-        r={MARK_MAGNET.r}
-        fill="var(--fc-accent)"
-      ></circle>
+      <path d={SPARK.f} fill="var(--fc-text-3)" opacity="0.5"></path>
+      <path d={SPARK.boltTop} style="fill: var(--fc-brand-molten)"></path>
+      <path d={SPARK.boltBottom} style="fill: var(--fc-brand-arc)"></path>
     </svg>
     <h1 class="display-2">This page isn’t here.</h1>
     <p class="lede">It may have moved, or the link may be wrong.</p>

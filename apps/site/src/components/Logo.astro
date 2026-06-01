@@ -1,21 +1,23 @@
 ---
-// The wordmark from brand/ with the text drawn in currentColor, so it follows the theme.
-// Gradient ids get a per-instance suffix so header and footer copies don't collide.
-import raw from '../../../../brand/logo-wordmark-dark.svg?raw'
+// The lockup (Spark mark + outlined wordmark) drawn inline: letters and the f in
+// currentColor, the shard and the live dot from the theme tokens, so it follows the theme.
+// `id` keeps the wordmark's mask unique when the header and footer both render it.
+import { BRAND_PAINT_THEMED, lockupParts } from '../../../../packages/ui/src/brand.ts'
 interface Props {
   id: string
   height?: number
 }
 const { id, height = 26 } = Astro.props
-const svg = raw
-  .replace(/id="wd-/g, `id="${id}-`)
-  .replace(/url\(#wd-/g, `url(#${id}-`)
-  .replace(/fill="#eef0f4"/g, 'fill="currentColor"')
-  .replace(/<svg ([^>]*?)width="(\d+)" height="120"/, (_m, rest: string, w: string) => {
-    const width = Math.round((Number(w) / 120) * height)
-    return `<svg ${rest}width="${width}" height="${height}" aria-hidden="true" focusable="false"`
-  })
-  .replace(/ role="img" aria-label="Ferrocast"/, '')
+const l = lockupParts(BRAND_PAINT_THEMED, `${id}-o`)
+const width = Math.round((l.width / l.height) * height)
 ---
 
-<Fragment set:html={svg} />
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox={l.viewBox}
+  width={width}
+  height={height}
+  aria-hidden="true"
+  focusable="false"
+  set:html={l.inner}
+/>
