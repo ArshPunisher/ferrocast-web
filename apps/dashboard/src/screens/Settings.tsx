@@ -691,7 +691,7 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
           checked={settings.lan_access}
           onChange={(v) => save({ ...settings, lan_access: v })}
           label="Allow other devices on my network"
-          description="Lets a mod’s phone or a second PC on your Wi-Fi open this dashboard with a pairing link. Off means only this computer can connect."
+          description="Lets a mod’s phone or a second PC on your Wi-Fi open this dashboard with a pairing link. Off means only this computer can connect. Takes effect the next time Ferrocast starts."
         />
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-semibold text-text">Open in another browser</p>
