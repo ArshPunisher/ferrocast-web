@@ -1,7 +1,7 @@
 /*
  * One alert, inside its own shadow root (so streamer CSS stays in here).
  * The arrival is a liquid rise: the card swells up from its base with a little overshoot,
- * the ferrofluid spikes climb out of its top edge toward the cobalt magnet, then the text
+ * the Spark mark's f climbs out of its top edge and its split shard drops in, then the text
  * settles. Exit sinks and fades in 300 ms. Low motion: fades only.
  */
 
@@ -25,11 +25,10 @@
   --a-body: #c3c9d4;
   --a-radius: 22px;
   --a-text-shadow: none;
-  --al-spike-1: #ffffff;
-  --al-spike-2: #c3cad6;
-  --al-spike-3: #4a515d;
-  --al-spike-4: #14171c;
-  --a-magnet: #3461f5;
+  /* The Spark flourish: ink f, molten and arc halves of the shard. */
+  --al-ink: #eef0f4;
+  --al-molten: #ffa424;
+  --al-arc: #33d4ff;
   --a-rotate: 0deg;
   --a-case: none;
   --a-weight: 750;
@@ -39,7 +38,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Room for the spikes above and the shadow below: the widget box clips paint. */
+  /* Room for the mark above and the shadow below: the widget box clips paint. */
   padding: 84px 28px 40px;
   font-family:
     'Hanken Grotesk Variable',
@@ -58,11 +57,9 @@
   --a-title: none;
   --a-title-solid: #0e1014;
   --a-body: #454b56;
-  --al-spike-1: #8b93a1;
-  --al-spike-2: #4a515d;
-  --al-spike-3: #1d2127;
-  --al-spike-4: #0e1014;
-  --a-magnet: #2e5be8;
+  --al-ink: #0e1014;
+  --al-molten: #cf7400;
+  --al-arc: #0888b8;
 }
 .al[data-theme='arcade'] {
   --a-surface: #101216;
@@ -94,11 +91,9 @@
   --a-radius: 24px;
   --a-rotate: -2deg;
   --a-weight: 800;
-  --al-spike-1: #3461f5;
-  --al-spike-2: #2a51d6;
-  --al-spike-3: #1b2f80;
-  --al-spike-4: #0e1014;
-  --a-magnet: #0e1014;
+  --al-ink: #0e1014;
+  --al-molten: #cf7400;
+  --al-arc: #0888b8;
 }
 
 .al-inner {
@@ -125,16 +120,23 @@
 .al-spikes {
   position: absolute;
   left: 50%;
-  bottom: calc(100% - 27px);
-  width: 136px;
-  height: 136px;
-  margin-left: -68px;
+  bottom: calc(100% - 16px);
+  width: 92px;
+  height: 92px;
+  margin-left: -46px;
   overflow: visible;
-  transform-origin: 50% 88%;
+  transform-origin: 50% 86%;
   pointer-events: none;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.35));
 }
-.al-magnet {
-  fill: var(--a-magnet);
+.al-spark-f {
+  fill: var(--al-ink);
+}
+.al-spark-molten {
+  fill: var(--al-molten);
+}
+.al-spark-arc {
+  fill: var(--al-arc);
 }
 .al[data-theme='minimal'] .al-spikes {
   display: none;

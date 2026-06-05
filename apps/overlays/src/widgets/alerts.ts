@@ -7,7 +7,7 @@
 
 import { ackFrame } from '@ferrocast/api/overlay-protocol'
 import type { AlertsConfig, RenderedAlert, Widget } from '@ferrocast/api/types'
-import { spikePath, MARK_SPIKES, MARK_MAGNET } from '@ferrocast/ui/mark'
+import { SPARK } from '@ferrocast/ui/brand'
 import alertCss from '../styles/alert.css?inline'
 import { el, mediaRef, safeText, speakText, themeOf, warnOnce } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
@@ -37,43 +37,32 @@ function isVideo(url: string): boolean {
   return /^data:video\//i.test(url) || /\.(webm|mp4)(\?|#|$)/i.test(url)
 }
 
-/** The brand mark's spikes as an SVG flourish that rises out of the card's top edge. */
+/**
+ * The Spark mark as the flourish on the card's top edge: the f rises out of the card and
+ * the split shard (molten over arc) drops in beside it. The class stays `al-spikes` (and
+ * the shard keeps `al-magnet`) because streamers' custom CSS targets those names.
+ */
 function spikes(): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')
   svg.setAttribute('viewBox', '0 0 64 64')
   svg.setAttribute('aria-hidden', 'true')
   svg.setAttribute('class', 'al-spikes')
-  const defs = document.createElementNS(SVG_NS, 'defs')
-  const grad = document.createElementNS(SVG_NS, 'linearGradient')
-  grad.setAttribute('id', 'al-chrome')
-  grad.setAttribute('x1', '0')
-  grad.setAttribute('y1', '14')
-  grad.setAttribute('x2', '0')
-  grad.setAttribute('y2', '60')
-  grad.setAttribute('gradientUnits', 'userSpaceOnUse')
-  for (const [o, c] of [
-    ['0', 'var(--al-spike-1)'],
-    ['0.38', 'var(--al-spike-2)'],
-    ['0.7', 'var(--al-spike-3)'],
-    ['1', 'var(--al-spike-4)'],
+  const f = document.createElementNS(SVG_NS, 'path')
+  f.setAttribute('d', SPARK.f)
+  f.setAttribute('class', 'al-spark-f')
+  svg.appendChild(f)
+  const shard = document.createElementNS(SVG_NS, 'g')
+  shard.setAttribute('class', 'al-magnet')
+  for (const [d, cls] of [
+    [SPARK.boltTop, 'al-spark-molten'],
+    [SPARK.boltBottom, 'al-spark-arc'],
   ] as const) {
-    const s = document.createElementNS(SVG_NS, 'stop')
-    s.setAttribute('offset', o)
-    s.setAttribute('style', `stop-color:${c}`)
-    grad.appendChild(s)
+    const p = document.createElementNS(SVG_NS, 'path')
+    p.setAttribute('d', d)
+    p.setAttribute('class', cls)
+    shard.appendChild(p)
   }
-  defs.appendChild(grad)
-  svg.appendChild(defs)
-  const p = document.createElementNS(SVG_NS, 'path')
-  p.setAttribute('d', spikePath(MARK_SPIKES))
-  p.setAttribute('fill', 'url(#al-chrome)')
-  svg.appendChild(p)
-  const dot = document.createElementNS(SVG_NS, 'circle')
-  dot.setAttribute('cx', String(MARK_MAGNET.cx))
-  dot.setAttribute('cy', String(MARK_MAGNET.cy))
-  dot.setAttribute('r', String(MARK_MAGNET.r))
-  dot.setAttribute('class', 'al-magnet')
-  svg.appendChild(dot)
+  svg.appendChild(shard)
   return svg
 }
 
