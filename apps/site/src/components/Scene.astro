@@ -1,0 +1,61 @@
+---
+// The site-wide 3D layer: one fixed WebGL canvas behind the content, the scroll ruler and
+// the rotating section sidebar. All decorative (aria-hidden); every word stays in HTML.
+// WebGL starts after first paint and only on a real GPU; without it the page is unchanged.
+interface Props {
+  mode: 'home' | 'page' | 'calm'
+  deck: string
+}
+const { mode, deck } = Astro.props
+const ticks = Array.from({ length: 21 }, (_, i) => i)
+---
+
+<canvas class="fc-stage" aria-hidden="true" data-mode={mode} data-deck={deck}></canvas>
+<div class="fc-ruler" aria-hidden="true">
+  {ticks.map((i) => <i class:list={['tk', { big: i % 5 === 0 }]} style={`top:${i * 5}%`} />)}
+  <i class="ind"><span class="read">000 %</span></i>
+</div>
+<div class="fc-side" aria-hidden="true"></div>
+
+<script>
+  const root = document.documentElement
+  const canvas = document.querySelector<HTMLCanvasElement>('.fc-stage')
+
+  // Real GPUs only: software renderers (SwiftShader, llvmpipe) would draw on the CPU.
+  const gpu = (() => {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl2')
+      if (!gl) return false
+      const info = gl.getExtension('WEBGL_debug_renderer_info')
+      const name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : ''
+      gl.getExtension('WEBGL_lose_context')?.loseContext()
+      return !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)
+    } catch {
+      return false
+    }
+  })()
+  if (!gpu) root.classList.add('no-webgl')
+
+  const idle = (cb: () => void) =>
+    'requestIdleCallback' in window ? requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 250)
+
+  // After first paint, so neither the scene nor GSAP competes with the headline (LCP).
+  const start = () =>
+    requestAnimationFrame(() =>
+      idle(() => {
+        import('../scripts/chrome').then((m) => m.mountChrome())
+        if (!gpu || !canvas) return
+        import('../scripts/scene/stage')
+          .then((m) =>
+            m.mountStage({
+              canvas,
+              mode: (canvas.dataset.mode as 'home' | 'page' | 'calm') ?? 'page',
+              deck: canvas.dataset.deck ?? 'page',
+            }),
+          )
+          .catch(() => root.classList.add('no-webgl'))
+      }),
+    )
+  if (document.readyState === 'complete') start()
+  else addEventListener('load', start, { once: true })
+</script>

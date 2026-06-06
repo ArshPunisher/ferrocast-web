@@ -1,0 +1,52 @@
+---
+// One thin strip of feature names per page (decorative; the same words are links elsewhere).
+// It moves for longer than five seconds, so it has a pause button (WCAG 2.2.2); the button
+// stays hidden without JS and under reduced motion, where the strip does not move.
+import Icon from './Icon.astro'
+
+const items = [
+  'Stream alerts',
+  'OBS overlays',
+  'Merged chat',
+  'Chatbot',
+  'Bans on every platform',
+  'Tip page',
+  'Event log',
+  'Goals',
+  'Open source',
+]
+const run = [...items, ...items]
+---
+
+<div class="fc-marquee" data-marquee>
+  <div class="track" aria-hidden="true">
+    {run.map((m) => (
+      <>
+        <span>{m}</span>
+        <span class="sl">/</span>
+      </>
+    ))}
+  </div>
+  <button type="button" class="mq-toggle" data-marquee-toggle aria-pressed="false" aria-label="Pause the scrolling feature strip" hidden>
+    <span class="i-play"><Icon name="play" size={14} weight="fill" /></span>
+    <span class="i-pause"><Icon name="pause" size={14} weight="fill" /></span>
+  </button>
+</div>
+
+<script>
+  const strip = document.querySelector<HTMLElement>('[data-marquee]')
+  const btn = strip?.querySelector<HTMLButtonElement>('[data-marquee-toggle]')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)')
+  if (strip && btn) {
+    const sync = () => {
+      btn.hidden = reduce.matches
+    }
+    sync()
+    reduce.addEventListener('change', sync)
+    btn.addEventListener('click', () => {
+      const paused = !strip.classList.contains('paused')
+      strip.classList.toggle('paused', paused)
+      btn.setAttribute('aria-pressed', String(paused))
+    })
+  }
+</script>

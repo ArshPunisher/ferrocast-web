@@ -1,0 +1,290 @@
+/* Site 3D layer: X1 Spark colours, the persistent WebGL stage, the scroll ruler,
+   the rotating section sidebar and the marquee. Loaded after global.css. */
+
+/* X1 Spark: Molten fills the primary action (dark text on it passes AA in both themes),
+   Arc carries links, icons and focus. Platform colours stay inside the hero strands. */
+:root {
+  --fc-accent: #ffa424;
+  --fc-accent-strong: #ffb547;
+  --fc-on-accent: #120a00;
+  --fc-accent-text: #33d4ff;
+  --fc-accent-soft: rgb(51 212 255 / 0.12);
+  --fc-accent-line: rgb(51 212 255 / 0.4);
+  --fc-focus: 0 0 0 2px var(--fc-bg), 0 0 0 4px var(--fc-accent-text);
+  --fc-scene-ui: #8a919d;
+}
+:root[data-theme='light'] {
+  --fc-accent: #cf7400;
+  --fc-accent-strong: #b86600;
+  --fc-on-accent: #0a0600;
+  --fc-accent-text: #066d92;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.36);
+  --fc-scene-ui: #5f6672;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    --fc-accent: #cf7400;
+    --fc-accent-strong: #b86600;
+    --fc-on-accent: #0a0600;
+    --fc-accent-text: #066d92;
+    --fc-accent-soft: rgb(8 136 184 / 0.1);
+    --fc-accent-line: rgb(8 136 184 / 0.36);
+    --fc-scene-ui: #5f6672;
+  }
+}
+.btn-primary {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 10px 28px -16px var(--fc-accent);
+}
+.skip-link {
+  color: var(--fc-on-accent);
+}
+::selection {
+  background: rgb(51 212 255 / 0.3);
+}
+
+/* ---------- The stage: one fixed canvas behind every page ---------- */
+.fc-stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms var(--fc-ease-out);
+}
+.fc-stage.ready {
+  opacity: 1;
+}
+html[data-scene='calm'] .fc-stage.ready {
+  opacity: 0.6;
+}
+main,
+body > footer,
+.fc-marquee {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Ruler: page progress on the right edge ---------- */
+.fc-ruler {
+  position: fixed;
+  z-index: 30;
+  right: 6px;
+  top: 96px;
+  bottom: 28px;
+  width: 16px;
+  pointer-events: none;
+}
+.fc-ruler .tk {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  height: 1px;
+  background: var(--fc-scene-ui);
+  opacity: 0.6;
+}
+.fc-ruler .tk.big {
+  width: 12px;
+  opacity: 0.95;
+}
+.fc-ruler .ind {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 16px;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--fc-accent-text);
+  will-change: transform;
+}
+.fc-ruler .read {
+  position: absolute;
+  right: 22px;
+  top: -6px;
+  display: none;
+  font: 600 11px/1 var(--fc-font-mono);
+  letter-spacing: 0.04em;
+  color: var(--fc-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 639px) {
+  .fc-ruler {
+    right: 2px;
+    width: 8px;
+  }
+  .fc-ruler .tk {
+    width: 4px;
+  }
+  .fc-ruler .tk.big {
+    width: 7px;
+  }
+  .fc-ruler .ind {
+    width: 9px;
+  }
+}
+@media (min-width: 1320px) {
+  .fc-ruler {
+    right: 14px;
+    width: 34px;
+  }
+  .fc-ruler .tk {
+    width: 8px;
+  }
+  .fc-ruler .tk.big {
+    width: 16px;
+  }
+  .fc-ruler .ind {
+    width: 30px;
+  }
+  .fc-ruler .read {
+    display: block;
+  }
+}
+
+/* ---------- Rotating section sidebar (needs room outside the content column) ---------- */
+.fc-side {
+  position: fixed;
+  z-index: 29;
+  right: 64px;
+  top: 104px;
+  bottom: 32px;
+  width: 0;
+  perspective: 700px;
+  pointer-events: none;
+  display: none;
+}
+@media (min-width: 1320px) {
+  .fc-side.on {
+    display: block;
+  }
+}
+.fc-lab {
+  position: absolute;
+  right: 0;
+  top: 0;
+  white-space: nowrap;
+  transform-origin: 100% 50%;
+  font: 500 11px/1 var(--fc-font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fc-scene-ui);
+  transition:
+    transform 760ms var(--fc-ease-drawer),
+    opacity 500ms var(--fc-ease-out),
+    color 400ms var(--fc-ease-out);
+  will-change: transform;
+}
+.fc-lab.active {
+  color: var(--fc-accent-text);
+  font-weight: 600;
+}
+.fc-lab.past {
+  color: var(--fc-text-2);
+}
+
+/* ---------- Marquee: one thin strip per page ---------- */
+.fc-marquee {
+  overflow: hidden;
+  border-block: 1px solid var(--fc-line);
+  background: color-mix(in srgb, var(--fc-bg) 78%, transparent);
+}
+.fc-marquee .track {
+  display: flex;
+  width: max-content;
+}
+.fc-marquee .track span {
+  font: 500 12px/1 var(--fc-font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fc-text-2);
+  padding: 14px 20px;
+  white-space: nowrap;
+}
+.fc-marquee .track span.sl {
+  color: var(--fc-accent-text);
+  padding-inline: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fc-marquee .track {
+    animation: fc-marquee 46s linear infinite;
+  }
+}
+@keyframes fc-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-lab {
+    transition: opacity 200ms linear;
+  }
+}
+@media print {
+  .fc-stage,
+  .fc-ruler,
+  .fc-side,
+  .fc-marquee {
+    display: none !important;
+  }
+}
+
+/* Between 1320 and 1600 px the margin only fits the vertical label, not the stacks. */
+@media (min-width: 1320px) and (max-width: 1599px) {
+  .fc-lab.next,
+  .fc-lab.past {
+    opacity: 0 !important;
+  }
+}
+
+/* The marquee pauses while hovered, while its button has focus, and when paused (WCAG 2.2.2). */
+.fc-marquee:hover .track,
+.fc-marquee:focus-within .track,
+.fc-marquee.paused .track {
+  animation-play-state: paused;
+}
+.mq-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--fc-line);
+  background: var(--fc-bg);
+  color: var(--fc-text-2);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 160ms var(--fc-ease-out);
+}
+.mq-toggle[hidden] {
+  display: none;
+}
+/* the strip clips overflow, so the focus ring sits inside the button */
+.mq-toggle:focus-visible {
+  outline-offset: -3px;
+}
+.mq-toggle .i-play,
+.fc-marquee:not(.paused) .mq-toggle .i-play,
+.fc-marquee.paused .mq-toggle .i-pause {
+  display: none;
+}
+.fc-marquee.paused .mq-toggle .i-play,
+.fc-marquee:not(.paused) .mq-toggle .i-pause {
+  display: inline-flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mq-toggle:hover {
+    color: var(--fc-text);
+  }
+}
+/* Without JS nothing drives the ruler, so it stays out of the way. */
+html:not(.js) .fc-ruler {
+  display: none;
+}

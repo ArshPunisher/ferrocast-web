@@ -1,0 +1,137 @@
+---
+// Hero visual: Twitch, YouTube and Kick braid into one channel that lands in the Spark mark.
+// The strands are drawn by the site-wide WebGL stage; this component holds the HTML chips
+// the stage positions on top of them, and a static SVG for browsers without WebGL or JS.
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
+import { BRAND_PAINT_THEMED, sparkShapes } from '@ferrocast/ui/brand'
+const spark = sparkShapes(BRAND_PAINT_THEMED)
+
+const streams = [
+  { name: 'twitch', y: 70 },
+  { name: 'youtube', y: 210 },
+  { name: 'kick', y: 350 },
+] as const
+const offsets = [-14, -9, -4, 0, 4, 9, 14]
+const strand = (y: number, o: number) =>
+  `M600 ${y + o} C 440 ${y + o} 380 ${210 + o * 0.45} 270 ${210 + o * 0.4} S 160 ${210 + o * 0.1} 122 210`
+---
+
+<div class="braid-fallback" aria-hidden="true">
+  <svg viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      {streams.map((s) => (
+        <linearGradient id={`hb-${s.name}`} x1="600" y1="0" x2="230" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color={`var(--fc-${s.name})`} />
+          <stop offset="1" stop-color="var(--fc-brand-arc)" />
+        </linearGradient>
+      ))}
+    </defs>
+    {streams.map((s) => (
+      <g fill="none" stroke={`url(#hb-${s.name})`} stroke-width="1.4" opacity="0.8">
+        {offsets.map((o) => <path d={strand(s.y, o)} />)}
+      </g>
+    ))}
+    <svg x="44" y="172" width="76" height="76" viewBox="0 0 64 64" class="spark" set:html={spark}></svg>
+  </svg>
+</div>
+
+<div class="braid-chips" aria-hidden="true">
+  {streams.map((s) => (
+    <div class={`chip-3d ${s.name}`} data-braid-chip={s.name}>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d={ICON_PATHS[s.name]}></path></svg>
+    </div>
+  ))}
+  <div class="chip-3d home" data-braid-home>
+    <svg viewBox="0 0 64 64" class="spark" set:html={spark}></svg>
+  </div>
+</div>
+
+<style>
+  .braid-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+  }
+  :global(html:not(.js)) .braid-fallback,
+  :global(.no-webgl) .braid-fallback {
+    display: flex;
+  }
+  .braid-fallback > svg {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+  }
+  .spark {
+    color: var(--fc-text);
+  }
+  .braid-chips {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  :global(.no-webgl) .braid-chips {
+    display: none;
+  }
+  .chip-3d {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin: -21px 0 0 -21px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fc-surface-1) 82%, transparent);
+    border: 1px solid var(--fc-line-strong);
+    box-shadow: 0 10px 30px -12px rgb(2 4 10 / 0.6);
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+  .chip-3d svg {
+    width: 20px;
+    height: 20px;
+  }
+  .twitch {
+    color: var(--fc-twitch);
+  }
+  .youtube {
+    color: var(--fc-youtube);
+  }
+  .kick {
+    color: var(--fc-kick);
+  }
+  .home {
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    border-radius: 16px;
+    background: var(--fc-surface-2);
+  }
+  .home svg {
+    width: 40px;
+    height: 40px;
+  }
+  @media (max-width: 899px) {
+    .chip-3d {
+      width: 36px;
+      height: 36px;
+      margin: -18px 0 0 -18px;
+    }
+    .chip-3d svg {
+      width: 17px;
+      height: 17px;
+    }
+    .home {
+      width: 54px;
+      height: 54px;
+      margin: -27px 0 0 -27px;
+    }
+    .home svg {
+      width: 34px;
+      height: 34px;
+    }
+  }
+</style>

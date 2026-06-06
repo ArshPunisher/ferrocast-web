@@ -1,9 +1,12 @@
 ---
 import '../styles/global.css'
+import '../styles/scene.css'
 import hanken from '@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2?url'
 import bricolage from '@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url'
 import Header from '../components/Header.astro'
 import Footer from '../components/Footer.astro'
+import Scene from '../components/Scene.astro'
+import Marquee from '../components/Marquee.astro'
 import { PAGES, ogSlug, type PageMeta } from '../data/pages'
 import { COMPANY, SITE } from '../data/company'
 
@@ -38,6 +41,22 @@ const crumbs =
         },
       ]
 const blocks = [...schema, ...crumbs]
+
+// The 3D scene: the home page gets the hero braid, docs and legal pages a calmer field so
+// long text stays readable, feature pages float cards that match the feature.
+const calmPaths = ['/docs/', '/terms/', '/privacy/', '/refunds/']
+const sceneMode: 'home' | 'page' | 'calm' =
+  page.path === '/' ? 'home' : calmPaths.some((p) => page.path.startsWith(p)) ? 'calm' : 'page'
+const FEATURE_DECKS: Record<string, string> = {
+  '/features/alerts/': 'alerts',
+  '/features/overlays/': 'overlays',
+  '/features/chat-moderation/': 'chat',
+  '/features/bot/': 'bot',
+  '/features/tips/': 'tips',
+  '/features/own-your-data/': 'own',
+  '/download/': 'download',
+}
+const deck = FEATURE_DECKS[page.path] ?? sceneMode
 // JSON inside <script>: escape "<" so no string can close the tag.
 const ld = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c')
 ---
@@ -105,10 +124,12 @@ const ld = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c')
     <a class="skip-link" href="#main">
       Skip to content
     </a>
+    <Scene mode={sceneMode} deck={deck} />
     <Header />
     <main id="main" tabindex="-1">
       <slot />
     </main>
+    <Marquee />
     <Footer />
     <script>
       // Reveal sections as they scroll in. Content is visible without JS (the CSS only

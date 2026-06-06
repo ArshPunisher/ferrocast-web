@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro'
-import FerroHero from '../components/FerroHero.astro'
+import HeroBraid from '../components/HeroBraid.astro'
+import AlertStack from '../components/AlertStack.astro'
 import VideoSlot from '../components/VideoSlot.astro'
 import Icon from '../components/Icon.astro'
 import BrandMark from '../components/BrandMark.astro'
@@ -10,7 +11,7 @@ import { organization, softwareApplication } from '../data/schema'
 ---
 
 <Base page={PAGES.home} schema={[softwareApplication, organization]}>
-  <section class="hero">
+  <section class="hero" data-hero>
     <div class="container hero-grid">
       <div class="hero-copy">
         <p class="eyebrow">Free and open source · Version 1 in development</p>
@@ -30,7 +31,7 @@ import { organization, softwareApplication } from '../data/schema'
         </div>
       </div>
       <div class="hero-visual">
-        <FerroHero />
+        <HeroBraid />
       </div>
     </div>
   </section>
@@ -55,7 +56,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section id="alerts" class="section">
+  <section id="alerts" class="section" data-chapter="Alerts">
     <div class="container split">
       <div class="split-copy reveal">
         <h2 class="display-2">Alerts that tell you why.</h2>
@@ -79,15 +80,12 @@ import { organization, softwareApplication } from '../data/schema'
         </a>
       </div>
       <div class="reveal" style="--i: 1">
-        <VideoSlot
-          name="alert-fires"
-          label="An alert rising onto a stream overlay as a viewer subscribes"
-        />
+        <AlertStack />
       </div>
     </div>
   </section>
 
-  <section class="section mod">
+  <section class="section mod" data-chapter="Moderation">
     <div class="container">
       <div class="mod-head reveal">
         <h2 class="display-1">One ban. Every platform.</h2>
@@ -131,7 +129,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" data-chapter="Ownership">
     <div class="container">
       <h2 class="display-2 bento-title reveal">It runs on your computer, not ours.</h2>
       <div class="bento">
@@ -186,7 +184,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section setup">
+  <section class="section setup" data-chapter="Setup">
     <div class="container setup-grid">
       <div class="reveal">
         <VideoSlot
@@ -219,7 +217,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section pledge">
+  <section class="section pledge" data-chapter="Open source">
     <div class="container pledge-inner reveal">
       <h2 class="display-1">
         <span class="fc-chrome-text">Free stays free.</span>
@@ -240,7 +238,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section final">
+  <section class="section final" data-chapter="Get started">
     <div class="container final-inner reveal">
       <div>
         <h2 class="display-2">Bring your stream home.</h2>
@@ -273,6 +271,15 @@ import { organization, softwareApplication } from '../data/schema'
     position: relative;
     z-index: 1;
   }
+  /* a soft plate of page colour behind the copy, so the 3D field never fights the text */
+  .hero-copy::before {
+    content: '';
+    position: absolute;
+    inset: -18% -22% -18% -30%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--fc-bg) 88%, transparent), color-mix(in srgb, var(--fc-bg) 60%, transparent) 60%, transparent);
+  }
   .hero-copy h1 {
     max-width: 17ch;
   }
@@ -292,7 +299,7 @@ import { organization, softwareApplication } from '../data/schema'
     }
     .hero-grid {
       grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-      min-height: min(calc(100svh - 64px - 88px), 560px);
+      min-height: calc(100svh - 96px);
       gap: 24px;
     }
     .hero-copy {
@@ -367,7 +374,7 @@ import { organization, softwareApplication } from '../data/schema'
 
   .mod {
     background:
-      radial-gradient(60% 50% at 50% 0%, var(--fc-accent-soft), transparent 70%), var(--fc-bg);
+      radial-gradient(60% 50% at 50% 0%, var(--fc-accent-soft), transparent 70%);
     border-top: 1px solid var(--fc-line);
   }
   .mod-head {

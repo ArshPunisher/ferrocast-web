@@ -87,14 +87,16 @@ for (const [path, name] of [
 
 test('every looping video can be paused and stays paused', async ({ page }) => {
   await page.goto('/')
-  await page.locator('#alerts').scrollIntoViewIfNeeded()
-  const video = page.locator('#alerts video')
+  // the alerts section now shows the live alert stack; the moderation loop is a video
+  const section = page.locator('[data-chapter="Moderation"]')
+  await section.scrollIntoViewIfNeeded()
+  const video = section.locator('video')
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => !v.paused)).toBe(true)
-  const btn = page.locator('#alerts').getByRole('button', { name: 'Pause video' })
+  const btn = section.getByRole('button', { name: /^Pause video/ })
   await btn.click()
-  await expect(page.locator('#alerts').getByRole('button', { name: 'Play video' })).toBeVisible()
+  await expect(section.getByRole('button', { name: /^Play video/ })).toBeVisible()
   await page.mouse.wheel(0, 2000)
-  await page.locator('#alerts').scrollIntoViewIfNeeded()
+  await section.scrollIntoViewIfNeeded()
   await page.waitForTimeout(500)
   expect(await video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true)
 })
