@@ -176,7 +176,7 @@ export const BanEverywhere: React.FC = () => {
       <AbsoluteFill
         style={{
           background:
-            'radial-gradient(50% 60% at 72% 45%, rgba(52,97,245,0.14), rgba(10,11,13,0) 70%)',
+            'radial-gradient(50% 60% at 72% 45%, rgba(51,212,255,0.1), rgba(10,11,13,0) 70%), radial-gradient(40% 50% at 20% 60%, rgba(255,164,36,0.06), rgba(10,11,13,0) 70%)',
         }}
       />
       {/* Headline */}

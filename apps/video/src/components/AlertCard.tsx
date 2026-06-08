@@ -1,14 +1,16 @@
 import type React from 'react'
 import { Easing, interpolate, spring, useVideoConfig } from 'remotion'
 import { C, EASE_OUT, FONT } from '../theme'
-import { PlatformGlyph, SpikeMark, type Platform } from './marks'
+import { PlatformGlyph, SparkMark, type Platform } from './marks'
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const
 
 /**
  * A Ferrocast alert in the default "Molten" theme: a glossy liquid-metal card that rises out
- * of its own puddle (scale-y from the bottom edge plus a clip reveal), the drop on the left
- * throws its spikes up, then everything drains back down on exit.
+ * of its own pool (scale-y from the bottom edge plus a clip reveal) while the Spark mark on
+ * the left plays the overlay's flourish (apps/overlays/src/styles/alert.css): the f rises
+ * from its base with a small overshoot and the split shard drops in. On exit the mark
+ * flattens and everything drains back down.
  *
  * `t` is the frame relative to the alert's start; `hold` is how long it stays (frames).
  */
@@ -19,9 +21,8 @@ export const AlertCard: React.FC<{
   body: string
   platform: Platform
   platformLabel: string
-  id: string
   scale?: number
-}> = ({ t, hold, title, body, platform, platformLabel, id, scale = 1 }) => {
+}> = ({ t, hold, title, body, platform, platformLabel, scale = 1 }) => {
   const { fps } = useVideoConfig()
   if (t < 0 || t > hold + 18) return null
   const rise = spring({ frame: t, fps, config: { damping: 15, stiffness: 120, mass: 0.9 } })
@@ -29,7 +30,22 @@ export const AlertCard: React.FC<{
     ...clamp,
     easing: Easing.bezier(0.55, 0, 0.75, 0.2),
   })
-  const spikes = spring({ frame: t - 6, fps, config: { damping: 9, stiffness: 140, mass: 0.7 } })
+  // The overlay's timings at 30 fps: al-spike 720 ms after 140 ms, al-magnet 480 ms after
+  // 80 ms, al-spikes-down 220 ms on exit.
+  const ms = (v: number) => (v / 1000) * fps
+  const markRise = interpolate(t, [ms(140), ms(140 + 720 * 0.7), ms(860)], [0.05, 1.12, 1], {
+    ...clamp,
+    easing: Easing.bezier(0.34, 1.4, 0.64, 1),
+  })
+  const markIn = interpolate(t, [ms(140), ms(140 + 720 * 0.3)], [0, 1], clamp)
+  const shardDrop = interpolate(t, [ms(80), ms(560)], [0, 1], {
+    ...clamp,
+    easing: Easing.bezier(...EASE_OUT),
+  })
+  const markOut = interpolate(t, [hold, hold + ms(220)], [0, 1], {
+    ...clamp,
+    easing: Easing.in(Easing.quad),
+  })
   const textIn = (delay: number) =>
     interpolate(t, [delay, delay + 14], [0, 1], { ...clamp, easing: Easing.bezier(...EASE_OUT) })
   const reveal = Math.min(rise, 1) * (1 - drain)
@@ -45,7 +61,7 @@ export const AlertCard: React.FC<{
         transformOrigin: '50% 100%',
       }}
     >
-      {/* cobalt pool the card rises from */}
+      {/* molten pool the card rises from */}
       <div
         style={{
           position: 'absolute',
@@ -54,7 +70,7 @@ export const AlertCard: React.FC<{
           bottom: -26 * scale,
           height: 60 * scale,
           borderRadius: '50%',
-          background: `radial-gradient(closest-side, rgba(52,97,245,${0.55 * reveal}), rgba(52,97,245,0))`,
+          background: `radial-gradient(closest-side, rgba(255,164,36,${0.42 * reveal}), rgba(255,164,36,0))`,
           scale: `${interpolate(rise, [0, 1], [0.3, 1])} 1`,
         }}
       />
@@ -67,8 +83,8 @@ export const AlertCard: React.FC<{
           padding: 2 * scale,
           borderRadius: 28 * scale,
           background:
-            'linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,255,255,0.06) 38%, rgba(142,170,255,0.22) 100%)',
-          boxShadow: `0 ${30 * scale}px ${80 * scale}px -${30 * scale}px rgba(0,0,0,0.9), 0 ${10 * scale}px ${40 * scale}px -${20 * scale}px rgba(52,97,245,0.6)`,
+            'linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,255,255,0.06) 38%, rgba(51,212,255,0.2) 100%)',
+          boxShadow: `0 ${30 * scale}px ${80 * scale}px -${30 * scale}px rgba(0,0,0,0.9), 0 ${10 * scale}px ${40 * scale}px -${20 * scale}px rgba(255,164,36,0.45)`,
         }}
       >
         <div
@@ -79,7 +95,7 @@ export const AlertCard: React.FC<{
             padding: `${34 * scale}px ${44 * scale}px ${34 * scale}px ${34 * scale}px`,
             borderRadius: 26 * scale,
             background:
-              'radial-gradient(120% 140% at 50% 120%, rgba(52,97,245,0.28), rgba(52,97,245,0) 55%), linear-gradient(180deg, #1a1e25 0%, #0d0f13 55%, #08090b 100%)',
+              'radial-gradient(120% 140% at 50% 120%, rgba(255,164,36,0.16), rgba(255,164,36,0) 55%), linear-gradient(180deg, #1a1e25 0%, #0d0f13 55%, #08090b 100%)',
             overflow: 'hidden',
             position: 'relative',
           }}
@@ -101,7 +117,7 @@ export const AlertCard: React.FC<{
               height: 132 * scale,
               borderRadius: 24 * scale,
               background:
-                'radial-gradient(80% 80% at 50% 85%, rgba(52,97,245,0.35), rgba(10,11,13,0) 70%), #0a0b0d',
+                'radial-gradient(80% 80% at 50% 85%, rgba(51,212,255,0.22), rgba(10,11,13,0) 70%), #0a0b0d',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -109,11 +125,14 @@ export const AlertCard: React.FC<{
               border: `1px solid ${C.line}`,
             }}
           >
-            <SpikeMark
-              id={id}
-              size={112 * scale}
-              energy={spikes * (1 - drain)}
-              magnet={Math.min(spikes, 1)}
+            <SparkMark
+              size={118 * scale}
+              rise={markRise * (1 - markOut * 0.9)}
+              drop={shardDrop}
+              style={{
+                opacity: markIn * (1 - markOut),
+                filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.35))',
+              }}
             />
           </div>
           <div style={{ minWidth: 0, flex: 1, position: 'relative' }}>

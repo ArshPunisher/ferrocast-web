@@ -1,7 +1,9 @@
 import { continueRender, delayRender, staticFile } from 'remotion'
 
-// The dark tokens from packages/ui/src/styles/tokens.css, as values (Remotion renders
-// inline styles, so CSS custom properties would only add indirection here).
+// The dark tokens from packages/ui/src/styles/tokens.css with the site's X1 Spark accents
+// (apps/site/src/styles/scene.css), as values (Remotion renders inline styles, so CSS custom
+// properties would only add indirection here). Molten fills primary actions (dark text on
+// it), Arc carries highlights, links and focus.
 export const C = {
   bg: '#0a0b0d',
   surface1: '#101216',
@@ -12,9 +14,17 @@ export const C = {
   text: '#eef0f4',
   text2: '#b3b9c4',
   text3: '#8a919d',
-  accent: '#3461f5',
-  accentText: '#8eaaff',
-  accentSoft: 'rgba(52, 97, 245, 0.16)',
+  /** Molten: primary fills. Text on it is `onAccent`. */
+  accent: '#ffa424',
+  onAccent: '#120a00',
+  /** Arc: highlights, rings, emphasis text. */
+  accentText: '#33d4ff',
+  accentSoft: 'rgba(51, 212, 255, 0.12)',
+  accentLine: 'rgba(51, 212, 255, 0.4)',
+  /** The Spark mark's paint (BRAND_PAINT.dark in packages/ui/src/brand.ts). */
+  ink: '#eef0f4',
+  molten: '#ffa424',
+  arc: '#33d4ff',
   ok: '#3dd193',
   danger: '#ff5d6c',
   dangerFill: '#d9324a',

@@ -52,7 +52,7 @@ const ThemeTile: React.FC<{ id: string; label: string; size: number }> = ({ id, 
             borderRadius: 12,
             background: 'linear-gradient(180deg, #1a1e25, #08090b)',
             border: '1px solid rgba(255,255,255,0.22)',
-            boxShadow: '0 8px 20px -8px rgba(52,97,245,0.9)',
+            boxShadow: '0 8px 20px -8px rgba(255,164,36,0.75)',
             color: C.text,
             fontFamily: FONT.display,
             fontWeight: 760,
@@ -89,7 +89,7 @@ const ThemeTile: React.FC<{ id: string; label: string; size: number }> = ({ id, 
             padding: `${fs * 0.6}px ${fs * 0.8}px`,
             background: '#0a0b0d',
             border: '3px solid #eef0f4',
-            boxShadow: `6px 6px 0 ${C.accent}`,
+            boxShadow: `6px 6px 0 ${C.arc}`,
             color: '#eef0f4',
             fontFamily: FONT.mono,
             fontWeight: 800,
@@ -129,7 +129,7 @@ const ThemeTile: React.FC<{ id: string; label: string; size: number }> = ({ id, 
             fontWeight: 800,
             fontSize: fs * 0.95,
             whiteSpace: 'nowrap',
-            boxShadow: `0 0 0 4px ${C.accent}, 0 10px 18px -8px rgba(0,0,0,0.8)`,
+            boxShadow: `0 0 0 4px ${C.molten}, 0 10px 18px -8px rgba(0,0,0,0.8)`,
           }}
         >
           {text}
@@ -260,8 +260,8 @@ export const SetupThreeClicks: React.FC = () => {
       <AbsoluteFill
         style={{
           background: portrait
-            ? 'radial-gradient(70% 45% at 50% 70%, rgba(52,97,245,0.16), rgba(10,11,13,0) 70%)'
-            : 'radial-gradient(45% 60% at 72% 50%, rgba(52,97,245,0.15), rgba(10,11,13,0) 70%)',
+            ? 'radial-gradient(70% 45% at 50% 70%, rgba(51,212,255,0.1), rgba(10,11,13,0) 70%), radial-gradient(50% 30% at 50% 20%, rgba(255,164,36,0.06), rgba(10,11,13,0) 70%)'
+            : 'radial-gradient(45% 60% at 72% 50%, rgba(51,212,255,0.1), rgba(10,11,13,0) 70%), radial-gradient(35% 45% at 18% 40%, rgba(255,164,36,0.06), rgba(10,11,13,0) 70%)',
         }}
       />
 
@@ -288,7 +288,7 @@ export const SetupThreeClicks: React.FC = () => {
                   height: 52,
                   padding: '0 20px 0 12px',
                   borderRadius: 999,
-                  border: `1px solid ${on ? 'rgba(110,145,255,0.6)' : C.line}`,
+                  border: `1px solid ${on ? C.accentLine : C.line}`,
                   background: on ? C.accentSoft : 'transparent',
                   fontFamily: FONT.sans,
                   fontWeight: 650,
@@ -305,7 +305,7 @@ export const SetupThreeClicks: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: on ? C.accent : done ? 'rgba(61,209,147,0.18)' : C.surface3,
-                    color: '#fff',
+                    color: on ? C.onAccent : '#fff',
                     fontSize: 17,
                     fontWeight: 750,
                   }}
@@ -512,14 +512,14 @@ export const SetupThreeClicks: React.FC = () => {
               fontFamily: FONT.sans,
               fontWeight: 750,
               fontSize: 46,
-              color: '#ffffff',
+              color: added > 0.5 ? '#ffffff' : C.onAccent,
               background: added > 0.5 ? '#123a2a' : C.accent,
               border:
-                added > 0.5 ? '1px solid rgba(61,209,147,0.5)' : '1px solid rgba(255,255,255,0.2)',
+                added > 0.5 ? '1px solid rgba(61,209,147,0.5)' : '1px solid rgba(255,255,255,0.28)',
               boxShadow:
                 added > 0.5
                   ? '0 30px 80px -30px rgba(0,0,0,0.9)'
-                  : `inset 0 1px 0 rgba(255,255,255,0.25), 0 24px 60px -18px rgba(52,97,245,0.75)`,
+                  : `inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -18px rgba(255,164,36,0.6)`,
               scale: String(1 - obsPress * 0.04),
               whiteSpace: 'nowrap',
             }}
@@ -535,7 +535,7 @@ export const SetupThreeClicks: React.FC = () => {
               </>
             ) : (
               <>
-                <PlatformGlyph platform="obs" size={52} color="#ffffff" />
+                <PlatformGlyph platform="obs" size={52} color={C.onAccent} />
                 Add to OBS
               </>
             )}

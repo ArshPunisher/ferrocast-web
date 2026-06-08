@@ -5,7 +5,7 @@ import { C } from '../theme'
 
 /**
  * An abstract "something is happening on stream" backdrop: layered dusk ridges drifting
- * slowly, a low sun, a soft vignette. Periodic over the composition so the loop is seamless.
+ * slowly, a low molten sun, a soft vignette. Periodic over the composition so the loop is seamless.
  */
 const Backdrop: React.FC<{ p: number }> = ({ p }) => {
   const { width, height } = useVideoConfig()
@@ -27,7 +27,7 @@ const Backdrop: React.FC<{ p: number }> = ({ p }) => {
       <AbsoluteFill
         style={{
           background:
-            'radial-gradient(60% 50% at 70% 38%, rgba(98,128,220,0.32), rgba(10,11,13,0) 70%), linear-gradient(180deg, #121827 0%, #0d1220 45%, #090b10 100%)',
+            'radial-gradient(60% 50% at 70% 38%, rgba(255,164,36,0.2), rgba(10,11,13,0) 70%), radial-gradient(70% 60% at 20% 30%, rgba(51,212,255,0.08), rgba(10,11,13,0) 70%), linear-gradient(180deg, #121722 0%, #0d111b 45%, #090b10 100%)',
         }}
       />
       <div
@@ -39,7 +39,7 @@ const Backdrop: React.FC<{ p: number }> = ({ p }) => {
           height: 180,
           borderRadius: '50%',
           background:
-            'radial-gradient(closest-side, rgba(220,228,255,0.55), rgba(142,170,255,0.18) 60%, rgba(142,170,255,0))',
+            'radial-gradient(closest-side, rgba(255,226,180,0.6), rgba(255,164,36,0.2) 60%, rgba(255,164,36,0))',
         }}
       />
       <svg width={width} height={height} style={{ position: 'absolute', inset: 0 }}>
@@ -69,7 +69,6 @@ export const AlertFires: React.FC = () => {
         style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 150 * scale }}
       >
         <AlertCard
-          id="tip"
           t={frame - Math.round(0.6 * fps)}
           hold={Math.round(2.9 * fps)}
           platform="tips"
@@ -83,7 +82,6 @@ export const AlertFires: React.FC = () => {
         style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 150 * scale }}
       >
         <AlertCard
-          id="sub"
           t={frame - Math.round(4.3 * fps)}
           hold={Math.round(2.7 * fps)}
           platform="twitch"

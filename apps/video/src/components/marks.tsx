@@ -1,6 +1,5 @@
 import type React from 'react'
-import { spikePath } from '@ferrocast/ui/ferro'
-import { SPARK_SMALL } from '@ferrocast/ui/brand'
+import { SPARK, SPARK_SMALL } from '@ferrocast/ui/brand'
 import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
 import { C } from '../theme'
 
@@ -13,17 +12,6 @@ const COLORS: Record<Platform, string> = {
   tips: C.tips,
   obs: C.text,
 }
-
-// The ferrofluid spikes (packages/ui/src/ferro/mark.ts), used only by the alert's spike
-// flourish below. The logo itself is the Spark mark (packages/ui/src/brand.ts).
-const SPIKES = [
-  { x: 11, h: 9 },
-  { x: 21.5, h: 18 },
-  { x: 32, h: 28 },
-  { x: 42.5, h: 18 },
-  { x: 53, h: 9 },
-]
-const MAGNET = { cx: 32, cy: 9, r: 4 }
 
 /** A platform glyph in its colour. Tips use the Ferrocast mark. */
 export const PlatformGlyph: React.FC<{ platform: Platform; size: number; color?: string }> = ({
@@ -46,46 +34,58 @@ export const FerroGlyph: React.FC<{ size: number; color: string }> = ({ size, co
   </svg>
 )
 
+/** Where the f stands: the overlay scales the flourish from 50% 86% of its box. */
+const BASE_Y = 64 * 0.86
+
 /**
- * The colour mark with spikes scaled by `energy` (0 = flat puddle, 1 = logo). Used for the
- * alert's "spike flourish": the drop rises when the alert lands.
+ * The Spark mark (packages/ui/src/brand.ts) with the overlay alert's flourish
+ * (apps/overlays/src/styles/alert.css): `rise` scales the mark up from its base (0 = flat,
+ * 1 = at rest, a little over 1 on the overshoot) and `drop` brings the split shard down
+ * into place (0 = 18 px above and hidden, 1 = landed). `split` pushes the shard's halves
+ * apart along their cut (0 = closed), used by the hero loop.
  */
-export const SpikeMark: React.FC<{ size: number; energy: number; magnet?: number; id: string }> = ({
+export const SparkMark: React.FC<{
+  size: number
+  rise?: number
+  drop?: number
+  split?: number
+  ink?: string
+  molten?: string
+  arc?: string
+  style?: React.CSSProperties
+}> = ({
   size,
-  energy,
-  magnet = 1,
-  id,
+  rise = 1,
+  drop = 1,
+  split = 0,
+  ink = C.ink,
+  molten = C.molten,
+  arc = C.arc,
+  style,
 }) => {
-  const spikes = SPIKES.map((s) => ({ x: s.x, h: Math.max(1.2, s.h * energy) }))
+  // The overlay drops the shard 18 px in a 92 px box: about 12.5 units of the 64 box.
+  const dropY = -12.5 * (1 - drop)
+  // The cut runs from (12,38) to (52,26) in bolt space; the upper half moves out along the
+  // cut's normal (up and to the left), the lower half the opposite way.
+  const nx = -0.287 * split * 6
+  const ny = -0.958 * split * 6
   return (
     <svg
       viewBox="0 0 64 64"
       width={size}
       height={size}
-      style={{ flexShrink: 0, overflow: 'visible' }}
+      aria-hidden="true"
+      style={{ flexShrink: 0, overflow: 'visible', ...style }}
     >
-      <defs>
-        <linearGradient id={`${id}-c`} x1="0" y1="14" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.32" stopColor="#c3cad6" />
-          <stop offset="0.62" stopColor="#4a515d" />
-          <stop offset="0.82" stopColor="#14171c" />
-          <stop offset="1" stopColor="#2c323b" />
-        </linearGradient>
-        <linearGradient id={`${id}-r`} x1="0" y1="50" x2="0" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={C.accent} stopOpacity="0" />
-          <stop offset="1" stopColor={C.accent} stopOpacity="0.6" />
-        </linearGradient>
-      </defs>
-      <path d={spikePath(spikes)} fill={`url(#${id}-c)`} />
-      <path d={spikePath(spikes)} fill={`url(#${id}-r)`} />
-      <circle
-        cx={MAGNET.cx}
-        cy={MAGNET.cy - (1 - magnet) * 14}
-        r={MAGNET.r}
-        fill={C.accent}
-        opacity={magnet}
-      />
+      <g
+        transform={`translate(0 ${BASE_Y}) scale(1 ${Math.max(rise, 0.0001)}) translate(0 ${-BASE_Y})`}
+      >
+        <path d={SPARK.f} fill={ink} />
+        <g transform={`translate(0 ${dropY})`} opacity={Math.min(Math.max(drop, 0), 1)}>
+          <path d={SPARK.boltTop} fill={molten} transform={`translate(${nx} ${ny})`} />
+          <path d={SPARK.boltBottom} fill={arc} transform={`translate(${-nx} ${-ny})`} />
+        </g>
+      </g>
     </svg>
   )
 }
