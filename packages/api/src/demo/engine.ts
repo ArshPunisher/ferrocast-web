@@ -11,6 +11,7 @@ import type { FetchLike } from '../client'
 import type { SocketFactory, SocketLike } from '../socket'
 import type {
   Account,
+  Actor,
   AlertRule,
   Backup,
   BanEntry,
@@ -58,6 +59,9 @@ import {
   tipSecretProblem,
 } from '../tips'
 import { chimeDataUrl } from './chime'
+import { HttpError } from './http-error'
+import { NOT_MINE, type DemoHost } from './features/host'
+import { DemoLoyalty } from './features/loyalty'
 import {
   CHATTERS,
   FILTERS,
@@ -135,17 +139,6 @@ const LIMITS: Record<MediaKind, { bytes: number; types: string[]; label: string 
   },
 }
 
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-    readonly hint?: string,
-    readonly retryAfter?: number,
-  ) {
-    super(message)
-  }
-}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -285,6 +278,9 @@ export class DemoEngine {
   private liveSubs = new Set<LiveSub>()
   private overlaySubs = new Set<OverlaySub>()
   private readonly token: string
+  private readonly host: DemoHost
+  /** Loyalty points (balances, settings, leaderboard). */
+  readonly loyalty: DemoLoyalty
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -382,6 +378,8 @@ export class DemoEngine {
     this.labels.set('latest_follower', 'LunaLagoon')
     this.labels.set('latest_sub', 'DesertFoxx')
     this.labels.set('latest_tip', 'Asha (₹500)')
+    this.host = this.makeHost()
+    this.loyalty = new DemoLoyalty(this.host)
     this.seedHistory(now)
     if (opts.autoplay ?? true) this.startAutoplay()
   }
@@ -745,6 +743,12 @@ export class DemoEngine {
 
     if (!p.startsWith('/api/v1/')) throw new HttpError(404, 'not_found', 'That page doesn’t exist.')
 
+    // Feature modules answer their own routes (points, polls, giveaways…).
+    for (const f of this.features()) {
+      const r = f.route(method, seg, body, url)
+      if (r !== NOT_MINE) return r
+    }
+
     // status and session
     if (is('GET', 'status')) return this.status()
     if (is('POST', 'session', 'pair')) return this.pair(body)
@@ -1071,6 +1075,53 @@ export class DemoEngine {
       'That doesn’t exist.',
       'Update the dashboard and the app to the same version.',
     )
+  }
+
+  // ---------------------------------------------------------------- feature modules
+
+  private features(): { route: DemoLoyalty['route'] }[] {
+    return [this.loyalty]
+  }
+
+  private makeHost(): DemoHost {
+    const known: Actor[] = (['twitch', 'youtube', 'kick'] as const).flatMap((p) =>
+      CHATTERS[p].map((c) =>
+        namedActor(p, c.name, {
+          id: `${p}-${c.name.toLowerCase().replace(/\s+/g, '')}`,
+          color: c.color,
+          roles: c.roles,
+        }),
+      ),
+    )
+    return {
+      broadcastLive: (f) => this.broadcastLive(f),
+      pushOverlayState: (partial) => {
+        for (const s of this.overlaySubs) this.sendOverlay(s, 'state', clone(partial))
+      },
+      say: (text) => {
+        for (const p of this.connectedChat())
+          this.ingest(
+            {
+              type: 'chat_message',
+              actor: namedActor(p, p === 'youtube' ? 'Nova Plays' : 'NovaPlays', {
+                id: 'me',
+                roles: 1,
+                color: '#7c9cff',
+              }),
+              content: { text, fragments: [{ type: 'text', text }] },
+              reply_to: null,
+              is_action: false,
+            },
+            p,
+            'live',
+          )
+      },
+      connectedChat: () => this.connectedChat(),
+      knownActors: () => known,
+      isLive: () => this.isLive(),
+      later: (fn, ms) => this.later(fn, ms),
+      random: () => this.rand(),
+    }
   }
 
   // ---------------------------------------------------------------- route bodies
@@ -1633,6 +1684,7 @@ export class DemoEngine {
               },
             ]
           : [],
+      points: this.loyalty.balanceOf(platform, userId),
     }
   }
 

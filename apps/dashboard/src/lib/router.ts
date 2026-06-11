@@ -11,6 +11,7 @@ export type Route =
   | { name: 'overlay'; id: string }
   | { name: 'moderation' }
   | { name: 'bot' }
+  | { name: 'community'; section?: string }
   | { name: 'tips' }
   | { name: 'settings'; section?: string }
 
@@ -28,6 +29,8 @@ export function parseRoute(hash: string): Route {
       return { name: 'moderation' }
     case 'bot':
       return { name: 'bot' }
+    case 'community':
+      return b ? { name: 'community', section: b } : { name: 'community' }
     case 'tips':
       return { name: 'tips' }
     case 'settings':
@@ -45,6 +48,8 @@ export function href(r: Route): string {
       return `#/overlays/${encodeURIComponent(r.id)}`
     case 'settings':
       return r.section ? `#/settings/${r.section}` : '#/settings'
+    case 'community':
+      return r.section ? `#/community/${r.section}` : '#/community'
     default:
       return `#/${r.name}`
   }

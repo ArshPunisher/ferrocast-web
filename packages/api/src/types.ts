@@ -589,7 +589,44 @@ export interface ViewerCard {
   banned: boolean
   timeouts: number
   other_identities: { platform: ChatPlatform; login: string }[]
+  /** Loyalty balance, shared by linked accounts. */
+  points: number
 }
+
+/** Loyalty points settings (`GET/PUT /api/v1/loyalty`). Amounts are 0–1,000,000. */
+export interface LoyaltyConfig {
+  enabled: boolean
+  /** What chat calls them: "points", "coins". 1–20 letters, numbers, spaces, - and _. */
+  name: string
+  /** Paid to each viewer who chatted during the interval while live. */
+  per_interval: number
+  /** 1–120 minutes. */
+  interval_min: number
+  follow_bonus: number
+  /** Per new sub, and per gifted sub for the gifter. */
+  sub_bonus: number
+  /** Per tip, Super Chat, Bits cheer or Kicks gift. */
+  tip_bonus: number
+  raid_bonus: number
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  platform: ChatPlatform
+  user_id: string
+  login: string
+  display_name: string
+  points: number
+}
+
+export interface PointsBalance {
+  points: number
+  /** The configured name, for "1,200 coins". */
+  name: string
+}
+
+/** Most points anyone can hold, and the most one adjustment can move. */
+export const POINTS_LIMITS = { maxBalance: 1_000_000_000_000, maxAdjust: 1_000_000_000 } as const
 
 /** Session numbers for the home screen. Shape proposed in docs/API-REQUESTS.md (R7). */
 export interface SessionStats {

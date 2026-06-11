@@ -35,6 +35,7 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { done, useAction, useClient } from '../lib/hooks'
+import { PointsAdjuster, pointsLabel } from './community/points'
 import { useLive } from '../lib/store'
 
 const SAFE_IMG =
@@ -786,6 +787,21 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
               </div>
             ))}
           </dl>
+          <div className="flex flex-col gap-2 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+            <p className="flex items-baseline justify-between gap-2">
+              <span className="text-[12px] text-text-3">Points</span>
+              <span className="font-mono text-sm font-semibold text-text tabular-nums">
+                {pointsLabel(card.points, 'points')}
+              </span>
+            </p>
+            <PointsAdjuster
+              platform={card.platform}
+              userId={card.user_id}
+              name="points"
+              points={card.points}
+              onChange={(points) => setCard({ ...card, points })}
+            />
+          </div>
           {card.other_identities.length > 0 && (
             <p className="text-[13px] text-text-3">
               Also seen as{' '}

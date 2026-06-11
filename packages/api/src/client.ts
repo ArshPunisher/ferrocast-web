@@ -12,6 +12,8 @@ import type {
   Filters,
   Goal,
   ImportReport,
+  LeaderboardEntry,
+  LoyaltyConfig,
   Media,
   ObsState,
   Overlay,
@@ -19,6 +21,7 @@ import type {
   PanicConfig,
   PanicResult,
   Platform,
+  PointsBalance,
   Queue,
   SendResult,
   SessionStats,
@@ -261,6 +264,20 @@ export class FerroClient {
   createTimer = (t: Omit<Timer, 'id'>) => this.post<Timer>('/api/v1/timers', t)
   saveTimer = (t: Timer) => this.put<Timer>(`/api/v1/timers/${enc(t.id)}`, t)
   deleteTimer = (id: string) => this.del(`/api/v1/timers/${enc(id)}`)
+
+  // Loyalty points
+  loyalty = () => this.get<LoyaltyConfig>('/api/v1/loyalty')
+  /** Saves only the fields given. */
+  saveLoyalty = (c: Partial<LoyaltyConfig>) => this.put<LoyaltyConfig>('/api/v1/loyalty', c)
+  leaderboard = (limit = 20) =>
+    this.get<LeaderboardEntry[]>(`/api/v1/loyalty/leaderboard?limit=${limit}`)
+  points = (platform: Platform, userId: string) =>
+    this.get<PointsBalance>(`/api/v1/loyalty/viewers/${platform}/${enc(userId)}`)
+  /** `delta` is a whole number, not 0; negative takes points away (never below 0). */
+  adjustPoints = (platform: Platform, userId: string, delta: number) =>
+    this.post<PointsBalance>(`/api/v1/loyalty/viewers/${platform}/${enc(userId)}/adjust`, {
+      delta,
+    })
 
   // TTS
   tts = () => this.get<TtsSettings>('/api/v1/tts')

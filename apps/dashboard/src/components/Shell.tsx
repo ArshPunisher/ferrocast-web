@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   SquaresFour,
   Sun,
+  UsersThree,
   X,
 } from '@phosphor-icons/react'
 import { Dialog, Wordmark, cx } from '@ferrocast/ui'
@@ -34,6 +35,12 @@ export const NAV: NavItem[] = [
   },
   { route: { name: 'moderation' }, label: 'Moderation', icon: ShieldCheck, match: ['moderation'] },
   { route: { name: 'bot' }, label: 'Bot', icon: Command, match: ['bot'] },
+  {
+    route: { name: 'community' },
+    label: 'Community',
+    icon: UsersThree,
+    match: ['community'],
+  },
   { route: { name: 'tips' }, label: 'Tips', icon: HandCoins, match: ['tips'] },
   { route: { name: 'settings' }, label: 'Settings', icon: GearSix, match: ['settings'] },
 ]
