@@ -277,7 +277,7 @@ export type ConnectFlow =
   | { flow: 'device_code'; user_code: string; verification_url: string; expires_at: Millis }
   | { flow: 'browser'; url: string }
 
-export type WidgetKind = 'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers'
+export type WidgetKind = 'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll'
 /** Default overlay theme id (the engine's presets use it too). */
 export const DEFAULT_THEME = 'molten'
 
@@ -288,6 +288,7 @@ export const WIDGET_KINDS: readonly WidgetKind[] = [
   'goal',
   'label',
   'viewers',
+  'poll',
 ]
 
 export interface AlertsConfig {
@@ -330,6 +331,9 @@ export interface ViewersConfig {
   platforms: Platform[]
   theme: string
 }
+export interface PollConfig {
+  theme: string
+}
 
 interface WidgetBase {
   id: string
@@ -345,6 +349,7 @@ export type Widget =
   | (WidgetBase & { kind: 'goal'; config: GoalConfig })
   | (WidgetBase & { kind: 'label'; config: LabelConfig })
   | (WidgetBase & { kind: 'viewers'; config: ViewersConfig })
+  | (WidgetBase & { kind: 'poll'; config: PollConfig })
 
 export interface Overlay {
   id: string
@@ -675,6 +680,7 @@ export type LiveFrame =
   | { v: 1; type: 'held'; data: { event_id: string; reason: string } }
   | { v: 1; type: 'panic'; data: { on: boolean; plan: PanicConfig } }
   | { v: 1; type: 'resync'; data: { missed: number } }
+  | { v: 1; type: 'poll'; data: { poll: PollView | null } }
 
 /** Overlay snapshot state (API.md §6). */
 export interface OverlayState {
@@ -683,7 +689,40 @@ export interface OverlayState {
   viewers: Partial<Record<Platform, number>>
   events: FerroEvent[]
   chat: FerroEvent[]
+  /** The running (or last) poll; overlays with a poll widget get updates. */
+  poll?: PollView | null
 }
+
+/** A chat poll (`!vote N`). Who voted for what is never sent. */
+export interface PollView {
+  id: string
+  question: string
+  options: { text: string; votes: number }[]
+  total: number
+  started_at: Millis
+  ends_at: Millis
+  closed: boolean
+  /** Indexes of the leading answers: several on a tie, none without votes. */
+  leaders: number[]
+}
+
+/** `POST /api/v1/polls`. */
+export interface PollSpec {
+  question: string
+  /** 2–5 answers, 1–60 characters each. */
+  options: string[]
+  /** 10–1800 seconds. */
+  duration_s: number
+}
+
+export const POLL_LIMITS = {
+  minOptions: 2,
+  maxOptions: 5,
+  minDuration: 10,
+  maxDuration: 1800,
+  question: 120,
+  option: 60,
+} as const
 
 export type OverlayServerFrame =
   | { v: 1; seq: number; type: 'snapshot'; data: { overlay: Overlay; state: OverlayState } }
@@ -694,7 +733,7 @@ export type OverlayServerFrame =
       v: 1
       seq: number
       type: 'state'
-      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers'>>
+      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll'>>
     }
   | { v: 1; seq: number; type: 'config'; data: Overlay }
   | { v: 1; seq: number; type: 'delete_message'; data: { platform: Platform; message_id: string } }

@@ -5,6 +5,7 @@ import type {
   Overlay,
   OverlayServerFrame,
   OverlayState,
+  PollView,
   RenderedAlert,
   Widget,
 } from '@ferrocast/api/types'
@@ -13,6 +14,7 @@ import { emptyState, type WidgetContext, type WidgetView } from './widget'
 import { AlertsWidget } from './widgets/alerts'
 import { ChatWidget } from './widgets/chat'
 import { EventsWidget, GoalWidget, LabelWidget, ViewersWidget } from './widgets/info'
+import { PollWidget } from './widgets/poll'
 
 export interface OverlayRuntime {
   apply(frame: OverlayServerFrame): void
@@ -52,6 +54,8 @@ function build(w: Widget, ctx: WidgetContext): WidgetView | null {
       return new LabelWidget(w, ctx)
     case 'viewers':
       return new ViewersWidget(w, ctx)
+    case 'poll':
+      return new PollWidget(w, ctx)
     default:
       warnOnce(`unknown widget kind: ${String((w as { kind?: unknown }).kind)}`)
       return null
@@ -194,6 +198,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         viewers: obj(s?.viewers) ? (s.viewers as OverlayState['viewers']) : {},
         events: Array.isArray(s?.events) ? s.events : [],
         chat: Array.isArray(s?.chat) ? s.chat : [],
+        poll: obj(s?.poll) ? (s.poll as PollView) : null,
       }
       layout(frame.data.overlay, true)
       each((v) => v.onSnapshot?.())
@@ -231,6 +236,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
           state.labels = { ...state.labels, ...(d.labels as Record<string, string>) }
         if (obj(d.viewers))
           state.viewers = { ...state.viewers, ...(d.viewers as OverlayState['viewers']) }
+        if ('poll' in d) state.poll = obj(d.poll) ? (d.poll as PollView) : null
         each((v) => v.onState?.())
         break
       }

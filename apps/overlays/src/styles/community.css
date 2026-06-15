@@ -1,0 +1,129 @@
+/*
+ * Community widgets: poll results (and the giveaway card). Same rules as overlay.css:
+ * everything under .fc-ov, only transform and opacity move, nothing loops.
+ */
+
+.fc-ov .fc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ poll */
+
+.fc-ov .fc-w-poll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: var(--t-radius);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+  overflow: hidden;
+}
+.fc-ov .fc-w-poll[data-theme='minimal'] {
+  padding: 0;
+}
+.fc-ov .fc-poll-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fc-ov .fc-poll-q {
+  font-family: var(--t-display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-transform: var(--t-case);
+  overflow-wrap: anywhere;
+}
+.fc-ov .fc-poll-status {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-accent);
+}
+.fc-ov .fc-poll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fc-ov .fc-poll-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 19px;
+}
+.fc-ov .fc-poll-n {
+  flex: none;
+  min-width: 1.4em;
+  font-weight: 700;
+  color: var(--t-accent);
+  font-variant-numeric: tabular-nums;
+}
+.fc-ov .fc-poll-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fc-ov .fc-poll-count {
+  flex: none;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--t-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.fc-ov .fc-poll-bar {
+  position: relative;
+  height: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--t-track);
+}
+.fc-ov [data-theme='arcade'] .fc-poll-bar {
+  border-radius: 2px;
+}
+.fc-ov [data-theme='sticker'] .fc-poll-bar {
+  border: 2px solid #0e1014;
+  height: 14px;
+}
+.fc-ov .fc-poll-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--t-fill);
+  border-radius: inherit;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fc-ov .fc-w-poll.is-closed .fc-poll-row:not(.is-leader) {
+  opacity: 0.55;
+}
+.fc-ov .fc-poll-row.is-leader .fc-poll-text::after {
+  content: '  Winner';
+  font-size: 0.75em;
+  color: var(--t-accent);
+}
+
+.fc-ov.is-low .fc-poll-fill {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-ov .fc-poll-fill {
+    transition: none;
+  }
+}

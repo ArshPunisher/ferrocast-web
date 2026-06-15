@@ -12,6 +12,7 @@ import {
   type Goal,
   type Notice,
   type PanicConfig,
+  type PollView,
   type Platform,
   type Queue,
   type Status,
@@ -47,6 +48,8 @@ interface LiveStore {
   held: Map<string, string>
   /** Bumped when the server says we fell behind; screens refetch. */
   resyncs: number
+  /** The latest `poll` frame; `undefined` until one arrives (load it with the client). */
+  poll: PollView | null | undefined
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
   setBootError: (e: ApiError | null) => void
@@ -79,6 +82,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   panicPlan: null,
   held: new Map(),
   resyncs: 0,
+  poll: undefined,
   setConn: (conn) => set({ conn }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   setBootError: (bootError) => set({ bootError }),
@@ -108,6 +112,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let panicPlan = s.panicPlan
     let held = s.held
     let resyncs = s.resyncs
+    let poll = s.poll
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
@@ -164,6 +169,9 @@ export const useLive = create<LiveStore>((set, get) => ({
           resyncs += 1
           void resync()
           break
+        case 'poll':
+          poll = f.data.poll
+          break
         case 'hello':
           break
       }
@@ -184,6 +192,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       panicPlan,
       held,
       resyncs,
+      poll,
     })
   },
 }))

@@ -1,8 +1,14 @@
 // What the demo engine lends its feature modules (points, polls, giveaways…), so each
 // feature keeps its own state and routes in its own file.
 
-import type { Actor, ChatPlatform } from '../../types'
+import type { Actor, ChatPlatform, FerroEvent } from '../../types'
 import { HttpError } from '../http-error'
+
+/** A demo feature: its routes, and (optionally) every chat message as it arrives. */
+export interface DemoFeature {
+  route(method: string, seg: string[], body: unknown, url: URL): unknown
+  onChat?(e: FerroEvent): void
+}
 
 /** Returned by a feature's `route` when the request isn't one of its routes. */
 export const NOT_MINE = Symbol('not mine')
@@ -15,6 +21,8 @@ export interface DemoHost {
   pushOverlayState(partial: Record<string, unknown>): void
   /** The bot says something in chat on every connected platform (shown as the streamer). */
   say(text: string): void
+  /** A viewer chats (demo audience): goes through the same path as real chat. */
+  chat(actor: Actor, text: string): void
   /** Chat platforms that are connected right now. */
   connectedChat(): ChatPlatform[]
   /** People the demo knows (its seeded chatters), with stable ids. */

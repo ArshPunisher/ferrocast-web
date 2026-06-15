@@ -27,7 +27,10 @@ const AMOUNTS = [
 
 /** "1,234 points", "1 point". */
 export function pointsLabel(n: number, name: string): string {
-  const unit = n === 1 && name.length > 1 && name.endsWith('s') && !name.endsWith('ss') ? name.slice(0, -1) : name
+  const unit =
+    n === 1 && name.length > 1 && name.endsWith('s') && !name.endsWith('ss')
+      ? name.slice(0, -1)
+      : name
   return `${group(n)} ${unit}`
 }
 
@@ -39,8 +42,7 @@ export function loyaltyProblem(c: LoyaltyConfig): string | null {
   if (!/^[\p{L}\p{N} _-]+$/u.test(name)) return 'name: use letters, numbers, spaces, - and _ only.'
   if (!isWhole(c.interval_min) || c.interval_min < 1 || c.interval_min > 120)
     return 'interval_min: must be between 1 and 120 minutes.'
-  for (const k of AMOUNTS)
-    if (c[k] > 1_000_000) return `${k}: must be between 0 and 1,000,000.`
+  for (const k of AMOUNTS) if (c[k] > 1_000_000) return `${k}: must be between 0 and 1,000,000.`
   return null
 }
 

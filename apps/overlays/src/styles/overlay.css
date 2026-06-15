@@ -1,3 +1,5 @@
+@import './community.css';
+
 /*
  * Ferrocast overlay widgets. Every selector lives under .fc-ov so the same file works on
  * the OBS page and inside the dashboard's Shadow DOM previews without leaking.

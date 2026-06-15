@@ -12,7 +12,11 @@ beforeEach(() => {
 })
 afterEach(() => engine.dispose())
 
-const fail = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e as ApiError)
+const fail = (p: Promise<unknown>) =>
+  p.then(
+    () => null,
+    (e: unknown) => e as ApiError,
+  )
 
 describe('demo loyalty points', () => {
   it('has the engine defaults and saves only the fields sent', async () => {

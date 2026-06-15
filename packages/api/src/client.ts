@@ -22,6 +22,8 @@ import type {
   PanicResult,
   Platform,
   PointsBalance,
+  PollSpec,
+  PollView,
   Queue,
   SendResult,
   SessionStats,
@@ -278,6 +280,14 @@ export class FerroClient {
     this.post<PointsBalance>(`/api/v1/loyalty/viewers/${platform}/${enc(userId)}/adjust`, {
       delta,
     })
+
+  // Polls
+  poll = () => this.get<PollView | null>('/api/v1/polls/current')
+  startPoll = (p: PollSpec) => this.post<PollView>('/api/v1/polls', p)
+  /** Ends it now and posts the result in chat. */
+  endPoll = () => this.post<PollView>('/api/v1/polls/current/end')
+  /** Removes it without posting anything. */
+  clearPoll = () => this.del('/api/v1/polls/current')
 
   // TTS
   tts = () => this.get<TtsSettings>('/api/v1/tts')

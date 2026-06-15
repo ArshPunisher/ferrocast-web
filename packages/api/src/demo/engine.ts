@@ -60,8 +60,9 @@ import {
 } from '../tips'
 import { chimeDataUrl } from './chime'
 import { HttpError } from './http-error'
-import { NOT_MINE, type DemoHost } from './features/host'
+import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
 import { DemoLoyalty } from './features/loyalty'
+import { DemoPolls } from './features/polls'
 import {
   CHATTERS,
   FILTERS,
@@ -138,7 +139,6 @@ const LIMITS: Record<MediaKind, { bytes: number; types: string[]; label: string 
     label: 'Videos can be up to 50 MB.',
   },
 }
-
 
 function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -281,6 +281,8 @@ export class DemoEngine {
   private readonly host: DemoHost
   /** Loyalty points (balances, settings, leaderboard). */
   readonly loyalty: DemoLoyalty
+  /** Chat polls (`!vote N`). */
+  readonly polls: DemoPolls
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -380,6 +382,7 @@ export class DemoEngine {
     this.labels.set('latest_tip', 'Asha (₹500)')
     this.host = this.makeHost()
     this.loyalty = new DemoLoyalty(this.host)
+    this.polls = new DemoPolls(this.host)
     this.seedHistory(now)
     if (opts.autoplay ?? true) this.startAutoplay()
   }
@@ -1079,8 +1082,8 @@ export class DemoEngine {
 
   // ---------------------------------------------------------------- feature modules
 
-  private features(): { route: DemoLoyalty['route'] }[] {
-    return [this.loyalty]
+  private features(): DemoFeature[] {
+    return [this.loyalty, this.polls]
   }
 
   private makeHost(): DemoHost {
@@ -1115,6 +1118,21 @@ export class DemoEngine {
             p,
             'live',
           )
+      },
+      chat: (actor, text) => {
+        if (actor.platform === 'tips' || actor.platform === 'ferrocast') return
+        if (this.connectors[actor.platform].state !== 'connected') return
+        this.ingest(
+          {
+            type: 'chat_message',
+            actor,
+            content: { text, fragments: [{ type: 'text', text }] },
+            reply_to: null,
+            is_action: false,
+          },
+          actor.platform,
+          'live',
+        )
       },
       connectedChat: () => this.connectedChat(),
       knownActors: () => known,
@@ -1825,6 +1843,7 @@ export class DemoEngine {
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000)
     this.broadcastLive({ v: 1, type: 'event', data: e })
     this.updateState(e)
+    if (kind.type === 'chat_message' && !opts.held) for (const f of this.features()) f.onChat?.(e)
 
     const forOverlays = kind.type === 'chat_message' || isAlertable(e)
     if (forOverlays && origin !== 'test' && !opts.held)
@@ -1959,6 +1978,7 @@ export class DemoEngine {
       viewers: clone(this.viewers),
       events: clone(this.events.filter((e) => isAlertable(e)).slice(-25)),
       chat: clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50)),
+      poll: this.polls.view(),
     }
     s.seq += 1
     s.sock.deliver({ v: 1, seq: s.seq, type: 'snapshot', data: { overlay: clone(o), state } })

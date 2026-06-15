@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { PageHeader } from '../components/Panel'
 import { PointsSection } from '../components/community/points'
+import { PollPanel } from '../components/community/polls'
 
-/** Things that involve the audience: points (and, later, polls and giveaways). */
+/** Things that involve the audience: polls, points. */
 export function Community({ section }: { section?: string | undefined }) {
   useEffect(() => {
     if (section) document.getElementById(`community-${section}`)?.scrollIntoView({ block: 'start' })
@@ -13,7 +14,18 @@ export function Community({ section }: { section?: string | undefined }) {
         title="Community"
         description="Reward the people who show up. Everything here works the same on Twitch, YouTube and Kick."
       />
-      <section id="community-points" aria-labelledby="community-points-title" className="scroll-mt-20">
+      <section id="community-live" aria-label="Live with chat" className="scroll-mt-20">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <div id="community-polls" className="scroll-mt-20">
+            <PollPanel />
+          </div>
+        </div>
+      </section>
+      <section
+        id="community-points"
+        aria-labelledby="community-points-title"
+        className="scroll-mt-20"
+      >
         <h2
           id="community-points-title"
           className="mb-3 font-display text-lg font-semibold tracking-tight text-text"

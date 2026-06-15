@@ -141,7 +141,12 @@ function Leaderboard({ name }: { name: string }) {
       title="Leaderboard"
       description={`Top 20 by ${name}. Linked accounts share one balance.`}
       actions={
-        <Button size="sm" variant="ghost" onClick={board.reload} busy={board.loading && !!board.data}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={board.reload}
+          busy={board.loading && !!board.data}
+        >
           Refresh
         </Button>
       }
@@ -156,8 +161,7 @@ function Leaderboard({ name }: { name: string }) {
         </div>
       ) : board.data.length === 0 ? (
         <EmptyState compact title="Nobody has points yet">
-          Viewers earn {name} by chatting while you’re live, and with follows, subs, tips and
-          raids.
+          Viewers earn {name} by chatting while you’re live, and with follows, subs, tips and raids.
         </EmptyState>
       ) : (
         <ol className="-mx-2 flex flex-col" aria-label={`Leaderboard by ${name}`}>
@@ -315,7 +319,9 @@ function PointsSettings({
           )}
         </Field>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-[13px] font-medium text-text-2">For chatting while live</legend>
+          <legend className="mb-1.5 text-[13px] font-medium text-text-2">
+            For chatting while live
+          </legend>
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 text-sm text-text-2">
             <label className="sr-only" htmlFor="per-interval">
               Points each time

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Bell,
+  ChartBar,
   CaretLeft,
   ChatsCircle,
   Eye,
@@ -56,6 +57,7 @@ const KINDS: { kind: WidgetKind; label: string; icon: typeof Bell }[] = [
   { kind: 'goal', label: 'Goal', icon: Target },
   { kind: 'label', label: 'Label', icon: Tag },
   { kind: 'viewers', label: 'Viewers', icon: UsersThree },
+  { kind: 'poll', label: 'Poll', icon: ChartBar },
 ]
 const kindInfo = (k: WidgetKind) => KINDS.find((x) => x.kind === k) ?? KINDS[0]!
 
@@ -132,6 +134,8 @@ function newWidget(kind: WidgetKind, o: Overlay, goals: Goal[]): Widget {
         ...center(260, 64),
         config: { platforms: ['twitch', 'youtube', 'kick'], theme: DEFAULT_THEME },
       }
+    case 'poll':
+      return { id, kind, ...center(560, 320), config: { theme: DEFAULT_THEME } }
   }
 }
 
