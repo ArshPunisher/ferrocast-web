@@ -63,6 +63,7 @@ import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
 import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
+import { DemoGiveaways } from './features/giveaways'
 import {
   CHATTERS,
   FILTERS,
@@ -283,6 +284,8 @@ export class DemoEngine {
   readonly loyalty: DemoLoyalty
   /** Chat polls (`!vote N`). */
   readonly polls: DemoPolls
+  /** Giveaways (`!join`). */
+  readonly giveaways: DemoGiveaways
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -383,6 +386,7 @@ export class DemoEngine {
     this.host = this.makeHost()
     this.loyalty = new DemoLoyalty(this.host)
     this.polls = new DemoPolls(this.host)
+    this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.seedHistory(now)
     if (opts.autoplay ?? true) this.startAutoplay()
   }
@@ -1083,7 +1087,7 @@ export class DemoEngine {
   // ---------------------------------------------------------------- feature modules
 
   private features(): DemoFeature[] {
-    return [this.loyalty, this.polls]
+    return [this.loyalty, this.polls, this.giveaways]
   }
 
   private makeHost(): DemoHost {
@@ -1979,6 +1983,7 @@ export class DemoEngine {
       events: clone(this.events.filter((e) => isAlertable(e)).slice(-25)),
       chat: clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50)),
       poll: this.polls.view(),
+      giveaway: this.giveaways.card(),
     }
     s.seq += 1
     s.sock.deliver({ v: 1, seq: s.seq, type: 'snapshot', data: { overlay: clone(o), state } })

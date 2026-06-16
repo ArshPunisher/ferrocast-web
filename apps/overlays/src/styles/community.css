@@ -127,3 +127,94 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ giveaway */
+
+.fc-ov .fc-w-giveaway {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 22px;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: var(--t-border);
+  border-radius: var(--t-radius);
+  box-shadow: var(--t-shadow);
+  text-shadow: var(--t-text-shadow);
+  overflow: hidden;
+  transform-origin: 50% 100%;
+}
+.fc-ov .fc-gw-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-accent);
+}
+.fc-ov .fc-gw-prize {
+  font-family: var(--t-display);
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.fc-ov .fc-gw-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-top: 4px;
+}
+.fc-ov .fc-gw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 18px;
+}
+.fc-ov .fc-gw-how {
+  color: var(--t-text-2);
+}
+.fc-ov .fc-gw-keyword {
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--t-track);
+  font-weight: 700;
+  color: var(--t-accent);
+}
+.fc-ov .fc-gw-count {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--t-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.fc-ov .fc-gw-winner {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--t-display);
+  font-weight: 800;
+  font-size: 34px;
+  letter-spacing: -0.02em;
+}
+@keyframes fc-gw-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+.fc-ov .fc-w-giveaway.is-reveal {
+  animation: fc-gw-reveal 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.fc-ov.is-low .fc-w-giveaway.is-reveal {
+  animation: fc-fade-in 200ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-ov .fc-w-giveaway.is-reveal {
+    animation: fc-fade-in 200ms ease-out both;
+  }
+}

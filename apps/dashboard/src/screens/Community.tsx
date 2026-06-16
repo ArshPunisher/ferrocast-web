@@ -2,8 +2,9 @@ import { useEffect } from 'react'
 import { PageHeader } from '../components/Panel'
 import { PointsSection } from '../components/community/points'
 import { PollPanel } from '../components/community/polls'
+import { GiveawayPanel } from '../components/community/giveaways'
 
-/** Things that involve the audience: polls, points. */
+/** Things that involve the audience: polls, giveaways, points. */
 export function Community({ section }: { section?: string | undefined }) {
   useEffect(() => {
     if (section) document.getElementById(`community-${section}`)?.scrollIntoView({ block: 'start' })
@@ -18,6 +19,9 @@ export function Community({ section }: { section?: string | undefined }) {
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           <div id="community-polls" className="scroll-mt-20">
             <PollPanel />
+          </div>
+          <div id="community-giveaway" className="scroll-mt-20">
+            <GiveawayPanel />
           </div>
         </div>
       </section>

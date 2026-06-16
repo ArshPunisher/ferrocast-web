@@ -21,6 +21,7 @@ const LIVE_TYPES = new Set([
   'panic',
   'resync',
   'poll',
+  'giveaway',
 ])
 
 /** Parses one frame; returns null for anything malformed or from a future protocol. */

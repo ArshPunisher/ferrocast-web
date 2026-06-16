@@ -72,6 +72,7 @@ const READS = [
   '/loyalty',
   '/loyalty/leaderboard',
   '/polls/current',
+  '/giveaways/current',
 ]
 
 /** Keys the types mark optional (`Partial<…>`): absent is fine. */

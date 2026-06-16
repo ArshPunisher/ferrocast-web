@@ -13,6 +13,7 @@ import {
   type Notice,
   type PanicConfig,
   type PollView,
+  type GiveawayView,
   type Platform,
   type Queue,
   type Status,
@@ -50,6 +51,8 @@ interface LiveStore {
   resyncs: number
   /** The latest `poll` frame; `undefined` until one arrives (load it with the client). */
   poll: PollView | null | undefined
+  /** The latest `giveaway` frame; `undefined` until one arrives. */
+  giveaway: GiveawayView | null | undefined
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
   setBootError: (e: ApiError | null) => void
@@ -83,6 +86,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   held: new Map(),
   resyncs: 0,
   poll: undefined,
+  giveaway: undefined,
   setConn: (conn) => set({ conn }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   setBootError: (bootError) => set({ bootError }),
@@ -113,6 +117,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let held = s.held
     let resyncs = s.resyncs
     let poll = s.poll
+    let giveaway = s.giveaway
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
@@ -172,6 +177,9 @@ export const useLive = create<LiveStore>((set, get) => ({
         case 'poll':
           poll = f.data.poll
           break
+        case 'giveaway':
+          giveaway = f.data.giveaway
+          break
         case 'hello':
           break
       }
@@ -193,6 +201,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       held,
       resyncs,
       poll,
+      giveaway,
     })
   },
 }))

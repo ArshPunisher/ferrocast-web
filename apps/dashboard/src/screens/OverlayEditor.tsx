@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Bell,
   ChartBar,
+  Gift,
   CaretLeft,
   ChatsCircle,
   Eye,
@@ -58,6 +59,7 @@ const KINDS: { kind: WidgetKind; label: string; icon: typeof Bell }[] = [
   { kind: 'label', label: 'Label', icon: Tag },
   { kind: 'viewers', label: 'Viewers', icon: UsersThree },
   { kind: 'poll', label: 'Poll', icon: ChartBar },
+  { kind: 'giveaway', label: 'Giveaway', icon: Gift },
 ]
 const kindInfo = (k: WidgetKind) => KINDS.find((x) => x.kind === k) ?? KINDS[0]!
 
@@ -136,6 +138,8 @@ function newWidget(kind: WidgetKind, o: Overlay, goals: Goal[]): Widget {
       }
     case 'poll':
       return { id, kind, ...center(560, 320), config: { theme: DEFAULT_THEME } }
+    case 'giveaway':
+      return { id, kind, ...center(560, 200), config: { theme: DEFAULT_THEME } }
   }
 }
 

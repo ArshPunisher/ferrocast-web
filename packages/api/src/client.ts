@@ -10,6 +10,8 @@ import type {
   ConnectFlow,
   FerroEvent,
   Filters,
+  GiveawaySpec,
+  GiveawayView,
   Goal,
   ImportReport,
   LeaderboardEntry,
@@ -288,6 +290,16 @@ export class FerroClient {
   endPoll = () => this.post<PollView>('/api/v1/polls/current/end')
   /** Removes it without posting anything. */
   clearPoll = () => this.del('/api/v1/polls/current')
+
+  // Giveaways
+  giveaway = () => this.get<GiveawayView | null>('/api/v1/giveaways/current')
+  startGiveaway = (g: GiveawaySpec) => this.post<GiveawayView>('/api/v1/giveaways', g)
+  closeGiveaway = () => this.post<GiveawayView>('/api/v1/giveaways/current/close')
+  drawGiveaway = () => this.post<GiveawayView>('/api/v1/giveaways/current/draw')
+  redrawGiveaway = () => this.post<GiveawayView>('/api/v1/giveaways/current/redraw')
+  endGiveaway = () => this.post<GiveawayView>('/api/v1/giveaways/current/end')
+  /** Cancels it and refunds every entry fee. */
+  cancelGiveaway = () => this.request<{ refunded: number }>('DELETE', '/api/v1/giveaways/current')
 
   // TTS
   tts = () => this.get<TtsSettings>('/api/v1/tts')

@@ -277,7 +277,7 @@ export type ConnectFlow =
   | { flow: 'device_code'; user_code: string; verification_url: string; expires_at: Millis }
   | { flow: 'browser'; url: string }
 
-export type WidgetKind = 'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll'
+export type WidgetKind = 'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway'
 /** Default overlay theme id (the engine's presets use it too). */
 export const DEFAULT_THEME = 'molten'
 
@@ -289,6 +289,7 @@ export const WIDGET_KINDS: readonly WidgetKind[] = [
   'label',
   'viewers',
   'poll',
+  'giveaway',
 ]
 
 export interface AlertsConfig {
@@ -334,6 +335,9 @@ export interface ViewersConfig {
 export interface PollConfig {
   theme: string
 }
+export interface GiveawayConfig {
+  theme: string
+}
 
 interface WidgetBase {
   id: string
@@ -350,6 +354,7 @@ export type Widget =
   | (WidgetBase & { kind: 'label'; config: LabelConfig })
   | (WidgetBase & { kind: 'viewers'; config: ViewersConfig })
   | (WidgetBase & { kind: 'poll'; config: PollConfig })
+  | (WidgetBase & { kind: 'giveaway'; config: GiveawayConfig })
 
 export interface Overlay {
   id: string
@@ -681,6 +686,7 @@ export type LiveFrame =
   | { v: 1; type: 'panic'; data: { on: boolean; plan: PanicConfig } }
   | { v: 1; type: 'resync'; data: { missed: number } }
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
+  | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
 
 /** Overlay snapshot state (API.md §6). */
 export interface OverlayState {
@@ -691,6 +697,53 @@ export interface OverlayState {
   chat: FerroEvent[]
   /** The running (or last) poll; overlays with a poll widget get updates. */
   poll?: PollView | null
+  /** The running (or last) giveaway, small; overlays with a giveaway widget get updates. */
+  giveaway?: GiveawayCard | null
+}
+
+export interface GiveawayEntrant {
+  platform: ChatPlatform
+  user_id: string
+  login: string
+  display_name: string
+  tickets: number
+}
+
+/** A giveaway as the dashboard sees it. */
+export interface GiveawayView {
+  id: string
+  prize: string
+  keyword: string
+  /** Points to enter (0 = free). */
+  cost: number
+  subscriber_bonus: boolean
+  started_at: Millis
+  /** Taking entries. */
+  open: boolean
+  ended: boolean
+  entries: number
+  tickets: number
+  /** Newest first, up to 500. */
+  entrants: GiveawayEntrant[]
+  winners: GiveawayEntrant[]
+}
+
+/** What an overlay gets: how to enter while open, then the latest winner. */
+export interface GiveawayCard {
+  id: string
+  prize: string
+  keyword: string
+  open: boolean
+  entries: number
+  winner: GiveawayEntrant | null
+}
+
+/** `POST /api/v1/giveaways`. */
+export interface GiveawaySpec {
+  prize: string
+  keyword?: string
+  cost?: number
+  subscriber_bonus?: boolean
 }
 
 /** A chat poll (`!vote N`). Who voted for what is never sent. */
@@ -733,7 +786,7 @@ export type OverlayServerFrame =
       v: 1
       seq: number
       type: 'state'
-      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll'>>
+      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll' | 'giveaway'>>
     }
   | { v: 1; seq: number; type: 'config'; data: Overlay }
   | { v: 1; seq: number; type: 'delete_message'; data: { platform: Platform; message_id: string } }
