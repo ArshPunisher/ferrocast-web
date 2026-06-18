@@ -277,7 +277,8 @@ export type ConnectFlow =
   | { flow: 'device_code'; user_code: string; verification_url: string; expires_at: Millis }
   | { flow: 'browser'; url: string }
 
-export type WidgetKind = 'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway'
+export type WidgetKind =
+  'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway'
 /** Default overlay theme id (the engine's presets use it too). */
 export const DEFAULT_THEME = 'molten'
 
@@ -603,6 +604,21 @@ export interface ViewerCard {
   points: number
 }
 
+/** First-time chatter settings (`GET/PUT /api/v1/welcome`). The welcome is off by default. */
+export interface WelcomeConfig {
+  /** Post `template` in chat for someone's first message ever. */
+  enabled: boolean
+  /** 1–300 characters; {user}, {name}, {platform}. */
+  template: string
+  /** Mark people chatting again after `returning_days` away. */
+  returning_badge: boolean
+  /** 7–365. */
+  returning_days: number
+}
+
+/** How the dashboard marks one chat message (live `chatter` frame). */
+export type ChatterMark = { kind: 'first' } | { kind: 'returning'; days: number }
+
 /** Loyalty points settings (`GET/PUT /api/v1/loyalty`). Amounts are 0–1,000,000. */
 export interface LoyaltyConfig {
   enabled: boolean
@@ -686,6 +702,7 @@ export type LiveFrame =
   | { v: 1; type: 'panic'; data: { on: boolean; plan: PanicConfig } }
   | { v: 1; type: 'resync'; data: { missed: number } }
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
+  | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
 
 /** Overlay snapshot state (API.md §6). */

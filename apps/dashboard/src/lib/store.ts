@@ -14,6 +14,7 @@ import {
   type PanicConfig,
   type PollView,
   type GiveawayView,
+  type ChatterMark,
   type Platform,
   type Queue,
   type Status,
@@ -51,6 +52,8 @@ interface LiveStore {
   resyncs: number
   /** The latest `poll` frame; `undefined` until one arrives (load it with the client). */
   poll: PollView | null | undefined
+  /** First messages ever and returning chatters, by event id (live `chatter` frames). */
+  chatters: Map<string, ChatterMark>
   /** The latest `giveaway` frame; `undefined` until one arrives. */
   giveaway: GiveawayView | null | undefined
   setConn: (c: Connection) => void
@@ -87,6 +90,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   resyncs: 0,
   poll: undefined,
   giveaway: undefined,
+  chatters: new Map(),
   setConn: (conn) => set({ conn }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   setBootError: (bootError) => set({ bootError }),
@@ -118,6 +122,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let resyncs = s.resyncs
     let poll = s.poll
     let giveaway = s.giveaway
+    let chatters = s.chatters
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
@@ -180,6 +185,13 @@ export const useLive = create<LiveStore>((set, get) => ({
         case 'giveaway':
           giveaway = f.data.giveaway
           break
+        case 'chatter': {
+          const { event_id, ...mark } = f.data
+          if (chatters === s.chatters) chatters = new Map(chatters)
+          chatters.set(event_id, mark as ChatterMark)
+          if (chatters.size > 1000) chatters.delete(chatters.keys().next().value as string)
+          break
+        }
         case 'hello':
           break
       }
@@ -202,6 +214,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       resyncs,
       poll,
       giveaway,
+      chatters,
     })
   },
 }))

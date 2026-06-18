@@ -21,6 +21,7 @@ import {
   type FerroEvent,
   type Platform,
   type ViewerCard as ViewerCardData,
+  type ChatterMark,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -77,18 +78,35 @@ export function resetThemeCache(): void {
   themeCache = null
 }
 
-function RoleChips({ roles }: { roles: number }) {
-  const chips: { label: string; tone: 'accent' | 'ok' | 'warn' | 'neutral' }[] = []
+function RoleChips({ roles, mark }: { roles: number; mark?: ChatterMark | undefined }) {
+  const chips: { label: string; tone: 'accent' | 'ok' | 'warn' | 'neutral'; title?: string }[] = []
   if (roles & Roles.BROADCASTER) chips.push({ label: 'Streamer', tone: 'accent' })
   if (roles & Roles.MODERATOR) chips.push({ label: 'Mod', tone: 'ok' })
   if (roles & Roles.VIP) chips.push({ label: 'VIP', tone: 'neutral' })
-  if (roles & Roles.FIRST_TIME) chips.push({ label: 'First message', tone: 'warn' })
+  if (mark?.kind === 'first')
+    chips.push({
+      label: 'First message ever',
+      tone: 'accent',
+      title: 'Their first message on any of their accounts. Say hi!',
+    })
+  else if (roles & Roles.FIRST_TIME) chips.push({ label: 'First message', tone: 'warn' })
+  if (mark?.kind === 'returning')
+    chips.push({
+      label: `Back after ${mark.days} days`,
+      tone: 'neutral',
+      title: 'They hadn’t chatted for a while.',
+    })
   if (roles & Roles.BOT) chips.push({ label: 'Bot', tone: 'neutral' })
   if (!chips.length) return null
   return (
     <>
       {chips.map((c) => (
-        <Badge key={c.label} tone={c.tone} className="h-[18px] px-1.5 text-[10.5px]">
+        <Badge
+          key={c.label}
+          tone={c.tone}
+          {...(c.title ? { title: c.title } : {})}
+          className="h-[18px] px-1.5 text-[10.5px]"
+        >
           {c.label}
         </Badge>
       ))}
@@ -173,6 +191,7 @@ export const ChatLine = memo(function ChatLine({
   actions: ChatActions | null
   dense?: boolean
 }) {
+  const mark = useLive((s) => s.chatters.get(event.id))
   if (event.kind.type !== 'chat_message') return null
   const a = event.kind.actor
   const color = readableColor(a.color)
@@ -189,6 +208,7 @@ export const ChatLine = memo(function ChatLine({
         dense ? 'py-1' : 'py-1.5',
         deleted && 'opacity-45',
         held && !deleted && 'bg-warn-soft',
+        !held && !deleted && mark?.kind === 'first' && 'bg-accent-soft',
       )}
     >
       <PlatformMark platform={event.platform} size={14} className="mt-[3px]" />
@@ -208,7 +228,7 @@ export const ChatLine = memo(function ChatLine({
           >
             {tameText(a.display_name)}
           </button>
-          <RoleChips roles={a.roles} />
+          <RoleChips roles={a.roles} mark={mark} />
           {held && (
             <Badge tone="warn" className="h-[18px] px-1.5 text-[10.5px]" title={held}>
               Held for review

@@ -22,6 +22,7 @@ const LIVE_TYPES = new Set([
   'resync',
   'poll',
   'giveaway',
+  'chatter',
 ])
 
 /** Parses one frame; returns null for anything malformed or from a future protocol. */

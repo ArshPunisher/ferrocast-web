@@ -64,6 +64,7 @@ import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
 import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
+import { DemoWelcome } from './features/welcome'
 import {
   CHATTERS,
   FILTERS,
@@ -286,6 +287,8 @@ export class DemoEngine {
   readonly polls: DemoPolls
   /** Giveaways (`!join`). */
   readonly giveaways: DemoGiveaways
+  /** First-time chatter marks and the welcome setting. */
+  readonly welcome: DemoWelcome
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -387,7 +390,9 @@ export class DemoEngine {
     this.loyalty = new DemoLoyalty(this.host)
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
+    this.welcome = new DemoWelcome(this.host)
     this.seedHistory(now)
+    this.welcome.arm(this.events)
     if (opts.autoplay ?? true) this.startAutoplay()
   }
 
@@ -1087,7 +1092,7 @@ export class DemoEngine {
   // ---------------------------------------------------------------- feature modules
 
   private features(): DemoFeature[] {
-    return [this.loyalty, this.polls, this.giveaways]
+    return [this.loyalty, this.polls, this.giveaways, this.welcome]
   }
 
   private makeHost(): DemoHost {

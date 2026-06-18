@@ -73,13 +73,14 @@ const READS = [
   '/loyalty/leaderboard',
   '/polls/current',
   '/giveaways/current',
+  '/welcome',
 ]
 
 /** Keys the types mark optional (`Partial<…>`): absent is fine. */
 const OPTIONAL = [/^\/stats\/session\.viewers\./]
 
 /** Settings the dashboard saves whole: the demo's value must be accepted as-is. */
-const WRITES = ['/mod/panic/config', '/mod/filters', '/tts', '/settings', '/loyalty']
+const WRITES = ['/mod/panic/config', '/mod/filters', '/tts', '/settings', '/loyalty', '/welcome']
 
 describe.skipIf(!base || !pair)('engine contract', () => {
   const demo = new DemoEngine({ latencyMs: 0 })

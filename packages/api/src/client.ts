@@ -39,6 +39,7 @@ import type {
   TtsSettings,
   TtsVoice,
   UpdateInfo,
+  WelcomeConfig,
   ViewerCard,
   WhyResult,
 } from './types'
@@ -282,6 +283,11 @@ export class FerroClient {
     this.post<PointsBalance>(`/api/v1/loyalty/viewers/${platform}/${enc(userId)}/adjust`, {
       delta,
     })
+
+  // First-time chatters
+  welcome = () => this.get<WelcomeConfig>('/api/v1/welcome')
+  /** Saves only the fields given. */
+  saveWelcome = (c: Partial<WelcomeConfig>) => this.put<WelcomeConfig>('/api/v1/welcome', c)
 
   // Polls
   poll = () => this.get<PollView | null>('/api/v1/polls/current')

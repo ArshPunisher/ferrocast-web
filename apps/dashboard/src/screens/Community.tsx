@@ -3,8 +3,9 @@ import { PageHeader } from '../components/Panel'
 import { PointsSection } from '../components/community/points'
 import { PollPanel } from '../components/community/polls'
 import { GiveawayPanel } from '../components/community/giveaways'
+import { WelcomePanel } from '../components/community/welcome'
 
-/** Things that involve the audience: polls, giveaways, points. */
+/** Things that involve the audience: polls, giveaways, points, new faces. */
 export function Community({ section }: { section?: string | undefined }) {
   useEffect(() => {
     if (section) document.getElementById(`community-${section}`)?.scrollIntoView({ block: 'start' })
@@ -37,6 +38,11 @@ export function Community({ section }: { section?: string | undefined }) {
           Points
         </h2>
         <PointsSection />
+      </section>
+      <section id="community-welcome" aria-label="New faces" className="scroll-mt-20">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <WelcomePanel />
+        </div>
       </section>
     </div>
   )
