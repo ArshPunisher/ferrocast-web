@@ -24,7 +24,7 @@ import { PanicButton } from './PanicButton'
 type NavItem = { route: Route; label: string; icon: typeof House; match: Route['name'][] }
 
 export const NAV: NavItem[] = [
-  { route: { name: 'home' }, label: 'Home', icon: House, match: ['home'] },
+  { route: { name: 'home' }, label: 'Home', icon: House, match: ['home', 'recap'] },
   { route: { name: 'chat' }, label: 'Chat', icon: ChatsCircle, match: ['chat'] },
   { route: { name: 'alerts' }, label: 'Alerts', icon: Bell, match: ['alerts'] },
   {

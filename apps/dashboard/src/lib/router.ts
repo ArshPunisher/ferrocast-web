@@ -12,6 +12,7 @@ export type Route =
   | { name: 'moderation' }
   | { name: 'bot' }
   | { name: 'community'; section?: string }
+  | { name: 'recap' }
   | { name: 'tips' }
   | { name: 'settings'; section?: string }
 
@@ -31,6 +32,8 @@ export function parseRoute(hash: string): Route {
       return { name: 'bot' }
     case 'community':
       return b ? { name: 'community', section: b } : { name: 'community' }
+    case 'recap':
+      return { name: 'recap' }
     case 'tips':
       return { name: 'tips' }
     case 'settings':

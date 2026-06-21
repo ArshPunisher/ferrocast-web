@@ -27,6 +27,7 @@ import type {
   PollSpec,
   PollView,
   Queue,
+  Recap,
   SendResult,
   SessionStats,
   Settings,
@@ -361,6 +362,9 @@ export class FerroClient {
   backups = () => this.get<Backup[]>('/api/v1/backups')
   restoreBackup = (id: string) => this.post<void>(`/api/v1/backups/${enc(id)}/restore`)
   sessionStats = () => this.get<SessionStats>('/api/v1/stats/session')
+  /** This stream so far, or the last one; `since` picks another start. */
+  recap = (since?: number) =>
+    this.get<Recap>(since === undefined ? '/api/v1/recap' : `/api/v1/recap?since=${since}`)
   updates = () => this.get<UpdateInfo>('/api/v1/updates')
 }
 

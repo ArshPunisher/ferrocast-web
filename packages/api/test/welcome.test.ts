@@ -12,7 +12,11 @@ beforeEach(() => {
 })
 afterEach(() => engine.dispose())
 
-const fail = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e as ApiError)
+const fail = (p: Promise<unknown>) =>
+  p.then(
+    () => null,
+    (e: unknown) => e as ApiError,
+  )
 
 describe('demo welcome settings', () => {
   it('is off by default and names bad fields', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CopySimple, Pause, Play, SkipForward } from '@phosphor-icons/react'
+import { ChartLineUp, CopySimple, Pause, Play, SkipForward } from '@phosphor-icons/react'
 import { formatCount, formatMoney, type Actor, type SessionStats } from '@ferrocast/api'
 import { Button, EmptyState, Skeleton, copyText, toast } from '@ferrocast/ui'
 import { Panel } from '../components/Panel'
@@ -160,6 +160,13 @@ export function Home() {
           <Button icon={<CopySimple size={16} />} disabled={!main} onClick={() => void copyUrl()}>
             Copy overlay URL
           </Button>
+          <a
+            href={href({ name: 'recap' })}
+            className="fc-press inline-flex h-10 shrink-0 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          >
+            <ChartLineUp size={16} />
+            Stream recap
+          </a>
         </div>
       </div>
 

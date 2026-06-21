@@ -29,6 +29,7 @@ const Moderation = lazy(() =>
 )
 const Bot = lazy(() => import('./screens/Bot').then((m) => ({ default: m.Bot })))
 const Community = lazy(() => import('./screens/Community').then((m) => ({ default: m.Community })))
+const Recap = lazy(() => import('./screens/Recap').then((m) => ({ default: m.Recap })))
 const Tips = lazy(() => import('./screens/Tips').then((m) => ({ default: m.Tips })))
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })))
 const Onboarding = lazy(() =>
@@ -185,6 +186,9 @@ export function App() {
       break
     case 'community':
       screen = <Community section={route.section} />
+      break
+    case 'recap':
+      screen = <Recap />
       break
     case 'tips':
       screen = <Tips />

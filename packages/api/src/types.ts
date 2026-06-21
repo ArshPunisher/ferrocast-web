@@ -666,6 +666,27 @@ export interface SessionStats {
   viewers: Partial<Record<ChatPlatform, number>>
 }
 
+/** The end-of-stream recap (`GET /api/v1/recap`). */
+export interface Recap {
+  /** null: no stream on record yet. */
+  started_at: Millis | null
+  ended_at: Millis | null
+  live: boolean
+  follows: number
+  subs: number
+  tips: Money[]
+  bits: number
+  messages: number
+  peak_viewers: number
+  new_followers: { platform: Platform; name: string }[]
+  subscribers: { platform: Platform; name: string; months: number; gifts: number }[]
+  tippers: { platform: Platform; name: string; amounts: Money[]; bits: number }[]
+  raiders: { platform: Platform; name: string; viewers: number }[]
+  top_chatters: { platform: Platform; name: string; messages: number }[]
+  /** Everyone to thank: subs and gifters, tippers, raiders, followers; each once. */
+  thanks: string[]
+}
+
 /** A look for every widget. Shape proposed in docs/API-REQUESTS.md (R8). */
 export interface Theme {
   id: string
