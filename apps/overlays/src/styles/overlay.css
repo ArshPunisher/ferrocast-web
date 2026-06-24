@@ -26,6 +26,15 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   contain: layout paint;
+  /* X1 Spark palette for every widget theme. Molten fills progress, Arc colours names,
+     mentions and status text. -ink values are the deeper ones for white cards (AA). */
+  --ov-molten: #ffa424;
+  --ov-molten-deep: #cf7400;
+  --ov-molten-glow: #ffc46e;
+  --ov-molten-ink: #b86600;
+  --ov-arc: #33d4ff;
+  --ov-arc-ink: #05678c;
+  --ov-arc-mist: #9ae6ff;
 }
 
 .fc-ov *,
@@ -49,13 +58,18 @@
   --t-flat: rgb(14 16 20 / 0.86);
   --t-text: #eef0f4;
   --t-text-2: #b8bec9;
-  --t-accent: #8eaaff;
-  --t-fill: linear-gradient(90deg, #284fd8, #3461f5 60%, #8eaaff);
+  --t-accent: var(--ov-arc);
+  --t-fill: linear-gradient(
+    90deg,
+    var(--ov-molten-deep),
+    var(--ov-molten) 60%,
+    var(--ov-molten-glow)
+  );
   --t-track: rgb(255 255 255 / 0.1);
   --t-radius: 14px;
   --t-border: 1px solid rgb(255 255 255 / 0.07);
   --t-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 0 rgb(52 97 245 / 0.6),
+    inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 0 rgb(255 164 36 / 0.6),
     0 12px 32px -14px rgb(0 0 0 / 0.75);
   --t-text-shadow: none;
   --t-display:
@@ -72,8 +86,8 @@
   --t-flat: rgb(255 255 255 / 0.95);
   --t-text: #0e1014;
   --t-text-2: #454b56;
-  --t-accent: #2347c4;
-  --t-fill: linear-gradient(90deg, #2149c9, #2e5be8);
+  --t-accent: var(--ov-arc-ink);
+  --t-fill: var(--ov-molten-ink);
   --t-track: rgb(14 16 20 / 0.09);
   --t-radius: 14px;
   --t-border: 1px solid rgb(14 16 20 / 0.08);
@@ -85,12 +99,16 @@
   --t-flat: #101216;
   --t-text: #f4f6fa;
   --t-text-2: #c3c9d4;
-  --t-accent: #8eaaff;
-  --t-fill: repeating-linear-gradient(90deg, #3461f5 0 14px, #284fd8 14px 18px);
+  --t-accent: var(--ov-arc);
+  --t-fill: repeating-linear-gradient(
+    90deg,
+    var(--ov-molten) 0 14px,
+    var(--ov-molten-deep) 14px 18px
+  );
   --t-track: #262b33;
   --t-radius: 6px;
   --t-border: 3px solid #eef0f4;
-  --t-shadow: 5px 5px 0 #3461f5;
+  --t-shadow: 5px 5px 0 var(--ov-arc);
   --t-name-weight: 800;
   --t-case: uppercase;
 }
@@ -100,7 +118,7 @@
   --t-flat: transparent;
   --t-text: #ffffff;
   --t-text-2: #e9ecf2;
-  --t-accent: #b9caff;
+  --t-accent: var(--ov-arc-mist);
   --t-fill: #ffffff;
   --t-track: rgb(255 255 255 / 0.28);
   --t-radius: 0;
@@ -115,8 +133,8 @@
   --t-flat: #ffffff;
   --t-text: #0e1014;
   --t-text-2: #31363f;
-  --t-accent: #2347c4;
-  --t-fill: #3461f5;
+  --t-accent: var(--ov-arc-ink);
+  --t-fill: var(--ov-molten-ink);
   --t-track: #e4e7ec;
   --t-radius: 16px;
   --t-border: 3px solid #0e1014;
@@ -208,7 +226,7 @@
 }
 .fc-ov [data-theme='arcade'] .fc-msg {
   border-width: 2px;
-  box-shadow: 3px 3px 0 #3461f5;
+  box-shadow: 3px 3px 0 var(--ov-arc);
 }
 .fc-ov [data-theme='sticker'] .fc-msg {
   border-width: 2px;

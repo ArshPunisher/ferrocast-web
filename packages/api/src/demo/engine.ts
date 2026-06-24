@@ -66,6 +66,7 @@ import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
 import { DemoRecap } from './features/recap'
+import { DemoDiscord } from './features/discord'
 import {
   CHATTERS,
   FILTERS,
@@ -291,6 +292,7 @@ export class DemoEngine {
   /** First-time chatter marks and the welcome setting. */
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
+  private readonly discord = new DemoDiscord()
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -1099,7 +1101,7 @@ export class DemoEngine {
   // ---------------------------------------------------------------- feature modules
 
   private features(): DemoFeature[] {
-    return [this.loyalty, this.polls, this.giveaways, this.welcome, this.recap]
+    return [this.loyalty, this.polls, this.giveaways, this.welcome, this.recap, this.discord]
   }
 
   private makeHost(): DemoHost {

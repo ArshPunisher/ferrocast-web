@@ -8,6 +8,8 @@ import type {
   ChatPlatform,
   Command,
   ConnectFlow,
+  DiscordSettings,
+  DiscordSettingsInput,
   FerroEvent,
   Filters,
   GiveawaySpec,
@@ -331,6 +333,12 @@ export class FerroClient {
     return this.request<Media>('POST', '/api/v1/media', undefined, form)
   }
   deleteMedia = (id: string) => this.del(`/api/v1/media/${enc(id)}`)
+
+  // Discord go-live posts
+  discord = () => this.get<DiscordSettings>('/api/v1/discord')
+  saveDiscord = (d: DiscordSettingsInput) => this.put<DiscordSettings>('/api/v1/discord', d)
+  /** Posts a test message to the webhook (never pings anyone). */
+  testDiscord = () => this.post<void>('/api/v1/discord/test')
 
   // OBS
   obs = () => this.get<ObsState>('/api/v1/obs')

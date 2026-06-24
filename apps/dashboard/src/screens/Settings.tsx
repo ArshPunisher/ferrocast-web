@@ -28,12 +28,14 @@ import { AccountRow, useConnect } from '../components/accounts'
 import { stateCopy } from '../components/StatusStrip'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
+import { DiscordSettingsForm } from '../components/discord'
 import { useLive } from '../lib/store'
 
 const SECTIONS = [
   ['accounts', 'Accounts'],
   ['obs', 'OBS'],
   ['tts', 'Text-to-speech'],
+  ['discord', 'Discord'],
   ['appearance', 'Appearance'],
   ['data', 'Your data'],
   ['updates', 'Updates'],
@@ -768,6 +770,13 @@ export function Settings({ section }: { section?: string | undefined }) {
           <Accounts />
           <Obs />
           <Tts currency={res.data?.currency} />
+          <Section
+            id="discord"
+            title="Discord"
+            description="Tell your server when you go live. The webhook stays in your system keychain and is never exported."
+          >
+            <DiscordSettingsForm />
+          </Section>
           {res.error ? (
             <LoadError error={res.error} onRetry={res.reload} />
           ) : !res.data ? (

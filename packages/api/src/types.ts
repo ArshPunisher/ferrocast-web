@@ -543,6 +543,25 @@ export interface Media {
   url: string
 }
 
+/** Discord go-live posts (`GET/PUT /api/v1/discord`). The webhook URL never comes back. */
+export interface DiscordSettings {
+  has_webhook: boolean
+  /** "discord.com webhook …4821", or null. */
+  webhook_hint: string | null
+  enabled: boolean
+  /** 1–1,500 characters; {name}, {platform}, {title}, {url}. */
+  template: string
+  mention_everyone: boolean
+}
+
+/** `PUT /api/v1/discord`: only what's given changes; `webhook_url: null` removes it. */
+export interface DiscordSettingsInput {
+  webhook_url?: string | null
+  enabled?: boolean
+  template?: string
+  mention_everyone?: boolean
+}
+
 export interface ObsState {
   state: ConnectorStateName
   version: string | null
