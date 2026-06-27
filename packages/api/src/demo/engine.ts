@@ -67,6 +67,7 @@ import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
 import { DemoRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
+import { DemoObsDetect } from './features/obs-detect'
 import {
   CHATTERS,
   FILTERS,
@@ -293,6 +294,20 @@ export class DemoEngine {
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
+  private readonly obsDetect = new DemoObsDetect(
+    () => true,
+    (port) => {
+      this.obs = {
+        state: 'connected',
+        version: '31.1.2',
+        scene: 'Gameplay',
+        host: '127.0.0.1',
+        port,
+      }
+      this.setConnector('obs', connector('connected', 'OBS 31.1.2'))
+      return clone(this.obs)
+    },
+  )
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
@@ -1101,7 +1116,15 @@ export class DemoEngine {
   // ---------------------------------------------------------------- feature modules
 
   private features(): DemoFeature[] {
-    return [this.loyalty, this.polls, this.giveaways, this.welcome, this.recap, this.discord]
+    return [
+      this.loyalty,
+      this.polls,
+      this.giveaways,
+      this.welcome,
+      this.recap,
+      this.discord,
+      this.obsDetect,
+    ]
   }
 
   private makeHost(): DemoHost {

@@ -19,6 +19,7 @@ import type {
   LeaderboardEntry,
   LoyaltyConfig,
   Media,
+  ObsDetect,
   ObsState,
   Overlay,
   OverlayPreset,
@@ -344,6 +345,10 @@ export class FerroClient {
   obs = () => this.get<ObsState>('/api/v1/obs')
   saveObs = (c: { host: string; port: number; password: string }) =>
     this.put<ObsState>('/api/v1/obs', c)
+  /** Looks for OBS's own WebSocket settings on this computer. */
+  obsDetect = () => this.get<ObsDetect>('/api/v1/obs/detect')
+  /** Uses the detected port and password (saved to the keychain), then connects. */
+  obsUseDetected = () => this.post<ObsState>('/api/v1/obs/detect')
 
   // Settings and data
   settings = () => this.get<Settings>('/api/v1/settings')

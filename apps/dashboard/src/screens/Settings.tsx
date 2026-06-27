@@ -29,6 +29,7 @@ import { stateCopy } from '../components/StatusStrip'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { DiscordSettingsForm } from '../components/discord'
+import { ObsAutoDetect } from '../components/obs-detect'
 import { useLive } from '../lib/store'
 
 const SECTIONS = [
@@ -141,6 +142,22 @@ function Obs() {
         )}
         {obs.data?.version && <span className="text-text-3">OBS {obs.data.version}</span>}
       </div>
+      <ObsAutoDetect
+        connected={conn?.state === 'connected'}
+        onUsed={(o) => {
+          obs.set(o)
+          toast({
+            tone: o.state === 'connected' ? 'ok' : 'warn',
+            message: o.state === 'connected' ? 'OBS connected.' : 'Saved OBS’s settings.',
+            hint:
+              o.state === 'connected'
+                ? o.scene
+                  ? `Current scene: ${o.scene}.`
+                  : null
+                : 'Open OBS and Ferrocast will connect.',
+          })
+        }}
+      />
       <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13px] text-text-3">
         <li>In OBS open Tools → WebSocket Server Settings and tick “Enable WebSocket server”.</li>
         <li>Click “Show Connect Info” and copy the password here.</li>

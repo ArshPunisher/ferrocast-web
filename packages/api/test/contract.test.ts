@@ -76,6 +76,7 @@ const READS = [
   '/welcome',
   '/recap',
   '/discord',
+  '/obs/detect',
 ]
 
 /** Keys the types mark optional (`Partial<…>`): absent is fine. */

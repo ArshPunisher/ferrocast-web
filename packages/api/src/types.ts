@@ -562,6 +562,17 @@ export interface DiscordSettingsInput {
   mention_everyone?: boolean
 }
 
+/** What auto-detect found in OBS's own settings (`GET /api/v1/obs/detect`). */
+export interface ObsDetect {
+  found: boolean
+  port: number | null
+  /** OBS asks for a password and it was found (it's never sent to the dashboard). */
+  has_password: boolean
+  server_enabled: boolean
+  /** Why nothing usable was found, or what to switch on. */
+  reason: string | null
+}
+
 export interface ObsState {
   state: ConnectorStateName
   version: string | null
