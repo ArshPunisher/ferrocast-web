@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PencilSimple, Plus, Trash } from '@phosphor-icons/react'
+import { Lightning, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import { ApiError, describeError, type Command, type Timer } from '@ferrocast/api'
 import {
   Badge,
@@ -152,7 +152,7 @@ function CommandDialog({
         <Field
           label="Reply"
           error={err?.field === 'response' ? err.message : null}
-          hint="Variables: {user}, {target}, {count}, {uptime}, {game}."
+          hint="Variables: {user}, {target}, {uptime}, {uptime_text}, {target_game}, {target_game_note}."
         >
           {(p) => (
             <Textarea
@@ -325,6 +325,28 @@ export function Bot() {
   const { run } = useAction()
   const [editCmd, setEditCmd] = useState<Command | Omit<Command, 'id'> | null>(null)
   const [editTimer, setEditTimer] = useState<Timer | Omit<Timer, 'id'> | null>(null)
+  const { busy: starting, run: runStarter } = useAction()
+  const addStarter = () =>
+    void runStarter('starter', () => client.addStarterCommands()).then((r) => {
+      if (!r) return
+      if (r.added.length) commands.set((p) => [...(p ?? []), ...r.added])
+      const names = (l: string[]) =>
+        l.length > 1 ? `${l.slice(0, -1).join(', ')} and ${l.at(-1)}` : (l[0] ?? '')
+      toast(
+        r.added.length
+          ? {
+              tone: 'ok',
+              message: `Added ${names(r.added.map((c) => c.name))}.`,
+              hint: r.skipped.length
+                ? `Kept your own ${names(r.skipped)}.`
+                : 'Add your links to !socials next.',
+            }
+          : { tone: 'info', message: 'You already have all the starter commands.' },
+      )
+      // !socials needs the streamer's links: open it right away.
+      const socials = r.added.find((c) => c.name === '!socials')
+      if (socials) setEditCmd(socials)
+    })
   return (
     <div>
       <PageHeader
@@ -335,14 +357,29 @@ export function Bot() {
         <Panel
           title="Commands"
           actions={
-            <Button
-              size="sm"
-              variant="primary"
-              icon={<Plus size={14} weight="bold" />}
-              onClick={() => setEditCmd({ ...BLANK_COMMAND })}
-            >
-              New command
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Lightning size={14} weight="fill" />}
+                busy={starting === 'starter'}
+                onClick={addStarter}
+                aria-label="Add starter commands"
+              >
+                <span className="sm:hidden">Add starter</span>
+                <span className="hidden sm:inline">Add starter commands</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Plus size={14} weight="bold" />}
+                onClick={() => setEditCmd({ ...BLANK_COMMAND })}
+                aria-label="New command"
+              >
+                <span className="sm:hidden">New</span>
+                <span className="hidden sm:inline">New command</span>
+              </Button>
+            </>
           }
         >
           {commands.error ? (
@@ -352,7 +389,19 @@ export function Bot() {
           ) : commands.data.length === 0 ? (
             <EmptyState compact title="No commands yet">
               Viewers type <span className="font-mono">!discord</span> and the bot answers. Start
-              with your socials.
+              with <span className="font-mono">!socials</span>,{' '}
+              <span className="font-mono">!lurk</span>, <span className="font-mono">!uptime</span>{' '}
+              and <span className="font-mono">!so</span> in one click.
+              <Button
+                size="sm"
+                variant="primary"
+                className="mt-3"
+                icon={<Lightning size={14} weight="fill" />}
+                busy={starting === 'starter'}
+                onClick={addStarter}
+              >
+                Add starter commands
+              </Button>
             </EmptyState>
           ) : (
             <ul className="-mx-2 flex flex-col">

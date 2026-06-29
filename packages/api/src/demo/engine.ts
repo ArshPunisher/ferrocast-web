@@ -68,6 +68,7 @@ import { DemoWelcome } from './features/welcome'
 import { DemoRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
 import { DemoObsDetect } from './features/obs-detect'
+import { DemoStarter } from './features/starter'
 import {
   CHATTERS,
   FILTERS,
@@ -294,6 +295,7 @@ export class DemoEngine {
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
+  private readonly starter = new DemoStarter(() => this.commands)
   private readonly obsDetect = new DemoObsDetect(
     () => true,
     (port) => {
@@ -1124,6 +1126,7 @@ export class DemoEngine {
       this.recap,
       this.discord,
       this.obsDetect,
+      this.starter,
     ]
   }
 

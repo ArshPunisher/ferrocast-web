@@ -443,6 +443,13 @@ export interface Command {
   enabled: boolean
 }
 
+/** `POST /api/v1/commands/starter`. */
+export interface StarterResult {
+  added: Command[]
+  /** Names already used by a command or alias, left alone. */
+  skipped: string[]
+}
+
 export interface Timer {
   id: string
   name: string

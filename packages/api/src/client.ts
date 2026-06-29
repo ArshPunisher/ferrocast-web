@@ -33,6 +33,7 @@ import type {
   Recap,
   SendResult,
   SessionStats,
+  StarterResult,
   Settings,
   Status,
   Theme,
@@ -269,6 +270,8 @@ export class FerroClient {
   createCommand = (c: Omit<Command, 'id'>) => this.post<Command>('/api/v1/commands', c)
   saveCommand = (c: Command) => this.put<Command>(`/api/v1/commands/${enc(c.id)}`, c)
   deleteCommand = (id: string) => this.del(`/api/v1/commands/${enc(id)}`)
+  /** Adds !socials, !lurk, !uptime and !so, skipping names already in use. */
+  addStarterCommands = () => this.post<StarterResult>('/api/v1/commands/starter')
   timers = () => this.get<Timer[]>('/api/v1/timers')
   createTimer = (t: Omit<Timer, 'id'>) => this.post<Timer>('/api/v1/timers', t)
   saveTimer = (t: Timer) => this.put<Timer>(`/api/v1/timers/${enc(t.id)}`, t)
