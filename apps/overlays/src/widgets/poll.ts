@@ -15,8 +15,12 @@ function valid(p: unknown): p is PollView {
   return (
     typeof v.id === 'string' &&
     typeof v.question === 'string' &&
+    typeof v.closed === 'boolean' &&
     Array.isArray(v.options) &&
-    v.options.every((o) => typeof o?.text === 'string' && Number.isFinite(o?.votes))
+    v.options.length >= 2 &&
+    v.options.every((o) => typeof o?.text === 'string' && Number.isFinite(o?.votes)) &&
+    Array.isArray(v.leaders) &&
+    v.leaders.every((i) => Number.isInteger(i))
   )
 }
 
@@ -28,6 +32,8 @@ export class PollWidget implements WidgetView {
   /** One spoken summary per change, for screen readers in browser previews. */
   private readonly live = el('p', 'fc-sr')
   private shownId = ''
+  /** What was last announced: a poll is spoken when it starts and when it closes. */
+  private spoken = ''
 
   constructor(
     w: Widget & { kind: 'poll' },
@@ -77,9 +83,12 @@ export class PollWidget implements WidgetView {
         ...options.map(() => {
           const li = el('li', 'fc-poll-row')
           const line = el('div', 'fc-poll-line')
+          const winner = el('span', 'fc-poll-winner', 'Winner')
+          winner.hidden = true
           line.append(
             el('span', 'fc-poll-n'),
             textSpan('fc-poll-text', ''),
+            winner,
             el('span', 'fc-poll-count'),
           )
           const bar = el('div', 'fc-poll-bar')
@@ -94,18 +103,36 @@ export class PollWidget implements WidgetView {
       const li = this.list.children[i] as HTMLElement
       const votes = Math.max(0, o.votes)
       const pct = total > 0 ? Math.round((votes / total) * 100) : 0
-      const [n, text, count] = Array.from(li.querySelectorAll('span')) as HTMLElement[]
+      const n = li.querySelector<HTMLElement>('.fc-poll-n')
+      const text = li.querySelector<HTMLElement>('.fc-poll-text')
+      const count = li.querySelector<HTMLElement>('.fc-poll-count')
+      const winner = li.querySelector<HTMLElement>('.fc-poll-winner')
       if (n) n.textContent = String(i + 1)
       if (text) text.textContent = safeText(o.text, 60)
       if (count) count.textContent = `${formatCount(votes)} · ${pct}%`
       const fill = li.querySelector<HTMLElement>('.fc-poll-fill')
       if (fill) fill.style.transform = `scaleX(${total > 0 ? votes / total : 0})`
-      li.classList.toggle('is-leader', !!p.closed && leaders.has(i))
+      const lead = p.closed && leaders.has(i)
+      li.classList.toggle('is-leader', lead)
+      if (winner) winner.hidden = !lead
       said.push(`${safeText(o.text, 60)}: ${formatCount(votes)} ${votes === 1 ? 'vote' : 'votes'}`)
     })
     const q = safeText(p.question, 120)
-    const summary = `${p.closed ? 'Poll closed' : 'Poll'}: ${q}${/[.?!]$/.test(q) ? '' : '.'} ${said.join(', ')}.`
-    if (this.live.textContent !== summary) this.live.textContent = summary
+    const end = /[.?!]$/.test(q) ? '' : '.'
+    const names = [...leaders].flatMap((i) => (options[i] ? [safeText(options[i].text, 60)] : []))
+    const result = !p.closed
+      ? ''
+      : names.length === 1
+        ? ` Winner: ${names[0]}.`
+        : names.length > 1
+          ? ` Tie: ${names.join(' and ')}.`
+          : ' Nobody voted.'
+    // Spoken once when it starts and once when it closes, not after every vote.
+    const key = `${p.id}:${p.closed}`
+    if (key !== this.spoken) {
+      this.spoken = key
+      this.live.textContent = `${p.closed ? 'Poll closed' : 'Poll'}: ${q}${end} ${said.join(', ')}.${result}`
+    }
   }
 
   destroy(): void {

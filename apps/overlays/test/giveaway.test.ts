@@ -59,11 +59,24 @@ describe('giveaway widget', () => {
     expect(root.querySelector('.fc-gw-row')).toBe(row)
   })
 
+  it('shows a known winner after a reconnect without replaying the reveal', () => {
+    rt.apply(snapshot({ giveaway: card({ open: false, winner }) }, overlay([gw])))
+    expect(widget().textContent).toContain('VoltViper')
+    expect(widget().classList.contains('is-reveal')).toBe(false)
+    rt.apply(
+      frame('state', {
+        giveaway: card({ open: false, winner: { ...winner, platform: 'toString' as 'kick' } }),
+      }),
+    )
+    expect(widget().hidden).toBe(true)
+  })
+
   it('hides with nothing to show and keeps viewer text as text', () => {
     rt.apply(snapshot({}, overlay([gw])))
     expect(widget().hidden).toBe(true)
     rt.apply(frame('state', { giveaway: card({ open: false }) }))
-    expect(widget().hidden).toBe(true)
+    expect(widget().textContent).toContain('Entries closed')
+    expect(widget().textContent).toContain('12 entries')
     rt.apply(
       frame('state', {
         giveaway: card({ prize: XSS[0]!, winner: { ...winner, display_name: XSS[2]! } }),

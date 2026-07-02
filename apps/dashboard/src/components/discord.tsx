@@ -1,7 +1,17 @@
 import { useState } from 'react'
 import { PaperPlaneTilt, Trash } from '@phosphor-icons/react'
 import { ApiError, describeError, type DiscordSettings } from '@ferrocast/api'
-import { Badge, Button, Field, Input, Skeleton, Switch, Textarea, toast } from '@ferrocast/ui'
+import {
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  Input,
+  Skeleton,
+  Switch,
+  Textarea,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError } from './Panel'
 import { useAction, useClient, useResource } from '../lib/hooks'
 
@@ -27,6 +37,7 @@ function DiscordForm({
   const [template, setTemplate] = useState(cfg.template)
   const [err, setErr] = useState<{ field: string | null; message: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const save = async () => {
     setSaving(true)
     setErr(null)
@@ -144,17 +155,40 @@ function DiscordForm({
           <Button
             variant="danger-ghost"
             icon={<Trash size={15} />}
-            busy={busy === 'remove'}
-            onClick={() =>
-              void run('remove', () => client.saveDiscord({ webhook_url: null }), {
-                success: 'Webhook removed.',
-              }).then((d) => d && onSaved(d))
-            }
+            onClick={() => setConfirmRemove(true)}
           >
             Remove webhook
           </Button>
         )}
       </div>
+      <Dialog
+        open={confirmRemove}
+        onClose={() => setConfirmRemove(false)}
+        size="sm"
+        title="Remove the Discord webhook?"
+        description="Go-live posts stop. To start them again you'll need to copy the webhook URL from Discord again."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmRemove(false)}>
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              busy={busy === 'remove'}
+              onClick={() =>
+                void run('remove', () => client.saveDiscord({ webhook_url: null }), {
+                  success: 'Webhook removed.',
+                }).then((d) => {
+                  setConfirmRemove(false)
+                  if (d) onSaved(d)
+                })
+              }
+            >
+              Remove webhook
+            </Button>
+          </>
+        }
+      />
     </form>
   )
 }

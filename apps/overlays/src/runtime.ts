@@ -236,6 +236,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         break
       case 'state': {
         const d = frame.data
+        if (!obj(d)) break
         if (Array.isArray(d.goals)) state.goals = d.goals
         if (obj(d.labels))
           state.labels = { ...state.labels, ...(d.labels as Record<string, string>) }

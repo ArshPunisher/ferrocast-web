@@ -284,7 +284,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               aria-haspopup="dialog"
               className={cx(
                 'flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium',
-                ['overlays', 'overlay', 'bot', 'tips', 'settings'].includes(route.name)
+                ['overlays', 'overlay', 'bot', 'community', 'tips', 'settings'].includes(route.name)
                   ? 'text-text'
                   : 'text-text-3',
               )}

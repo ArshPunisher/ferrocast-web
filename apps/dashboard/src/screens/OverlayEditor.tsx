@@ -48,6 +48,7 @@ import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useLive } from '../lib/store'
 import { useUnsavedWarning } from '../lib/unsaved'
+import { SAMPLE_GIVEAWAY, SAMPLE_POLL, giveawayCard } from '../components/community/preview'
 
 const GRID = 8
 
@@ -685,6 +686,8 @@ export function OverlayEditor({ id }: { id: string }) {
   const chat = useLive((s) => s.chat)
   const events = useLive((s) => s.events)
   const viewers = useLive((s) => s.viewers)
+  const livePoll = useLive((s) => s.poll)
+  const liveGiveaway = useLive((s) => s.giveaway)
   const { run, busy } = useAction()
   const { add, busy: adding, guide } = useAddToObs()
   const [draft, setDraft] = useState<Overlay | null>(null)
@@ -715,10 +718,13 @@ export function OverlayEditor({ id }: { id: string }) {
       viewers,
       events: events.slice(-25),
       chat: chat.slice(-30),
+      // The real poll and giveaway when there are some, else samples to place them by.
+      poll: livePoll ?? SAMPLE_POLL,
+      giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
     }),
     // Keyed on the newest item: both lists are capped, so their lengths stop changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goals.data, labelKey, lastChat, lastEvent],
+    [goals.data, labelKey, lastChat, lastEvent, livePoll, liveGiveaway],
   )
 
   if (ov.error) return <LoadError error={ov.error} onRetry={ov.reload} />

@@ -70,6 +70,7 @@ export function parseVote(text: string): number | null {
 
 export class DemoPolls {
   private poll: Poll | null = null
+  private n = 0
 
   constructor(private readonly host: DemoHost) {}
 
@@ -153,7 +154,7 @@ export class DemoPolls {
           'A poll is already running. End it before starting another.',
         )
       const now = Date.now()
-      const id = `poll-${now.toString(36)}`
+      const id = `poll-${now.toString(36)}-${++this.n}`
       this.poll = {
         id,
         question: spec.question,

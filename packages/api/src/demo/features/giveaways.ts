@@ -42,6 +42,7 @@ const strip = ({ key: _k, paid: _p, ...e }: Entrant): GiveawayEntrant => e
 export class DemoGiveaways {
   private g: Giveaway | null = null
   private told = new Set<string>()
+  private n = 0
 
   constructor(
     private readonly host: DemoHost,
@@ -130,10 +131,10 @@ export class DemoGiveaways {
       )
     if (redraw && !g.winners.length) throw new HttpError(409, 'conflict', 'Draw a winner first.')
     if (!g.entrants.length) throw new HttpError(422, 'unavailable', 'Nobody has entered yet.')
-    g.open = false
     const pool = g.entrants.filter((e) => !g.winners.some((w) => w.key === e.key))
     if (!pool.length)
       throw new HttpError(422, 'unavailable', 'Everyone who entered has already won.')
+    g.open = false
     const total = pool.reduce((n, e) => n + e.tickets, 0)
     const buf = new Uint32Array(1)
     crypto.getRandomValues(buf)
@@ -193,7 +194,7 @@ export class DemoGiveaways {
         )
       const now = Date.now()
       this.g = {
-        id: `gw-${now.toString(36)}`,
+        id: `gw-${now.toString(36)}-${++this.n}`,
         prize,
         keyword,
         cost,

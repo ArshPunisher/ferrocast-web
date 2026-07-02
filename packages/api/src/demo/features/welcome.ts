@@ -44,11 +44,11 @@ export class DemoWelcome {
       const now = Date.now()
       if (this.config.enabled && now - this.lastWelcome >= 10_000) {
         this.lastWelcome = now
+        // One pass, so a name like "$'" or "{platform}" stays exactly what it is.
         this.host.say(
-          this.config.template
-            .replaceAll('{user}', a.display_name)
-            .replaceAll('{name}', a.display_name)
-            .replaceAll('{platform}', e.platform),
+          this.config.template.replace(/\{(user|name|platform)\}/g, (_m, k: string) =>
+            k === 'platform' ? e.platform : a.display_name,
+          ),
         )
       }
       return

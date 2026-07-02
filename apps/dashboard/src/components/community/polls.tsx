@@ -89,7 +89,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
             {...p}
             value={question}
             maxLength={POLL_LIMITS.question}
-            placeholder="Which map next?"
+            placeholder="Which map next…"
             onChange={(e) => setQuestion(e.target.value)}
           />
         )}

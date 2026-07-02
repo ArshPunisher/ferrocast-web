@@ -82,7 +82,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
             {...p}
             value={prize}
             maxLength={100}
-            placeholder="A Steam key for Hades II"
+            placeholder="A Steam key for Hades II…"
             onChange={(e) => setPrize(e.target.value)}
           />
         )}
@@ -217,7 +217,10 @@ export function GiveawayPanel() {
               {tameText(g.prize)}
             </p>
             <p className="mt-0.5 text-[13px] text-text-3">
-              <span className="font-mono text-text-2">{g.keyword}</span> to enter
+              <span translate="no" className="font-mono text-text-2">
+                {g.keyword}
+              </span>{' '}
+              to enter
               {g.cost > 0 ? ` · ${formatCount(g.cost)} points` : ' · free'}
               {g.subscriber_bonus ? ' · subs get 2 entries' : ''}
             </p>
@@ -245,7 +248,7 @@ export function GiveawayPanel() {
                 Who entered
               </summary>
               <ul className="fc-scroll mt-2 flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-                {g.entrants.map((e) => (
+                {g.entrants.slice(0, 200).map((e) => (
                   <li
                     key={`${e.platform}:${e.user_id}`}
                     className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[12.5px] text-text-2"
@@ -259,6 +262,11 @@ export function GiveawayPanel() {
                   </li>
                 ))}
               </ul>
+              {g.entries > 200 && (
+                <p className="mt-1.5 text-[12.5px] text-text-3">
+                  And {formatCount(g.entries - 200)} more.
+                </p>
+              )}
             </details>
           )}
           {g.entries === 0 && g.open && (

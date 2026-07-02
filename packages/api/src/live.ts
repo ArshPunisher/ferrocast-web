@@ -44,6 +44,33 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
     if (typeof e.kind !== 'object' || e.kind === null) return null
     if (typeof (e.kind as { type?: unknown }).type !== 'string') return null
   }
+  // Community frames: the dashboard renders these directly, so their shape is checked.
+  const d = f.data as Record<string, unknown>
+  if (f.type === 'poll') {
+    const p = d.poll as Record<string, unknown> | null | undefined
+    if (
+      p !== null &&
+      !(typeof p === 'object' && typeof p.id === 'string' && Array.isArray(p.options))
+    )
+      return null
+  }
+  if (f.type === 'giveaway') {
+    const g = d.giveaway as Record<string, unknown> | null | undefined
+    if (
+      g !== null &&
+      !(
+        typeof g === 'object' &&
+        typeof g.id === 'string' &&
+        Array.isArray(g.entrants) &&
+        Array.isArray(g.winners)
+      )
+    )
+      return null
+  }
+  if (f.type === 'chatter') {
+    if (typeof d.event_id !== 'string') return null
+    if (d.kind !== 'first' && !(d.kind === 'returning' && typeof d.days === 'number')) return null
+  }
   return f as LiveFrame
 }
 

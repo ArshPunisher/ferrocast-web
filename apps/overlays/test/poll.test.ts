@@ -76,6 +76,8 @@ describe('poll widget', () => {
     expect(root.querySelector('.fc-poll-row')).toBe(firstRow)
     expect(widget().classList.contains('is-closed')).toBe(true)
     expect(root.querySelectorAll('.fc-poll-row')[1]!.classList.contains('is-leader')).toBe(true)
+    expect(root.querySelectorAll<HTMLElement>('.fc-poll-winner')[1]!.hidden).toBe(false)
+    expect(root.querySelector('[aria-live]')?.textContent).toMatch(/Winner: Bind\.$/)
     expect(widget().textContent).toContain('Final result')
     rt.apply(frame('state', { poll: null }))
     expect(widget().hidden).toBe(true)
@@ -95,6 +97,9 @@ describe('poll widget', () => {
       }),
     )
     expect(deepAll(root, 'script, img, [onerror]')).toEqual([])
+    rt.apply(frame('state', { poll: poll({ options: [] }) }))
+    expect(widget().hidden).toBe(true)
+    rt.apply(frame('state', 'nope' as unknown as { poll: PollView }))
     rt.apply(frame('state', { poll: { id: 5 } as unknown as PollView }))
     expect(widget().hidden).toBe(true)
   })

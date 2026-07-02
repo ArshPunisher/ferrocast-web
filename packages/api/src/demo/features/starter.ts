@@ -63,7 +63,7 @@ export class DemoStarter {
         out.skipped.push(c.name)
         continue
       }
-      const cmd = { ...clone(c), id: `c-${c.name.slice(1)}-${list.length}` }
+      const cmd = { ...clone(c), id: `c-${c.name.slice(1)}-${crypto.randomUUID().slice(0, 8)}` }
       list.push(cmd)
       out.added.push(clone(cmd))
     }

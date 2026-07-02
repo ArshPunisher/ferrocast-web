@@ -75,3 +75,19 @@ describe('demo polls', () => {
     expect((await fail(client.endPoll()))?.code).toBe('poll_not_found')
   })
 })
+
+describe('community live frames are checked before the dashboard sees them', () => {
+  it('drops malformed poll, giveaway and chatter frames', async () => {
+    const { parseLiveFrame } = await import('../src/live')
+    const f = (type: string, data: unknown) => JSON.stringify({ v: 1, type, data })
+    expect(parseLiveFrame(f('poll', { poll: null }))).not.toBeNull()
+    expect(parseLiveFrame(f('poll', { poll: 'x' }))).toBeNull()
+    expect(parseLiveFrame(f('poll', { poll: {} }))).toBeNull()
+    expect(parseLiveFrame(f('giveaway', { giveaway: { id: 'g' } }))).toBeNull()
+    expect(parseLiveFrame(f('chatter', { kind: 'first' }))).toBeNull()
+    expect(parseLiveFrame(f('chatter', { event_id: 'e', kind: 'other' }))).toBeNull()
+    expect(
+      parseLiveFrame(f('chatter', { event_id: 'e', kind: 'returning', days: 40 })),
+    ).not.toBeNull()
+  })
+})

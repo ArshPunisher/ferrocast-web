@@ -113,10 +113,17 @@
 .fc-ov .fc-w-poll.is-closed .fc-poll-row:not(.is-leader) {
   opacity: 0.55;
 }
-.fc-ov .fc-poll-row.is-leader .fc-poll-text::after {
-  content: '  Winner';
-  font-size: 0.75em;
+.fc-ov .fc-poll-winner {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--t-track);
+  font-size: 13px;
+  font-weight: 700;
   color: var(--t-accent);
+}
+.fc-ov .fc-poll-winner[hidden] {
+  display: none;
 }
 
 .fc-ov.is-low .fc-poll-fill {
@@ -217,4 +224,7 @@
   .fc-ov .fc-w-giveaway.is-reveal {
     animation: fc-fade-in 200ms ease-out both;
   }
+}
+.fc-ov .fc-w-giveaway.is-closed .fc-gw-label {
+  color: var(--t-text-2);
 }
