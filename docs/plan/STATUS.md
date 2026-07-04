@@ -1,5 +1,17 @@
 # Status
 
+## 17 Oct 2026 (community features)
+
+**Done**
+
+- `packages/api`: types, client methods and demo-engine routes for loyalty points, polls, giveaways, first-time chatter marks (`chatter` live frame), the stream recap, Discord go-live settings, OBS auto-detect and the starter command pack. Each demo feature lives in its own file under `src/demo/features/`. `contract.test.ts` reads and saves the new routes and passes against a real engine.
+- Dashboard: new **Community** screen (polls, giveaway, points leaderboard and earning settings, welcome for new faces), **Stream recap** (from Home), points on the viewer card, "First message ever" and "Back after N days" badges in chat, Discord in Settings, "Found OBS on this computer" in Settings, "Add starter commands" in Bot, poll and giveaway widgets in the overlay editor (samples until one is running).
+- Overlays: `poll` and `giveaway` widgets in their own files and `styles/community.css` (text-only DOM, reduced-motion aware, live text for screen readers).
+
+**Next**
+
+- Browser tests (Playwright) for the Community and Recap screens.
+
 ## 17 Oct 2026 (tips)
 
 **Done**
