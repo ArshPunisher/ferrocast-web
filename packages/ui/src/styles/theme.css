@@ -17,6 +17,8 @@
   --color-accent-soft: var(--fc-accent-soft);
   --color-accent-line: var(--fc-accent-line);
   --color-on-accent: var(--fc-on-accent);
+  --color-molten-text: var(--fc-molten-text);
+  --color-arc: var(--fc-arc);
   --color-ok: var(--fc-ok);
   --color-ok-soft: var(--fc-ok-soft);
   --color-warn: var(--fc-warn);

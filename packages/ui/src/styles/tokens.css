@@ -2,8 +2,13 @@
  * Ferrocast design tokens. Plain CSS custom properties so the dashboard (Tailwind 4),
  * the site (Astro) and the video renders share one source.
  *
- * Direction: liquid metal. Cool off-black surfaces, chrome highlights, one accent:
- * cobalt (like iron, a ferromagnetic metal). Platform colours appear only in small marks.
+ * Direction: liquid metal. Cool off-black surfaces, chrome highlights and the two X1 Spark
+ * colours: Molten (amber) fills the primary action, Arc (cyan) carries links, icons, focus
+ * and info highlights. Platform colours appear only in small marks.
+ *
+ * Contrast (WCAG AA, checked in every theme block below): text pairs 4.5:1+, focus rings and
+ * UI parts 3:1+. The bright values (--fc-accent, --fc-arc) are for fills and graphics; anything
+ * set as text uses a -text token, which is darker on off-white.
  *
  * Shape rule: controls (buttons, inputs) 10px, panels and cards 16px, chips and toggles
  * fully round. Nothing else.
@@ -26,17 +31,24 @@
   --fc-text-2: #b3b9c4;
   --fc-text-3: #8a919d;
 
-  /* Cobalt. --fc-accent is for fills with white text (AA 4.5:1+),
-     --fc-accent-text for text and icons on dark surfaces. */
-  --fc-accent: #3461f5;
-  /* Logo only (the Spark mark): molten amber + arc cyan. Not for UI accents. */
+  /* The Spark mark's own colours (logo, brand art). */
   --fc-brand-molten: #ffa424;
   --fc-brand-arc: #33d4ff;
-  --fc-accent-strong: #284fd8;
-  --fc-accent-text: #8eaaff;
-  --fc-accent-soft: rgb(52 97 245 / 0.16);
-  --fc-accent-line: rgb(110 145 255 / 0.42);
-  --fc-on-accent: #ffffff;
+
+  /* Molten: the primary action. --fc-accent fills with dark --fc-on-accent text (9.9:1),
+     --fc-accent-strong is its hover, --fc-molten-text is Molten set as text. */
+  --fc-accent: #ffa424;
+  --fc-accent-strong: #ffb547;
+  --fc-on-accent: #120a00;
+  --fc-molten-text: #ffa424;
+
+  /* Arc: links, icons, focus rings, selection and info highlights. --fc-arc is the bright
+     fill/graphic value, --fc-accent-text the text value (7.2:1+ on every surface, also
+     over --fc-accent-soft). */
+  --fc-arc: #33d4ff;
+  --fc-accent-text: #33d4ff;
+  --fc-accent-soft: rgb(51 212 255 / 0.12);
+  --fc-accent-line: rgb(51 212 255 / 0.4);
 
   /* Meaning. Used only for real state. */
   --fc-ok: #3dd193;
@@ -99,11 +111,16 @@
   --fc-text: #0e1014;
   --fc-text-2: #424854;
   --fc-text-3: #5f6672;
-  --fc-accent: #2e5be8;
-  --fc-accent-strong: #2149c9;
-  --fc-accent-text: #2347c4;
-  --fc-accent-soft: rgb(46 91 232 / 0.1);
-  --fc-accent-line: rgb(46 91 232 / 0.38);
+  /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
+     fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface). */
+  --fc-accent: #cf7400;
+  --fc-accent-strong: #e08a1a;
+  --fc-on-accent: #0a0600;
+  --fc-molten-text: #9a5400;
+  --fc-arc: #0888b8;
+  --fc-accent-text: #05678c;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.38);
   --fc-ok: #0a6b46;
   --fc-ok-soft: rgb(17 134 90 / 0.1);
   --fc-warn: #946200;
@@ -144,11 +161,14 @@
     --fc-text: #0e1014;
     --fc-text-2: #424854;
     --fc-text-3: #5f6672;
-    --fc-accent: #2e5be8;
-    --fc-accent-strong: #2149c9;
-    --fc-accent-text: #2347c4;
-    --fc-accent-soft: rgb(46 91 232 / 0.1);
-    --fc-accent-line: rgb(46 91 232 / 0.38);
+    --fc-accent: #cf7400;
+    --fc-accent-strong: #e08a1a;
+    --fc-on-accent: #0a0600;
+    --fc-molten-text: #9a5400;
+    --fc-arc: #0888b8;
+    --fc-accent-text: #05678c;
+    --fc-accent-soft: rgb(8 136 184 / 0.1);
+    --fc-accent-line: rgb(8 136 184 / 0.38);
     --fc-ok: #0a6b46;
     --fc-ok-soft: rgb(17 134 90 / 0.1);
     --fc-warn: #946200;

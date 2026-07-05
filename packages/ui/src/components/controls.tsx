@@ -141,14 +141,14 @@ export function Switch({
         className={cx(
           'relative mt-0.5 h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
           'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-40',
-          checked ? 'border-accent bg-accent' : 'border-line-strong bg-surface-3',
+          checked ? 'border-arc bg-arc' : 'border-line-strong bg-surface-3',
         )}
       >
         <span
           aria-hidden="true"
           className={cx(
             'absolute top-[3px] left-[3px] size-4 rounded-full shadow-sm transition-transform duration-200 ease-[var(--fc-ease-out)]',
-            checked ? 'translate-x-4 bg-white' : 'translate-x-0 bg-text-3',
+            checked ? 'translate-x-4 bg-surface-1' : 'translate-x-0 bg-text-3',
           )}
         />
       </button>

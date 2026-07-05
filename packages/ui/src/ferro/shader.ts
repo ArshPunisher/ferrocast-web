@@ -1,7 +1,7 @@
 // Ferrofluid in a fragment shader: a puddle of glossy black liquid metal whose surface
 // rises into a hexagonal field of spikes (the Rosensweig instability) under a magnet.
 // One full-screen pass: a raymarched height field, normals by finite differences, and a
-// procedural studio (two softboxes and a cobalt rim light) for the reflections.
+// procedural studio (two softboxes and an Arc (cyan) rim light) for the reflections.
 
 export const VERT = `
 attribute vec2 aPos;
@@ -14,7 +14,7 @@ uniform vec2 uRes;
 uniform float uTime;
 uniform vec3 uMag;     // magnet x, z on the floor plane, strength 0..1
 uniform vec3 uBg;      // page background, sRGB 0..1
-uniform vec3 uAccent;  // cobalt, sRGB 0..1
+uniform vec3 uAccent;  // rim light (Arc cyan by default), sRGB 0..1
 uniform float uSpike;  // overall spike height multiplier
 uniform float uLight;  // 1.0 on light pages: lighter studio
 

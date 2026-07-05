@@ -303,7 +303,7 @@ export function EmptyState({
 export function FerroCanvas({
   className,
   background,
-  accent = '#3461f5',
+  accent = '#33d4ff',
   light,
   label,
 }: {
