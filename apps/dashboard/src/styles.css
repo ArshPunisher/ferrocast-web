@@ -27,3 +27,16 @@ input[type='range'] {
   filter: blur(5px);
   user-select: none;
 }
+
+/* Chat name colours: each row carries a dark and a light value (chat.tsx readableColors). */
+.fc-name {
+  color: var(--nc-d);
+}
+:root[data-theme='light'] .fc-name {
+  color: var(--nc-l);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) .fc-name {
+    color: var(--nc-l);
+  }
+}

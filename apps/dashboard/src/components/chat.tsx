@@ -1,4 +1,13 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowBendUpLeft,
@@ -52,30 +61,23 @@ function luminance(hex: string): number {
 }
 
 /** A name colour only when it passes WCAG AA (4.5:1) on the current theme's panel. */
-let themeCache: { light: boolean; at: number } | null = null
-function isLightTheme(): boolean {
-  const now = Date.now()
-  if (themeCache && now - themeCache.at < 1000) return themeCache.light
-  const root = document.documentElement
-  const light =
-    root.dataset.theme === 'light' ||
-    (!root.dataset.theme && matchMedia('(prefers-color-scheme: light)').matches)
-  themeCache = { light, at: now }
-  return light
-}
+const PANEL = { dark: '#16191e', light: '#ffffff' } as const
 
-/** A name colour only when it passes WCAG AA (4.5:1) on the current theme's panel. */
-export function readableColor(color: string | null): string | undefined {
-  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined
-  const bg = isLightTheme() ? '#ffffff' : '#16191e'
+function passes(color: string, bg: string): boolean {
   const [a, b] = [luminance(color), luminance(bg)]
-  const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
-  return ratio >= 4.5 ? color : undefined
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5
 }
 
-/** For tests: forget the cached theme. */
-export function resetThemeCache(): void {
-  themeCache = null
+/**
+ * A viewer's name colour for each theme, kept only where it passes WCAG AA (4.5:1) on
+ * that theme's panel. Both are sent to CSS, so switching themes never shows a stale one.
+ */
+export function readableColors(color: string | null): { dark?: string; light?: string } {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return {}
+  const out: { dark?: string; light?: string } = {}
+  if (passes(color, PANEL.dark)) out.dark = color
+  if (passes(color, PANEL.light)) out.light = color
+  return out
 }
 
 function RoleChips({ roles, mark }: { roles: number; mark?: ChatterMark | undefined }) {
@@ -194,8 +196,9 @@ export const ChatLine = memo(function ChatLine({
   const mark = useLive((s) => s.chatters.get(event.id))
   if (event.kind.type !== 'chat_message') return null
   const a = event.kind.actor
-  const color = readableColor(a.color)
+  const names = readableColors(a.color)
   const mine = (a.roles & Roles.BROADCASTER) !== 0
+  const fallback = mine ? 'var(--color-accent-text)' : 'var(--color-text)'
   return (
     <li
       onClick={(ev) => {
@@ -219,11 +222,13 @@ export const ChatLine = memo(function ChatLine({
             disabled={!actions || a.id === null}
             onClick={() => actions?.card(a)}
             dir="auto"
-            style={color ? { color } : undefined}
-            className={cx(
-              'max-w-[22ch] truncate text-left font-semibold enabled:hover:underline focus-visible:underline focus-visible:outline-none',
-              !color && (mine ? 'text-accent-text' : 'text-text'),
-            )}
+            style={
+              {
+                '--nc-d': names.dark ?? fallback,
+                '--nc-l': names.light ?? fallback,
+              } as CSSProperties
+            }
+            className="fc-name max-w-[22ch] truncate text-left font-semibold enabled:hover:underline focus-visible:underline focus-visible:outline-none"
             title={`${tameText(a.display_name)} on ${PLATFORM_LABEL[event.platform]}`}
           >
             {tameText(a.display_name)}

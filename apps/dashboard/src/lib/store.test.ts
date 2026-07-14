@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
 import { selectFeed, useLive } from './store'
 import { href, parseRoute } from './router'
-import { readableColor, resetThemeCache } from '../components/chat'
+import { readableColors } from '../components/chat'
 
 const chat = (id: string, text = 'hi'): FerroEvent => ({
   id,
@@ -158,16 +158,12 @@ describe('router', () => {
 })
 
 describe('name colours', () => {
-  it('keeps readable colours and drops unreadable or hostile ones', () => {
-    document.documentElement.dataset.theme = 'dark'
-    resetThemeCache()
-    expect(readableColor('#ff7ab6')).toBe('#ff7ab6')
-    expect(readableColor('#000080')).toBeUndefined()
-    expect(readableColor('red; background:url(x)')).toBeUndefined()
-    expect(readableColor(null)).toBeUndefined()
-    document.documentElement.dataset.theme = 'light'
-    resetThemeCache()
-    expect(readableColor('#ffd166')).toBeUndefined()
-    expect(readableColor('#1a5fb4')).toBe('#1a5fb4')
+  it('keeps each theme only the colours that read on it, and drops hostile ones', () => {
+    expect(readableColors('#ff7ab6')).toEqual({ dark: '#ff7ab6' })
+    expect(readableColors('#000080')).toEqual({ light: '#000080' })
+    expect(readableColors('#ffd166')).toEqual({ dark: '#ffd166' })
+    expect(readableColors('#1a5fb4')).toEqual({ light: '#1a5fb4' })
+    expect(readableColors('red; background:url(x)')).toEqual({})
+    expect(readableColors(null)).toEqual({})
   })
 })
