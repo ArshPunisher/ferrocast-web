@@ -622,6 +622,8 @@ function Data() {
 function Updates({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
   const info = useResource((c) => c.updates())
   const u = info.data
+  const client = useClient()
+  const { run, busy } = useAction()
   return (
     <Section
       id="updates"
@@ -650,13 +652,11 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
               <Button
                 size="sm"
                 variant="primary"
-                disabled={u.blocked_while_live}
+                disabled={u.blocked_while_live || busy === 'update'}
                 title={u.blocked_while_live ? 'Available after your stream' : undefined}
                 onClick={() =>
-                  toast({
-                    tone: 'info',
-                    message: 'The update installs from the Ferrocast app.',
-                    hint: 'Use the tray menu: Update and restart.',
+                  void run('update', () => client.installUpdate(), {
+                    success: (r) => `Installing v${r.installing}. Ferrocast restarts by itself in a moment.`,
                   })
                 }
               >

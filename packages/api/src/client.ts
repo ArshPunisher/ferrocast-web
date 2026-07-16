@@ -382,6 +382,8 @@ export class FerroClient {
   recap = (since?: number) =>
     this.get<Recap>(since === undefined ? '/api/v1/recap' : `/api/v1/recap?since=${since}`)
   updates = () => this.get<UpdateInfo>('/api/v1/updates')
+  /** The desktop app downloads, checks and installs it, then restarts. 409 while live. */
+  installUpdate = () => this.post<{ installing: string }>('/api/v1/updates/install')
 }
 
 function enc(s: string): string {

@@ -58,6 +58,7 @@ import {
   tipPageIdProblem,
   tipSecretProblem,
 } from '../tips'
+import { WIDGET_KINDS } from '../types'
 import { chimeDataUrl } from './chime'
 import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
@@ -1106,6 +1107,15 @@ export class DemoEngine {
         blocked_while_live: this.isLive() && this.settings.never_update_while_live,
         notes_url: 'https://ferrocast.clearcraftlabs.com/docs/getting-started',
       }
+    if (is('POST', 'updates', 'install')) {
+      if (this.isLive() && this.settings.never_update_while_live)
+        throw new HttpError(
+          409,
+          'conflict',
+          'You’re live, so the update waits until the stream ends (Settings › Updates).',
+        )
+      return { installing: '0.4.1' }
+    }
 
     throw new HttpError(
       404,
@@ -1353,7 +1363,7 @@ export class DemoEngine {
       )
     const widgets = Array.isArray(o.widgets) ? (o.widgets as Widget[]) : cur.widgets
     for (const w of widgets) {
-      if (!['alerts', 'chat', 'events', 'goal', 'label', 'viewers'].includes(w.kind))
+      if (!WIDGET_KINDS.includes(w.kind))
         throw new HttpError(400, 'invalid', `widgets: '${String(w.kind)}' isn't a widget type.`)
       if (w.w < 20 || w.h < 20)
         throw new HttpError(400, 'invalid', 'widgets: a widget must be at least 20 × 20 pixels.')
