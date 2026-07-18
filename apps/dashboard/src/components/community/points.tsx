@@ -170,7 +170,6 @@ function Leaderboard({ name }: { name: string }) {
               <button
                 type="button"
                 onClick={() => setEditing(e)}
-                aria-label={`${tameText(e.display_name)}, rank ${e.rank}, ${pointsLabel(e.points, name)}. Change ${name}`}
                 className="fc-press grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-control px-2 py-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 <span
@@ -198,6 +197,7 @@ function Leaderboard({ name }: { name: string }) {
                 <span className="font-mono text-sm font-semibold text-text tabular-nums">
                   {formatCount(e.points)}
                 </span>
+                <span className="sr-only">. Change {name}</span>
               </button>
             </li>
           ))}

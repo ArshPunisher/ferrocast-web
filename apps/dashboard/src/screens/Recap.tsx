@@ -57,7 +57,12 @@ function ListPanel<T>({
       {rows.length === 0 ? (
         <p className="text-[13px] text-text-3">{empty}</p>
       ) : (
-        <ul className="fc-scroll -mx-2 flex max-h-72 flex-col overflow-y-auto">
+        <ul
+          // Long lists scroll: focusable so keyboard users can scroll them too.
+          tabIndex={0}
+          aria-label={title}
+          className="fc-scroll -mx-2 flex max-h-72 flex-col overflow-y-auto rounded-control focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        >
           {rows.map((row) => {
             const r = render(row)
             return (
