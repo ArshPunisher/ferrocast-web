@@ -12,6 +12,8 @@ const SCREENS = [
   'bot',
   'tips',
   'settings',
+  'community',
+  'recap',
 ]
 
 test.use({ viewport: { width: 375, height: 812 } })

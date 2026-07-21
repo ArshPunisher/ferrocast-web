@@ -3,7 +3,7 @@ import { DemoEngine, DEMO_TOKEN, DEMO_PAIR } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
 import { parseOverlayFrame, ackFrame, helloFrame, visibilityFrame } from '../src/overlay-protocol'
-import type { OverlayServerFrame, Overlay } from '../src/types'
+import type { OverlayServerFrame, Overlay, Widget } from '../src/types'
 import type { SocketLike } from '../src/socket'
 
 let engine: DemoEngine
@@ -140,6 +140,17 @@ describe('demo engine: overlays', () => {
     const bad = { ...o!, widgets: [{ ...o!.widgets[0]!, w: 2 }] }
     await expect(client.saveOverlay(bad)).rejects.toMatchObject({ status: 400 })
     await expect(client.saveOverlay({ ...o!, width: 99999 })).rejects.toMatchObject({ status: 400 })
+  })
+  it('saves poll and giveaway widgets, like the engine', async () => {
+    const [o] = await client.overlays()
+    const theme = { theme: 'molten' }
+    const widgets = [
+      ...o!.widgets,
+      { id: 'w-poll', kind: 'poll', x: 0, y: 0, w: 560, h: 320, config: theme },
+      { id: 'w-give', kind: 'giveaway', x: 0, y: 400, w: 560, h: 200, config: theme },
+    ] as Widget[]
+    const saved = await client.saveOverlay({ ...o!, widgets })
+    expect(saved.widgets.map((w) => w.kind)).toEqual(expect.arrayContaining(['poll', 'giveaway']))
   })
 })
 

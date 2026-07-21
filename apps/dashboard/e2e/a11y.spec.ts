@@ -12,6 +12,8 @@ const SCREENS = [
   'bot',
   'tips',
   'settings',
+  'community',
+  'recap',
 ]
 
 for (const scheme of ['dark', 'light'] as const) {
