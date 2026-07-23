@@ -80,7 +80,7 @@ export const PAGES = {
     path: '/features/tips/',
     title: 'Tips that keep your legal name off the page | Ferrocast',
     description:
-      'A tip page paid straight into your own Razorpay (UPI), Stripe, PayPal or Ko-fi account. Zero cut, alerts only on settled payments, legal name off the page.',
+      'A tip page paid straight into your own Razorpay (UPI), Stripe or Ko-fi account. Zero cut, alerts only on settled payments, legal name off the page.',
     ogTitle: 'Your legal name stays off the page',
     ogKicker: 'Tips',
     crumb: 'Tips',
@@ -90,7 +90,7 @@ export const PAGES = {
     path: '/features/own-your-data/',
     title: 'Own your setup: local-first and exportable | Ferrocast',
     description:
-      'Ferrocast keeps your overlays, alerts, commands and history on your own computer. Export everything in open formats, import from StreamElements.',
+      'Ferrocast keeps your overlays, alerts, commands and history on your own computer. Export everything in open formats; a StreamElements importer is coming.',
     ogTitle: 'Your setup lives on your PC',
     ogKicker: 'Own your data',
     crumb: 'Own your data',

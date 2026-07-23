@@ -40,7 +40,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which platforms does Ferrocast support?',
-        a: 'Twitch, YouTube and Kick, all at once if you multistream. Tips come from Razorpay (including UPI), Stripe, PayPal and Ko-fi. Ferrocast works with OBS Studio and any app that has a browser source.',
+        a: 'Twitch, YouTube and Kick, all at once if you multistream. Tips come from Razorpay (including UPI), Stripe and Ko-fi. Ferrocast works with OBS Studio and any app that has a browser source.',
       },
       {
         q: 'Why is there no TikTok support?',
@@ -65,11 +65,11 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How do tips work, and will tippers see my legal name?',
-        a: 'Viewers pay through your own Razorpay, Stripe, PayPal or Ko-fi account, so the money never touches us and we take no cut. Your legal name is never shown on your tip page or in alerts, only your stream name. The payment provider’s checkout and receipt show the name on your provider account, so use a business or brand name there to keep your own private. Alerts play only once a payment has settled.',
+        a: 'Viewers pay through your own Razorpay, Stripe or Ko-fi account, so the money never touches us and we take no cut. Your legal name is never shown on your tip page or in alerts, only your stream name. The payment provider’s checkout and receipt show the name on your provider account, so use a business or brand name there to keep your own private. Alerts play only once a payment has settled.',
       },
       {
         q: 'Can I move my setup from StreamElements or Streamlabs?',
-        a: 'Yes. Ferrocast imports overlays, alert settings and commands from StreamElements and Streamlabs and shows a report of what came over. You can export everything from Ferrocast at any time in open formats.',
+        a: 'Soon. An importer for StreamElements and Streamlabs is being built: it will bring over alert settings and commands and show a report of what came over. Today you can already export everything from Ferrocast at any time, in open formats.',
       },
       {
         q: 'Does Ferrocast use AI?',

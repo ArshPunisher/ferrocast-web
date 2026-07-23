@@ -166,7 +166,7 @@ export const FEATURES: Feature[] = [
       },
     ],
     notes: [
-      'Custom HTML widgets from StreamElements will run in a sandbox in a later version. Their settings are kept when you import.',
+      'Importing from StreamElements is planned; its custom HTML widgets will then run in a sandbox.',
     ],
   },
   {
@@ -265,8 +265,8 @@ export const FEATURES: Feature[] = [
             body: 'The bot runs in the app on your PC. It works when our servers don’t.',
           },
           {
-            title: 'Import your commands',
-            body: 'Bring commands and timers over from StreamElements and Streamlabs.',
+            title: 'Import your commands (coming)',
+            body: 'Planned: bring commands and timers over from StreamElements and Streamlabs.',
           },
           {
             title: 'Same filters as moderation',
@@ -287,7 +287,7 @@ export const FEATURES: Feature[] = [
       'A tip page paid straight to your own account, with zero cut and your legal name kept off the page.',
     h1: 'Tips that keep your legal name off the page.',
     intro:
-      'Your tip page and alerts show only your stream name. Viewers pay straight into your own Razorpay, Stripe, PayPal or Ko-fi account. We never hold your money and take no cut.',
+      'Your tip page and alerts show only your stream name. Viewers pay straight into your own Razorpay, Stripe or Ko-fi account. We never hold your money and take no cut.',
     groups: [
       {
         title: 'Your money, your account',
@@ -298,7 +298,7 @@ export const FEATURES: Feature[] = [
             body: 'Made for India first: UPI, cards and netbanking through your own Razorpay account.',
           },
           {
-            title: 'Stripe, PayPal and Ko-fi',
+            title: 'Stripe and Ko-fi',
             body: 'Connect the provider you already use. Payments land with them, not with us.',
           },
           {
@@ -368,8 +368,8 @@ export const FEATURES: Feature[] = [
             body: 'Overlays with their media, alerts, commands, timers and tip history, as JSON and CSV in one file.',
           },
           {
-            title: 'Import your old setup',
-            body: 'From StreamElements and Streamlabs, with a report of what came over and what didn’t.',
+            title: 'Import your old setup (coming)',
+            body: 'Planned: from StreamElements and Streamlabs, with a report of what came over and what didn’t.',
           },
           {
             title: 'Backups before changes',
