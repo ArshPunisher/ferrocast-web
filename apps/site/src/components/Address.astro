@@ -8,6 +8,8 @@ const a = COMPANY.address
 <address class="addr">
   <strong>{COMPANY.legalName}</strong>
   <br />
+  Proprietor: {COMPANY.proprietor}
+  <br />
   {confirmed('address') ? (
     <>
       {a.street}
@@ -32,6 +34,8 @@ const a = COMPANY.address
       <span class="pending">GSTIN: being confirmed</span>
     </>
   )}
+  <br />
+  Udyam: {COMPANY.udyam}
   {confirmed('phone') && (
     <>
       <br />

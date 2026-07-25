@@ -1,10 +1,10 @@
 // Every company fact the site prints, in one place. Legal pages, the contact page, the
 // footer and the JSON-LD read from here.
 //
-// TODO(owner): every field listed in UNCONFIRMED must be confirmed before the site goes
-// live and before applying for Razorpay. Razorpay checks that the legal name, address and
-// contact details on these pages match the KYC documents exactly. Once a value is final,
-// remove its key from UNCONFIRMED. The build prints the fields still waiting.
+// Confirmed by the owner on 17 October 2026 against the Udyam registration certificate
+// (UDYAM-PB-01-0155844). Razorpay checks that the legal name, address and contact details
+// on these pages match the KYC documents exactly, so change them only together with KYC.
+// A field that ever needs re-checking goes back into UNCONFIRMED; the build lists them.
 
 export const COMPANY = {
   /** Brand name used in copy. */
@@ -13,33 +13,37 @@ export const COMPANY = {
   legalName: 'ClearCraft Labs',
   /** Type of entity, written as it reads mid-sentence. */
   entityType: 'sole proprietorship',
+  /** The proprietor, exactly as on PAN. */
+  proprietor: 'Arshdeep Singh',
+  /** MSME (Udyam) registration. */
+  udyam: 'UDYAM-PB-01-0155844',
   url: 'https://clearcraftlabs.com',
   /** Support inbox. */
   email: 'hello@clearcraftlabs.com',
   /** Inbox for privacy and data requests. */
   privacyEmail: 'privacy@clearcraftlabs.com',
-  /** Inbox for billing, refunds and cancellations. */
-  billingEmail: 'billing@clearcraftlabs.com',
-  /** Support phone in E.164 form. Shown only once confirmed. */
-  phone: '+91 00000 00000',
+  /** Inbox for billing, refunds and cancellations (the support inbox for now). */
+  billingEmail: 'hello@clearcraftlabs.com',
+  /** Support phone, as on the Udyam certificate. */
+  phone: '+91 70877 95553',
   /** Registered business address (contact, terms, privacy, refunds). */
   address: {
-    street: '',
-    city: '',
-    region: '',
-    postalCode: '',
+    street: '150, Malliana Colony, Sarai Road, Jandiala Guru',
+    city: 'Amritsar',
+    region: 'Punjab',
+    postalCode: '143115',
     country: 'India',
     countryCode: 'IN',
   },
-  /** GSTIN, or null when not registered for GST. */
+  /** GSTIN, or null when not registered for GST (not registered: below the threshold). */
   gstin: null as string | null,
   /** Grievance officer required by India's IT Rules and DPDP Act. */
   grievanceOfficer: {
-    name: 'Grievance Officer, ClearCraft Labs',
-    email: 'grievance@clearcraftlabs.com',
+    name: 'Arshdeep Singh',
+    email: 'privacy@clearcraftlabs.com',
   },
   /** Courts for disputes. */
-  jurisdiction: 'the courts of India',
+  jurisdiction: 'the courts at Amritsar, Punjab',
   /** Working days we answer within. */
   responseDays: 3,
   github: 'https://github.com/ArshPunisher/ferrocast',
@@ -55,18 +59,7 @@ export type CompanyField = keyof typeof COMPANY
  * Fields still waiting for the owner. Unconfirmed fields never go into JSON-LD; the
  * address, GSTIN and phone are not printed on pages until confirmed.
  */
-export const UNCONFIRMED: ReadonlySet<CompanyField> = new Set<CompanyField>([
-  'legalName',
-  'entityType',
-  'email',
-  'privacyEmail',
-  'billingEmail',
-  'phone',
-  'address',
-  'gstin',
-  'grievanceOfficer',
-  'jurisdiction',
-])
+export const UNCONFIRMED: ReadonlySet<CompanyField> = new Set<CompanyField>([])
 
 export const confirmed = (field: CompanyField): boolean => !UNCONFIRMED.has(field)
 
