@@ -26,6 +26,18 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* comfortable reading on desktop: 17px body, small body copy never under 16px */
+:root {
+  --fc-body-s: 1rem;
+}
+@media (min-width: 1024px) {
+  body {
+    font-size: 17px;
+  }
+  :root {
+    --fc-body-s: 1.0625rem;
+  }
+}
 
 main {
   flex: 1;
