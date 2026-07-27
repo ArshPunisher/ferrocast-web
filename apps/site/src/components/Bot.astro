@@ -1,0 +1,308 @@
+---
+// Sparky, the Ferrocast bot: a soft desk robot with the Spark bolt for an antenna and big
+// teddy-bear eyes that follow the cursor. It changes face with what the visitor does (see
+// scripts/bot.ts) and gets excited over anything marked data-bot-excite. Decorative only.
+
+const L = [90, 104] as const
+const R = [130, 104] as const
+const EYE = { rx: 17, ry: 19, pupil: 9.5 }
+const M = [110, 133] as const
+const sparkle = (x: number, y: number, s: number) =>
+  `M${x} ${y - s}Q${x + s * 0.18} ${y - s * 0.18} ${x + s} ${y}Q${x + s * 0.18} ${y + s * 0.18} ${x} ${y + s}Q${x - s * 0.18} ${y + s * 0.18} ${x - s} ${y}Q${x - s * 0.18} ${y - s * 0.18} ${x} ${y - s}Z`
+const eyes = [L, R]
+---
+
+<div class="fc-bot" data-bot>
+  <svg viewBox="0 0 220 240" class="bot" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="bot-shell" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff"></stop>
+        <stop offset="1" stop-color="#d5dbe4"></stop>
+      </linearGradient>
+    </defs>
+    <ellipse class="shadow" cx="110" cy="226" rx="46" ry="7"></ellipse>
+    <g class="body">
+      <ellipse cx="74" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
+      <ellipse cx="146" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
+      <rect x="80" y="160" width="60" height="56" rx="24" fill="url(#bot-shell)"></rect>
+      <path d="M115 174L104 188L110 188L106 198L118 184L112 184Z" fill="#ffa424"></path>
+    </g>
+    <g class="head">
+      <line x1="110" y1="56" x2="110" y2="34" stroke="#c3cad4" stroke-width="4" stroke-linecap="round"></line>
+      <g class="antenna">
+        <path
+          d="M116 14L100 34L108 34L103 46L120 26L112 26Z"
+          fill="#ffa424"
+          stroke="#ffa424"
+          stroke-width="2"
+          stroke-linejoin="round"></path>
+      </g>
+      <circle cx="47" cy="106" r="12" fill="#ffa424"></circle>
+      <circle cx="173" cy="106" r="12" fill="#ffa424"></circle>
+      <rect x="48" y="52" width="124" height="110" rx="42" fill="url(#bot-shell)"></rect>
+      <rect x="60" y="68" width="100" height="80" rx="30" fill="#12161c"></rect>
+      <g class="face">
+        <g class="eyes-open">
+          {
+            eyes.map(([x, y]) => (
+              <g
+                class="eye"
+                data-rx={EYE.rx - EYE.pupil - 1.2}
+                data-ry={EYE.ry - EYE.pupil - 1.2}
+                style={`transform-origin:${x}px ${y}px`}
+              >
+                <ellipse cx={x} cy={y} rx={EYE.rx} ry={EYE.ry} fill="#fff" />
+                <g class="pupil">
+                  <circle cx={x} cy={y} r={EYE.pupil} fill="#0e1014" />
+                  <circle cx={x - 3.4} cy={y - 4} r="3.6" fill="#fff" />
+                  <circle cx={x + 3} cy={y + 3.4} r="1.5" fill="#fff" opacity="0.8" />
+                </g>
+              </g>
+            ))
+          }
+        </g>
+        <g class="eyes-happy">
+          {
+            eyes.map(([x, y]) => (
+              <path
+                d={`M${x - 11} ${y + 4}Q${x} ${y - 11} ${x + 11} ${y + 4}`}
+                fill="none"
+                stroke="#fff"
+                stroke-width="5"
+                stroke-linecap="round"
+              />
+            ))
+          }
+        </g>
+        <g class="eyes-sleep">
+          {
+            eyes.map(([x, y]) => (
+              <path
+                d={`M${x - 11} ${y}Q${x} ${y + 7} ${x + 11} ${y}`}
+                fill="none"
+                stroke="#fff"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
+            ))
+          }
+        </g>
+        <g class="eyes-star">
+          {
+            eyes.map(([x, y]) => (
+              <>
+                <path d={sparkle(x, y, 15)} fill="#ffa424" />
+                <circle cx={x} cy={y} r="2.6" fill="#fff" />
+              </>
+            ))
+          }
+        </g>
+        <g class="blush">
+          <ellipse cx={L[0] - 7} cy={L[1] + 24} rx="8" ry="4" fill="#ff7a9a"></ellipse>
+          <ellipse cx={R[0] + 7} cy={R[1] + 24} rx="8" ry="4" fill="#ff7a9a"></ellipse>
+        </g>
+        <path
+          class="m m-idle"
+          d={`M${M[0] - 7} ${M[1]}Q${M[0]} ${M[1] + 5} ${M[0] + 7} ${M[1]}`}
+          fill="none"
+          stroke="#33d4ff"
+          stroke-width="3"
+          stroke-linecap="round"></path>
+        <path
+          class="m m-smile"
+          d={`M${M[0] - 11} ${M[1] - 2}Q${M[0]} ${M[1] + 9} ${M[0] + 11} ${M[1] - 2}`}
+          fill="none"
+          stroke="#33d4ff"
+          stroke-width="3.5"
+          stroke-linecap="round"></path>
+        <path
+          class="m m-open"
+          d={`M${M[0] - 10} ${M[1] - 3}Q${M[0]} ${M[1] + 13} ${M[0] + 10} ${M[1] - 3}Z`}
+          fill="#33d4ff"></path>
+        <circle class="m m-o" cx={M[0]} cy={M[1] + 1} r="4" fill="none" stroke="#33d4ff" stroke-width="3"
+        ></circle>
+      </g>
+    </g>
+    <g class="fx">
+      <path class="sp s1" d={sparkle(48, 58, 8)} fill="#ffa424"></path>
+      <path class="sp s2" d={sparkle(174, 46, 6)} fill="#33d4ff"></path>
+      <path class="sp s3" d={sparkle(164, 98, 5)} fill="#ffa424"></path>
+      <text class="zz" x="158" y="52">z<tspan dx="2" dy="-8" font-size="13">z</tspan></text>
+    </g>
+  </svg>
+</div>
+
+<script>
+  import { mountBot } from '../scripts/bot'
+  document.querySelectorAll<HTMLElement>('[data-bot]').forEach(mountBot)
+</script>
+
+<style>
+  .fc-bot {
+    display: grid;
+    place-items: center;
+  }
+  .bot {
+    width: clamp(170px, 20vw, 250px);
+    height: auto;
+    overflow: visible;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .shadow {
+    fill: rgb(2 4 10 / 0.25);
+  }
+  :global(html[data-theme='light']) .shadow {
+    fill: rgb(14 16 20 / 0.12);
+  }
+  @media (prefers-color-scheme: light) {
+    :global(html:not([data-theme])) .shadow {
+      fill: rgb(14 16 20 / 0.12);
+    }
+  }
+  /* the white shell needs an edge on the light page */
+  :global(html[data-theme='light']) .bot {
+    filter: drop-shadow(0 1px 0 rgb(14 16 20 / 0.06)) drop-shadow(0 10px 24px rgb(14 16 20 / 0.12));
+  }
+  @media (prefers-color-scheme: light) {
+    :global(html:not([data-theme])) .bot {
+      filter: drop-shadow(0 1px 0 rgb(14 16 20 / 0.06)) drop-shadow(0 10px 24px rgb(14 16 20 / 0.12));
+    }
+  }
+  .head {
+    transform-box: view-box;
+    transform-origin: 110px 200px;
+  }
+  .eye {
+    transition: transform 90ms ease-out;
+  }
+  .bot:global(.blink) .eyes-open .eye {
+    transform: scaleY(0.08);
+  }
+
+  /* moods */
+  .eyes-happy,
+  .eyes-sleep,
+  .eyes-star,
+  .blush,
+  .m,
+  .fx > * {
+    opacity: 0;
+    transition: opacity 140ms ease-out;
+  }
+  .eyes-open {
+    transition: opacity 140ms ease-out;
+  }
+  .m-idle {
+    opacity: 1;
+  }
+  .bot[data-mood='happy'] .m-idle,
+  .bot[data-mood='surprised'] .m-idle,
+  .bot[data-mood='sleepy'] .m-idle,
+  .bot[data-mood='giggle'] .m-idle,
+  .bot[data-mood='excited'] .m-idle,
+  .bot[data-mood='sleepy'] .eyes-open,
+  .bot[data-mood='giggle'] .eyes-open,
+  .bot[data-mood='excited'] .eyes-open {
+    opacity: 0;
+  }
+  .bot[data-mood='happy'] .m-smile,
+  .bot[data-mood='surprised'] .m-o,
+  .bot[data-mood='sleepy'] .eyes-sleep,
+  .bot[data-mood='sleepy'] .m-o,
+  .bot[data-mood='sleepy'] .zz,
+  .bot[data-mood='giggle'] .eyes-happy,
+  .bot[data-mood='giggle'] .m-open,
+  .bot[data-mood='excited'] .eyes-star,
+  .bot[data-mood='excited'] .m-open,
+  .bot[data-mood='excited'] .sp {
+    opacity: 1;
+  }
+  .bot[data-mood='happy'] .blush,
+  .bot[data-mood='giggle'] .blush,
+  .bot[data-mood='excited'] .blush {
+    opacity: 0.6;
+  }
+  .bot[data-mood='surprised'] .eyes-open .eye {
+    transform: scale(1.14);
+  }
+  .zz {
+    font: 700 18px/1 var(--fc-font-display);
+    fill: var(--fc-text-3);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .antenna {
+      transform-box: fill-box;
+      transform-origin: 50% 100%;
+      animation: bot-sway 3.2s ease-in-out infinite;
+    }
+    .bot[data-mood='excited'] .head,
+    .bot[data-mood='excited'] .body {
+      animation: bot-hop 0.5s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+    }
+    .bot[data-mood='giggle'] .head {
+      animation: bot-wiggle 0.28s ease-in-out 3;
+    }
+    .bot[data-mood='sleepy'] .head {
+      animation: bot-doze 3s ease-in-out infinite;
+    }
+    .sp {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .bot[data-mood='excited'] .sp {
+      animation: bot-twinkle 0.9s ease-in-out infinite;
+    }
+    .bot[data-mood='excited'] .s2 {
+      animation-delay: 0.3s;
+    }
+    .bot[data-mood='excited'] .s3 {
+      animation-delay: 0.6s;
+    }
+    .bot[data-mood='sleepy'] .zz {
+      animation: bot-zz 2.4s ease-in-out infinite;
+    }
+  }
+  @keyframes bot-sway {
+    50% {
+      transform: rotate(8deg);
+    }
+  }
+  @keyframes bot-hop {
+    50% {
+      translate: 0 -10px;
+    }
+  }
+  @keyframes bot-wiggle {
+    25% {
+      rotate: -6deg;
+    }
+    75% {
+      rotate: 6deg;
+    }
+  }
+  @keyframes bot-doze {
+    50% {
+      translate: 0 3px;
+      rotate: 3deg;
+    }
+  }
+  @keyframes bot-twinkle {
+    50% {
+      transform: scale(1.5) rotate(20deg);
+    }
+  }
+  @keyframes bot-zz {
+    0% {
+      translate: 0 6px;
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+    }
+    100% {
+      translate: 8px -10px;
+      opacity: 0;
+    }
+  }
+</style>

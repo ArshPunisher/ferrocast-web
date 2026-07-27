@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro'
 import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Bot from '../components/Bot.astro'
 import Icon from '../components/Icon.astro'
 import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
@@ -41,13 +42,16 @@ const platforms = [
   schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
 >
   <section class="head">
-    <div class="container head-inner">
-      <Breadcrumbs page={page} />
-      <h1 class="display-2">Ferrocast is almost here.</h1>
-      <p class="lede">
-        The first version is being built in the open. It will be free on macOS, Windows and Linux,
-        with nothing to sign up for.
-      </p>
+    <div class="container head-grid">
+      <div class="head-inner">
+        <Breadcrumbs page={page} />
+        <h1 class="display-2">Ferrocast is almost here.</h1>
+        <p class="lede">
+          The first version is being built in the open. It will be free on macOS, Windows and Linux,
+          with nothing to sign up for.
+        </p>
+      </div>
+      <Bot />
     </div>
   </section>
 
@@ -55,7 +59,7 @@ const platforms = [
     <h2 class="sr-only">Downloads by operating system</h2>
     <ul class="oses">
       {platforms.map((p) => (
-        <li class="os" data-os={p.os}>
+        <li class="os" data-os={p.os} data-bot-excite>
           <div class="os-top">
             <Icon name={p.icon} size={32} weight="fill" />
             <span class="yours" hidden>
@@ -91,11 +95,21 @@ const platforms = [
           </p>
         </div>
         <div class="notify-actions">
-          <a href={`${COMPANY.github}/releases`} class="btn btn-primary" rel="noopener">
+          <a
+            href={`${COMPANY.github}/releases`}
+            class="btn btn-primary"
+            rel="noopener"
+            data-bot-excite
+          >
             <BrandMark name="github" size={18} />
             Watch releases on GitHub
           </a>
-          <a href={`${COMPANY.github}/releases.atom`} class="btn btn-secondary" rel="noopener">
+          <a
+            href={`${COMPANY.github}/releases.atom`}
+            class="btn btn-secondary"
+            rel="noopener"
+            data-bot-excite
+          >
             <Icon name="rss" size={18} />
             Release feed (Atom)
           </a>
@@ -151,6 +165,17 @@ const platforms = [
 </script>
 
 <style>
+  .head-grid {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+  }
+  @media (min-width: 900px) {
+    .head-grid {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr);
+      gap: 48px;
+    }
+  }
   .head {
     padding-block: 40px 32px;
   }
@@ -221,7 +246,7 @@ const platforms = [
   }
   .format {
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
   }
   .plan {
     color: var(--fc-text-3);
