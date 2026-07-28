@@ -34,18 +34,24 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     </nav>
 
     <div class="actions">
-      <button type="button" class="icon-btn" data-theme-toggle aria-label="Switch to light theme">
-        <span class="moon">
-          <Icon name="moon" size={18} />
-        </span>
-        <span class="sun">
-          <Icon name="sun" size={18} />
-        </span>
-      </button>
+      <div class="theme-switch" role="group" aria-label="Theme" data-theme-switch>
+        <button type="button" data-theme-set="system" aria-pressed="true" title="System">
+          <Icon name="monitor" size={16} />
+          <span class="sr-only">System</span>
+        </button>
+        <button type="button" data-theme-set="light" aria-pressed="false" title="Light">
+          <Icon name="sun" size={16} />
+          <span class="sr-only">Light</span>
+        </button>
+        <button type="button" data-theme-set="dark" aria-pressed="false" title="Dark">
+          <Icon name="moon" size={16} />
+          <span class="sr-only">Dark</span>
+        </button>
+      </div>
       <a href={COMPANY.github} class="icon-btn gh" aria-label="Ferrocast on GitHub" rel="noopener">
         <BrandMark name="github" size={18} />
       </a>
-      <a href="/download/" class="btn btn-primary btn-sm cta">
+      <a href="/download/" class="btn btn-primary btn-sm cta" data-bot-excite>
         Download
       </a>
       <button
@@ -110,32 +116,43 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     if (e.matches) setOpen(false)
   })
 
-  const toggle = document.querySelector<HTMLButtonElement>('[data-theme-toggle]')
-  const current = () =>
-    document.documentElement.dataset.theme ??
-    (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-  const label = () => {
-    toggle?.setAttribute(
-      'aria-label',
-      current() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
-    )
+  // Theme: System (follows the OS, nothing saved), Light or Dark (saved on this device).
+  const themeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-theme-set]')]
+  const saved = () => {
+    const t = document.documentElement.dataset.theme
+    return t === 'light' || t === 'dark' ? t : 'system'
   }
-  label()
-  toggle?.addEventListener('click', () => {
-    const next = current() === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = next
-    // An explicit choice overrides the OS-based browser chrome colour.
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((m) => m.setAttribute('content', next === 'light' ? '#f2f3f6' : '#0a0b0d'))
-    try {
-      localStorage.setItem('fc-theme', next)
-    } catch {
-      /* private mode: the choice lasts for this page only */
-    }
-    label()
-    document.dispatchEvent(new CustomEvent('fc-theme', { detail: next }))
-  })
+  const mark = () => {
+    const now = saved()
+    themeBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === now)))
+  }
+  mark()
+  themeBtns.forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const pick = btn.dataset.themeSet
+      const root = document.documentElement
+      const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+      if (pick === 'light' || pick === 'dark') {
+        root.dataset.theme = pick
+        // an explicit choice overrides the OS-based browser chrome colour
+        metas.forEach((m) => m.setAttribute('content', pick === 'light' ? '#f2f3f6' : '#0a0b0d'))
+      } else {
+        delete root.dataset.theme
+        // back to the OS: each meta goes back to the colour for its own media query
+        metas.forEach((m) =>
+          m.setAttribute('content', m.media.includes('light') ? '#f2f3f6' : '#0a0b0d'),
+        )
+      }
+      try {
+        if (pick === 'light' || pick === 'dark') localStorage.setItem('fc-theme', pick)
+        else localStorage.removeItem('fc-theme')
+      } catch {
+        /* private mode: the choice lasts for this page only */
+      }
+      mark()
+      document.dispatchEvent(new CustomEvent('fc-theme', { detail: saved() }))
+    }),
+  )
 </script>
 
 <style>
@@ -143,16 +160,10 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     position: sticky;
     top: 0;
     z-index: 40;
-    background: color-mix(in srgb, var(--fc-bg) 86%, transparent);
-    backdrop-filter: saturate(140%) blur(12px);
-    -webkit-backdrop-filter: saturate(140%) blur(12px);
-    border-bottom: 1px solid color-mix(in srgb, var(--fc-line) 70%, transparent);
+    /* solid, so page text never shows through the bar while scrolling */
+    background: var(--fc-bg);
+    border-bottom: 1px solid var(--fc-line);
     padding-top: env(safe-area-inset-top, 0px);
-  }
-  @supports not (backdrop-filter: blur(1px)) {
-    .site-header {
-      background: var(--fc-bg);
-    }
   }
   .bar {
     display: flex;
@@ -226,23 +237,58 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
   .icon-btn:active {
     transform: scale(0.94);
   }
-  .sun,
-  .moon,
   .open-i,
   .close-i {
     display: inline-flex;
   }
-  :global(html[data-theme='light']) .moon,
-  :global(html:not([data-theme='light'])) .sun {
-    display: none;
+  /* System / Light / Dark: a small segmented switch */
+  .theme-switch {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
   }
-  @media (prefers-color-scheme: light) {
-    :global(html:not([data-theme])) .moon {
-      display: none;
+  .theme-switch button {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--fc-text-3);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      color 160ms var(--fc-ease-out),
+      background-color 160ms var(--fc-ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .theme-switch button:hover {
+      color: var(--fc-text);
     }
-    :global(html:not([data-theme])) .sun {
-      display: inline-flex;
+  }
+  /* touch screens: full-size tap targets */
+  @media (pointer: coarse) {
+    .theme-switch button {
+      width: 40px;
+      height: 40px;
     }
+  }
+  .theme-switch button[aria-pressed='true'] {
+    color: var(--fc-text);
+    background: var(--fc-surface-3);
+    box-shadow: inset 0 0 0 1px var(--fc-line-strong);
+  }
+  .theme-switch button:focus-visible {
+    outline: none;
+    box-shadow: var(--fc-focus);
+  }
+  .theme-switch button:active {
+    transform: scale(0.92);
   }
   .close-i {
     display: none;
