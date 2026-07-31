@@ -1,8 +1,9 @@
 ---
 import Base from '../layouts/Base.astro'
 import HeroBraid from '../components/HeroBraid.astro'
-import AlertStack from '../components/AlertStack.astro'
-import VideoSlot from '../components/VideoSlot.astro'
+import Story from '../components/Story.astro'
+import Beat from '../components/Beat.astro'
+import BanPanel from '../components/BanPanel.astro'
 import Icon from '../components/Icon.astro'
 import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
@@ -11,11 +12,20 @@ import { organization, softwareApplication } from '../data/schema'
 ---
 
 <Base page={PAGES.home} schema={[softwareApplication, organization]}>
+  <script is:inline>
+    // every load of the home page plays the opening (On air, Spark drop, Level check). Set
+    // before the banner is parsed so its start states hold from the first frame.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+      document.documentElement.classList.add('fc-intro', 'intro-hold')
+  </script>
   <section class="hero" data-hero>
     <div class="container hero-grid">
       <div class="hero-copy">
         <p class="eyebrow">Free and open source · Version 1 in development</p>
-        <h1 class="display-1">Your stream tools, on your own PC.</h1>
+        <h1 class="display-1">
+          <span class="line">Your stream tools,</span>
+          <span class="line">on your own PC.</span>
+        </h1>
         <p class="lede">
           Alerts, overlays, merged chat, a bot and one-click bans for Twitch, YouTube and Kick.
           Keeps working when clouds don’t.
@@ -56,49 +66,64 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section id="alerts" class="section" data-chapter="Alerts">
-    <div class="container split">
-      <div class="split-copy reveal">
-        <h2 class="display-2">Alerts that tell you why.</h2>
-        <p class="lede">
-          Every follow, sub, bit, Super Chat, raid and tip gets its own look and sound. When one
-          doesn’t play, the event log says why, like Twitch quietly hiding a follow.
-        </p>
-        <ul class="ticks">
-          <li>
-            <Icon name="play-circle" size={20} /> Test any alert with one click, nothing connected
-          </li>
-          <li>
-            <Icon name="stack" size={20} /> A gold look for a 12-month sub, a big one for big tips
-          </li>
-          <li>
-            <Icon name="queue" size={20} /> A queue you can pause, skip and replay mid-stream
-          </li>
-        </ul>
-        <a href="/features/alerts/" class="text-link">
-          How alerts work
-        </a>
-      </div>
-      <div class="reveal" style="--i: 1">
-        <AlertStack />
-      </div>
+  <section class="desk-story" aria-label="Alerts, merged chat and tips">
+    <div class="container">
+      <Story kind="desk" side="left">
+        <Beat kind="desk" n={1} id="alerts" chapter="Alerts">
+          <h2 class="display-2">Alerts that tell you why.</h2>
+          <p class="lede">
+            Every follow, sub, bit, Super Chat, raid and tip gets its own look and sound. When one
+            doesn’t play, the event log says why, like Twitch quietly hiding a follow.
+          </p>
+          <ul class="ticks">
+            <li>
+              <Icon name="play-circle" size={20} /> Test any alert with one click, nothing connected
+            </li>
+            <li>
+              <Icon name="stack" size={20} /> A gold look for a 12-month sub, a big one for big tips
+            </li>
+            <li>
+              <Icon name="queue" size={20} /> A queue you can pause, skip and replay mid-stream
+            </li>
+          </ul>
+          <a href="/features/alerts/" class="text-link">
+            How alerts work
+          </a>
+        </Beat>
+        <Beat kind="desk" n={2} id="chat" chapter="Merged chat">
+          <h2 class="display-2">Three chats. One lane.</h2>
+          <p class="lede">
+            Twitch, YouTube and Kick land in one list, each message marked with where it came from.
+            Reply from the same box and it goes back to the right platform.
+          </p>
+          <a href="/features/chat-moderation/" class="text-link">
+            How merged chat works
+          </a>
+        </Beat>
+        <Beat kind="desk" n={3} id="tips" chapter="Tips">
+          <h2 class="display-2">Tips go straight to you.</h2>
+          <p class="lede">
+            Viewers pay into your own Razorpay (UPI), Stripe or Ko-fi account. No middle
+            step: we never hold your money and take no cut. Your legal name never appears on the
+            tip page or in alerts.
+          </p>
+          <div class="pay">
+            <BrandMark name="razorpay" size={22} label="Razorpay" />
+            <BrandMark name="stripe" size={22} label="Stripe" />
+            <BrandMark name="kofi" size={22} label="Ko-fi" />
+          </div>
+          <a href="/features/tips/" class="text-link">
+            How tips work
+          </a>
+        </Beat>
+      </Story>
     </div>
   </section>
 
-  <section class="section mod" data-chapter="Moderation">
+  <section id="moderation" class="section mod" data-chapter="Moderation">
     <div class="container">
-      <div class="mod-head reveal">
-        <h2 class="display-1">One ban. Every platform.</h2>
-        <p class="lede">
-          Ban a hate-raider on Twitch, YouTube and Kick in one click. Panic mode locks chat down
-          everywhere at once, from a single hotkey.
-        </p>
-      </div>
-      <div class="reveal" style="--i: 1">
-        <VideoSlot
-          name="ban-everywhere"
-          label="One ban button removing a spammer from Twitch, YouTube and Kick chat at once"
-        />
+      <div class="reveal">
+        <BanPanel />
       </div>
       <ul class="mod-points">
         <li class="reveal">
@@ -129,22 +154,36 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section" data-chapter="Ownership">
+  <section id="local-first" class="section" data-chapter="Local-first">
     <div class="container">
       <h2 class="display-2 bento-title reveal">It runs on your computer, not ours.</h2>
       <div class="bento">
         <article class="cell cell-offline reveal">
-          <div class="cell-art" aria-hidden="true">
-            <div class="ring r1"></div>
-            <div class="ring r2"></div>
-            <div class="ring r3"></div>
-            <Icon name="cloud-slash" size={44} />
+          <div class="status" aria-hidden="true">
+            <div class="status-head">
+              <Icon name="cloud-slash" size={20} />
+              <span>Ferrocast servers</span>
+              <span class="down">Unreachable</span>
+            </div>
+            <ul>
+              {['Alerts', 'Merged chat', 'Bot', 'Moderation', 'Overlays in OBS'].map((n) => (
+                <li>
+                  <span>{n}</span>
+                  <span class="ok">
+                    <Icon name="check-circle" weight="fill" size={16} />
+                    Running
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <h3>Works without us</h3>
-          <p>
-            Alerts, chat, the bot and moderation run on your PC. If our servers vanished tomorrow,
-            Twitch and YouTube would keep working.
-          </p>
+          <div class="cell-text">
+            <h3>Works without us</h3>
+            <p>
+              Alerts, chat, the bot and moderation run on your PC. If our servers vanished tomorrow,
+              Twitch and YouTube would keep working.
+            </p>
+          </div>
         </article>
         <article class="cell cell-export reveal" style="--i: 1">
           <div class="files" aria-hidden="true">
@@ -160,64 +199,67 @@ import { organization, softwareApplication } from '../data/schema'
           <h3>Bring your setup</h3>
           <p>Coming soon: import alerts and commands from StreamElements and Streamlabs.</p>
         </article>
-        <article class="cell cell-tips reveal" style="--i: 1">
-          <div class="pay" aria-hidden="true">
-            <BrandMark name="razorpay" size={22} />
-            <BrandMark name="stripe" size={22} />
-            <BrandMark name="kofi" size={22} />
-          </div>
-          <h3>Tips without doxxing</h3>
-          <p>
-            Viewers pay straight into your own Razorpay (UPI), Stripe, PayPal or Ko-fi. Your legal
-            name never appears on your tip page or in alerts, and we never hold your money.
-          </p>
-        </article>
-        <article class="cell cell-light reveal" style="--i: 2">
+        <article class="cell cell-light reveal" style="--i: 1">
           <Icon name="feather" size={28} />
-          <h3>Light while gaming</h3>
-          <p>
-            A Rust engine, a window that closes to the tray, and overlays that pause when OBS hides
-            them.
-          </p>
+          <div>
+            <h3>Light while gaming</h3>
+            <p>
+              A Rust engine, a window that closes to the tray, and overlays that pause when OBS
+              hides them.
+            </p>
+          </div>
         </article>
       </div>
     </div>
   </section>
 
-  <section class="section setup" data-chapter="Setup">
-    <div class="container setup-grid">
-      <div class="reveal">
-        <VideoSlot
-          name="setup-3-clicks"
-          label="Ferrocast first run: signing in to Twitch, picking a look, adding the overlay to OBS"
-        />
-      </div>
-      <div class="setup-copy reveal" style="--i: 1">
-        <h2 class="display-2">Live in three clicks.</h2>
-        <ol class="steps">
-          <li>
-            <h3>Sign in</h3>
-            <p>
-              One click per platform. Twitch shows a short code, you approve it in your browser.
-            </p>
-          </li>
-          <li>
-            <h3>Pick a look</h3>
-            <p>Five themes, previewed live with sample alerts and chat.</p>
-          </li>
-          <li>
-            <h3>Add to OBS</h3>
-            <p>Ferrocast adds the browser source for you. Or copy the URL and paste it in.</p>
-          </li>
-        </ol>
-        <a href="/docs/getting-started/" class="text-link">
-          Read the getting started guide
-        </a>
-      </div>
+  <section class="deck-story" aria-label="Setup, hotkeys and panic mode">
+    <div class="container">
+      <Story kind="deck" side="right">
+        <Beat kind="deck" n={1} id="setup" chapter="Setup">
+          <h2 class="display-2">Live in three clicks.</h2>
+          <ol class="steps">
+            <li>
+              <h3>Sign in</h3>
+              <p>
+                One click per platform. Twitch shows a short code, you approve it in your browser.
+              </p>
+            </li>
+            <li>
+              <h3>Pick a look</h3>
+              <p>Five themes, previewed live with sample alerts and chat.</p>
+            </li>
+            <li>
+              <h3>Add to OBS</h3>
+              <p>Ferrocast adds the browser source for you. Or copy the URL and paste it in.</p>
+            </li>
+          </ol>
+          <a href="/docs/getting-started/" class="text-link">
+            Read the getting started guide
+          </a>
+        </Beat>
+        <Beat kind="deck" n={2} id="hotkeys">
+          <h2 class="display-2">Hands stay on the game.</h2>
+          <p class="lede">
+            Test, replay, skip or pause alerts and mute text-to-speech from a hotkey, without
+            tabbing out of your game.
+          </p>
+        </Beat>
+        <Beat kind="deck" n={3} id="panic">
+          <h2 class="display-2">One key when a raid hits.</h2>
+          <p class="lede">
+            Panic mode turns on followers-only, slow mode and held new accounts on every platform
+            and pauses alerts and TTS.
+          </p>
+          <a href="/features/chat-moderation/" class="text-link">
+            How panic mode works
+          </a>
+        </Beat>
+      </Story>
     </div>
   </section>
 
-  <section class="section pledge" data-chapter="Open source">
+  <section id="open-source" class="section pledge" data-chapter="Open source">
     <div class="container pledge-inner reveal">
       <h2 class="display-1">
         <span class="fc-chrome-text">Free stays free.</span>
@@ -238,7 +280,7 @@ import { organization, softwareApplication } from '../data/schema'
     </div>
   </section>
 
-  <section class="section final" data-chapter="Get started">
+  <section id="get-started" class="section final" data-chapter="Get started">
     <div class="container final-inner reveal">
       <div>
         <h2 class="display-2">Bring your stream home.</h2>
@@ -252,7 +294,85 @@ import { organization, softwareApplication } from '../data/schema'
   </section>
 </Base>
 
+<script>
+  import { realGpu } from '../scripts/gpu'
+  // The banner's star field (home only). It loads right away rather than at idle, because
+  // it is the page's opening animation; without WebGL the braid simply shows.
+  const root = document.documentElement
+  const hero = document.querySelector<HTMLElement>('[data-hero]')
+  const stage = hero?.querySelector<HTMLElement>('.hero-visual')
+  const show = () => root.classList.add('hero-burst')
+  if (hero && root.classList.contains('fc-intro'))
+    import('../scripts/intro')
+      .then((m) => m.playIntro(hero))
+      .catch(() => root.classList.remove('intro-hold'))
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+  // thousands of points every frame: real GPUs only, and not when saving data
+  if (!hero || !stage || conn?.saveData || !realGpu()) show()
+  else
+    import('../scripts/hero-field')
+      .then((m) => {
+        if (!m.mountHeroField(hero, stage, { intro: root.classList.contains('fc-intro') })) show()
+      })
+      .catch(show)
+</script>
+
 <style>
+  /* ---- banner star field and opening animation */
+  .hero :global(.hero-field) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .hero-grid {
+    position: relative;
+    z-index: 1;
+  }
+  /* headline lines: one block each, so the Level check cursor can read them in */
+  .hero-copy h1 :global(.line) {
+    display: block;
+    position: relative;
+    width: fit-content;
+  }
+  .hero-copy h1 {
+    position: relative;
+  }
+  /* opening start states, held only while the intro is about to play (html.intro-hold);
+     if its script never runs, the failsafe shows everything after 4 s */
+  @keyframes intro-failsafe {
+    to {
+      opacity: 1;
+    }
+  }
+  :global(html.intro-hold) .hero-copy .eyebrow,
+  :global(html.intro-hold) .hero-copy h1 :global(.line),
+  :global(html.intro-hold) .hero-copy .lede,
+  :global(html.intro-hold) .hero-ctas {
+    opacity: 0;
+    animation: intro-failsafe 1ms 4s forwards;
+  }
+  @keyframes hero-visual-in {
+    from {
+      opacity: 0.3;
+      clip-path: inset(-10% 100% -10% 0);
+    }
+    to {
+      opacity: 1;
+      clip-path: inset(-10% -10% -10% 0);
+    }
+  }
+  /* Spark drop: the braid waits for the burst, then the chats flow out of the hub (a wipe
+     from the hub outward); if the particles never start it shows after 3.5 s */
+  :global(html.fc-intro) .hero-visual {
+    animation: hero-visual-in 700ms var(--fc-ease-out) 3.5s both;
+  }
+  :global(html.fc-intro.hero-burst) .hero-visual {
+    animation: hero-visual-in 1000ms cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
   .hero {
     position: relative;
     padding-top: 24px;
@@ -271,15 +391,6 @@ import { organization, softwareApplication } from '../data/schema'
     position: relative;
     z-index: 1;
   }
-  /* a soft plate of page colour behind the copy, so the 3D field never fights the text */
-  .hero-copy::before {
-    content: '';
-    position: absolute;
-    inset: -18% -22% -18% -30%;
-    z-index: -1;
-    pointer-events: none;
-    background: radial-gradient(closest-side, color-mix(in srgb, var(--fc-bg) 88%, transparent), color-mix(in srgb, var(--fc-bg) 60%, transparent) 60%, transparent);
-  }
   .hero-copy h1 {
     max-width: 17ch;
   }
@@ -289,9 +400,12 @@ import { organization, softwareApplication } from '../data/schema'
     gap: 12px;
     margin-top: 8px;
   }
+  /* the braid has its own column (below the copy on phones): it never runs under text */
   .hero-visual {
-    height: min(78vw, 420px);
-    margin-inline: -16px;
+    height: min(78vw, 400px);
+  }
+  .hero-visual :global(.hero-station) {
+    height: 100%;
   }
   @media (min-width: 900px) {
     .hero {
@@ -307,7 +421,23 @@ import { organization, softwareApplication } from '../data/schema'
     }
     .hero-visual {
       height: min(calc(100svh - 220px), 540px);
-      margin-inline: 0 -40px;
+    }
+  }
+  /* big screens: the banner grows with the window (wider, larger headline and braid), up to
+     a ceiling so it never turns into a poster */
+  @media (min-width: 1440px) {
+    .hero-grid {
+      gap: clamp(24px, 3vw, 64px);
+    }
+    .hero-copy h1 {
+      font-size: clamp(3.9rem, 4.1vw, 5.1rem);
+    }
+    .hero-copy .lede {
+      font-size: clamp(1.125rem, 1.05vw, 1.3rem);
+      max-width: 36em;
+    }
+    .hero-visual {
+      height: min(calc(100svh - 200px), clamp(540px, 38vw, 700px));
     }
   }
 
@@ -337,21 +467,24 @@ import { organization, softwareApplication } from '../data/schema'
     align-items: center;
   }
 
-  .split {
-    display: grid;
-    gap: 40px;
-    align-items: center;
+  .desk-story {
+    border-top: 1px solid var(--fc-line);
+    padding-block: 24px;
   }
-  .split-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+  .deck-story {
+    border-top: 1px solid var(--fc-line);
+    padding-block: 24px;
   }
-  @media (min-width: 900px) {
-    .split {
-      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-      gap: 64px;
+  @media (min-width: 960px) {
+    .desk-story,
+    .deck-story {
+      padding-block: 40px;
     }
+  }
+  .pay {
+    display: flex;
+    gap: 18px;
+    color: var(--fc-text-2);
   }
   .ticks {
     list-style: none;
@@ -372,21 +505,9 @@ import { organization, softwareApplication } from '../data/schema'
     margin-top: 2px;
   }
 
+  /* the moderation panel keeps its own dark look; the three points sit below it */
   .mod {
-    background:
-      radial-gradient(60% 50% at 50% 0%, var(--fc-accent-soft), transparent 70%);
     border-top: 1px solid var(--fc-line);
-  }
-  .mod-head {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-    margin-bottom: 48px;
-  }
-  .mod-head .lede {
-    margin-inline: auto;
   }
   .mod-points {
     list-style: none;
@@ -409,7 +530,7 @@ import { organization, softwareApplication } from '../data/schema'
   }
   .mod-points p {
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
   }
   @media (min-width: 900px) {
     .mod-points {
@@ -450,47 +571,70 @@ import { organization, softwareApplication } from '../data/schema'
   }
   .cell p {
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
+    max-width: 62ch;
   }
   .cell > :global(svg) {
     color: var(--fc-accent-text);
     margin-bottom: 8px;
   }
+  /* the offline cell: a status panel from the app, the words below it on solid surface */
   .cell-offline {
-    min-height: 340px;
-    justify-content: flex-end;
-    background:
-      radial-gradient(80% 70% at 70% 30%, rgb(52 97 245 / 0.28), transparent 70%),
-      linear-gradient(160deg, var(--fc-surface-2), var(--fc-surface-inset));
+    padding: 0;
+    gap: 0;
   }
-  .cell-offline p {
-    max-width: 44ch;
-  }
-  .cell-art {
-    position: absolute;
-    top: 36px;
-    right: 36px;
-    width: 140px;
-    height: 140px;
+  .status {
+    margin: 20px 20px 0;
+    padding: 16px 18px;
+    border-radius: 14px;
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
     display: grid;
-    place-items: center;
+    gap: 12px;
+    font-size: var(--fc-body-s);
+  }
+  .status-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--fc-text-2);
+    font-weight: 600;
+  }
+  .status-head .down {
+    margin-left: auto;
+    font-size: 0.875rem;
+    color: var(--fc-text-3);
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line-strong);
+  }
+  .status ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .status li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid var(--fc-line);
     color: var(--fc-text);
   }
-  .ring {
-    position: absolute;
-    border-radius: 999px;
-    border: 1px solid var(--fc-accent-line);
+  .status .ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fc-ok);
+    font-weight: 600;
+    font-size: 0.9375rem;
   }
-  .r1 {
-    inset: 34px;
-  }
-  .r2 {
-    inset: 14px;
-    opacity: 0.6;
-  }
-  .r3 {
-    inset: -8px;
-    opacity: 0.3;
+  .cell-text {
+    display: grid;
+    gap: 10px;
+    padding: 20px 24px 24px;
   }
   .cell-export {
     background:
@@ -512,24 +656,19 @@ import { organization, softwareApplication } from '../data/schema'
     border: 1px solid var(--fc-line-strong);
     color: var(--fc-text-2);
   }
-  .cell-tips {
-    background: linear-gradient(200deg, var(--fc-surface-2), var(--fc-surface-1) 60%);
-  }
-  .pay {
-    display: flex;
-    gap: 14px;
-    color: var(--fc-text-2);
-    margin-bottom: 12px;
-  }
   @media (min-width: 768px) {
+    .status {
+      margin: 28px 32px 0;
+    }
     .bento {
       grid-template-columns: repeat(6, minmax(0, 1fr));
     }
     .cell-offline {
       grid-column: span 4;
       grid-row: span 2;
-      min-height: 420px;
-      padding: 36px;
+    }
+    .cell-text {
+      padding: 24px 32px 32px;
     }
     .cell-export {
       grid-column: span 2;
@@ -537,33 +676,17 @@ import { organization, softwareApplication } from '../data/schema'
     .cell-import {
       grid-column: span 2;
     }
-    .cell-tips {
-      grid-column: span 3;
-    }
     .cell-light {
-      grid-column: span 3;
+      grid-column: span 6;
+      flex-direction: row;
+      align-items: center;
+      gap: 20px;
+    }
+    .cell-light > :global(svg) {
+      margin-bottom: 0;
     }
   }
 
-  .setup {
-    border-top: 1px solid var(--fc-line);
-  }
-  .setup-grid {
-    display: grid;
-    gap: 40px;
-    align-items: center;
-  }
-  @media (min-width: 900px) {
-    .setup-grid {
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-      gap: 64px;
-    }
-  }
-  .setup-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
   .steps {
     list-style: none;
     padding: 0;
@@ -599,7 +722,7 @@ import { organization, softwareApplication } from '../data/schema'
   }
   .steps p {
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
   }
 
   .pledge {

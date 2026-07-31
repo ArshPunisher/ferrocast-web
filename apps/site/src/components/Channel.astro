@@ -1,0 +1,60 @@
+---
+// Site-wide layer: page progress and section links (the Spark line on wide screens, the
+// Signal dial on tablets and phones) and the loader for the 3D stations. three.js loads
+// after first paint and only on a real GPU; without it every station shows its still picture.
+---
+
+<nav class="fc-spark" data-spark aria-label="Sections on this page" hidden>
+  <span class="sk-track" aria-hidden="true"><span class="sk-lit"></span></span>
+  <ol></ol>
+  <!-- the two shards of the Spark logo (geometry from logo-mark.svg) -->
+  <svg class="sk-shard sk-a" viewBox="36.72 34.2 16.45 16.6" aria-hidden="true">
+    <path d="M36.72 39.14L42.73 39.14L39.02 50.8L53.17 34.2Z"></path>
+  </svg>
+  <svg class="sk-shard sk-m" viewBox="34.35 21.12 16.5 16.61" aria-hidden="true">
+    <path d="M48.03 21.12L34.35 37.73L50.85 32.78L44.85 32.78Z"></path>
+  </svg>
+  <span class="sk-now" aria-hidden="true"></span>
+</nav>
+
+<nav class="fc-dial" data-dial aria-label="Sections on this page" hidden>
+  <button class="dl-knob" type="button" aria-expanded="false" aria-controls="fc-dial-menu">
+    <span class="sr-only">Sections. Now reading: <span data-dial-now></span></span>
+    <svg viewBox="0 0 76 76" aria-hidden="true">
+      <path class="dl-ring-bg" d=""></path>
+      <path class="dl-ring" d=""></path>
+      <g class="dl-ticks"></g>
+    </svg>
+    <span class="dl-body" aria-hidden="true"></span>
+  </button>
+  <div class="dl-menu" id="fc-dial-menu"><ol></ol></div>
+</nav>
+
+<script>
+  import { realGpu } from '../scripts/gpu'
+  const root = document.documentElement
+  const stations = [...document.querySelectorAll<HTMLElement>('[data-station]')]
+
+  const idle = (cb: () => void) =>
+    'requestIdleCallback' in window
+      ? requestIdleCallback(cb, { timeout: 1500 })
+      : setTimeout(cb, 250)
+
+  // After first paint, so neither three.js nor GSAP competes with the headline (LCP).
+  const start = () =>
+    requestAnimationFrame(() =>
+      idle(() => {
+        import('../scripts/rail').then((m) => m.mountRail())
+        if (!realGpu()) {
+          root.classList.add('no-webgl')
+          return
+        }
+        if (stations.length)
+          import('../scripts/channel/runtime')
+            .then((m) => m.mountChannel(stations))
+            .catch(() => root.classList.add('no-webgl'))
+      }),
+    )
+  if (document.readyState === 'complete') start()
+  else addEventListener('load', start, { once: true })
+</script>

@@ -1,5 +1,6 @@
-/* Site 3D layer: X1 Spark colours, the persistent WebGL stage, the scroll ruler,
-   the rotating section sidebar and the marquee. Loaded after global.css. */
+/* The 3D layer: X1 Spark colours, the 3D stations (each in its own box, never behind text),
+   the story stages, the section rail (Spark line and Signal dial) and the marquee.
+   Loaded after global.css. */
 
 /* X1 Spark: Molten fills the primary action (dark text on it passes AA in both themes),
    Arc carries links, icons and focus. Platform colours stay inside the hero strands. */
@@ -17,7 +18,7 @@
   --fc-accent: #cf7400;
   --fc-accent-strong: #b86600;
   --fc-on-accent: #0a0600;
-  --fc-accent-text: #066d92;
+  --fc-accent-text: #05678c;
   --fc-accent-soft: rgb(8 136 184 / 0.1);
   --fc-accent-line: rgb(8 136 184 / 0.36);
   --fc-scene-ui: #5f6672;
@@ -27,7 +28,7 @@
     --fc-accent: #cf7400;
     --fc-accent-strong: #b86600;
     --fc-on-accent: #0a0600;
-    --fc-accent-text: #066d92;
+    --fc-accent-text: #05678c;
     --fc-accent-soft: rgb(8 136 184 / 0.1);
     --fc-accent-line: rgb(8 136 184 / 0.36);
     --fc-scene-ui: #5f6672;
@@ -45,153 +46,619 @@
   background: rgb(51 212 255 / 0.3);
 }
 
-/* ---------- The stage: one fixed canvas behind every page ---------- */
-.fc-stage {
-  position: fixed;
+/* ---------- Stations: a box reserved for 3D, with HTML chips on top ---------- */
+.station-wrap {
+  position: relative;
+}
+.station {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+}
+.st-fallback,
+.st-canvas {
+  position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 900ms var(--fc-ease-out);
 }
-.fc-stage.ready {
+.st-canvas {
+  opacity: 0;
+  transition: opacity 700ms var(--fc-ease-out);
+}
+.station.live .st-canvas {
   opacity: 1;
 }
-html[data-scene='calm'] .fc-stage.ready {
-  opacity: 0.6;
+.station.live .st-fallback {
+  opacity: 0;
+  transition: opacity 500ms var(--fc-ease-out);
 }
-main,
-body > footer,
-.fc-marquee {
-  position: relative;
-  z-index: 1;
-}
-
-/* ---------- Ruler: page progress on the right edge ---------- */
-.fc-ruler {
-  position: fixed;
-  z-index: 30;
-  right: 6px;
-  top: 96px;
-  bottom: 28px;
-  width: 16px;
+.st-over {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
 }
-.fc-ruler .tk {
+/* chips are placed by the scene; without it they sit at their static spot or stay hidden */
+[data-chip] {
   position: absolute;
-  right: 0;
-  width: 6px;
-  height: 1px;
-  background: var(--fc-scene-ui);
-  opacity: 0.6;
-}
-.fc-ruler .tk.big {
-  width: 12px;
-  opacity: 0.95;
-}
-.fc-ruler .ind {
-  position: absolute;
-  right: 0;
+  left: 0;
   top: 0;
-  width: 16px;
-  height: 2px;
-  margin-top: -1px;
-  background: var(--fc-accent-text);
+  transition: opacity 240ms var(--fc-ease-out);
+}
+.station.live [data-chip] {
+  opacity: 0;
   will-change: transform;
 }
-.fc-ruler .read {
-  position: absolute;
-  right: 22px;
-  top: -6px;
+.station:not(.live) [data-chip]:not([data-static]) {
   display: none;
-  font: 600 11px/1 var(--fc-font-mono);
-  letter-spacing: 0.04em;
+}
+.station:not(.live) [data-chip][data-static] {
+  left: var(--fx);
+  top: var(--fy);
+  transform: translate(-50%, -50%);
+}
+.st-pause {
+  position: absolute;
+  /* bottom-left: the platform icons come in on the right */
+  left: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--fc-line-strong);
+  background: var(--fc-surface-1);
   color: var(--fc-text);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms var(--fc-ease-out),
+    border-color 160ms var(--fc-ease-out);
 }
-@media (max-width: 639px) {
-  .fc-ruler {
-    right: 2px;
-    width: 8px;
-  }
-  .fc-ruler .tk {
-    width: 4px;
-  }
-  .fc-ruler .tk.big {
-    width: 7px;
-  }
-  .fc-ruler .ind {
-    width: 9px;
-  }
+.st-pause[hidden] {
+  display: none;
 }
-@media (min-width: 1320px) {
-  .fc-ruler {
-    right: 14px;
-    width: 34px;
+/* the hero keeps a clean frame: its pause button only appears for keyboard users who tab
+   to it (still reachable, WCAG 2.2.2), never as a visible circle under the braid */
+.station-wrap-hero > .st-pause:not(:focus-visible) {
+  clip-path: inset(50%);
+  opacity: 0;
+}
+/* a still picture has nothing to pause */
+.station-wrap:has(> .station:not(.live)) > .st-pause {
+  display: none;
+}
+/* still pictures of the story scenes, one per theme */
+.st-poster {
+  object-fit: cover;
+}
+.st-poster.p-light,
+:root[data-theme='light'] .st-poster.p-dark {
+  display: none;
+}
+:root[data-theme='light'] .st-poster.p-light {
+  display: block;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .st-poster.p-dark {
+    display: none;
   }
-  .fc-ruler .tk {
-    width: 8px;
-  }
-  .fc-ruler .tk.big {
-    width: 16px;
-  }
-  .fc-ruler .ind {
-    width: 30px;
-  }
-  .fc-ruler .read {
+  :root:not([data-theme]) .st-poster.p-light {
     display: block;
+  }
+}
+.st-pause:active {
+  transform: scale(0.94);
+}
+.st-pause .i-play,
+.st-pause[data-playing='false'] .i-pause {
+  display: none;
+}
+.st-pause[data-playing='false'] .i-play,
+.st-pause .i-pause {
+  display: inline-flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .st-pause:hover {
+    border-color: var(--fc-text-3);
   }
 }
 
-/* ---------- Rotating section sidebar (needs room outside the content column) ---------- */
-.fc-side {
-  position: fixed;
-  z-index: 29;
-  right: 64px;
-  top: 104px;
-  bottom: 32px;
-  width: 0;
-  perspective: 700px;
-  pointer-events: none;
+/* ---------- Story: a sticky 3D stage beside a column of beats ---------- */
+/* Phones: every beat has its own small stage above its words. Wide: one stage stays put
+   while the beats scroll past it, and the camera flies to what each beat is about. */
+.story {
+  display: grid;
+}
+.story-stage {
   display: none;
 }
-@media (min-width: 1320px) {
-  .fc-side.on {
+.story .station-wrap {
+  border-radius: var(--fc-radius-panel);
+  background: var(--fc-surface-1);
+  border: 1px solid var(--fc-line);
+  overflow: hidden;
+}
+.beat {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-block: 48px;
+}
+.beat + .beat {
+  border-top: 1px solid var(--fc-line);
+}
+.beat-station {
+  aspect-ratio: 4 / 3;
+  max-height: 62svh;
+  width: 100%;
+  margin-bottom: 8px;
+}
+@media (min-width: 960px) {
+  .story {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    column-gap: clamp(40px, 5vw, 88px);
+  }
+  .story.stage-right {
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  }
+  .story.stage-right .story-stage {
+    order: 2;
+  }
+  .story-stage {
     display: block;
+    position: relative;
+  }
+  .story-station {
+    position: sticky;
+    top: calc(64px + max(24px, (100svh - 64px - 860px) / 2));
+    height: min(calc(100svh - 64px - 48px), 860px);
+    border-radius: 24px !important;
+  }
+  /* the deck and the glass cards are wide: a squarer stage frames them without empty sky */
+  .story-deck .story-station,
+  .story-glass .story-station {
+    top: calc(64px + max(24px, (100svh - 64px - 680px) / 2));
+    height: min(calc(100svh - 64px - 48px), 680px);
+  }
+  .beat {
+    min-height: calc(100svh - 64px);
+    justify-content: center;
+    padding-block: 72px;
+  }
+  .beat + .beat {
+    border-top: 0;
+  }
+  .beat-station {
+    display: none;
   }
 }
-.fc-lab {
+
+/* ---------- Spark line: page progress on the right edge (wide screens) ---------- */
+/* A hairline with the Molten shard of the logo riding down it; the Arc shard waits at the
+   bottom and the two meet at the end of the page. Dots along the line are section links. */
+.fc-spark,
+.fc-dial {
+  display: none;
+}
+@media (min-width: 1280px) {
+  html.js .fc-spark:not([hidden]) {
+    --L: min(56svh, 460px);
+    --s: 1.45px;
+    display: block;
+    position: fixed;
+    z-index: 30;
+    right: calc(22px + env(safe-area-inset-right, 0px));
+    top: calc(50% + 32px);
+    width: 40px;
+    height: var(--L);
+    transform: translateY(-50%);
+  }
+}
+.sk-track {
   position: absolute;
-  right: 0;
+  left: 50%;
   top: 0;
-  white-space: nowrap;
-  transform-origin: 100% 50%;
-  font: 500 11px/1 var(--fc-font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--fc-scene-ui);
+  width: 1px;
+  height: 100%;
+  background: var(--fc-line-strong);
+}
+.sk-lit {
+  position: absolute;
+  inset: 0;
+  transform-origin: top;
+  transform: scaleY(var(--p, 0));
+  background: linear-gradient(180deg, transparent, var(--fc-accent));
+}
+.fc-spark ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fc-spark a {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: var(--at, 0);
+  width: 30px;
+  height: 26px;
+  margin: -13px 0 0 -15px;
+  border-radius: 8px;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+.sk-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--fc-bg);
+  box-shadow: 0 0 0 1px var(--fc-line-strong);
   transition:
-    transform 760ms var(--fc-ease-drawer),
-    opacity 500ms var(--fc-ease-out),
-    color 400ms var(--fc-ease-out);
+    transform 200ms var(--fc-ease-out),
+    background-color 200ms var(--fc-ease-out);
+}
+.fc-spark a.past .sk-dot {
+  background: var(--fc-accent);
+  box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .fc-spark a:hover .sk-dot {
+    transform: scale(1.6);
+  }
+}
+/* the shard covers the current dot */
+.fc-spark a[aria-current] .sk-dot {
+  transform: scale(0);
+}
+.fc-spark a:focus-visible {
+  outline: 2px solid var(--fc-accent-text);
+  outline-offset: -2px;
+}
+/* names: a solid pill beside the line on hover or focus */
+.sk-lab,
+.sk-now {
+  position: absolute;
+  white-space: nowrap;
+  pointer-events: none;
+  border-radius: 8px;
+  background: var(--fc-surface-1);
+  border: 1px solid var(--fc-line-strong);
+  box-shadow: 0 12px 28px -16px rgb(2 4 10 / 0.6);
+}
+.sk-lab {
+  right: calc(100% + 6px);
+  top: 50%;
+  padding: 5px 10px;
+  font: 600 13px/1.2 var(--fc-font-sans);
+  color: var(--fc-text);
+  /* opacity only (not visibility), so the name stays the link's accessible name */
+  opacity: 0;
+  transform: translate(6px, -50%);
+  transition:
+    opacity 140ms var(--fc-ease-out),
+    transform 180ms var(--fc-ease-out);
+}
+.fc-spark a:hover .sk-lab,
+.fc-spark a:focus-visible .sk-lab {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+/* the current section's name rides with the shard while you scroll, then fades */
+.sk-now {
+  right: calc(50% + 20px);
+  top: 0;
+  padding: 4px 8px;
+  font: 600 11px/1 var(--fc-font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fc-molten-text);
+  opacity: 0;
+  transform: translate3d(0, calc(var(--y, 0px) + 4px), 0);
+  transition: opacity 260ms var(--fc-ease-out);
+}
+.fc-spark.moving .sk-now:not(:empty) {
+  opacity: 1;
+  transition-duration: 120ms;
+}
+.fc-spark:has(a:hover, a:focus-visible) .sk-now {
+  opacity: 0;
+}
+.sk-shard {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.sk-m {
+  z-index: 2;
+  width: calc(16.5 * var(--s));
+  height: calc(16.61 * var(--s));
+  margin-left: calc(-9 * var(--s));
+  transform: translate3d(0, var(--y, 0px), 0);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   will-change: transform;
 }
-.fc-lab.active {
-  color: var(--fc-accent-text);
-  font-weight: 600;
+.fc-spark.dragging .sk-m {
+  cursor: grabbing;
 }
-.fc-lab.past {
+html:has(.fc-spark.dragging) {
+  user-select: none;
+}
+.sk-m path {
+  fill: var(--fc-accent);
+  transform-box: fill-box;
+  transform-origin: 60% 50%;
+  transform: rotate(var(--tilt, 0deg));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--fc-accent) 60%, transparent));
+}
+.sk-a {
+  width: calc(16.45 * var(--s));
+  height: calc(16.6 * var(--s));
+  margin-left: calc((-9 + 2.37) * var(--s));
+  /* parked where the Molten shard's end position completes the logo */
+  top: calc(var(--L) - 16.61 * var(--s) + 13.08 * var(--s));
+}
+.sk-a path {
+  fill: var(--fc-arc);
+  opacity: 0.35;
+  transition: opacity 260ms var(--fc-ease-out);
+}
+.fc-spark.whole .sk-a path {
+  opacity: 1;
+}
+
+/* ---------- Signal dial: page progress in the corner (tablets and phones) ---------- */
+@media (max-width: 1279px) {
+  html.js .fc-dial:not([hidden]) {
+    display: block;
+    position: fixed;
+    z-index: 30;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transition:
+      opacity 220ms var(--fc-ease-out),
+      transform 260ms var(--fc-ease-out),
+      visibility 0s;
+  }
+  /* out of the way over the hero; it slides in once you start reading */
+  html.js .fc-dial.away:not(.open) {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(12px) scale(0.92);
+    transition:
+      opacity 220ms var(--fc-ease-out),
+      transform 260ms var(--fc-ease-out),
+      visibility 0s linear 260ms;
+  }
+}
+.fc-dial {
+  --dl-body-1: #3a404a;
+  --dl-body-2: #1d2127;
+  --dl-knurl: rgb(255 255 255 / 0.06);
+}
+:root[data-theme='light'] .fc-dial {
+  --dl-body-1: #ffffff;
+  --dl-body-2: #dfe3e8;
+  --dl-knurl: rgb(14 16 20 / 0.06);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .fc-dial {
+    --dl-body-1: #ffffff;
+    --dl-body-2: #dfe3e8;
+    --dl-knurl: rgb(14 16 20 / 0.06);
+  }
+}
+.dl-knob {
+  --size: 64px;
+  position: relative;
+  display: block;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  /* a solid disc behind the ring so page text never shows through */
+  background: color-mix(in srgb, var(--fc-bg) 92%, transparent);
+  box-shadow: 0 10px 30px -12px rgb(2 4 10 / 0.6);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.dl-knob:focus-visible {
+  outline: none;
+  box-shadow: var(--fc-focus);
+}
+.dl-knob svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.dl-ring-bg,
+.dl-ring {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.dl-ring-bg {
+  stroke: var(--fc-line-strong);
+}
+.dl-ring {
+  stroke: var(--fc-accent);
+  transition: stroke-dashoffset 120ms linear;
+}
+.dl-tick {
+  stroke: var(--fc-text-3);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke 160ms var(--fc-ease-out);
+}
+.dl-tick.past {
+  stroke: var(--fc-accent);
+}
+.dl-tick.cur {
+  stroke: var(--fc-arc);
+  stroke-width: 2.5;
+}
+/* the knob itself: knurled edge, an index line, it turns as you read */
+.dl-body {
+  position: absolute;
+  inset: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, var(--dl-body-1), var(--dl-body-2) 72%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 -2px 4px rgb(0 0 0 / 0.35),
+    0 6px 12px -6px rgb(2 4 10 / 0.6),
+    0 0 0 1px var(--fc-line-strong);
+  transform: rotate(var(--deg, -135deg));
+  transition: transform 120ms linear;
+}
+.dl-body::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--dl-knurl) 0 4deg, transparent 4deg 9deg);
+}
+.dl-body::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 3px;
+  height: 11px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--fc-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--fc-accent) 70%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dl-knob:hover .dl-body {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.24),
+      inset 0 -2px 4px rgb(0 0 0 / 0.35),
+      0 8px 16px -6px rgb(2 4 10 / 0.6),
+      0 0 0 1px var(--fc-accent-line);
+  }
+}
+.dl-knob:active .dl-body {
+  scale: 0.96;
+}
+/* the list: a solid card above the knob */
+.dl-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: min(248px, calc(100vw - 32px));
+  max-height: min(60svh, 420px);
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--fc-surface-1);
+  border: 1px solid var(--fc-line-strong);
+  box-shadow: 0 24px 60px -24px rgb(2 4 10 / 0.7);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.98);
+  transform-origin: bottom right;
+  transition:
+    opacity 160ms var(--fc-ease-out),
+    transform 200ms var(--fc-ease-out),
+    visibility 0s linear 200ms;
+}
+.fc-dial.open .dl-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 160ms var(--fc-ease-out),
+    transform 200ms var(--fc-ease-out);
+}
+.dl-menu ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dl-menu a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 9px;
+  text-decoration: none;
   color: var(--fc-text-2);
+  font: 500 15px/1.2 var(--fc-font-sans);
+  touch-action: manipulation;
+}
+.dl-num {
+  flex: none;
+  font: 600 11px/1 var(--fc-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-text-3);
+}
+.dl-menu a.past .dl-num {
+  color: var(--fc-molten-text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dl-menu a:hover {
+    background: var(--fc-surface-3);
+    color: var(--fc-text);
+  }
+}
+.dl-menu a[aria-current] {
+  color: var(--fc-text);
+  background: var(--fc-accent-soft);
+}
+.dl-menu a[aria-current] .dl-num {
+  color: var(--fc-accent-text);
+}
+.dl-menu a[aria-current]::after {
+  content: 'Now';
+  margin-left: auto;
+  font: 700 10px/1 var(--fc-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fc-accent-text);
+}
+.dl-menu a:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--fc-accent-text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-dot,
+  .sk-lab,
+  .sk-now,
+  .sk-a path,
+  .dl-ring,
+  .dl-tick,
+  .dl-body,
+  .dl-menu,
+  html.js .fc-dial:not([hidden]) {
+    transition: none !important;
+  }
 }
 
 /* ---------- Marquee: one thin strip per page ---------- */
 .fc-marquee {
+  position: relative;
   overflow: hidden;
   border-block: 1px solid var(--fc-line);
-  background: color-mix(in srgb, var(--fc-bg) 78%, transparent);
+  /* solid, so nothing shows through its words */
+  background: var(--fc-bg);
 }
 .fc-marquee .track {
   display: flex;
@@ -209,6 +676,20 @@ body > footer,
   color: var(--fc-accent-text);
   padding-inline: 0;
 }
+/* wide screens: the Spark line sits on the right edge, so the strip's words fade out
+   before it and its pause button moves clear of it */
+@media (min-width: 1280px) {
+  .fc-marquee {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 140px), transparent calc(100% - 76px));
+    mask-image: linear-gradient(90deg, #000 calc(100% - 140px), transparent calc(100% - 76px));
+  }
+  .mq-toggle {
+    left: 0;
+    right: auto;
+    border-left: 0;
+    border-right: 1px solid var(--fc-line);
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
   .fc-marquee .track {
     animation: fc-marquee 46s linear infinite;
@@ -219,28 +700,6 @@ body > footer,
     transform: translateX(-50%);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .fc-lab {
-    transition: opacity 200ms linear;
-  }
-}
-@media print {
-  .fc-stage,
-  .fc-ruler,
-  .fc-side,
-  .fc-marquee {
-    display: none !important;
-  }
-}
-
-/* Between 1320 and 1600 px the margin only fits the vertical label, not the stacks. */
-@media (min-width: 1320px) and (max-width: 1599px) {
-  .fc-lab.next,
-  .fc-lab.past {
-    opacity: 0 !important;
-  }
-}
-
 /* The marquee pauses while hovered, while its button has focus, and when paused (WCAG 2.2.2). */
 .fc-marquee:hover .track,
 .fc-marquee:focus-within .track,
@@ -284,7 +743,108 @@ body > footer,
     color: var(--fc-text);
   }
 }
-/* Without JS nothing drives the ruler, so it stays out of the way. */
-html:not(.js) .fc-ruler {
-  display: none;
+@media print {
+  .fc-spark,
+  .fc-dial,
+  .hero-field,
+  .st-canvas,
+  .st-pause,
+  .fc-marquee {
+    display: none !important;
+  }
+  .station .st-fallback {
+    opacity: 1 !important;
+  }
+}
+
+/* ---------- Home opening (scripts/intro.ts): helper pieces, removed when it ends ---------- */
+.intro-standby {
+  position: fixed;
+  inset: 64px 0 0;
+  z-index: 35;
+  pointer-events: none;
+  background: var(--fc-bg);
+  opacity: 0.84;
+}
+.intro-onair {
+  position: fixed;
+  z-index: 36;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--fc-line-strong);
+  background: var(--fc-surface-1);
+  font: 700 12px/1 var(--fc-font-mono);
+  letter-spacing: 0.14em;
+  color: var(--fc-text);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.intro-lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fc-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fc-accent) 22%, transparent);
+}
+.intro-wash {
+  position: fixed;
+  z-index: 36;
+  width: 160vmax;
+  height: 160vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--fc-accent) 22%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+}
+.intro-tally {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--fc-accent);
+  transform-origin: left;
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-cursor {
+  position: absolute;
+  top: 0.12em;
+  bottom: 0.08em;
+  left: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--fc-accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-meter {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-meter i {
+  width: 10px;
+  height: 100%;
+  border-radius: 1.5px;
+  background: var(--fc-line-strong);
+}
+@media (max-width: 640px) {
+  .intro-meter i {
+    width: 7px;
+  }
 }

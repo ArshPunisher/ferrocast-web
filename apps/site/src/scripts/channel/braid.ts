@@ -5,11 +5,34 @@
 import * as THREE from 'three'
 
 export interface BraidLayout {
-  start: number; merge: number; end: number; badge: number
-  Y: [number, number, number]; Z: [number, number, number]; R: number
+  start: number
+  merge: number
+  end: number
+  badge: number
+  Y: [number, number, number]
+  Z: [number, number, number]
+  R: number
 }
-export const BRAID_DESKTOP: BraidLayout = { start: 6.6, merge: -0.2, end: -2.65, badge: 2.55, Y: [3.4, 0.25, -3.2], Z: [-1.6, 1.3, -0.4], R: 0.4 }
-export const BRAID_MOBILE: BraidLayout = { start: 4.6, merge: 0, end: -2.35, badge: 2.35, Y: [2.0, 0.1, -1.9], Z: [-1.2, 1.0, -0.2], R: 0.26 }
+export const BRAID_DESKTOP: BraidLayout = {
+  start: 6.0,
+  merge: -0.2,
+  end: -2.65,
+  // each platform's icon caps its strand's far end: the strands pinch into it, the same
+  // way they gather into the Spark at the near end
+  badge: 6.0,
+  Y: [3.4, 0.25, -3.2],
+  Z: [-1.6, 1.3, -0.4],
+  R: 0.4,
+}
+export const BRAID_MOBILE: BraidLayout = {
+  start: 3.8,
+  merge: 0,
+  end: -2.35,
+  badge: 3.8,
+  Y: [2.0, 0.1, -1.9],
+  Z: [-1.2, 1.0, -0.2],
+  R: 0.26,
+}
 
 const PATH = /* glsl */ `
   uniform float uTime, uStart, uMerge, uEnd; uniform vec3 uY, uZ;
@@ -25,7 +48,8 @@ const PATH = /* glsl */ `
     vec3 c = center(x, k);
     float merged = 1.0 - smoothstep(uMerge - 0.4, uMerge + 1.8, x);
     float into = smoothstep(uEnd + 0.15, uEnd + 2.6, x);
-    float rad = r * mix(1.0, 1.35, merged) * into;
+    float tail = 1.0 - smoothstep(uStart - 2.2, uStart, x);
+    float rad = r * mix(1.0, 1.35, merged) * into * tail;
     float a = th + x * 0.75 + uTime * 0.35;
     return c + vec3(0.0, cos(a) * rad, sin(a) * rad);
   }`
@@ -36,12 +60,19 @@ const LIGHT = { c: ['#7a2ee6', '#e1102f', '#17913a'], merge: '#0888b8', hot: '#a
 export function createBraid(mobile: boolean) {
   const L = mobile ? BRAID_MOBILE : BRAID_DESKTOP
   const group = new THREE.Group()
-  const STRANDS = mobile ? 20 : 34, SEG = mobile ? 100 : 170
-  const nStr = STRANDS * 3, vPer = (SEG + 1) * 2
-  const aT = new Float32Array(nStr * vPer), aSide = new Float32Array(nStr * vPer), aS = new Float32Array(nStr * vPer * 4)
+  const STRANDS = mobile ? 20 : 34,
+    SEG = mobile ? 100 : 170
+  const nStr = STRANDS * 3,
+    vPer = (SEG + 1) * 2
+  const aT = new Float32Array(nStr * vPer),
+    aSide = new Float32Array(nStr * vPer),
+    aS = new Float32Array(nStr * vPer * 4)
   const idx: number[] = []
   for (let s = 0; s < nStr; s++) {
-    const stream = s % 3, r = L.R * Math.sqrt(Math.random()), th = Math.random() * Math.PI * 2, ph = Math.random()
+    const stream = s % 3,
+      r = L.R * Math.sqrt(Math.random()),
+      th = Math.random() * Math.PI * 2,
+      ph = Math.random()
     for (let i = 0; i <= SEG; i++)
       for (let side = 0; side < 2; side++) {
         const v = s * vPer + i * 2 + side
@@ -62,22 +93,36 @@ export function createBraid(mobile: boolean) {
   ribGeo.setIndex(idx)
 
   const u = {
-    uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 },
-    uStart: { value: L.start }, uMerge: { value: L.merge }, uEnd: { value: L.end },
-    uY: { value: new THREE.Vector3(...L.Y) }, uZ: { value: new THREE.Vector3(...L.Z) },
-    uC0: { value: new THREE.Color() }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() },
-    uMergeC: { value: new THREE.Color() }, uHot: { value: new THREE.Color() }, uTheme: { value: 0 }, uAlpha: { value: 1 },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+    uDpr: { value: 1 },
+    uStart: { value: L.start },
+    uMerge: { value: L.merge },
+    uEnd: { value: L.end },
+    uY: { value: new THREE.Vector3(...L.Y) },
+    uZ: { value: new THREE.Vector3(...L.Z) },
+    uC0: { value: new THREE.Color() },
+    uC1: { value: new THREE.Color() },
+    uC2: { value: new THREE.Color() },
+    uMergeC: { value: new THREE.Color() },
+    uHot: { value: new THREE.Color() },
+    uTheme: { value: 0 },
+    uAlpha: { value: 1 },
     uWidth: { value: mobile ? 1.3 : 1.5 },
   }
   const ribMat = new THREE.ShaderMaterial({
-    uniforms: u, transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+    uniforms: u,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
       ${PATH}
       uniform vec2 uRes; uniform float uWidth;
       attribute float aT, aSide; attribute vec4 aS;
       varying float vSide; varying float vX; varying float vK; varying float vPh;
       void main() {
-        float x = mix(uStart + 0.6, uEnd, aT);
+        float x = mix(uStart, uEnd, aT);
         vec3 p0 = strand(x, aS.x, aS.y, aS.z);
         vec3 p1 = strand(x - 0.03, aS.x, aS.y, aS.z);
         vec4 c0 = projectionMatrix * modelViewMatrix * vec4(p0, 1.0);
@@ -97,7 +142,7 @@ export function createBraid(mobile: boolean) {
         vec3 col = mix(sc, uMergeC, smoothstep(uMerge + 0.9, uMerge - 0.7, vX));
         float pulse = pow(0.5 + 0.5 * sin(vX * 1.9 + uTime * 2.4 + vPh * 6.2831), 14.0);
         col = mix(col, uHot, pulse * 0.5 * (1.0 - uTheme * 0.5));
-        float fade = smoothstep(uStart + 0.6, uStart - 1.2, vX) * smoothstep(uEnd, uEnd + 0.5, vX);
+        float fade = (1.0 - smoothstep(uStart - 0.35, uStart, vX)) * smoothstep(uEnd, uEnd + 0.5, vX);
         gl_FragColor = vec4(col, aa * fade * (0.42 + pulse * 0.75) * uAlpha);
       }`,
   })
@@ -106,7 +151,8 @@ export function createBraid(mobile: boolean) {
   group.add(ribbons)
 
   const NPK = mobile ? 110 : 240
-  const pk = new Float32Array(NPK * 4), pk2 = new Float32Array(NPK)
+  const pk = new Float32Array(NPK * 4),
+    pk2 = new Float32Array(NPK)
   for (let i = 0; i < NPK; i++) {
     pk.set([i % 3, L.R * Math.sqrt(Math.random()), Math.random() * 6.283, Math.random()], i * 4)
     pk2[i] = 0.05 + Math.random() * 0.05
@@ -116,7 +162,10 @@ export function createBraid(mobile: boolean) {
   pkGeo.setAttribute('aS', new THREE.BufferAttribute(pk, 4))
   pkGeo.setAttribute('aSpeed', new THREE.BufferAttribute(pk2, 1))
   const pkMat = new THREE.ShaderMaterial({
-    uniforms: u, transparent: true, depthWrite: false, depthTest: false,
+    uniforms: u,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
     vertexShader: /* glsl */ `
       ${PATH}
       uniform float uDpr; attribute vec4 aS; attribute float aSpeed;
@@ -145,9 +194,12 @@ export function createBraid(mobile: boolean) {
   packets.frustumCulled = false
   group.add(packets)
 
-  const tmp = new THREE.Color(), tmp2 = new THREE.Color()
+  const tmp = new THREE.Color(),
+    tmp2 = new THREE.Color()
   function setTheme(m: number) {
-    ;(['uC0', 'uC1', 'uC2'] as const).forEach((k, i) => u[k].value.set(DARK.c[i] as string).lerp(tmp.set(LIGHT.c[i] as string), m))
+    ;(['uC0', 'uC1', 'uC2'] as const).forEach((k, i) =>
+      u[k].value.set(DARK.c[i] as string).lerp(tmp.set(LIGHT.c[i] as string), m),
+    )
     u.uMergeC.value.set(DARK.merge).lerp(tmp2.set(LIGHT.merge), m)
     u.uHot.value.set(DARK.hot).lerp(tmp2.set(LIGHT.hot), m)
     u.uTheme.value = m
@@ -171,8 +223,17 @@ export function createBraid(mobile: boolean) {
   }
 
   return {
-    group, layout: L, uniforms: u, setTheme, center,
-    dispose() { ribGeo.dispose(); pkGeo.dispose(); ribMat.dispose(); pkMat.dispose() },
+    group,
+    layout: L,
+    uniforms: u,
+    setTheme,
+    center,
+    dispose() {
+      ribGeo.dispose()
+      pkGeo.dispose()
+      ribMat.dispose()
+      pkMat.dispose()
+    },
   }
 }
 export type Braid = ReturnType<typeof createBraid>

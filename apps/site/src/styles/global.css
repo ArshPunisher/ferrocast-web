@@ -84,6 +84,13 @@ p {
     padding-inline: 24px;
   }
 }
+/* big screens: the whole site grows with the window, up to a ceiling (text blocks keep
+   their own reading width) */
+@media (min-width: 1440px) {
+  .container {
+    max-width: clamp(1200px, 84vw, 1560px);
+  }
+}
 
 .section {
   padding-block: 72px;
@@ -114,7 +121,7 @@ p {
   font-size: 1.125rem;
   line-height: 1.6;
   color: var(--fc-text-2);
-  max-width: 58ch;
+  max-width: 62ch;
 }
 @media (min-width: 768px) {
   .lede {
@@ -280,9 +287,10 @@ summary:focus-visible {
 
 /* Long-form text: docs and legal pages. */
 .prose {
-  max-width: 72ch;
+  max-width: 70ch;
   color: var(--fc-text-2);
   font-size: 1.0625rem;
+  line-height: 1.7;
 }
 .prose > * + * {
   margin-top: 1em;

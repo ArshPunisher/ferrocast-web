@@ -1,0 +1,29 @@
+---
+// One beat of a story: its words, and on phones its own view of the story's scene.
+import Station from './Station.astro'
+
+interface Props {
+  kind: 'desk' | 'deck' | 'glass'
+  /** 1-based position in the story; the camera's stop for this beat. */
+  n: number
+  id?: string
+  /** Name on the section rail. */
+  chapter?: string
+}
+const { kind, n, id, chapter } = Astro.props
+---
+
+<article class="beat" id={id} data-chapter={chapter} data-beat-text>
+  <Station kind={kind} beat={n} class="beat-station" />
+  <div class="beat-copy reveal">
+    <slot />
+  </div>
+</article>
+
+<style>
+  .beat-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+</style>

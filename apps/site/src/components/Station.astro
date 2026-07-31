@@ -1,0 +1,79 @@
+---
+// One 3D station: a box reserved for WebGL that never holds page text, so nothing is ever
+// drawn behind words. The shared renderer paints into its canvas (see scripts/channel).
+// Until it is ready, and without WebGL or JS, a still picture of the same scene shows
+// instead (story stages), or the station's own fallback passed in the slot.
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import Icon from './Icon.astro'
+
+interface Props {
+  kind: 'hero' | 'icon' | 'desk' | 'deck' | 'glass'
+  class?: string
+  /** Phone slot of a story: which beat it shows (the sticky stage leaves this out). */
+  beat?: number
+  /** Moving stations get a pause button (WCAG 2.2.2). */
+  pausable?: boolean
+}
+const { kind, class: cls, beat, pausable = true } = Astro.props
+const poster = (theme: string) => {
+  const f = `${kind}-${beat ?? 1}-${theme}.webp`
+  return existsSync(join(process.cwd(), 'public', 'media', 'story', f)) ? `/media/story/${f}` : null
+}
+const posters = ['desk', 'deck', 'glass'].includes(kind)
+  ? { dark: poster('dark'), light: poster('light') }
+  : null
+---
+
+<div class:list={['station-wrap', `station-wrap-${kind}`, cls]}>
+  <div
+    class:list={['station', `station-${kind}`]}
+    data-station={kind}
+    data-beat={beat}
+    aria-hidden="true"
+  >
+    {posters?.dark && (
+      <img class="st-fallback st-poster p-dark" src={posters.dark} alt="" loading="lazy" decoding="async" />
+    )}
+    {posters?.light && (
+      <img class="st-fallback st-poster p-light" src={posters.light} alt="" loading="lazy" decoding="async" />
+    )}
+    <canvas class="st-canvas"></canvas>
+    <div class="st-over">
+      <slot />
+    </div>
+  </div>
+  {pausable && (
+    <button type="button" class="st-pause" data-station-pause aria-label="Pause animation" hidden>
+      <span class="i-pause">
+        <Icon name="pause" size={14} weight="fill" />
+      </span>
+      <span class="i-play">
+        <Icon name="play" size={14} weight="fill" />
+      </span>
+    </button>
+  )}
+</div>
+
+<script>
+  // The drawing is aria-hidden; its pause button sits beside it so it stays reachable.
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)')
+  document.querySelectorAll<HTMLElement>('[data-station]').forEach((st) => {
+    const btn = st.parentElement?.querySelector<HTMLButtonElement>(':scope > [data-station-pause]')
+    if (!btn || btn.dataset.wired) return
+    btn.dataset.wired = '1'
+    const sync = () => {
+      btn.hidden = reduce.matches
+      const p = st.dataset.paused === 'true'
+      btn.dataset.playing = String(!p)
+      btn.setAttribute('aria-label', p ? 'Play animation' : 'Pause animation')
+    }
+    sync()
+    reduce.addEventListener('change', sync)
+    btn.addEventListener('click', () => {
+      st.dataset.paused = String(st.dataset.paused !== 'true')
+      sync()
+      st.dispatchEvent(new CustomEvent('station-pause'))
+    })
+  })
+</script>

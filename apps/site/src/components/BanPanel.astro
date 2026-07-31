@@ -1,0 +1,551 @@
+---
+// "One ban. Every platform." A live product demo (HTML, crisp in every theme): a spam
+// message lands in Twitch, YouTube and Kick chat, one "Ban everywhere" click removes it from
+// all three at once, and a pill confirms it. The panel is the app's own dark look in both
+// site themes. It loops only while on screen, has a pause button (WCAG 2.2.2), and under
+// reduced motion shows the finished state without moving.
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
+import Icon from './Icon.astro'
+
+type P = 'twitch' | 'youtube' | 'kick'
+const calm: [P, string, string, string][] = [
+  ['twitch', 'kuro_neko', 'that clutch was insane', '#8fb8ff'],
+  ['youtube', 'Nakamura Ren', 'boa noite do Brasil!', '#eef0f4'],
+  ['kick', 'VoltViper', 'one more game, please', '#f5d742'],
+  ['twitch', 'mira_exe', 'yo chat, be nice to the new folks', '#86e08a'],
+]
+const spam = 'Want 1,000 followers? Visit our site'
+const plats: P[] = ['twitch', 'youtube', 'kick']
+---
+
+<div class="bp" data-ban-panel>
+  <div class="bp-copy">
+    <h2 class="display-1">One ban. <span class="hl">Every platform.</span></h2>
+    <p class="lede">
+      Ban a hate-raider on Twitch, YouTube and Kick in one click. Panic mode locks chat down
+      everywhere at once, from a single hotkey.
+    </p>
+  </div>
+  <div class="bp-demo">
+    <div
+      class="bp-stage"
+      data-ban
+      role="img"
+      aria-label="Chat from Twitch, YouTube and Kick in one list. The same spam message arrives on all three; one Ban everywhere click removes it from all three at once, and a note confirms the ban on Twitch, YouTube and Kick."
+    >
+      <div class="chat">
+        <div class="chat-head">
+          <span class="ch-title">Chat</span>
+          <span class="ch-plats">
+            {plats.map((p) => (
+              <span class={`pf ${p}`}>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d={ICON_PATHS[p]} />
+                </svg>
+              </span>
+            ))}
+          </span>
+        </div>
+        <ul class="rows">
+          {calm.map(([p, name, msg, color]) => (
+            <li class="row">
+              <div class="in">
+                <svg class={`pi ${p}`} viewBox="0 0 24 24" fill="currentColor">
+                  <path d={ICON_PATHS[p]} />
+                </svg>
+                <span class="nm" style={`color: ${color}`}>{name}</span>
+                <span class="tx">{msg}</span>
+              </div>
+            </li>
+          ))}
+          {plats.map((p, i) => (
+            <li class="row spam" style={`--d: ${i * 90}ms`}>
+              <div class="in">
+                <svg class={`pi ${p}`} viewBox="0 0 24 24" fill="currentColor">
+                  <path d={ICON_PATHS[p]} />
+                </svg>
+                <span class="nm">cheap_viewers_dot_com</span>
+                <span class="tx">{spam}</span>
+              </div>
+            </li>
+          ))}
+          <li class="row late">
+            <div class="in">
+              <svg class="pi youtube" viewBox="0 0 24 24" fill="currentColor">
+                <path d={ICON_PATHS.youtube} />
+              </svg>
+              <span class="nm" style="color: #eef0f4">Priya Iyer</span>
+              <span class="tx">gg</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div class="act">
+          <div class="act-who">
+            <span class="act-name">cheap_viewers_dot_com</span>
+            <span class="act-sub">Same name on Twitch, YouTube and Kick</span>
+          </div>
+          <div class="act-btns">
+            <span class="b b-time">Timeout 10 min</span>
+            <span class="b b-ban">Ban everywhere</span>
+          </div>
+        </div>
+        <span class="pill">
+          <Icon name="check-circle" weight="fill" size={18} />
+          Banned on Twitch, YouTube and Kick
+        </span>
+      </div>
+    </div>
+    <button type="button" class="bp-pause" data-ban-pause aria-label="Pause the ban demo" hidden>
+      <span class="i-pause"><Icon name="pause" size={14} weight="fill" /></span>
+      <span class="i-play"><Icon name="play" size={14} weight="fill" /></span>
+    </button>
+  </div>
+</div>
+
+<script>
+  // Steps: spam arrives -> the ban card -> the click -> removed from all three at once and
+  // the pill -> chat moves on -> fade and start over. Runs only while on screen.
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)')
+  document.querySelectorAll<HTMLElement>('[data-ban-panel]').forEach((panel) => {
+    const stage = panel.querySelector<HTMLElement>('[data-ban]')!
+    const btn = panel.querySelector<HTMLButtonElement>('[data-ban-pause]')!
+    const STEPS: [string, number][] = [
+      ['spam-in', 1300],
+      ['act-in', 1300],
+      ['press', 900],
+      ['banned', 260],
+      ['late-in', 1100],
+    ]
+    const END = 3200 // hold the finished state, then start over
+    let timer = 0,
+      i = 0,
+      visible = false,
+      paused = false
+
+    const finished = () => {
+      stage.classList.add('still', 'spam-in', 'banned', 'late-in')
+      stage.classList.remove('act-in', 'press', 'fading')
+    }
+    const reset = () => {
+      stage.classList.add('still')
+      stage.classList.remove('spam-in', 'act-in', 'press', 'banned', 'late-in', 'fading')
+      void stage.offsetWidth // apply the reset without transitions
+      stage.classList.remove('still')
+    }
+    const step = () => {
+      timer = 0
+      if (!visible || paused) return
+      if (i < STEPS.length) {
+        const [cls] = STEPS[i]!
+        stage.classList.add(cls)
+        if (cls === 'banned') stage.classList.remove('act-in', 'press')
+        i++
+        timer = window.setTimeout(step, STEPS[i]?.[1] ?? END)
+        return
+      }
+      // fade out, start again from a calm chat
+      stage.classList.add('fading')
+      timer = window.setTimeout(() => {
+        reset()
+        i = 0
+        timer = window.setTimeout(step, STEPS[0]![1])
+      }, 360)
+    }
+    const play = () => {
+      clearTimeout(timer)
+      timer = 0
+      // a fade cut short by Pause or by scrolling away: finish the reset now, so the chat
+      // never stays invisible
+      if (stage.classList.contains('fading')) {
+        reset()
+        i = 0
+      }
+      if (reduce.matches) {
+        finished()
+        return
+      }
+      if (visible && !paused) timer = window.setTimeout(step, i === 0 ? STEPS[0]![1] : 600)
+    }
+    const sync = () => {
+      btn.hidden = reduce.matches
+      btn.dataset.playing = String(!paused)
+      btn.setAttribute('aria-label', paused ? 'Play the ban demo' : 'Pause the ban demo')
+    }
+    btn.addEventListener('click', () => {
+      paused = !paused
+      sync()
+      play()
+    })
+    reduce.addEventListener('change', () => {
+      sync()
+      if (!reduce.matches) {
+        reset()
+        i = 0
+      }
+      play()
+    })
+    new IntersectionObserver(
+      ([e]) => {
+        visible = !!e?.isIntersecting
+        play()
+      },
+      { threshold: 0.35 },
+    ).observe(stage)
+    sync()
+    if (reduce.matches) finished()
+  })
+</script>
+
+<style>
+  /* the app's own dark look, in both site themes */
+  .bp {
+    --bp-bg: #0b0d11;
+    --bp-card: #12151b;
+    --bp-card-2: #181c23;
+    --bp-line: #262b33;
+    --bp-text: #eef0f4;
+    --bp-text-2: #b3b9c4;
+    --bp-arc: #33d4ff;
+    --bp-danger: #ff6b78;
+    --bp-ok: #3dd193;
+    position: relative;
+    display: grid;
+    gap: 36px;
+    padding: 28px 20px 68px;
+    border-radius: 24px;
+    background:
+      radial-gradient(70% 60% at 15% 60%, rgb(255 164 36 / 0.06), transparent 70%),
+      radial-gradient(50% 50% at 85% 20%, rgb(51 212 255 / 0.05), transparent 70%),
+      var(--bp-bg);
+    border: 1px solid var(--bp-line);
+    color: var(--bp-text);
+    color-scheme: dark;
+    overflow: hidden;
+  }
+  @media (min-width: 640px) {
+    .bp {
+      padding: 40px 40px 68px;
+    }
+  }
+  @media (min-width: 960px) {
+    .bp {
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      align-items: center;
+      gap: 56px;
+      padding: 56px 64px 64px;
+    }
+  }
+  .bp-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .bp-copy h2 {
+    color: var(--bp-text);
+    max-width: 11ch;
+  }
+  .bp-copy .hl {
+    color: var(--bp-arc);
+  }
+  .bp-copy .lede {
+    color: var(--bp-text-2);
+  }
+  .bp-demo {
+    min-width: 0;
+  }
+
+  .chat {
+    border-radius: 18px;
+    background: var(--bp-card);
+    border: 1px solid var(--bp-line);
+    box-shadow: 0 30px 60px -36px rgb(0 0 0 / 0.9);
+    overflow: hidden;
+  }
+  .chat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--bp-line);
+  }
+  .ch-title {
+    font: 700 1.125rem/1 var(--fc-font-display);
+  }
+  .ch-plats {
+    display: flex;
+    gap: 6px;
+  }
+  .pf {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--bp-line);
+    background: var(--bp-card-2);
+  }
+  .pf svg {
+    width: 15px;
+    height: 15px;
+  }
+  .twitch {
+    color: #a970ff;
+  }
+  .youtube {
+    color: #ff4e5b;
+  }
+  .kick {
+    color: #53fc18;
+  }
+  /* fixed height: rows come and go inside it, the page never jumps */
+  .rows {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+    height: calc(7 * 40px + 16px);
+  }
+  .row {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows 420ms var(--fc-ease-out),
+      opacity 320ms var(--fc-ease-out),
+      background-color 320ms var(--fc-ease-out);
+  }
+  .in {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+    height: 40px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .pi {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  .nm {
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tx {
+    color: var(--bp-text-2);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .spam,
+  .late {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  .spam .in {
+    box-shadow: inset 3px 0 0 var(--bp-danger);
+    background: rgb(255 93 108 / 0.09);
+  }
+  .spam .nm {
+    color: var(--bp-danger);
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 52%;
+  }
+  .spam-in .spam {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition-delay: var(--d, 0ms);
+  }
+  /* removed from all three at the same moment */
+  .banned .spam {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition-delay: 0ms;
+  }
+  .late-in .late {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  /* the area under the chat: the ban card, then the confirmation in the same spot */
+  .foot {
+    position: relative;
+    height: 152px;
+    margin-top: 14px;
+  }
+  .act {
+    position: absolute;
+    inset: 0 12px auto;
+    display: grid;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: var(--bp-card-2);
+    border: 1px solid var(--bp-line);
+    box-shadow: 0 24px 48px -30px rgb(0 0 0 / 0.9);
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    transition:
+      opacity 300ms var(--fc-ease-out),
+      transform 360ms var(--fc-ease-out);
+  }
+  .act-in .act {
+    opacity: 1;
+    transform: none;
+  }
+  .act-who {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .act-name {
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .act-sub {
+    font-size: 14px;
+    color: var(--bp-text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .act-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .b {
+    display: grid;
+    place-items: center;
+    height: 40px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    white-space: nowrap;
+    transition:
+      transform 140ms var(--fc-ease-out),
+      background-color 140ms var(--fc-ease-out);
+  }
+  .b-time {
+    border: 1px solid var(--bp-line);
+    background: var(--bp-card);
+  }
+  .b-ban {
+    background: #d9324a;
+    color: #fff;
+  }
+  .press .b-ban {
+    transform: scale(0.95);
+    background: #b72a3f;
+  }
+  .pill {
+    position: absolute;
+    left: 50%;
+    top: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 16px);
+    padding: 10px 16px 10px 12px;
+    border-radius: 999px;
+    background: #10251d;
+    border: 1px solid rgb(61 209 147 / 0.35);
+    color: #c9f5e1;
+    font-weight: 650;
+    font-size: 15px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, 8px);
+    transition:
+      opacity 320ms var(--fc-ease-out) 120ms,
+      transform 380ms var(--fc-ease-out) 120ms;
+  }
+  .pill :global(svg) {
+    color: var(--bp-ok);
+    flex-shrink: 0;
+  }
+  .banned .pill {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  .fading .rows,
+  .fading .pill {
+    opacity: 0;
+    transition: opacity 320ms var(--fc-ease-out);
+  }
+  .still,
+  .still * {
+    transition: none !important;
+  }
+  @media (max-width: 420px) {
+    .in {
+      font-size: 14px;
+      padding: 0 14px;
+      gap: 8px;
+    }
+    .pill {
+      font-size: 13px;
+      padding-inline: 10px 12px;
+    }
+    .act-btns .b {
+      font-size: 14px;
+    }
+  }
+  /* very narrow: only the button the demo presses, full width */
+  @media (max-width: 379px) {
+    .act-btns {
+      grid-template-columns: 1fr;
+    }
+    .b-time {
+      display: none;
+    }
+  }
+
+  /* in the panel's bottom padding, clear of the chat and the ban card */
+  .bp-pause {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--bp-line);
+    background: var(--bp-card);
+    color: var(--bp-text);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .bp-pause[hidden] {
+    display: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .bp-pause:hover {
+      border-color: #4a515d;
+    }
+  }
+  .bp-pause:active {
+    transform: scale(0.94);
+  }
+  .bp-pause:focus-visible {
+    outline: 2px solid var(--bp-arc);
+    outline-offset: 2px;
+  }
+  .bp-pause .i-play,
+  .bp-pause[data-playing='false'] .i-pause {
+    display: none;
+  }
+  .bp-pause[data-playing='false'] .i-play,
+  .bp-pause .i-pause {
+    display: inline-flex;
+  }
+</style>

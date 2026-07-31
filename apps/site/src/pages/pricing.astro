@@ -168,6 +168,33 @@ const promises = [
   </section>
 </Base>
 
+<script>
+  // Pricing station: plan cards tilt a few degrees toward the pointer (fine pointers only).
+  const ok = matchMedia(
+    '(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)',
+  )
+  document.querySelectorAll<HTMLElement>('.plan').forEach((card) => {
+    let raf = 0
+    card.addEventListener('pointermove', (e) => {
+      if (!ok.matches || raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const r = card.getBoundingClientRect()
+        const x = (e.clientX - r.left) / r.width - 0.5
+        const y = (e.clientY - r.top) / r.height - 0.5
+        card.style.setProperty('--ry', `${(x * 5).toFixed(2)}deg`)
+        card.style.setProperty('--rx', `${(-y * 4).toFixed(2)}deg`)
+      })
+    })
+    card.addEventListener('pointerleave', () => {
+      if (raf) cancelAnimationFrame(raf)
+      raf = 0
+      card.style.removeProperty('--rx')
+      card.style.removeProperty('--ry')
+    })
+  })
+</script>
+
 <style>
   .head {
     padding-block: 40px 32px;
@@ -202,6 +229,19 @@ const promises = [
     border-radius: var(--fc-radius-panel);
     border: 1px solid var(--fc-line);
     background: var(--fc-surface-1);
+    transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition:
+      transform 500ms var(--fc-ease-out),
+      box-shadow 500ms var(--fc-ease-out);
+  }
+  /* a subtle tilt toward the pointer: the plan card leans like a physical card */
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .plan:hover {
+      transition:
+        transform 120ms linear,
+        box-shadow 300ms var(--fc-ease-out);
+      box-shadow: 0 30px 70px -40px rgb(2 4 10 / 0.7);
+    }
   }
   @media (min-width: 640px) {
     .plan {
@@ -279,7 +319,7 @@ const promises = [
   .pro-list dd {
     margin: 2px 0 0;
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
   }
   .not-yet {
     margin-top: auto;
@@ -287,7 +327,7 @@ const promises = [
     gap: 10px;
     align-items: center;
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
     padding: 12px 14px;
     border-radius: var(--fc-radius-control);
     border: 1px dashed var(--fc-line-strong);
@@ -314,7 +354,7 @@ const promises = [
   }
   .promises p {
     color: var(--fc-text-2);
-    font-size: 0.9375rem;
+    font-size: var(--fc-body-s);
   }
   @media (min-width: 768px) {
     .promises {

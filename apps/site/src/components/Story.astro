@@ -1,0 +1,23 @@
+---
+// A story: one sticky 3D stage beside a column of beats (see Beat.astro). The stage sits in
+// its own grid column, so the 3D never runs behind the words. On phones the stage hides and
+// every beat shows its own small view of the same scene above its text.
+import Station from './Station.astro'
+
+interface Props {
+  kind: 'desk' | 'deck' | 'glass'
+  /** Which side the stage sits on at desktop widths. */
+  side?: 'left' | 'right'
+  class?: string
+}
+const { kind, side = 'left', class: cls } = Astro.props
+---
+
+<div class:list={['story', `story-${kind}`, `stage-${side}`, cls]} data-story>
+  <div class="story-stage">
+    <Station kind={kind} class="story-station" />
+  </div>
+  <div class="story-flow">
+    <slot />
+  </div>
+</div>
