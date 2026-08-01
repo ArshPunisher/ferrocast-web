@@ -1,5 +1,39 @@
 # Status
 
+## 17 Oct 2026 (site: owner's final picks, company facts)
+
+**Done**
+
+- Home banner: ClearCraft-style star field (`scripts/hero-field.ts`, three.js points) in the hero only; the points form the Spark, then burst into a field that tilts toward the cursor. The page-wide particles are gone.
+- Opening on every home load (`scripts/intro.ts`): On air (dim page, tally lamp, Molten wash), Level check (headline read in behind a cursor, meter peaks) and Spark drop (the braid's chats flow out of the hub after the burst). Skips on any input; off under reduced motion; CSS failsafe.
+- Section rail (`scripts/rail.ts`): Spark line on the right edge at 1280 px and up, Signal dial in the corner below that. Replaces the fader and the header meter.
+- Braid strands end inside each platform icon; the hero's pause button only appears on keyboard focus.
+- Big screens: `.container` grows to `clamp(1200px, 84vw, 1560px)` from 1440 px; the hero headline and braid grow with it.
+- Header theme switch: System, Light, Dark (System forgets the saved choice).
+- Download page: the 3D icon is replaced by Sparky (`Bot.astro`, `scripts/bot.ts`), a bot whose eyes follow the cursor and whose face reacts (excited over anything `data-bot-excite`).
+- Company facts confirmed from the Udyam certificate (UDYAM-PB-01-0155844); proprietor, address, phone, jurisdiction and Udyam number now print on Contact, Terms and the footer. Billing and grievance mail use the existing hello@ and privacy@ forwards.
+- Copy: removed the false PayPal claim; the StreamElements/Streamlabs importer is now described as coming, not shipped.
+
+**Next**
+
+- Deploy to Cloudflare Pages (`ferrocast-site`) and attach ferrocast.clearcraftlabs.com.
+- StreamElements/Streamlabs importer once the owner shares a token.
+
+## 17 Oct 2026 (site 3D, owner's picks)
+
+**Done** (uncommitted, not deployed)
+
+- Hero braid kept; it is now the only place the strand motif appears. Removed the strand stations (alerts, chat lane, tips, local-first), the footer strands, the left strand rail and its mobile bar, and the old stacked alert cards.
+- S3 Isometric Desk as the sticky story for Alerts, Merged chat and Tips (`Story.astro`, `Beat.astro`, `scripts/channel/desk.ts`): bevelled models, soft environment light, contact-shadow AO, the camera flies monitor, portrait screen, phone; the chair fades out of the close-ups. Phones get one small stage per beat.
+- "One ban. Every platform." rebuilt as a live HTML demo (`BanPanel.astro`) in the app's dark look: spam lands in all three chats, one Ban everywhere click removes all three at once, a pill confirms. Pausable, loops only on screen, finished state under reduced motion.
+- S2 Control Deck for Setup, hotkeys and panic mode (`deck.ts`); S1 Glass Studio on /features/ (`glass.ts`).
+- Right-edge section fader (`Channel.astro`, `scripts/fader.ts`): notches are links with aria-current, the cap can be dragged; slim header meter below 1280 px. Margin backdrop (`scripts/backdrop.ts`): a few soft shapes in the gutters only, 1400 px and up.
+- Still posters of every story beat in `public/media/story/` for no-WebGL browsers.
+
+**Next**
+
+- Owner review of the new home page and /features/; then commit in small pieces.
+
 ## 17 Oct 2026 (community features)
 
 **Done**
