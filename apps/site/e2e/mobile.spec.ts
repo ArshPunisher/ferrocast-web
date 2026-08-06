@@ -29,7 +29,7 @@ test('the mobile menu opens, traps nothing, and closes with Escape', async ({ pa
 
 test('form controls and tap targets are big enough', async ({ page }) => {
   await page.goto('/')
-  for (const name of ['Menu', 'System', 'Light', 'Dark']) {
+  for (const name of ['Menu', /^Theme:/]) {
     const box = await page.getByRole('button', { name }).boundingBox()
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(40)
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)

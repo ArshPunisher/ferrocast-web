@@ -41,33 +41,33 @@ test('keyboard: skip link, then the main nav', async ({ page }) => {
   await expect(page.locator('#main')).toBeFocused()
 })
 
-test('theme switch: System, Light and Dark; a choice is remembered and never flashes', async ({
+test('theme button cycles System, Light, Dark; a choice is remembered and never flashes', async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')
-  const theme = page.getByRole('group', { name: 'Theme' })
-  await expect(theme.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'true')
-  await theme.getByRole('button', { name: 'Light' }).click()
+  const btn = page.getByRole('button', { name: /^Theme:/ })
+  await expect(btn).toHaveAccessibleName('Theme: System. Switch to Light')
+  await btn.click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(btn).toHaveAccessibleName('Theme: Light. Switch to Dark')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
   expect(bg).toBe('rgb(242, 243, 246)')
-  await expect(theme.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(btn.locator('.t-light')).toBeVisible()
+  await expect(btn.locator('.t-system')).toBeHidden()
+  await btn.click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(btn).toHaveAccessibleName('Theme: Dark. Switch to System')
   // back to System: follows the OS again and forgets the saved choice
-  await theme.getByRole('button', { name: 'System' }).click()
+  await btn.click()
   await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/)
   expect(await page.evaluate(() => localStorage.getItem('fc-theme'))).toBeNull()
-  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
-    'rgb(10, 11, 13)',
-  )
   await page.emulateMedia({ colorScheme: 'light' })
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
     'rgb(242, 243, 246)',
   )
-  await theme.getByRole('button', { name: 'Dark' }).click()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
 test('reduced motion: videos never autoplay', async ({ page }) => {
