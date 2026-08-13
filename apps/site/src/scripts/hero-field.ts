@@ -102,7 +102,12 @@ export function mountHeroField(hero: HTMLElement, stage: HTMLElement, opts: { in
   canvas.setAttribute('aria-hidden', 'true')
   let renderer: THREE.WebGLRenderer
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' })
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      alpha: true,
+      powerPreference: 'high-performance',
+    })
   } catch {
     return null
   }
@@ -128,7 +133,10 @@ export function mountHeroField(hero: HTMLElement, stage: HTMLElement, opts: { in
   const toneArr = new Float32Array(COUNT)
   const dir = new THREE.Vector3()
   for (let i = 0; i < COUNT; i++) {
-    chaos.set([(Math.random() - 0.5) * 14, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 6], i * 3)
+    chaos.set(
+      [(Math.random() - 0.5) * 14, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 6],
+      i * 3,
+    )
     seed[i] = Math.random()
     const r = Math.random()
     toneArr[i] = r > 0.92 ? 1 : r > 0.86 ? 2 : 0 // ~14% accent, split Molten / Arc
@@ -152,7 +160,13 @@ export function mountHeroField(hero: HTMLElement, stage: HTMLElement, opts: { in
   }
   const points = new THREE.Points(
     geo,
-    new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, transparent: true, depthWrite: false }),
+    new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms,
+      transparent: true,
+      depthWrite: false,
+    }),
   )
   points.frustumCulled = false
   rig.add(points)
@@ -273,7 +287,9 @@ export function mountHeroField(hero: HTMLElement, stage: HTMLElement, opts: { in
     if (!running) render()
   }
   document.addEventListener('fc-theme', onTheme, { signal: ac.signal })
-  matchMedia('(prefers-color-scheme: light)').addEventListener('change', onTheme, { signal: ac.signal })
+  matchMedia('(prefers-color-scheme: light)').addEventListener('change', onTheme, {
+    signal: ac.signal,
+  })
 
   setTheme()
   place()

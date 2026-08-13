@@ -7,8 +7,7 @@ export const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t)
 }
 export const mix = (a: number, b: number, t: number) => a + (b - a) * t
-export const easeInOut = (t: number) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+export const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 export const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
 /** Hold each beat still for most of its stretch; move only between beats. */
 export function plateau(s: number, hold = 0.28) {

@@ -28,14 +28,23 @@ const eyes = [L, R]
       <path d="M115 174L104 188L110 188L106 198L118 184L112 184Z" fill="#ffa424"></path>
     </g>
     <g class="head">
-      <line x1="110" y1="56" x2="110" y2="34" stroke="#c3cad4" stroke-width="4" stroke-linecap="round"></line>
+      <line
+        x1="110"
+        y1="56"
+        x2="110"
+        y2="34"
+        stroke="#c3cad4"
+        stroke-width="4"
+        stroke-linecap="round"
+      ></line>
       <g class="antenna">
         <path
           d="M116 14L100 34L108 34L103 46L120 26L112 26Z"
           fill="#ffa424"
           stroke="#ffa424"
           stroke-width="2"
-          stroke-linejoin="round"></path>
+          stroke-linejoin="round"
+        ></path>
       </g>
       <circle cx="47" cy="106" r="12" fill="#ffa424"></circle>
       <circle cx="173" cy="106" r="12" fill="#ffa424"></circle>
@@ -43,59 +52,51 @@ const eyes = [L, R]
       <rect x="60" y="68" width="100" height="80" rx="30" fill="#12161c"></rect>
       <g class="face">
         <g class="eyes-open">
-          {
-            eyes.map(([x, y]) => (
-              <g
-                class="eye"
-                data-rx={EYE.rx - EYE.pupil - 1.2}
-                data-ry={EYE.ry - EYE.pupil - 1.2}
-                style={`transform-origin:${x}px ${y}px`}
-              >
-                <ellipse cx={x} cy={y} rx={EYE.rx} ry={EYE.ry} fill="#fff" />
-                <g class="pupil">
-                  <circle cx={x} cy={y} r={EYE.pupil} fill="#0e1014" />
-                  <circle cx={x - 3.4} cy={y - 4} r="3.6" fill="#fff" />
-                  <circle cx={x + 3} cy={y + 3.4} r="1.5" fill="#fff" opacity="0.8" />
-                </g>
+          {eyes.map(([x, y]) => (
+            <g
+              class="eye"
+              data-rx={EYE.rx - EYE.pupil - 1.2}
+              data-ry={EYE.ry - EYE.pupil - 1.2}
+              style={`transform-origin:${x}px ${y}px`}
+            >
+              <ellipse cx={x} cy={y} rx={EYE.rx} ry={EYE.ry} fill="#fff" />
+              <g class="pupil">
+                <circle cx={x} cy={y} r={EYE.pupil} fill="#0e1014" />
+                <circle cx={x - 3.4} cy={y - 4} r="3.6" fill="#fff" />
+                <circle cx={x + 3} cy={y + 3.4} r="1.5" fill="#fff" opacity="0.8" />
               </g>
-            ))
-          }
+            </g>
+          ))}
         </g>
         <g class="eyes-happy">
-          {
-            eyes.map(([x, y]) => (
-              <path
-                d={`M${x - 11} ${y + 4}Q${x} ${y - 11} ${x + 11} ${y + 4}`}
-                fill="none"
-                stroke="#fff"
-                stroke-width="5"
-                stroke-linecap="round"
-              />
-            ))
-          }
+          {eyes.map(([x, y]) => (
+            <path
+              d={`M${x - 11} ${y + 4}Q${x} ${y - 11} ${x + 11} ${y + 4}`}
+              fill="none"
+              stroke="#fff"
+              stroke-width="5"
+              stroke-linecap="round"
+            />
+          ))}
         </g>
         <g class="eyes-sleep">
-          {
-            eyes.map(([x, y]) => (
-              <path
-                d={`M${x - 11} ${y}Q${x} ${y + 7} ${x + 11} ${y}`}
-                fill="none"
-                stroke="#fff"
-                stroke-width="4.5"
-                stroke-linecap="round"
-              />
-            ))
-          }
+          {eyes.map(([x, y]) => (
+            <path
+              d={`M${x - 11} ${y}Q${x} ${y + 7} ${x + 11} ${y}`}
+              fill="none"
+              stroke="#fff"
+              stroke-width="4.5"
+              stroke-linecap="round"
+            />
+          ))}
         </g>
         <g class="eyes-star">
-          {
-            eyes.map(([x, y]) => (
-              <>
-                <path d={sparkle(x, y, 15)} fill="#ffa424" />
-                <circle cx={x} cy={y} r="2.6" fill="#fff" />
-              </>
-            ))
-          }
+          {eyes.map(([x, y]) => (
+            <>
+              <path d={sparkle(x, y, 15)} fill="#ffa424" />
+              <circle cx={x} cy={y} r="2.6" fill="#fff" />
+            </>
+          ))}
         </g>
         <g class="blush">
           <ellipse cx={L[0] - 7} cy={L[1] + 24} rx="8" ry="4" fill="#ff7a9a"></ellipse>
@@ -107,19 +108,29 @@ const eyes = [L, R]
           fill="none"
           stroke="#33d4ff"
           stroke-width="3"
-          stroke-linecap="round"></path>
+          stroke-linecap="round"
+        ></path>
         <path
           class="m m-smile"
           d={`M${M[0] - 11} ${M[1] - 2}Q${M[0]} ${M[1] + 9} ${M[0] + 11} ${M[1] - 2}`}
           fill="none"
           stroke="#33d4ff"
           stroke-width="3.5"
-          stroke-linecap="round"></path>
+          stroke-linecap="round"
+        ></path>
         <path
           class="m m-open"
           d={`M${M[0] - 10} ${M[1] - 3}Q${M[0]} ${M[1] + 13} ${M[0] + 10} ${M[1] - 3}Z`}
-          fill="#33d4ff"></path>
-        <circle class="m m-o" cx={M[0]} cy={M[1] + 1} r="4" fill="none" stroke="#33d4ff" stroke-width="3"
+          fill="#33d4ff"
+        ></path>
+        <circle
+          class="m m-o"
+          cx={M[0]}
+          cy={M[1] + 1}
+          r="4"
+          fill="none"
+          stroke="#33d4ff"
+          stroke-width="3"
         ></circle>
       </g>
     </g>
@@ -127,7 +138,12 @@ const eyes = [L, R]
       <path class="sp s1" d={sparkle(48, 58, 8)} fill="#ffa424"></path>
       <path class="sp s2" d={sparkle(174, 46, 6)} fill="#33d4ff"></path>
       <path class="sp s3" d={sparkle(164, 98, 5)} fill="#ffa424"></path>
-      <text class="zz" x="158" y="52">z<tspan dx="2" dy="-8" font-size="13">z</tspan></text>
+      <text class="zz" x="158" y="52">
+        z
+        <tspan dx="2" dy="-8" font-size="13">
+          z
+        </tspan>
+      </text>
     </g>
   </svg>
 </div>
@@ -166,7 +182,8 @@ const eyes = [L, R]
   }
   @media (prefers-color-scheme: light) {
     :global(html:not([data-theme])) .bot {
-      filter: drop-shadow(0 1px 0 rgb(14 16 20 / 0.06)) drop-shadow(0 10px 24px rgb(14 16 20 / 0.12));
+      filter: drop-shadow(0 1px 0 rgb(14 16 20 / 0.06))
+        drop-shadow(0 10px 24px rgb(14 16 20 / 0.12));
     }
   }
   .head {

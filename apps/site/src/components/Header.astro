@@ -35,10 +35,18 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
 
     <div class="actions">
       <button type="button" class="icon-btn theme-btn" data-theme-cycle>
-        <span class="t-i t-system"><Icon name="monitor" size={18} /></span>
-        <span class="t-i t-light"><Icon name="sun" size={18} /></span>
-        <span class="t-i t-dark"><Icon name="moon" size={18} /></span>
-        <span class="sr-only" data-theme-label>Theme: System. Switch to Light</span>
+        <span class="t-i t-system">
+          <Icon name="monitor" size={18} />
+        </span>
+        <span class="t-i t-light">
+          <Icon name="sun" size={18} />
+        </span>
+        <span class="t-i t-dark">
+          <Icon name="moon" size={18} />
+        </span>
+        <span class="sr-only" data-theme-label>
+          Theme: System. Switch to Light
+        </span>
       </button>
       <a href={COMPANY.github} class="icon-btn gh" aria-label="Ferrocast on GitHub" rel="noopener">
         <BrandMark name="github" size={18} />

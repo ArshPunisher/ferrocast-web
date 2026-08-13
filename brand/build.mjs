@@ -73,8 +73,14 @@ writeFileSync(
 
 // ---------------------------------------------------------------- lockups
 
-writeFileSync(out('logo-wordmark-dark.svg'), lockupSvg(dark, { id: 'wd-o', height: 120, title: 'Ferrocast' }) + '\n') // for dark backgrounds
-writeFileSync(out('logo-wordmark-light.svg'), lockupSvg(light, { id: 'wl-o', height: 120, title: 'Ferrocast' }) + '\n') // for light backgrounds
+writeFileSync(
+  out('logo-wordmark-dark.svg'),
+  lockupSvg(dark, { id: 'wd-o', height: 120, title: 'Ferrocast' }) + '\n',
+) // for dark backgrounds
+writeFileSync(
+  out('logo-wordmark-light.svg'),
+  lockupSvg(light, { id: 'wl-o', height: 120, title: 'Ferrocast' }) + '\n',
+) // for light backgrounds
 
 // ---------------------------------------------------------------- app icons
 
@@ -131,7 +137,8 @@ writeFileSync(out('png/maskable-512.png'), pngOf(maskable, 512))
 // Small sizes of the app icon (Windows 16 to 48 px): the heavier small-size mark, larger.
 const iconBleedSmall = appIcon({ grid: 'bleed', markScale: 0.86, small: true })
 writeFileSync(out('app-icon-small.svg'), iconBleedSmall)
-for (const size of [16, 24, 32, 48, 64]) writeFileSync(out(`png/app-icon-small-${size}.png`), pngOf(iconBleedSmall, size))
+for (const size of [16, 24, 32, 48, 64])
+  writeFileSync(out(`png/app-icon-small-${size}.png`), pngOf(iconBleedSmall, size))
 
 // ---------------------------------------------------------------- menu bar (tray)
 
@@ -180,7 +187,10 @@ function ico(frames) {
   })
   return Buffer.concat([header, dir, ...frames.map((f) => f.data)])
 }
-writeFileSync(out('favicon/favicon.ico'), ico([16, 32, 48].map((size) => ({ size, data: fav(size) }))))
+writeFileSync(
+  out('favicon/favicon.ico'),
+  ico([16, 32, 48].map((size) => ({ size, data: fav(size) }))),
+)
 
 const manifest = {
   name: 'Ferrocast',

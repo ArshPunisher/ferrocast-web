@@ -680,7 +680,11 @@ html:has(.fc-spark.dragging) {
    before it and its pause button moves clear of it */
 @media (min-width: 1280px) {
   .fc-marquee {
-    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 140px), transparent calc(100% - 76px));
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      #000 calc(100% - 140px),
+      transparent calc(100% - 76px)
+    );
     mask-image: linear-gradient(90deg, #000 calc(100% - 140px), transparent calc(100% - 76px));
   }
   .mq-toggle {

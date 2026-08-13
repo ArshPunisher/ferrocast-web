@@ -96,7 +96,10 @@ export function mountBot(host: HTMLElement) {
         'transform',
         `translate(${(cur.px * e.rx).toFixed(2)} ${(cur.py * e.ry).toFixed(2)})`,
       )
-    face.setAttribute('transform', `translate(${(cur.px * 5).toFixed(2)} ${(cur.py * 4).toFixed(2)})`)
+    face.setAttribute(
+      'transform',
+      `translate(${(cur.px * 5).toFixed(2)} ${(cur.py * 4).toFixed(2)})`,
+    )
     head.style.transform = `rotate(${cur.tilt.toFixed(2)}deg)`
 
     let next: Mood = 'neutral'

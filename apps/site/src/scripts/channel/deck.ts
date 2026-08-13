@@ -310,7 +310,12 @@ const CAM = (
     [[-0.2, 0.85, 1], [-0.8, 0.6, -0.2], 8.4, 5.6],
     [[0.3, 0.8, 1], [0.6, 0.6, -0.1], 8.2, 5.6],
   ] as const
-).map(([d, t, w, h]) => ({ dir: new THREE.Vector3(...d).normalize(), at: new THREE.Vector3(...t), w, h }))
+).map(([d, t, w, h]) => ({
+  dir: new THREE.Vector3(...d).normalize(),
+  at: new THREE.Vector3(...t),
+  w,
+  h,
+}))
 
 export const deck: Build = (el, mobile, renderer) => {
   shared ??= buildWorld(renderer, mobile)

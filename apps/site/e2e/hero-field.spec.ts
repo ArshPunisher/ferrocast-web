@@ -58,7 +58,9 @@ test('the field moves', async ({ page }) => {
   expect(await frame(page)).not.toBe(a)
 })
 
-test('under reduced motion: no intro, everything visible, the field holds still', async ({ page }) => {
+test('under reduced motion: no intro, everything visible, the field holds still', async ({
+  page,
+}) => {
   needsGpu()
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
@@ -81,12 +83,16 @@ test('opening: On air, Level check and Spark drop play, then every helper is gon
   await expect(page.locator('.intro-meter')).toHaveCount(1)
   await expect(page.locator('html')).not.toHaveClass(/intro-hold/, { timeout: 4000 })
   await expect(
-    page.locator('.intro-standby, .intro-onair, .intro-wash, .intro-tally, .intro-cursor, .intro-meter'),
+    page.locator(
+      '.intro-standby, .intro-onair, .intro-wash, .intro-tally, .intro-cursor, .intro-meter',
+    ),
   ).toHaveCount(0)
   for (const sel of ['.hero .eyebrow', '.hero h1 .line >> nth=1', '.hero .lede', '.hero-ctas'])
     await expect(page.locator(sel)).toHaveCSS('opacity', '1')
   // the headline still reads as one sentence
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Your stream tools,\s+on your own PC\./)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    /Your stream tools,\s+on your own PC\./,
+  )
 })
 
 test('opening: any key skips straight to the finished banner', async ({ page }) => {
@@ -107,7 +113,9 @@ test('opening: if its script never runs, the text still shows', async ({ page })
 test('opening: only the banner waits; other sections are readable at once', async ({ page }) => {
   await page.goto('/#tips')
   await expect(page.locator('html')).toHaveClass(/intro-hold/)
-  const others = page.locator('main .lede:not(.hero-copy .lede), main .eyebrow:not(.hero-copy .eyebrow)')
+  const others = page.locator(
+    'main .lede:not(.hero-copy .lede), main .eyebrow:not(.hero-copy .eyebrow)',
+  )
   const n = await others.count()
   expect(n).toBeGreaterThan(0)
   for (let i = 0; i < n; i++) await expect(others.nth(i)).toHaveCSS('opacity', '1')

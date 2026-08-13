@@ -192,7 +192,7 @@ function buildWorld(renderer: THREE.WebGLRenderer, mobile: boolean): World {
   dummy.position.set(0.1, DY + 0.17, -2.68 + 4 * 0.128 - 0.01)
   dummy.scale.set(5.5, 1, 1)
   dummy.updateMatrix()
-  caps.setMatrixAt(n++, dummy.matrix)
+  caps.setMatrixAt(n, dummy.matrix)
   caps.castShadow = true
   caps.receiveShadow = true
   room.add(caps)
@@ -314,7 +314,9 @@ function buildWorld(renderer: THREE.WebGLRenderer, mobile: boolean): World {
   phone.add(badge)
 
   /* ---- desk mic on a short stand, beside the keyboard and clear of every close-up */
-  const micBase = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.04, 32), M.device))
+  const micBase = shadowed(
+    new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.04, 32), M.device),
+  )
   micBase.position.set(1.95, DY + 0.09, -3.0)
   room.add(micBase)
   cyl(0.025, 0.025, 0.36, M.metal, 1.95, DY + 0.28, -3.0, 12)
@@ -362,7 +364,17 @@ function buildWorld(renderer: THREE.WebGLRenderer, mobile: boolean): World {
   cyl(0.06, 0.06, 0.78, cMetal, 0, 0.52, 0, 16, chair)
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2
-    const leg = box(0.55, 0.06, 0.09, cDark, Math.cos(a) * 0.27, 0.12, Math.sin(a) * 0.27, 0.03, chair)
+    const leg = box(
+      0.55,
+      0.06,
+      0.09,
+      cDark,
+      Math.cos(a) * 0.27,
+      0.12,
+      Math.sin(a) * 0.27,
+      0.03,
+      chair,
+    )
     leg.rotation.y = -a
     const wheel = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), cDevice))
     wheel.position.set(Math.cos(a) * 0.52, 0.06, Math.sin(a) * 0.52)

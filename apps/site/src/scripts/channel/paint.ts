@@ -40,7 +40,14 @@ export const APP_LIGHT: UI = {
   line: '#c9ced7',
 }
 
-export function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function rr(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   c.beginPath()
   c.moveTo(x + r, y)
   c.arcTo(x + w, y, x + w, y + h, r)

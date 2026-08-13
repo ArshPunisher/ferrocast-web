@@ -656,7 +656,8 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
                 title={u.blocked_while_live ? 'Available after your stream' : undefined}
                 onClick={() =>
                   void run('update', () => client.installUpdate(), {
-                    success: (r) => `Installing v${r.installing}. Ferrocast restarts by itself in a moment.`,
+                    success: (r) =>
+                      `Installing v${r.installing}. Ferrocast restarts by itself in a moment.`,
                   })
                 }
               >

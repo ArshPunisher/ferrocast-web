@@ -33,10 +33,22 @@ const posters = ['desk', 'deck', 'glass'].includes(kind)
     aria-hidden="true"
   >
     {posters?.dark && (
-      <img class="st-fallback st-poster p-dark" src={posters.dark} alt="" loading="lazy" decoding="async" />
+      <img
+        class="st-fallback st-poster p-dark"
+        src={posters.dark}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
     )}
     {posters?.light && (
-      <img class="st-fallback st-poster p-light" src={posters.light} alt="" loading="lazy" decoding="async" />
+      <img
+        class="st-fallback st-poster p-light"
+        src={posters.light}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
     )}
     <canvas class="st-canvas"></canvas>
     <div class="st-over">

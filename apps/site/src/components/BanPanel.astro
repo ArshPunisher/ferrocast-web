@@ -20,7 +20,9 @@ const plats: P[] = ['twitch', 'youtube', 'kick']
 
 <div class="bp" data-ban-panel>
   <div class="bp-copy">
-    <h2 class="display-1">One ban. <span class="hl">Every platform.</span></h2>
+    <h2 class="display-1">
+      One ban. <span class="hl">Every platform.</span>
+    </h2>
     <p class="lede">
       Ban a hate-raider on Twitch, YouTube and Kick in one click. Panic mode locks chat down
       everywhere at once, from a single hotkey.
@@ -53,7 +55,9 @@ const plats: P[] = ['twitch', 'youtube', 'kick']
                 <svg class={`pi ${p}`} viewBox="0 0 24 24" fill="currentColor">
                   <path d={ICON_PATHS[p]} />
                 </svg>
-                <span class="nm" style={`color: ${color}`}>{name}</span>
+                <span class="nm" style={`color: ${color}`}>
+                  {name}
+                </span>
                 <span class="tx">{msg}</span>
               </div>
             </li>
@@ -74,7 +78,9 @@ const plats: P[] = ['twitch', 'youtube', 'kick']
               <svg class="pi youtube" viewBox="0 0 24 24" fill="currentColor">
                 <path d={ICON_PATHS.youtube} />
               </svg>
-              <span class="nm" style="color: #eef0f4">Priya Iyer</span>
+              <span class="nm" style="color: #eef0f4">
+                Priya Iyer
+              </span>
               <span class="tx">gg</span>
             </div>
           </li>
@@ -98,8 +104,12 @@ const plats: P[] = ['twitch', 'youtube', 'kick']
       </div>
     </div>
     <button type="button" class="bp-pause" data-ban-pause aria-label="Pause the ban demo" hidden>
-      <span class="i-pause"><Icon name="pause" size={14} weight="fill" /></span>
-      <span class="i-play"><Icon name="play" size={14} weight="fill" /></span>
+      <span class="i-pause">
+        <Icon name="pause" size={14} weight="fill" />
+      </span>
+      <span class="i-play">
+        <Icon name="play" size={14} weight="fill" />
+      </span>
     </button>
   </div>
 </div>
@@ -217,8 +227,7 @@ const plats: P[] = ['twitch', 'youtube', 'kick']
     border-radius: 24px;
     background:
       radial-gradient(70% 60% at 15% 60%, rgb(255 164 36 / 0.06), transparent 70%),
-      radial-gradient(50% 50% at 85% 20%, rgb(51 212 255 / 0.05), transparent 70%),
-      var(--bp-bg);
+      radial-gradient(50% 50% at 85% 20%, rgb(51 212 255 / 0.05), transparent 70%), var(--bp-bg);
     border: 1px solid var(--bp-line);
     color: var(--bp-text);
     color-scheme: dark;

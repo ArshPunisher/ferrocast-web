@@ -2,7 +2,14 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ICON_PATHS, type IconName } from '../platform-icons'
 import { MARK_MAGNET, MARK_SPIKES, spikePath, type SpikeSpec } from '../ferro/mark'
-import { SPARK, SPARK_SMALL, WORDMARK_BOX, WORDMARK_LETTERS, WORDMARK_LIVE, WORDMARK_O } from '../brand'
+import {
+  SPARK,
+  SPARK_SMALL,
+  WORDMARK_BOX,
+  WORDMARK_LETTERS,
+  WORDMARK_LIVE,
+  WORDMARK_O,
+} from '../brand'
 import { Ferrofluid, mountFerrofluid } from '../ferro/ferrofluid'
 import { cx } from '../cx'
 

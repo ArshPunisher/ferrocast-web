@@ -120,11 +120,36 @@ function buildWorld(renderer: THREE.WebGLRenderer, mobile: boolean): World {
   }
   // [entering, floating apart, one card tested, the dashboard]
   const LAY: Record<string, Lay[]> = {
-    alert: [scatter('alert', -1.4, 0.2, 0.4, 1.4), scatter('alert', 0.5, 0.1, 0.28), [0, 1.0, 0.6, 0.05, -0.06, 1.45], grid('alert')],
-    mod: [scatter('mod', -2.2, -0.1, 0.35, 1.5), scatter('mod', -0.3, -0.06, 0.22), [...dock.mod!, 0, 0.1, 0, 0.45], grid('mod', 0.02)],
-    goal: [scatter('goal', -1.8, -0.25, 0.4, 1.4), scatter('goal', 0.2, -0.18, 0.3), [...dock.goal!, 0, 0.1, 0, 0.45], grid('goal')],
-    tip: [scatter('tip', -2.0, 0.25, -0.4, 1.45), scatter('tip', -0.4, 0.16, -0.26), [...dock.tip!, 0, 0.1, 0, 0.45], grid('tip')],
-    chat: [scatter('chat', -1.6, -0.12, -0.45, 1.4), scatter('chat', 0.1, -0.08, -0.32), [...dock.chat!, 0, 0.1, 0, 0.45], grid('chat')],
+    alert: [
+      scatter('alert', -1.4, 0.2, 0.4, 1.4),
+      scatter('alert', 0.5, 0.1, 0.28),
+      [0, 1.0, 0.6, 0.05, -0.06, 1.45],
+      grid('alert'),
+    ],
+    mod: [
+      scatter('mod', -2.2, -0.1, 0.35, 1.5),
+      scatter('mod', -0.3, -0.06, 0.22),
+      [...dock.mod!, 0, 0.1, 0, 0.45],
+      grid('mod', 0.02),
+    ],
+    goal: [
+      scatter('goal', -1.8, -0.25, 0.4, 1.4),
+      scatter('goal', 0.2, -0.18, 0.3),
+      [...dock.goal!, 0, 0.1, 0, 0.45],
+      grid('goal'),
+    ],
+    tip: [
+      scatter('tip', -2.0, 0.25, -0.4, 1.45),
+      scatter('tip', -0.4, 0.16, -0.26),
+      [...dock.tip!, 0, 0.1, 0, 0.45],
+      grid('tip'),
+    ],
+    chat: [
+      scatter('chat', -1.6, -0.12, -0.45, 1.4),
+      scatter('chat', 0.1, -0.08, -0.32),
+      [...dock.chat!, 0, 0.1, 0, 0.45],
+      grid('chat'),
+    ],
   }
   const defs: [string, number, number, keyof typeof paint][] = [
     ['alert', 3.4, 1.05, 'alert'],
@@ -167,7 +192,9 @@ function buildWorld(renderer: THREE.WebGLRenderer, mobile: boolean): World {
     backdropTex.redraw()
     orbs.forEach((o) => {
       const m = o.material as THREE.MeshBasicMaterial
-      m.color.set(o.userData.tone === 'molten' ? (l ? '#e9800c' : '#ffa424') : l ? '#0888b8' : '#33d4ff')
+      m.color.set(
+        o.userData.tone === 'molten' ? (l ? '#e9800c' : '#ffa424') : l ? '#0888b8' : '#33d4ff',
+      )
       m.opacity = l ? 0.38 : 0.32
     })
     tiles.forEach((tl) => {

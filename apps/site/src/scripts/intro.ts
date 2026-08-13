@@ -62,34 +62,54 @@ export function playIntro(hero: HTMLElement) {
   wash.style.top = `${lr.top + lr.height / 2}px`
   const tally = header ? add('<span class="intro-tally" aria-hidden="true"></span>', header) : null
 
-  tl(sign, [
-    { opacity: 0, transform: 'translateY(-50%) scale(0.96)' },
-    { opacity: 1, transform: 'translateY(-50%)', offset: 0.1 },
-    { opacity: 1, transform: 'translateY(-50%)', offset: 0.8 },
-    { opacity: 0, transform: 'translateY(calc(-50% - 6px))' },
-  ], { duration: 1250, easing: 'linear' })
+  tl(
+    sign,
+    [
+      { opacity: 0, transform: 'translateY(-50%) scale(0.96)' },
+      { opacity: 1, transform: 'translateY(-50%)', offset: 0.1 },
+      { opacity: 1, transform: 'translateY(-50%)', offset: 0.8 },
+      { opacity: 0, transform: 'translateY(calc(-50% - 6px))' },
+    ],
+    { duration: 1250, easing: 'linear' },
+  )
   // hard on/off cuts, like a real tally lamp
-  tl(lamp, [
-    { opacity: 0.15, offset: 0 },
-    { opacity: 0.15, offset: 0.24 },
-    { opacity: 1, offset: 0.25 },
-    { opacity: 1, offset: 0.49 },
-    { opacity: 0.15, offset: 0.5 },
-    { opacity: 0.15, offset: 0.74 },
-    { opacity: 1, offset: 0.75 },
-    { opacity: 1, offset: 1 },
-  ], { duration: 480, easing: 'linear' })
-  tl(standby, [{ opacity: 0.84 }, { opacity: 0 }], { duration: 380, delay: 420, easing: 'ease-out' })
-  tl(wash, [
-    { opacity: 0, transform: 'translate(-50%, -50%) scale(0.05)' },
-    { opacity: 1, transform: 'translate(-50%, -50%) scale(0.5)', offset: 0.4 },
-    { opacity: 0, transform: 'translate(-50%, -50%) scale(1)' },
-  ], { duration: 700, delay: 400 })
-  tl(tally, [
-    { opacity: 1, transform: 'scaleX(0)' },
-    { opacity: 1, transform: 'scaleX(1)', offset: 0.55 },
-    { opacity: 0, transform: 'scaleX(1)' },
-  ], { duration: 760, delay: 440, easing: 'cubic-bezier(0.65, 0, 0.35, 1)' })
+  tl(
+    lamp,
+    [
+      { opacity: 0.15, offset: 0 },
+      { opacity: 0.15, offset: 0.24 },
+      { opacity: 1, offset: 0.25 },
+      { opacity: 1, offset: 0.49 },
+      { opacity: 0.15, offset: 0.5 },
+      { opacity: 0.15, offset: 0.74 },
+      { opacity: 1, offset: 0.75 },
+      { opacity: 1, offset: 1 },
+    ],
+    { duration: 480, easing: 'linear' },
+  )
+  tl(standby, [{ opacity: 0.84 }, { opacity: 0 }], {
+    duration: 380,
+    delay: 420,
+    easing: 'ease-out',
+  })
+  tl(
+    wash,
+    [
+      { opacity: 0, transform: 'translate(-50%, -50%) scale(0.05)' },
+      { opacity: 1, transform: 'translate(-50%, -50%) scale(0.5)', offset: 0.4 },
+      { opacity: 0, transform: 'translate(-50%, -50%) scale(1)' },
+    ],
+    { duration: 700, delay: 400 },
+  )
+  tl(
+    tally,
+    [
+      { opacity: 1, transform: 'scaleX(0)' },
+      { opacity: 1, transform: 'scaleX(1)', offset: 0.55 },
+      { opacity: 0, transform: 'scaleX(1)' },
+    ],
+    { duration: 760, delay: 440, easing: 'cubic-bezier(0.65, 0, 0.35, 1)' },
+  )
   tl(eyebrow, [{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 1160, easing: 'ease-out' })
 
   // ---- 2. Level check
@@ -97,18 +117,29 @@ export function playIntro(hero: HTMLElement) {
     const cur = add('<span class="intro-cursor" aria-hidden="true"></span>', line)
     const w = line.getBoundingClientRect().width
     const delay = 520 + i * 110
-    tl(line, [
-      { opacity: 1, clipPath: 'inset(-0.2em 100% -0.2em 0)' },
-      { opacity: 1, clipPath: 'inset(-0.2em -0.2em -0.2em 0)' },
-    ], { duration: 520, delay })
-    tl(cur, [
-      { opacity: 1, transform: 'translateX(0)' },
-      { opacity: 1, transform: `translateX(${w + 6}px)`, offset: 0.7 },
-      { opacity: 0, transform: `translateX(${w + 6}px)` },
-    ], { duration: 740, delay })
+    tl(
+      line,
+      [
+        { opacity: 1, clipPath: 'inset(-0.2em 100% -0.2em 0)' },
+        { opacity: 1, clipPath: 'inset(-0.2em -0.2em -0.2em 0)' },
+      ],
+      { duration: 520, delay },
+    )
+    tl(
+      cur,
+      [
+        { opacity: 1, transform: 'translateX(0)' },
+        { opacity: 1, transform: `translateX(${w + 6}px)`, offset: 0.7 },
+        { opacity: 0, transform: `translateX(${w + 6}px)` },
+      ],
+      { duration: 740, delay },
+    )
   })
   if (h1) {
-    const meter = add(`<div class="intro-meter" aria-hidden="true">${'<i></i>'.repeat(24)}</div>`, h1)
+    const meter = add(
+      `<div class="intro-meter" aria-hidden="true">${'<i></i>'.repeat(24)}</div>`,
+      h1,
+    )
     tl(meter, [{ opacity: 1 }, { opacity: 1, offset: 0.75 }, { opacity: 0 }], {
       duration: 1240,
       delay: 540,
@@ -116,12 +147,16 @@ export function playIntro(hero: HTMLElement) {
     })
     meter.querySelectorAll('i').forEach((seg, i) => {
       const col = i >= 19 ? 'var(--fc-accent)' : 'var(--fc-arc)'
-      tl(seg, [
-        { background: 'var(--fc-line-strong)' },
-        { background: col, offset: 0.2 },
-        { background: col, offset: 0.6 },
-        { background: 'var(--fc-line-strong)' },
-      ], { duration: 760, delay: 560 + i * 16, easing: 'linear' })
+      tl(
+        seg,
+        [
+          { background: 'var(--fc-line-strong)' },
+          { background: col, offset: 0.2 },
+          { background: col, offset: 0.6 },
+          { background: 'var(--fc-line-strong)' },
+        ],
+        { duration: 760, delay: 560 + i * 16, easing: 'linear' },
+      )
     })
   }
   const rise = [
