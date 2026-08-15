@@ -10,7 +10,7 @@ import {
   type Overlay,
   type Theme,
 } from '@ferrocast/api'
-import { Button, FerroCanvas, Skeleton, Wordmark, copyText, cx, toast } from '@ferrocast/ui'
+import { Button, Skeleton, SparkField, Wordmark, copyText, cx, toast } from '@ferrocast/ui'
 import { AccountRow, useConnect } from '../components/accounts'
 import { AlertStage } from '../components/AlertStage'
 import { ObsIcon, useAddToObs } from '../components/obs'
@@ -29,6 +29,12 @@ function previewAlert() {
 function bgHex(): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--fc-bg').trim()
   return /^#[0-9a-f]{6}$/i.test(v) ? v : '#0a0b0d'
+}
+
+// a light page background means the light theme
+const isLight = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16)
+  return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114 > 140
 }
 
 export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void }) {
@@ -80,10 +86,10 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   return (
     <div className="grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="relative hidden overflow-hidden border-r border-line lg:block">
-        <FerroCanvas
-          background={bg}
+        <SparkField
+          light={isLight(bg)}
           className="absolute inset-0 h-full w-full"
-          label="Ferrofluid rising toward a magnet"
+          label="The Ferrocast Spark forming from points of light"
         />
         <div className="absolute inset-x-0 bottom-0 p-10">
           <p className="max-w-[24ch] font-display text-[34px] leading-[1.08] font-bold tracking-[-0.03em] text-text">

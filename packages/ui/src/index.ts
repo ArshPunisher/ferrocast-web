@@ -15,3 +15,4 @@ export {
   lockupSvg,
   type BrandPaint,
 } from './brand'
+export { SparkField } from './components/SparkField'
