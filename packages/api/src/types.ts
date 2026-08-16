@@ -611,10 +611,71 @@ export interface Backup {
   version: string
 }
 
+/** `POST /api/v1/import` (a `.ferropack`): rows per table, media files unpacked, the backup taken first. */
+export interface PackImportReport {
+  imported: Record<string, number>
+  media_files: number
+  backup: string
+}
+
+export type ImportSource = 'streamelements' | 'streamlabs'
+export type ImportKind = 'commands' | 'timers' | 'points' | 'loyalty_settings' | 'tips'
+export type ConflictChoice = 'keep' | 'replace'
+export interface ImportItem {
+  name: string
+  reason: string
+}
+export interface NotImported {
+  what: string
+  /** 0 when not counted. */
+  count: number
+  reason: string
+}
+export interface ImportPreviewSection {
+  kind: ImportKind
+  found: number
+  new: number
+  conflicts: number
+  /** Points for people Ferrocast hasn't seen yet; paid when their id or login first shows up. */
+  waiting: number
+  /** YouTube points with only a name: never paid automatically (names aren't unique). */
+  needs_match: number
+  skipped: number
+  /** Up to 100 each; the counts are exact. */
+  conflict_items: ImportItem[]
+  skipped_items: ImportItem[]
+  needs_match_items: ImportItem[]
+  notes: string[]
+}
+/** `POST /api/v1/import/{streamelements,streamlabs}/preview`. Nothing is written yet. */
+export interface ImportPreview {
+  preview_id: string
+  source: ImportSource
+  expires_at: Millis
+  account: { name: string; platform: ChatPlatform | null } | null
+  sections: ImportPreviewSection[]
+  not_imported: NotImported[]
+}
+export interface ImportReportSection {
+  kind: ImportKind
+  found: number
+  added: number
+  replaced: number
+  kept: number
+  waiting: number
+  needs_match: number
+  skipped: number
+  skipped_items: ImportItem[]
+  needs_match_items: ImportItem[]
+  notes: string[]
+}
+/** `POST /api/v1/import/apply`. */
 export interface ImportReport {
-  source: 'ferropack' | 'streamelements' | 'streamlabs'
-  imported: { kind: string; count: number }[]
-  skipped: { kind: string; reason: string }[]
+  source: ImportSource
+  backup: string
+  on_conflict: ConflictChoice
+  sections: ImportReportSection[]
+  not_imported: NotImported[]
 }
 
 export interface WhyResult {

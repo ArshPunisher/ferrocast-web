@@ -15,7 +15,10 @@ import type {
   GiveawaySpec,
   GiveawayView,
   Goal,
+  ConflictChoice,
+  ImportPreview,
   ImportReport,
+  PackImportReport,
   LeaderboardEntry,
   LoyaltyConfig,
   Media,
@@ -369,12 +372,33 @@ export class FerroClient {
     if (!res.ok) throw await errorFromResponse(res)
     return res.blob()
   }
-  importPack = (file: Blob, name: string, source: ImportReport['source']) => {
+  /** Imports a `.ferropack` exported from Ferrocast (a backup is taken first). */
+  importPack = (file: Blob, name: string) => {
     const form = new FormData()
-    form.append('source', source)
     form.append('file', file, name)
-    return this.request<ImportReport>('POST', '/api/v1/import', undefined, form)
+    return this.request<PackImportReport>('POST', '/api/v1/import', undefined, form)
   }
+  /** Reads a StreamElements channel with its JWT. Nothing is written; the token isn't kept. */
+  previewStreamElements = (token: string) =>
+    this.post<ImportPreview>('/api/v1/import/streamelements/preview', { token })
+  /** Reads Streamlabs exports (CSV or .xlsx). `platform` says whose viewers the points are. */
+  previewStreamlabs = (files: {
+    platform?: ChatPlatform
+    points?: { file: Blob; name: string }
+    tips?: { file: Blob; name: string }
+  }) => {
+    const form = new FormData()
+    if (files.platform) form.append('platform', files.platform)
+    if (files.points) form.append('points', files.points.file, files.points.name)
+    if (files.tips) form.append('tips', files.tips.file, files.tips.name)
+    return this.request<ImportPreview>('POST', '/api/v1/import/streamlabs/preview', undefined, form)
+  }
+  /** Imports what a preview showed (backup first, one transaction). */
+  applyImport = (previewId: string, onConflict: ConflictChoice) =>
+    this.post<ImportReport>('/api/v1/import/apply', {
+      preview_id: previewId,
+      on_conflict: onConflict,
+    })
   backups = () => this.get<Backup[]>('/api/v1/backups')
   restoreBackup = (id: string) => this.post<void>(`/api/v1/backups/${enc(id)}/restore`)
   sessionStats = () => this.get<SessionStats>('/api/v1/stats/session')

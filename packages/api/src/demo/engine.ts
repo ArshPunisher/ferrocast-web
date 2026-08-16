@@ -70,6 +70,7 @@ import { DemoRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
 import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
+import { DemoImporters } from './features/importers'
 import {
   CHATTERS,
   FILTERS,
@@ -297,6 +298,18 @@ export class DemoEngine {
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
   private readonly starter = new DemoStarter(() => this.commands)
+  private readonly importers = new DemoImporters(
+    () => this.commands,
+    (c) => {
+      this.commands = c
+    },
+    () => this.timersList,
+    (t) => {
+      this.timersList = t
+    },
+    // Logins only: display names never match anyone (anyone can set one).
+    () => this.host.knownActors().flatMap((a) => (a.login ? [a.login] : [])),
+  )
   private readonly obsDetect = new DemoObsDetect(
     () => true,
     (port) => {
@@ -1137,6 +1150,7 @@ export class DemoEngine {
       this.discord,
       this.obsDetect,
       this.starter,
+      this.importers,
     ]
   }
 
@@ -1831,41 +1845,24 @@ export class DemoEngine {
     return clone(m)
   }
 
+  /** A `.ferropack` (the engine's `POST /api/v1/import`): a backup first, then the report. */
   private importPack(body: unknown) {
     if (!(body instanceof FormData))
-      throw new HttpError(400, 'invalid', 'file: choose a file to import.')
-    const source = body.get('source')
+      throw new HttpError(400, 'invalid', 'Attach the .ferropack in a form field named "file".')
     const file = body.get('file')
-    if (source !== 'ferropack' && source !== 'streamelements' && source !== 'streamlabs')
-      throw new HttpError(400, 'invalid', 'source: pick where the file comes from.')
     if (!(file instanceof Blob) || file.size === 0)
-      throw new HttpError(400, 'invalid', 'file: choose a file to import.')
-    if (file.size > 200 * 1024 * 1024)
-      throw new HttpError(413, 'too_large', 'Imports can be up to 200 MB.')
+      throw new HttpError(
+        400,
+        'invalid',
+        'The file is empty.',
+        'Pick a .ferropack you exported from Ferrocast.',
+      )
+    if (file.size > 2 * 1024 * 1024 * 1024)
+      throw new HttpError(413, 'too_large', 'Packs can be up to 2 GB.')
     return {
-      source,
-      imported: [
-        { kind: 'overlays', count: source === 'ferropack' ? 2 : 3 },
-        { kind: 'alert variations', count: 14 },
-        { kind: 'commands', count: 22 },
-        { kind: 'timers', count: 4 },
-        { kind: 'sounds and images', count: 31 },
-      ],
-      skipped:
-        source === 'ferropack'
-          ? []
-          : [
-              {
-                kind: 'custom widget',
-                reason:
-                  'Custom widgets run in a sandbox that isn’t ready yet. They are saved and will import later.',
-              },
-              {
-                kind: 'loyalty points',
-                reason:
-                  'Points arrive in a later version. Your totals are kept in the import file.',
-              },
-            ],
+      imported: { overlays: 2, alert_rules: 14, commands: 22, timers: 4, goals: 3, media: 31 },
+      media_files: 31,
+      backup: `${Date.now()}-before-import`,
     }
   }
 

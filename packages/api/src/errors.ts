@@ -1,7 +1,7 @@
 import type { ApiErrorBody } from './types'
 
 /** Statuses the engine documents (API.md §1), plus 0 for "the engine isn't reachable". */
-export type KnownStatus = 0 | 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 429 | 503
+export type KnownStatus = 0 | 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 429 | 502 | 503
 
 /**
  * One error type for every failed call. `message` is always something a streamer can
@@ -59,6 +59,10 @@ export const STATUS_COPY: Record<KnownStatus, { message: string; hint: string | 
   },
   422: { message: "That can't run right now.", hint: null },
   429: { message: "You're going a bit fast.", hint: 'Wait a moment and try again.' },
+  502: {
+    message: 'Another service Ferrocast was talking to had a problem.',
+    hint: 'Nothing was changed. Try again in a few minutes.',
+  },
   503: { message: 'Ferrocast is still starting.', hint: 'This takes a second or two.' },
 }
 
