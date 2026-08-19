@@ -14,6 +14,8 @@ const SCREENS = [
   'settings',
   'community',
   'recap',
+  'import',
+  'import/streamlabs',
 ]
 
 test.use({ viewport: { width: 375, height: 812 } })

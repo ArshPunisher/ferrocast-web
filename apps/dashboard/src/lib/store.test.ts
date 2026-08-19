@@ -144,6 +144,8 @@ describe('router', () => {
       '#/tips',
       '#/settings',
       '#/settings/obs',
+      '#/import',
+      '#/import/streamlabs',
     ])
       expect(href(parseRoute(h))).toBe(h)
   })

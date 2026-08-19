@@ -15,6 +15,7 @@ export type Route =
   | { name: 'recap' }
   | { name: 'tips' }
   | { name: 'settings'; section?: string }
+  | { name: 'import'; source?: 'streamelements' | 'streamlabs' }
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent)
@@ -38,6 +39,10 @@ export function parseRoute(hash: string): Route {
       return { name: 'tips' }
     case 'settings':
       return b ? { name: 'settings', section: b } : { name: 'settings' }
+    case 'import':
+      return b === 'streamelements' || b === 'streamlabs'
+        ? { name: 'import', source: b }
+        : { name: 'import' }
     default:
       return { name: 'home' }
   }
@@ -53,6 +58,8 @@ export function href(r: Route): string {
       return r.section ? `#/settings/${r.section}` : '#/settings'
     case 'community':
       return r.section ? `#/community/${r.section}` : '#/community'
+    case 'import':
+      return r.source ? `#/import/${r.source}` : '#/import'
     default:
       return `#/${r.name}`
   }

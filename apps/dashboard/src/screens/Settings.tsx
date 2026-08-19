@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DownloadSimple, UploadSimple } from '@phosphor-icons/react'
+import { ArrowSquareIn, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
   describeError,
   type Backup,
-  type ImportReport,
+  type PackImportReport,
   type Settings as SettingsData,
   type TtsSettings,
 } from '@ferrocast/api'
@@ -424,8 +424,7 @@ function Data() {
   const backups = useResource((c) => c.backups())
   const { run, busy } = useAction()
   const file = useRef<HTMLInputElement>(null)
-  const [source, setSource] = useState<ImportReport['source']>('streamelements')
-  const [report, setReport] = useState<ImportReport | null>(null)
+  const [report, setReport] = useState<PackImportReport | null>(null)
   const [restore, setRestore] = useState<Backup | null>(null)
   const exportAll = () =>
     void run(
@@ -471,22 +470,21 @@ function Data() {
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-text">Bring your setup</h3>
           <p className="text-[13px] text-text-3">
-            Import a StreamElements or Streamlabs export, or a Ferrocast file.
+            Coming from StreamElements or Streamlabs? Bring your commands, timers, points and tip
+            history. You see everything before anything changes.
           </p>
           <div className="mt-1 flex flex-wrap gap-2">
-            <Select
-              aria-label="Import from"
-              value={source}
-              onChange={(e) => setSource(e.target.value as ImportReport['source'])}
-              className="w-auto"
+            <a
+              href={href({ name: 'import' })}
+              className="fc-press inline-flex h-10 items-center justify-center gap-2 rounded-control bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text border border-line-strong hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
             >
-              <option value="streamelements">StreamElements</option>
-              <option value="streamlabs">Streamlabs</option>
-              <option value="ferropack">Ferrocast file</option>
-            </Select>
+              <ArrowSquareIn size={16} aria-hidden="true" />
+              From StreamElements or Streamlabs
+            </a>
             <input
               ref={file}
               type="file"
+              accept=".ferropack,application/zip"
               className="sr-only"
               tabIndex={-1}
               aria-hidden="true"
@@ -494,7 +492,7 @@ function Data() {
                 const f = e.target.files?.[0]
                 e.target.value = ''
                 if (f)
-                  void run('import', () => client.importPack(f, f.name, source)).then(
+                  void run('import', () => client.importPack(f, f.name)).then(
                     (r) => r && setReport(r),
                   )
               }}
@@ -504,7 +502,7 @@ function Data() {
               busy={busy === 'import'}
               onClick={() => file.current?.click()}
             >
-              Choose file
+              Ferrocast file
             </Button>
           </div>
         </div>
@@ -563,29 +561,25 @@ function Data() {
         {report && (
           <div className="flex flex-col gap-3">
             <ul className="flex flex-col gap-1">
-              {report.imported.map((i) => (
-                <li
-                  key={i.kind}
-                  className="flex justify-between rounded-control bg-surface-2 px-3 py-2 text-sm"
-                >
-                  <span className="text-text-2 capitalize">{i.kind}</span>
-                  <span className="font-mono text-text">{i.count}</span>
-                </li>
-              ))}
+              {Object.entries(report.imported)
+                .filter(([, count]) => count > 0)
+                .map(([table, count]) => (
+                  <li
+                    key={table}
+                    className="flex justify-between rounded-control bg-surface-2 px-3 py-2 text-sm"
+                  >
+                    <span className="text-text-2 capitalize">{table.replace(/_/g, ' ')}</span>
+                    <span className="font-mono text-text">{count}</span>
+                  </li>
+                ))}
+              <li className="flex justify-between rounded-control bg-surface-2 px-3 py-2 text-sm">
+                <span className="text-text-2">Media files</span>
+                <span className="font-mono text-text">{report.media_files}</span>
+              </li>
             </ul>
-            {report.skipped.length > 0 && (
-              <div>
-                <p className="text-[13px] font-semibold text-text-2">Not imported yet</p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {report.skipped.map((s) => (
-                    <li key={s.kind} className="text-[13px] text-text-3">
-                      <span className="font-medium text-text-2 capitalize">{s.kind}:</span>{' '}
-                      {s.reason}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <p className="text-[13px] text-text-3">
+              A backup was taken first; restore it below to undo.
+            </p>
           </div>
         )}
       </Dialog>

@@ -16,6 +16,7 @@ import { AlertStage } from '../components/AlertStage'
 import { ObsIcon, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { useLive } from '../lib/store'
+import { go } from '../lib/router'
 
 const STEPS = ['Connect', 'Pick a look', 'Add to OBS'] as const
 
@@ -76,6 +77,13 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   }
   const finish = () =>
     void run('finish', () => done(client.completeSetup())).then((ok) => ok && onDone())
+  // Finishes setup and opens the importer (for people moving from StreamElements or Streamlabs).
+  const finishToImport = () =>
+    void run('import', () => done(client.completeSetup())).then((ok) => {
+      if (!ok) return
+      go({ name: 'import' })
+      onDone()
+    })
 
   const variants = {
     enter: (d: number) => (reduce ? { opacity: 0 } : { opacity: 0, x: d * 24 }),
@@ -333,6 +341,17 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       {added ? 'Open my dashboard' : 'I’ll do it later'}
                     </Button>
                   </div>
+                  <p className="text-[13px] text-text-3">
+                    Coming from StreamElements or Streamlabs?{' '}
+                    <button
+                      type="button"
+                      onClick={finishToImport}
+                      disabled={saving !== null}
+                      className="rounded-sm font-medium text-accent-text underline underline-offset-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
+                    >
+                      Bring your commands and points
+                    </button>
+                  </p>
                 </>
               )}
             </motion.section>

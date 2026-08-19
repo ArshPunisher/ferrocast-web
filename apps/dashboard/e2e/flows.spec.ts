@@ -300,11 +300,13 @@ test.describe('tips and settings', () => {
     expect((await dl).suggestedFilename()).toMatch(/\.ferropack$/)
   })
 
-  test('import shows a report of what came over', async ({ page }) => {
+  test('importing a Ferrocast file shows a report of what came over', async ({ page }) => {
     await open(page, 'settings/data')
-    await page
-      .locator('input[type=file]')
-      .setInputFiles({ name: 'se.json', mimeType: 'application/json', buffer: Buffer.from('{}') })
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'old-pc.ferropack',
+      mimeType: 'application/zip',
+      buffer: Buffer.from('PK'),
+    })
     await expect(page.getByRole('dialog', { name: 'Import finished' })).toContainText('commands')
   })
 

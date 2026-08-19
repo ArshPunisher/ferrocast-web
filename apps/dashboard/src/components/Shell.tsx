@@ -42,7 +42,7 @@ export const NAV: NavItem[] = [
     match: ['community'],
   },
   { route: { name: 'tips' }, label: 'Tips', icon: HandCoins, match: ['tips'] },
-  { route: { name: 'settings' }, label: 'Settings', icon: GearSix, match: ['settings'] },
+  { route: { name: 'settings' }, label: 'Settings', icon: GearSix, match: ['settings', 'import'] },
 ]
 
 const MOBILE_MAIN = ['home', 'chat', 'alerts', 'moderation']
@@ -284,7 +284,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               aria-haspopup="dialog"
               className={cx(
                 'flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium',
-                ['overlays', 'overlay', 'bot', 'community', 'tips', 'settings'].includes(route.name)
+                ['overlays', 'overlay', 'bot', 'community', 'tips', 'settings', 'import'].includes(
+                  route.name,
+                )
                   ? 'text-text'
                   : 'text-text-3',
               )}

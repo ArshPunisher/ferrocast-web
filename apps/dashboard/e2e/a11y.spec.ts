@@ -14,6 +14,8 @@ const SCREENS = [
   'settings',
   'community',
   'recap',
+  'import',
+  'import/streamlabs',
 ]
 
 for (const scheme of ['dark', 'light'] as const) {
