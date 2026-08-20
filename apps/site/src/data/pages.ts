@@ -90,7 +90,7 @@ export const PAGES = {
     path: '/features/own-your-data/',
     title: 'Own your setup: local-first and exportable | Ferrocast',
     description:
-      'Ferrocast keeps your overlays, alerts, commands and history on your own computer. Export everything in open formats; a StreamElements importer is coming.',
+      'Ferrocast keeps your overlays, alerts, commands and history on your own computer. Export it all in open formats, and import from StreamElements.',
     ogTitle: 'Your setup lives on your PC',
     ogKicker: 'Own your data',
     crumb: 'Own your data',

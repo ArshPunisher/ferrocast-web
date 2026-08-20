@@ -1,5 +1,17 @@
 # Status
 
+## 18 Oct 2026 (StreamElements and Streamlabs importers)
+
+**Done**
+
+- `packages/api`: importer types (`ImportPreview`, `ImportReport`, `PackImportReport`), client methods (`previewStreamElements`, `previewStreamlabs`, `applyImport`), 502 fallback copy, and a demo importer (`demo/features/importers.ts`) with a sample channel and the engine's error codes. The `.ferropack` report now matches the engine's real shape.
+- Dashboard: Import screen at `#/import` (from Settings → Your data, and a link on the last first-run step): paste a token or pick files, preview with counts, clashes and skip reasons, keep or replace, import, report. Live region for progress, focus moves to each new step.
+- Site: features, FAQ, pricing, home and the data page meta now say exactly what each importer brings over.
+
+**Next**
+
+- Deploy the site copy with the next site release.
+
 ## 17 Oct 2026 (site: owner's final picks, company facts)
 
 **Done**
@@ -17,7 +29,6 @@
 **Next**
 
 - Deploy to Cloudflare Pages (`ferrocast-site`) and attach ferrocast.clearcraftlabs.com.
-- StreamElements/Streamlabs importer once the owner shares a token.
 
 ## 17 Oct 2026 (site 3D, owner's picks)
 

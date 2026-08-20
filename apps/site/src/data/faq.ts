@@ -69,7 +69,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Can I move my setup from StreamElements or Streamlabs?',
-        a: 'Soon. An importer for StreamElements and Streamlabs is being built: it will bring over alert settings and commands and show a report of what came over. Today you can already export everything from Ferrocast at any time, in open formats.',
+        a: 'Yes. From StreamElements, paste your JWT token and Ferrocast brings over your custom commands, timers, loyalty points balances, points settings and tip history. It only reads, and never saves the token. From Streamlabs, which has no way for other apps to read your Cloudbot, it reads the files you export: Streamlabs Chatbot points (CSV or Excel) and tip history. Viewers are matched by their login or account id, never by display name; YouTube balances that come with only a name are listed for you to add by hand. You see a preview first, choose whether to keep or replace anything you already have, and get a report of what came over and what didn’t. Overlays and custom widgets don’t come over; you rebuild those in Ferrocast.',
       },
       {
         q: 'Does Ferrocast use AI?',

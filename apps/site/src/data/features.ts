@@ -166,7 +166,7 @@ export const FEATURES: Feature[] = [
       },
     ],
     notes: [
-      'Importing from StreamElements is planned; its custom HTML widgets will then run in a sandbox.',
+      'StreamElements overlays and custom HTML widgets don’t import; the importer brings commands, timers, points and tip history.',
     ],
   },
   {
@@ -265,8 +265,8 @@ export const FEATURES: Feature[] = [
             body: 'The bot runs in the app on your PC. It works when our servers don’t.',
           },
           {
-            title: 'Import your commands (coming)',
-            body: 'Planned: bring commands and timers over from StreamElements and Streamlabs.',
+            title: 'Import your commands',
+            body: 'Bring custom commands and timers over from StreamElements, with their cooldowns and user levels.',
           },
           {
             title: 'Same filters as moderation',
@@ -368,8 +368,8 @@ export const FEATURES: Feature[] = [
             body: 'Overlays with their media, alerts, commands, timers and tip history, as JSON and CSV in one file.',
           },
           {
-            title: 'Import your old setup (coming)',
-            body: 'Planned: from StreamElements and Streamlabs, with a report of what came over and what didn’t.',
+            title: 'Import your old setup',
+            body: 'From StreamElements: commands, timers, points and tip history. From Streamlabs: points and tip history from your exports. A report shows what came over and what didn’t.',
           },
           {
             title: 'Backups before changes',
