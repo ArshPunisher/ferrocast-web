@@ -122,26 +122,65 @@ export interface Toast {
   message: string
   hint?: string | null
   action?: { label: string; run: () => void }
+  /**
+   * Toasts about the same thing share a key (`panic`, `obs`, `account:twitch`): a new one
+   * replaces the old one instead of stacking, so switching panic on then off shows only
+   * the latest state. Without a key, an identical toast (same tone and words) replaces
+   * the one on screen instead of stacking a copy.
+   */
+  key?: string
 }
 
 let toasts: Toast[] = []
 let nextId = 1
+const timers = new Map<number, ReturnType<typeof setTimeout>>()
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
+
+/** At most this many toasts at once; the oldest goes first. */
+const MAX_TOASTS = 4
 
 export function toast(t: Omit<Toast, 'id'> & { duration?: number }): number {
   const id = nextId++
   const { duration, ...rest } = t
-  toasts = [...toasts.slice(-3), { ...rest, id }]
+  const key = t.key ?? `${t.tone}:${t.message}`
+  const next: Toast = { ...rest, key, id }
+  let list = toasts
+  const old = list.find((x) => x.key === key)
+  if (old) {
+    clearTimeout(timers.get(old.id))
+    timers.delete(old.id)
+    // Same place in the stack, new content: no jump, no duplicate.
+    list = list.map((x) => (x.id === old.id ? next : x))
+  } else list = [...list, next]
+  while (list.length > MAX_TOASTS) {
+    const [first, ...others] = list
+    if (first) {
+      clearTimeout(timers.get(first.id))
+      timers.delete(first.id)
+    }
+    list = others
+  }
+  toasts = list
   emit()
   const ms = duration ?? (t.tone === 'error' ? 7000 : 3800)
-  setTimeout(() => dismissToast(id), ms)
+  timers.set(
+    id,
+    setTimeout(() => dismissToast(id), ms),
+  )
   return id
 }
 
 export function dismissToast(id: number): void {
+  clearTimeout(timers.get(id))
+  timers.delete(id)
   toasts = toasts.filter((t) => t.id !== id)
   emit()
+}
+
+/** The toasts on screen now (tests). */
+export function currentToasts(): readonly Toast[] {
+  return toasts
 }
 
 const subscribe = (l: () => void) => {
@@ -169,7 +208,7 @@ export function Toaster() {
       <AnimatePresence initial={false}>
         {list.map((t) => (
           <motion.div
-            key={t.id}
+            key={t.key ?? t.id}
             layout={!reduce}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
