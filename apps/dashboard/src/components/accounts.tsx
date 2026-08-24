@@ -42,7 +42,11 @@ export function useConnect(): {
   const done = flow ? connectors?.[flow.platform].state === 'connected' : false
   useEffect(() => {
     if (flow && done) {
-      toast({ tone: 'ok', message: `${PLATFORM_LABEL[flow.platform]} is connected.` })
+      toast({
+        key: `account:${flow.platform}`,
+        tone: 'ok',
+        message: `${PLATFORM_LABEL[flow.platform]} is connected.`,
+      })
       const t = setTimeout(() => setFlow(null), 900)
       return () => clearTimeout(t)
     }
@@ -55,6 +59,7 @@ export function useConnect(): {
     } catch (e) {
       const d = describeError(e)
       toast({
+        key: `account:${p}`,
         tone: e instanceof ApiError && e.status === 409 ? 'info' : 'error',
         message: d.message,
         hint: d.hint,

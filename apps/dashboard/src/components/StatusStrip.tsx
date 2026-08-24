@@ -82,7 +82,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
                 </span>
               )}
               <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
-              {!compact && tone !== 'ok' && <span className="text-text-3">{label}</span>}
+              {!compact && (tone !== 'ok' || name === 'obs') && (
+                <span className={tone === 'ok' ? 'text-text-2' : 'text-text-3'}>{label}</span>
+              )}
               {!compact && late && (
                 <span className="text-text-3" title={c.detail ?? undefined}>
                   may lag

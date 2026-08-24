@@ -276,6 +276,9 @@ export class DemoEngine {
     scene: 'Gameplay',
     host: '127.0.0.1',
     port: 4455,
+    has_password: true,
+    auto: true,
+    detail: null,
   }
   private settings: Settings = clone(SETTINGS)
   private backups: Backup[]
@@ -312,6 +315,7 @@ export class DemoEngine {
   )
   private readonly obsDetect = new DemoObsDetect(
     () => true,
+    () => this.obs.auto !== false,
     (port) => {
       this.obs = {
         state: 'connected',
@@ -319,6 +323,9 @@ export class DemoEngine {
         scene: 'Gameplay',
         host: '127.0.0.1',
         port,
+        has_password: true,
+        auto: true,
+        detail: null,
       }
       this.setConnector('obs', connector('connected', 'OBS 31.1.2'))
       return clone(this.obs)
@@ -357,6 +364,9 @@ export class DemoEngine {
         scene: null,
         host: '127.0.0.1',
         port: 4455,
+        has_password: true,
+        auto: true,
+        detail: 'OBS isn’t running, or its WebSocket server is off.',
       }
     this.accounts = on
       ? [
@@ -1048,7 +1058,7 @@ export class DemoEngine {
     // obs
     if (is('GET', 'obs')) return clone(this.obs)
     if (is('PUT', 'obs')) {
-      const o = requireObj(body) as { host?: string; port?: number; password?: string }
+      const o = requireObj(body) as { host?: string; port?: number; password?: string | null }
       if (!o.host || !/^[a-z0-9.-]+$/i.test(o.host))
         throw new HttpError(400, 'invalid', 'host: enter an address like 127.0.0.1.')
       if (!o.port || o.port < 1 || o.port > 65535)
@@ -1060,14 +1070,32 @@ export class DemoEngine {
           'OBS rejected that password.',
           'Copy it again from OBS: Tools → WebSocket Server Settings → Show Connect Info.',
         )
+      // Like the engine: saving what's already in use (Connect without changes while
+      // following OBS) keeps following OBS; anything else becomes the streamer's own.
+      const unchanged =
+        o.password === undefined && o.host === this.obs.host && o.port === this.obs.port
+      const auto = unchanged && this.obs.auto !== false
+      const hasPassword =
+        o.password === undefined ? this.obs.has_password === true : o.password !== null
+      // The demo's OBS listens on 127.0.0.1:4455; anything else isn't there.
+      const reachable = /^(127\.0\.0\.1|localhost)$/i.test(o.host) && o.port === 4455
+      const detail = reachable
+        ? null
+        : 'OBS isn’t running, or its WebSocket server is off (Tools → WebSocket Server Settings).'
       this.obs = {
-        state: 'connected',
-        version: '31.1.2',
-        scene: 'Gameplay',
+        state: reachable ? 'connected' : 'disconnected',
+        version: reachable ? '31.1.2' : null,
+        scene: reachable ? 'Gameplay' : null,
         host: o.host,
         port: o.port,
+        has_password: hasPassword,
+        auto,
+        detail,
       }
-      this.setConnector('obs', connector('connected', 'OBS 31.1.2'))
+      this.setConnector(
+        'obs',
+        reachable ? connector('connected', 'OBS 31.1.2') : connector('disconnected', null, detail),
+      )
       return clone(this.obs)
     }
 
@@ -1732,8 +1760,16 @@ export class DemoEngine {
       v: 1,
       type: 'notice',
       data: on
-        ? { level: 'warn', message: 'Panic mode is on. Chat is locked down and alerts are paused.' }
-        : { level: 'info', message: 'Panic mode is off. Chat and alerts are back to normal.' },
+        ? {
+            key: 'panic',
+            level: 'warn',
+            message: 'Panic mode is on. Chat is locked down and alerts are paused.',
+          }
+        : {
+            key: 'panic',
+            level: 'info',
+            message: 'Panic mode is off. Chat and alerts are back to normal.',
+          },
     })
     return { on, applied }
   }

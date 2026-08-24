@@ -139,6 +139,7 @@ export function useAddToObs(): {
     try {
       const r = await client.addToObs(o.id)
       toast({
+        key: 'obs',
         tone: 'ok',
         message: `Added to OBS.`,
         hint: `“${r.source}” is in the scene “${r.scene}”.`,

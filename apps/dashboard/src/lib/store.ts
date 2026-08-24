@@ -20,6 +20,7 @@ import {
   type Status,
   type TtsPending,
 } from '@ferrocast/api'
+import { toast } from '@ferrocast/ui'
 import type { Connection } from './boot'
 
 const CHAT_CAP = 500
@@ -70,6 +71,37 @@ interface LiveStore {
 
 let noticeId = 1
 
+const MAX_NOTICES = 3
+
+/** Panic notices (keyed `panic`; older engines only say it in the message). */
+export function isPanicNotice(n: Notice): boolean {
+  return n.key === 'panic' || /panic mode is (on|off)/i.test(n.message)
+}
+
+/**
+ * Adds a banner without stacking repeats: one with the same `key` (or, without a key,
+ * the same message) replaces the older one. At most three at a time.
+ */
+export function addNotice(list: NoticeItem[], n: Notice): NoticeItem[] {
+  const same = (x: NoticeItem) =>
+    n.key !== undefined ? x.key === n.key : x.key === undefined && x.message === n.message
+  const kept = list.filter((x) => !same(x))
+  return [...kept, { ...n, id: noticeId++, at: Date.now() }].slice(-MAX_NOTICES)
+}
+
+/**
+ * Panic is never a banner: the red "Panic on" button already shows it while it's on,
+ * and one toast (replaced on every switch) says what just happened.
+ */
+function panicToast(n: Notice): void {
+  const on = /panic mode is on/i.test(n.message)
+  toast({
+    key: 'panic',
+    tone: n.level === 'error' ? 'error' : on ? 'warn' : 'ok',
+    message: n.message,
+  })
+}
+
 export const useLive = create<LiveStore>((set, get) => ({
   conn: null,
   status: null,
@@ -103,8 +135,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       events: [...events].sort((a, b) => a.seq - b.seq).slice(-EVENT_CAP),
     }),
   dismissNotice: (id) => set({ notices: get().notices.filter((n) => n.id !== id) }),
-  pushNotice: (n) =>
-    set({ notices: [...get().notices.slice(-2), { ...n, id: noticeId++, at: Date.now() }] }),
+  pushNotice: (n) => set({ notices: addNotice(get().notices, n) }),
   apply: (frames) => {
     const s = get()
     let chat = s.chat
@@ -159,9 +190,12 @@ export const useLive = create<LiveStore>((set, get) => ({
           tts = f.data
           break
         case 'notice':
-          notices = [...notices.slice(-2), { ...f.data, id: noticeId++, at: Date.now() }]
-          if (/panic mode is on/i.test(f.data.message)) panic = true
-          if (/panic mode is off/i.test(f.data.message)) panic = false
+          if (isPanicNotice(f.data)) {
+            if (/panic mode is on/i.test(f.data.message)) panic = true
+            if (/panic mode is off/i.test(f.data.message)) panic = false
+            notices = notices.filter((n) => !isPanicNotice(n))
+            panicToast(f.data)
+          } else notices = addNotice(notices, f.data)
           break
         case 'goals':
           goals = f.data

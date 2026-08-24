@@ -4,6 +4,7 @@ import {
   PLATFORM_LABEL,
   describeError,
   type Backup,
+  type ObsState,
   type PackImportReport,
   type Settings as SettingsData,
   type TtsSettings,
@@ -71,7 +72,7 @@ function Accounts() {
     <Section
       id="accounts"
       title="Accounts"
-      description="Sign-in tokens stay in your system keychain, never in files or exports."
+      description="Sign-in tokens are stored privately on this computer, never in exports or logs."
     >
       <ul className="flex flex-col gap-2">
         {(['twitch', 'youtube', 'kick'] as const).map((p) => (
@@ -93,6 +94,24 @@ function Accounts() {
   )
 }
 
+/** One toast about OBS at a time, saying what really happened. */
+function obsToast(o: ObsState): void {
+  if (o.state === 'connected')
+    toast({
+      key: 'obs',
+      tone: 'ok',
+      message: 'OBS connected.',
+      hint: o.scene ? `Current scene: ${o.scene}.` : null,
+    })
+  else
+    toast({
+      key: 'obs',
+      tone: 'warn',
+      message: 'Saved, but OBS isn’t connected yet.',
+      hint: o.detail ?? 'Open OBS and Ferrocast will connect by itself.',
+    })
+}
+
 function Obs() {
   const client = useClient()
   const obs = useResource((c) => c.obs())
@@ -102,22 +121,34 @@ function Obs() {
   const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [detectKey, setDetectKey] = useState(0)
   useEffect(() => {
     if (obs.data?.host) setHost(obs.data.host)
     if (obs.data?.port) setPort(obs.data.port)
   }, [obs.data])
+  // The engine connects by itself: when the live state changes, refresh the version and
+  // scene shown here.
+  const live = conn?.state
+  const reload = obs.reload
+  const seen = useRef(live)
+  useEffect(() => {
+    if (seen.current !== undefined && live !== seen.current) reload()
+    seen.current = live
+  }, [live, reload])
   const save = async () => {
     setBusy(true)
     setErr(null)
     try {
-      const r = await client.saveObs({ host: host.trim(), port, password })
+      // A blank field keeps the saved password.
+      const r = await client.saveObs({
+        host: host.trim(),
+        port,
+        ...(password ? { password } : {}),
+      })
       obs.set(r)
       setPassword('')
-      toast({
-        tone: 'ok',
-        message: 'OBS connected.',
-        hint: r.scene ? `Current scene: ${r.scene}.` : null,
-      })
+      setDetectKey((k) => k + 1)
+      obsToast(r)
     } catch (e) {
       const d = describeError(e)
       const m = d.message
@@ -127,40 +158,43 @@ function Obs() {
       setBusy(false)
     }
   }
+  const auto = obs.data?.auto === true
+  const saved = obs.data?.has_password === true
   return (
     <Section
       id="obs"
       title="OBS"
       description="Lets “Add to OBS” put overlays into your scene in one click."
     >
-      <div className="mb-4 flex items-center gap-2 text-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-text-3">Status</span>
         {conn && (
           <Badge tone={stateCopy(conn).tone === 'ok' ? 'ok' : 'warn'}>
             {stateCopy(conn).label}
           </Badge>
         )}
-        {obs.data?.version && <span className="text-text-3">OBS {obs.data.version}</span>}
+        {conn?.state === 'connected' && obs.data?.version && (
+          <span className="text-text-3">OBS {obs.data.version}</span>
+        )}
+        {auto && <span className="text-text-3">Using OBS’s own settings</span>}
       </div>
+      {conn && conn.state !== 'connected' && conn.detail && (
+        <p className="mb-4 text-[13px] text-text-2">{conn.detail}</p>
+      )}
       <ObsAutoDetect
+        key={detectKey}
         connected={conn?.state === 'connected'}
         onUsed={(o) => {
           obs.set(o)
-          toast({
-            tone: o.state === 'connected' ? 'ok' : 'warn',
-            message: o.state === 'connected' ? 'OBS connected.' : 'Saved OBS’s settings.',
-            hint:
-              o.state === 'connected'
-                ? o.scene
-                  ? `Current scene: ${o.scene}.`
-                  : null
-                : 'Open OBS and Ferrocast will connect.',
-          })
+          obsToast(o)
         }}
       />
       <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13px] text-text-3">
         <li>In OBS open Tools → WebSocket Server Settings and tick “Enable WebSocket server”.</li>
-        <li>Click “Show Connect Info” and copy the password here.</li>
+        <li>
+          Ferrocast connects by itself. Only for OBS on another computer: click “Show Connect Info”
+          there and copy the address and password here.
+        </li>
       </ol>
       <form
         className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]"
@@ -192,7 +226,11 @@ function Obs() {
         <Field
           label="Password"
           className="sm:col-span-2"
-          hint="Stored in your system keychain."
+          hint={
+            auto && saved
+              ? 'Read from OBS’s settings, never shown. Type one only to use a different password.'
+              : 'Stored privately on this computer, never shown or exported.'
+          }
           error={err}
         >
           {(p) => (
@@ -200,6 +238,9 @@ function Obs() {
               {...p}
               type="password"
               value={password}
+              placeholder={
+                saved ? (auto ? 'From OBS — type to replace' : 'Saved — type to replace') : ''
+              }
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="off"
             />
@@ -785,7 +826,7 @@ export function Settings({ section }: { section?: string | undefined }) {
           <Section
             id="discord"
             title="Discord"
-            description="Tell your server when you go live. The webhook stays in your system keychain and is never exported."
+            description="Tell your server when you go live. The webhook is stored privately on this computer and is never exported."
           >
             <DiscordSettingsForm />
           </Section>

@@ -576,6 +576,11 @@ export interface ObsDetect {
   /** OBS asks for a password and it was found (it's never sent to the dashboard). */
   has_password: boolean
   server_enabled: boolean
+  /**
+   * Ferrocast already uses these (it follows OBS's settings, or the typed details match),
+   * so there is nothing to offer. Absent from engines before it existed.
+   */
+  in_use?: boolean
   /** Why nothing usable was found, or what to switch on. */
   reason: string | null
 }
@@ -586,6 +591,16 @@ export interface ObsState {
   scene: string | null
   host?: string
   port?: number
+  /** A password is in use (never sent): typed and saved, or read from OBS's settings. */
+  has_password?: boolean
+  /**
+   * Following OBS's own settings, re-read on every attempt (nothing typed by the
+   * streamer). Typing different details and pressing Connect turns it off; "Use these"
+   * turns it back on.
+   */
+  auto?: boolean
+  /** Why it isn't connected, in plain words. */
+  detail?: string | null
 }
 
 /** App settings. Shape proposed in docs/API-REQUESTS.md (R5). */
@@ -803,6 +818,8 @@ export interface UpdateInfo {
 }
 
 export interface Notice {
+  /** Notices with the same key replace each other (`panic`, `account:twitch`, …). */
+  key?: string
   level: 'info' | 'warn' | 'error'
   message: string
   action?: { label: string; href: string }

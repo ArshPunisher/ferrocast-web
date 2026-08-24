@@ -193,7 +193,7 @@ function DiscordForm({
   )
 }
 
-/** Discord go-live posts. The webhook is kept in the keychain and never shown again. */
+/** Discord go-live posts. The webhook is kept in the engine’s secret store and never shown again. */
 export function DiscordSettingsForm() {
   const d = useResource((c) => c.discord())
   if (d.error) return <LoadError error={d.error} onRetry={d.reload} />

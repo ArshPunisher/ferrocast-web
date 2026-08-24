@@ -254,6 +254,26 @@ test.describe('moderation and bot', () => {
     )
   })
 
+  test('panic on, off, on: one toast with the latest state and no banners', async ({ page }) => {
+    await open(page, 'moderation')
+    const panic = page.getByRole('button', { name: /^(Start panic mode|Panic)/ }).first()
+    for (const pressed of ['true', 'false', 'true']) {
+      await panic.click()
+      await expect(panic).toHaveAttribute('aria-pressed', pressed)
+    }
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    await expect(toasts.getByText(/Panic mode is on/)).toHaveCount(1)
+    await expect(toasts.getByText(/Panic mode is off/)).toHaveCount(0)
+    // Nothing about panic anywhere else on the page: no stacked top banners.
+    await expect(page.getByText(/Panic mode is (on|off)/)).toHaveCount(1)
+  })
+
+  test('the OBS chip says Connected in words, like the platforms', async ({ page }) => {
+    await open(page, 'home')
+    const chip = page.locator('header a[href$="settings/obs"]').first()
+    await expect(chip).toContainText('Connected')
+  })
+
   test('unban from the shared list', async ({ page }) => {
     await open(page, 'moderation')
     const row = page.getByRole('listitem').filter({ hasText: 'raid_bot_4421' })

@@ -29,7 +29,9 @@ export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
           const where = r.applied
             .map((a) => a.platform[0]?.toUpperCase() + a.platform.slice(1))
             .join(', ')
+          // Keyed: switching on, off, on shows one toast with the latest state.
           toast({
+            key: 'panic',
             tone: 'warn',
             message: 'Panic mode is on.',
             hint: where
@@ -38,6 +40,7 @@ export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
           })
         } else
           toast({
+            key: 'panic',
             tone: 'ok',
             message: 'Panic mode is off.',
             hint: 'Chat and alerts are back to normal.',
@@ -45,7 +48,7 @@ export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
       } catch (e) {
         setPanic(!next)
         const d = describeError(e)
-        toast({ tone: 'error', message: d.message, hint: d.hint })
+        toast({ key: 'panic', tone: 'error', message: d.message, hint: d.hint })
       }
     },
     [conn, setPanic],

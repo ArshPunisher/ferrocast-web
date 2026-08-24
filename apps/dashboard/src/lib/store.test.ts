@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
+import { currentToasts } from '@ferrocast/ui'
 import { selectFeed, useLive } from './store'
 import { href, parseRoute } from './router'
 import { readableColors } from '../components/chat'
@@ -108,7 +109,43 @@ describe('live store', () => {
       },
     ])
     expect(useLive.getState().panic).toBe(false)
-    expect(useLive.getState().notices).toHaveLength(1)
+    expect(useLive.getState().notices, 'panic is never a banner').toHaveLength(0)
+  })
+  it('panic on, off, on: no banners, one toast with the latest state', () => {
+    const frame = (on: boolean): LiveFrame => ({
+      v: 1,
+      type: 'notice',
+      data: {
+        key: 'panic',
+        level: on ? 'warn' : 'info',
+        message: on ? 'Panic mode is on. Chat is locked down.' : 'Panic mode is off.',
+      },
+    })
+    for (const on of [true, false, true]) useLive.getState().apply([frame(on)])
+    expect(useLive.getState().notices).toHaveLength(0)
+    expect(useLive.getState().panic).toBe(true)
+    const panicToasts = currentToasts().filter((t) => t.key === 'panic')
+    expect(panicToasts).toHaveLength(1)
+    expect(panicToasts[0]?.message).toMatch(/Panic mode is on/)
+    expect(panicToasts[0]?.tone).toBe('warn')
+  })
+  it('a notice with the same key replaces the shown one', () => {
+    const n = (key: string | undefined, message: string): LiveFrame =>
+      ({ v: 1, type: 'notice', data: { key, level: 'warn', message } }) as LiveFrame
+    useLive
+      .getState()
+      .apply([
+        n('account:twitch', 'Twitch needs you to sign in again.'),
+        n('discord', 'The Discord post didn’t go out.'),
+        n('account:twitch', 'Twitch is connected.'),
+        n(undefined, 'Same words.'),
+        n(undefined, 'Same words.'),
+      ])
+    expect(useLive.getState().notices.map((x) => x.message)).toEqual([
+      'The Discord post didn’t go out.',
+      'Twitch is connected.',
+      'Same words.',
+    ])
   })
   it('keeps at most three notices', () => {
     useLive

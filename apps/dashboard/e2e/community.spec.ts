@@ -378,18 +378,34 @@ test.describe('settings: Discord and OBS', () => {
     await expect(s.getByRole('alert')).toHaveText(/is never closed/)
   })
 
-  test('found OBS on this computer: use it in one click', async ({ page }) => {
+  test('OBS found on this computer is used without a click, and typed details win', async ({
+    page,
+  }) => {
     await open(page, 'settings')
-    await demo(
-      page,
-      `(d) => d.setConnector('obs', { state: 'disconnected', account: null, detail: 'OBS isn’t running.', last_event_at: null })`,
-    )
     const s = page.locator('#s-obs')
-    await expect(s.getByText('Found OBS on this computer')).toBeVisible()
+    await expect(s.getByText('Using OBS’s own settings')).toBeVisible()
+    await expect(s.getByLabel('Password', { exact: true })).toHaveAttribute(
+      'placeholder',
+      'From OBS — type to replace',
+    )
+    await expect(s.getByText('Found OBS on this computer')).toBeHidden()
+
+    // The streamer types other details: the toast says what really happened.
+    await s.getByLabel('Port').fill('4460')
+    await s.getByRole('button', { name: 'Connect OBS' }).click()
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    await expect(toasts.getByText('Saved, but OBS isn’t connected yet.')).toBeVisible()
+    await expect(toasts.getByText('OBS connected.')).toHaveCount(0)
+    await expect(s.getByText('Disconnected')).toBeVisible()
+    await expect(s.getByText('Using OBS’s own settings')).toBeHidden()
+
+    // OBS's own details are offered back, one click.
     await expect(s.getByText(/Port 4455, password included/)).toBeVisible()
     await s.getByRole('button', { name: 'Use these' }).click()
-    await expect(page.getByText('OBS connected.')).toBeVisible()
+    await expect(toasts.getByText('OBS connected.')).toBeVisible()
+    await expect(toasts.getByText('Saved, but OBS isn’t connected yet.')).toHaveCount(0)
     await expect(s.getByText('Found OBS on this computer')).toBeHidden()
+    await expect(page.locator('header a[href$="settings/obs"]').first()).toContainText('Connected')
   })
 })
 

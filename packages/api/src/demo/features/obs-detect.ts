@@ -9,17 +9,27 @@ export class DemoObsDetect {
   constructor(
     /** Whether this demo machine "has OBS" (a fresh install's demo does). */
     private readonly installed: () => boolean,
+    /** Ferrocast follows OBS's settings already (nothing typed by the streamer). */
+    private readonly following: () => boolean,
     private readonly use: (port: number) => ObsState,
   ) {}
 
   private view(): ObsDetect {
     return this.installed()
-      ? { found: true, port: 4455, has_password: true, server_enabled: true, reason: null }
+      ? {
+          found: true,
+          port: 4455,
+          has_password: true,
+          server_enabled: true,
+          in_use: this.following(),
+          reason: null,
+        }
       : {
           found: false,
           port: null,
           has_password: false,
           server_enabled: false,
+          in_use: false,
           reason: 'OBS’s settings aren’t on this computer. Is OBS 28 or newer installed here?',
         }
   }
