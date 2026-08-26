@@ -61,7 +61,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'Is my data uploaded anywhere?',
-        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens stay in your operating system keychain. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept.',
+        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens are stored privately on your computer, never in exports or logs. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept.',
       },
       {
         q: 'How do tips work, and will tippers see my legal name?',

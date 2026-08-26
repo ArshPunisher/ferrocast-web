@@ -154,7 +154,7 @@ export const PAGES = {
     path: '/privacy/',
     title: 'Privacy policy | Ferrocast',
     description:
-      'What Ferrocast stores and where: your setup stays on your computer, sign-in tokens in your OS keychain, no chat logs in our cloud and no website analytics.',
+      'What Ferrocast stores and where: your setup stays on your computer, sign-in tokens stored privately on your computer, no chat logs in our cloud and no website analytics.',
     ogTitle: 'Privacy policy',
     ogKicker: 'Legal',
     crumb: 'Privacy',

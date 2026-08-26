@@ -1,5 +1,13 @@
 # Status
 
+## 18 Oct 2026 (owner fixes: keychain prompt, OBS auto-connect, panic notices)
+
+**Done**
+
+- Toasts replace by `key` (and identical toasts never stack a copy); panic, OBS and account toasts are keyed. Panic notices are never top banners: one toast with the latest state, the red "Panic on" button shows it while on. Other notices replace by `key` or identical words.
+- OBS settings: the engine follows OBS's own settings by itself (`auto`), toasts say what really happened ("Saved, but OBS isn't connected yet."), the password field shows "Saved — type to replace" / "From OBS — type to replace", "Use these" only when typed details differ. The top OBS chip says "Connected" in words.
+- Copy: no more "system keychain" claims; dashboard, privacy page, FAQ, features and getting-started say secrets are stored privately on this computer (keyring on Windows/Linux, a user-only file on macOS).
+
 ## 18 Oct 2026 (StreamElements and Streamlabs importers)
 
 **Done**

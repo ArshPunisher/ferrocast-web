@@ -14,7 +14,9 @@ import { COMPANY } from '../data/company'
   <ul>
     <li>Your overlays, alerts, commands, viewer notes and history stay on your computer.</li>
     <li>
-      Sign-in tokens for Twitch, YouTube and Kick are kept in your operating system’s keychain.
+      Sign-in tokens for Twitch, YouTube and Kick are stored privately on your computer: in the
+      Windows Credential Manager or the Linux keyring, and on macOS in a file only your user account
+      can open.
     </li>
     <li>
       Our relay does three jobs: it receives Kick events, handles Kick sign-in, and hosts tip pages.
@@ -41,8 +43,13 @@ import { COMPANY } from '../data/company'
   </p>
   <p>
     When you connect Twitch, YouTube or Kick, you sign in on the platform’s own website. The access
-    tokens the platform gives back are stored in your operating system’s keychain, never in plain
-    files, exports or logs. The app talks to Twitch and YouTube directly from your computer.
+    tokens the platform gives back, your OBS password and your Discord webhook are stored privately
+    on your computer, never in the database, exports, backups or logs. On Windows they go in the
+    Credential Manager and on Linux in the system keyring. On macOS they go in a file in the app’s
+    data folder that only your user account can open, not in the macOS Keychain: the app isn’t
+    signed with a paid Apple developer certificate, so the Keychain would ask for your login
+    password after every update. OBS keeps its own WebSocket password in a file in the same way. The
+    app talks to Twitch and YouTube directly from your computer.
   </p>
   <p>
     The app checks for updates by downloading a public release list. That request includes your IP

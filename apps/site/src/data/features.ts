@@ -376,8 +376,8 @@ export const FEATURES: Feature[] = [
             body: 'Ferrocast snapshots your settings before every update and lets you restore them.',
           },
           {
-            title: 'Keys stay in your keychain',
-            body: 'Sign-in tokens live in your operating system’s keychain, never in files, exports or logs.',
+            title: 'Keys stay on your computer',
+            body: 'Sign-in tokens are stored privately on your computer (the system keyring on Windows and Linux, a file only you can open on macOS), never in exports or logs.',
           },
         ],
       },
