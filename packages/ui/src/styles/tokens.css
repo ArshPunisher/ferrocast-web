@@ -35,12 +35,22 @@
   --fc-brand-molten: #ffa424;
   --fc-brand-arc: #33d4ff;
 
-  /* Molten: the primary action. --fc-accent fills with dark --fc-on-accent text (9.9:1),
-     --fc-accent-strong is its hover, --fc-molten-text is Molten set as text. */
+  /* Molten: brand fills and graphics (progress bars, marks). Dark --fc-on-accent text on it
+     is 9.9:1, --fc-accent-strong is its hover, --fc-molten-text is Molten set as text.
+     Buttons use --fc-btn-primary below. */
   --fc-accent: #ffa424;
   --fc-accent-strong: #ffb547;
   --fc-on-accent: #120a00;
   --fc-molten-text: #ffa424;
+
+  /* Primary buttons: white text on a deeper Molten fill. The bright --fc-accent stays for
+     graphics; as a button fill it can't carry white text. The same values in every theme:
+     white on --fc-btn-primary 4.83:1, on --fc-btn-primary-hover 5.88:1 (WCAG AA 4.5:1); the
+     fill against the page is 4.07:1 dark (#0a0b0d) and 4.36:1 light (#f2f3f6), so the
+     button's edge passes 3:1 as a UI part too. */
+  --fc-btn-primary: #b35900;
+  --fc-btn-primary-hover: #9e4f00;
+  --fc-on-btn-primary: #ffffff;
 
   /* Arc: links, icons, focus rings, selection and info highlights. --fc-arc is the bright
      fill/graphic value, --fc-accent-text the text value (7.2:1+ on every surface, also

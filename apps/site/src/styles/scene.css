@@ -2,8 +2,8 @@
    the story stages, the section rail (Spark line and Signal dial) and the marquee.
    Loaded after global.css. */
 
-/* X1 Spark: Molten fills the primary action (dark text on it passes AA in both themes),
-   Arc carries links, icons and focus. Platform colours stay inside the hero strands. */
+/* X1 Spark: Molten is the brand fill for graphics; primary buttons use the deeper
+   --fc-btn-primary with white text (tokens.css). Arc carries links, icons and focus. Platform colours stay inside the hero strands. */
 :root {
   --fc-accent: #ffa424;
   --fc-accent-strong: #ffb547;
@@ -36,11 +36,8 @@
 }
 .btn-primary {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28),
-    0 10px 28px -16px var(--fc-accent);
-}
-.skip-link {
-  color: var(--fc-on-accent);
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 10px 28px -16px var(--fc-btn-primary);
 }
 ::selection {
   background: rgb(51 212 255 / 0.3);

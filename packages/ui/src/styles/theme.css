@@ -17,6 +17,9 @@
   --color-accent-soft: var(--fc-accent-soft);
   --color-accent-line: var(--fc-accent-line);
   --color-on-accent: var(--fc-on-accent);
+  --color-btn-primary: var(--fc-btn-primary);
+  --color-btn-primary-hover: var(--fc-btn-primary-hover);
+  --color-on-btn-primary: var(--fc-on-btn-primary);
   --color-molten-text: var(--fc-molten-text);
   --color-arc: var(--fc-arc);
   --color-ok: var(--fc-ok);

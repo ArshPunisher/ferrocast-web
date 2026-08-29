@@ -138,7 +138,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           e.preventDefault()
           document.getElementById('main')?.focus()
         }}
-        className="sr-only z-[80] rounded-control bg-accent px-3 py-2 text-sm font-semibold text-on-accent focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+        className="sr-only z-[80] rounded-control bg-btn-primary px-3 py-2 text-sm font-semibold text-on-btn-primary focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
       >
         Skip to content
       </a>
