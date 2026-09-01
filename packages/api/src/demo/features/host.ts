@@ -27,6 +27,8 @@ export interface DemoHost {
   connectedChat(): ChatPlatform[]
   /** People the demo knows (its seeded chatters), with stable ids. */
   knownActors(): Actor[]
+  /** Anyone who chatted or did something here (from the event log), like the engine's viewers. */
+  seenActor(platform: string, userId: string): Actor | null
   isLive(): boolean
   /** Runs `fn` after `ms`, cancelled when the demo is disposed. */
   later(fn: () => void, ms: number): void

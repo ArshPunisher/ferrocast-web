@@ -3,6 +3,8 @@ import type {
   Account,
   AlertRule,
   Backup,
+  PairLink,
+  RestoreResult,
   BanEntry,
   BanResult,
   ChatPlatform,
@@ -170,8 +172,7 @@ export class FerroClient {
   // Status and session
   status = () => this.get<Status>('/api/v1/status')
   pair = (code: string) => this.post<{ token: string }>('/api/v1/session/pair', { code })
-  pairCode = () =>
-    this.post<{ code: string; url: string; expires_at: number }>('/api/v1/session/pair-code')
+  pairCode = () => this.post<PairLink>('/api/v1/session/pair-code')
 
   // Accounts
   accounts = () => this.get<Account[]>('/api/v1/accounts')
@@ -400,8 +401,16 @@ export class FerroClient {
       preview_id: previewId,
       on_conflict: onConflict,
     })
+  /** Chat the filter held for a mod, oldest first. */
+  held = () => this.get<FerroEvent[]>('/api/v1/mod/held')
+  /** Approves a held message: chat overlays show it. 404 `held_not_found` if another mod got there first. */
+  releaseHeld = (eventId: string) => this.post<void>(`/api/v1/mod/held/${enc(eventId)}/release`)
+  /** Removes a held message: it's deleted on its platform. */
+  dropHeld = (eventId: string) => this.post<void>(`/api/v1/mod/held/${enc(eventId)}/drop`)
   backups = () => this.get<Backup[]>('/api/v1/backups')
-  restoreBackup = (id: string) => this.post<void>(`/api/v1/backups/${enc(id)}/restore`)
+  /** Takes a backup now; answers the new list. */
+  backupNow = () => this.post<Backup[]>('/api/v1/backups')
+  restoreBackup = (id: string) => this.post<RestoreResult>(`/api/v1/backups/${enc(id)}/restore`)
   sessionStats = () => this.get<SessionStats>('/api/v1/stats/session')
   /** This stream so far, or the last one; `since` picks another start. */
   recap = (since?: number) =>

@@ -61,7 +61,10 @@ export class DemoLoyalty {
   }
 
   private actor(platform: string, userId: string): Actor | null {
-    return this.host.knownActors().find((a) => a.platform === platform && a.id === userId) ?? null
+    return (
+      this.host.knownActors().find((a) => a.platform === platform && a.id === userId) ??
+      this.host.seenActor(platform, userId)
+    )
   }
 
   private known(platform: string, userId: string): boolean {

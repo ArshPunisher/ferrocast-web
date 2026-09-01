@@ -58,7 +58,7 @@ import {
   tipPageIdProblem,
   tipSecretProblem,
 } from '../tips'
-import { WIDGET_KINDS } from '../types'
+import { Roles, WIDGET_KINDS } from '../types'
 import { chimeDataUrl } from './chime'
 import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
@@ -127,6 +127,9 @@ export interface DemoOptions {
 export const DEMO_TAKEN_HANDLES: readonly string[] = ['asha', 'rohanlive', 'meghna']
 
 export const DEMO_TOKEN = 'demo-session'
+
+/** The version the demo engine says it is. */
+const DEMO_VERSION = '0.4.0'
 /** Pairing codes the demo treats specially, for tests of the pairing screen. */
 export const DEMO_PAIR = { expired: 'EXPIRED', used: 'USED00' } as const
 
@@ -253,6 +256,8 @@ export class DemoEngine {
   private goals: Goal[]
   private bans: BanEntry[]
   private filters: Filters = clone(FILTERS)
+  /** Messages the chat filter held for a mod, oldest first: event id → reason. */
+  private heldMsgs = new Map<string, string>()
   private panicCfg: PanicConfig = clone(PANIC)
   private panicOn = false
   private commands: Command[] = seedCommands()
@@ -282,6 +287,8 @@ export class DemoEngine {
   }
   private settings: Settings = clone(SETTINGS)
   private backups: Backup[]
+  /** LAN access as the "server" started with (it only changes at a restart). */
+  private readonly lanAtStart = false
   private notes = new Map<string, string>()
   private stats: SessionStats
   private labels = new Map<string, string>()
@@ -312,6 +319,7 @@ export class DemoEngine {
     },
     // Logins only: display names never match anyone (anyone can set one).
     () => this.host.knownActors().flatMap((a) => (a.login ? [a.login] : [])),
+    (label) => this.takeBackup(label),
   )
   private readonly obsDetect = new DemoObsDetect(
     () => true,
@@ -398,20 +406,21 @@ export class DemoEngine {
     this.rules = seedRules()
     this.goals = seedGoals(now)
     this.bans = seedBans(now)
+    // Newest first, like the engine.
     this.backups = [
       {
-        id: 'b-1',
-        created_at: now - 2 * 86_400_000,
-        reason: 'before_update',
-        bytes: 2_431_118,
-        version: '0.3.0',
-      },
-      {
-        id: 'b-2',
+        id: `${now - 86_400_000}-daily`,
         created_at: now - 86_400_000,
         reason: 'daily',
         bytes: 2_498_302,
-        version: '0.3.1',
+        version: DEMO_VERSION,
+      },
+      {
+        id: `${now - 2 * 86_400_000}-before-update`,
+        created_at: now - 2 * 86_400_000,
+        reason: 'update',
+        bytes: 2_431_118,
+        version: '0.3.0',
       },
     ]
     this.media = [
@@ -814,12 +823,16 @@ export class DemoEngine {
     // status and session
     if (is('GET', 'status')) return this.status()
     if (is('POST', 'session', 'pair')) return this.pair(body)
-    if (is('POST', 'session', 'pair-code'))
+    if (is('POST', 'session', 'pair-code')) {
+      // Like the engine: LAN access applies at the next start, and the demo never restarts.
+      const active = this.lanAtStart
       return {
         code: 'K7M2QX',
-        url: `${this.base}/app/#pair=K7M2QX`,
+        url: `${active ? 'http://192.168.1.24:47820' : this.base}/app/#pair=K7M2QX`,
         expires_at: Date.now() + 120_000,
+        lan: { active, restart_needed: this.settings.lan_access && !active },
       }
+    }
     if (is('POST', 'setup', 'complete')) {
       this.setupDone = true
       return undefined
@@ -950,6 +963,13 @@ export class DemoEngine {
       return undefined
     }
     if (is('GET', 'mod', 'bans')) return clone(this.bans)
+    if (is('GET', 'mod', 'held'))
+      return [...this.heldMsgs.keys()].flatMap((id) => {
+        const e = this.events.find((x) => x.id === id)
+        return e ? [clone(e)] : []
+      })
+    if (method === 'POST' && a === 'mod' && b === 'held' && seg.length === 4)
+      if (seg[3] === 'release' || seg[3] === 'drop') return this.resolveHeld(c ?? '', seg[3])
     if (is('POST', 'mod', 'panic')) return this.panic(body)
     if (is('GET', 'mod', 'panic', 'config')) return clone(this.panicCfg)
     if (is('PUT', 'mod', 'panic', 'config')) {
@@ -1127,6 +1147,10 @@ export class DemoEngine {
     }
     if (is('POST', 'import')) return this.importPack(body)
     if (is('GET', 'backups')) return clone(this.backups)
+    if (is('POST', 'backups')) {
+      this.takeBackup('manual')
+      return clone(this.backups)
+    }
     if (is('POST', 'backups', null, 'restore')) {
       if (!this.backups.some((x) => x.id === b))
         throw new HttpError(404, 'backup_not_found', 'That backup is gone.')
@@ -1137,12 +1161,15 @@ export class DemoEngine {
           'You’re live right now.',
           'Restore after your stream so nothing breaks mid-show.',
         )
-      return undefined
+      return {
+        restart_needed: true,
+        message: 'Restart Ferrocast to finish restoring.',
+      }
     }
     if (is('GET', 'stats', 'session')) return clone(this.stats)
     if (is('GET', 'updates'))
       return {
-        current: '0.4.0',
+        current: DEMO_VERSION,
         latest: '0.4.1',
         channel: this.settings.update_channel,
         blocked_while_live: this.isLive() && this.settings.never_update_while_live,
@@ -1155,6 +1182,7 @@ export class DemoEngine {
           'conflict',
           'You’re live, so the update waits until the stream ends (Settings › Updates).',
         )
+      this.takeBackup('before-update')
       return { installing: '0.4.1' }
     }
 
@@ -1232,6 +1260,7 @@ export class DemoEngine {
       },
       connectedChat: () => this.connectedChat(),
       knownActors: () => known,
+      seenActor: (platform, userId) => this.seenActor(platform, userId),
       isLive: () => this.isLive(),
       later: (fn, ms) => this.later(fn, ms),
       random: () => this.rand(),
@@ -1242,7 +1271,7 @@ export class DemoEngine {
 
   private status() {
     return {
-      version: '0.4.0',
+      version: DEMO_VERSION,
       port: 47820,
       live: {
         twitch: this.isLiveOn('twitch'),
@@ -1774,16 +1803,44 @@ export class DemoEngine {
     return { on, applied }
   }
 
+  /** The newest look of someone in the event log. */
+  private seenActor(platform: string, userId: string): Actor | null {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const ev = this.events[i]
+      const a = ev ? actorOf(ev) : null
+      if (a && a.platform === platform && a.id === userId) return a
+    }
+    return null
+  }
+
   private viewerCard(platform: string, userId: string): ViewerCard {
-    const e = [...this.events].reverse().find((x) => {
-      const a = actorOf(x)
-      return a && a.platform === platform && a.id === userId
-    })
-    const a = e ? actorOf(e) : null
+    const a = this.seenActor(platform, userId)
     if (!a) throw new HttpError(404, 'viewer_not_found', 'We haven’t seen that viewer yet.')
-    const msgs = this.events.filter(
-      (x) => x.kind.type === 'chat_message' && actorOf(x)?.id === userId,
-    ).length
+    const mine = this.events.filter(
+      (x) => x.kind.type === 'chat_message' && x.platform === platform && actorOf(x)?.id === userId,
+    )
+    const msgs = mine.length
+    // Someone chatting for the first time has no history to invent: their card shows only
+    // what happened here (like the engine), so "First message" and the counts agree.
+    if (a.roles & Roles.FIRST_TIME) {
+      const first = this.events.find((x) => x.platform === platform && actorOf(x)?.id === userId)
+      return {
+        platform: platform as ChatPlatform,
+        user_id: userId,
+        login: a.login ?? a.display_name,
+        display_name: a.display_name,
+        avatar_url: a.avatar_url,
+        roles: a.roles,
+        first_seen: first?.received_at ?? Date.now(),
+        messages: msgs,
+        follows_since: null,
+        note: this.notes.get(`${platform}:${userId}`) ?? '',
+        banned: this.bans.some((b) => b.user_id === userId && b.platform === platform),
+        timeouts: 0,
+        other_identities: [],
+        points: this.loyalty.balanceOf(platform, userId),
+      }
+    }
     return {
       platform: platform as ChatPlatform,
       user_id: userId,
@@ -1881,6 +1938,34 @@ export class DemoEngine {
     return clone(m)
   }
 
+  /**
+   * A backup row like the engine's (`<ms>-<label>`, its reason from the label), newest
+   * first, keeping the newest 7 daily and 10 others. Returns its id.
+   */
+  takeBackup(label: string): string {
+    const at = Math.max(Date.now(), (this.backups[0]?.created_at ?? 0) + 1)
+    const reason: Backup['reason'] =
+      label === 'daily'
+        ? 'daily'
+        : label === 'manual'
+          ? 'manual'
+          : label === 'before-update'
+            ? 'update'
+            : label.endsWith('import')
+              ? 'import'
+              : 'other'
+    const id = `${at}-${label}`
+    const size = (this.backups[0]?.bytes ?? 2_400_000) + Math.round(this.rand() * 40_000)
+    const next = [
+      { id, created_at: at, reason, bytes: size, version: DEMO_VERSION },
+      ...this.backups,
+    ]
+    let daily = 0
+    let other = 0
+    this.backups = next.filter((b) => (b.reason === 'daily' ? ++daily <= 7 : ++other <= 10))
+    return id
+  }
+
   /** A `.ferropack` (the engine's `POST /api/v1/import`): a backup first, then the report. */
   private importPack(body: unknown) {
     if (!(body instanceof FormData))
@@ -1898,7 +1983,7 @@ export class DemoEngine {
     return {
       imported: { overlays: 2, alert_rules: 14, commands: 22, timers: 4, goals: 3, media: 31 },
       media_files: 31,
-      backup: `${Date.now()}-before-import`,
+      backup: this.takeBackup('before-import'),
     }
   }
 
@@ -2243,7 +2328,7 @@ export class DemoEngine {
     }
     if (this.panicOn && this.rand() < 0.7) return
     if (this.filters.solicitation.enabled && this.rand() < 0.04) {
-      this.holdSpam(p)
+      this.spam(p)
       return
     }
     const actor = this.chatter(p)
@@ -2272,8 +2357,69 @@ export class DemoEngine {
     )
   }
 
-  /** A scam chatter the solicitation filter holds for a mod (live `held` frame). */
-  holdSpam(p: ChatPlatform = 'twitch'): FerroEvent {
+  /** Approve (`release`: overlays show it) or remove (`drop`: deleted on the platform). */
+  private resolveHeld(id: string, how: 'release' | 'drop'): undefined {
+    const e = this.events.find((x) => x.id === id)
+    if (!this.heldMsgs.has(id) || !e)
+      throw new HttpError(
+        404,
+        'held_not_found',
+        'Another mod already dealt with that message.',
+        'Nothing more to do.',
+      )
+    this.heldMsgs.delete(id)
+    if (how === 'release') {
+      for (const s of this.overlaySubs) if (this.overlayWants(s, e)) this.sendOverlay(s, 'event', e)
+      for (const f of this.features()) f.onChat?.(e)
+    } else if (e.source_id) {
+      this.ingest({ type: 'message_deleted', message_id: e.source_id }, e.platform, 'live')
+    }
+    this.broadcastLive({
+      v: 1,
+      type: 'held_resolved',
+      data: { event_id: id, outcome: how === 'release' ? 'released' : 'dropped' },
+    })
+    return undefined
+  }
+
+  /** Keeps a chat message away from overlays until a mod approves it (live `held` frame). */
+  private hold(kind: EventKind, p: ChatPlatform, reason: string): FerroEvent {
+    const e = this.ingest(kind, p, 'live', { held: true })
+    this.heldMsgs.set(e.id, reason)
+    if (this.heldMsgs.size > 200) this.heldMsgs.delete(this.heldMsgs.keys().next().value as string)
+    this.broadcastLive({ v: 1, type: 'held', data: { event_id: e.id, reason } })
+    return e
+  }
+
+  /**
+   * A scam chatter, handled the way the scam filter is set (like the engine): held for a
+   * mod, deleted, timed out or banned.
+   */
+  spam(p: ChatPlatform = 'twitch'): FerroEvent {
+    const { kind, actor } = this.spamMessage(p)
+    const reason = 'Looks like self-promotion or a scam (scam filter).'
+    const action = this.filters.solicitation.action
+    if (action === 'hold') return this.hold(kind, p, reason)
+    const e = this.ingest(kind, p, 'live', { held: true })
+    if (e.source_id) this.ingest({ type: 'message_deleted', message_id: e.source_id }, p, 'live')
+    if (action === 'ban' && actor.id) {
+      this.bans = this.bans.filter((x) => !(x.user_id === actor.id && x.platform === p))
+      this.bans.unshift({
+        platform: p,
+        user_id: actor.id,
+        login: actor.login ?? actor.display_name,
+        display_name: actor.display_name,
+        reason: 'Scam filter',
+        banned_at: Date.now(),
+        everywhere: false,
+        by: null,
+      })
+      this.ingest({ type: 'ban', target: actor, reason: 'Scam filter', until: null }, p, 'live')
+    }
+    return e
+  }
+
+  private spamMessage(p: ChatPlatform): { kind: EventKind; actor: Actor } {
     const text = this.pickOf([
       'hey! i do stream overlays and emotes, check my profile for prices',
       'want more viewers? cheap_viewers dot com, real and fast',
@@ -2284,27 +2430,25 @@ export class DemoEngine {
       this.pickOf(['art_by_lumi_x', 'promo_wizard22', 'viewbooster_live']),
       { id: `${p}-spam-${this.seq}`, roles: 512 },
     )
-    const e = this.ingest(
-      {
+    return {
+      actor,
+      kind: {
         type: 'chat_message',
         actor,
         content: { text, fragments: [{ type: 'text', text }] },
         reply_to: null,
         is_action: false,
       },
+    }
+  }
+
+  /** A scam chatter held for a mod whatever the filter says (tests and the simulate menu). */
+  holdSpam(p: ChatPlatform = 'twitch'): FerroEvent {
+    return this.hold(
+      this.spamMessage(p).kind,
       p,
-      'live',
-      { held: true },
+      'Looks like self-promotion or a scam (scam filter).',
     )
-    this.broadcastLive({
-      v: 1,
-      type: 'held',
-      data: {
-        event_id: e.id,
-        reason: 'Looks like self-promotion or a scam (solicitation filter).',
-      },
-    })
-    return e
   }
 
   private randomSupport(): void {

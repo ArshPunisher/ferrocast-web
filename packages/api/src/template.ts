@@ -139,6 +139,28 @@ function apply(f: Filter, value: string): string {
   }
 }
 
+/** "1 month", "12 months" (core::template::plural: the plain number, no grouping). */
+function counted(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+/**
+ * Templates written as "{months} months" (the old default, and what most people type) read
+ * "1 months" for a first sub. Like the engine (core::template::with_plurals), each pair is
+ * rewritten to its `_text` variable before rendering, so saved templates read right.
+ */
+const COUNTED_WORDS: readonly [string, string][] = [
+  ['{months} months', '{months_text}'],
+  ['{count} subs', '{count_text}'],
+  ['{viewers} viewers', '{viewers_text}'],
+]
+
+export function withPlurals(src: string): string {
+  let out = src
+  for (const [from, to] of COUNTED_WORDS) out = out.split(from).join(to)
+  return out
+}
+
 /** Every variable an event can set, for the editor's autocomplete (core::KNOWN_VARS). */
 export const KNOWN_VARS = [
   'name',
@@ -148,12 +170,15 @@ export const KNOWN_VARS = [
   'currency',
   'message',
   'months',
+  'months_text',
   'tier',
   'gifter',
   'count',
+  'count_text',
   'value',
   'unit',
   'viewers',
+  'viewers_text',
   'reward',
   'cost',
 ] as const
@@ -170,12 +195,14 @@ export function eventVars(e: FerroEvent): Vars {
   switch (k.type) {
     case 'subscription':
       v.months = String(k.months)
+      v.months_text = counted(k.months, 'month', 'months')
       v.tier = tierLabel(k.tier)
       if (k.message) v.message = k.message.text
       if (k.gifted_by) v.gifter = k.gifted_by.display_name
       break
     case 'gift_batch':
       v.count = String(k.count)
+      v.count_text = counted(k.count, 'sub', 'subs')
       v.amount = String(k.count)
       v.tier = tierLabel(k.tier)
       break
@@ -197,6 +224,7 @@ export function eventVars(e: FerroEvent): Vars {
       break
     case 'raid':
       v.viewers = String(k.viewers)
+      v.viewers_text = counted(k.viewers, 'viewer', 'viewers')
       v.amount = String(k.viewers)
       break
     case 'reward_redemption':

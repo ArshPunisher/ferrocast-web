@@ -273,6 +273,8 @@ export class DemoImporters {
     private readonly timers: () => Timer[],
     private readonly setTimers: (t: Timer[]) => void,
     private readonly knownNames: () => string[],
+    /** Takes a backup (the engine does before every import) and answers its id. */
+    private readonly backup: (label: string) => string = (label) => `${Date.now()}-${label}`,
   ) {}
 
   route(method: string, seg: string[], body: unknown): Routed {
@@ -448,9 +450,11 @@ export class DemoImporters {
         'That preview has expired or was replaced by a newer one.',
         'Run the preview again, then import.',
       )
+    // A backup first, like the engine: restore it from Settings › Your data to undo.
+    const backup = this.backup(`before-${h.source}-import`)
     const r = this.compute(h, b.on_conflict, true)
     this.held = null
-    return r.report
+    return { ...r.report, backup }
   }
 
   /** Same walk for preview and apply, like the engine. */
@@ -566,7 +570,7 @@ export class DemoImporters {
     }
     const report: ImportReport = {
       source: h.source,
-      backup: `${Date.now()}-before-${h.source}-import`,
+      backup: '',
       on_conflict: choice,
       sections: sections.map((s) => ({
         kind: s.kind,

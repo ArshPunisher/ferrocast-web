@@ -120,3 +120,24 @@ export function describeError(err: unknown): { message: string; hint: string | n
   if (err instanceof ApiError) return { message: err.message, hint: err.hint }
   return { message: 'Something went wrong.', hint: 'Try again in a moment.' }
 }
+
+/**
+ * A 400 like "options: give 2 to 5 answers." split into its field and a whole sentence
+ * ("Give 2 to 5 answers."), so a form can show it next to that field. A message that
+ * leaned on the field name ("must be text.") gets a subject ("This must be text.").
+ * Anything else comes back whole, with its hint.
+ */
+export function fieldError(err: unknown): { field: string | null; message: string } {
+  const d = describeError(err)
+  if (err instanceof ApiError && err.status === 400) {
+    const m = /^(\w+): (.*)$/s.exec(d.message)
+    if (m?.[1] && m[2]) return { field: m[1], message: sentence(m[2]) }
+  }
+  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
+}
+
+function sentence(s: string): string {
+  const t = s.trim()
+  if (/^(must|can|can't|cannot|should|is|are)\b/i.test(t)) return `This ${t}`
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}

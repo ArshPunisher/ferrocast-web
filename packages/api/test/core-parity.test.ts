@@ -2,7 +2,7 @@
 // unit tests in crates/core/src/{template,money,alert,queue}.rs.
 
 import { describe, expect, it } from 'vitest'
-import { Template, eventVars, checkTemplate, KNOWN_VARS } from '../src/template'
+import { Template, eventVars, checkTemplate, KNOWN_VARS, withPlurals } from '../src/template'
 import { formatMoney, formatValue, tameText, describeEvent, relativeTime } from '../src/format'
 import { defaultRules, matches, newVariation, render, select, validateRule } from '../src/alert'
 import { AlertQueue, type QueueAction } from '../src/queue'
@@ -16,6 +16,24 @@ describe('template', () => {
     const t = Template.parse('{name|upper} gave {amount}! {message|default:"no message"}')
     expect(t.render(vars({ name: 'asha', amount: '₹500' }))).toBe('ASHA gave ₹500! no message')
     expect(Template.parse('{name|title}').render({ name: 'pixel panda' })).toBe('Pixel Panda')
+  })
+  it('reads counts right for one, with old and new templates (core::template::with_plurals)', () => {
+    const one = { months: '1', months_text: '1 month', count: '1', count_text: '1 sub' }
+    const t = Template.parse(
+      withPlurals('{name} subscribed for {months} months! Gifted {count} subs'),
+    )
+    expect(t.render(one)).toBe(' subscribed for 1 month! Gifted 1 sub')
+    expect(withPlurals('{months} mo')).toBe('{months} mo')
+    const sub = anySample('subscription', 0)
+    if (sub?.kind.type !== 'subscription') throw new Error('no sample')
+    sub.kind.months = 1
+    const rule = defaultRules().find((r) => r.id === 'sub')
+    if (!rule?.variations[0]) throw new Error('no sub rule')
+    expect(render('a', rule, rule.variations[0], sub).title).toMatch(/subscribed for 1 month!$/)
+    const old = newVariation('old', '{name} subscribed for {months} months!')
+    expect(render('a', rule, old, sub).title).toMatch(/subscribed for 1 month!$/)
+    sub.kind.months = 12
+    expect(render('a', rule, rule.variations[0], sub).title).toMatch(/subscribed for 12 months!$/)
   })
   it('handles literal braces', () => {
     expect(Template.parse('{{not a var}} {name}').render({ name: 'x' })).toBe('{not a var} x')

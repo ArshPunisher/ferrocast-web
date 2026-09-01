@@ -2,7 +2,7 @@
 // The engine stays the source of truth; this only answers "what would this look like?".
 
 import { actorOf, majorUnits } from './format'
-import { Template, eventVars } from './template'
+import { Template, eventVars, withPlurals } from './template'
 import {
   ALERT_KINDS,
   type AlertRule,
@@ -154,7 +154,7 @@ export function render(
   const vars = eventVars(e)
   const fill = (src: string) => {
     try {
-      return Template.parse(src).render(vars)
+      return Template.parse(withPlurals(src)).render(vars)
     } catch {
       return src
     }
@@ -233,12 +233,12 @@ export function defaultRules(): AlertRule[] {
   })
   return [
     rule('follow', 'Follows', 'follow', '{name} followed!'),
-    rule('sub', 'Subscriptions', 'subscription', '{name} subscribed for {months} months!'),
-    rule('gift', 'Gifted subs', 'gift_batch', '{name} gifted {count} subs!'),
+    rule('sub', 'Subscriptions', 'subscription', '{name} subscribed for {months_text}!'),
+    rule('gift', 'Gifted subs', 'gift_batch', '{name} gifted {count_text}!'),
     rule('bits', 'Bits and KICKs', 'platform_gift', '{name} sent {value}!'),
     rule('superchat', 'Super Chats', 'paid_message', '{name} sent {amount}!'),
     rule('tip', 'Tips', 'tip', '{name} tipped {amount}!'),
-    rule('raid', 'Raids', 'raid', '{name} is raiding with {viewers} viewers!'),
+    rule('raid', 'Raids', 'raid', '{name} is raiding with {viewers_text}!'),
     rule('redeem', 'Channel points', 'reward_redemption', '{name} redeemed {reward}'),
   ]
 }

@@ -98,6 +98,11 @@ export function formatCount(n: number): string {
   return group(BigInt(Math.max(0, Math.trunc(n))))
 }
 
+/** "1 minute", "1,500 viewers": a count with the word that fits it. */
+export function plural(n: number, one: string, many: string): string {
+  return `${formatCount(n)} ${n === 1 ? one : many}`
+}
+
 export const PLATFORM_LABEL: Record<Platform, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
@@ -196,7 +201,7 @@ export function describeEvent(e: FerroEvent): { title: string; detail: string | 
         detail: k.message,
       }
     case 'raid':
-      return { title: `raided with ${formatCount(k.viewers)} viewers`, detail: null }
+      return { title: `raided with ${plural(k.viewers, 'viewer', 'viewers')}`, detail: null }
     case 'reward_redemption':
       return { title: `redeemed ${k.reward}`, detail: k.input }
     case 'chat_message':

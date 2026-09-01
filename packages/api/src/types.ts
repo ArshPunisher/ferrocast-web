@@ -410,7 +410,14 @@ export type FilterAction = 'delete' | 'timeout' | 'ban' | 'hold'
 /** Moderation filters. Shape proposed in docs/API-REQUESTS.md (R2). */
 export interface Filters {
   words: { enabled: boolean; list: string[]; lookalikes: boolean; action: FilterAction }
-  links: { enabled: boolean; allow_roles: number; allow_domains: string[]; action: FilterAction }
+  links: {
+    enabled: boolean
+    allow_roles: number
+    allow_domains: string[]
+    action: FilterAction
+    /** Hold someone's first message with a link for a mod (on when left out). */
+    hold_first_time?: boolean
+  }
   caps: { enabled: boolean; min_length: number; max_percent: number; action: FilterAction }
   emotes: { enabled: boolean; max: number; action: FilterAction }
   symbols: { enabled: boolean; max_percent: number; action: FilterAction }
@@ -442,6 +449,13 @@ export interface Command {
   platforms: Platform[]
   enabled: boolean
 }
+
+/**
+ * What the starter `!socials` says until the streamer writes their links
+ * (core::starter::SOCIALS_PLACEHOLDER). It's added switched off, so viewers never see it.
+ */
+export const SOCIALS_PLACEHOLDER =
+  'Find me everywhere: add your links to this reply in Ferrocast (Bot, !socials).'
 
 /** `POST /api/v1/commands/starter`. */
 export interface StarterResult {
@@ -618,12 +632,32 @@ export interface Settings {
   currency: string
 }
 
+/** Why a backup was taken (API.md §4 Settings and data). `restore`: the data a restore replaced. */
+export type BackupReason =
+  'daily' | 'update' | 'migration' | 'import' | 'restore' | 'manual' | 'other'
+
 export interface Backup {
   id: string
   created_at: Millis
-  reason: 'manual' | 'before_update' | 'before_migration' | 'daily'
+  reason: BackupReason
   bytes: number
-  version: string
+  /** The Ferrocast version that took it; null for backups from before this was kept. */
+  version: string | null
+}
+
+/** `POST /api/v1/backups/{id}/restore`: it's swapped in at the next start. */
+export interface RestoreResult {
+  restart_needed: boolean
+  message: string
+}
+
+/** `POST /api/v1/session/pair-code`: a one-time link to open the dashboard elsewhere. */
+export interface PairLink {
+  code: string
+  url: string
+  expires_at: Millis
+  /** `active`: the link uses this computer's network address. `restart_needed`: LAN access was switched on and applies at the next start. Older engines leave it out. */
+  lan?: { active: boolean; restart_needed: boolean }
 }
 
 /** `POST /api/v1/import` (a `.ferropack`): rows per table, media files unpacked, the backup taken first. */
@@ -835,6 +869,8 @@ export type LiveFrame =
   | { v: 1; type: 'notice'; data: Notice }
   | { v: 1; type: 'goals'; data: Goal[] }
   | { v: 1; type: 'held'; data: { event_id: string; reason: string } }
+  /** A mod approved (`released`) or removed (`dropped`) a held message, from any dashboard. */
+  | { v: 1; type: 'held_resolved'; data: { event_id: string; outcome: 'released' | 'dropped' } }
   | { v: 1; type: 'panic'; data: { on: boolean; plan: PanicConfig } }
   | { v: 1; type: 'resync'; data: { missed: number } }
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }

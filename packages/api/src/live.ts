@@ -18,6 +18,7 @@ const LIVE_TYPES = new Set([
   'notice',
   'goals',
   'held',
+  'held_resolved',
   'panic',
   'resync',
   'poll',

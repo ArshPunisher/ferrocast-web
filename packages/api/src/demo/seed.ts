@@ -232,8 +232,7 @@ export function seedRules(): AlertRule[] {
     big.layout = 'banner'
     tip.variations.push(big)
   }
-  const raid = rules.find((r) => r.id === 'raid')
-  if (raid) raid.platforms = ['twitch']
+  // Raids alert on every platform that has them (Twitch and Kick), like the engine's default.
   return rules
 }
 
@@ -299,6 +298,7 @@ export const FILTERS: Filters = {
     allow_roles: 2 | 4 | 8,
     allow_domains: ['clips.twitch.tv', 'youtu.be'],
     action: 'delete',
+    hold_first_time: true,
   },
   caps: { enabled: true, min_length: 12, max_percent: 70, action: 'delete' },
   emotes: { enabled: false, max: 15, action: 'delete' },
@@ -347,7 +347,8 @@ export function seedCommands(): Command[] {
       id: 'c-so',
       name: '!so',
       aliases: [],
-      response: 'Go show {target} some love, they were last playing {game}!',
+      // {target_game_note} like the engine: "They were last playing X." or nothing.
+      response: 'Go show {target} some love! {target_game_note}',
       roles: 'mods',
       cooldown_s: 5,
       user_cooldown_s: 0,

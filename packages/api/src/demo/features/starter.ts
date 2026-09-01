@@ -1,19 +1,20 @@
 // The starter command pack in the demo, matching the engine (`crates/core/src/starter.rs`):
 // the same four commands, skipping any name a command or alias already uses.
 
-import type { Command, StarterResult } from '../../types'
+import { SOCIALS_PLACEHOLDER, type Command, type StarterResult } from '../../types'
 import { NOT_MINE, clone, type Routed } from './host'
 
 export const STARTER: Omit<Command, 'id'>[] = [
   {
+    // Off until the streamer writes their links, so viewers never get the placeholder.
     name: '!socials',
     aliases: [],
-    response: 'Find me everywhere: add your links to this reply in Ferrocast (Bot, !socials).',
+    response: SOCIALS_PLACEHOLDER,
     roles: 'everyone',
     cooldown_s: 30,
     user_cooldown_s: 0,
     platforms: [],
-    enabled: true,
+    enabled: false,
   },
   {
     name: '!lurk',
