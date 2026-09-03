@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react'
 import { describeError, type FerroClient } from '@ferrocast/api'
 import { toast } from '@ferrocast/ui'
 import { useLive } from './store'
@@ -118,4 +118,37 @@ export function useMediaQuery(q: string): boolean {
     return () => mq.removeEventListener('change', on)
   }, [q])
   return m
+}
+
+/**
+ * The newest `size` items, except while keyboard focus is inside the list: then the window
+ * stops dropping its oldest rows, so the row holding focus never disappears under the
+ * reader (focus would fall back to the page). New rows still arrive at the end.
+ */
+export function useFocusHeldTail<T extends { id: string }>(
+  list: T[],
+  size: number,
+): {
+  items: T[]
+  hold: { onFocus: () => void; onBlur: (e: FocusEvent<HTMLElement>) => void }
+} {
+  const [from, setFrom] = useState<string | null>(null)
+  const items = useMemo(() => {
+    if (from !== null) {
+      const i = list.findIndex((x) => x.id === from)
+      if (i >= 0) return list.slice(i)
+    }
+    return list.slice(-size)
+  }, [list, size, from])
+  const first = items[0]?.id ?? null
+  const hold = useMemo(
+    () => ({
+      onFocus: () => setFrom((f) => f ?? first),
+      onBlur: (e: FocusEvent<HTMLElement>) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFrom(null)
+      },
+    }),
+    [first],
+  )
+  return { items, hold }
 }

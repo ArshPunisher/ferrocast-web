@@ -12,6 +12,7 @@ import {
 import { EventRow } from '../components/EventRow'
 import { useLive } from '../lib/store'
 import { useMediaQuery, useNow } from '../lib/hooks'
+import { useHeldItems, useHeldSync } from '../lib/held'
 
 type Filter = 'all' | ChatPlatform
 
@@ -24,22 +25,25 @@ export function Chat() {
   const connectors = useLive((s) => s.connectors)
   const [filter, setFilter] = useState<Filter>('all')
   const [hideBots, setHideBots] = useState(true)
+  const [onlyHeld, setOnlyHeld] = useState(false)
+  useHeldSync()
+  const heldItems = useHeldItems()
   const [tab, setTab] = useState<'chat' | 'events'>('chat')
   const [reply, setReply] = useState<ReplyTarget | null>(null)
   const [card, setCard] = useState<Actor | null>(null)
   const { actions, dialogs } = useChatActions(setReply, setCard)
   const wide = useMediaQuery('(min-width: 1024px)')
 
-  const lines = useMemo(
-    () =>
-      chat.filter(
-        (e) =>
-          e.kind.type === 'chat_message' &&
-          (filter === 'all' || e.platform === filter) &&
-          !(hideBots && (e.kind.actor.roles & Roles.BOT) !== 0),
-      ),
-    [chat, filter, hideBots],
-  )
+  const lines = useMemo(() => {
+    // "Held" lists every held message, also ones from before the chat on screen.
+    const source = onlyHeld ? heldItems.map((h) => h.event) : chat
+    return source.filter(
+      (e) =>
+        e.kind.type === 'chat_message' &&
+        (filter === 'all' || e.platform === filter) &&
+        !(hideBots && (e.kind.actor.roles & Roles.BOT) !== 0),
+    )
+  }, [chat, heldItems, onlyHeld, filter, hideBots])
   const feed = useMemo(() => [...events].reverse().slice(0, 80), [events])
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
@@ -82,6 +86,25 @@ export function Chat() {
               })),
           ]}
         />
+        <button
+          type="button"
+          aria-pressed={onlyHeld}
+          onClick={() => setOnlyHeld((v) => !v)}
+          title="Messages waiting for a mod"
+          className={cx(
+            'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold',
+            'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+            onlyHeld
+              ? 'border-warn bg-warn-soft text-text'
+              : heldItems.length > 0
+                ? 'border-warn/60 text-text-2 hover:bg-surface-2'
+                : 'border-line text-text-3 hover:bg-surface-2',
+          )}
+        >
+          Held
+          <span className="font-mono tabular-nums">{heldItems.length}</span>
+          <span className="sr-only">{heldItems.length === 1 ? 'message' : 'messages'} waiting</span>
+        </button>
         <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-text-3">
           <input
             type="checkbox"
@@ -94,9 +117,15 @@ export function Chat() {
       </header>
       <ChatScroller count={lines.length} className="flex-1" label="Merged chat">
         {lines.length === 0 ? (
-          <EmptyState title="Chat is quiet">
-            Messages from every connected platform appear here, newest at the bottom.
-          </EmptyState>
+          onlyHeld ? (
+            <EmptyState title="Nothing waiting for a mod">
+              Messages a filter holds show here with Approve and Remove.
+            </EmptyState>
+          ) : (
+            <EmptyState title="Chat is quiet">
+              Messages from every connected platform appear here, newest at the bottom.
+            </EmptyState>
+          )
         ) : (
           <ul className="flex flex-col px-1 py-2 sm:px-2">
             {lines.map((e) => (

@@ -4,6 +4,7 @@ import { currentToasts } from '@ferrocast/ui'
 import { selectFeed, useLive } from './store'
 import { href, parseRoute } from './router'
 import { readableColors } from '../components/chat'
+import { stageScale } from '../components/AlertStage'
 
 const chat = (id: string, text = 'hi'): FerroEvent => ({
   id,
@@ -40,6 +41,7 @@ beforeEach(() => {
     events: [],
     deleted: new Set(),
     held: new Map(),
+    heldEvents: new Map(),
     notices: [],
     panic: false,
     viewers: {},
@@ -76,6 +78,34 @@ describe('live store', () => {
     useLive.getState().apply(frames)
     expect(useLive.getState().held.size).toBe(200)
     expect(useLive.getState().held.get('e249')).toBe('spam')
+  })
+  it('clears a held message when any dashboard approves or removes it', () => {
+    const s = useLive.getState()
+    s.apply([
+      ev(chat('c1')),
+      { v: 1, type: 'held', data: { event_id: 'c1', reason: 'scam' } },
+      ev(chat('c2')),
+      { v: 1, type: 'held', data: { event_id: 'c2', reason: 'link' } },
+    ])
+    expect([...useLive.getState().heldEvents.keys()]).toEqual(['c1', 'c2'])
+    s.apply([
+      { v: 1, type: 'held_resolved', data: { event_id: 'c1', outcome: 'released' } },
+      { v: 1, type: 'held_resolved', data: { event_id: 'c2', outcome: 'dropped' } },
+    ])
+    const st = useLive.getState()
+    expect(st.held.size).toBe(0)
+    expect(st.heldEvents.size).toBe(0)
+    expect(st.deleted.has('src-c1')).toBe(false)
+    expect(st.deleted.has('src-c2')).toBe(true)
+  })
+  it('takes the engine held list as the truth', () => {
+    const s = useLive.getState()
+    s.apply([ev(chat('c1')), { v: 1, type: 'held', data: { event_id: 'c1', reason: 'scam' } }])
+    s.syncHeld([chat('c9')])
+    const st = useLive.getState()
+    expect([...st.held.keys()]).toEqual(['c9'])
+    expect(st.held.get('c9')).toMatch(/held/i)
+    expect(st.heldEvents.get('c9')?.id).toBe('c9')
   })
   it('follows panic frames and notices', () => {
     useLive.getState().apply([
@@ -204,5 +234,14 @@ describe('name colours', () => {
     expect(readableColors('#1a5fb4')).toEqual({ light: '#1a5fb4' })
     expect(readableColors('red; background:url(x)')).toEqual({})
     expect(readableColors(null)).toEqual({})
+  })
+})
+
+describe('alert preview', () => {
+  it('shrinks the stage as one picture on narrow screens only', () => {
+    expect(stageScale(1280)).toBe(1)
+    expect(stageScale(640)).toBe(1)
+    expect(stageScale(335)).toBeCloseTo(335 / 640)
+    expect(stageScale(0)).toBe(1)
   })
 })

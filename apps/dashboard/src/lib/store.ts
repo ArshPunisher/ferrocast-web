@@ -49,6 +49,8 @@ interface LiveStore {
   panicPlan: PanicConfig | null
   /** Event ids the chat filter held for a mod, with the reason. */
   held: Map<string, string>
+  /** The held messages themselves, by event id (for the review list). */
+  heldEvents: Map<string, FerroEvent>
   /** Bumped when the server says we fell behind; screens refetch. */
   resyncs: number
   /** The latest `poll` frame; `undefined` until one arrives (load it with the client). */
@@ -67,6 +69,32 @@ interface LiveStore {
   apply: (frames: LiveFrame[]) => void
   dismissNotice: (id: number) => void
   pushNotice: (n: Notice) => void
+  /** The engine's held list (`GET /mod/held`) is the truth: anything else was handled. */
+  syncHeld: (list: FerroEvent[]) => void
+  /** A held message was approved or removed (here, or by another mod). */
+  resolveHeld: (eventId: string, outcome: 'released' | 'dropped') => void
+}
+
+/** Shown when a held message came from the list, not a live `held` frame. */
+export const HELD_REASON = 'Held by the chat filter for a mod.'
+
+/** Removes a held message; a removed one is marked deleted (by its platform message id). */
+function resolved(
+  s: Pick<LiveStore, 'held' | 'heldEvents' | 'deleted'>,
+  eventId: string,
+  outcome: 'released' | 'dropped',
+): Pick<LiveStore, 'held' | 'heldEvents' | 'deleted'> {
+  const held = new Map(s.held)
+  held.delete(eventId)
+  const heldEvents = new Map(s.heldEvents)
+  const e = heldEvents.get(eventId)
+  heldEvents.delete(eventId)
+  let deleted = s.deleted
+  if (outcome === 'dropped' && e?.source_id) {
+    deleted = new Set(deleted)
+    deleted.add(e.source_id)
+  }
+  return { held, heldEvents, deleted }
 }
 
 let noticeId = 1
@@ -119,6 +147,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   goals: null,
   panicPlan: null,
   held: new Map(),
+  heldEvents: new Map(),
   resyncs: 0,
   poll: undefined,
   giveaway: undefined,
@@ -136,6 +165,17 @@ export const useLive = create<LiveStore>((set, get) => ({
     }),
   dismissNotice: (id) => set({ notices: get().notices.filter((n) => n.id !== id) }),
   pushNotice: (n) => set({ notices: addNotice(get().notices, n) }),
+  syncHeld: (list) => {
+    const s = get()
+    const held = new Map<string, string>()
+    const heldEvents = new Map<string, FerroEvent>()
+    for (const e of list) {
+      held.set(e.id, s.held.get(e.id) ?? HELD_REASON)
+      heldEvents.set(e.id, e)
+    }
+    set({ held, heldEvents })
+  },
+  resolveHeld: (eventId, outcome) => set(resolved(get(), eventId, outcome)),
   apply: (frames) => {
     const s = get()
     let chat = s.chat
@@ -150,6 +190,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let goals = s.goals
     let panicPlan = s.panicPlan
     let held = s.held
+    let heldEvents = s.heldEvents
     let resyncs = s.resyncs
     let poll = s.poll
     let giveaway = s.giveaway
@@ -200,11 +241,34 @@ export const useLive = create<LiveStore>((set, get) => ({
         case 'goals':
           goals = f.data
           break
-        case 'held':
+        case 'held': {
           held = new Map(held)
           held.set(f.data.event_id, f.data.reason)
-          if (held.size > 200) held.delete(held.keys().next().value as string)
+          // Its `event` frame came first (API.md §5), usually in this same batch.
+          const id = f.data.event_id
+          let e: FerroEvent | undefined
+          for (let i = chat.length - 1; i >= 0 && !e; i--) if (chat[i]?.id === id) e = chat[i]
+          if (e) {
+            heldEvents = new Map(heldEvents)
+            heldEvents.set(id, e)
+          }
+          if (held.size > 200) {
+            const old = held.keys().next().value as string
+            held.delete(old)
+            if (heldEvents.has(old)) {
+              if (heldEvents === s.heldEvents) heldEvents = new Map(heldEvents)
+              heldEvents.delete(old)
+            }
+          }
           break
+        }
+        case 'held_resolved': {
+          const r = resolved({ held, heldEvents, deleted }, f.data.event_id, f.data.outcome)
+          held = r.held
+          heldEvents = r.heldEvents
+          deleted = r.deleted
+          break
+        }
         case 'panic':
           panic = f.data.on
           panicPlan = f.data.plan
@@ -245,6 +309,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       goals,
       panicPlan,
       held,
+      heldEvents,
       resyncs,
       poll,
       giveaway,

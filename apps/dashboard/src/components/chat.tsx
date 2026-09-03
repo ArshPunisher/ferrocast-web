@@ -12,6 +12,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowBendUpLeft,
   ArrowDown,
+  Check,
   Clock,
   IdentificationCard,
   PaperPlaneRight,
@@ -47,6 +48,7 @@ import {
 import { done, useAction, useClient } from '../lib/hooks'
 import { PointsAdjuster, pointsLabel } from './community/points'
 import { useLive } from '../lib/store'
+import { useHeldActions } from '../lib/held'
 
 const SAFE_IMG =
   /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/]|data:image\/(png|gif|webp|jpeg);)/i
@@ -166,6 +168,9 @@ export function MessageText({ event }: { event: FerroEvent }) {
 }
 
 export interface ChatActions {
+  /** Held messages: show it (chat overlays get it) or remove it (deleted on its platform). */
+  approve: (e: FerroEvent) => void
+  drop: (e: FerroEvent) => void
   reply: (e: FerroEvent) => void
   remove: (e: FerroEvent) => void
   timeout: (e: FerroEvent, seconds: number) => void
@@ -245,6 +250,12 @@ export const ChatLine = memo(function ChatLine({
         ) : (
           <MessageText event={event} />
         )}
+        {held && !deleted && actions && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-2">
+            <HeldButtons event={event} onApprove={actions.approve} onRemove={actions.drop} />
+            <span className="text-[12px] text-text-3">{held}</span>
+          </span>
+        )}
       </div>
       {actions && !deleted && !mine && (
         <div className="absolute top-0.5 right-1 hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 group-hover:flex group-focus-within:flex">
@@ -286,6 +297,47 @@ export const ChatLine = memo(function ChatLine({
     </li>
   )
 })
+
+/** The two buttons, used on a held chat line and in the review list. */
+export function HeldButtons({
+  event,
+  onApprove,
+  onRemove,
+  busy,
+}: {
+  event: FerroEvent
+  onApprove: (e: FerroEvent) => void
+  onRemove: (e: FerroEvent) => void
+  busy?: boolean
+}) {
+  const who = event.kind.type === 'chat_message' ? tameText(event.kind.actor.display_name) : ''
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={<Check size={14} weight="bold" />}
+        disabled={busy}
+        onClick={() => onApprove(event)}
+        aria-label={`Approve ${who}’s message`}
+        title="Show it in chat overlays"
+      >
+        Approve
+      </Button>
+      <Button
+        size="sm"
+        variant="danger-ghost"
+        icon={<Trash size={14} />}
+        disabled={busy}
+        onClick={() => onRemove(event)}
+        aria-label={`Remove ${who}’s message`}
+        title={`Delete it on ${PLATFORM_LABEL[event.platform]}`}
+      >
+        Remove
+      </Button>
+    </span>
+  )
+}
 
 /** Keeps the newest line in view unless the reader scrolled up; then offers a jump button. */
 export function ChatScroller({
@@ -525,10 +577,14 @@ export function useChatActions(
 ): { actions: ChatActions; dialogs: ReactNode } {
   const client = useClient()
   const { run, busy } = useAction()
+  const heldActions = useHeldActions()
+  const { approve, remove: drop } = heldActions
   const [banning, setBanning] = useState<FerroEvent | null>(null)
   const [sheet, setSheet] = useState<FerroEvent | null>(null)
   const actions = useMemo<ChatActions>(
     () => ({
+      approve,
+      drop,
       reply: (e) =>
         e.kind.type === 'chat_message' &&
         setReply({ event: e, name: tameText(e.kind.actor.display_name) }),
@@ -557,7 +613,7 @@ export function useChatActions(
       sheet: (e) => setSheet(e),
     }),
     // Stable across renders so memo(ChatLine) can skip unchanged lines during a chat flood.
-    [client, run, setReply, openCard],
+    [client, run, setReply, openCard, approve, drop],
   )
   const sheetActor = sheet?.kind.type === 'chat_message' ? sheet.kind.actor : null
   const target = banning?.kind.type === 'chat_message' ? banning.kind.actor : null
@@ -659,7 +715,7 @@ export function BanDialog({
   onClose,
   onBan,
 }: {
-  actor: Actor | null
+  actor: Pick<Actor, 'display_name'> | null
   platform: Platform | null
   busy: boolean
   onClose: () => void
@@ -728,7 +784,13 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [saved, setSaved] = useState<string | null>(null)
+  const [banning, setBanning] = useState(false)
+  const banTarget = useMemo(
+    () => (banning && card ? { display_name: card.display_name } : null),
+    [banning, card],
+  )
   useEffect(() => {
+    setBanning(false)
     if (!actor?.id) return
     let alive = true
     setCard(null)
@@ -889,28 +951,42 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
                 Unban
               </Button>
             ) : (
-              <Button
-                size="sm"
-                variant="danger"
-                busy={busy === 'ban'}
-                onClick={() =>
-                  void run(
-                    'ban',
-                    () =>
-                      client.ban(
-                        { platform: card.platform, user_id: card.user_id, login: card.login },
-                        true,
-                      ),
-                    { success: 'Banned everywhere.' },
-                  ).then((r) => r && onClose())
-                }
-              >
-                Ban everywhere
+              <Button size="sm" variant="danger" onClick={() => setBanning(true)}>
+                Ban…
               </Button>
             )}
           </div>
         </div>
       )}
+      {/* The same "Ban X?" check as the message toolbar: a ban is hard to take back live. */}
+      <BanDialog
+        actor={banTarget}
+        platform={card?.platform ?? null}
+        busy={busy === 'ban'}
+        onClose={() => setBanning(false)}
+        onBan={(everywhere, reason) => {
+          if (!card) return
+          void run(
+            'ban',
+            () =>
+              client.ban(
+                { platform: card.platform, user_id: card.user_id, login: card.login },
+                everywhere,
+                reason || undefined,
+              ),
+            {
+              success: (r) =>
+                r.failed.length
+                  ? `Banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}. Not on ${r.failed.map((f) => PLATFORM_LABEL[f.platform]).join(', ')}.`
+                  : `${tameText(card.display_name)} is banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}.`,
+            },
+          ).then((r) => {
+            if (!r) return
+            setBanning(false)
+            onClose()
+          })
+        }}
+      />
     </Dialog>
   )
 }

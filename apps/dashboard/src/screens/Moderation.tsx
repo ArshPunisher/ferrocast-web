@@ -4,6 +4,7 @@ import { MagnifyingGlass, ShieldWarning } from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
   Roles,
+  plural,
   tameText,
   type BanEntry,
   type FilterAction,
@@ -24,6 +25,7 @@ import {
   cx,
 } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { HeldPanel } from '../components/held'
 import { usePanic } from '../components/PanicButton'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 
@@ -56,6 +58,15 @@ function ActionSelect({
       )}
     </Field>
   )
+}
+
+/** Who can post links, said the same way the switches below are set. */
+export function linkRule(allowRoles: number): string {
+  const who = ['Mods']
+  if (allowRoles & Roles.VIP) who.push('VIPs')
+  if (allowRoles & Roles.SUBSCRIBER) who.push('subscribers')
+  const list = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who.at(-1)}` : who[0]
+  return `${list} can post links. Everyone else’s links get the action below, unless the site is always allowed.`
 }
 
 function PanicCard() {
@@ -116,7 +127,7 @@ function PanicCard() {
               checked={c.followers_only}
               onChange={(v) => save({ ...c, followers_only: v })}
               label="Followers-only chat"
-              description={`Only people who followed at least ${c.followers_only_minutes} minutes ago can talk.`}
+              description={`Only people who followed at least ${plural(c.followers_only_minutes, 'minute', 'minutes')} ago can talk.`}
             />
             <Switch
               checked={c.hold_new_accounts}
@@ -350,7 +361,7 @@ function FiltersPanel() {
             checked={f.links.enabled}
             onChange={(v) => set('links', { enabled: v })}
             label="Links"
-            description="Subs, VIPs and mods can always post links."
+            description={linkRule(f.links.allow_roles)}
           />
           {f.links.enabled && (
             <>
@@ -381,6 +392,12 @@ function FiltersPanel() {
                   })
                 }
                 label="Subscribers may post links"
+              />
+              <Switch
+                checked={f.links.hold_first_time !== false}
+                onChange={(v) => set('links', { hold_first_time: v })}
+                label="Hold a first message with a link"
+                description="Someone’s very first message with a link waits for a mod, even if they may post links. Allowed sites always go through."
               />
               <ActionSelect
                 label="Then"
@@ -496,6 +513,7 @@ export function Moderation() {
       />
       <div className="flex flex-col gap-5">
         <PanicCard />
+        <HeldPanel />
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           <BanList />
           <FiltersPanel />

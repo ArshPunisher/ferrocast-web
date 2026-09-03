@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { ArrowClockwise, CopySimple } from '@phosphor-icons/react'
 import {
   formatCount,
+  plural,
   formatMoney,
   tameText,
   type Platform,
@@ -202,7 +203,7 @@ function RecapBody({ r }: { r: RecapData }) {
           render={(x) => ({
             key: `${x.platform}:${x.name}`,
             who: x,
-            detail: `${formatCount(x.viewers)} viewers`,
+            detail: plural(x.viewers, 'viewer', 'viewers'),
           })}
         />
         <ListPanel

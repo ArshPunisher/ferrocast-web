@@ -1,4 +1,4 @@
-import { formatCount, type ConnectorName, type ConnectorState } from '@ferrocast/api'
+import { formatCount, plural, type ConnectorName, type ConnectorState } from '@ferrocast/api'
 import { BrandIcon, PlatformMark, cx } from '@ferrocast/ui'
 import { useLive } from '../lib/store'
 import { href } from '../lib/router'
@@ -20,7 +20,10 @@ export function stateCopy(c: ConnectorState): {
     case 'connected':
       return { label: 'Connected', tone: 'ok' }
     case 'reconnecting':
-      return { label: 'Reconnecting', tone: 'warn' }
+      // Never connected yet (no account, nothing heard): it's the first connect.
+      return c.account === null && c.last_event_at === null
+        ? { label: 'Connecting', tone: 'warn' }
+        : { label: 'Reconnecting', tone: 'warn' }
     case 'disconnected':
       return { label: 'Disconnected', tone: 'danger' }
     case 'sign_in_needed':
@@ -55,8 +58,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
         const { label, tone } = stateCopy(c)
         const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
         const late = name === 'kick' && c.state === 'connected'
-        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${c.detail ? `. ${c.detail}` : ''}`
         const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
+        const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
+        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}`
         return (
           <li key={name} className="shrink-0">
             <a
@@ -91,7 +95,10 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
                 </span>
               )}
               {!compact && v !== undefined && (
-                <span className="font-mono text-text-3 tabular-nums">{formatCount(v)}</span>
+                <span aria-hidden="true" className="text-text-3">
+                  <span className="font-mono tabular-nums">{formatCount(v)}</span>{' '}
+                  {v === 1 ? 'viewer' : 'viewers'}
+                </span>
               )}
             </a>
           </li>

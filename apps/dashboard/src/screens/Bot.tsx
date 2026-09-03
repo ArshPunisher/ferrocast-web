@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Lightning, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
-import { ApiError, describeError, type Command, type Timer } from '@ferrocast/api'
+import { SOCIALS_PLACEHOLDER, fieldError, plural, type Command, type Timer } from '@ferrocast/api'
 import {
   Badge,
   Button,
@@ -44,15 +44,6 @@ const BLANK_TIMER: Omit<Timer, 'id'> = {
   enabled: true,
 }
 
-function errorFor(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
-}
-
 function CommandDialog({
   value,
   onClose,
@@ -69,15 +60,22 @@ function CommandDialog({
   if (value !== null && c === null) setC(value)
   if (!c) return null
   const isNew = !('id' in c)
+  const placeholder = c.response.trim() === SOCIALS_PLACEHOLDER
+  // The starter !socials is off until it has real links: writing them switches it on.
+  const switchesOn = !c.enabled && value?.response === SOCIALS_PLACEHOLDER && !placeholder
   const save = async () => {
     setBusy(true)
     setErr(null)
     try {
-      const saved = 'id' in c ? await client.saveCommand(c) : await client.createCommand(c)
+      const enabled = switchesOn || c.enabled
+      const saved =
+        'id' in c
+          ? await client.saveCommand({ ...c, enabled })
+          : await client.createCommand({ ...c, enabled })
       onSaved(saved)
       setC(null)
     } catch (e) {
-      setErr(errorFor(e))
+      setErr(fieldError(e))
     } finally {
       setBusy(false)
     }
@@ -149,6 +147,20 @@ function CommandDialog({
             )}
           </Field>
         </div>
+        {placeholder && (
+          <p
+            role="status"
+            className="rounded-control border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-text-2"
+          >
+            Replace this reply with your links, like “Twitter: x.com/you · Discord: discord.gg/you”.{' '}
+            {c.name} stays off until you do, so viewers never see this text.
+          </p>
+        )}
+        {switchesOn && (
+          <p role="status" className="text-[13px] text-text-3">
+            {c.name} switches on when you save.
+          </p>
+        )}
         <Field
           label="Reply"
           error={err?.field === 'response' ? err.message : null}
@@ -189,7 +201,11 @@ function CommandDialog({
               >
                 {[0, 5, 15, 30, 60, 300].map((s) => (
                   <option key={s} value={s}>
-                    {s === 0 ? 'None' : s < 60 ? `${s} seconds` : `${s / 60} minutes`}
+                    {s === 0
+                      ? 'None'
+                      : s < 60
+                        ? plural(s, 'second', 'seconds')
+                        : plural(s / 60, 'minute', 'minutes')}
                   </option>
                 ))}
               </Select>
@@ -232,7 +248,7 @@ function TimerDialog({
       onSaved(saved)
       setT(null)
     } catch (e) {
-      setErr(errorFor(e))
+      setErr(fieldError(e))
     } finally {
       setBusy(false)
     }
@@ -339,7 +355,9 @@ export function Bot() {
               message: `Added ${names(r.added.map((c) => c.name))}.`,
               hint: r.skipped.length
                 ? `Kept your own ${names(r.skipped)}.`
-                : 'Add your links to !socials next.',
+                : r.added.some((c) => c.name === '!socials')
+                  ? '!socials stays off until you add your links.'
+                  : null,
             }
           : { tone: 'info', message: 'You already have all the starter commands.' },
       )
@@ -419,6 +437,9 @@ export function Bot() {
                         </span>
                       ))}
                       {c.roles !== 'everyone' && <Badge>{ROLE_LABEL[c.roles]}</Badge>}
+                      {c.response.trim() === SOCIALS_PLACEHOLDER && (
+                        <Badge tone="warn">Add your links</Badge>
+                      )}
                     </p>
                     <p className="mt-0.5 line-clamp-2 text-[13px] break-words text-text-3">
                       {c.response}
@@ -463,6 +484,17 @@ export function Bot() {
                     hideLabel
                     label={`${c.name} on`}
                     onChange={(enabled) => {
+                      // Never post the placeholder: ask for the links instead.
+                      if (enabled && c.response.trim() === SOCIALS_PLACEHOLDER) {
+                        setEditCmd(c)
+                        toast({
+                          key: 'socials',
+                          tone: 'info',
+                          message: `Add your links to ${c.name} first.`,
+                          hint: 'It switches on when you save.',
+                        })
+                        return
+                      }
                       commands.set((p) =>
                         (p ?? []).map((x) => (x.id === c.id ? { ...x, enabled } : x)),
                       )
@@ -510,7 +542,8 @@ export function Bot() {
                       {t.name || 'Timer'}
                     </span>
                     <span className="mt-0.5 block text-[12.5px] text-text-3">
-                      Every {t.every_min} min · after {t.min_chat_lines} messages
+                      Every {t.every_min} min · after{' '}
+                      {plural(t.min_chat_lines, 'message', 'messages')}
                     </span>
                   </button>
                   <Switch

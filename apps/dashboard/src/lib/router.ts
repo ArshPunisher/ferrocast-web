@@ -70,6 +70,45 @@ export function go(r: Route): void {
   if (location.hash !== h) location.hash = h
 }
 
+// ------------------------------------------------------------------ leave guard
+// An editor with unsaved changes can stop in-app navigation (links, go(), Back): the hash
+// is put back before any screen sees it, and the editor asks what to do. This listener is
+// added when the module loads, so it runs before the route subscribers below.
+
+/** Returns true to keep the reader here; `to` is the hash they tried to open. */
+type LeaveGuard = (to: string) => boolean
+let guard: LeaveGuard | null = null
+let current = typeof location === 'undefined' ? '' : location.hash
+let passing = false
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => {
+    const next = location.hash
+    if (!passing && guard && next !== current && guard(next)) {
+      history.replaceState(history.state, '', `${location.pathname}${location.search}${current}`)
+      return
+    }
+    passing = false
+    current = next
+  })
+}
+
+/** Sets (or with null, clears) the one leave guard. Returns a function that clears it. */
+export function setLeaveGuard(g: LeaveGuard | null): () => void {
+  guard = g
+  current = location.hash
+  return () => {
+    if (guard === g) guard = null
+  }
+}
+
+/** Opens `hash` past the guard (the reader chose to leave). */
+export function leaveTo(hash: string): void {
+  if (location.hash === hash) return
+  passing = true
+  location.hash = hash
+}
+
 const subscribe = (cb: () => void) => {
   window.addEventListener('hashchange', cb)
   return () => window.removeEventListener('hashchange', cb)

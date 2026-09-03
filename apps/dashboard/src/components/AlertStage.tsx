@@ -40,6 +40,18 @@ function Backdrop() {
 }
 
 /**
+ * Narrowest stage the alert is laid out at. Alert text is sized for a 1080p canvas, so on a
+ * phone the whole stage is laid out this wide and scaled down as one picture: the card
+ * keeps its real proportions instead of the name breaking mid-word.
+ */
+const STAGE_MIN_W = 640
+
+/** How much to shrink a stage `width` pixels wide (1 = real size). */
+export function stageScale(width: number): number {
+  return width > 0 ? Math.min(1, width / STAGE_MIN_W) : 1
+}
+
+/**
  * The real overlay renderer playing one alert, at 16:9, scaled to fit. What you see is
  * exactly what OBS will show.
  */
@@ -57,6 +69,17 @@ export function AlertStage({
   const [host, root] = useShadowRoot()
   const [nonce, setNonce] = useState(0)
   const [sound, setSound] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const el = box.current
+    if (!el || typeof ResizeObserver !== 'function') return
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setScale(stageScale(entry.contentRect.width))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   useEffect(() => {
     if (!root || !alert) return
     return playAlertPreview(root, alert, { theme, audio: sound, loop: true })
@@ -69,9 +92,17 @@ export function AlertStage({
       )}
       aria-label={label}
     >
-      <div className="relative aspect-video w-full">
+      <div ref={box} className="relative aspect-video w-full">
         <Backdrop />
-        <div ref={host} className="absolute inset-0" />
+        <div
+          ref={host}
+          className="absolute top-0 left-0 origin-top-left"
+          style={{
+            width: `${100 / scale}%`,
+            height: `${100 / scale}%`,
+            transform: scale < 1 ? `scale(${scale})` : undefined,
+          }}
+        />
         {!alert && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-white/60">
             This rule has nothing to preview yet.

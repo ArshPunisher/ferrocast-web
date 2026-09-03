@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowCounterClockwise, Plus, Stop, X } from '@phosphor-icons/react'
 import {
-  ApiError,
   POLL_LIMITS,
-  describeError,
+  fieldError,
   formatCount,
   tameText,
   type PollSpec,
@@ -40,15 +39,6 @@ const PRESETS: { label: string; options: string[] }[] = [
 function clock(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-function fieldError(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
 }
 
 function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: PollSpec | null }) {

@@ -1,5 +1,16 @@
 # Status
 
+## 18 Oct 2026 (QA fixes)
+
+**Done**
+
+- Primary buttons: white text on a deeper Molten fill (`--fc-btn-primary` #b35900, hover #9e4f00, `--fc-on-btn-primary`): 4.83:1 and 5.88:1, the same in both themes, dashboard and site. The bright `--fc-accent` stays for graphics. A unit test checks the ratios.
+- Held messages: Approve / Remove on the chat line, a "Held" filter in Chat and a "Held for review" panel in Moderation; the `held_resolved` frame clears other dashboards. Viewer card bans and account disconnects ask first. The layout editor asks Save / Discard / Stay on in-app navigation.
+- Backups list their reason and version (daily, before an update or import…), "Back up now", restore says it finishes at the next start. Counts read "1 month", "1 minute", "1 viewer"; field errors are whole sentences. Starter `!socials` is off until it has links. Link filter wording matches its switches, plus "Hold a first message with a link".
+- Smaller: viewer counts labelled in the top bar, first connect says "Connecting", skipping step 1 leaves it unticked, LAN switch and pairing link say when a restart is needed, the look preview scales as one picture on phones, Home chat keeps keyboard focus, `/api/v1/status` answers on dev/preview servers. Demo engine: scam filter follows its action, consistent first-time viewer cards, raids on Twitch and Kick, `!so` uses `{target_game_note}`.
+
+**Known:** the site's `/privacy/` meta description is 169 characters (SEO test wants ≤160); untouched here.
+
 ## 18 Oct 2026 (owner fixes: keychain prompt, OBS auto-connect, panic notices)
 
 **Done**

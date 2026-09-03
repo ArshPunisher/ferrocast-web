@@ -30,6 +30,7 @@ import {
 } from '@ferrocast/api'
 import {
   Button,
+  Dialog,
   Field,
   IconButton,
   Input,
@@ -47,7 +48,7 @@ import { TestAlertMenu } from '../components/alerts-live'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useLive } from '../lib/store'
-import { useUnsavedWarning } from '../lib/unsaved'
+import { useLeaveGuard } from '../lib/unsaved'
 import { SAMPLE_GIVEAWAY, SAMPLE_POLL, giveawayCard } from '../components/community/preview'
 
 const GRID = 8
@@ -302,7 +303,7 @@ function Canvas({
               <span
                 className={cx(
                   'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold',
-                  sel ? 'bg-accent text-on-accent' : 'bg-surface-3 text-text-2',
+                  sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                 )}
               >
                 <Icon size={12} weight="bold" />
@@ -697,7 +698,7 @@ export function OverlayEditor({ id }: { id: string }) {
   useEffect(() => {
     if (ov.data) setDraft(ov.data)
   }, [ov.data])
-  useUnsavedWarning(draft !== null && JSON.stringify(draft) !== JSON.stringify(ov.data))
+  const leaving = useLeaveGuard(draft !== null && JSON.stringify(draft) !== JSON.stringify(ov.data))
 
   // Labels depend only on label widgets' text, not on where widgets sit, so dragging
   // doesn't rebuild the preview state.
@@ -739,10 +740,14 @@ export function OverlayEditor({ id }: { id: string }) {
   const sel = draft.widgets.find((w) => w.id === selected) ?? null
   const update = (w: Widget) =>
     setDraft({ ...draft, widgets: draft.widgets.map((x) => (x.id === w.id ? w : x)) })
-  const save = () =>
-    void run('save', () => client.saveOverlay(draft), {
+  const saveNow = () =>
+    run('save', () => client.saveOverlay(draft), {
       success: 'Overlay saved. OBS updates by itself.',
-    }).then((o) => o && ov.set(o))
+    }).then((o) => {
+      if (o) ov.set(o)
+      return o
+    })
+  const save = () => void saveNow()
 
   return (
     <div className="flex flex-col gap-4">
@@ -902,6 +907,36 @@ export function OverlayEditor({ id }: { id: string }) {
         )}
       </AnimatePresence>
       {guide}
+      <Dialog
+        open={leaving.pending !== null}
+        onClose={leaving.stay}
+        size="sm"
+        title="Save your layout first?"
+        description="You moved or changed widgets in this overlay. OBS keeps the old layout until you save."
+        footer={
+          <>
+            <Button variant="ghost" onClick={leaving.stay}>
+              Stay
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDraft(ov.data ?? draft)
+                leaving.leave()
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              variant="primary"
+              busy={busy === 'save'}
+              onClick={() => void saveNow().then((o) => o && leaving.leave())}
+            >
+              Save and leave
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }

@@ -14,7 +14,7 @@ import {
   type ReplyTarget,
 } from '../components/chat'
 import { selectFeed, useLive } from '../lib/store'
-import { useAction, useClient, useNow, useResource } from '../lib/hooks'
+import { useAction, useClient, useFocusHeldTail, useNow, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 
 function duration(ms: number): string {
@@ -88,7 +88,8 @@ export function Home() {
   const [card, setCard] = useState<Actor | null>(null)
   const { actions, dialogs } = useChatActions(setReply, setCard)
   const feed = useMemo(() => selectFeed(events, 8), [events])
-  const peek = chat.slice(-30)
+  // Keyboard focus on a chat line stays put while new messages arrive.
+  const { items: peek, hold } = useFocusHeldTail(chat, 30)
 
   useEffect(() => {
     const t = setInterval(stats.reload, 20_000)
@@ -217,27 +218,29 @@ export function Home() {
             </a>
           }
         >
-          <ChatScroller count={peek.length} className="h-72" label="Latest chat">
-            {peek.length === 0 ? (
-              <EmptyState compact title="Chat is quiet">
-                Messages from Twitch, YouTube and Kick appear here together.
-              </EmptyState>
-            ) : (
-              <ul className="-mx-2 flex flex-col">
-                {peek.map((e) => (
-                  <ChatLine
-                    key={e.id}
-                    event={e}
-                    now={now}
-                    deleted={deleted.has(e.source_id ?? '')}
-                    held={held.get(e.id)}
-                    actions={actions}
-                    dense
-                  />
-                ))}
-              </ul>
-            )}
-          </ChatScroller>
+          <div {...hold}>
+            <ChatScroller count={peek.length} className="h-72" label="Latest chat">
+              {peek.length === 0 ? (
+                <EmptyState compact title="Chat is quiet">
+                  Messages from Twitch, YouTube and Kick appear here together.
+                </EmptyState>
+              ) : (
+                <ul className="-mx-2 flex flex-col">
+                  {peek.map((e) => (
+                    <ChatLine
+                      key={e.id}
+                      event={e}
+                      now={now}
+                      deleted={deleted.has(e.source_id ?? '')}
+                      held={held.get(e.id)}
+                      actions={actions}
+                      dense
+                    />
+                  ))}
+                </ul>
+              )}
+            </ChatScroller>
+          </div>
           <Composer reply={reply} onClearReply={() => setReply(null)} compact />
         </Panel>
       </div>

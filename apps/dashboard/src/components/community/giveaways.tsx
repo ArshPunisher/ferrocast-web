@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowsClockwise, Confetti, HandPalm, Trophy } from '@phosphor-icons/react'
 import {
-  ApiError,
   PLATFORM_LABEL,
   POINTS_LIMITS,
-  describeError,
+  fieldError,
   formatCount,
+  plural,
   tameText,
   type GiveawayView,
 } from '@ferrocast/api'
@@ -25,15 +25,6 @@ import {
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
-
-function fieldError(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
-}
 
 function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
   const client = useClient()
@@ -221,7 +212,7 @@ export function GiveawayPanel() {
                 {g.keyword}
               </span>{' '}
               to enter
-              {g.cost > 0 ? ` · ${formatCount(g.cost)} points` : ' · free'}
+              {g.cost > 0 ? ` · ${plural(g.cost, 'point', 'points')}` : ' · free'}
               {g.subscriber_bonus ? ' · subs get 2 entries' : ''}
             </p>
           </div>

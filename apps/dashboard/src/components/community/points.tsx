@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { Coins, Minus, Plus } from '@phosphor-icons/react'
 import {
-  ApiError,
   POINTS_LIMITS,
   PLATFORM_LABEL,
-  describeError,
+  fieldError,
   formatCount,
   tameText,
   type LeaderboardEntry,
@@ -32,16 +31,6 @@ export function pointsLabel(n: number, name: string): string {
       ? name.slice(0, -1)
       : name
   return `${formatCount(n)} ${unit}`
-}
-
-/** A 400 like "delta: they have…" split into its field and message. */
-function fieldError(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
 }
 
 /**

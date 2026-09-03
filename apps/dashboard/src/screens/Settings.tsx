@@ -4,7 +4,9 @@ import {
   PLATFORM_LABEL,
   describeError,
   type Backup,
+  type ChatPlatform,
   type ObsState,
+  type PairLink,
   type PackImportReport,
   type Settings as SettingsData,
   type TtsSettings,
@@ -67,7 +69,9 @@ function Section({
 function Accounts() {
   const client = useClient()
   const { connect, busy, dialog } = useConnect()
-  const { run } = useAction()
+  const { run, busy: acting } = useAction()
+  const [leaving, setLeaving] = useState<ChatPlatform | null>(null)
+  const name = leaving ? PLATFORM_LABEL[leaving] : ''
   return (
     <Section
       id="accounts"
@@ -81,15 +85,38 @@ function Accounts() {
             platform={p}
             busy={busy === p}
             onConnect={() => void connect(p)}
-            onDisconnect={() =>
-              void run('dc', () => client.disconnect(p), {
-                success: `${PLATFORM_LABEL[p]} disconnected.`,
-              })
-            }
+            onDisconnect={() => setLeaving(p)}
           />
         ))}
       </ul>
       {dialog}
+      <Dialog
+        open={leaving !== null}
+        onClose={() => setLeaving(null)}
+        size="sm"
+        title={`Disconnect ${name}?`}
+        description={`Chat and alerts from ${name} stop until you connect again. Your overlays, commands and settings stay.`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setLeaving(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              busy={acting === 'dc'}
+              onClick={() => {
+                const p = leaving
+                if (!p) return
+                void run('dc', () => done(client.disconnect(p)), {
+                  success: `${PLATFORM_LABEL[p]} disconnected.`,
+                }).then((ok) => ok && setLeaving(null))
+              }}
+            >
+              Disconnect {name}
+            </Button>
+          </>
+        }
+      />
     </Section>
   )
 }
@@ -460,6 +487,27 @@ function Appearance({
   )
 }
 
+/** What a `.ferropack` holds (the engine's export tables), said the same way everywhere. */
+const EXPORT_CONTENTS =
+  'overlays with their media, alerts, commands, timers, goals, points and viewers'
+
+const BACKUP_REASON: Record<Backup['reason'], string> = {
+  daily: 'Daily',
+  update: 'Before an update',
+  migration: 'Before a data upgrade',
+  import: 'Before an import',
+  restore: 'Before a restore',
+  manual: 'Taken by you',
+  other: 'Backup',
+}
+
+/** "2.4 MB". */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
 function Data() {
   const client = useClient()
   const backups = useResource((c) => c.backups())
@@ -483,7 +531,7 @@ function Data() {
         return blob
       },
       {
-        success: 'Export saved. It has your overlays with their media, alerts, commands and goals.',
+        success: `Export saved. It has your ${EXPORT_CONTENTS}.`,
       },
     )
   return (
@@ -496,8 +544,7 @@ function Data() {
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-text">Export everything</h3>
           <p className="text-[13px] text-text-3">
-            One file with overlays and their media, alerts, commands, timers and goals, in an open
-            format.
+            One file with your {EXPORT_CONTENTS}, in an open format.
           </p>
           <Button
             className="mt-1 self-start"
@@ -533,9 +580,11 @@ function Data() {
                 const f = e.target.files?.[0]
                 e.target.value = ''
                 if (f)
-                  void run('import', () => client.importPack(f, f.name)).then(
-                    (r) => r && setReport(r),
-                  )
+                  void run('import', () => client.importPack(f, f.name)).then((r) => {
+                    if (!r) return
+                    setReport(r)
+                    backups.reload()
+                  })
               }}
             />
             <Button
@@ -549,14 +598,34 @@ function Data() {
         </div>
       </div>
       <div className="mt-6 border-t border-line pt-4">
-        <h3 className="text-sm font-semibold text-text">Backups</h3>
-        <p className="mt-0.5 text-[13px] text-text-3">
-          Taken automatically every day and before every update.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-text">Backups</h3>
+            <p className="mt-0.5 text-[13px] text-text-3">
+              Taken automatically every day, before every update and before every import. The last 7
+              daily ones and the last 10 others are kept.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            busy={busy === 'backup'}
+            onClick={() =>
+              void run('backup', () => client.backupNow(), { success: 'Backup taken.' }).then(
+                (list) => list && backups.set(list),
+              )
+            }
+          >
+            Back up now
+          </Button>
+        </div>
         {backups.error ? (
           <LoadError error={backups.error} onRetry={backups.reload} />
         ) : !backups.data ? (
           <Skeleton className="mt-3 h-20" />
+        ) : backups.data.length === 0 ? (
+          <p className="mt-3 text-[13px] text-text-3">
+            No backups yet. The first daily one is taken soon after Ferrocast starts.
+          </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-1">
             {backups.data.map((b) => (
@@ -564,20 +633,18 @@ function Data() {
                 key={b.id}
                 className="flex items-center gap-3 rounded-control px-2 py-2 hover:bg-surface-2"
               >
-                <span className="min-w-0 flex-1 text-[13.5px] text-text-2">
-                  {new Date(b.created_at).toLocaleString(undefined, {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                  <span className="ml-2 text-text-3">
-                    {b.reason === 'before_update'
-                      ? 'before an update'
-                      : b.reason === 'before_migration'
-                        ? 'before a data upgrade'
-                        : b.reason}{' '}
-                    · v{b.version}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+                  <span className="text-[13.5px] text-text-2">
+                    {new Date(b.created_at).toLocaleString(undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  <span className="text-[12.5px] text-text-3">
+                    {BACKUP_REASON[b.reason] ?? BACKUP_REASON.other}
+                    {b.version ? ` · v${b.version}` : ''} · {formatBytes(b.bytes)}
                   </span>
                 </span>
                 <Button size="sm" variant="ghost" onClick={() => setRestore(b)}>
@@ -619,7 +686,7 @@ function Data() {
               </li>
             </ul>
             <p className="text-[13px] text-text-3">
-              A backup was taken first; restore it below to undo.
+              A backup was taken first (“Before an import” below); restore it to undo.
             </p>
           </div>
         )}
@@ -629,7 +696,7 @@ function Data() {
         onClose={() => setRestore(null)}
         size="sm"
         title="Restore this backup?"
-        description="Your current setup is saved as a backup first, so you can come back to it."
+        description="It’s swapped in the next time Ferrocast starts. Your current setup is saved as a backup first, so you can come back to it."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRestore(null)}>
@@ -640,9 +707,16 @@ function Data() {
               busy={busy === 'restore'}
               onClick={() =>
                 restore &&
-                void run('restore', () => done(client.restoreBackup(restore.id)), {
-                  success: 'Backup restored.',
-                }).then((ok) => ok && setRestore(null))
+                void run(
+                  'restore',
+                  // An older engine answers 204 with no body: that's a success too.
+                  async () =>
+                    (await client.restoreBackup(restore.id)) ?? {
+                      restart_needed: true,
+                      message: '',
+                    },
+                  { success: (r) => r.message || 'Restart Ferrocast to finish restoring.' },
+                ).then((r) => r && setRestore(null))
               }
             >
               Restore
@@ -728,7 +802,17 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
 function Advanced({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
   const client = useClient()
   const { run, busy } = useAction()
-  const [link, setLink] = useState<string | null>(null)
+  const [link, setLink] = useState<PairLink | null>(null)
+  // What the switch was when this screen opened: the server applies it at the next start.
+  const [startedWith] = useState(settings.lan_access)
+  const lanPending = settings.lan_access !== startedWith
+  const lanNote = link?.lan
+    ? link.lan.active
+      ? 'Open it on a phone or PC on the same Wi-Fi. It works once.'
+      : link.lan.restart_needed
+        ? 'This link only works on this computer until you restart Ferrocast. After the restart, make a new one for other devices.'
+        : 'This link only works on this computer. To open the dashboard on a phone, turn on “Allow other devices” and restart Ferrocast.'
+    : null
   return (
     <Section id="advanced" title="Advanced">
       <div className="flex flex-col gap-4">
@@ -742,37 +826,66 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
           onChange={(v) => save({ ...settings, close_to_tray: v })}
           label="Keep running in the tray when the window closes"
         />
-        <Switch
-          checked={settings.lan_access}
-          onChange={(v) => save({ ...settings, lan_access: v })}
-          label="Allow other devices on my network"
-          description="Lets a mod’s phone or a second PC on your Wi-Fi open this dashboard with a pairing link. Off means only this computer can connect. Takes effect the next time Ferrocast starts."
-        />
+        <div className="flex flex-col gap-2">
+          <Switch
+            checked={settings.lan_access}
+            onChange={(v) => {
+              save({ ...settings, lan_access: v })
+              setLink(null)
+              toast({
+                key: 'lan',
+                tone: 'info',
+                message: v
+                  ? 'Other devices can connect after you restart Ferrocast.'
+                  : 'Only this computer can connect after you restart Ferrocast.',
+                hint: v ? 'Then make a link below and open it on the other device.' : null,
+              })
+            }}
+            label="Allow other devices on my network"
+            description="Lets a mod’s phone or a second PC on your Wi-Fi open this dashboard with a pairing link. Off means only this computer can connect. Takes effect the next time Ferrocast starts."
+          />
+          {lanPending && (
+            <p role="status" className="text-[13px] font-medium text-warn">
+              Restart Ferrocast to{' '}
+              {settings.lan_access ? 'let other devices in' : 'close it to other devices'}.
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-semibold text-text">Open in another browser</p>
           <p className="text-[13px] text-text-3">Makes a one-time link that works for 2 minutes.</p>
           {link ? (
-            <div className="flex gap-2">
-              <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[12.5px] text-text-2">
-                {link}
-              </code>
-              <Button
-                onClick={() =>
-                  void copyText(link).then(
-                    (ok) => ok && toast({ tone: 'ok', message: 'Link copied. It works once.' }),
-                  )
-                }
-              >
-                Copy
-              </Button>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[12.5px] text-text-2">
+                  {link.url}
+                </code>
+                <Button
+                  onClick={() =>
+                    void copyText(link.url).then(
+                      (ok) => ok && toast({ tone: 'ok', message: 'Link copied. It works once.' }),
+                    )
+                  }
+                >
+                  Copy
+                </Button>
+              </div>
+              {lanNote && (
+                <p
+                  className={cx(
+                    'text-[13px]',
+                    link.lan?.active ? 'text-text-3' : 'font-medium text-warn',
+                  )}
+                >
+                  {lanNote}
+                </p>
+              )}
             </div>
           ) : (
             <Button
               className="self-start"
               busy={busy === 'pair'}
-              onClick={() =>
-                void run('pair', () => client.pairCode()).then((r) => r && setLink(r.url))
-              }
+              onClick={() => void run('pair', () => client.pairCode()).then((r) => r && setLink(r))}
             >
               Make a link
             </Button>

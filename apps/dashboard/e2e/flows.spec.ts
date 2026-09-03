@@ -288,7 +288,7 @@ test.describe('moderation and bot', () => {
     await page.getByLabel('Command', { exact: true }).fill('discord')
     await page.getByLabel('Reply', { exact: true }).fill('join us')
     await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByText(/commands start with !/)).toBeVisible()
+    await expect(page.getByText(/^Commands start with !/)).toBeVisible()
     await page.getByLabel('Command', { exact: true }).fill('!discord2')
     await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
     await expect(page.getByText('!discord2')).toBeVisible()

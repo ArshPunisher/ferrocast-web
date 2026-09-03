@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { PaperPlaneTilt, Trash } from '@phosphor-icons/react'
-import { ApiError, describeError, type DiscordSettings } from '@ferrocast/api'
+import { fieldError, type DiscordSettings } from '@ferrocast/api'
 import {
   Badge,
   Button,
@@ -14,15 +14,6 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from './Panel'
 import { useAction, useClient, useResource } from '../lib/hooks'
-
-function fieldError(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
-}
 
 function DiscordForm({
   cfg,

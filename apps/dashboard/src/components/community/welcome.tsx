@@ -1,17 +1,8 @@
 import { useState } from 'react'
-import { ApiError, describeError, type WelcomeConfig } from '@ferrocast/api'
+import { fieldError, type WelcomeConfig } from '@ferrocast/api'
 import { Button, Field, Input, Skeleton, Switch, Textarea, toast } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useClient, useResource } from '../../lib/hooks'
-
-function fieldError(e: unknown): { field: string | null; message: string } {
-  const d = describeError(e)
-  if (e instanceof ApiError && e.status === 400) {
-    const m = /^(\w+): (.*)$/.exec(d.message)
-    if (m) return { field: m[1] ?? null, message: m[2] ?? d.message }
-  }
-  return { field: null, message: d.hint ? `${d.message} ${d.hint}` : d.message }
-}
 
 function WelcomeForm({
   cfg,

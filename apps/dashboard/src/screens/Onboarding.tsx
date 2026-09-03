@@ -57,6 +57,9 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     (p) => connectors?.[p].state === 'connected',
   )
   const main: Overlay | undefined = overlays.data?.[0]
+  // A step only gets its tick when it was really done: skipping "Connect" leaves it open.
+  const [lookDone, setLookDone] = useState(false)
+  const stepDone = (i: number) => (i === 0 ? anyConnected : i === 1 ? lookDone : added)
 
   const goTo = (n: number) => {
     setDir(n > step ? 1 : -1)
@@ -72,7 +75,9 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
       widgets: base.widgets.map((w) => ({ ...w, config: { ...w.config, theme } }) as typeof w),
     }
     const saved = await run('theme', () => client.saveOverlay(next))
-    if (saved) overlays.set((p) => (p ?? []).map((o) => (o.id === saved.id ? saved : o)))
+    if (!saved) return
+    overlays.set((p) => (p ?? []).map((o) => (o.id === saved.id ? saved : o)))
+    setLookDone(true)
     goTo(2)
   }
   const finish = () =>
@@ -126,14 +131,23 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
               <span
                 className={cx(
                   'inline-flex size-6 items-center justify-center rounded-full text-[12px] font-semibold transition-colors',
-                  i < step
-                    ? 'bg-ok text-white'
-                    : i === step
-                      ? 'bg-accent text-on-accent'
+                  i === step
+                    ? 'bg-btn-primary text-on-btn-primary'
+                    : stepDone(i)
+                      ? 'bg-ok text-white'
                       : 'bg-surface-3 text-text-3',
                 )}
               >
-                {i < step ? <Check size={13} weight="bold" /> : i + 1}
+                {i !== step && stepDone(i) ? <Check size={13} weight="bold" /> : i + 1}
+                <span className="sr-only">
+                  {i === step
+                    ? ' (current step)'
+                    : stepDone(i)
+                      ? ' (done)'
+                      : i < step
+                        ? ' (skipped)'
+                        : ''}
+                </span>
               </span>
               <span
                 className={cx(
