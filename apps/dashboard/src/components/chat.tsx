@@ -399,7 +399,7 @@ export function ChatScroller({
         onTouchMove={markIntent}
         onKeyDown={markIntent}
         onPointerDown={markIntent}
-        className="fc-scroll h-full overflow-y-auto overscroll-contain"
+        className="fc-scroll h-full overflow-x-hidden overflow-y-auto overscroll-contain"
         role="log"
         aria-label={label}
         aria-live="off"

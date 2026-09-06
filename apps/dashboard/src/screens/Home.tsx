@@ -179,9 +179,11 @@ export function Home() {
           <Stats stats={stats.data} now={now} />
         </div>
 
+        {/* the bottom row shares one height on wide screens; each card scrolls inside itself */}
         <Panel
           title="Recent events"
-          className="lg:col-span-7"
+          className="lg:col-span-7 lg:h-[clamp(24rem,55vh,40rem)]"
+          bodyClassName="fc-scroll max-h-[28rem] overflow-x-hidden overflow-y-auto overscroll-contain lg:max-h-none"
           actions={
             <a
               href={href({ name: 'chat' })}
@@ -207,7 +209,7 @@ export function Home() {
 
         <Panel
           title="Chat"
-          className="lg:col-span-5"
+          className="lg:col-span-5 lg:h-[clamp(24rem,55vh,40rem)]"
           bodyClassName="flex flex-col gap-3"
           actions={
             <a
@@ -218,8 +220,12 @@ export function Home() {
             </a>
           }
         >
-          <div {...hold}>
-            <ChatScroller count={peek.length} className="h-72" label="Latest chat">
+          <div {...hold} className="flex min-h-0 flex-1 flex-col">
+            <ChatScroller
+              count={peek.length}
+              className="h-72 lg:h-auto lg:flex-1"
+              label="Latest chat"
+            >
               {peek.length === 0 ? (
                 <EmptyState compact title="Chat is quiet">
                   Messages from Twitch, YouTube and Kick appear here together.
