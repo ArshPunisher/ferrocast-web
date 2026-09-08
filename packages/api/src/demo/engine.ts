@@ -4,6 +4,8 @@
 // built, screenshotted and tested with no engine. Faults can be injected per route.
 
 import { render, select } from '../alert'
+import { withAmount } from '../design'
+import { DemoDesigns } from './features/designs'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
@@ -13,6 +15,7 @@ import type {
   Account,
   Actor,
   AlertRule,
+  Design,
   Backup,
   BanEntry,
   ChatPlatform,
@@ -71,6 +74,8 @@ import { DemoDiscord } from './features/discord'
 import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
+import { DemoPro } from './features/pro'
+import { DemoStudio } from './features/studio'
 import {
   CHATTERS,
   FILTERS,
@@ -121,6 +126,8 @@ export interface DemoOptions {
   relay?: boolean
   /** Start with a tip page set up (default) or none saved yet. */
   tips?: 'set' | 'empty'
+  /** The built-in design catalogue (`@ferrocast/designs`); none by default. */
+  designs?: readonly Design[]
 }
 
 /** Tip page names someone else already has, for trying the 409 in the demo. */
@@ -275,6 +282,10 @@ export class DemoEngine {
   private releasedTipHandle: string | null = null
   private relayOn: boolean
   private media: Media[] = []
+  /** The bytes behind each library file (design files carry them). */
+  private mediaBlobs = new Map<string, Blob>()
+  /** Designs: the catalogue, your own, Use, the alert design in use, share files. */
+  readonly designs: DemoDesigns
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -307,6 +318,9 @@ export class DemoEngine {
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
+  private readonly pro = new DemoPro()
+  /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
+  readonly studio: DemoStudio
   private readonly starter = new DemoStarter(() => this.commands)
   private readonly importers = new DemoImporters(
     () => this.commands,
@@ -445,6 +459,56 @@ export class DemoEngine {
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.welcome = new DemoWelcome(this.host)
+    this.studio = new DemoStudio(this.host, () => this.commands)
+    this.designs = new DemoDesigns(
+      {
+        overlays: () => this.overlays,
+        findOverlay: (id) => this.findOverlay(id),
+        putOverlay: (o) => this.putOverlay(o),
+        newOverlay: (name, scene, design, layers) => {
+          const id = `ov-${randomToken().slice(0, 10)}`
+          let unique = name
+          for (
+            let n = 2;
+            this.overlays.some((x) => x.name.toLowerCase() === unique.toLowerCase());
+            n++
+          )
+            unique = `${name.slice(0, 56)} ${n}`
+          const o: Overlay = {
+            id,
+            name: unique,
+            url: `${this.base}/o/${this.tokenFor(id)}/`,
+            width: scene.width,
+            height: scene.height,
+            widgets: clone(layers),
+            updated_at: Date.now(),
+            design,
+          }
+          this.overlays.push(o)
+          return clone(o)
+        },
+        media: (id) => {
+          const m = this.media.find((x) => x.id === id)
+          return m ? { media: m, blob: this.mediaBlobs.get(id) ?? null } : null
+        },
+        addMedia: (name, blob, kind) => {
+          const url = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(blob) : ''
+          const m: Media = {
+            id: `m${randomToken().slice(0, 10)}`,
+            kind,
+            name,
+            bytes: blob.size,
+            url,
+          }
+          this.media.push(m)
+          this.mediaBlobs.set(m.id, blob)
+          return clone(m)
+        },
+        now: () => Date.now(),
+        newId: () => `d${randomToken().slice(0, 16)}`,
+      },
+      opts.designs ?? [],
+    )
     this.recap = new DemoRecap(() => ({
       events: this.events,
       stats: this.stats,
@@ -545,6 +609,8 @@ export class DemoEngine {
     if (this.queueTimer) clearTimeout(this.queueTimer)
     for (const s of this.liveSubs) s.sock.close()
     for (const s of this.overlaySubs) s.sock.close()
+    for (const m of this.media) revokeBlobUrl(m.url)
+    this.mediaBlobs.clear()
   }
 
   // ---------------------------------------------------------------- transport
@@ -1071,7 +1137,18 @@ export class DemoEngine {
           `The “${used.name}” alert still uses this file.`,
           'Pick another sound or image there first.',
         )
+      const designs = this.designs.usedBy(b ?? '')
+      if (designs.length)
+        throw new HttpError(
+          409,
+          'in_use',
+          `This file is used by: ${designs.map((d) => `the design ${d}`).join(', ')}.`,
+          'Change those alerts or designs to another file first.',
+        )
+      const gone = this.media.find((m) => m.id === b)
+      if (gone) revokeBlobUrl(gone.url)
       this.media = this.media.filter((m) => m.id !== b)
+      this.mediaBlobs.delete(b ?? '')
       return undefined
     }
 
@@ -1207,6 +1284,9 @@ export class DemoEngine {
       this.obsDetect,
       this.starter,
       this.importers,
+      this.pro,
+      this.designs,
+      this.studio,
     ]
   }
 
@@ -1407,6 +1487,7 @@ export class DemoEngine {
       height: 1080,
       widgets: presetWidgets(preset as OverlayPreset),
       updated_at: Date.now(),
+      design: null,
     }
     this.overlays.push(overlay)
     return clone(overlay)
@@ -1434,23 +1515,31 @@ export class DemoEngine {
       )
     const widgets = Array.isArray(o.widgets) ? (o.widgets as Widget[]) : cur.widgets
     for (const w of widgets) {
-      if (!WIDGET_KINDS.includes(w.kind))
+      if (!WIDGET_KINDS.includes(w.kind) && w.kind !== 'layer')
         throw new HttpError(400, 'invalid', `widgets: '${String(w.kind)}' isn't a widget type.`)
       if (w.w < 20 || w.h < 20)
         throw new HttpError(400, 'invalid', 'widgets: a widget must be at least 20 × 20 pixels.')
     }
-    const next: Overlay = {
+    DemoDesigns.checkLayout(name, width, height, widgets)
+    this.designs.checkBranding(cur, widgets)
+    // `design` can't be changed here (API.md §4 Overlays): it stays what "Use" set.
+    return this.putOverlay({
       ...cur,
       name,
       width,
       height,
       widgets: clone(widgets),
       updated_at: Date.now(),
-    }
-    this.overlays = this.overlays.map((x) => (x.id === id ? next : x))
+    })
+  }
+
+  /** Saves an overlay as is and pushes the new layout to its open pages. */
+  private putOverlay(next: Overlay): Overlay {
+    const saved = { ...clone(next), updated_at: Date.now() }
+    this.overlays = this.overlays.map((x) => (x.id === saved.id ? saved : x))
     for (const s of this.overlaySubs)
-      if (s.overlayId === id) this.sendOverlay(s, 'config', clone(next))
-    return clone(next)
+      if (s.overlayId === saved.id) this.sendOverlay(s, 'config', clone(saved))
+    return clone(saved)
   }
 
   /** Tells pages on the old URL to go blank, then closes them (API.md §6 `revoked`). */
@@ -1510,9 +1599,14 @@ export class DemoEngine {
   }
 
   private test(body: unknown) {
-    const o = requireObj(body) as { kind?: unknown; platform?: unknown }
+    const o = requireObj(body) as {
+      kind?: unknown
+      platform?: unknown
+      design_id?: unknown
+      amount?: unknown
+    }
     if (typeof o.kind !== 'string') throw new HttpError(400, 'invalid', 'kind: pick what to test.')
-    const s =
+    let s =
       typeof o.platform === 'string' ? sample(o.kind, o.platform as Platform) : anySample(o.kind)
     if (!s)
       throw new HttpError(
@@ -1522,7 +1616,31 @@ export class DemoEngine {
           ? `kind: ${label(o.platform as Platform)} doesn’t have that kind of event.`
           : `kind: '${o.kind}' can’t show an alert.`,
       )
-    const e = this.ingest(s.kind, s.platform, 'test')
+    if (o.amount !== undefined && o.amount !== null) {
+      const a = o.amount
+      if (typeof a !== 'number' || !Number.isFinite(a) || a <= 0 || a > 1_000_000_000)
+        throw new HttpError(
+          400,
+          'invalid',
+          'amount: must be a number above 0 and up to 1,000,000,000.',
+        )
+      if (
+        !['tip', 'paid_message', 'platform_gift', 'gift_batch', 'raid', 'subscription'].includes(
+          s.kind.type,
+        )
+      )
+        throw new HttpError(400, 'invalid', 'amount: this kind of alert has no amount.')
+      s = withAmount(s, a)
+    }
+    let design: Design | undefined
+    if (o.design_id !== undefined && o.design_id !== null) {
+      if (typeof o.design_id !== 'string')
+        throw new HttpError(400, 'invalid', 'design_id: must be a design id.')
+      design = this.designs.find(o.design_id)
+      if (design.kind !== 'alert')
+        throw new HttpError(400, 'invalid', 'design_id: test alerts need an alert design.')
+    }
+    const e = this.ingest(s.kind, s.platform, 'test', design ? { design } : {})
     return { event_id: e.id }
   }
 
@@ -1933,8 +2051,9 @@ export class DemoEngine {
       throw new HttpError(413, 'too_large', limit.label, 'Trim or compress it, then try again.')
     if (file.size === 0) throw new HttpError(400, 'invalid', 'file: that file is empty.')
     const url = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : ''
-    const m: Media = { id: `m-${randomToken().slice(0, 8)}`, kind, name, bytes: file.size, url }
+    const m: Media = { id: `m${randomToken().slice(0, 10)}`, kind, name, bytes: file.size, url }
     this.media.push(m)
+    this.mediaBlobs.set(m.id, file)
     return clone(m)
   }
 
@@ -1993,7 +2112,7 @@ export class DemoEngine {
     kind: EventKind,
     platform: Platform,
     origin: FerroEvent['origin'],
-    opts: { held?: boolean } = {},
+    opts: { held?: boolean; design?: Design } = {},
   ): FerroEvent {
     const now = Date.now()
     this.seq += 1
@@ -2011,11 +2130,13 @@ export class DemoEngine {
       origin,
       kind,
     }
+    if (opts.design) this.designs.testWith(e.id, opts.design.id)
     this.events.push(e)
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000)
     this.broadcastLive({ v: 1, type: 'event', data: e })
     this.updateState(e)
     if (kind.type === 'chat_message' && !opts.held) for (const f of this.features()) f.onChat?.(e)
+    if (kind.type !== 'chat_message') for (const f of this.features()) f.onEvent?.(e)
 
     const forOverlays = kind.type === 'chat_message' || isAlertable(e)
     if (forOverlays && origin !== 'test' && !opts.held)
@@ -2024,7 +2145,10 @@ export class DemoEngine {
     if (isAlertable(e) && (origin === 'live' || origin === 'replay' || origin === 'test')) {
       const sel = select(this.rules, e)
       if (sel) {
-        const alert = render(`al-${++this.alertSeq}`, sel.rule, sel.variation, e)
+        const alert = this.designs.dress(
+          render(`al-${++this.alertSeq}`, sel.rule, sel.variation, e),
+          e,
+        )
         const priority = e.kind.type === 'tip' || e.kind.type === 'paid_message' ? 5 : 0
         if (alert.tts_text && this.tts.enabled && this.tts.hold_for_approval) {
           const amount =
@@ -2217,7 +2341,7 @@ export class DemoEngine {
         const sel = select(this.rules, ev)
         if (sel)
           this.sendOverlay(s, 'alert', {
-            ...render(`test-${i}`, sel.rule, sel.variation, ev),
+            ...this.designs.dress(render(`test-${i}`, sel.rule, sel.variation, ev), ev),
             sound: null,
           })
         this.sendOverlay(s, 'event', { ...ev, seq: this.seq })
@@ -2828,4 +2952,9 @@ function validateTimer(t: Partial<Timer>, _list: Timer[], id: string | null): vo
       'invalid',
       'every_min: timers can run every 5 minutes to 12 hours. Faster than that floods chat.',
     )
+}
+
+/** Frees an uploaded file's bytes; other URLs (bundled samples) are left alone. */
+function revokeBlobUrl(url: string): void {
+  if (url.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url)
 }

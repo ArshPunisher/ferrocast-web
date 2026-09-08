@@ -9,6 +9,8 @@ export * from './template'
 export * from './samples'
 export * from './queue'
 export * from './tips'
+export * from './pro'
+export * from './studio'
 export {
   amountOf,
   appliesTo,
@@ -23,3 +25,4 @@ export {
   MIN_DURATION_MS,
   MAX_DURATION_MS,
 } from './alert'
+export * from './design'

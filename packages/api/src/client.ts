@@ -3,6 +3,12 @@ import type {
   Account,
   AlertRule,
   Backup,
+  Design,
+  DesignImportReport,
+  DesignKind,
+  TestAlertRequest,
+  UseDesignRequest,
+  UseDesignResult,
   PairLink,
   RestoreResult,
   BanEntry,
@@ -197,7 +203,52 @@ export class FerroClient {
   createAlertRule = (r: AlertRule) => this.post<AlertRule>('/api/v1/alert-rules', r)
   deleteAlertRule = (id: string) => this.del(`/api/v1/alert-rules/${enc(id)}`)
   test = (kind: string, platform?: Platform) =>
-    this.post<{ event_id: string }>('/api/v1/test', platform ? { kind, platform } : { kind })
+    this.post<{ ok?: boolean; event_id?: string }>(
+      '/api/v1/test',
+      platform ? { kind, platform } : { kind },
+    )
+  /** A test alert with an amount and, from the designer, the design to show it with. */
+  testAlert = (req: TestAlertRequest) =>
+    this.post<{ ok?: boolean; event_id?: string }>('/api/v1/test', req)
+
+  // Designs (API.md §4 Designs)
+  designs = (kind?: DesignKind) =>
+    this.get<Design[]>(`/api/v1/designs${kind ? `?kind=${enc(kind)}` : ''}`)
+  design = (id: string) => this.get<Design>(`/api/v1/designs/${enc(id)}`)
+  /** Saves a new design of your own (never built-in or branded). */
+  createDesign = (d: Design) => this.post<Design>('/api/v1/designs', d)
+  saveDesign = (d: Design) => this.put<Design>(`/api/v1/designs/${enc(d.id)}`, d)
+  deleteDesign = (id: string) => this.del(`/api/v1/designs/${enc(id)}`)
+  /** Your own copy, without the Ferrocast mark. */
+  duplicateDesign = (id: string, name?: string) =>
+    this.post<Design>(`/api/v1/designs/${enc(id)}/duplicate`, name ? { name } : {})
+  useDesign = (id: string, req: UseDesignRequest = {}) =>
+    this.post<UseDesignResult>(`/api/v1/designs/${enc(id)}/use`, req)
+  activeAlertDesign = () => this.get<{ design_id: string | null }>('/api/v1/designs/active-alert')
+  setActiveAlertDesign = (id: string | null) =>
+    this.put<{ design_id: string | null }>('/api/v1/designs/active-alert', { design_id: id })
+  /** The design as a `.ferrodesign` file to save or share. */
+  exportDesign = async (id: string): Promise<Blob> => {
+    const headers: Record<string, string> = {}
+    if (this.token) headers.Authorization = `Bearer ${this.token}`
+    let res: Response
+    try {
+      res = await this.doFetch(`${this.base}/api/v1/designs/${enc(id)}/export`, {
+        method: 'POST',
+        headers,
+      })
+    } catch {
+      throw offlineError()
+    }
+    if (!res.ok) throw await errorFromResponse(res)
+    return res.blob()
+  }
+  /** Imports a `.ferrodesign`: always new designs of your own. */
+  importDesign = (file: Blob, name: string) => {
+    const form = new FormData()
+    form.append('file', file, name)
+    return this.request<DesignImportReport>('POST', '/api/v1/designs/import', undefined, form)
+  }
   queue = () => this.get<Queue>('/api/v1/queue')
   queuePause = () => this.post<Queue>('/api/v1/queue/pause')
   queueResume = () => this.post<Queue>('/api/v1/queue/resume')
@@ -368,6 +419,19 @@ export class FerroClient {
     let res: Response
     try {
       res = await this.doFetch(`${this.base}/api/v1/export`, { method: 'POST', headers })
+    } catch {
+      throw offlineError()
+    }
+    if (!res.ok) throw await errorFromResponse(res)
+    return res.blob()
+  }
+  /** A GET that answers a file (Studio's marker export), as a Blob. */
+  downloadFile = async (path: string): Promise<Blob> => {
+    const headers: Record<string, string> = {}
+    if (this.token) headers.Authorization = `Bearer ${this.token}`
+    let res: Response
+    try {
+      res = await this.doFetch(`${this.base}${path}`, { method: 'GET', headers })
     } catch {
       throw offlineError()
     }

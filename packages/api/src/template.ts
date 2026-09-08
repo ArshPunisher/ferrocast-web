@@ -83,6 +83,35 @@ export class Template {
     }
     return out
   }
+
+  /**
+   * Like `render`, but marks the text that came from a variable in `highlight` (the name,
+   * the amount), merging neighbours with the same flag (core::template::render_parts).
+   */
+  renderParts(vars: Vars, highlight: readonly string[]): { text: string; hl: boolean }[] {
+    const parts: { text: string; hl: boolean }[] = []
+    let total = 0
+    for (const p of this.pieces) {
+      let text: string
+      let hl = false
+      if ('text' in p) text = p.text
+      else {
+        text = Object.prototype.hasOwnProperty.call(vars, p.name) ? (vars[p.name] ?? '') : ''
+        for (const f of p.filters) text = apply(f, text)
+        hl = highlight.includes(p.name)
+      }
+      const cs = chars(text)
+      if (total + cs.length > MAX_OUTPUT_CHARS)
+        text = cs.slice(0, MAX_OUTPUT_CHARS - total).join('')
+      total += chars(text).length
+      if (text === '') continue
+      const last = parts[parts.length - 1]
+      if (last && last.hl === hl) last.text += text
+      else parts.push({ text, hl })
+      if (total >= MAX_OUTPUT_CHARS) break
+    }
+    return parts
+  }
 }
 
 function parseVar(inner: string): Piece {

@@ -8,6 +8,8 @@ import { HttpError } from '../http-error'
 export interface DemoFeature {
   route(method: string, seg: string[], body: unknown, url: URL): unknown
   onChat?(e: FerroEvent): void
+  /** Every event after the engine handled it (Studio's "Don't miss" lane). */
+  onEvent?(e: FerroEvent): void
 }
 
 /** Returned by a feature's `route` when the request isn't one of its routes. */

@@ -24,6 +24,13 @@ const LIVE_TYPES = new Set([
   'poll',
   'giveaway',
   'chatter',
+  // Studio (studio.ts)
+  'lane',
+  'marker',
+  'counter',
+  'show',
+  'obs_health',
+  'brb',
 ])
 
 /** Parses one frame; returns null for anything malformed or from a future protocol. */
@@ -72,6 +79,12 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
     if (typeof d.event_id !== 'string') return null
     if (d.kind !== 'first' && !(d.kind === 'returning' && typeof d.days === 'number')) return null
   }
+  // Studio frames the dashboard renders directly.
+  if (f.type === 'lane' && !Array.isArray(d.items)) return null
+  if (f.type === 'obs_health' && !Array.isArray(d.warnings)) return null
+  if (f.type === 'show' && d.show !== null && typeof d.show !== 'object') return null
+  if (f.type === 'counter' && (typeof d.name !== 'string' || typeof d.value !== 'number'))
+    return null
   return f as LiveFrame
 }
 

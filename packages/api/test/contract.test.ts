@@ -49,6 +49,8 @@ const READS = [
   '/accounts',
   '/overlays',
   '/themes',
+  '/designs',
+  '/designs/active-alert',
   '/alert-rules',
   '/queue',
   '/events?limit=5',

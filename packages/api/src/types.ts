@@ -199,6 +199,8 @@ export interface RenderedAlert {
   tts_text: string | null
   tts_audio: string | null
   test: boolean
+  /** Present when an alert design dressed it (API.md §4 Designs); `layout` is then "design". */
+  design?: AlertDesignView
 }
 
 export type Condition =
@@ -278,7 +280,7 @@ export type ConnectFlow =
   | { flow: 'browser'; url: string }
 
 export type WidgetKind =
-  'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway'
+  'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway' | 'layer'
 /** Default overlay theme id (the engine's presets use it too). */
 export const DEFAULT_THEME = 'molten'
 
@@ -292,6 +294,8 @@ export const WIDGET_KINDS: readonly WidgetKind[] = [
   'poll',
   'giveaway',
 ]
+/** Live widgets (everything but static `layer`s), for "Add widget" menus. */
+export const LIVE_WIDGET_KINDS = WIDGET_KINDS
 
 export interface AlertsConfig {
   theme: string
@@ -340,22 +344,223 @@ export interface GiveawayConfig {
   theme: string
 }
 
+/** How a widget design styles a live widget (`config.style`, API.md §4 Overlays). */
+export interface WidgetStyle {
+  variant?: string
+  font?: string
+  text?: string
+  accent?: string
+  background?: string
+  track?: string
+  muted?: string
+  radius?: number
+  font_size?: number
+  uppercase?: boolean
+  brand?: BrandSpot
+}
+/** Present on any live widget that a widget design styled. */
+export interface StyledConfig {
+  style?: WidgetStyle
+  design_id?: string
+  branded?: boolean
+}
+
+export type LayerType = 'image' | 'text' | 'shape' | 'frame' | 'webcam' | 'brand'
+export type LayerLoop = 'none' | 'float' | 'pulse' | 'shimmer'
+export interface LayerAnim {
+  in: AnimIn
+  delay_ms: number
+  loop: LayerLoop
+}
+interface LayerBase {
+  anim?: LayerAnim
+  css?: string
+}
+/** A silhouette a shape layer is cut to (design library, API-REQUESTS R20). */
+export type ShapeClip =
+  | 'chevron'
+  | 'arrow'
+  | 'hexagon'
+  | 'octagon'
+  | 'diamond'
+  | 'star'
+  | 'burst'
+  | 'ticket'
+  | 'ribbon'
+  | 'tag'
+  | 'parallelogram'
+  | 'cut'
+  | 'shield'
+  | 'wave'
+  | 'torn'
+  | 'cloud'
+  | 'blob'
+  | 'heart'
+  | 'drop'
+  | 'leaf'
+  | 'moon'
+  | 'bolt'
+  | 'pennant'
+  | 'trapezoid'
+  | 'steps'
+  | 'sparkle'
+  | 'cross'
+  | 'bat'
+/** A decorative fill: tiled patterns, or particles drawn as small shapes (R20). */
+export type ShapePattern =
+  | 'dots'
+  | 'grid'
+  | 'lines'
+  | 'scanlines'
+  | 'stripes'
+  | 'checker'
+  | 'halftone'
+  | 'waves'
+  | 'zigzag'
+  | 'rays'
+  | 'rings'
+  | 'paper'
+  | 'perspective'
+  | 'blinds'
+  | 'stars'
+  | 'sparkles'
+  | 'confetti'
+  | 'bokeh'
+  | 'snow'
+  | 'embers'
+  | 'rain'
+  | 'petals'
+  | 'leaves'
+  | 'lights'
+  | 'bubbles'
+  | 'fireflies'
+  | 'pixels'
+  | 'eq'
+  | 'shimmer'
+/** A richer frame drawn over the plain frame style (R20). */
+export type FrameVariant =
+  | 'hud'
+  | 'sketch'
+  | 'tube'
+  | 'pixel'
+  | 'film'
+  | 'polaroid'
+  | 'gold'
+  | 'tape'
+  | 'chevron'
+  | 'holo'
+  | 'vhs'
+  | 'circle'
+  | 'bulbs'
+  | 'stitch'
+  | 'brush'
+  | 'deco'
+/** A text treatment for text layers (R20). */
+export type TextEffect =
+  | 'gradient'
+  | 'chrome'
+  | 'neon'
+  | 'extrude'
+  | 'outline'
+  | 'glitch'
+  | 'sticker'
+  | 'marker'
+  | 'long_shadow'
+  | 'stamp'
+export type LayerShadow = 'none' | 'soft' | 'hard' | 'glow'
+export type LayerConfig =
+  | (LayerBase & {
+      type: 'image'
+      media: string
+      fit?: 'cover' | 'contain' | 'fill'
+      radius?: number
+    })
+  | (LayerBase & {
+      type: 'text'
+      text: string
+      font?: string
+      size?: number
+      weight?: number
+      color?: string
+      align?: 'left' | 'center' | 'right'
+      uppercase?: boolean
+      italic?: boolean
+      letter_spacing?: number
+      shadow?: LayerShadow
+      outline?: number
+      outline_color?: string
+      /** A text treatment; `color2` is its second colour (gradients, extrusion, marker). */
+      effect?: TextEffect
+      color2?: string
+      /** The entrance plays per letter or per word instead of on the whole block. */
+      split?: 'letters' | 'words'
+      /** More lines shown in turn after `text` (a social rotator), every `rotate_s` seconds. */
+      rotate?: string[]
+      rotate_s?: number
+      /** Counts down from this many seconds once shown; `{time}` in the text is replaced. */
+      countdown?: number
+      countdown_done?: string
+    })
+  | (LayerBase & {
+      type: 'shape'
+      shape?: 'rect' | 'ellipse' | 'line' | 'slant' | 'triangle'
+      fill?: string | null
+      fill2?: string | null
+      angle?: number
+      stroke?: string | null
+      stroke_width?: number
+      radius?: number
+      clip?: ShapeClip
+      /** Drawn in `fill` over `fill2`; particles drift when the layer has a loop. */
+      pattern?: ShapePattern
+      /** Tile size of a tiled pattern, or particle count (8 to 48), as a scale 0.25 to 4. */
+      pattern_scale?: number
+      shadow?: LayerShadow
+    })
+  | (LayerBase & {
+      type: 'frame' | 'webcam'
+      style?: 'line' | 'double' | 'corners' | 'notch' | 'glow'
+      color?: string
+      accent?: string
+      thickness?: number
+      radius?: number
+      label?: string
+      variant?: FrameVariant
+    })
+  | (LayerBase & { type: 'brand'; variant?: 'mark' | 'badge' | 'watermark'; color?: string })
+
 interface WidgetBase {
   id: string
   x: number
   y: number
   w: number
   h: number
+  /** The editor won't move or resize it. Left out when false. */
+  locked?: boolean
+  /** Kept but not shown on stream. Left out when false. */
+  hidden?: boolean
+  /** Degrees clockwise, -360…360. Left out when 0. */
+  rotation?: number
+  /** 0…1. Left out when 1. */
+  opacity?: number
 }
 export type Widget =
-  | (WidgetBase & { kind: 'alerts'; config: AlertsConfig })
-  | (WidgetBase & { kind: 'chat'; config: ChatConfig })
-  | (WidgetBase & { kind: 'events'; config: EventsConfig })
-  | (WidgetBase & { kind: 'goal'; config: GoalConfig })
-  | (WidgetBase & { kind: 'label'; config: LabelConfig })
-  | (WidgetBase & { kind: 'viewers'; config: ViewersConfig })
-  | (WidgetBase & { kind: 'poll'; config: PollConfig })
-  | (WidgetBase & { kind: 'giveaway'; config: GiveawayConfig })
+  | (WidgetBase & { kind: 'alerts'; config: AlertsConfig & StyledConfig })
+  | (WidgetBase & { kind: 'chat'; config: ChatConfig & StyledConfig })
+  | (WidgetBase & { kind: 'events'; config: EventsConfig & StyledConfig })
+  | (WidgetBase & { kind: 'goal'; config: GoalConfig & StyledConfig })
+  | (WidgetBase & { kind: 'label'; config: LabelConfig & StyledConfig })
+  | (WidgetBase & { kind: 'viewers'; config: ViewersConfig & StyledConfig })
+  | (WidgetBase & { kind: 'poll'; config: PollConfig & StyledConfig })
+  | (WidgetBase & { kind: 'giveaway'; config: GiveawayConfig & StyledConfig })
+  | (WidgetBase & { kind: 'layer'; config: LayerConfig })
+
+/** The gallery design an overlay was made from. */
+export interface DesignRef {
+  id: string
+  scene: string
+  branded: boolean
+}
 
 export interface Overlay {
   id: string
@@ -365,6 +570,188 @@ export interface Overlay {
   height: number
   widgets: Widget[]
   updated_at: Millis
+  /** The gallery design it came from (API.md §4 Designs); null for hand-made overlays. */
+  design?: DesignRef | null
+}
+
+// ------------------------------------------------------------------ designs (API.md §4 Designs)
+
+export type DesignKind = 'alert' | 'theme' | 'scene' | 'widget'
+export type StyleTag = 'minimal' | 'bold' | 'retro' | 'playful' | 'tech' | 'cozy'
+export type MotionTag = 'still' | 'smooth' | 'lively' | 'bouncy'
+export type OriginKind = 'built_in' | 'scratch' | 'duplicate' | 'import' | 'asset_pack'
+export type EventKey =
+  | 'follow'
+  | 'sub'
+  | 'resub'
+  | 'gift'
+  | 'member'
+  | 'bits'
+  | 'kicks'
+  | 'tip'
+  | 'superchat'
+  | 'raid'
+  | 'redeem'
+export type Frame = 'plate' | 'neon' | 'comic' | 'glass' | 'pixel' | 'banner' | 'pill' | 'none'
+export type LookLayout = 'above' | 'left' | 'right' | 'over' | 'text' | 'custom'
+export type AnimIn =
+  | 'none'
+  | 'fade'
+  | 'rise'
+  | 'drop'
+  | 'slide_left'
+  | 'slide_right'
+  | 'zoom'
+  | 'pop'
+  | 'bounce'
+  | 'flip'
+  | 'wipe'
+  | 'magnet'
+export type AnimOut =
+  | 'none'
+  | 'fade'
+  | 'sink'
+  | 'lift'
+  | 'slide_left'
+  | 'slide_right'
+  | 'zoom'
+  | 'shrink'
+  | 'flip'
+  | 'wipe'
+export type TextAnim = 'none' | 'wave' | 'wiggle' | 'bounce' | 'pop' | 'type' | 'glow'
+export type BuiltinSound = 'none' | 'chime' | 'coin' | 'whoosh' | 'boing' | 'bass' | 'sparkle'
+export type BrandSpot = 'corner' | 'divider' | 'watermark' | 'notch' | 'badge' | 'edge'
+export type ShadowKind = 'none' | 'soft' | 'hard' | 'glow'
+export type SceneKey =
+  'in_game' | 'just_chatting' | 'starting_soon' | 'brb' | 'ending' | `custom_${number}`
+
+export interface AlertLook {
+  frame: Frame
+  layout: LookLayout
+  media: { kind: 'none' | 'emblem' | 'image' | 'video'; ref: string | null }
+  media_size: number
+  offsets: { text_x: number; text_y: number; media_x: number; media_y: number }
+  title: string
+  body: string
+  font: {
+    family: string
+    source: 'bundled' | 'google' | 'system'
+    size: number
+    weight: number
+    uppercase: boolean
+    italic: boolean
+    letter_spacing: number
+  }
+  colors: { text: string; highlight: string; plate: string; accent: string; outline: string }
+  plate: boolean
+  shadow: ShadowKind
+  outline: number
+  anim: {
+    in: AnimIn
+    out: AnimOut
+    text: TextAnim
+    in_ms: number
+    out_ms: number
+    text_delay_ms: number
+  }
+  sound: { ref: string | null; builtin: BuiltinSound; volume: number }
+  duration_ms: number
+  tts: { enabled: boolean; min_amount: number }
+  brand: BrandSpot
+  css: string
+}
+
+export interface DesignVariation {
+  id: string
+  name: string
+  condition: Condition | null
+  priority: number
+  look: AlertLook
+}
+
+export interface AlertContent {
+  events: Partial<Record<EventKey, { variations: DesignVariation[] }>>
+}
+
+export interface Scene {
+  key: SceneKey | string
+  name: string
+  width: number
+  height: number
+  background: string | null
+  layers: Widget[]
+}
+
+export interface ThemeContent {
+  scenes: Scene[]
+  alert_design: string | null
+}
+
+export interface WidgetContent {
+  widget: Exclude<WidgetKind, 'layer'>
+  w: number
+  h: number
+  config: Record<string, unknown>
+  style: WidgetStyle
+}
+
+interface DesignBase {
+  schema: 1
+  id: string
+  name: string
+  description: string
+  tags: { style: StyleTag; motion: MotionTag }
+  pro: boolean
+  built_in: boolean
+  branded: boolean
+  origin: { type: OriginKind; from: string | null }
+  created_at: Millis
+  updated_at: Millis
+}
+export type Design =
+  | (DesignBase & { kind: 'alert'; content: AlertContent })
+  | (DesignBase & { kind: 'theme'; content: ThemeContent })
+  | (DesignBase & { kind: 'scene'; content: Scene })
+  | (DesignBase & { kind: 'widget'; content: WidgetContent })
+export type AlertDesign = Extract<Design, { kind: 'alert' }>
+export type ThemeDesign = Extract<Design, { kind: 'theme' }>
+export type SceneDesign = Extract<Design, { kind: 'scene' }>
+export type WidgetDesign = Extract<Design, { kind: 'widget' }>
+
+export interface TextPart {
+  text: string
+  hl: boolean
+}
+
+export interface AlertDesignView {
+  design_id: string
+  variation_id: string
+  event_key: EventKey
+  branded: boolean
+  look: AlertLook
+  title_parts: TextPart[]
+  body_parts: TextPart[]
+}
+
+export interface UseDesignRequest {
+  overlay_id?: string | null
+  scenes?: string[]
+  alert_style?: boolean
+}
+export interface UseDesignResult {
+  alert_design: string | null
+  overlays: Overlay[]
+}
+export interface DesignImportReport {
+  designs: Design[]
+  media_files: number
+  notes: string[]
+}
+export interface TestAlertRequest {
+  kind: string
+  platform?: Platform
+  design_id?: string
+  amount?: number
 }
 
 export type OverlayPreset = 'starter' | 'alerts_only' | 'chat_only' | 'blank'
@@ -876,6 +1263,8 @@ export type LiveFrame =
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
   | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
+  /** Studio: the "Don't miss" lane, markers, counters, the show, OBS health, BRB. */
+  | import('./studio').StudioFrame
 
 /** Overlay snapshot state (API.md §6). */
 export interface OverlayState {
