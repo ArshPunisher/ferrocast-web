@@ -1,0 +1,7 @@
+/*
+ * The overlay page's styles, in cascade order: the widgets and themes first, then the
+ * design library's scene layers and widget looks, which refine them.
+ */
+@import './overlay.css';
+@import './decor.css';
+@import './widget-looks.css';

@@ -17,6 +17,8 @@ import { ChatWidget } from './widgets/chat'
 import { EventsWidget, GoalWidget, LabelWidget, ViewersWidget } from './widgets/info'
 import { PollWidget } from './widgets/poll'
 import { GiveawayWidget } from './widgets/giveaway'
+import { LayerWidget, applyTransform } from './widgets/layer'
+import { applyWidgetStyle } from './design/style'
 
 export interface OverlayRuntime {
   apply(frame: OverlayServerFrame): void
@@ -42,6 +44,16 @@ const MAX_WIDGETS = 50
 const obj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
+/** Rotation, opacity, hidden, and a widget design's style (API.md §4 Overlays). */
+function dress(node: HTMLElement, w: Widget): void {
+  try {
+    applyTransform(node, w)
+    if (w.kind !== 'layer') applyWidgetStyle(node, w.config)
+  } catch (e) {
+    warnOnce('a widget style could not be applied', e)
+  }
+}
+
 function build(w: Widget, ctx: WidgetContext): WidgetView | null {
   switch (w.kind) {
     case 'alerts':
@@ -60,6 +72,8 @@ function build(w: Widget, ctx: WidgetContext): WidgetView | null {
       return new PollWidget(w, ctx)
     case 'giveaway':
       return new GiveawayWidget(w, ctx)
+    case 'layer':
+      return new LayerWidget(w, ctx)
     default:
       warnOnce(`unknown widget kind: ${String((w as { kind?: unknown }).kind)}`)
       return null
@@ -134,6 +148,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       const cur = views.get(w.id)
       if (cur && cur.kind === w.kind) {
         cur.view.update(w)
+        dress(cur.view.el, w)
         canvas.appendChild(cur.view.el) // keeps the stacking order of the list
         continue
       }
@@ -144,6 +159,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         continue
       }
       views.set(w.id, { kind: w.kind, view: v })
+      dress(v.el, w)
       canvas.appendChild(v.el)
       if (!fresh) v.onSnapshot?.()
     }

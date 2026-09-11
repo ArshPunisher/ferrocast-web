@@ -11,7 +11,7 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL: `http://localhost:${port}`, viewport: { width: 1920, height: 1080 } },
   webServer: {
-    command: `pnpm exec vite build --logLevel warn && pnpm exec vite preview --port ${port} --strictPort`,
+    command: `pnpm exec vite build --configLoader runner --logLevel warn && pnpm exec vite preview --configLoader runner --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

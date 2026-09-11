@@ -134,9 +134,9 @@ export class GoalWidget implements WidgetView {
   }
 
   onState(): void {
-    const g = Array.isArray(this.ctx.state.goals)
-      ? this.ctx.state.goals.find((x) => x?.id === this.cfg.goal_id)
-      : undefined
+    // A goal widget from a gallery scene starts without a goal: it shows the first one.
+    const goals = Array.isArray(this.ctx.state.goals) ? this.ctx.state.goals : []
+    const g = this.cfg.goal_id ? goals.find((x) => x?.id === this.cfg.goal_id) : goals[0]
     this.el.hidden = !g
     if (!g) return
     const target = Number.isFinite(g.target) && g.target > 0 ? g.target : 1
@@ -152,6 +152,8 @@ export class GoalWidget implements WidgetView {
         : formatCount(n)
     this.nums.textContent = `${fmt(current)} / ${fmt(target)}`
     this.fill.style.transform = `scaleX(${pct})`
+    // Round goal looks draw from this (a conic fill can't use the bar's transform).
+    this.el.style.setProperty('--pct', String(Math.round(pct * 1000) / 1000))
     this.el.classList.toggle('is-done', current >= target)
   }
 

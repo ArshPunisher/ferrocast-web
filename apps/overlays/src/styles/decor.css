@@ -1,0 +1,1180 @@
+/*
+ * Richer scene layers for the design library (API-REQUESTS R20): tiled patterns, particles,
+ * frame variants and text effects. Same rules as overlay.css: everything under .fc-ov, only
+ * transform and opacity animate, and nothing moves unless the layer asked for a loop
+ * (.is-moving, never added in low motion). OBS hiding the page pauses it all.
+ */
+
+/* ------------------------------------------------------------------ tiled patterns */
+
+.fc-ov .fc-shape.has-pattern {
+  position: relative;
+  overflow: hidden;
+}
+.fc-ov .fc-pat {
+  position: absolute;
+  inset: calc(var(--tile) * -2);
+  pointer-events: none;
+}
+.fc-ov .fc-pat-dots {
+  background: radial-gradient(circle, var(--p1) 17%, transparent 19%) 0 0 / var(--tile) var(--tile);
+}
+.fc-ov .fc-pat-grid {
+  background:
+    linear-gradient(var(--p1) 1px, transparent 1px) 0 0 / var(--tile) var(--tile),
+    linear-gradient(90deg, var(--p1) 1px, transparent 1px) 0 0 / var(--tile) var(--tile);
+}
+.fc-ov .fc-pat-lines {
+  background: repeating-linear-gradient(0deg, var(--p1) 0 1px, transparent 1px var(--tile));
+}
+.fc-ov .fc-pat-scanlines {
+  inset: 0;
+  background: repeating-linear-gradient(0deg, var(--p1) 0 2px, transparent 2px 4px);
+}
+.fc-ov .fc-pat-stripes {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--p1) 0 calc(var(--tile) / 2),
+    transparent calc(var(--tile) / 2) var(--tile)
+  );
+}
+.fc-ov .fc-pat-checker {
+  background: conic-gradient(var(--p1) 25%, transparent 0 50%, var(--p1) 0 75%, transparent 0) 0 0 /
+    var(--tile) var(--tile);
+}
+.fc-ov .fc-pat-halftone {
+  background: radial-gradient(circle, var(--p1) 30%, transparent 33%) 0 0 / calc(var(--tile) / 2)
+    calc(var(--tile) / 2);
+  -webkit-mask-image: linear-gradient(115deg, #000 10%, transparent 75%);
+  mask-image: linear-gradient(115deg, #000 10%, transparent 75%);
+}
+.fc-ov .fc-pat-waves {
+  background:
+    radial-gradient(circle at 50% 0, transparent 38%, var(--p1) 40% 47%, transparent 49%) 0 0 /
+      var(--tile) calc(var(--tile) / 2),
+    radial-gradient(circle at 50% 100%, transparent 38%, var(--p1) 40% 47%, transparent 49%)
+      calc(var(--tile) / 2) calc(var(--tile) / 4) / var(--tile) calc(var(--tile) / 2);
+}
+.fc-ov .fc-pat-zigzag {
+  background:
+    linear-gradient(135deg, var(--p1) 25%, transparent 25%) calc(var(--tile) / -2) 0 / var(--tile)
+      var(--tile),
+    linear-gradient(225deg, var(--p1) 25%, transparent 25%) calc(var(--tile) / -2) 0 / var(--tile)
+      var(--tile);
+}
+.fc-ov .fc-pat-rays {
+  inset: -60%;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    var(--p1) 0 6deg,
+    transparent 6deg 18deg
+  );
+}
+.fc-ov .fc-pat-rings {
+  inset: 0;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    var(--p1) 0 2px,
+    transparent 2px var(--tile)
+  );
+}
+.fc-ov .fc-pat-paper {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 72px, var(--p1) 72px 74px, transparent 74px),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 calc(var(--tile) * 1.4 - 1px),
+      color-mix(in srgb, var(--p1) 45%, transparent) calc(var(--tile) * 1.4 - 1px)
+        calc(var(--tile) * 1.4)
+    );
+}
+/* Sunset bands: night stripes across the lower half, thicker towards the bottom. */
+.fc-ov .fc-pat-blinds {
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0 52%,
+    var(--p1) 52% 54%,
+    transparent 54% 61%,
+    var(--p1) 61% 64.5%,
+    transparent 64.5% 71%,
+    var(--p1) 71% 75.5%,
+    transparent 75.5% 81%,
+    var(--p1) 81% 87%,
+    transparent 87% 91%,
+    var(--p1) 91%
+  );
+}
+/* A horizon grid rolling towards you (synthwave floors). */
+.fc-ov .fc-pat-perspective {
+  inset: 0;
+  overflow: hidden;
+  perspective: 420px;
+  perspective-origin: 50% 0;
+}
+.fc-ov .fc-pat-floor {
+  position: absolute;
+  left: -60%;
+  right: -60%;
+  top: 0;
+  height: 260%;
+  transform-origin: 50% 0;
+  transform: rotateX(64deg);
+  background:
+    linear-gradient(var(--p1) 2px, transparent 2px) 0 0 / calc(var(--tile) * 3)
+      calc(var(--tile) * 3),
+    linear-gradient(90deg, var(--p1) 2px, transparent 2px) 0 0 / calc(var(--tile) * 3)
+      calc(var(--tile) * 3);
+  -webkit-mask-image: linear-gradient(transparent, #000 18%);
+  mask-image: linear-gradient(transparent, #000 18%);
+}
+
+@keyframes fc-pat-xy {
+  to {
+    transform: translate(var(--tile), var(--tile));
+  }
+}
+@keyframes fc-pat-x {
+  to {
+    transform: translateX(calc(var(--tile) * 1.41421));
+  }
+}
+@keyframes fc-pat-y {
+  to {
+    transform: translateY(var(--tile));
+  }
+}
+@keyframes fc-pat-spin {
+  to {
+    transform: rotate(18deg);
+  }
+}
+@keyframes fc-pat-floor {
+  to {
+    transform: rotateX(64deg) translateY(calc(var(--tile) * 3));
+  }
+}
+@keyframes fc-pat-sweep {
+  from {
+    transform: translateY(-120%);
+  }
+  to {
+    transform: translateY(120%);
+  }
+}
+.fc-ov .is-moving .fc-pat-dots,
+.fc-ov .is-moving .fc-pat-grid,
+.fc-ov .is-moving .fc-pat-checker,
+.fc-ov .is-moving .fc-pat-halftone {
+  animation: fc-pat-xy 6s linear infinite;
+}
+.fc-ov .is-moving .fc-pat-stripes {
+  animation: fc-pat-x 2.4s linear infinite;
+}
+.fc-ov .is-moving .fc-pat-lines,
+.fc-ov .is-moving .fc-pat-waves,
+.fc-ov .is-moving .fc-pat-zigzag {
+  animation: fc-pat-y 4s linear infinite;
+}
+.fc-ov .is-moving .fc-pat-rays {
+  animation: fc-pat-spin 9s linear infinite;
+}
+.fc-ov .is-moving .fc-pat-floor {
+  animation: fc-pat-floor 2.2s linear infinite;
+}
+/* Scan lines stay put; a soft refresh band rolls down over them. */
+.fc-ov .is-moving .fc-pat-scanlines::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 30%;
+  background: linear-gradient(
+    transparent,
+    color-mix(in srgb, var(--p1) 60%, transparent),
+    transparent
+  );
+  animation: fc-pat-sweep 7s linear infinite;
+}
+
+/* ------------------------------------------------------------------ particles */
+
+.fc-ov .fc-pf {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fc-ov .fc-pt {
+  position: absolute;
+  display: block;
+  background: var(--c);
+  opacity: var(--o, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(var(--r, 0deg));
+}
+.fc-ov .fc-pf-stars .fc-pt {
+  box-shadow: 0 0 6px var(--c);
+}
+.fc-ov .fc-pf-sparkles .fc-pt {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+}
+.fc-ov .fc-pf-confetti .fc-pt {
+  border-radius: 1px;
+}
+.fc-ov .fc-pf-bokeh .fc-pt {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--c) 70%, transparent) 0,
+    transparent 70%
+  );
+  opacity: calc(var(--o, 1) * 0.55);
+}
+.fc-ov .fc-pf-embers .fc-pt,
+.fc-ov .fc-pf-fireflies .fc-pt {
+  box-shadow:
+    0 0 8px var(--c),
+    0 0 2px #fff;
+}
+.fc-ov .fc-pf-rain .fc-pt {
+  border-radius: 2px;
+  opacity: calc(var(--o, 1) * 0.5);
+  transform: translate(-50%, -50%) rotate(14deg);
+}
+.fc-ov .fc-pf-petals .fc-pt {
+  border-radius: 80% 0 80% 0;
+}
+.fc-ov .fc-pf-leaves .fc-pt {
+  border-radius: 0 80% 0 80%;
+}
+.fc-ov .fc-pf-bubbles .fc-pt {
+  background: transparent;
+  border: 2px solid var(--c);
+  box-shadow: inset -3px -3px 0 -1px color-mix(in srgb, var(--c) 40%, transparent);
+}
+.fc-ov .fc-pf-pixels .fc-pt {
+  border-radius: 0;
+  transform: translate(-50%, -50%);
+}
+/* String lights: a sagging wire and glowing bulbs hanging from it. */
+.fc-ov .fc-pf-wire {
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  top: 4%;
+  height: 36%;
+  border: 2px solid rgb(20 18 16 / 0.85);
+  border-top: 0;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+}
+.fc-ov .fc-pf-lights .fc-pt {
+  width: 16px;
+  height: 22px;
+  border-radius: 50% 50% 46% 46% / 60% 60% 40% 40%;
+  transform: translate(-50%, 0);
+  box-shadow:
+    0 0 14px 2px var(--c),
+    0 0 36px color-mix(in srgb, var(--c) 55%, transparent);
+}
+.fc-ov .fc-pf-lights .fc-pt::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -6px;
+  height: 7px;
+  border-radius: 2px;
+  background: #2a2622;
+}
+/* Music bars, standing on the bottom edge. */
+.fc-ov .fc-pf-eq .fc-pt {
+  top: auto;
+  bottom: 0;
+  height: 100%;
+  border-radius: 4px 4px 1px 1px;
+  transform-origin: 50% 100%;
+  transform: scaleY(var(--lo, 0.4));
+}
+/* A diagonal sheen, still at rest, sweeping when the layer loops. */
+.fc-ov .fc-pf-shimmer .fc-pt {
+  left: 0;
+  top: -30%;
+  width: 26%;
+  height: 160%;
+  border-radius: 0;
+  opacity: 0.7;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--c) 55%, transparent),
+    transparent
+  );
+  transform: translateX(160%) skewX(-18deg);
+}
+
+@keyframes fc-twinkle {
+  50% {
+    opacity: 0.12;
+  }
+}
+@keyframes fc-sparkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(45deg);
+  }
+}
+@keyframes fc-fall {
+  from {
+    transform: translate(-50%, -60px) rotate(var(--r));
+  }
+  to {
+    transform: translate(calc(-50% + var(--x)), var(--fall)) rotate(calc(var(--r) + 540deg));
+  }
+}
+@keyframes fc-snow {
+  0% {
+    transform: translate(-50%, -30px);
+  }
+  50% {
+    transform: translate(calc(-50% + var(--x)), calc(var(--fall) * 0.5));
+  }
+  100% {
+    transform: translate(-50%, var(--fall));
+  }
+}
+@keyframes fc-rain {
+  from {
+    transform: translate(-50%, -60px) rotate(14deg);
+  }
+  to {
+    transform: translate(calc(-50% - 60px), var(--fall)) rotate(14deg);
+  }
+}
+@keyframes fc-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  15% {
+    opacity: var(--o, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), calc(var(--fall) * -1));
+  }
+}
+@keyframes fc-drift {
+  50% {
+    transform: translate(calc(-50% + var(--x)), calc(-50% - 26px));
+  }
+}
+@keyframes fc-wander {
+  25% {
+    transform: translate(calc(-50% + var(--x)), calc(-50% - 18px));
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(calc(-50% + var(--x) * 0.4), calc(-50% + 24px));
+    opacity: 1;
+  }
+  75% {
+    transform: translate(calc(-50% - var(--x) * 0.6), -50%);
+    opacity: 0.35;
+  }
+}
+@keyframes fc-eq {
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes fc-sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  45%,
+  100% {
+    transform: translateX(var(--span)) skewX(-18deg);
+  }
+}
+
+.fc-ov .is-moving .fc-pf-stars .fc-pt,
+.fc-ov .is-moving .fc-pf-lights .fc-pt {
+  animation: fc-twinkle var(--t) ease-in-out var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-sparkles .fc-pt {
+  animation: fc-sparkle var(--t) ease-in-out var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-confetti .fc-pt,
+.fc-ov .is-moving .fc-pf-petals .fc-pt,
+.fc-ov .is-moving .fc-pf-leaves .fc-pt {
+  top: 0;
+  animation: fc-fall var(--t) linear var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-snow .fc-pt {
+  top: 0;
+  animation: fc-snow var(--t) linear var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-rain .fc-pt {
+  top: 0;
+  animation: fc-rain var(--t) linear var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-embers .fc-pt,
+.fc-ov .is-moving .fc-pf-bubbles .fc-pt,
+.fc-ov .is-moving .fc-pf-pixels .fc-pt {
+  top: 100%;
+  animation: fc-rise var(--t) linear var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-bokeh .fc-pt {
+  animation: fc-drift var(--t) ease-in-out var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-fireflies .fc-pt {
+  animation: fc-wander calc(var(--t) * 2) ease-in-out var(--d) infinite;
+}
+.fc-ov .is-moving .fc-pf-eq .fc-pt {
+  animation: fc-eq var(--t) ease-in-out var(--d) infinite alternate;
+}
+.fc-ov .is-moving .fc-pf-shimmer .fc-pt {
+  animation: fc-sheen var(--t) cubic-bezier(0.45, 0, 0.25, 1) var(--d) infinite;
+}
+
+/* ------------------------------------------------------------------ frame variants */
+
+.fc-ov .fc-frame[class*='fv-'] > span {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* HUD: heavy corner brackets, a tick ruler and two side rails. */
+.fc-ov .fv-hud {
+  border-color: transparent;
+}
+.fc-ov .fv-br {
+  width: 14%;
+  height: 18%;
+  min-width: 34px;
+  min-height: 34px;
+  border: 0 solid var(--f-color);
+}
+.fc-ov .fv-br-tl {
+  left: calc(var(--f-w) * -1);
+  top: calc(var(--f-w) * -1);
+  border-width: var(--f-w) 0 0 var(--f-w);
+}
+.fc-ov .fv-br-tr {
+  right: calc(var(--f-w) * -1);
+  top: calc(var(--f-w) * -1);
+  border-width: var(--f-w) var(--f-w) 0 0;
+}
+.fc-ov .fv-br-bl {
+  left: calc(var(--f-w) * -1);
+  bottom: calc(var(--f-w) * -1);
+  border-width: 0 0 var(--f-w) var(--f-w);
+}
+.fc-ov .fv-br-br {
+  right: calc(var(--f-w) * -1);
+  bottom: calc(var(--f-w) * -1);
+  border-width: 0 var(--f-w) var(--f-w) 0;
+}
+.fc-ov .fv-ticks {
+  left: 32%;
+  right: 32%;
+  top: calc(var(--f-w) * -1 - 2px);
+  height: 8px;
+  background: repeating-linear-gradient(90deg, var(--f-accent) 0 2px, transparent 2px 12px);
+}
+.fc-ov .fv-side {
+  top: 38%;
+  bottom: 38%;
+  width: var(--f-w);
+  background: var(--f-accent);
+}
+.fc-ov .fv-side-l {
+  left: calc(var(--f-w) * -1 - 10px);
+}
+.fc-ov .fv-side-r {
+  right: calc(var(--f-w) * -1 - 10px);
+}
+.fc-ov .fv-hud .fc-frame-label {
+  left: auto;
+  right: 16%;
+  border-radius: 0;
+  padding: 3px 10px 4px;
+  background: var(--f-color);
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 15px;
+  letter-spacing: 0.16em;
+}
+
+/* Sketch and brush: two loose hand-drawn outlines. */
+.fc-ov .fv-sketch,
+.fc-ov .fv-brush {
+  border-color: transparent;
+}
+.fc-ov .fv-line {
+  inset: -3px;
+  border: var(--f-w) solid var(--f-color);
+  border-radius: 255px 18px 225px 18px / 18px 225px 18px 255px;
+}
+.fc-ov .fv-line-b {
+  inset: 4px -5px -4px 3px;
+  border-color: var(--f-accent);
+  border-width: calc(var(--f-w) * 0.7);
+  border-radius: 18px 225px 18px 255px / 255px 18px 225px 18px;
+  opacity: 0.85;
+}
+.fc-ov .fv-brush .fv-line {
+  border-width: calc(var(--f-w) * 2.2);
+  opacity: 0.92;
+}
+.fc-ov .fv-brush .fv-line-b {
+  border-width: calc(var(--f-w) * 1.2);
+  opacity: 0.6;
+}
+.fc-ov .fv-sketch .fc-frame-label,
+.fc-ov .fv-brush .fc-frame-label {
+  border-radius: 6px 14px 8px 12px;
+  rotate: -3deg;
+  font-family: 'Caveat', 'Chalkboard SE', cursive;
+  font-size: 26px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Neon tube: a pale core inside a coloured glow, flickering on when it loops. */
+.fc-ov .fv-tube {
+  border-color: color-mix(in srgb, var(--f-color) 35%, #ffffff);
+  box-shadow:
+    0 0 4px var(--f-color),
+    0 0 18px var(--f-color),
+    0 0 44px color-mix(in srgb, var(--f-color) 55%, transparent),
+    inset 0 0 4px var(--f-color),
+    inset 0 0 18px color-mix(in srgb, var(--f-color) 50%, transparent);
+}
+@keyframes fc-flicker {
+  0%,
+  18%,
+  22%,
+  62%,
+  64%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  63% {
+    opacity: 0.55;
+  }
+}
+.fc-ov .is-moving .fv-tube {
+  animation: fc-flicker 5s linear infinite;
+}
+
+/* Pixel: stepped corners. The shape is clipped on ::before, not the frame, so the
+   label can sit across the top edge. */
+.fc-ov .fv-pixel {
+  border-color: transparent;
+  border-radius: 0;
+}
+.fc-ov .fv-pixel::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--f-w) * -1);
+  border: var(--f-w) solid var(--f-color);
+  pointer-events: none;
+  clip-path: polygon(
+    calc(var(--f-w) * 2) 0,
+    calc(100% - var(--f-w) * 2) 0,
+    calc(100% - var(--f-w) * 2) var(--f-w),
+    calc(100% - var(--f-w)) var(--f-w),
+    calc(100% - var(--f-w)) calc(var(--f-w) * 2),
+    100% calc(var(--f-w) * 2),
+    100% calc(100% - var(--f-w) * 2),
+    calc(100% - var(--f-w)) calc(100% - var(--f-w) * 2),
+    calc(100% - var(--f-w)) calc(100% - var(--f-w)),
+    calc(100% - var(--f-w) * 2) calc(100% - var(--f-w)),
+    calc(100% - var(--f-w) * 2) 100%,
+    calc(var(--f-w) * 2) 100%,
+    calc(var(--f-w) * 2) calc(100% - var(--f-w)),
+    var(--f-w) calc(100% - var(--f-w)),
+    var(--f-w) calc(100% - var(--f-w) * 2),
+    0 calc(100% - var(--f-w) * 2),
+    0 calc(var(--f-w) * 2),
+    var(--f-w) calc(var(--f-w) * 2),
+    var(--f-w) var(--f-w),
+    calc(var(--f-w) * 2) var(--f-w)
+  );
+  box-shadow:
+    inset 0 0 0 calc(var(--f-w) * 2) transparent,
+    inset 0 0 0 calc(var(--f-w) * 2 + 4px) var(--f-accent);
+}
+.fc-ov .fv-pixel .fc-frame-label {
+  border-radius: 0;
+  font-family: 'Press Start 2P', 'JetBrains Mono Variable', monospace;
+  font-size: 13px;
+  padding: 6px 10px;
+  translate: 0 -60%;
+}
+
+/* Film strip: dark bands top and bottom with sprocket holes. */
+.fc-ov .fv-film {
+  --band: calc(var(--f-w) + 26px);
+  border-radius: 4px;
+  border-width: var(--band) var(--f-w);
+}
+.fc-ov .fv-holes {
+  left: 1%;
+  right: 1%;
+  height: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 12px,
+    var(--f-accent) 12px 28px,
+    transparent 28px 40px
+  );
+  border-radius: 2px;
+}
+.fc-ov .fv-holes-t {
+  top: calc(var(--band) / -2 - 6px);
+}
+.fc-ov .fv-holes-b {
+  bottom: calc(var(--band) / -2 - 6px);
+}
+.fc-ov .fv-film .fc-frame-label {
+  top: auto;
+  bottom: calc(var(--band) * -1);
+  translate: 0 -2px;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 13px;
+  background: transparent;
+  color: var(--f-accent);
+}
+
+/* Instant photo: a thick white surround, the caption written on the bottom band. */
+.fc-ov .fv-polaroid {
+  border-width: var(--f-w) var(--f-w) calc(var(--f-w) * 4.4);
+  border-radius: 3px;
+  box-shadow: 0 22px 44px -18px rgb(0 0 0 / 0.65);
+}
+.fc-ov .fv-polaroid .fc-frame-label {
+  left: 50%;
+  top: auto;
+  bottom: calc(var(--f-w) * -2.2);
+  translate: -50% 50%;
+  padding: 0;
+  background: none;
+  color: var(--f-accent);
+  font:
+    600 30px/1 'Caveat',
+    'Chalkboard SE',
+    cursive;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* Gold and holographic rings: a gradient masked to the border. */
+.fc-ov .fv-gold,
+.fc-ov .fv-holo {
+  border-color: transparent;
+}
+.fc-ov .fv-ring {
+  inset: calc(var(--f-w) * -1);
+  border: var(--f-w) solid transparent;
+  border-radius: var(--f-r);
+  overflow: hidden;
+  -webkit-mask:
+    linear-gradient(#000 0 0) padding-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.fc-ov .fv-gold .fv-ring {
+  background: linear-gradient(
+      135deg,
+      var(--f-accent),
+      var(--f-color) 22%,
+      var(--f-accent) 46%,
+      var(--f-color) 70%,
+      var(--f-accent)
+    )
+    border-box;
+}
+.fc-ov .fv-gold {
+  box-shadow:
+    0 0 0 6px transparent,
+    0 0 0 7px color-mix(in srgb, var(--f-color) 70%, transparent);
+}
+.fc-ov .fv-sheen {
+  left: 0;
+  top: -20%;
+  width: 18%;
+  height: 140%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85), transparent);
+  transform: translateX(-200%) skewX(-20deg);
+  opacity: 0;
+}
+@keyframes fc-ring-sheen {
+  0% {
+    opacity: 1;
+    transform: translateX(-200%) skewX(-20deg);
+  }
+  40%,
+  100% {
+    opacity: 1;
+    transform: translateX(700%) skewX(-20deg);
+  }
+}
+.fc-ov .is-moving .fv-sheen {
+  animation: fc-ring-sheen 6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.fc-ov .fv-holo .fv-ring {
+  background: conic-gradient(
+      from 30deg,
+      var(--f-color),
+      #a8f0ff,
+      #ffb8f0,
+      var(--f-accent),
+      #c8ffde,
+      var(--f-color)
+    )
+    border-box;
+}
+.fc-ov .fv-spin {
+  inset: -60%;
+  background: conic-gradient(
+    from 0deg,
+    var(--f-color),
+    #a8f0ff,
+    #ffb8f0,
+    var(--f-accent),
+    #c8ffde,
+    var(--f-color)
+  );
+  opacity: 0;
+}
+@keyframes fc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fc-ov .is-moving .fv-spin {
+  opacity: 1;
+  animation: fc-spin 9s linear infinite;
+}
+.fc-ov .fv-holo .fc-frame-label,
+.fc-ov .fv-gold .fc-frame-label {
+  background: var(--f-color);
+  color: #0d0f12;
+}
+
+/* Taped: two strips of washi tape over the top corners. */
+.fc-ov .fv-tape {
+  width: 128px;
+  height: 36px;
+  top: 6px;
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.22) 0 6px, transparent 6px 12px),
+    color-mix(in srgb, var(--f-accent) 78%, transparent);
+  clip-path: polygon(
+    3% 0,
+    97% 4%,
+    100% 30%,
+    96% 55%,
+    100% 82%,
+    97% 100%,
+    2% 96%,
+    0 70%,
+    4% 46%,
+    0 20%
+  );
+}
+.fc-ov .fv-tape-l {
+  left: -42px;
+  rotate: -38deg;
+}
+.fc-ov .fv-tape-r {
+  right: -42px;
+  rotate: 38deg;
+}
+
+/* Chevrons: esports cut corners and arrows on the side edges. The cut is on ::before,
+   not the frame, so the arrows outside the edges still show. */
+.fc-ov .fv-chevron {
+  border-color: transparent;
+  border-radius: 0;
+}
+.fc-ov .fv-chevron::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--f-w) * -1);
+  border: var(--f-w) solid var(--f-color);
+  pointer-events: none;
+  clip-path: polygon(
+    var(--cut, 28px) 0,
+    100% 0,
+    100% calc(100% - var(--cut, 28px)),
+    calc(100% - var(--cut, 28px)) 100%,
+    0 100%,
+    0 var(--cut, 28px)
+  );
+}
+.fc-ov .fc-frame.fv-chevron,
+.fc-ov .fc-frame.fv-pixel {
+  box-shadow: none;
+}
+.fc-ov .fc-frame-double.fv-chevron::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--f-w) + 3px) transparent,
+    inset 0 0 0 calc(var(--f-w) + 4px) var(--f-accent);
+}
+.fc-ov .fc-frame-glow.fv-chevron::before {
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--f-color) 50%, transparent);
+}
+.fc-ov .fv-chev {
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border: solid var(--f-accent);
+  border-width: var(--f-w) var(--f-w) 0 0;
+  translate: 0 -50%;
+  rotate: 45deg;
+}
+.fc-ov .fv-chev::before,
+.fc-ov .fv-chev::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: inherit;
+  border-color: inherit;
+  translate: 10px -10px;
+  opacity: 0.6;
+}
+.fc-ov .fv-chev::after {
+  translate: 20px -20px;
+  opacity: 0.3;
+}
+.fc-ov .fv-chev-l {
+  left: -46px;
+}
+.fc-ov .fv-chev-r {
+  right: -18px;
+  rotate: 225deg;
+}
+@keyframes fc-chev {
+  50% {
+    transform: translateX(8px);
+  }
+}
+.fc-ov .is-moving .fv-chev-l {
+  animation: fc-chev 1.6s ease-in-out infinite;
+}
+.fc-ov .fv-chevron .fc-frame-label {
+  left: 40px;
+  border-radius: 0;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  padding: 4px 18px 5px;
+  font-style: italic;
+}
+
+/* VHS: a thin edge, a REC light, faint scan lines over the picture. */
+.fc-ov .fv-vhs {
+  border-radius: 2px;
+}
+.fc-ov .fv-rec {
+  left: 22px;
+  top: 20px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff2d48;
+  box-shadow: 0 0 10px #ff2d48;
+}
+.fc-ov .fv-scan {
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.06) 0 2px, transparent 2px 5px);
+}
+@keyframes fc-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+.fc-ov .is-moving .fv-rec {
+  animation: fc-blink 1.4s steps(1) infinite;
+}
+.fc-ov .fv-vhs .fc-frame-label {
+  left: 48px;
+  top: 16px;
+  translate: 0 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  color: #f4f4f4;
+  font:
+    400 30px/1 'VT323',
+    'JetBrains Mono Variable',
+    monospace;
+  letter-spacing: 0.06em;
+  text-shadow:
+    2px 0 rgb(255 40 80 / 0.7),
+    -2px 0 rgb(40 220 255 / 0.7);
+}
+
+/* Circle: a round cam. */
+.fc-ov .fv-circle {
+  border-radius: 50%;
+}
+.fc-ov .fv-circle .fc-frame-label {
+  left: 50%;
+  top: auto;
+  bottom: calc(var(--f-w) * -1);
+  translate: -50% 50%;
+}
+
+/* Bulbs: marquee lights around the edge. */
+.fc-ov .fv-bulb {
+  width: 14px;
+  height: 14px;
+  margin: calc(var(--f-w) / -2) 0 0 calc(var(--f-w) / -2);
+  border-radius: 50%;
+  background: var(--f-accent);
+  translate: -50% -50%;
+  box-shadow:
+    0 0 10px var(--f-accent),
+    inset 0 0 3px #ffffff;
+}
+.fc-ov .is-moving .fv-bulb {
+  animation: fc-twinkle 1.8s ease-in-out var(--d) infinite;
+}
+
+/* Stitched: a seam sewn just inside the edge. */
+.fc-ov .fv-stitch {
+  outline: 3px dashed var(--f-accent);
+  outline-offset: calc(var(--f-w) * -1 - 8px);
+}
+
+/* Art deco: a hairline inside, fans in the corners. */
+.fc-ov .fv-deco {
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 calc(var(--f-w) + 5px) transparent,
+    inset 0 0 0 calc(var(--f-w) + 6px) var(--f-accent);
+}
+.fc-ov .fv-fan {
+  width: 64px;
+  height: 64px;
+  background: repeating-conic-gradient(
+    from 90deg at 0 0,
+    var(--f-color) 0 5deg,
+    transparent 5deg 11.25deg
+  );
+  -webkit-mask-image: radial-gradient(circle at 0 0, #000 68%, transparent 70%);
+  mask-image: radial-gradient(circle at 0 0, #000 68%, transparent 70%);
+}
+.fc-ov .fv-fan-tl {
+  left: 0;
+  top: 0;
+}
+.fc-ov .fv-fan-tr {
+  right: 0;
+  top: 0;
+  scale: -1 1;
+}
+.fc-ov .fv-fan-bl {
+  left: 0;
+  bottom: 0;
+  scale: 1 -1;
+}
+.fc-ov .fv-fan-br {
+  right: 0;
+  bottom: 0;
+  scale: -1 -1;
+}
+.fc-ov .fv-deco .fc-frame-label {
+  left: 50%;
+  translate: -50% -55%;
+  border-radius: 0;
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 0.3em;
+}
+
+/* ------------------------------------------------------------------ text effects */
+
+.fc-ov .fc-layer-text .w {
+  display: inline-block;
+  white-space: nowrap;
+}
+.fc-ov .fc-layer-text .ch {
+  display: inline-block;
+  white-space: pre;
+}
+.fc-ov .fc-layer-text .fc-lt {
+  display: inline-block;
+  max-width: 100%;
+  white-space: pre-line;
+}
+.fc-ov .fc-layer-text.is-rotator .fc-lt,
+.fc-ov .fc-layer-text.is-countdown .fc-lt {
+  /* No clipping here: it would cut glows and shadows into boxes. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fc-ov .fx-gradient,
+.fc-ov .fx-chrome {
+  text-shadow: none !important;
+}
+.fc-ov .fx-gradient .fc-lt,
+.fc-ov .fx-chrome .fc-lt {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  padding-bottom: 0.08em;
+  filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
+}
+.fc-ov .fx-gradient .fc-lt {
+  background-image: linear-gradient(180deg, var(--fx1) 10%, var(--fx2) 90%);
+}
+.fc-ov .fx-chrome .fc-lt {
+  background-image: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    var(--fx1) 42%,
+    var(--fx2) 50%,
+    color-mix(in srgb, var(--fx1) 60%, #ffffff) 72%,
+    var(--fx2) 100%
+  );
+}
+.fc-ov .fx-neon {
+  color: color-mix(in srgb, var(--fx1) 25%, #ffffff) !important;
+  text-shadow:
+    0 0 3px #ffffff,
+    0 0 10px var(--fx1),
+    0 0 24px var(--fx1),
+    0 0 52px var(--fx2) !important;
+}
+.fc-ov .fx-extrude {
+  text-shadow:
+    1px 1px 0 var(--fx2),
+    2px 2px 0 var(--fx2),
+    3px 3px 0 var(--fx2),
+    4px 4px 0 var(--fx2),
+    5px 5px 0 var(--fx2),
+    6px 6px 0 var(--fx2),
+    7px 7px 0 var(--fx2),
+    8px 8px 0 var(--fx2),
+    12px 16px 26px rgb(0 0 0 / 0.45) !important;
+}
+.fc-ov .fx-outline {
+  color: transparent !important;
+  -webkit-text-stroke: 2px var(--fx1) !important;
+  text-shadow: none !important;
+}
+.fc-ov .fx-sticker {
+  -webkit-text-stroke: 0.16em var(--fx2) !important;
+  paint-order: stroke fill;
+  text-shadow:
+    0.05em 0.09em 0 var(--fx2),
+    0.08em 0.16em 0 rgb(0 0 0 / 0.32) !important;
+}
+.fc-ov .fx-marker .fc-lt {
+  padding: 0 0.18em;
+  background: linear-gradient(176deg, transparent 50%, var(--fx2) 50% 88%, transparent 88%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.fc-ov .fx-long_shadow {
+  text-shadow:
+    2px 2px 0 var(--fx2),
+    4px 4px 0 var(--fx2),
+    6px 6px 0 color-mix(in srgb, var(--fx2) 92%, transparent),
+    8px 8px 0 color-mix(in srgb, var(--fx2) 84%, transparent),
+    10px 10px 0 color-mix(in srgb, var(--fx2) 74%, transparent),
+    12px 12px 0 color-mix(in srgb, var(--fx2) 64%, transparent),
+    14px 14px 0 color-mix(in srgb, var(--fx2) 52%, transparent),
+    16px 16px 0 color-mix(in srgb, var(--fx2) 40%, transparent),
+    18px 18px 0 color-mix(in srgb, var(--fx2) 28%, transparent),
+    20px 20px 0 color-mix(in srgb, var(--fx2) 16%, transparent) !important;
+}
+.fc-ov .fx-stamp .fc-lt {
+  padding: 0.06em 0.36em 0.1em;
+  border: 0.07em solid currentColor;
+  border-radius: 0.14em;
+  rotate: -4deg;
+  -webkit-mask-image: radial-gradient(circle at 30% 40%, transparent 0 0.9px, #000 1.6px);
+  -webkit-mask-size: 7px 7px;
+  mask-image: radial-gradient(circle at 30% 40%, transparent 0 0.9px, #000 1.6px);
+  mask-size: 7px 7px;
+}
+.fc-ov .fx-glitch .fc-lt {
+  position: relative;
+}
+.fc-ov .fx-glitch .fc-lt::before,
+.fc-ov .fx-glitch .fc-lt::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fc-ov .fx-glitch .fc-lt::before {
+  color: var(--fx2);
+  translate: -3px 0;
+  clip-path: inset(8% 0 58% 0);
+  opacity: 0.9;
+}
+.fc-ov .fx-glitch .fc-lt::after {
+  color: color-mix(in srgb, var(--fx1) 40%, #ff2d6f);
+  translate: 3px 0;
+  clip-path: inset(56% 0 10% 0);
+  opacity: 0.9;
+}
+@keyframes fc-glitch {
+  0%,
+  86%,
+  100% {
+    transform: none;
+  }
+  88% {
+    transform: translateX(-6px);
+  }
+  91% {
+    transform: translateX(5px);
+  }
+  94% {
+    transform: translateX(-2px);
+  }
+}
+.fc-ov .fc-loop-pulse .fx-glitch .fc-lt::before,
+.fc-ov .fc-loop-shimmer .fx-glitch .fc-lt::after,
+.fc-ov .fc-loop-float .fx-glitch .fc-lt::before {
+  animation: fc-glitch 4.2s steps(1) infinite;
+}
+
+/* ------------------------------------------------------------------ motion guards */
+
+.fc-ov .fc-w-layer.is-paused *,
+.fc-ov .fc-w-layer.is-paused *::before,
+.fc-ov .fc-w-layer.is-paused *::after {
+  animation-play-state: paused !important;
+}
+.fc-ov.is-low .fc-w-layer *,
+.fc-ov.is-low .fc-w-layer *::before,
+.fc-ov.is-low .fc-w-layer *::after {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-ov .fc-w-layer,
+  .fc-ov .fc-w-layer *,
+  .fc-ov .fc-w-layer *::before,
+  .fc-ov .fc-w-layer *::after {
+    animation: none !important;
+  }
+}

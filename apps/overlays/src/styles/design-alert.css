@@ -1,0 +1,483 @@
+/*
+ * Alert designs (API.md §4 Designs). Lives inside each alert's shadow root, so the
+ * streamer's custom CSS can't reach anything else. The look arrives as custom properties
+ * (colours, font, sizes) and classes (frame, layout); movement is Web Animations from
+ * design/alert.ts, transform and opacity only (R-38).
+ *
+ * Classes custom CSS can target: .fa .fa-media .fa-text .fa-title .fa-body .fa-spark
+ * (plus the legacy .al-spikes on the mark).
+ */
+
+:host {
+  all: initial;
+}
+* {
+  box-sizing: border-box;
+}
+.fa-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 800px;
+  height: 450px;
+  transform-origin: 0 0;
+  contain: layout;
+}
+.fa {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: max-content;
+  max-width: 760px;
+  font-family: var(--font);
+  color: var(--c);
+  will-change: transform, opacity;
+}
+.fa.lay-above {
+  flex-direction: column;
+  text-align: center;
+}
+.fa.lay-left {
+  flex-direction: row;
+  text-align: left;
+}
+.fa.lay-right {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.fa.lay-text .fa-media {
+  display: none;
+}
+.fa.lay-over,
+.fa.lay-custom {
+  display: grid;
+  text-align: center;
+}
+.fa.lay-over > *,
+.fa.lay-custom > * {
+  grid-area: 1 / 1;
+}
+.fa.lay-over .fa-media {
+  width: 560px;
+  height: 300px;
+  border-radius: 18px;
+}
+.fa.lay-over .fa-text {
+  align-self: end;
+  justify-self: center;
+  margin: 0 0 22px;
+  max-width: 520px;
+}
+.fa.lay-custom .fa-media {
+  translate: var(--mx) var(--my);
+  justify-self: center;
+  align-self: center;
+}
+.fa.lay-custom .fa-text {
+  translate: var(--tx) var(--ty);
+  justify-self: center;
+  align-self: center;
+}
+
+.fa-media {
+  position: relative;
+  flex: none;
+  width: var(--ms);
+  height: var(--ms);
+  border-radius: 22px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.fa-media img,
+.fa-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fa-emblem {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: radial-gradient(
+    circle at 30% 25%,
+    color-mix(in srgb, var(--hl) 80%, #fff) 0%,
+    var(--hl) 40%,
+    color-mix(in srgb, var(--hl) 40%, #05060a) 100%
+  );
+}
+.fa-emblem svg {
+  width: 46%;
+  height: 46%;
+  fill: currentColor;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.35));
+}
+
+.fa-text {
+  position: relative;
+  min-width: 0;
+  max-width: 640px;
+  padding: 16px 26px 18px;
+  border-radius: 16px;
+}
+.plate .fa-text {
+  background: var(--plate);
+}
+.fa-title {
+  font-size: var(--fs);
+  font-weight: var(--fw);
+  line-height: 1.08;
+  letter-spacing: var(--ls);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  text-shadow: var(--sh);
+  -webkit-text-stroke: var(--ol) var(--olc);
+  paint-order: stroke fill;
+}
+.up .fa-title {
+  text-transform: uppercase;
+}
+.it .fa-title {
+  font-style: italic;
+}
+.fa-body {
+  margin-top: 8px;
+  font-size: calc(var(--fs) * 0.5);
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.88;
+  overflow-wrap: anywhere;
+  text-shadow: var(--sh);
+}
+.fa-body:empty {
+  display: none;
+}
+.w {
+  display: inline-block;
+  white-space: nowrap;
+}
+.ch {
+  display: inline-block;
+  white-space: pre;
+}
+.hl {
+  color: var(--hl);
+}
+
+/* ---------------------------------------------------------------- the Spark mark */
+.fa-spark {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+  color: var(--ink);
+  pointer-events: none;
+}
+.fa-spark .sh-top {
+  fill: #ffa424;
+}
+.fa-spark .sh-bottom {
+  fill: #33d4ff;
+}
+.fa-spark .f {
+  fill: currentColor;
+}
+.fa-spark.spot-corner {
+  right: -14px;
+  top: -20px;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.45));
+}
+.fa-spark.spot-watermark {
+  right: 10px;
+  top: 50%;
+  width: auto;
+  height: 118%;
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  opacity: 0.12;
+}
+.fa-spark.spot-watermark .sh-top,
+.fa-spark.spot-watermark .sh-bottom {
+  fill: currentColor;
+}
+.fa-spark.spot-notch {
+  top: -24px;
+  left: 50%;
+  translate: -50% 0;
+  width: 48px;
+  height: 40px;
+  padding: 2px 6px;
+  background: var(--plate);
+  border: 4px solid var(--hl);
+  border-bottom: 0;
+}
+.fa-spark.spot-badge {
+  right: -18px;
+  bottom: -18px;
+  width: 50px;
+  height: 50px;
+  padding: 7px;
+  border-radius: 50%;
+  background: var(--hl);
+  color: var(--plate);
+  rotate: 10deg;
+  box-shadow:
+    0 0 0 3px var(--olc),
+    3px 4px 0 var(--olc);
+}
+.fa-spark.spot-edge {
+  right: -46px;
+  top: 50%;
+  translate: 0 -50%;
+  width: 36px;
+  height: 36px;
+}
+.fa-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px 0;
+  color: var(--c);
+}
+.fa-divider::before,
+.fa-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.35;
+}
+.fa-divider .fa-spark {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  inset: auto;
+}
+
+/* ---------------------------------------------------------------- frames */
+/* Molten plate: dark plate, hairline border, a molten top edge. */
+.f-plate .fa-text {
+  border: 1px solid #343a44;
+  box-shadow:
+    inset 0 3px 0 var(--hl),
+    0 24px 50px -24px rgb(0 0 0 / 0.8);
+}
+.f-plate .fa-media {
+  box-shadow:
+    0 0 0 1px #343a44,
+    0 20px 40px -20px rgb(0 0 0 / 0.8);
+}
+
+/* Neon sign: a glowing tube around dark glass. */
+.f-neon .fa-text {
+  background: color-mix(in srgb, var(--plate) 70%, transparent);
+  border: 2.5px solid var(--accent);
+  border-radius: 22px;
+  box-shadow:
+    0 0 18px var(--accent),
+    inset 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.f-neon .fa-title .hl {
+  text-shadow:
+    0 0 14px var(--hl),
+    0 0 2px var(--hl);
+}
+.f-neon .fa-media {
+  border-radius: 50%;
+  border: 2.5px solid var(--hl);
+  box-shadow: 0 0 18px var(--hl);
+}
+
+/* Comic burst: a starburst behind the art, an inked tilted caption on halftone. */
+.f-comic .fa-deco {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: calc(var(--ms) * 1.7);
+  height: calc(var(--ms) * 1.7);
+  translate: -50% calc(var(--ms) * -0.35);
+  background: conic-gradient(
+    from 10deg,
+    var(--hl),
+    var(--plate),
+    var(--hl),
+    var(--accent),
+    var(--hl),
+    var(--plate),
+    var(--hl)
+  );
+  clip-path: polygon(
+    50% 0%,
+    61% 30%,
+    95% 18%,
+    72% 45%,
+    100% 62%,
+    66% 64%,
+    74% 98%,
+    50% 74%,
+    26% 98%,
+    34% 64%,
+    0% 62%,
+    28% 45%,
+    5% 18%,
+    39% 30%
+  );
+  z-index: -1;
+}
+.f-comic.lay-left .fa-deco,
+.f-comic.lay-right .fa-deco {
+  left: calc(var(--ms) / 2);
+  top: 50%;
+  translate: -50% -50%;
+}
+.f-comic .fa-text {
+  border: 4px solid var(--olc);
+  border-radius: 6px;
+  box-shadow: 7px 7px 0 var(--olc);
+  rotate: -2deg;
+  background-color: var(--plate);
+  background-image: radial-gradient(rgb(0 0 0 / 0.12) 1.2px, transparent 1.6px);
+  background-size: 9px 9px;
+}
+.f-comic .fa-media {
+  border: 4px solid var(--olc);
+  border-radius: 50%;
+  box-shadow: 5px 5px 0 var(--olc);
+  rotate: 4deg;
+}
+
+/* Glass card: frosted, light border, calm. The blur is small (OBS on Linux). */
+.f-glass .fa-text {
+  background: color-mix(in srgb, var(--plate) 14%, rgb(12 14 20 / 0.35));
+  border: 1px solid rgb(255 255 255 / 0.32);
+  backdrop-filter: blur(10px) saturate(1.25);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 20px 44px -22px rgb(0 0 0 / 0.7);
+}
+.f-glass .fa-media {
+  border-radius: 24px;
+  border: 1px solid rgb(255 255 255 / 0.35);
+}
+.low .f-glass .fa-text {
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--plate) 10%, rgb(12 14 20 / 0.8));
+}
+
+/* Pixel arcade: stepped corners, a hard pixel shadow, pixelated art. */
+.f-pixel .fa-text {
+  border-radius: 0;
+  border: 4px solid var(--hl);
+  box-shadow:
+    0 0 0 4px var(--olc),
+    10px 10px 0 4px var(--accent);
+}
+.f-pixel .fa-media {
+  border-radius: 0;
+  border: 4px solid var(--c);
+  box-shadow: 6px 6px 0 var(--accent);
+  image-rendering: pixelated;
+}
+.f-pixel .fa-spark.spot-notch {
+  border-radius: 0;
+}
+
+/* Esports banner: a slanted bar, a hard edge, stripes on the end cap. */
+.f-banner .fa-text {
+  border-radius: 4px;
+  transform: skewX(-9deg);
+  background: linear-gradient(90deg, var(--plate), color-mix(in srgb, var(--plate) 55%, #000));
+  border-left: 8px solid var(--hl);
+  padding: 14px 54px 16px 28px;
+}
+.f-banner .fa-text > * {
+  transform: skewX(9deg);
+}
+.f-banner .fa-text::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 70%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}
+.f-banner .fa-title {
+  line-height: 1;
+}
+.f-banner .fa-media {
+  border-radius: 4px;
+  transform: skewX(-9deg);
+}
+.f-banner .fa-spark.spot-edge {
+  right: -48px;
+}
+
+/* Slim pill: one line, round art. */
+.fa.f-pill {
+  gap: 0;
+  background: var(--plate);
+  border-radius: 999px;
+  padding: 8px;
+  border: 1px solid #343a44;
+  box-shadow: 0 16px 36px -18px rgb(0 0 0 / 0.8);
+}
+.f-pill .fa-text {
+  background: none;
+  padding: 6px 24px 8px 16px;
+}
+.f-pill .fa-media {
+  border-radius: 50%;
+}
+.f-pill .fa-body {
+  display: none;
+}
+
+/* Text only. */
+.f-none .fa-text {
+  background: none;
+}
+
+/* ---------------------------------------------------------------- states */
+.fa.is-paused,
+.fa.is-paused * {
+  animation-play-state: paused;
+}
+/* Decoration a design's CSS animates (sparkles, slashes, steam) freezes with the alert,
+   and never moves in low motion or with reduced motion: designs draw their final state by
+   default and only animate from somewhere else. */
+.fa-stage.is-paused *,
+.fa-stage.is-paused::before,
+.fa-stage.is-paused::after,
+.fa-stage.is-paused *::before,
+.fa-stage.is-paused *::after {
+  animation-play-state: paused !important;
+}
+.fa-stage.low *,
+.fa-stage.low::before,
+.fa-stage.low::after,
+.fa-stage.low *::before,
+.fa-stage.low *::after {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fa-stage *,
+  .fa-stage::before,
+  .fa-stage::after,
+  .fa-stage *::before,
+  .fa-stage *::after {
+    animation: none !important;
+  }
+}

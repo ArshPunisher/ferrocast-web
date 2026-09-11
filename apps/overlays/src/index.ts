@@ -13,6 +13,12 @@ export {
   type ConnectOptions,
 } from './connection'
 export { THEME_IDS } from './dom'
+export { buildDesignAlert, type DesignAlert, type DesignAlertOptions } from './design/alert'
+export { playBuiltin } from './design/sounds'
+export { fontStack, DESIGN_FONTS, GOOGLE_FONTS, SYSTEM_FONTS } from './design/fonts'
+export { registerDesignFonts } from './design/font-files'
+export { IN as ANIM_IN_FRAMES, OUT as ANIM_OUT_FRAMES, textAnimation } from './design/motion'
+export { sparkSvg } from './design/spark'
 
 /**
  * Plays one alert in `root` (the alert editor's stage). With `loop` it replays after a

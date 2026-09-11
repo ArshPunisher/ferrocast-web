@@ -1,0 +1,635 @@
+/*
+ * Widget design looks (the `variant` of a widget design's style, design/style.ts): goal
+ * bars, labels, event lists and chat boxes that differ in structure, not just colour.
+ * Colours, font, radius and case arrive as the theme variables; nothing here animates
+ * forever, and only transform and opacity ever move.
+ */
+
+/* ------------------------------------------------------------------ goals */
+
+/* Chevron: a slanted esports bar, striped fill, italic caps. */
+.fc-ov .fc-w-goal[data-variant='chevron'] {
+  clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  border-radius: 0;
+  padding-inline: 26px;
+}
+.fc-ov .fc-w-goal[data-variant='chevron'] .fc-goal-title {
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+.fc-ov .fc-w-goal[data-variant='chevron'] .fc-goal-bar {
+  height: 16px;
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.fc-ov .fc-w-goal[data-variant='chevron'] .fc-goal-fill {
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(-60deg, rgb(255 255 255 / 0.22) 0 7px, transparent 7px 14px),
+    var(--t-fill);
+}
+
+/* Liquid: a fat glossy tube with a bright meniscus. */
+.fc-ov .fc-w-goal[data-variant='liquid'] .fc-goal-bar {
+  height: 24px;
+  box-shadow:
+    inset 0 2px 6px rgb(0 0 0 / 0.45),
+    inset 0 -1px 0 rgb(255 255 255 / 0.08);
+}
+.fc-ov .fc-w-goal[data-variant='liquid'] .fc-goal-fill {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.5) 0 18%, transparent 30% 70%, rgb(0 0 0 / 0.2)),
+    var(--t-fill);
+}
+.fc-ov .fc-w-goal[data-variant='liquid'] .fc-goal-nums {
+  color: var(--t-accent);
+  font-weight: 800;
+}
+
+/* Neon tube: an outlined glass tube with a glowing fill. */
+.fc-ov .fc-w-goal[data-variant='tube'] {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--t-accent) 50%, transparent);
+}
+.fc-ov .fc-w-goal[data-variant='tube'] .fc-goal-bar {
+  height: 14px;
+  background: transparent;
+  border: 2px solid var(--t-accent);
+  box-shadow:
+    0 0 10px var(--t-accent),
+    inset 0 0 8px color-mix(in srgb, var(--t-accent) 60%, transparent);
+  overflow: visible;
+}
+.fc-ov .fc-w-goal[data-variant='tube'] .fc-goal-fill {
+  inset: 2px;
+  box-shadow: 0 0 14px var(--t-accent);
+}
+.fc-ov .fc-w-goal[data-variant='tube'] .fc-goal-title {
+  text-shadow: 0 0 12px var(--t-accent);
+}
+
+/* Ticks: minimal, a hairline track with a ruler, the numbers large. */
+.fc-ov .fc-w-goal[data-variant='ticks'] {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 4px 2px;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 0 10px rgb(0 0 0 / 0.4);
+}
+.fc-ov .fc-w-goal[data-variant='ticks'] .fc-goal-nums {
+  font-family: var(--t-display);
+  font-size: 26px;
+  color: var(--t-text);
+}
+.fc-ov .fc-w-goal[data-variant='ticks'] .fc-goal-bar {
+  height: 4px;
+  overflow: visible;
+}
+.fc-ov .fc-w-goal[data-variant='ticks'] .fc-goal-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 7px;
+  background: repeating-linear-gradient(90deg, var(--t-text-2) 0 1px, transparent 1px 10%);
+  opacity: 0.6;
+}
+
+/* Candy: two-tone stripes in a soft white outline. */
+.fc-ov .fc-w-goal[data-variant='candy'] .fc-goal-bar {
+  height: 22px;
+  border: 3px solid #ffffff;
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.12);
+}
+.fc-ov .fc-w-goal[data-variant='candy'] .fc-goal-fill {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--t-accent) 0 10px,
+    color-mix(in srgb, var(--t-accent) 55%, #ffffff) 10px 20px
+  );
+}
+
+/* Sketch: drawn by hand, hatched fill. */
+.fc-ov .fc-w-goal[data-variant='sketch'] {
+  border: 3px solid var(--t-text);
+  border-radius: 255px 14px 225px 14px / 14px 225px 14px 255px;
+  box-shadow: 5px 6px 0 color-mix(in srgb, var(--t-text) 85%, transparent);
+}
+.fc-ov .fc-w-goal[data-variant='sketch'] .fc-goal-bar {
+  height: 18px;
+  border: 2.5px solid var(--t-text);
+  border-radius: 14px 225px 14px 255px / 255px 14px 225px 14px;
+  background: transparent;
+}
+.fc-ov .fc-w-goal[data-variant='sketch'] .fc-goal-fill {
+  border-radius: 0;
+  background: repeating-linear-gradient(
+    -50deg,
+    var(--t-accent) 0 3px,
+    color-mix(in srgb, var(--t-accent) 50%, transparent) 3px 7px
+  );
+}
+
+/* Gold: a thin bar under spaced capitals, hairline gold edge. */
+.fc-ov .fc-w-goal[data-variant='gold'] {
+  border: 1px solid color-mix(in srgb, var(--t-accent) 70%, transparent);
+  box-shadow:
+    inset 0 0 0 4px transparent,
+    inset 0 0 0 5px color-mix(in srgb, var(--t-accent) 35%, transparent);
+  padding: 14px 22px;
+}
+.fc-ov .fc-w-goal[data-variant='gold'] .fc-goal-title {
+  letter-spacing: 0.22em;
+  font-size: 15px;
+  font-weight: 600;
+}
+.fc-ov .fc-w-goal[data-variant='gold'] .fc-goal-bar {
+  height: 6px;
+  border-radius: 0;
+}
+.fc-ov .fc-w-goal[data-variant='gold'] .fc-goal-fill {
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--t-accent) 55%, #3a2a08),
+    var(--t-accent) 55%,
+    color-mix(in srgb, var(--t-accent) 50%, #ffffff)
+  );
+}
+
+/* HP: a retro health bar with stepped ends and a highlight row. */
+.fc-ov .fc-w-goal[data-variant='hp'] {
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0,
+    calc(100% - 6px) 0,
+    calc(100% - 6px) 6px,
+    100% 6px,
+    100% calc(100% - 6px),
+    calc(100% - 6px) calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    6px 100%,
+    6px calc(100% - 6px),
+    0 calc(100% - 6px),
+    0 6px,
+    6px 6px
+  );
+}
+.fc-ov .fc-w-goal[data-variant='hp'] .fc-goal-title,
+.fc-ov .fc-w-goal[data-variant='hp'] .fc-goal-nums {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.fc-ov .fc-w-goal[data-variant='hp'] .fc-goal-bar {
+  height: 20px;
+  border-radius: 0;
+  border: 3px solid var(--t-text);
+}
+.fc-ov .fc-w-goal[data-variant='hp'] .fc-goal-fill {
+  border-radius: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.45) 0 4px,
+      transparent 4px calc(100% - 4px),
+      rgb(0 0 0 / 0.25) 0
+    ),
+    var(--t-fill);
+}
+
+/* Ring: a round meter beside the title (drawn from --pct). */
+.fc-ov .fc-w-goal[data-variant='ring'] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 16px;
+  row-gap: 2px;
+  align-content: center;
+  padding: 12px 20px 12px 14px;
+  border-radius: 999px;
+}
+.fc-ov .fc-w-goal[data-variant='ring'] .fc-goal-head {
+  display: contents;
+}
+.fc-ov .fc-w-goal[data-variant='ring'] .fc-goal-title {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+}
+.fc-ov .fc-w-goal[data-variant='ring'] .fc-goal-nums {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+}
+.fc-ov .fc-w-goal[data-variant='ring'] .fc-goal-bar {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: conic-gradient(var(--t-accent) calc(var(--pct, 0) * 360deg), var(--t-track) 0);
+  -webkit-mask-image: radial-gradient(circle, transparent 54%, #000 56%);
+  mask-image: radial-gradient(circle, transparent 54%, #000 56%);
+}
+.fc-ov .fc-w-goal[data-variant='ring'] .fc-goal-fill {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ labels */
+
+/* Chip: a pill with a glowing status dot. */
+.fc-ov .fc-w-label[data-variant='chip'] {
+  border-radius: 999px;
+  gap: 12px;
+  padding: 0 22px 0 16px;
+}
+.fc-ov .fc-w-label[data-variant='chip']::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--t-accent) 25%, transparent);
+}
+
+/* Bracket: HUD brackets on both ends, mono capitals. */
+.fc-ov .fc-w-label[data-variant='bracket'] {
+  background: color-mix(in srgb, var(--t-surface) 70%, transparent);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 26px;
+}
+.fc-ov .fc-w-label[data-variant='bracket']::before,
+.fc-ov .fc-w-label[data-variant='bracket']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border: 3px solid var(--t-accent);
+}
+.fc-ov .fc-w-label[data-variant='bracket']::before {
+  left: 0;
+  border-right: 0;
+}
+.fc-ov .fc-w-label[data-variant='bracket']::after {
+  right: 0;
+  border-left: 0;
+}
+.fc-ov .fc-w-label[data-variant='bracket'] .fc-label-text {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+}
+
+/* Ribbon: a banner with notched ends. */
+.fc-ov .fc-w-label[data-variant='ribbon'] {
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 44px;
+  background: var(--t-accent);
+  color: var(--t-text);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%, 22px 50%);
+}
+.fc-ov .fc-w-label[data-variant='ribbon'] .fc-label-text {
+  font-weight: 800;
+}
+
+/* Sticker: white card, thick ink edge, a little tilt. */
+.fc-ov .fc-w-label[data-variant='sticker'] {
+  border: 3px solid var(--t-text);
+  box-shadow: 5px 5px 0 var(--t-text);
+  rotate: -2deg;
+}
+.fc-ov .fc-w-label[data-variant='sticker'] .fc-label-text {
+  font-weight: 800;
+}
+
+/* Ticket: a stub with bites out of the ends and a perforation. */
+.fc-ov .fc-w-label[data-variant='ticket'] {
+  padding: 0 26px 0 66px;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  -webkit-mask-image:
+    radial-gradient(circle at 0 50%, transparent 11px, #000 12px),
+    radial-gradient(circle at 100% 50%, transparent 11px, #000 12px);
+  -webkit-mask-size: 51% 100%;
+  -webkit-mask-position: left, right;
+  -webkit-mask-repeat: no-repeat;
+  mask-image:
+    radial-gradient(circle at 0 50%, transparent 11px, #000 12px),
+    radial-gradient(circle at 100% 50%, transparent 11px, #000 12px);
+  mask-size: 51% 100%;
+  mask-position: left, right;
+  mask-repeat: no-repeat;
+}
+.fc-ov .fc-w-label[data-variant='ticket']::before {
+  content: '';
+  position: absolute;
+  left: 44px;
+  top: 8px;
+  bottom: 8px;
+  border-left: 2px dashed color-mix(in srgb, var(--t-text) 45%, transparent);
+}
+.fc-ov .fc-w-label[data-variant='ticket']::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  translate: 0 -50%;
+  rotate: 45deg;
+  background: var(--t-accent);
+}
+
+/* Underline: no plate, a thick accent rule under the words. */
+.fc-ov .fc-w-label[data-variant='underline'] {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0 0 6px;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.9),
+    0 0 12px rgb(0 0 0 / 0.45);
+}
+.fc-ov .fc-w-label[data-variant='underline']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  width: 64px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--t-accent);
+}
+
+/* Neon: dark glass, a glowing outline and glowing words. */
+.fc-ov .fc-w-label[data-variant='neon'] {
+  border: 2px solid var(--t-accent);
+  box-shadow:
+    0 0 14px var(--t-accent),
+    inset 0 0 14px color-mix(in srgb, var(--t-accent) 45%, transparent);
+}
+.fc-ov .fc-w-label[data-variant='neon'] .fc-label-text {
+  text-shadow:
+    0 0 10px var(--t-accent),
+    0 0 2px #ffffff;
+}
+
+/* ------------------------------------------------------------------ event lists */
+
+/* Timeline: a rail with a dot for every event. */
+.fc-ov .fc-w-events[data-variant='timeline'] .fc-events {
+  position: relative;
+  gap: 4px;
+  padding-left: 26px;
+}
+.fc-ov .fc-w-events[data-variant='timeline'] .fc-events::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: color-mix(in srgb, var(--t-accent) 55%, transparent);
+}
+.fc-ov .fc-w-events[data-variant='timeline'] .fc-ev {
+  position: relative;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 6px 4px;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.9),
+    0 0 10px rgb(0 0 0 / 0.5);
+}
+.fc-ov .fc-w-events[data-variant='timeline'] .fc-ev::before {
+  content: '';
+  position: absolute;
+  left: -23px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  translate: 0 -50%;
+  border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.55);
+}
+.fc-ov .fc-w-events[data-variant='timeline'] .fc-ev:first-child::before {
+  width: 14px;
+  height: 14px;
+  left: -25px;
+}
+
+/* HUD: mono rows with a bracket and dashed rules. */
+.fc-ov .fc-w-events[data-variant='hud'] .fc-events {
+  gap: 0;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 16px;
+}
+.fc-ov .fc-w-events[data-variant='hud'] .fc-ev {
+  border: 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--t-accent) 45%, transparent);
+  border-radius: 0;
+  box-shadow: inset 3px 0 0 var(--t-accent);
+  background: color-mix(in srgb, var(--t-surface) 75%, transparent);
+  padding: 9px 14px;
+  text-transform: uppercase;
+}
+.fc-ov .fc-w-events[data-variant='hud'] .fc-ev-name {
+  color: var(--t-accent);
+}
+
+/* Stickers: little tilted cards. */
+.fc-ov .fc-w-events[data-variant='stickers'] .fc-events {
+  gap: 12px;
+  padding: 6px 10px;
+}
+.fc-ov .fc-w-events[data-variant='stickers'] .fc-ev {
+  border: 3px solid var(--t-text);
+  box-shadow: 4px 4px 0 var(--t-text);
+}
+.fc-ov .fc-w-events[data-variant='stickers'] .fc-ev:nth-child(odd) {
+  rotate: -1.6deg;
+}
+.fc-ov .fc-w-events[data-variant='stickers'] .fc-ev:nth-child(even) {
+  rotate: 1.3deg;
+  translate: 10px 0;
+}
+
+/* Ticker: one row of chips for a bottom bar. */
+.fc-ov .fc-w-events[data-variant='ticker'] {
+  overflow: hidden;
+  background: var(--t-surface);
+  border-radius: var(--t-radius);
+}
+.fc-ov .fc-w-events[data-variant='ticker'] .fc-events {
+  flex-direction: row;
+  align-items: center;
+  height: 100%;
+  gap: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.fc-ov .fc-w-events[data-variant='ticker'] .fc-ev {
+  flex: none;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0 18px;
+}
+.fc-ov .fc-w-events[data-variant='ticker'] .fc-ev + .fc-ev {
+  border-left: 2px solid color-mix(in srgb, var(--t-accent) 60%, transparent);
+}
+.fc-ov .fc-w-events[data-variant='ticker'] .fc-ev-name {
+  max-width: 12em;
+  color: var(--t-accent);
+}
+
+/* Stack: the newest is big, older ones step back. */
+.fc-ov .fc-w-events[data-variant='stack'] .fc-ev {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 2px 0;
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.9),
+    0 0 12px rgb(0 0 0 / 0.45);
+}
+.fc-ov .fc-w-events[data-variant='stack'] .fc-ev:first-child {
+  font-size: 1.45em;
+  font-family: var(--t-display);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 3px solid var(--t-accent);
+}
+.fc-ov .fc-w-events[data-variant='stack'] .fc-ev:nth-child(n + 3) {
+  opacity: 0.78;
+}
+.fc-ov .fc-w-events[data-variant='stack'] .fc-ev:nth-child(n + 4) {
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------------ chat */
+
+/* Speech: bubbles with a tail, the name above the words. */
+.fc-ov .fc-w-chat[data-variant='speech'] .fc-chat-list {
+  gap: 0.55em;
+}
+.fc-ov .fc-w-chat[data-variant='speech'] .fc-msg {
+  position: relative;
+  margin-left: 0.5em;
+  padding: 0.5em 0.8em 0.55em;
+  border-radius: 1em;
+  border-bottom-left-radius: 0.2em;
+}
+.fc-ov .fc-w-chat[data-variant='speech'] .fc-msg::before {
+  content: '';
+  position: absolute;
+  left: -0.5em;
+  bottom: 0;
+  width: 0.7em;
+  height: 0.7em;
+  background: inherit;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+.fc-ov .fc-w-chat[data-variant='speech'] .fc-name {
+  display: block;
+  max-width: 100%;
+  font-size: 0.78em;
+  margin-bottom: 0.1em;
+}
+
+/* Terminal: a console panel, mono lines with a prompt. */
+.fc-ov .fc-w-chat[data-variant='terminal'] {
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  background:
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.03) 0 2px, transparent 2px 4px),
+    var(--t-surface);
+  border: 1px solid color-mix(in srgb, var(--t-accent) 40%, transparent);
+  border-radius: var(--t-radius);
+  padding: 12px 14px;
+}
+.fc-ov .fc-w-chat[data-variant='terminal'] .fc-msg {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0.1em 0;
+}
+.fc-ov .fc-w-chat[data-variant='terminal'] .fc-name::before {
+  content: '> ';
+  color: var(--t-text-2);
+}
+
+/* Paper: a ruled notebook page, names highlighted. */
+.fc-ov .fc-w-chat[data-variant='paper'] {
+  background:
+    linear-gradient(90deg, transparent 38px, rgb(232 90 90 / 0.5) 38px 40px, transparent 40px),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 calc(1.35em * 1.2 - 1px),
+      rgb(70 110 190 / 0.25) 0 calc(1.35em * 1.2)
+    ),
+    var(--t-surface);
+  border-radius: 6px;
+  padding: 14px 16px 14px 52px;
+  box-shadow: 6px 8px 0 rgb(0 0 0 / 0.28);
+  rotate: -0.6deg;
+}
+.fc-ov .fc-w-chat[data-variant='paper'] .fc-chat-list {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.fc-ov .fc-w-chat[data-variant='paper'] .fc-msg {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0.05em 0;
+}
+.fc-ov .fc-w-chat[data-variant='paper'] .fc-name {
+  /* Ink on the highlighter: viewer colours would vanish on yellow. */
+  color: var(--t-text) !important;
+  background: linear-gradient(
+    176deg,
+    transparent 45%,
+    color-mix(in srgb, var(--t-accent) 75%, transparent) 45% 90%,
+    transparent 90%
+  );
+  padding: 0 0.2em;
+}
+
+/* Glass: clear cards with a bright top edge (no blur: OBS on Linux). */
+.fc-ov .fc-w-chat[data-variant='glass'] .fc-msg {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.05)),
+    color-mix(in srgb, var(--t-flat) 55%, transparent);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: var(--t-radius);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 10px 24px -14px rgb(0 0 0 / 0.7);
+}
+
+/* Neon: a glowing bar beside every line. */
+.fc-ov .fc-w-chat[data-variant='neon'] .fc-msg {
+  border: 0;
+  border-left: 3px solid var(--t-accent);
+  border-radius: 0 var(--t-radius) var(--t-radius) 0;
+  box-shadow: -4px 0 14px -4px var(--t-accent);
+}
+.fc-ov .fc-w-chat[data-variant='neon'] .fc-name {
+  text-shadow: 0 0 10px currentColor;
+}
+
+/* A styled chat keeps the chat's own text size unless the style sets one. */
+.fc-ov .fc-w-chat.is-styled {
+  font-size: var(--w-size, var(--chat-size));
+}

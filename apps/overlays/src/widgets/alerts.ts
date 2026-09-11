@@ -7,12 +7,13 @@
 
 import { ackFrame } from '@ferrocast/api/overlay-protocol'
 import type { AlertsConfig, RenderedAlert, Widget } from '@ferrocast/api/types'
-import { SPARK } from '@ferrocast/ui/brand'
 import alertCss from '../styles/alert.css?inline'
+import { buildDesignAlert, type DesignAlert } from '../design/alert'
+import { playBuiltin } from '../design/sounds'
+import { sparkSvg } from '../design/spark'
 import { el, mediaRef, safeText, speakText, themeOf, warnOnce } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
 
-const SVG_NS = 'http://www.w3.org/2000/svg'
 const EXIT_MS = 300
 const EXIT_LOW_MS = 200
 const GAP_MS = 250
@@ -31,6 +32,8 @@ interface Playing {
   holdEndsAt: number
   /** Time left on the hold when it was frozen. */
   remaining: number
+  /** Set when an alert design renders it (API.md §4 Designs). */
+  design: DesignAlert | null
 }
 
 function isVideo(url: string): boolean {
@@ -43,31 +46,20 @@ function isVideo(url: string): boolean {
  * the shard keeps `al-magnet`) because streamers' custom CSS targets those names.
  */
 function spikes(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg')
-  svg.setAttribute('viewBox', '0 0 64 64')
-  svg.setAttribute('aria-hidden', 'true')
-  svg.setAttribute('class', 'al-spikes')
-  const f = document.createElementNS(SVG_NS, 'path')
-  f.setAttribute('d', SPARK.f)
-  f.setAttribute('class', 'al-spark-f')
-  svg.appendChild(f)
-  const shard = document.createElementNS(SVG_NS, 'g')
-  shard.setAttribute('class', 'al-magnet')
-  for (const [d, cls] of [
-    [SPARK.boltTop, 'al-spark-molten'],
-    [SPARK.boltBottom, 'al-spark-arc'],
-  ] as const) {
-    const p = document.createElementNS(SVG_NS, 'path')
-    p.setAttribute('d', d)
-    p.setAttribute('class', cls)
-    shard.appendChild(p)
-  }
-  svg.appendChild(shard)
-  return svg
+  return sparkSvg('al-spark', true)
 }
 
-/** Builds one alert. Throws only on a truly broken alert (the caller acks `failed`). */
-export function buildAlert(a: RenderedAlert, theme: string, lowMotion: boolean): HTMLElement {
+/**
+ * Builds one alert in a classic theme. Throws only on a truly broken alert (the caller acks
+ * `failed`). `branded`: the built-in themes carry the small Spark flourish; pass false for an
+ * unbranded alert (the streamer's own look).
+ */
+export function buildAlert(
+  a: RenderedAlert,
+  theme: string,
+  lowMotion: boolean,
+  branded = true,
+): HTMLElement {
   if (typeof a.title !== 'string' || typeof a.body !== 'string') throw new Error('bad alert')
   const host = el('div', 'fc-alert-host')
   const root: ShadowRoot | HTMLElement =
@@ -84,7 +76,7 @@ export function buildAlert(a: RenderedAlert, theme: string, lowMotion: boolean):
   card.dataset.kind = typeof a.kind === 'string' ? a.kind.replace(/[^a-z_]/g, '') : ''
   card.setAttribute('role', 'status')
   const inner = el('div', 'al-inner')
-  inner.appendChild(spikes())
+  if (branded) inner.appendChild(spikes())
 
   const img = mediaRef(a.image)
   if (a.image && img) {
@@ -196,6 +188,10 @@ export class AlertsWidget implements WidgetView {
     const p = this.playing
     const card = p?.host.shadowRoot?.querySelector('.al') ?? p?.host.querySelector('.al')
     card?.classList.toggle('is-paused', !visible)
+    if (p?.design) {
+      if (visible) p.design.resume()
+      else p.design.pause()
+    }
     if (!visible) {
       if (this.gapTimer) {
         clearTimeout(this.gapTimer)
@@ -249,8 +245,20 @@ export class AlertsWidget implements WidgetView {
     if (!item) return
     const { alert, primary } = item
     let host: HTMLElement
+    let design: DesignAlert | null = null
     try {
-      host = buildAlert(alert, this.cfg.theme, this.ctx.lowMotion())
+      if (alert.design) {
+        try {
+          design = buildDesignAlert(alert, { lowMotion: this.ctx.lowMotion() })
+        } catch (e) {
+          // A design this page can't draw still shows, in the classic look.
+          warnOnce('could not draw an alert design, showing the classic look', e)
+        }
+      }
+      // Classic themes are built-ins and keep their Spark; an alert that came with a design
+      // (even one this page couldn't draw) shows the mark only when that design is branded.
+      const branded = alert.design ? (alert.design as { branded?: unknown }).branded === true : true
+      host = design ? design.host : buildAlert(alert, this.cfg.theme, this.ctx.lowMotion(), branded)
     } catch (e) {
       warnOnce('could not render an alert', e)
       if (primary) this.ctx.send(ackFrame(alert.alert_id, 'failed'))
@@ -262,6 +270,8 @@ export class AlertsWidget implements WidgetView {
         'is-paused',
       )
     this.el.appendChild(host)
+    design?.start()
+    if (this.paused) design?.pause()
     const ms = Number.isFinite(alert.duration_ms)
       ? Math.min(Math.max(alert.duration_ms, 1000), 60_000)
       : 7000
@@ -275,6 +285,7 @@ export class AlertsWidget implements WidgetView {
       hold: null,
       holdEndsAt: 0,
       remaining: ms,
+      design,
     }
     this.playing = p
     if (primary) this.ctx.send(ackFrame(alert.alert_id, 'started'))
@@ -325,8 +336,16 @@ export class AlertsWidget implements WidgetView {
       if (tts) play(tts)
       else if (ttsText) speakText(ttsText)
     }
+    const look = p.alert.design?.look
     if (sound) play(sound, tts || ttsText ? playTts : undefined)
-    else playTts()
+    else if (look && look.sound?.builtin && look.sound.builtin !== 'none') {
+      // A built-in sound from the design, then the message read aloud after it.
+      const len = playBuiltin(
+        look.sound.builtin,
+        Number.isFinite(look.sound.volume) ? look.sound.volume : 70,
+      )
+      if (tts || ttsText) p.timers.push(setTimeout(playTts, len + 150))
+    } else playTts()
   }
 
   /** `stop` = the streamer skipped it: cut the sound too. A normal end lets it ring out. */
@@ -342,9 +361,10 @@ export class AlertsWidget implements WidgetView {
     p.host.classList.add('is-out')
     const card = p.host.shadowRoot?.querySelector('.al') ?? p.host.querySelector('.al')
     card?.classList.add('is-out')
-    const ms = this.ctx.lowMotion() ? EXIT_LOW_MS : EXIT_MS
+    const ms = p.design ? p.design.exit() : this.ctx.lowMotion() ? EXIT_LOW_MS : EXIT_MS
     p.timers.push(
       setTimeout(() => {
+        if (p.design) p.design.destroy()
         p.host.remove()
         if (this.playing === p) this.playing = null
         if (p.primary) this.ctx.send(ackFrame(p.alert.alert_id, 'finished'))
@@ -363,6 +383,7 @@ export class AlertsWidget implements WidgetView {
       for (const t of p.timers) clearTimeout(t)
       if (p.hold) clearTimeout(p.hold)
       for (const a of p.audio) a.pause()
+      p.design?.destroy()
       // Let the engine move on instead of waiting for its deadlines.
       if (p.primary && !silent) this.ctx.send(ackFrame(p.alert.alert_id, 'finished'))
     }
