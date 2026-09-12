@@ -16,6 +16,10 @@ const SCREENS = [
   'recap',
   'import',
   'import/streamlabs',
+  'designs',
+  'designer/builtin.molten-plate',
+  'designer/builtin.forge',
+  'designer/builtin.goal-segments',
 ]
 
 for (const scheme of ['dark', 'light'] as const) {

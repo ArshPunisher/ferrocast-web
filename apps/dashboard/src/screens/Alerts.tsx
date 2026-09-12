@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { CaretLeft, Lightning, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import {
+  CaretLeft,
+  Lightning,
+  PaintBrushBroad,
+  Plus,
+  Trash,
+  UploadSimple,
+} from '@phosphor-icons/react'
 import {
   KIND_LABEL,
   KNOWN_VARS,
@@ -789,6 +796,21 @@ function RuleEditor({
   )
 }
 
+/** Opens the designer on the alert design in use, or the gallery when there is none. */
+function AlertDesignButton() {
+  const active = useResource((c) => c.activeAlertDesign())
+  const id = active.data?.design_id
+  return (
+    <a
+      href={id ? href({ name: 'designer', id }) : href({ name: 'designs' })}
+      className="fc-press inline-flex h-10 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold text-text hover:border-text-3"
+    >
+      <PaintBrushBroad size={16} />
+      {id ? 'Alert designer' : 'Alert designs'}
+    </a>
+  )
+}
+
 export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
   const rules = useResource((c) => c.alertRules())
   const media = useResource((c) => c.media())
@@ -814,7 +836,12 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
       <PageHeader
         title="Alerts"
         description="What plays on stream for each kind of support. Every rule has a default look; add looks for bigger moments."
-        actions={<TestAlertMenu />}
+        actions={
+          <>
+            <AlertDesignButton />
+            <TestAlertMenu />
+          </>
+        }
       />
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />

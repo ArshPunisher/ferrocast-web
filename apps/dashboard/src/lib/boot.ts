@@ -110,7 +110,10 @@ export async function connect(): Promise<
 }
 
 export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connection> {
-  const { DemoEngine, DEMO_TOKEN } = await import('@ferrocast/api/demo')
+  const [{ DemoEngine, DEMO_TOKEN }, { BUILTINS }] = await Promise.all([
+    import('@ferrocast/api/demo'),
+    import('@ferrocast/designs'),
+  ])
   const params = new URLSearchParams(location.search)
   const setupDone = opts.setupDone ?? params.get('firstrun') === null
   window.__ferrocastDemo?.dispose()
@@ -121,6 +124,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
     ...(params.get('tips') === 'empty' ? { tips: 'empty' as const } : {}),
     ...(params.get('relay') === '0' ? { relay: false } : {}),
+    designs: BUILTINS,
   })
   window.__ferrocastDemo = engine
   return {
