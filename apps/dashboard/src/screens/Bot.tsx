@@ -17,6 +17,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
+import { CountersPanel, ModulesPanel, QuotesPanel } from '../components/studio/chatbot'
 
 const ROLE_LABEL: Record<Command['roles'], string> = {
   everyone: 'Everyone',
@@ -562,6 +563,13 @@ export function Bot() {
             </ul>
           )}
         </Panel>
+      </div>
+      <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-5">
+          <CountersPanel />
+          <QuotesPanel />
+        </div>
+        <ModulesPanel />
       </div>
       <CommandDialog
         value={editCmd}

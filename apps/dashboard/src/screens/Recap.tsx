@@ -11,6 +11,7 @@ import {
 import { Badge, Button, EmptyState, PlatformMark, Skeleton, copyText, toast } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { useResource } from '../lib/hooks'
+import { MarkersPanel } from '../components/studio/moments'
 import { href } from '../lib/router'
 
 function duration(ms: number): string {
@@ -255,7 +256,12 @@ export function Recap() {
           </a>
         </EmptyState>
       ) : (
-        <RecapBody r={recap.data} />
+        <>
+          <RecapBody r={recap.data} />
+          <div className="mt-5">
+            <MarkersPanel since={recap.data.started_at} title="Moments to clip" />
+          </div>
+        </>
       )}
     </div>
   )

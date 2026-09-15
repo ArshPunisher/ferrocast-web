@@ -22,6 +22,7 @@ import {
 } from '@ferrocast/api'
 import { toast } from '@ferrocast/ui'
 import type { Connection } from './boot'
+import { EMPTY_STUDIO, isStudioFrame, reduceStudio, type StudioLive } from './studio-live'
 
 const CHAT_CAP = 500
 const EVENT_CAP = 300
@@ -59,6 +60,8 @@ interface LiveStore {
   chatters: Map<string, ChatterMark>
   /** The latest `giveaway` frame; `undefined` until one arrives. */
   giveaway: GiveawayView | null | undefined
+  /** Studio: the "Don't miss" lane, OBS health, the show, counters (studio-live.ts). */
+  studio: StudioLive
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
   setBootError: (e: ApiError | null) => void
@@ -152,6 +155,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   poll: undefined,
   giveaway: undefined,
   chatters: new Map(),
+  studio: EMPTY_STUDIO,
   setConn: (conn) => set({ conn }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   setBootError: (bootError) => set({ bootError }),
@@ -195,9 +199,14 @@ export const useLive = create<LiveStore>((set, get) => ({
     let poll = s.poll
     let giveaway = s.giveaway
     let chatters = s.chatters
+    let studio = s.studio
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
+      if (isStudioFrame(f)) {
+        studio = reduceStudio(studio, f)
+        continue
+      }
       switch (f.type) {
         case 'event': {
           const e = f.data
@@ -314,6 +323,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       poll,
       giveaway,
       chatters,
+      studio,
     })
   },
 }))

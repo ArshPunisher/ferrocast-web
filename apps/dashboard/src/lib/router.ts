@@ -18,6 +18,10 @@ export type Route =
   | { name: 'import'; source?: 'streamelements' | 'streamlabs' }
   | { name: 'designs'; tab?: 'mine' }
   | { name: 'designer'; id: string }
+  | { name: 'studio'; section?: StudioSection }
+
+export type StudioSection = 'show' | 'info' | 'obs' | 'moments'
+const STUDIO_SECTIONS: StudioSection[] = ['show', 'info', 'obs', 'moments']
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent)
@@ -45,6 +49,10 @@ export function parseRoute(hash: string): Route {
       return b === 'mine' ? { name: 'designs', tab: 'mine' } : { name: 'designs' }
     case 'designer':
       return b ? { name: 'designer', id: b } : { name: 'designs' }
+    case 'studio':
+      return STUDIO_SECTIONS.includes(b as StudioSection)
+        ? { name: 'studio', section: b as StudioSection }
+        : { name: 'studio' }
     case 'import':
       return b === 'streamelements' || b === 'streamlabs'
         ? { name: 'import', source: b }
@@ -70,6 +78,8 @@ export function href(r: Route): string {
       return r.tab ? '#/designs/mine' : '#/designs'
     case 'designer':
       return `#/designer/${encodeURIComponent(r.id)}`
+    case 'studio':
+      return r.section ? `#/studio/${r.section}` : '#/studio'
     default:
       return `#/${r.name}`
   }

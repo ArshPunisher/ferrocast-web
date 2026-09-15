@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Bell,
+  Broadcast,
   ChatsCircle,
   Command,
   DotsThreeOutline,
@@ -26,6 +27,7 @@ type NavItem = { route: Route; label: string; icon: typeof House; match: Route['
 
 export const NAV: NavItem[] = [
   { route: { name: 'home' }, label: 'Home', icon: House, match: ['home', 'recap'] },
+  { route: { name: 'studio' }, label: 'Studio', icon: Broadcast, match: ['studio'] },
   { route: { name: 'chat' }, label: 'Chat', icon: ChatsCircle, match: ['chat'] },
   { route: { name: 'alerts' }, label: 'Alerts', icon: Bell, match: ['alerts'] },
   {

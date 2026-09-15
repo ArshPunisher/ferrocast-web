@@ -16,6 +16,7 @@ import { startLive, stopLive, useLive } from './lib/store'
 import { useRoute } from './lib/router'
 import { Shell } from './components/Shell'
 import { Home } from './screens/Home'
+import { StudioGlobal } from './components/studio/moments'
 
 // Home is in the first bundle; other screens load when first opened.
 const Chat = lazy(() => import('./screens/Chat').then((m) => ({ default: m.Chat })))
@@ -34,6 +35,7 @@ const Tips = lazy(() => import('./screens/Tips').then((m) => ({ default: m.Tips 
 const Designs = lazy(() => import('./screens/Designs').then((m) => ({ default: m.Designs })))
 const Designer = lazy(() => import('./screens/Designer').then((m) => ({ default: m.Designer })))
 const Import = lazy(() => import('./screens/Import').then((m) => ({ default: m.Import })))
+const Studio = lazy(() => import('./screens/Studio').then((m) => ({ default: m.Studio })))
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })))
 const Onboarding = lazy(() =>
   import('./screens/Onboarding').then((m) => ({ default: m.Onboarding })),
@@ -208,6 +210,9 @@ export function App() {
     case 'designer':
       screen = <Designer id={route.id} />
       break
+    case 'studio':
+      screen = <Studio section={route.section} />
+      break
     default:
       screen = <Home />
   }
@@ -218,6 +223,7 @@ export function App() {
           <Suspense fallback={<ScreenLoading />}>{screen}</Suspense>
         </ScreenBoundary>
       </Shell>
+      <StudioGlobal />
       <Toaster />
     </>
   )

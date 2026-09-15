@@ -16,6 +16,8 @@ import {
 import { selectFeed, useLive } from '../lib/store'
 import { useAction, useClient, useFocusHeldTail, useNow, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
+import { ObsWarnings, StartShowButton } from '../components/studio/home'
+import { DontMissLane } from '../components/studio/moments'
 
 function duration(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60_000))
@@ -126,6 +128,7 @@ export function Home() {
           <p className="mt-1 text-sm text-text-3">Everything for this stream, on one screen.</p>
         </div>
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+          <StartShowButton />
           <TestAlertMenu variant="primary" />
           <Button
             icon={paused ? <Play size={16} weight="fill" /> : <Pause size={16} weight="fill" />}
@@ -172,6 +175,8 @@ export function Home() {
       </div>
 
       <TtsApprovals />
+      <ObsWarnings />
+      <DontMissLane />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <QueuePanel className="lg:col-span-7" />
