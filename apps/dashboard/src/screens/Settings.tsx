@@ -33,6 +33,7 @@ import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { DiscordSettingsForm } from '../components/discord'
 import { ObsAutoDetect } from '../components/obs-detect'
+import { ProSettings } from '../components/pro'
 import { useLive } from '../lib/store'
 
 const SECTIONS = [
@@ -43,6 +44,7 @@ const SECTIONS = [
   ['appearance', 'Appearance'],
   ['data', 'Your data'],
   ['updates', 'Updates'],
+  ['pro', 'Pro'],
   ['advanced', 'Advanced'],
 ] as const
 
@@ -952,6 +954,13 @@ export function Settings({ section }: { section?: string | undefined }) {
               <Appearance settings={res.data} save={save} />
               <Data />
               <Updates settings={res.data} save={save} />
+              <Section
+                id="pro"
+                title="Ferrocast Pro"
+                description="Optional hosted extras. Everything free stays free."
+              >
+                <ProSettings />
+              </Section>
               <Advanced settings={res.data} save={save} />
             </>
           )}
