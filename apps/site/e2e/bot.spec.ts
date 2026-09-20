@@ -23,7 +23,8 @@ test('Sparky is decorative and his eyes follow the cursor', async ({ page }) => 
 test('Sparky gets excited over a download, and giggles when clicked', async ({ page }) => {
   await page.goto('/download/')
   const svg = page.locator('[data-bot] svg')
-  await page.locator('.os').first().hover()
+  // The first download on the page (the beta section, near the top, so Sparky stays in view).
+  await page.locator('[data-bot-excite]').first().hover()
   await expect(svg).toHaveAttribute('data-mood', 'excited')
   await page.mouse.move(5, 600)
   await expect(svg).not.toHaveAttribute('data-mood', 'excited')

@@ -98,9 +98,9 @@ export const PAGES = {
   }),
   download: p({
     path: '/download/',
-    title: 'Ferrocast for macOS, Windows and Linux: coming soon',
+    title: 'Download Ferrocast: beta for macOS, Windows and Linux',
     description:
-      'Ferrocast is coming to macOS (Apple Silicon and Intel), Windows and Linux. See the planned packages and how to hear the moment the first version ships.',
+      'Download the Ferrocast beta for macOS, Windows and Linux, with install notes and checksums. Version 1 comes next, free and open source like the beta.',
     ogTitle: 'macOS, Windows and Linux',
     ogKicker: 'Download',
     crumb: 'Download',

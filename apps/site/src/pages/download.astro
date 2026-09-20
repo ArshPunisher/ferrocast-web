@@ -7,8 +7,18 @@ import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
 import { COMPANY, SITE } from '../data/company'
 import { webPage } from '../data/schema'
+import { latestBeta } from '../data/releases'
 
 const page = PAGES.download
+const beta = await latestBeta()
+const mb = (bytes: number) => (bytes > 0 ? `${Math.round(bytes / 1_000_000)} MB` : '')
+const released = beta?.publishedAt
+  ? new Date(beta.publishedAt).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+  : ''
 const platforms = [
   {
     os: 'mac',
@@ -47,16 +57,113 @@ const platforms = [
         <Breadcrumbs page={page} />
         <h1 class="display-2">Ferrocast is almost here.</h1>
         <p class="lede">
-          The first version is being built in the open. It will be free on macOS, Windows and Linux,
-          with nothing to sign up for.
+          Version 1 is being built in the open. The beta is free on macOS, Windows and Linux, with
+          nothing to sign up for.
         </p>
       </div>
       <Bot />
     </div>
   </section>
 
+  <section class="container beta-wrap" id="beta" aria-labelledby="beta-title">
+    <div class="beta">
+      <div class="beta-main">
+        <h2 id="beta-title" class="display-3">
+          Try the beta
+        </h2>
+        <p class="beta-warn" role="note">
+          <Icon name="warning" size={18} weight="fill" />
+          <span>
+            Betas are test builds. Expect rough edges and the odd bug, and keep your old tools
+            around for important streams. Ferrocast backs up its data before every update.
+          </span>
+        </p>
+        {beta && beta.assets.length > 0 ? (
+          <>
+            <!-- prettier-ignore -->
+            <p class="beta-version">Version <span class="mono">{beta.version}</span>{released && `, released ${released}`}</p>
+            <ul class="beta-downloads" aria-label={`Downloads for Ferrocast ${beta.version}`}>
+              {beta.assets.map((a, i) => (
+                <li data-os={a.os}>
+                  <a
+                    class={i === 0 ? 'btn btn-primary' : 'btn btn-secondary'}
+                    href={a.url}
+                    rel="noopener"
+                    data-beta-download
+                    data-bot-excite
+                  >
+                    <Icon name="download-simple" size={18} />
+                    {a.label}
+                  </a>
+                  {mb(a.size) && <span class="size">{mb(a.size)}</span>}
+                </li>
+              ))}
+            </ul>
+            <p class="beta-links">
+              {beta.checksums && (
+                <a href={beta.checksums} rel="noopener">
+                  SHA-256 checksums
+                </a>
+              )}
+              <a href={beta.url} rel="noopener">
+                Release notes and every file
+              </a>
+            </p>
+          </>
+        ) : (
+          <>
+            <p class="beta-empty">
+              The first beta isn’t out yet. When it is, its downloads appear here and on GitHub.
+            </p>
+            <p class="beta-links">
+              <a
+                href={`${COMPANY.github}/releases`}
+                rel="noopener"
+                data-beta-releases
+                data-bot-excite
+              >
+                See releases on GitHub
+              </a>
+            </p>
+          </>
+        )}
+      </div>
+      <div class="beta-notes">
+        <h3>Installing the beta</h3>
+        <dl>
+          <dt>macOS</dt>
+          <dd>
+            The beta isn’t signed with an Apple Developer ID yet. Drag Ferrocast to Applications,
+            then right-click it and choose <strong>Open</strong>, and <strong>Open</strong> again.
+            You only do this once.
+          </dd>
+          <dt>Windows</dt>
+          <dd>
+            If SmartScreen says “Windows protected your PC”, choose <strong>More info</strong>, then
+            <strong>Run anyway</strong>. The installer needs no admin rights.
+          </dd>
+          <dt>Linux</dt>
+          <dd>
+            Install the .deb or .rpm with your package manager, or make the AppImage executable and
+            run it.
+          </dd>
+          <dt>Updates</dt>
+          <dd>
+            Ferrocast offers new betas by itself when Settings, Updates is set to
+            <strong>Beta</strong>. It never updates while you’re live.
+          </dd>
+        </dl>
+        <p class="check">
+          To check a download, compare its SHA-256 with the checksums file:
+          <code>shasum -a 256 &lt;file&gt;</code> on macOS and Linux,{' '}
+          <code>certutil -hashfile &lt;file&gt; SHA256</code> on Windows.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <section class="container">
-    <h2 class="sr-only">Downloads by operating system</h2>
+    <h2 class="sr-only">Version 1 by operating system</h2>
     <ul class="oses">
       {platforms.map((p) => (
         <li class="os" data-os={p.os} data-bot-excite>
@@ -158,13 +265,135 @@ const platforms = [
             ? 'linux'
             : null
   if (os) {
-    const card = document.querySelector<HTMLElement>(`[data-os="${os}"]`)
+    const card = document.querySelector<HTMLElement>(`.os[data-os="${os}"]`)
     card?.classList.add('mine')
     card?.querySelector<HTMLElement>('.yours')?.removeAttribute('hidden')
+    // The visitor's beta download goes first.
+    const list = document.querySelector<HTMLElement>('.beta-downloads')
+    const mine = list?.querySelector<HTMLElement>(`li[data-os="${os}"]`)
+    if (list && mine) {
+      mine.classList.add('mine')
+      // Its first file becomes the main button.
+      list
+        .querySelectorAll('.btn-primary')
+        .forEach((b) => b.classList.replace('btn-primary', 'btn-secondary'))
+      mine.querySelector('.btn')?.classList.replace('btn-secondary', 'btn-primary')
+      list.prepend(mine)
+    }
   }
 </script>
 
 <style>
+  .beta-wrap {
+    margin-bottom: 32px;
+  }
+  .beta {
+    display: grid;
+    gap: 28px;
+    padding: 28px 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-accent-line);
+    background:
+      radial-gradient(70% 90% at 100% 0%, var(--fc-accent-soft), transparent 70%),
+      var(--fc-surface-1);
+  }
+  @media (min-width: 900px) {
+    .beta {
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 48px;
+      padding: 40px;
+    }
+  }
+  .beta-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .beta-warn {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    color: var(--fc-text-2);
+    font-size: var(--fc-body-s);
+  }
+  .beta-warn :global(svg) {
+    flex: none;
+    margin-top: 2px;
+    color: var(--fc-accent-text);
+  }
+  .beta-version,
+  .beta-empty {
+    color: var(--fc-text);
+    font-weight: 550;
+  }
+  .mono {
+    font-family: var(--fc-font-mono, ui-monospace, monospace);
+  }
+  .beta-downloads {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .beta-downloads li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .beta-downloads li.mine .btn-secondary {
+    border-color: var(--fc-accent-line);
+  }
+  .size {
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .beta-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    font-size: var(--fc-body-s);
+  }
+  .beta-links a {
+    color: var(--fc-accent-text);
+    font-weight: 600;
+  }
+  .beta-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .beta-notes h3 {
+    font-size: 1.125rem;
+  }
+  .beta-notes dl {
+    display: grid;
+    gap: 6px 16px;
+    margin: 0;
+    font-size: var(--fc-body-s);
+  }
+  .beta-notes dt {
+    color: var(--fc-text);
+    font-weight: 650;
+  }
+  .beta-notes dd {
+    margin: 0 0 8px;
+    color: var(--fc-text-2);
+  }
+  .check {
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 480px) {
+    .beta-downloads .btn {
+      width: 100%;
+    }
+  }
   .head-grid {
     display: grid;
     gap: 8px;
