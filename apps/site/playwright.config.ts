@@ -11,7 +11,8 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL: `http://localhost:${port}` },
   webServer: {
-    command: `pnpm exec astro preview --port ${port}`,
+    // --ignore-lock: astro allows one preview at a time, and a dev preview may already run.
+    command: `pnpm exec astro preview --ignore-lock --port ${port}`,
     url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
   },
