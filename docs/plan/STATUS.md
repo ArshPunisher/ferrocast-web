@@ -1,5 +1,41 @@
 # Status
 
+## 18 Oct 2026 (design library)
+
+- Built-in library grew from 14 to 87 designs: 14 full themes (five scenes each, every one with its own matching alert design), 33 alert designs, 32 widget designs (11 goals, 9 labels, 6 event lists, 6 chat boxes) and 8 small scene designs (3 social rotators, 3 countdowns, 2 now-playing cards). About a quarter is marked Pro. Seasonal and regional packs: Diwali, Halloween, Holi, winter, cricket.
+- Overlay renderer: shape silhouettes, tiled and particle patterns, frame variants, text effects, per-letter entrances, a rotator and a countdown on text layers (API-REQUESTS R20; the engine passes the fields through, and its real-catalogue test passes). 22 OFL Google Fonts bundled locally, loaded only when used.
+- Fixed on the way: frame rules beat look CSS (now scoped), styled chat boxes lost their text size, look CSS now freezes with the alert and never moves in low or reduced motion.
+- Tests: library size, variety, tiny mark, no mark on copies, nothing opaque over a camera, clear middle in game, budgets; render tests for every scene design and the new layer options; bundled-font test. Dev preview page `apps/overlays/preview.html` for contact sheets.
+- Not committed (owner to review).
+
+## 18 Oct 2026 (Studio)
+
+**Done:** Studio, the streamer tools (all free, on the streamer's PC): a Studio screen (Show, Stream info, OBS, Moments), Start show from Home in two clicks with a pre-flight and one-click fixes, the stream-info editor for Twitch, YouTube and Kick with presets and per-platform results, scene switching with Alt+1..9, clip that, BRB, OBS health warnings on Home, the Don't miss lane with a sound only the streamer hears, markers with CSV/TXT export (also in the recap), and counters, quotes and chat modules on the Bot page. `packages/api/src/studio.ts` (types and `studioApi`), the demo implements every route.
+
+**Next:** the overlay label editor could offer `{count:name}` as a source; an overlay countdown widget for Starting Soon.
+
+## 18 Oct 2026 (overlay design system, phase 1)
+
+**Done**
+
+- Designs (API.md §4 Designs): alert looks, themes (five scenes), scenes and widget styles. Types and a TS port of the model and checks in `packages/api/src/design.ts`; client methods; the demo engine implements every route, `.ferrodesign` files (fflate) and the branding check.
+- Built-in catalogue `packages/designs` (one file per design + `registry.ts`): six structurally different alert designs (molten plate, neon sign, comic burst, glass card, pixel arcade, esports banner), two themes (Forge, Arcade night) with all five scenes, six widget designs (goal bar, segment goal, latest and top labels, event cards, chat bubbles). The overlay build writes `designs/catalog.json` for the engine. Guide: `docs/CONTRIBUTING-designs.md`.
+- Overlays: design alert renderer (frames, layouts, media, fonts, colours, highlight, shadow, outline, in/out and per-letter text animations, text delay, built-in Web Audio sounds, reduced motion), the Spark only on branded designs (classic themes keep it; `al-spikes` class kept), `layer` widgets (image, text, shape, frame, webcam frame, brand mark), widget design styles, rotation/opacity/hidden.
+- Dashboard: Designs gallery (Built-in / My designs, dropdown filters for kind, style, motion and price, search, Preview as chips, live tiles, Use, Duplicate & customise, export, delete; import cards: design file, StreamElements, asset pack, Find in OBS). Designer with Stage (A2) and Guided (A3) views over one draft, remembered per person; undo/redo; Send test alert with the design on screen and an amount. Theme, scene and widget designers. Overlay editor on a shared layout editor: layers panel (order, lock, hide), align, snapping to other layers, text/picture/shape/frame/webcam layers, undo/redo. Asset-pack importer with a review table.
+- Tests: `docs/TESTING.md`; `tools/smoke.sh` (`@smoke`).
+
+**Next**
+
+- Google Fonts are named but not yet downloaded for offline use (they fall back to bundled faces).
+- StreamElements overlay import and Find in OBS (replace widgets in place) are still to come; their cards explain that.
+
+## 18 Oct 2026 (Pro status in Settings, beta downloads)
+
+**Done**
+
+- Settings › Pro (`components/pro.tsx`, `packages/api/src/pro.ts`): status in one sentence, Check again, Manage (relay's manage page in the browser), Restore ("Move Pro here" with the subscription id and checkout email), and the buy form only once the relay says Pro is on sale. Shows "Ferrocast Pro launches after version 1" until then. Demo engine: `demo/features/pro.ts` (restore with `sub_DemoPro00001`). E2E: `apps/dashboard/e2e/pro.spec.ts`.
+- Site Download page: a "Try the beta" section with per-OS buttons from the newest GitHub prerelease (read at build time by `src/data/releases.ts`; `FERROCAST_RELEASES=off|<file.json>` for offline builds), the beta warning, install notes (macOS right-click › Open once, Windows SmartScreen › More info › Run anyway), checksums. Before the first beta it links to the releases page. Title and description now say beta. E2E: `apps/site/e2e/download.spec.ts`.
+
 ## 18 Oct 2026 (QA fixes)
 
 **Done**

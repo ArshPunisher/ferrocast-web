@@ -161,3 +161,27 @@ The engine and relay already save tip pages (`PUT /api/v1/tips` → relay `PUT /
 - Worth a look on the relay side: taking your own name back after a take-down counts as one of the 3 name changes a day (`set_tip_config` sees no current page, so any name is "new"). The demo copies this; consider not counting a name that is held for the same install.
 
 API.md §Tips still lists the old placeholder shape (`enabled, currency, min_amount, providers`). The dashboard follows what the server really sends (`handle, display_name, message, page_url, webhooks, razorpay|kofi|stripe: { page_url, page_id, test_mode, has_secret } | null`; see `packages/api/src/types.ts`). Please update API.md to match.
+
+## R20. Richer scene layers (the design library)
+
+The built-in design library uses a few **optional** fields on `layer` widget configs. The
+engine already passes unknown layer fields through (`core::layer::validate` ignores them), so
+nothing breaks today; please add the same checks the web side makes
+(`packages/api/src/design.ts` `validateLayer`, same messages):
+
+- `shape`: `clip` one of chevron, arrow, hexagon, octagon, diamond, star, burst, ticket,
+  ribbon, tag, parallelogram, cut, shield, wave, torn, cloud, blob, heart, drop, leaf, moon,
+  bolt, pennant, trapezoid, steps, sparkle, cross, bat; `pattern` one of dots, grid, lines,
+  scanlines, stripes, checker, halftone, waves, zigzag, rays, rings, paper, perspective,
+  blinds, stars, sparkles, confetti, bokeh, snow, embers, rain, petals, leaves, lights,
+  bubbles, fireflies, pixels, eq, shimmer; `pattern_scale` 0.25 to 4; `shadow` none, soft,
+  hard, glow.
+- `frame` / `webcam`: `variant` one of hud, sketch, tube, pixel, film, polaroid, gold, tape,
+  chevron, holo, vhs, circle, bulbs, stitch, brush, deco.
+- `text`: `effect` one of gradient, chrome, neon, extrude, outline, glitch, sticker, marker,
+  long_shadow, stamp; `color2` a colour; `split` letters or words; `rotate` up to 8 strings
+  of up to 80 characters; `rotate_s` 2 to 60; `countdown` 1 to 86400 (seconds);
+  `countdown_done` up to 80 characters.
+
+The overlay ignores any value it doesn't know, and never passes one to CSS.
+
