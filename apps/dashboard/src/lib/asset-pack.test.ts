@@ -5,6 +5,15 @@ import { classify, keysFor, planPack, unzipPack } from './asset-pack'
 
 const blob = (n = 10) => new Blob([new Uint8Array(n)])
 
+/** Rewrites every central-directory entry's uncompressed size, as a zip bomb's would read. */
+function claimSize(zip: Uint8Array, bytes: number): Uint8Array {
+  const out = zip.slice()
+  const view = new DataView(out.buffer)
+  for (let i = 0; i + 46 <= out.length; i++)
+    if (view.getUint32(i, true) === 0x02014b50) view.setUint32(i + 24, bytes, true)
+  return out
+}
+
 describe('asset pack importer', () => {
   it('guesses the alert from file names, most specific first', () => {
     const cases: [string, string][] = [
@@ -72,10 +81,12 @@ describe('asset pack importer', () => {
   })
 
   it('stops a zip bomb from its directory, before inflating', () => {
-    const big = new Uint8Array((201 * 1024 * 1024) / 30) // compresses to almost nothing
+    // A bomb's directory claims sizes its data doesn't have; patching the claim keeps the
+    // test fast (building 200 MB for real timed out on CI).
     const files: Record<string, Uint8Array> = {}
-    for (let i = 0; i < 40; i++) files[`frame-${i}.webm`] = big
-    expect(() => unzipPack(zipSync(files))).toThrow(/more than 200 MB/)
+    for (let i = 0; i < 40; i++) files[`frame-${i}.webm`] = new Uint8Array([1])
+    const bomb = claimSize(zipSync(files, { level: 0 }), Math.ceil((201 * 1024 * 1024) / 30))
+    expect(() => unzipPack(bomb)).toThrow(/more than 200 MB/)
     const many: Record<string, Uint8Array> = {}
     for (let i = 0; i < 520; i++) many[`f${i}.png`] = new Uint8Array([1])
     expect(() => unzipPack(zipSync(many))).toThrow(/more than 500 files/)
