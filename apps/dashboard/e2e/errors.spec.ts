@@ -132,3 +132,30 @@ test('a socket drop reconnects by itself', async ({ page }) => {
     .poll(() => page.evaluate(() => window.__ferrocastDemo?.liveSocketCount), { timeout: 10_000 })
     .toBe(1)
 })
+
+test('a pairing link pasted into an open tab pairs without a reload', async ({ page }) => {
+  // Not port 9 like the test above: WebKit refuses that port before routing sees it.
+  const engine = 'http://127.0.0.1:47999'
+  let paired = ''
+  await page.route(`${engine}/api/v1/**`, async (route) => {
+    const req = route.request()
+    if (req.url().endsWith('/session/pair')) {
+      paired = (req.postDataJSON() as { code: string }).code
+      return route.fulfill({
+        status: 410,
+        json: { error: { code: 'pair_code_expired', message: 'That link has expired.' } },
+      })
+    }
+    return route.fulfill({
+      status: 401,
+      json: { error: { code: 'unauthorized', message: 'Pair this browser first.' } },
+    })
+  })
+  await page.goto(`./?engine=${engine}`)
+  await expect(page.getByRole('alert')).toContainText('Link this browser to Ferrocast')
+  await page.evaluate(() => {
+    location.hash = '#pair=WXYZ5678'
+  })
+  await expect.poll(() => paired).toBe('WXYZ5678')
+  await expect(page.getByText('That link has expired.').first()).toBeVisible()
+})

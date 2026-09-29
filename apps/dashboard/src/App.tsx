@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { ApiError, describeError, type FerroEvent } from '@ferrocast/api'
 import { Button, SparkMark, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
-import { clearSession, connect, demo, pair, type Connection } from './lib/boot'
+import { clearSession, connect, demo, pair, pairCodeFromHash, type Connection } from './lib/boot'
 import { startLive, stopLive, useLive } from './lib/store'
 import { useRoute } from './lib/router'
 import { Shell } from './components/Shell'
@@ -142,6 +142,16 @@ export function App() {
   useEffect(() => {
     void boot()
     return () => stopLive()
+  }, [boot])
+
+  // A pairing link pasted into a tab that's already open only changes the hash: pair now
+  // instead of waiting for a reload.
+  useEffect(() => {
+    const onHash = () => {
+      if (pairCodeFromHash()) void boot()
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
   }, [boot])
 
   const tryDemo = async () => {
