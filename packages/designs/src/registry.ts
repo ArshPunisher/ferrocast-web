@@ -90,6 +90,30 @@ import mochiPop from './themes/mochi-pop'
 import deepSpace from './themes/deep-space'
 import diwaliLights from './themes/diwali-lights'
 import midnightManor from './themes/midnight-manor'
+import lofiCassette from './alerts/lofi-cassette'
+import lofiLoft from './themes/lofi-loft'
+import glitchSlice from './alerts/glitch-slice'
+import glitchDistrict from './themes/glitch-district'
+import chromePop from './alerts/chrome-pop'
+import chromeBubble from './themes/chrome-bubble'
+import sakuraPetal from './alerts/sakura-petal'
+import sakuraBloom from './themes/sakura-bloom'
+import terminalBoot from './alerts/terminal-boot'
+import phosphorTerminal from './themes/phosphor-terminal'
+import scoreboardFlash from './alerts/scoreboard-flash'
+import floodlight from './themes/floodlight'
+import pitBoard from './alerts/pit-board'
+import pitWall from './themes/pit-wall'
+import brutalStamp from './alerts/brutal-stamp'
+import brutalMono from './themes/brutal-mono'
+import chatLoft from './widgets/chat-loft'
+import labelHazard from './widgets/label-hazard'
+import goalBubble from './widgets/goal-bubble'
+import chatSakura from './widgets/chat-sakura'
+import chatPhosphor from './widgets/chat-phosphor'
+import labelScoreboard from './widgets/label-scoreboard'
+import labelTiming from './widgets/label-timing'
+import eventsCredits from './widgets/events-credits'
 
 export const BUILTINS: readonly Design[] = [
   moltenPlate,
@@ -179,4 +203,28 @@ export const BUILTINS: readonly Design[] = [
   timerPixel,
   nowPlayingCassette,
   nowPlayingVinyl,
+  lofiCassette,
+  lofiLoft,
+  glitchSlice,
+  glitchDistrict,
+  chromePop,
+  chromeBubble,
+  sakuraPetal,
+  sakuraBloom,
+  terminalBoot,
+  phosphorTerminal,
+  scoreboardFlash,
+  floodlight,
+  pitBoard,
+  pitWall,
+  brutalStamp,
+  brutalMono,
+  chatLoft,
+  labelHazard,
+  goalBubble,
+  chatSakura,
+  chatPhosphor,
+  labelScoreboard,
+  labelTiming,
+  eventsCredits,
 ]
