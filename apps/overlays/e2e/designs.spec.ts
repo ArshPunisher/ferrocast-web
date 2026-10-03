@@ -89,3 +89,33 @@ test('a theme scene renders its layers and the mark', async ({ page }) => {
   await expect(page.locator('.fc-brand')).toHaveCount(1)
   await expect(page.locator('.fc-layer-text').first()).toHaveText(/Be right back/)
 })
+
+test('a long name with no spaces wraps inside the alert instead of running off', async ({
+  page,
+}) => {
+  await open(page)
+  await page.evaluate(async () => {
+    const d = (window as unknown as { __ferroDemo: Demo }).__ferroDemo
+    await d.client.setActiveAlertDesign('builtin.molten-plate')
+    await d.client.testAlert({ kind: 'tip' })
+  })
+  await expect.poll(() => inAlert(page, '.fa-title')).toBe(1)
+  const fits = await page.evaluate(() => {
+    const root = document.querySelector('.fc-design-host')?.shadowRoot
+    const title = root?.querySelector('.fa-title')
+    const card = root?.querySelector('.fa-text')
+    if (!title || !card) return null
+    // Same shape the renderer builds: one box per word, one per letter.
+    const w = document.createElement('span')
+    w.className = 'w'
+    for (const c of 'TheLegendaryChaiDrinker_9000xXxTheLegendary') {
+      const ch = document.createElement('span')
+      ch.className = 'ch'
+      ch.textContent = c
+      w.append(ch)
+    }
+    title.replaceChildren(w)
+    return w.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1
+  })
+  expect(fits).toBe(true)
+})
