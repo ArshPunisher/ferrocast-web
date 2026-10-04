@@ -367,13 +367,7 @@ export class DemoEngine {
     this.connectors = {
       twitch: on ? connector('connected', 'NovaPlays') : connector('off', null),
       youtube: on ? connector('connected', 'Nova Plays') : connector('off', null),
-      kick: on
-        ? connector(
-            'connected',
-            'novaplays',
-            'Kick events come through the Ferrocast relay and can be a few seconds late.',
-          )
-        : connector('off', null),
+      kick: on ? connector('connected', 'novaplays') : connector('off', null),
       obs: on
         ? connector('connected', 'OBS 31.1.2')
         : connector('disconnected', null, 'OBS isn’t running, or its WebSocket server is off.'),
@@ -1411,16 +1405,7 @@ export class DemoEngine {
           connected_at: Date.now(),
           scopes_ok: true,
         })
-        this.setConnector(
-          p,
-          connector(
-            'connected',
-            name,
-            p === 'kick'
-              ? 'Kick events come through the Ferrocast relay and can be a few seconds late.'
-              : null,
-          ),
-        )
+        this.setConnector(p, connector('connected', name))
         this.ingest({ type: 'connector', state: 'connected' }, p, 'live')
       },
       p === 'twitch' ? 4500 : 2500,

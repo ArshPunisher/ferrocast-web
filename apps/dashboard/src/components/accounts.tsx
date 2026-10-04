@@ -25,7 +25,7 @@ import { stateCopy } from './StatusStrip'
 const BLURB: Record<ChatPlatform, string> = {
   twitch: 'Chat, follows, subs, Bits, raids and channel points.',
   youtube: 'Chat, Super Chats and memberships while you’re live.',
-  kick: 'Chat, follows, subs and KICKs. Kick events arrive through our relay, so they can be a few seconds late.',
+  kick: 'Chat, follows, subs and KICKs, through the Ferrocast relay (usually within a second).',
 }
 
 /** Connect one platform: Twitch shows a device code; YouTube and Kick finish in the browser. */

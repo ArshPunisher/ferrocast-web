@@ -57,7 +57,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
         const c = connectors[name]
         const { label, tone } = stateCopy(c)
         const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
-        const late = name === 'kick' && c.state === 'connected'
+        // Kick's events come through the relay link: only warn while that link is down.
+        const late =
+          name === 'kick' && c.state === 'connected' && connectors.relay?.state !== 'connected'
         const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
         const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
         const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}`
@@ -90,8 +92,11 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
                 <span className={tone === 'ok' ? 'text-text-2' : 'text-text-3'}>{label}</span>
               )}
               {!compact && late && (
-                <span className="text-text-3" title={c.detail ?? undefined}>
-                  may lag
+                <span
+                  className="text-warn"
+                  title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
+                >
+                  delayed
                 </span>
               )}
               {!compact && v !== undefined && (
