@@ -83,6 +83,7 @@ import { SceneDesigner, WidgetDesigner } from '../components/design/LayoutDesign
 import { useHistory, useUndoKeys } from '../lib/history'
 import { useAction, useClient, useMediaQuery, useResource } from '../lib/hooks'
 import { go, href, leaveTo } from '../lib/router'
+import { galleryTab } from '../components/design/gallery'
 import { useLeaveGuard } from '../lib/unsaved'
 
 export type DesignerView = 'stage' | 'guided'
@@ -602,7 +603,10 @@ export function DesignerHeader({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <a
-        href={href({ name: 'designs', ...(design.built_in ? {} : { tab: 'mine' as const }) })}
+        href={href({
+          name: 'designs',
+          tab: design.built_in ? galleryTab(design) : 'mine',
+        })}
         className="fc-press inline-flex size-10 items-center justify-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text"
         aria-label="Back to designs"
       >

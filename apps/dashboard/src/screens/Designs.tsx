@@ -1,10 +1,12 @@
-// The design gallery: built-in designs (alerts, full themes, widgets) and your own, with
-// live previews on hover or tap, dropdown filters, search, Use, Duplicate & customise,
-// export, and the ways to bring designs in (a .ferrodesign, StreamElements, an asset pack,
-// OBS).
+// The design gallery, in tabs like a store: Themes (a featured row of full theme bundles,
+// then every theme), Alerts, Widgets, and My designs. Previews play the real thing on hover
+// or tap; style chips, a motion menu and search narrow each tab. The Import menu brings
+// designs in (a .ferrodesign, StreamElements, an asset pack, OBS).
 
 import { useMemo, useRef, useState } from 'react'
 import {
+  CaretDown,
+  Check,
   Copy,
   DotsThree,
   DownloadSimple,
@@ -16,12 +18,11 @@ import {
   Play,
   Plus,
   Trash,
+  Waveform,
 } from '@phosphor-icons/react'
 import {
   EVENT_KEYS,
   EVENT_LABEL,
-  MOTION_LABEL,
-  MOTION_TAGS,
   STYLE_LABEL,
   STYLE_TAGS,
   newAlertDesign,
@@ -32,17 +33,7 @@ import {
   type MotionTag,
   type StyleTag,
 } from '@ferrocast/api'
-import {
-  Badge,
-  Button,
-  Dialog,
-  EmptyState,
-  IconButton,
-  Input,
-  Select,
-  Skeleton,
-  cx,
-} from '@ferrocast/ui'
+import { Badge, Button, Dialog, EmptyState, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
 import { Menu } from '../components/Menu'
 import { DesignStage, type StageHandle } from '../components/design/DesignStage'
@@ -56,28 +47,47 @@ import {
   useExport,
 } from '../components/design/dialogs'
 import { AssetPackDialog } from '../components/design/AssetPackDialog'
+import {
+  FeaturedThemes,
+  ThemeCard,
+  ThemeSheet,
+  galleryTab,
+  isTheme,
+} from '../components/design/gallery'
 import { useAction, useClient, useResource } from '../lib/hooks'
-import { go, href } from '../lib/router'
+import { go, href, type GalleryTab } from '../lib/router'
 
-type KindFilter = 'all' | 'alert' | 'theme' | 'widget'
-const KINDS: { value: KindFilter; label: string }[] = [
-  { value: 'all', label: 'Everything' },
-  { value: 'alert', label: 'Alerts' },
-  { value: 'theme', label: 'Themes and scenes' },
-  { value: 'widget', label: 'Widgets' },
-]
-/** Small scene designs (a rotator, a countdown) sit with the widgets; full scenes with themes. */
-const kindMatch = (k: KindFilter, d: Design) => {
-  if (k === 'all' || k === d.kind) return true
-  if (d.kind !== 'scene') return false
-  return d.content.width < 1280 ? k === 'widget' : k === 'theme'
-}
+const inTab = (t: GalleryTab, d: Design) => t === 'mine' || galleryTab(d) === t
 const KIND_NAME: Record<DesignKind, string> = {
   alert: 'Alerts',
   theme: 'Theme',
   scene: 'Scene',
   widget: 'Widget',
 }
+const TABS: { id: GalleryTab; label: string }[] = [
+  { id: 'themes', label: 'Themes' },
+  { id: 'alerts', label: 'Alerts' },
+  { id: 'widgets', label: 'Widgets' },
+  { id: 'mine', label: 'My designs' },
+]
+/** Featured first, in this order, when they ship; the rest of the themes follow. */
+const FEATURED = [
+  'builtin.lofi-loft',
+  'builtin.floodlight',
+  'builtin.sakura-bloom',
+  'builtin.forge',
+  'builtin.glitch-district',
+  'builtin.synthwave-drive',
+  'builtin.pixel-quest',
+  'builtin.diwali-lights',
+]
+/** The last built-ins added (registry order) are "New". */
+const NEW_COUNT = 8
+const MOTION_GROUPS: { value: '' | 'calm' | 'lively'; label: string; tags: MotionTag[] }[] = [
+  { value: '', label: 'Any motion', tags: [] },
+  { value: 'calm', label: 'Calm', tags: ['still', 'smooth'] },
+  { value: 'lively', label: 'Lively', tags: ['lively', 'bouncy'] },
+]
 
 function Tile({
   design,
@@ -245,44 +255,46 @@ const IMPORTS = [
   },
 ] as const
 
-export function Designs({ tab }: { tab: 'built' | 'mine' }) {
+export function Designs({ tab }: { tab: GalleryTab }) {
   const client = useClient()
   const { run } = useAction()
   const list = useResource((c) => c.designs())
   const active = useResource((c) => c.activeAlertDesign())
-  const [kind, setKind] = useState<KindFilter>('all')
   const [ev, setEv] = useState<EventKey>('tip')
   const [style, setStyle] = useState<StyleTag | ''>('')
-  const [motion, setMotion] = useState<MotionTag | ''>('')
-  const [price, setPrice] = useState<'' | 'free' | 'pro'>('')
+  const [motion, setMotion] = useState<'' | 'calm' | 'lively'>('')
+  const [freeOnly, setFreeOnly] = useState(false)
   const [q, setQ] = useState('')
   const [using, setUsing] = useState<Design | null>(null)
+  const [sheet, setSheet] = useState<Design | null>(null)
   const [deleting, setDeleting] = useState<Design | null>(null)
   const [dialog, setDialog] = useState<'file' | 'pack' | 'obs' | null>(null)
 
   const all = list.data ?? []
   const built = all.filter((d) => d.built_in)
   const mine = all.filter((d) => !d.built_in)
-  const source = tab === 'built' ? built : mine
+  const source = (tab === 'mine' ? mine : built).filter((d) => inTab(tab, d))
+  const count = (t: GalleryTab) => (t === 'mine' ? mine : built).filter((d) => inTab(t, d)).length
+  const motionTags = MOTION_GROUPS.find((m) => m.value === motion)?.tags ?? []
   const query = q.trim().toLowerCase()
   const items = source.filter(
     (d) =>
-      kindMatch(kind, d) &&
       (!style || d.tags.style === style) &&
-      (!motion || d.tags.motion === motion) &&
-      (!price || (price === 'pro' ? d.pro : !d.pro)) &&
+      (motionTags.length === 0 || motionTags.includes(d.tags.motion)) &&
+      (!freeOnly || !d.pro) &&
       (!query ||
         `${d.name} ${d.description} ${STYLE_LABEL[d.tags.style]} ${KIND_NAME[d.kind]}`
           .toLowerCase()
           .includes(query)),
   )
-  const filtered = !!(style || motion || price || query || kind !== 'all')
+  const filtered = !!(style || motion || freeOnly || query)
+  const stylesHere = STYLE_TAGS.filter((t) => source.some((d) => d.tags.style === t))
+  const hasPro = source.some((d) => d.pro)
   const clear = () => {
     setStyle('')
     setMotion('')
-    setPrice('')
+    setFreeOnly(false)
     setQ('')
-    setKind('all')
   }
   const use = (d: Design) => {
     if (d.kind !== 'alert') return setUsing(d)
@@ -302,83 +314,89 @@ export function Designs({ tab }: { tab: 'built' | 'mine' }) {
     }).then((d) => {
       if (d) go({ name: 'designer', id: d.id })
     })
-  const selectCls = 'h-9 w-auto min-w-[8.5rem]'
+
+  const themes = items.filter(isTheme)
+  const showShelves = tab === 'themes' && !filtered
+  const featured = showShelves ? FEATURED.flatMap((id) => themes.filter((t) => t.id === id)) : []
+  const builtThemeIds = built.filter(isTheme).map((t) => t.id)
+  const newIds = new Set(builtThemeIds.slice(-NEW_COUNT))
+  const sheetTheme = sheet && isTheme(sheet) ? sheet : null
+  const sheetAlert = sheetTheme?.content.alert_design
+    ? (all.find((d) => d.id === sheetTheme.content.alert_design) ?? null)
+    : null
+  const searchLabel =
+    tab === 'themes'
+      ? 'Search themes'
+      : tab === 'alerts'
+        ? 'Search alerts'
+        : tab === 'widgets'
+          ? 'Search widgets'
+          : 'Search my designs'
+  const chip = (on: boolean) =>
+    cx(
+      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium',
+      on
+        ? 'border-accent-line bg-accent-soft text-text'
+        : 'border-line text-text-2 hover:border-line-strong hover:text-text',
+    )
 
   return (
     <div>
       <PageHeader
         title="Designs"
-        description="Every built-in plays the real thing: hover or tap one to watch it. Duplicate one to make it yours, without Ferrocast branding."
+        description="Themes, alerts and widgets that play the real thing. Use one as it is, or duplicate it to make it yours without Ferrocast branding."
         actions={
-          <Button variant="secondary" icon={<Plus size={15} />} onClick={startScratch}>
-            Start from scratch
-          </Button>
+          <>
+            <Menu
+              label="Import"
+              align="end"
+              trigger={(p) => (
+                <Button {...p} variant="secondary" icon={<DownloadSimple size={15} />}>
+                  Import
+                </Button>
+              )}
+              items={IMPORTS.map((x) => ({
+                key: x.key,
+                label: x.title,
+                hint: x.text,
+                icon: <x.icon size={16} />,
+                onSelect: () =>
+                  x.key === 'se'
+                    ? go({ name: 'import', source: 'streamelements' })
+                    : setDialog(x.key),
+              }))}
+            />
+            <Button variant="secondary" icon={<Plus size={15} />} onClick={startScratch}>
+              Start from scratch
+            </Button>
+          </>
         }
       />
-      <div
-        aria-label="Bring designs in"
-        role="group"
-        className="-mx-4 mb-5 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] min-[480px]:mx-0 min-[480px]:grid min-[480px]:grid-cols-2 min-[480px]:overflow-visible min-[480px]:px-0 xl:grid-cols-4"
-      >
-        {IMPORTS.map((x) => {
-          const body = (
-            <>
-              <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-surface-3 text-accent-text">
-                <x.icon size={20} />
-              </span>
-              <span className="min-w-0">
-                <b className="block text-sm text-text">{x.title}</b>
-                <span className="block text-[12.5px] leading-snug text-text-3">{x.text}</span>
-              </span>
-            </>
-          )
-          const cls =
-            'fc-press flex min-w-0 items-center gap-3 rounded-[14px] border border-line bg-surface-1 px-3.5 py-3 text-left hover:border-line-strong focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none'
-          return x.key === 'se' ? (
-            <a
-              key={x.key}
-              href={href({ name: 'import', source: 'streamelements' })}
-              className={cls}
-            >
-              {body}
-            </a>
-          ) : (
-            <button key={x.key} type="button" className={cls} onClick={() => setDialog(x.key)}>
-              {body}
-            </button>
-          )
-        })}
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2.5">
-        <div
-          role="tablist"
-          aria-label="Collections"
-          className="flex gap-0.5 rounded-[12px] border border-line bg-surface-2 p-[3px]"
+      <div className="mb-5 flex flex-wrap items-end gap-3 border-b border-line">
+        <nav
+          aria-label="Gallery"
+          className="-mb-px flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]"
         >
-          {(
-            [
-              ['built', 'Built-in', built.length],
-              ['mine', 'My designs', mine.length],
-            ] as const
-          ).map(([id, label, n]) => (
+          {TABS.map((t) => (
             <a
-              key={id}
-              role="tab"
-              aria-selected={tab === id}
-              href={href({ name: 'designs', ...(id === 'mine' ? { tab: 'mine' as const } : {}) })}
+              key={t.id}
+              href={href({ name: 'designs', ...(t.id === 'themes' ? {} : { tab: t.id }) })}
+              aria-current={tab === t.id ? 'page' : undefined}
               className={cx(
-                'inline-flex min-h-[34px] items-center gap-2 rounded-[9px] px-3.5 text-[13.5px] font-semibold',
-                tab === id ? 'bg-surface-3 text-text shadow-1' : 'text-text-3 hover:text-text',
+                'inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-[14px] font-semibold transition-colors',
+                tab === t.id
+                  ? 'border-accent text-text'
+                  : 'border-transparent text-text-3 hover:text-text',
               )}
             >
-              {label}
-              <span className="font-mono text-[11.5px] text-text-3">{n}</span>
+              {t.label}
+              <span className="font-mono text-[11.5px] font-medium text-text-3">{count(t.id)}</span>
             </a>
           ))}
-        </div>
+        </nav>
         <span className="flex-1" />
-        <label className="relative w-full sm:w-64">
-          <span className="sr-only">Search designs</span>
+        <label className="relative mb-2 w-full sm:w-64">
+          <span className="sr-only">{searchLabel}</span>
           <MagnifyingGlass
             size={16}
             className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
@@ -386,72 +404,69 @@ export function Designs({ tab }: { tab: 'built' | 'mine' }) {
           />
           <Input
             type="search"
-            placeholder="Search designs"
+            placeholder={searchLabel}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="h-9 pl-9"
           />
         </label>
       </div>
-      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-3">
-        <label className="flex items-center gap-2 text-[12.5px] text-text-3">
-          Show
-          <Select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as KindFilter)}
-            className={selectCls}
+      <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="Style"
+          className="-mx-4 flex min-w-0 basis-full gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:basis-0 sm:flex-1 sm:px-0"
+        >
+          <button
+            type="button"
+            aria-pressed={style === ''}
+            onClick={() => setStyle('')}
+            className={chip(style === '')}
           >
-            {KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex items-center gap-2 text-[12.5px] text-text-3">
-          Style
-          <Select
-            value={style}
-            onChange={(e) => setStyle(e.target.value as StyleTag | '')}
-            className={selectCls}
+            All styles
+          </button>
+          {stylesHere.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={style === t}
+              onClick={() => setStyle(style === t ? '' : t)}
+              className={chip(style === t)}
+            >
+              {STYLE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+        <Menu
+          label="Motion"
+          align="end"
+          trigger={(p) => (
+            <button {...p} type="button" className={chip(motion !== '')}>
+              <Waveform size={14} />
+              {MOTION_GROUPS.find((m) => m.value === motion)?.label}
+              <CaretDown size={12} />
+            </button>
+          )}
+          items={MOTION_GROUPS.map((m) => ({
+            key: m.value || 'any',
+            label: m.label,
+            icon:
+              motion === m.value ? <Check size={15} /> : <span className="inline-block w-[15px]" />,
+            onSelect: () => setMotion(m.value),
+          }))}
+        />
+        {hasPro && (
+          <button
+            type="button"
+            aria-pressed={freeOnly}
+            onClick={() => setFreeOnly(!freeOnly)}
+            className={chip(freeOnly)}
           >
-            <option value="">All styles</option>
-            {STYLE_TAGS.map((t) => (
-              <option key={t} value={t}>
-                {STYLE_LABEL[t]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex items-center gap-2 text-[12.5px] text-text-3">
-          Motion
-          <Select
-            value={motion}
-            onChange={(e) => setMotion(e.target.value as MotionTag | '')}
-            className={selectCls}
-          >
-            <option value="">Any motion</option>
-            {MOTION_TAGS.map((t) => (
-              <option key={t} value={t}>
-                {MOTION_LABEL[t]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex items-center gap-2 text-[12.5px] text-text-3">
-          Price
-          <Select
-            value={price}
-            onChange={(e) => setPrice(e.target.value as '' | 'free' | 'pro')}
-            className={selectCls}
-          >
-            <option value="">Free and Pro</option>
-            <option value="free">Free</option>
-            <option value="pro">Pro</option>
-          </Select>
-        </label>
+            Free only
+          </button>
+        )}
       </div>
-      {kind !== 'theme' && kind !== 'widget' && (
+      {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
         <div className="mb-5 flex min-w-0 items-center gap-2">
           <span className="shrink-0 text-[12.5px] text-text-3">Preview as</span>
           <div
@@ -468,12 +483,7 @@ export function Designs({ tab }: { tab: 'built' | 'mine' }) {
                     type="button"
                     aria-pressed={ev === k}
                     onClick={() => setEv(k)}
-                    className={cx(
-                      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium',
-                      ev === k
-                        ? 'border-accent-line bg-accent-soft text-text'
-                        : 'border-line text-text-2 hover:border-line-strong',
-                    )}
+                    className={chip(ev === k)}
                   >
                     <I size={14} />
                     {EVENT_LABEL[k]}
@@ -508,20 +518,55 @@ export function Designs({ tab }: { tab: 'built' | 'mine' }) {
           </div>
         )
       ) : (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3" aria-live="polite">
-          {items.map((d) => (
-            <Tile
-              key={d.id}
-              design={d}
-              ev={ev}
-              active={active.data?.design_id === d.id}
-              onUse={() => use(d)}
-              onDuplicate={() => duplicate(d)}
-              onDelete={() => setDeleting(d)}
-            />
-          ))}
-        </div>
+        <>
+          {showShelves && <FeaturedThemes themes={featured} onOpen={setSheet} onUse={setUsing} />}
+          {tab === 'themes' && (
+            <h2 className="mb-3 font-display text-lg font-semibold tracking-tight">
+              {filtered ? 'Matching themes' : 'All themes'}
+            </h2>
+          )}
+          <div
+            className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+            aria-live="polite"
+          >
+            {items.map((d) =>
+              isTheme(d) ? (
+                <ThemeCard
+                  key={d.id}
+                  theme={d}
+                  isNew={d.built_in && newIds.has(d.id)}
+                  onOpen={() => setSheet(d)}
+                  onUse={() => setUsing(d)}
+                />
+              ) : (
+                <Tile
+                  key={d.id}
+                  design={d}
+                  ev={ev}
+                  active={active.data?.design_id === d.id}
+                  onUse={() => use(d)}
+                  onDuplicate={() => duplicate(d)}
+                  onDelete={() => setDeleting(d)}
+                />
+              ),
+            )}
+          </div>
+        </>
       )}
+      <ThemeSheet
+        key={sheetTheme?.id ?? 'none'}
+        theme={sheetTheme}
+        alertDesign={sheetAlert}
+        onClose={() => setSheet(null)}
+        onUse={(t) => {
+          setSheet(null)
+          setUsing(t)
+        }}
+        onDuplicate={(t) => {
+          setSheet(null)
+          duplicate(t)
+        }}
+      />
       <UseDialog key={using?.id ?? 'none'} design={using} onClose={() => setUsing(null)} />
       <ImportDesignDialog
         open={dialog === 'file'}

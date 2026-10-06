@@ -29,16 +29,21 @@ async function deepText(page: Page, selector: string): Promise<string> {
   }, selector)
 }
 
-const tile = (page: Page, name: string) => page.getByRole('article', { name, exact: true })
+/** A card in the tab's grid (Themes also has a Featured row with the same names). */
+const tile = (page: Page, name: string) =>
+  page.locator('[aria-live="polite"]').getByRole('article', { name, exact: true })
 
 test.describe('smoke', () => {
   test(
     'the app boots, the gallery loads, a built-in alert renders',
     { tag: '@smoke' },
     async ({ page }) => {
-      await open(page, 'designs')
+      await open(page, 'designs/alerts')
       await expect(page.getByRole('heading', { name: 'Designs', level: 1 })).toBeVisible()
-      await expect(page.getByRole('tab', { name: /Built-in 87/ })).toBeVisible()
+      await expect(page.getByRole('link', { name: /Alerts 41/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
       await expect(tile(page, 'Molten plate')).toBeVisible()
       await expect.poll(() => deepCount(page, '.fa.f-plate')).toBeGreaterThan(0)
     },
@@ -56,38 +61,67 @@ test.describe('smoke', () => {
 })
 
 test.describe('gallery', () => {
-  test('dropdown filters, search, tabs and clearing', async ({ page }) => {
+  test('tabs, style chips, the motion menu, search and clearing', async ({ page }) => {
     await open(page, 'designs')
-    const grid = page.getByRole('article')
-    await expect(grid).toHaveCount(87)
-    await page.getByLabel('Show').selectOption('theme')
-    await expect(grid).toHaveCount(14)
+    const grid = page.locator('[aria-live="polite"] > article')
+    // Themes first: a featured row of full bundles, then every theme.
+    await expect(page.getByRole('heading', { name: 'Featured' })).toBeVisible()
+    await expect(grid).toHaveCount(22)
+    await expect(tile(page, 'Floodlight')).toContainText('5 scenes + alerts')
+    await page.getByRole('link', { name: /^Widgets \d+/ }).click()
+    await expect(page).toHaveURL(/#\/designs\/widgets$/)
     // Widget designs, plus the small scene designs (rotators, countdowns, now playing).
-    await page.getByLabel('Show').selectOption('widget')
-    await expect(grid).toHaveCount(40)
+    await expect(grid).toHaveCount(48)
     await expect(tile(page, 'Ring countdown')).toBeVisible()
-    await page.getByLabel('Show').selectOption('all')
-    await page.getByLabel('Style').selectOption('retro')
+    await page.getByRole('link', { name: /^Alerts \d+/ }).click()
+    await expect(grid).toHaveCount(41)
+    const styles = page.getByRole('group', { name: 'Style' })
+    await styles.getByRole('button', { name: 'Retro' }).click()
     await expect(tile(page, 'Pixel arcade')).toBeVisible()
     await expect(tile(page, 'Molten plate')).toHaveCount(0)
-    await page.getByLabel('Motion').selectOption('lively')
-    await expect(grid).toHaveCount(9)
-    await page.getByLabel('Price').selectOption('pro')
-    await expect(grid).toHaveCount(1)
-    await expect(tile(page, 'Marquee bulbs')).toBeVisible()
-    await page.getByLabel('Style').selectOption('minimal')
+    await page.getByRole('button', { name: /Any motion/ }).click()
+    await page.getByRole('menuitem', { name: 'Lively' }).click()
+    await expect(page.getByRole('button', { name: /Lively/ })).toBeVisible()
+    const lively = await grid.count()
+    expect(lively).toBeGreaterThan(0)
+    await page.getByRole('button', { name: 'Free only' }).click()
+    expect(await grid.count()).toBeLessThan(lively)
+    await styles.getByRole('button', { name: 'Minimal' }).click()
+    await page.getByRole('button', { name: /Lively/ }).click()
+    await page.getByRole('menuitem', { name: 'Calm' }).click()
+    await page.getByRole('searchbox', { name: 'Search alerts' }).fill('zzz-nothing')
     await expect(page.getByText('Nothing matches these filters')).toBeVisible()
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await expect(grid).toHaveCount(87)
-    await page.getByRole('searchbox', { name: 'Search designs' }).fill('sixer')
+    await expect(grid).toHaveCount(41)
+    await page.getByRole('searchbox', { name: 'Search alerts' }).fill('sixer')
     await expect(grid).toHaveCount(1)
-    await page.getByRole('tab', { name: /My designs/ }).click()
+    await page.getByRole('link', { name: /My designs/ }).click()
     await expect(page).toHaveURL(/#\/designs\/mine$/)
     await expect(page.getByText('No designs of your own yet')).toBeVisible()
   })
 
-  test('"Preview as" switches the event every alert tile plays', async ({ page }) => {
+  test('a theme opens with every scene and its alert, and Use theme sets it up', async ({
+    page,
+  }) => {
     await open(page, 'designs')
+    await tile(page, 'Chai & rain').getByRole('button', { name: 'Preview' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Chai & rain' })
+    const scenes = sheet.getByRole('tablist', { name: 'Chai & rain scenes' })
+    const names = ['Starting soon', 'In game', 'Just chatting', 'Be right back', 'Ending', 'Alerts']
+    for (const [i, name] of names.entries())
+      await expect(scenes.getByRole('tab').nth(i)).toHaveAccessibleName(name)
+    await scenes.getByRole('tab', { name: 'Alerts' }).click()
+    await expect(scenes.getByRole('tab', { name: 'Alerts' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect.poll(() => deepCount(page, '.fa')).toBeGreaterThan(0)
+    await sheet.getByRole('button', { name: 'Use theme' }).click()
+    await expect(page.getByRole('dialog', { name: 'Use Chai & rain' })).toBeVisible()
+  })
+
+  test('"Preview as" switches the event every alert tile plays', async ({ page }) => {
+    await open(page, 'designs/alerts')
     await page
       .getByRole('group', { name: 'Preview as' })
       .getByRole('button', { name: 'Raid' })
@@ -96,7 +130,7 @@ test.describe('gallery', () => {
   })
 
   test('Use an alert design: it plays your alerts and says it keeps the mark', async ({ page }) => {
-    await open(page, 'designs')
+    await open(page, 'designs/alerts')
     await tile(page, 'Neon sign').getByRole('button', { name: 'Use' }).click()
     await expect(page.getByText(/Neon sign now plays your alerts\. It is a built-in/)).toBeVisible()
     await expect(tile(page, 'Neon sign').getByText('Plays your alerts now')).toBeVisible()
@@ -105,7 +139,7 @@ test.describe('gallery', () => {
   test('Duplicate & customise makes an unbranded copy that opens in the designer', async ({
     page,
   }) => {
-    await open(page, 'designs')
+    await open(page, 'designs/alerts')
     await expect.poll(() => deepCount(page, '.fa-spark')).toBeGreaterThan(0)
     await tile(page, 'Glass card').getByRole('button', { name: 'Duplicate & customise' }).click()
     await expect(page).toHaveURL(/#\/designer\/d/)
@@ -117,7 +151,7 @@ test.describe('gallery', () => {
 
   test('using a theme makes one overlay per scene', async ({ page }) => {
     await open(page, 'designs')
-    await tile(page, 'Forge').getByRole('button', { name: 'Use' }).click()
+    await tile(page, 'Forge').getByRole('button', { name: 'Use theme' }).click()
     const dialog = page.getByRole('dialog', { name: 'Use Forge' })
     await expect(dialog.getByRole('switch', { name: 'Also use its alert style' })).toBeVisible()
     await dialog.getByRole('button', { name: 'Make 5 overlays' }).click()
@@ -127,7 +161,7 @@ test.describe('gallery', () => {
   })
 
   test('a widget design is added to the overlay picked', async ({ page }) => {
-    await open(page, 'designs')
+    await open(page, 'designs/widgets')
     await tile(page, 'Segment goal').getByRole('button', { name: 'Use' }).click()
     const dialog = page.getByRole('dialog', { name: 'Use Segment goal' })
     await expect(dialog.getByRole('button', { name: 'Add widget' })).toBeDisabled()
@@ -140,7 +174,7 @@ test.describe('gallery', () => {
 
 test.describe('designer', () => {
   test('both views edit the same design; the choice is remembered', async ({ page }) => {
-    await open(page, 'designs')
+    await open(page, 'designs/alerts')
     await tile(page, 'Molten plate').getByRole('button', { name: 'Duplicate & customise' }).click()
     await expect(page.getByRole('tablist', { name: 'Inspector sections' })).toBeVisible()
     // Stage view: change the headline in the Text tab, see it on the stage.
@@ -215,7 +249,7 @@ test.describe('designer', () => {
     const ask = page.getByRole('dialog', { name: 'Save your design first?' })
     await expect(ask).toBeVisible()
     await ask.getByRole('button', { name: 'Discard' }).click()
-    await expect(page).toHaveURL(/#\/designs$/)
+    await expect(page).toHaveURL(/#\/designs\/alerts$/)
   })
 })
 
@@ -243,7 +277,7 @@ test.describe('theme designer', () => {
 
 test.describe('design files', () => {
   test('export then import makes a new design of your own', async ({ page }) => {
-    await open(page, 'designs')
+    await open(page, 'designs/alerts')
     await tile(page, 'Molten plate').getByRole('button', { name: 'Duplicate & customise' }).click()
     await expect(page).toHaveURL(/#\/designer\/d/)
     await page.goto('./?autoplay=0&latency=0#/designs/mine')
@@ -256,7 +290,8 @@ test.describe('design files', () => {
     const file = await download
     expect(file.suggestedFilename()).toBe('Molten-plate-copy.ferrodesign')
     const path = await file.path()
-    await page.getByRole('button', { name: /Design file/ }).click()
+    await page.getByRole('button', { name: 'Import' }).click()
+    await page.getByRole('menuitem', { name: /Design file/ }).click()
     const dialog = page.getByRole('dialog', { name: 'Import a design file' })
     await dialog.locator('input[type=file]').setInputFiles({
       name: 'Molten-plate-copy.ferrodesign',
@@ -270,7 +305,8 @@ test.describe('design files', () => {
 
   test('a file that isn’t a design file gets a clear reason', async ({ page }) => {
     await open(page, 'designs')
-    await page.getByRole('button', { name: /Design file/ }).click()
+    await page.getByRole('button', { name: 'Import' }).click()
+    await page.getByRole('menuitem', { name: /Design file/ }).click()
     const dialog = page.getByRole('dialog', { name: 'Import a design file' })
     await dialog
       .locator('input[type=file]')
@@ -297,7 +333,8 @@ test.describe('asset pack importer', () => {
 
   test('matches files to alerts by name, lets you fix them, builds a design', async ({ page }) => {
     await open(page, 'designs')
-    await page.getByRole('button', { name: /Asset pack/ }).click()
+    await page.getByRole('button', { name: 'Import' }).click()
+    await page.getByRole('menuitem', { name: /Asset pack/ }).click()
     const dialog = page.getByRole('dialog', { name: 'Import an asset pack' })
     await dialog.locator('input[type=file]').setInputFiles([
       { name: 'follow.png', mimeType: 'image/png', buffer: PNG },

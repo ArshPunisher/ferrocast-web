@@ -17,7 +17,7 @@ for (const scheme of ['dark', 'light'] as const) {
       await open(page, 'designs')
       await expect(page.getByRole('article').first()).toBeVisible()
       await noSideScroll(page)
-      await page.getByLabel('Style').selectOption('bold')
+      await page.getByRole('group', { name: 'Style' }).getByRole('button', { name: 'Bold' }).click()
       await expect(page.getByRole('article').first()).toBeVisible()
     })
 

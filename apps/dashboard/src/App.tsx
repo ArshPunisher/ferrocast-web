@@ -215,7 +215,7 @@ export function App() {
       screen = <Import source={route.source} demo={isDemo} />
       break
     case 'designs':
-      screen = <Designs tab={route.tab ?? 'built'} />
+      screen = <Designs tab={route.tab ?? 'themes'} />
       break
     case 'designer':
       screen = <Designer id={route.id} />

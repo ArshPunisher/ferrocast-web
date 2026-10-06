@@ -30,6 +30,8 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.waitForTimeout(600)
       const r = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        // Overlay previews are the stream's own art (checked in the overlays package).
+        .exclude('[data-overlay-preview]')
         .analyze()
       const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
       expect(

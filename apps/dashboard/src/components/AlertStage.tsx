@@ -183,7 +183,13 @@ export function OverlayPreview({
   useEffect(() => schedule('config'), [overlay])
   useEffect(() => schedule('snapshot'), [state])
   return (
-    <div className={cx('overflow-hidden', className ?? 'relative')}>
+    // A picture of what viewers will see, not part of the dashboard: hidden from screen
+    // readers (each card names it) and left out of the dashboard's contrast checks.
+    <div
+      data-overlay-preview
+      aria-hidden="true"
+      className={cx('overflow-hidden', className ?? 'relative')}
+    >
       <div ref={host} className="absolute inset-0" />
     </div>
   )

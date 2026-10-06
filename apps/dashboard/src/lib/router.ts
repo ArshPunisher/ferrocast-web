@@ -16,9 +16,13 @@ export type Route =
   | { name: 'tips' }
   | { name: 'settings'; section?: string }
   | { name: 'import'; source?: 'streamelements' | 'streamlabs' }
-  | { name: 'designs'; tab?: 'mine' }
+  | { name: 'designs'; tab?: GalleryTab }
   | { name: 'designer'; id: string }
   | { name: 'studio'; section?: StudioSection }
+
+/** Gallery tabs; themes is the default (`#/designs`). */
+export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
+const GALLERY_TABS: GalleryTab[] = ['themes', 'alerts', 'widgets', 'mine']
 
 export type StudioSection = 'show' | 'info' | 'obs' | 'moments'
 const STUDIO_SECTIONS: StudioSection[] = ['show', 'info', 'obs', 'moments']
@@ -46,7 +50,9 @@ export function parseRoute(hash: string): Route {
     case 'settings':
       return b ? { name: 'settings', section: b } : { name: 'settings' }
     case 'designs':
-      return b === 'mine' ? { name: 'designs', tab: 'mine' } : { name: 'designs' }
+      return GALLERY_TABS.includes(b as GalleryTab) && b !== 'themes'
+        ? { name: 'designs', tab: b as GalleryTab }
+        : { name: 'designs' }
     case 'designer':
       return b ? { name: 'designer', id: b } : { name: 'designs' }
     case 'studio':
@@ -75,7 +81,7 @@ export function href(r: Route): string {
     case 'import':
       return r.source ? `#/import/${r.source}` : '#/import'
     case 'designs':
-      return r.tab ? '#/designs/mine' : '#/designs'
+      return r.tab && r.tab !== 'themes' ? `#/designs/${r.tab}` : '#/designs'
     case 'designer':
       return `#/designer/${encodeURIComponent(r.id)}`
     case 'studio':
