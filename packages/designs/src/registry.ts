@@ -114,6 +114,20 @@ import chatPhosphor from './widgets/chat-phosphor'
 import labelScoreboard from './widgets/label-scoreboard'
 import labelTiming from './widgets/label-timing'
 import eventsCredits from './widgets/events-credits'
+import cabinWindow from './alerts/cabin-window'
+import winterCabin from './themes/winter-cabin'
+import questScroll from './alerts/quest-scroll'
+import tavernQuest from './themes/tavern-quest'
+import abyssGlow from './alerts/abyss-glow'
+import oceanDepths from './themes/ocean-depths'
+import neonKanban from './alerts/neon-kanban'
+import tokyoNeon from './themes/tokyo-neon'
+import studioCaption from './alerts/studio-caption'
+import cleanStudio from './themes/clean-studio'
+import chalkMenu from './alerts/chalk-menu'
+import cafeCorner from './themes/cafe-corner'
+import labelKraft from './widgets/label-kraft'
+import eventsQuestLog from './widgets/events-quest-log'
 
 export const BUILTINS: readonly Design[] = [
   moltenPlate,
@@ -227,4 +241,18 @@ export const BUILTINS: readonly Design[] = [
   labelScoreboard,
   labelTiming,
   eventsCredits,
+  cabinWindow,
+  winterCabin,
+  questScroll,
+  tavernQuest,
+  abyssGlow,
+  oceanDepths,
+  neonKanban,
+  tokyoNeon,
+  studioCaption,
+  cleanStudio,
+  chalkMenu,
+  cafeCorner,
+  labelKraft,
+  eventsQuestLog,
 ]

@@ -40,7 +40,7 @@ test.describe('smoke', () => {
     async ({ page }) => {
       await open(page, 'designs/alerts')
       await expect(page.getByRole('heading', { name: 'Designs', level: 1 })).toBeVisible()
-      await expect(page.getByRole('link', { name: /Alerts 41/ })).toHaveAttribute(
+      await expect(page.getByRole('link', { name: /Alerts 47/ })).toHaveAttribute(
         'aria-current',
         'page',
       )
@@ -66,15 +66,15 @@ test.describe('gallery', () => {
     const grid = page.locator('[aria-live="polite"] > article')
     // Themes first: a featured row of full bundles, then every theme.
     await expect(page.getByRole('heading', { name: 'Featured' })).toBeVisible()
-    await expect(grid).toHaveCount(22)
+    await expect(grid).toHaveCount(28)
     await expect(tile(page, 'Floodlight')).toContainText('5 scenes + alerts')
     await page.getByRole('link', { name: /^Widgets \d+/ }).click()
     await expect(page).toHaveURL(/#\/designs\/widgets$/)
     // Widget designs, plus the small scene designs (rotators, countdowns, now playing).
-    await expect(grid).toHaveCount(48)
+    await expect(grid).toHaveCount(50)
     await expect(tile(page, 'Ring countdown')).toBeVisible()
     await page.getByRole('link', { name: /^Alerts \d+/ }).click()
-    await expect(grid).toHaveCount(41)
+    await expect(grid).toHaveCount(47)
     const styles = page.getByRole('group', { name: 'Style' })
     await styles.getByRole('button', { name: 'Retro' }).click()
     await expect(tile(page, 'Pixel arcade')).toBeVisible()
@@ -92,7 +92,7 @@ test.describe('gallery', () => {
     await page.getByRole('searchbox', { name: 'Search alerts' }).fill('zzz-nothing')
     await expect(page.getByText('Nothing matches these filters')).toBeVisible()
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await expect(grid).toHaveCount(41)
+    await expect(grid).toHaveCount(47)
     await page.getByRole('searchbox', { name: 'Search alerts' }).fill('sixer')
     await expect(grid).toHaveCount(1)
     await page.getByRole('link', { name: /My designs/ }).click()
