@@ -1,5 +1,12 @@
 # Status
 
+## 18 Oct 2026 (gallery, theme bundles, live test)
+
+- Designs is now a store-like gallery: Themes, Alerts, Widgets and My designs tabs with counts; a Featured carousel of theme bundles that plays the real scenes; theme cards that say what's inside ("5 scenes + alerts"); a theme sheet to flip through every scene and the alert before "Use theme". Style chips and a motion menu replace the dropdowns; the import cards are one Import menu. Routes `#/designs`, `/alerts`, `/widgets`, `/mine`.
+- Fourteen new theme bundles, each with its own alert (and widgets where needed): Lo-fi loft, Glitch district, Chrome bubble, Sakura bloom, Phosphor terminal, Floodlight, Pit wall, Brutal mono, Winter cabin, Tavern quest, Ocean depths, Tokyo neon, Clean studio and Café corner. The library is now 28 themes, 47 alerts and 50 widgets.
+- Fixes from a real private YouTube stream: Kick's pill warns only while the relay link is down; a long name with no spaces wraps inside alert cards; a pairing link pasted into an open tab pairs.
+- Overlay previews are marked decorative (`data-overlay-preview`, hidden from screen readers, excluded from the dashboard's contrast check; overlays are checked in their own package).
+
 ## 18 Oct 2026 (design library)
 
 - Built-in library grew from 14 to 87 designs: 14 full themes (five scenes each, every one with its own matching alert design), 33 alert designs, 32 widget designs (11 goals, 9 labels, 6 event lists, 6 chat boxes) and 8 small scene designs (3 social rotators, 3 countdowns, 2 now-playing cards). About a quarter is marked Pro. Seasonal and regional packs: Diwali, Halloween, Holi, winter, cricket.
