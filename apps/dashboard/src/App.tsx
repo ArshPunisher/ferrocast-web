@@ -144,6 +144,25 @@ export function App() {
     return () => stopLive()
   }, [boot])
 
+  // The app restarted (or forgot this browser): the live socket only retries, so ask once
+  // whether this tab is still signed in, and if not, show "Link this browser" instead of
+  // old data that never updates.
+  const socket = useLive((s) => s.socket)
+  useEffect(() => {
+    // (The desktop window's token can't go stale: the app reloads it.)
+    if (socket !== 'retrying' || !conn || conn.mode === 'desktop') return
+    let gone = false
+    const c = conn
+    void c.client.status().catch((e: unknown) => {
+      if (gone || !(e instanceof ApiError) || e.status !== 401) return
+      clearSession()
+      void boot()
+    })
+    return () => {
+      gone = true
+    }
+  }, [socket, conn, boot])
+
   // A pairing link pasted into a tab that's already open only changes the hash: pair now
   // instead of waiting for a reload.
   useEffect(() => {
