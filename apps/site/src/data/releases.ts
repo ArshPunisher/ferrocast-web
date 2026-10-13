@@ -55,17 +55,43 @@ const KINDS: { os: BetaOs; label: string; test: (n: string) => boolean }[] = [
 const releaseDownload = (u: unknown): u is string =>
   typeof u === 'string' && u.startsWith(`${COMPANY.github}/releases/download/`)
 
+/** Compares `v1.2.3-beta.4` style tags: numbers numerically, a release above its betas. */
+export function compareVersions(a: string, b: string): number {
+  const parse = (t: string) => {
+    const bare = t.replace(/^v/, '')
+    const dash = bare.indexOf('-')
+    const core = dash === -1 ? bare : bare.slice(0, dash)
+    const nums = core.split('.').map((n) => Number.parseInt(n, 10) || 0)
+    while (nums.length < 3) nums.push(0)
+    if (dash === -1) return [...nums.slice(0, 3), Infinity]
+    // Each number in the prerelease part in turn: beta.1.2 < beta.3, beta.4 < beta.10.
+    const pre = (bare.slice(dash + 1).match(/\d+/g) ?? []).map(Number)
+    return [...nums.slice(0, 3), 0, ...pre]
+  }
+  const x = parse(a)
+  const y = parse(b)
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0)
+    if (d !== 0) return d > 0 ? 1 : -1
+  }
+  return 0
+}
+
 /** The newest published prerelease in a GitHub API answer, or null. Exported for tests. */
 export function pickBeta(data: unknown): BetaRelease | null {
   if (!Array.isArray(data)) return null
-  const r = (data as GhRelease[]).find(
-    (x) =>
-      x &&
-      x.prerelease === true &&
-      x.draft !== true &&
-      typeof x.tag_name === 'string' &&
-      x.tag_name !== 'beta',
-  )
+  // Highest version, not the first listed: GitHub orders releases by the tagged commit's
+  // date, which doesn't follow the version.
+  const r = (data as GhRelease[])
+    .filter(
+      (x) =>
+        x &&
+        x.prerelease === true &&
+        x.draft !== true &&
+        typeof x.tag_name === 'string' &&
+        x.tag_name !== 'beta',
+    )
+    .sort((a, b) => compareVersions(String(b.tag_name), String(a.tag_name)))[0]
   if (!r || typeof r.tag_name !== 'string') return null
   const files = Array.isArray(r.assets) ? (r.assets as GhAsset[]) : []
   const assets: BetaAsset[] = []

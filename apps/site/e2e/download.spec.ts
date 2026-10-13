@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { pickBeta } from '../src/data/releases'
+import { compareVersions, pickBeta } from '../src/data/releases'
 
 const GH = 'https://github.com/ArshPunisher/ferrocast'
 const dl = (tag: string, name: string) => ({
@@ -69,6 +69,22 @@ test.describe('picking the beta from GitHub releases', () => {
     expect(r?.version).toBe('0.1.0-beta.2')
     expect(r?.assets.map((a) => a.os)).toEqual(['mac', 'windows', 'linux', 'linux', 'linux'])
     expect(r?.checksums).toBe(`${GH}/releases/download/${tag}/SHA256SUMS.txt`)
+  })
+
+  test('picks the highest beta, not the first GitHub lists', () => {
+    // GitHub orders by the tagged commit's date, which can put an older beta first.
+    const r = pickBeta(
+      ['v0.1.0-beta.2', 'v0.1.0-beta.10', 'v0.1.0-beta.4'].map((tag_name) => ({
+        tag_name,
+        prerelease: true,
+        draft: false,
+        assets: [],
+      })),
+    )
+    expect(r?.tag).toBe('v0.1.0-beta.10')
+    expect(compareVersions('v0.1.0-beta.1.2', 'v0.1.0-beta.3')).toBe(-1)
+    expect(compareVersions('v0.1.0', 'v0.1.0-beta.9')).toBe(1)
+    expect(compareVersions('v0.2.0-beta.1', 'v0.1.9')).toBe(1)
   })
 
   test('ignores stable releases, drafts, foreign links and junk', () => {
