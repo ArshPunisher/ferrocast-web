@@ -436,6 +436,7 @@ export class DemoEngine {
     ]
     for (const r of this.rules) for (const v of r.variations) v.sound = 'm-chime'
     this.stats = {
+      live: true,
       started_at: now - 2 * 3_600_000 - 14 * 60_000,
       follows: 23,
       subs: 7,
@@ -1237,7 +1238,7 @@ export class DemoEngine {
         message: 'Restart Ferrocast to finish restoring.',
       }
     }
-    if (is('GET', 'stats', 'session')) return clone(this.stats)
+    if (is('GET', 'stats', 'session')) return clone({ ...this.stats, live: this.isLive() })
     if (is('GET', 'updates'))
       return {
         current: DEMO_VERSION,

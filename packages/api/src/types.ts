@@ -1190,6 +1190,9 @@ export const POINTS_LIMITS = { maxBalance: 1_000_000_000_000, maxAdjust: 1_000_0
 
 /** Session numbers for the home screen. Shape proposed in docs/API-REQUESTS.md (R7). */
 export interface SessionStats {
+  /** Live on any platform right now. */
+  live: boolean
+  /** When this stream started; kept after it ends so its numbers can still be read. */
   started_at: Millis | null
   follows: number
   subs: number

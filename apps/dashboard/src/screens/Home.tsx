@@ -42,7 +42,7 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
     <Panel
       title="This stream"
       actions={
-        stats?.started_at ? (
+        stats?.live && stats.started_at ? (
           <span className="font-mono text-[12.5px] text-text-3 tabular-nums">
             live {duration(now - stats.started_at)}
           </span>
@@ -123,7 +123,7 @@ export function Home() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="font-display text-[26px] font-bold tracking-[-0.03em] text-text sm:text-3xl">
-            {stats.data?.started_at ? 'You’re live' : 'Ready when you are'}
+            {stats.data?.live ? 'You’re live' : 'Ready when you are'}
           </h1>
           <p className="mt-1 text-sm text-text-3">Everything for this stream, on one screen.</p>
         </div>
