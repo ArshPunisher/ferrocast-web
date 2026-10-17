@@ -179,7 +179,6 @@ export default themeDesign(
       'Art-deco luxury in emerald and gold: sunburst, fan corners, crest and serif capitals.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

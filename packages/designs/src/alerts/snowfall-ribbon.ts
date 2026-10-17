@@ -10,7 +10,6 @@ export default alertDesign(
     description: 'A gift card tied with a gold ribbon while snow drifts past. For winter streams.',
     style: 'cozy',
     motion: 'smooth',
-    pro: true,
   },
   {
     frame: 'plate',

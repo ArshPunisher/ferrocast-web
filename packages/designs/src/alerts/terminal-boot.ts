@@ -11,7 +11,6 @@ export default alertDesign(
     description: 'A green-screen window: the headline types out in phosphor with a block cursor.',
     style: 'retro',
     motion: 'still',
-    pro: true,
   },
   {
     frame: 'pixel',

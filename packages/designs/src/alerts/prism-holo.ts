@@ -11,7 +11,6 @@ export default alertDesign(
       'Clear glass with an iridescent edge and a sheen that sweeps across. Airy and calm.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   {
     frame: 'glass',

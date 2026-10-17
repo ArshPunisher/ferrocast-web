@@ -55,16 +55,8 @@ describe('library size', () => {
     )
   })
 
-  it('about a quarter is marked Pro, and Pro designs are themes, alerts, widgets and scenes alike', () => {
-    const pro = BUILTINS.filter((d) => d.pro)
-    const share = pro.length / BUILTINS.length
-    expect(share).toBeGreaterThan(0.15)
-    expect(share).toBeLessThan(0.35)
-    for (const k of ['theme', 'alert', 'widget', 'scene'] as const)
-      expect(
-        pro.some((d) => d.kind === k),
-        k,
-      ).toBe(true)
+  it('every built-in design is free: none is marked Pro', () => {
+    for (const d of BUILTINS) expect(d.pro, d.id).toBe(false)
   })
 
   it('every theme points at its own matching alert design', () => {

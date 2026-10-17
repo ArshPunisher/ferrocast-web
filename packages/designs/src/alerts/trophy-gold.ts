@@ -11,7 +11,6 @@ export default alertDesign(
     description: 'Gold rays turning behind the art and a gold-rimmed plate. For the big moments.',
     style: 'bold',
     motion: 'lively',
-    pro: true,
   },
   {
     frame: 'plate',

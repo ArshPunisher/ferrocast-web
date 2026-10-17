@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'A thin gold bar under spaced serif capitals. Quiet luxury.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   'goal',
   { w: 600, h: 96 },

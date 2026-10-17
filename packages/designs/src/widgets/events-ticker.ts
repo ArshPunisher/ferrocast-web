@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'One row of events for a bottom bar.',
     style: 'bold',
     motion: 'smooth',
-    pro: true,
   },
   'events',
   { w: 1200, h: 56 },

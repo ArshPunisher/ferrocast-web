@@ -43,7 +43,7 @@ start (API.md §4 Designs).
   No SVG, no scripts, no remote URLs (custom CSS may only use `data:image/…`).
 - **Motion**: transform and opacity only; no infinite loops by default (R-38); everything
   must still read under reduced motion.
-- **Copy**: plain, warm, specific. No em dashes. `pro: true` only for the paid catalogue.
+- **Copy**: plain, warm, specific. No em dashes. Every built-in design is free: never mark one Pro.
 
 ## Richer layers (API-REQUESTS R20)
 

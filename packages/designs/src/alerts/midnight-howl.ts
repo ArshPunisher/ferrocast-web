@@ -12,7 +12,6 @@ export default alertDesign(
       'A crooked tombstone that drops in, dripping letters and bats scattering off the moon.',
     style: 'playful',
     motion: 'bouncy',
-    pro: true,
   },
   {
     frame: 'plate',

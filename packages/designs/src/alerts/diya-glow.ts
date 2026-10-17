@@ -12,7 +12,6 @@ export default alertDesign(
       'A marigold-edged card with a little flame and a burst of sparkles. For Diwali streams.',
     style: 'cozy',
     motion: 'lively',
-    pro: true,
   },
   {
     frame: 'neon',

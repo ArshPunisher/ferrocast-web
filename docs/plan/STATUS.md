@@ -1,5 +1,9 @@
 # Status
 
+## 18 Oct 2026 (every built-in design is free)
+
+- Owner's call: every built-in design is free. The 26 designs marked Pro are now free (`pro` stays in the `Design` type because API.md has it, but the library always sets it false). Gone with it: the Pro chip on design cards, the theme sheet and the designer, the "Free only" filter, "(Pro)" in widget Look menus and "· Pro" on the overlay preview sheets. Settings › Pro is unchanged. The library test now asserts no built-in is Pro.
+
 ## 18 Oct 2026 (gallery, theme bundles, live test)
 
 - Designs is now a store-like gallery: Themes, Alerts, Widgets and My designs tabs with counts; a Featured carousel of theme bundles that plays the real scenes; theme cards that say what's inside ("5 scenes + alerts"); a theme sheet to flip through every scene and the alert before "Use theme". Style chips and a motion menu replace the dropdowns; the import cards are one Import menu. Routes `#/designs`, `/alerts`, `/widgets`, `/mine`.

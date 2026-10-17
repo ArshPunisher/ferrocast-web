@@ -10,7 +10,6 @@ export default sceneDesign(
     description: 'A departure-board countdown with split tiles. Starts when the source shows.',
     style: 'retro',
     motion: 'still',
-    pro: true,
   },
   'Countdown',
   { w: 720, h: 260 },

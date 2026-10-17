@@ -10,7 +10,6 @@ export default sceneDesign(
     description: 'A record with grooves beside the song on a glass strip. Type your song.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   'Now playing',
   { w: 700, h: 200 },

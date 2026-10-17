@@ -57,7 +57,6 @@ function Tags({ design, className }: { design: Design; className?: string }) {
       <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11.5px] font-semibold text-text-2">
         {MOTION_LABEL[design.tags.motion]}
       </span>
-      {design.pro && <Badge tone="pro">Pro</Badge>}
     </span>
   )
 }

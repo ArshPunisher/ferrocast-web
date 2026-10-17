@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'A ruled notebook page, names highlighted in marker.',
     style: 'playful',
     motion: 'still',
-    pro: true,
   },
   'chat',
   { w: 500, h: 640 },

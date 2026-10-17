@@ -168,7 +168,6 @@ export default themeDesign(
     description: 'Holographic glass: iridescent blobs, clear panels and a slowly turning cam ring.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

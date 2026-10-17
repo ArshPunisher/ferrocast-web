@@ -100,7 +100,7 @@ type SessionStats = { started_at: number | null; follows: number; subs: number; 
 
 ## R8. Themes ("pick a look")
 
-`GET /api/v1/themes` → `{ id, name, description, pro: boolean }[]`. The overlay bundle ships five free themes: **`molten`** (default, same id the engine's presets use), `daylight`, `arcade`, `minimal`, `sticker`. Widget configs reference them by `theme` id. Unknown ids fall back to `molten`.
+`GET /api/v1/themes` → `{ id, name, description, pro: boolean }[]` (`pro` is always false: every built-in look is free). The overlay bundle ships five free themes: **`molten`** (default, same id the engine's presets use), `daylight`, `arcade`, `minimal`, `sticker`. Widget configs reference them by `theme` id. Unknown ids fall back to `molten`.
 
 ## R9. Updates
 

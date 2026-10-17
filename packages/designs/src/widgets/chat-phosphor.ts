@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'Green phosphor lines in VT323, like a chat log on an old monitor.',
     style: 'retro',
     motion: 'still',
-    pro: true,
   },
   'chat',
   { w: 480, h: 640 },

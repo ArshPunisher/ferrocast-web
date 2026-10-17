@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'A round meter beside the title, in a soft pill.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   'goal',
   { w: 440, h: 96 },

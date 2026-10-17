@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'A timing tower row: carbon, a red edge and italic capitals.',
     style: 'tech',
     motion: 'still',
-    pro: true,
   },
   'label',
   { w: 440, h: 56 },

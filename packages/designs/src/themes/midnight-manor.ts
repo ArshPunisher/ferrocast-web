@@ -195,7 +195,6 @@ export default themeDesign(
       'A Halloween night: huge moon, bats, a crooked manor, carved pumpkins and fog. Seasonal pack.',
     style: 'playful',
     motion: 'lively',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

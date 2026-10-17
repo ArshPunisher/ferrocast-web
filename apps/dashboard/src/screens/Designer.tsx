@@ -624,7 +624,6 @@ export function DesignerHeader({
         />
       )}
       {design.built_in ? <BrandChip label="Built-in" /> : <Badge tone="accent">Mine</Badge>}
-      {design.pro && <Badge tone="pro">Pro</Badge>}
       <span className="flex-1" />
       {view && onView && (
         <Segmented

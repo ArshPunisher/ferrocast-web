@@ -11,7 +11,6 @@ export default alertDesign(
     description: 'Emerald and gold art deco: a double rule, fan corners and spaced serif capitals.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   {
     frame: 'plate',

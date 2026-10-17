@@ -178,7 +178,6 @@ export default themeDesign(
       'Race-day telemetry: carbon, racing red, five start lights, a timing tower and a chequered strip.',
     style: 'tech',
     motion: 'smooth',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

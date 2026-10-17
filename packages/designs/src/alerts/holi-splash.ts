@@ -10,7 +10,6 @@ export default alertDesign(
     description: 'Clouds of colour powder burst behind a bright card. For Holi streams.',
     style: 'playful',
     motion: 'bouncy',
-    pro: true,
   },
   {
     frame: 'none',

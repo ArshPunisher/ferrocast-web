@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'A ticket stub with bites out of the ends and a perforation.',
     style: 'retro',
     motion: 'still',
-    pro: true,
   },
   'label',
   { w: 460, h: 60 },

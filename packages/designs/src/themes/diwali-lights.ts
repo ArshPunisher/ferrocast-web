@@ -162,7 +162,6 @@ export default themeDesign(
       'Strings of warm lights, flickering diyas and a rangoli, with a Hindi greeting. Festive pack.',
     style: 'cozy',
     motion: 'lively',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

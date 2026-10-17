@@ -84,8 +84,9 @@ test.describe('gallery', () => {
     await expect(page.getByRole('button', { name: /Lively/ })).toBeVisible()
     const lively = await grid.count()
     expect(lively).toBeGreaterThan(0)
-    await page.getByRole('button', { name: 'Free only' }).click()
-    expect(await grid.count()).toBeLessThan(lively)
+    // Every built-in design is free: no Pro marks and no free-only filter.
+    await expect(page.getByRole('button', { name: 'Free only' })).toHaveCount(0)
+    await expect(grid.getByText('Pro', { exact: true })).toHaveCount(0)
     await styles.getByRole('button', { name: 'Minimal' }).click()
     await page.getByRole('button', { name: /Lively/ }).click()
     await page.getByRole('menuitem', { name: 'Calm' }).click()

@@ -9,7 +9,6 @@ export default widgetDesign(
     description: 'Clear cards with a bright top edge, airy and calm.',
     style: 'minimal',
     motion: 'smooth',
-    pro: true,
   },
   'chat',
   { w: 480, h: 640 },

@@ -246,8 +246,7 @@ function render(): void {
   if (sheet === 'themes') {
     const g = grid(5, 14)
     for (const t of pick(of('theme')))
-      for (const s of t.content.scenes)
-        g.appendChild(drawScene(s, 384, `${t.name} · ${s.name}${t.pro ? ' · Pro' : ''}`))
+      for (const s of t.content.scenes) g.appendChild(drawScene(s, 384, `${t.name} · ${s.name}`))
   } else if (sheet === 'theme' && d?.kind === 'theme') {
     const g = grid(2)
     for (const s of d.content.scenes) g.appendChild(drawScene(s, 940, `${d.name} · ${s.name}`))
@@ -257,8 +256,7 @@ function render(): void {
   } else if (sheet === 'alerts') {
     const key = (q.get('event') ?? 'tip') as EventKey
     const g = grid(4)
-    for (const a of pick(of('alert')))
-      g.appendChild(drawAlert(a, key, 440, `${a.name}${a.pro ? ' · Pro' : ''}`))
+    for (const a of pick(of('alert'))) g.appendChild(drawAlert(a, key, 440, a.name))
   } else if (sheet === 'alert' && d?.kind === 'alert') {
     const g = grid(4)
     for (const k of EVENT_KEYS) g.appendChild(drawAlert(d, k, 440, `${d.name} · ${EVENT_LABEL[k]}`))
@@ -267,20 +265,12 @@ function render(): void {
     const g = grid(4)
     for (const w of pick(of('widget'))) {
       const s = widgetScene(w)
-      g.appendChild(
-        drawScene(
-          s,
-          Math.min(440, s.width),
-          `${w.name} · ${w.content.widget}${w.pro ? ' · Pro' : ''}`,
-        ),
-      )
+      g.appendChild(drawScene(s, Math.min(440, s.width), `${w.name} · ${w.content.widget}`))
     }
   } else if (sheet === 'scenes') {
     const g = grid(3)
     for (const s of pick(of('scene')))
-      g.appendChild(
-        drawScene(s.content, Math.min(560, s.content.width), `${s.name}${s.pro ? ' · Pro' : ''}`),
-      )
+      g.appendChild(drawScene(s.content, Math.min(560, s.content.width), s.name))
   }
   const wait = Number(q.get('wait') ?? 1600)
   void document.fonts.ready.then(() =>

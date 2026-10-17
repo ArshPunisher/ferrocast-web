@@ -155,7 +155,6 @@ function Tile({
             {design.name}
           </h3>
           {design.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
-          {design.pro && <Badge tone="pro">Pro</Badge>}
         </div>
         <p className="line-clamp-2 text-[13px] leading-snug text-text-3">
           {design.kind !== 'alert' && (
@@ -263,7 +262,6 @@ export function Designs({ tab }: { tab: GalleryTab }) {
   const [ev, setEv] = useState<EventKey>('tip')
   const [style, setStyle] = useState<StyleTag | ''>('')
   const [motion, setMotion] = useState<'' | 'calm' | 'lively'>('')
-  const [freeOnly, setFreeOnly] = useState(false)
   const [q, setQ] = useState('')
   const [using, setUsing] = useState<Design | null>(null)
   const [sheet, setSheet] = useState<Design | null>(null)
@@ -281,19 +279,16 @@ export function Designs({ tab }: { tab: GalleryTab }) {
     (d) =>
       (!style || d.tags.style === style) &&
       (motionTags.length === 0 || motionTags.includes(d.tags.motion)) &&
-      (!freeOnly || !d.pro) &&
       (!query ||
         `${d.name} ${d.description} ${STYLE_LABEL[d.tags.style]} ${KIND_NAME[d.kind]}`
           .toLowerCase()
           .includes(query)),
   )
-  const filtered = !!(style || motion || freeOnly || query)
+  const filtered = !!(style || motion || query)
   const stylesHere = STYLE_TAGS.filter((t) => source.some((d) => d.tags.style === t))
-  const hasPro = source.some((d) => d.pro)
   const clear = () => {
     setStyle('')
     setMotion('')
-    setFreeOnly(false)
     setQ('')
   }
   const use = (d: Design) => {
@@ -455,16 +450,6 @@ export function Designs({ tab }: { tab: GalleryTab }) {
             onSelect: () => setMotion(m.value),
           }))}
         />
-        {hasPro && (
-          <button
-            type="button"
-            aria-pressed={freeOnly}
-            onClick={() => setFreeOnly(!freeOnly)}
-            className={chip(freeOnly)}
-          >
-            Free only
-          </button>
-        )}
       </div>
       {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
         <div className="mb-5 flex min-w-0 items-center gap-2">

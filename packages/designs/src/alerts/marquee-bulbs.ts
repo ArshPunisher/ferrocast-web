@@ -11,7 +11,6 @@ export default alertDesign(
     description: 'A theatre marquee: bulbs chase round a red sign, outlined neon capitals.',
     style: 'retro',
     motion: 'lively',
-    pro: true,
   },
   {
     frame: 'neon',

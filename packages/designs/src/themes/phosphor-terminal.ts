@@ -169,7 +169,6 @@ export default themeDesign(
       'An old green-screen monitor: glowing VT323 capitals, a boot log, scan lines and a blinking cursor.',
     style: 'retro',
     motion: 'still',
-    pro: true,
   },
   [
     scene('in_game', 'In game', [

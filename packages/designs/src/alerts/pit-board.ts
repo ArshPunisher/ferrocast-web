@@ -11,7 +11,6 @@ export default alertDesign(
     description: 'A carbon pit board with a red P1 block, italic capitals and a chequered strip.',
     style: 'tech',
     motion: 'smooth',
-    pro: true,
   },
   {
     frame: 'plate',

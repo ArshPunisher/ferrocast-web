@@ -27,7 +27,6 @@ export interface Meta {
   description: string
   style: StyleTag
   motion: MotionTag
-  pro?: boolean
 }
 
 function base(meta: Meta) {
@@ -37,7 +36,8 @@ function base(meta: Meta) {
     name: meta.name,
     description: meta.description,
     tags: { style: meta.style, motion: meta.motion },
-    pro: meta.pro ?? false,
+    // Every built-in design is free; the field stays because API.md's Design has it.
+    pro: false,
     built_in: true,
     branded: true,
     origin: { type: 'built_in' as const, from: null },
