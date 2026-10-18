@@ -37,12 +37,12 @@ export function Panel({
             {title && (
               <h2
                 id={headingId}
-                className="truncate font-display text-[15px] font-semibold tracking-tight text-text"
+                className="truncate font-display text-base font-bold tracking-tight text-text"
               >
                 {title}
               </h2>
             )}
-            {description && <p className="mt-0.5 text-[13px] text-text-3">{description}</p>}
+            {description && <p className="mt-0.5 text-[13.5px] text-text-3">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
         </header>
@@ -76,7 +76,7 @@ export function PageHeader({
           {title}
         </h1>
         {description && (
-          <p className="mt-1 max-w-[62ch] text-sm leading-relaxed text-text-3">{description}</p>
+          <p className="mt-1 max-w-[70ch] text-[15px] leading-relaxed text-pretty text-text-2">{description}</p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

@@ -24,7 +24,7 @@ const variants: Record<Variant, string> = {
 }
 
 const sizes: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[13px] gap-1.5',
+  sm: 'h-8 px-3 text-[13.5px] gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
   lg: 'h-12 px-5 text-[15px] gap-2.5',
 }
@@ -51,8 +51,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         'fc-press inline-flex shrink-0 items-center justify-center rounded-control font-semibold whitespace-nowrap select-none',
         'transition-[background-color,border-color,color,transform,filter] duration-150 ease-out',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        variants[variant],
+        'disabled:cursor-not-allowed',
+        // A primary that can't be pressed yet goes neutral instead of a faded, glowing orange;
+        // a busy one keeps its colour.
+        variant === 'primary' && disabled && !busy
+          ? 'border border-line bg-surface-3 text-text-3'
+          : cx(variants[variant], 'disabled:opacity-50'),
         sizes[size],
         className,
       )}
@@ -181,18 +185,18 @@ export function Field({ label, hint, error, children, className, optional }: Fie
   if (error) props['aria-invalid'] = true
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-[13px] font-medium text-text-2">
+      <label htmlFor={id} className="text-[13.5px] font-semibold text-text">
         {label}
         {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
       </label>
       {children(props)}
       {hint && !error && (
-        <p id={hintId} className="text-[12.5px] leading-snug text-text-3">
+        <p id={hintId} className="text-[13px] leading-snug text-text-3">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errId} role="alert" className="text-[12.5px] leading-snug font-medium text-danger">
+        <p id={errId} role="alert" className="text-[13px] leading-snug font-semibold text-danger">
           {error}
         </p>
       )}
@@ -201,7 +205,7 @@ export function Field({ label, hint, error, children, className, optional }: Fie
 }
 
 const inputBase =
-  'w-full rounded-control border border-line-strong bg-inset px-3 text-sm text-text placeholder:text-text-3 ' +
+  'w-full rounded-control border border-line-strong bg-inset px-3 text-[14.5px] text-text placeholder:text-text-3 ' +
   'transition-[border-color,box-shadow] duration-150 hover:border-text-3 ' +
   'focus:border-accent-text focus:shadow-[0_0_0_3px_var(--fc-accent-soft)] focus:outline-none ' +
   'aria-[invalid=true]:border-danger disabled:opacity-50'
