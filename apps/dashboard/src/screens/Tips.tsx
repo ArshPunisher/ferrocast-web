@@ -11,7 +11,13 @@ import {
   Warning,
 } from '@phosphor-icons/react'
 import {
+  ApiError,
   TIP_LIMITS,
+  formatMoney,
+  proApi,
+  proPanelState,
+  tipBrandApi,
+  tipPalette,
   TIP_PAGE_ID_PROVIDERS,
   TIP_PROVIDER_KEYS,
   TIP_PROVIDER_NAMES,
@@ -29,6 +35,9 @@ import {
   type TipProviderKey,
   type TipSettings,
   type TipSettingsInput,
+  type TipBrand,
+  type TipColours,
+  type TipGoal,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -46,6 +55,10 @@ import {
   useFlash,
 } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { ProPanelView } from '../components/pro/ProPanel'
+import { Branding, savedColours } from '../components/tips/Branding'
+import { GoalPage, goalPct } from '../components/tips/GoalPage'
+import { TipPreview } from '../components/tips/TipPreview'
 import { useClient, useResource } from '../lib/hooks'
 import { useUnsavedWarning } from '../lib/unsaved'
 
@@ -253,6 +266,52 @@ export function Tips() {
   const handleRef = useRef<HTMLInputElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
+  // Pro: branding and the goal page (shown only when the relay has them and Pro is open).
+  const pro = useResource((c) => proApi(c).status())
+  const proOpen = proPanelState(pro.error ? null : pro.data, 'tip_brand') === 'open'
+  const [brand, setBrand] = useState<TipBrand | null>(null)
+  const [draft, setDraft] = useState<TipColours | null>(null)
+  const [goal, setGoal] = useState<TipGoal | null>(null)
+  const [goalLoaded, setGoalLoaded] = useState(false)
+  const [brandError, setBrandError] = useState<unknown>(null)
+  const [goalError, setGoalError] = useState<unknown>(null)
+  const [brandTry, setBrandTry] = useState(0)
+  useEffect(() => {
+    if (!proOpen) return
+    let alive = true
+    const api = tipBrandApi(client)
+    setBrandError(null)
+    setGoalError(null)
+    setGoalLoaded(false)
+    api.brand().then(
+      (b) => alive && setBrand(b),
+      (e: unknown) => {
+        if (!alive) return
+        setBrand(null)
+        setBrandError(e)
+      },
+    )
+    api.goal().then(
+      (g) => {
+        if (alive) {
+          setGoal(g)
+          setGoalLoaded(true)
+        }
+      },
+      (e: unknown) => {
+        if (!alive) return
+        // No goal yet is a 404. Anything else is an error, not an empty form: saving an
+        // empty form could replace a goal that never loaded.
+        if (e instanceof ApiError && e.status === 404) {
+          setGoal(null)
+          setGoalLoaded(true)
+        } else setGoalError(e)
+      },
+    )
+    return () => {
+      alive = false
+    }
+  }, [proOpen, client, brandTry])
 
   useEffect(() => {
     // Set the draft once; `savePage` refreshes it after a save. Provider saves and taking the
@@ -510,10 +569,41 @@ export function Tips() {
               ))}
             </ul>
           </Panel>
+
+          <ProPanelView pro={pro.error ? null : pro.data} feature="tip_brand" id="tip-brand" title="Branding">
+            {brand ? (
+              <Branding
+                brand={brand}
+                draft={draft}
+                onDraft={setDraft}
+                onSaved={(b) => setBrand(b)}
+              />
+            ) : brandError ? (
+              <LoadError error={brandError} onRetry={() => setBrandTry((n) => n + 1)} />
+            ) : (
+              <Skeleton className="h-48" />
+            )}
+          </ProPanelView>
+
+          <ProPanelView pro={pro.error ? null : pro.data} feature="tip_brand" id="tip-goal" title="Goal page">
+            {goalLoaded ? (
+              <GoalPage goal={goal} hasPage={live} defaultCurrency="INR" onSaved={setGoal} />
+            ) : goalError ? (
+              <LoadError error={goalError} onRetry={() => setBrandTry((n) => n + 1)} />
+            ) : (
+              <Skeleton className="h-40" />
+            )}
+          </ProPanelView>
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <Preview saved={saved} page={page} />
+          <Preview
+            saved={saved}
+            page={page}
+            brand={proOpen ? brand : null}
+            colours={proOpen ? (draft ?? savedColours(brand)) : null}
+            goal={proOpen ? goal : null}
+          />
           <Safety />
         </div>
       </div>
@@ -1060,52 +1150,47 @@ function ProviderSetup({
   )
 }
 
-/** A small, faithful copy of the relay's public page, updating as the streamer types. */
-function Preview({ saved, page }: { saved: TipSettings; page: PageDraft }) {
-  const name = page.display_name.trim() || 'Your name'
-  const buttons = TIP_PROVIDER_KEYS.filter((k) => saved[k])
+/** The relay's public page, updating as the streamer types (and with Pro, their branding). */
+function Preview({
+  saved,
+  page,
+  brand,
+  colours,
+  goal,
+}: {
+  saved: TipSettings
+  page: PageDraft
+  brand: TipBrand | null
+  colours: TipColours | null
+  goal: TipGoal | null
+}) {
+  const buttons = TIP_PROVIDER_KEYS.filter((k) => saved[k]).map((k) => ({
+    label: GUIDES[k].button,
+    hint: TIP_PROVIDER_NAMES[k],
+  }))
   return (
     <Panel title="What viewers see" as="div">
       <figure className="m-0">
-        <div
-          className="overflow-hidden rounded-[14px] border border-[#263047] px-5 py-7 text-center"
-          style={{
-            background: 'radial-gradient(600px 300px at 50% 120%, #1b2a5c 0, #0c0e12 62%)',
-            color: '#eef0f4',
-          }}
-        >
-          <p className="font-display text-[26px] leading-tight font-bold tracking-[-0.02em] break-words">
-            {name}
-          </p>
-          {page.message.trim() && (
-            <p className="mx-auto mt-1.5 max-w-[34ch] text-[13.5px] break-words text-[#9aa3b2]">
-              {page.message.trim()}
-            </p>
-          )}
-          <div className="mx-auto mt-5 grid max-w-[300px] gap-2">
-            {buttons.length ? (
-              buttons.map((k) => (
-                <span
-                  key={k}
-                  className="flex items-center justify-between rounded-[12px] border border-[#263047] bg-[#151a24] px-4 py-3 text-left text-[13.5px] font-semibold"
-                >
-                  {GUIDES[k].button}
-                  <span className="text-[12.5px] font-normal text-[#9aa3b2]">
-                    {TIP_PROVIDER_NAMES[k]}
-                  </span>
-                </span>
-              ))
-            ) : (
-              <span className="text-[13.5px] text-[#9aa3b2]">Tips aren’t set up yet.</span>
-            )}
-          </div>
-          <p className="mx-auto mt-5 max-w-[36ch] text-[12.5px] text-[#9aa3b2]">
-            Your name and message can show on stream. Payments go straight to the streamer through
-            the provider you pick.
-          </p>
-        </div>
+        <TipPreview
+          name={page.display_name.trim() || 'Your name'}
+          message={page.message.trim()}
+          buttons={buttons}
+          palette={tipPalette(colours)}
+          avatarUrl={brand?.avatar_url ?? null}
+          bannerUrl={brand?.banner_url ?? null}
+          goal={
+            goal
+              ? {
+                  title: goal.title,
+                  raised: formatMoney({ minor: goal.raised, currency: goal.currency }),
+                  target: formatMoney({ minor: goal.target, currency: goal.currency }),
+                  pct: goalPct(goal),
+                }
+              : null
+          }
+        />
         <figcaption className="mt-2 text-[13.5px] text-text-2">
-          Your public page. No ads, trackers or branding.
+          {brand ? 'Your public page, in your colours.' : 'Your public page. No ads, trackers or branding.'}
         </figcaption>
       </figure>
     </Panel>
