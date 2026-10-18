@@ -51,10 +51,10 @@ function useInView<T extends Element>(ratio = 0.6) {
 function Tags({ design, className }: { design: Design; className?: string }) {
   return (
     <span className={cx('flex flex-wrap items-center gap-1.5', className)}>
-      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11.5px] font-semibold text-text-2">
+      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[12.5px] font-semibold text-text-2">
         {STYLE_LABEL[design.tags.style]}
       </span>
-      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11.5px] font-semibold text-text-2">
+      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[12.5px] font-semibold text-text-2">
         {MOTION_LABEL[design.tags.motion]}
       </span>
     </span>
@@ -66,10 +66,13 @@ export function FeaturedThemes({
   themes,
   onOpen,
   onUse,
+  paused = false,
 }: {
   themes: Theme[]
   onOpen: (t: Theme) => void
   onUse: (t: Theme) => void
+  /** Stops the cards playing, e.g. while a dialog covers them. */
+  paused?: boolean
 }) {
   const track = useRef<HTMLDivElement>(null)
   const scroll = (dir: 1 | -1) => {
@@ -108,7 +111,13 @@ export function FeaturedThemes({
         className="-mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:px-0"
       >
         {themes.map((t) => (
-          <FeaturedCard key={t.id} theme={t} onOpen={() => onOpen(t)} onUse={() => onUse(t)} />
+          <FeaturedCard
+            key={t.id}
+            theme={t}
+            paused={paused}
+            onOpen={() => onOpen(t)}
+            onUse={() => onUse(t)}
+          />
         ))}
       </div>
     </section>
@@ -117,10 +126,12 @@ export function FeaturedThemes({
 
 function FeaturedCard({
   theme,
+  paused,
   onOpen,
   onUse,
 }: {
   theme: Theme
+  paused: boolean
   onOpen: () => void
   onUse: () => void
 }) {
@@ -140,17 +151,15 @@ function FeaturedCard({
         tabIndex={-1}
         aria-hidden="true"
       >
-        <ScenePreview design={theme} live={seen} />
+        <ScenePreview design={theme} live={seen && !paused} />
       </button>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent sm:block" />
-      <div className="flex flex-col gap-3 p-3.5 sm:absolute sm:inset-x-0 sm:bottom-0 sm:flex-row sm:items-end sm:p-5">
-        <div className="min-w-0 flex-1 text-text sm:text-white">
-          <p className="mb-0.5 text-[12.5px] font-semibold text-text-3 sm:text-white/80">
-            {bundleLine(theme)}
-          </p>
-          <h3 id={titleId} className="font-display text-lg font-bold tracking-tight sm:text-xl">
+      {/* Under the picture, not on it: every scene has its own text near the bottom. */}
+      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <h3 id={titleId} className="truncate font-display text-lg font-bold tracking-tight">
             {theme.name}
           </h3>
+          <p className="truncate text-[13.5px] font-medium text-text-3">{bundleLine(theme)}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="secondary" icon={<Play size={13} />} onClick={onOpen}>
@@ -194,7 +203,7 @@ export function ThemeCard({
         aria-hidden="true"
       >
         <ScenePreview design={theme} live={hover} />
-        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-1 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">
+        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-1 font-mono text-[12px] font-semibold text-white backdrop-blur-sm">
           {bundleLine(theme)}
         </span>
         {isNew && (
@@ -213,7 +222,7 @@ export function ThemeCard({
           </h3>
           {theme.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[13px] leading-snug text-text-3">{theme.description}</p>
+        <p className="line-clamp-2 text-[13.5px] leading-snug text-text-3">{theme.description}</p>
         <Tags design={theme} />
       </div>
       <div className="mt-auto flex gap-2 px-3.5 pt-3 pb-3.5">
@@ -286,7 +295,7 @@ export function ThemeSheet({
       description={theme.description}
       footer={
         <>
-          <span className="mr-auto hidden text-[12.5px] text-text-3 sm:block">
+          <span className="mr-auto hidden text-[13px] text-text-3 sm:block">
             {bundleLine(theme)}
             {alertDesign ? `, alert style ${alertDesign.name}` : ''}
           </span>
@@ -337,7 +346,7 @@ export function ThemeSheet({
                   <span className="block aspect-video animate-pulse bg-surface-3" />
                 )}
               </span>
-              <span className="truncate px-0.5 text-[12px] font-semibold text-text">{v.label}</span>
+              <span className="truncate px-0.5 text-[12.5px] font-semibold text-text">{v.label}</span>
             </button>
           ))}
         </div>

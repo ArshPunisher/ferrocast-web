@@ -1,7 +1,7 @@
 // The designer's controls, shared by the stage view (tabs in a floating inspector) and the
 // guided view (cards). Each section edits one look; `advanced` reveals the finer controls.
 
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { Children, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowsClockwise,
   ChatCircleText,
@@ -91,11 +91,11 @@ export function Group({
   const id = useId()
   return (
     <div role="group" aria-labelledby={id} className="flex flex-col gap-2">
-      <span id={id} className="text-[13px] font-medium text-text-2">
+      <span id={id} className="text-[13.5px] font-medium text-text-2">
         {label}
       </span>
       {children}
-      {hint && <p className="text-[12.5px] leading-snug text-text-3">{hint}</p>}
+      {hint && <p className="text-[13px] leading-snug text-text-3">{hint}</p>}
     </div>
   )
 }
@@ -124,10 +124,10 @@ export function Range({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-[13px] font-medium text-text-2">
+        <label htmlFor={id} className="text-[13.5px] font-medium text-text-2">
           {label}
         </label>
-        <span className="font-mono text-[12px] text-text-3 tabular-nums">
+        <span className="font-mono text-[12.5px] text-text-3 tabular-nums">
           {format ? format(value) : `${value}${unit ? ` ${unit}` : ''}`}
         </span>
       </div>
@@ -166,7 +166,7 @@ export function ColorField({
   const shown = isColor(value) && value.length === 7 ? value : '#000000'
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] font-medium text-text-2">
+      <label htmlFor={id} className="text-[13.5px] font-medium text-text-2">
         {label}
       </label>
       <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export function Tiles<T extends string>({
             aria-pressed={o.value === value}
             onClick={() => onChange(o.value)}
             className={cx(
-              'fc-press flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[12px] border px-2 py-2 text-center text-[12.5px] font-medium',
+              'fc-press flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[12px] border px-2 py-2 text-center text-[13px] font-medium',
               o.value === value
                 ? 'border-accent-line bg-accent-soft text-text'
                 : 'border-line bg-surface-2 text-text-2 hover:border-line-strong',
@@ -265,7 +265,7 @@ export function Chips<T extends string>({
             onClick={() => onChange(o.value)}
             onPointerEnter={() => onPreview?.(o.value)}
             className={cx(
-              'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[12.5px] font-medium',
+              'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium',
               o.value === value
                 ? 'border-accent-line bg-accent-soft text-text'
                 : 'border-line text-text-2 hover:border-line-strong',
@@ -289,7 +289,7 @@ function LayoutArt({ layout }: { layout: AlertLook['layout'] }) {
   )
   const row = (cls: string, ...k: ReactNode[]) => (
     <span aria-hidden="true" className={cx('flex items-center gap-1.5', cls)}>
-      {k}
+      {Children.toArray(k)}
     </span>
   )
   switch (layout) {
@@ -394,7 +394,7 @@ function MediaChoice({
       >
         {kind === 'sound' ? 'Upload a sound' : 'Upload picture or video'}
       </Button>
-      <p className="text-[12px] text-text-3">
+      <p className="text-[12.5px] text-text-3">
         {kind === 'sound'
           ? 'MP3, OGG or WAV, up to 5 MB.'
           : 'PNG, JPEG, GIF or WebP up to 10 MB. WebM or MP4 up to 50 MB.'}
@@ -560,7 +560,7 @@ function TemplateField({
             key={v}
             type="button"
             onClick={() => insert(v)}
-            className="fc-press rounded-full border border-line px-2 py-0.5 font-mono text-[11.5px] text-text-3 hover:border-line-strong hover:text-text"
+            className="fc-press rounded-full border border-line px-2 py-0.5 font-mono text-[12.5px] text-text-3 hover:border-line-strong hover:text-text"
           >
             {`{${v}}`}
           </button>
@@ -634,7 +634,7 @@ export function TextSection({ look, set, advanced }: SectionProps) {
               >
                 Aa
               </span>
-              <span className="w-full truncate text-[11.5px] text-text-3">{f}</span>
+              <span className="w-full truncate text-[12.5px] text-text-3">{f}</span>
             </button>
           ))}
         </div>
@@ -1051,7 +1051,7 @@ export function WhenSection({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[13px] text-text-3">
+      <p className="text-[13.5px] text-text-3">
         Variations play a different look for some events, like a bigger alert for big tips. The most
         specific match wins.
       </p>
@@ -1073,7 +1073,7 @@ export function WhenSection({
               >
                 {v.name}
               </button>
-              <span className="shrink-0 text-[12px] text-text-3">{conditionText(v.condition)}</span>
+              <span className="shrink-0 text-[12.5px] text-text-3">{conditionText(v.condition)}</span>
               {v.condition !== null && (
                 <IconButton
                   size="sm"
@@ -1258,7 +1258,7 @@ export function CssSection({ look, set }: SectionProps) {
             spellCheck={false}
             value={look.css}
             maxLength={20_000}
-            className="font-mono text-[12.5px]"
+            className="font-mono text-[13px]"
             onChange={(e) => set({ css: e.target.value }, { merge: true })}
           />
         )}

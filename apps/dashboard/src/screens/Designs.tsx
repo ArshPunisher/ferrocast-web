@@ -156,7 +156,7 @@ function Tile({
           </h3>
           {design.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[13px] leading-snug text-text-3">
+        <p className="line-clamp-2 text-[13.5px] leading-snug text-text-3">
           {design.kind !== 'alert' && (
             <span className="font-medium text-text-2">{KIND_NAME[design.kind]}. </span>
           )}
@@ -164,7 +164,7 @@ function Tile({
             (design.origin.from ? `From ${design.origin.from}.` : 'Your own design.')}
         </p>
         {active && (
-          <p className="text-[12.5px] font-medium text-accent-text">Plays your alerts now</p>
+          <p className="text-[13px] font-medium text-accent-text">Plays your alerts now</p>
         )}
       </div>
       <div className="mt-auto flex gap-2 px-3.5 pt-2.5 pb-3.5">
@@ -187,7 +187,7 @@ function Tile({
           <>
             <a
               href={href({ name: 'designer', id: design.id })}
-              className="fc-press inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13px] font-semibold text-text hover:border-text-3"
+              className="fc-press inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text hover:border-text-3"
             >
               <PaintBrushBroad size={14} />
               Edit
@@ -329,7 +329,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
           : 'Search my designs'
   const chip = (on: boolean) =>
     cx(
-      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium',
+      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium',
       on
         ? 'border-accent-line bg-accent-soft text-text'
         : 'border-line text-text-2 hover:border-line-strong hover:text-text',
@@ -385,7 +385,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
               )}
             >
               {t.label}
-              <span className="font-mono text-[11.5px] font-medium text-text-3">{count(t.id)}</span>
+              <span className="font-mono text-[12.5px] font-medium text-text-3">{count(t.id)}</span>
             </a>
           ))}
         </nav>
@@ -453,7 +453,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
       </div>
       {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
         <div className="mb-5 flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-[12.5px] text-text-3">Preview as</span>
+          <span className="shrink-0 text-[13px] text-text-3">Preview as</span>
           <div
             role="group"
             aria-label="Preview as"
@@ -504,7 +504,14 @@ export function Designs({ tab }: { tab: GalleryTab }) {
         )
       ) : (
         <>
-          {showShelves && <FeaturedThemes themes={featured} onOpen={setSheet} onUse={setUsing} />}
+          {showShelves && (
+            <FeaturedThemes
+              themes={featured}
+              paused={!!sheet || !!using}
+              onOpen={setSheet}
+              onUse={setUsing}
+            />
+          )}
           {tab === 'themes' && (
             <h2 className="mb-3 font-display text-lg font-semibold tracking-tight">
               {filtered ? 'Matching themes' : 'All themes'}
@@ -539,7 +546,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
         </>
       )}
       <ThemeSheet
-        key={sheetTheme?.id ?? 'none'}
+        key={`sheet-${sheetTheme?.id ?? 'none'}`}
         theme={sheetTheme}
         alertDesign={sheetAlert}
         onClose={() => setSheet(null)}
@@ -552,7 +559,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
           duplicate(t)
         }}
       />
-      <UseDialog key={using?.id ?? 'none'} design={using} onClose={() => setUsing(null)} />
+      <UseDialog key={`use-${using?.id ?? 'none'}`} design={using} onClose={() => setUsing(null)} />
       <ImportDesignDialog
         open={dialog === 'file'}
         onClose={() => setDialog(null)}
