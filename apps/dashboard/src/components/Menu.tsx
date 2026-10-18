@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { cx } from '@ferrocast/ui'
 
@@ -43,6 +43,26 @@ export function Menu({
   const wrap = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const reduce = useReducedMotion()
+  // How far the open list is nudged sideways so it stays inside the window.
+  const [shift, setShift] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setShift(0)
+      return
+    }
+    const el = list.current
+    const box = wrap.current
+    if (!el || !box) return
+    // From layout sizes, not the on-screen rect: the list is still scaling in at this point.
+    const b = box.getBoundingClientRect()
+    const width = el.offsetWidth
+    const left = align === 'end' ? b.right - width : b.left
+    const gap = 8
+    const vw = document.documentElement.clientWidth
+    if (left + width > vw - gap) setShift(vw - gap - (left + width))
+    else if (left < gap) setShift(gap - left)
+  }, [open, align])
 
   useEffect(() => {
     if (!open) return
@@ -109,7 +129,10 @@ export function Menu({
               reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, transition: { duration: 0.1 } }
             }
             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            style={{ transformOrigin: align === 'end' ? 'top right' : 'top left' }}
+            style={{
+              transformOrigin: align === 'end' ? 'top right' : 'top left',
+              translate: shift ? `${shift}px 0` : undefined,
+            }}
             className={cx(
               'absolute top-full z-40 mt-1.5 rounded-[12px] border border-line-strong bg-surface-1 p-1 shadow-pop',
               items.some((it) => it.description) ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-52',
