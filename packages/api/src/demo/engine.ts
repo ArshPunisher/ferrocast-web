@@ -82,6 +82,8 @@ import type { ProView } from '../pro'
 import { DemoTipBrand } from './features/tip-brand'
 import { DemoTtsVoices } from './features/tts-voices'
 import { DemoAutoReplies } from './features/autoreplies'
+import { DemoRemote } from './features/remote'
+import { remoteAllowed, remoteLiveAllowed, type RemoteRole } from '../remote'
 import {
   CHATTERS,
   FILTERS,
@@ -140,6 +142,8 @@ export interface DemoOptions {
   history?: 'demo' | 'empty'
   /** Pro cloud backups: a few from this PC (default), none yet, or a new PC's view. */
   cloudBackups?: DemoCloudMode
+  /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
+  remote?: { role: RemoteRole; pcOnline?: boolean }
 }
 
 /** Tip page names someone else already has, for trying the 409 in the demo. */
@@ -203,6 +207,8 @@ function connector(
 }
 
 type LiveSub = { sock: FakeSocket }
+/** The demo acting as a phone through the relay (`?remote=owner|mod`). */
+type DemoRemoteSession = { role: RemoteRole; pcOnline: boolean }
 type OverlaySub = {
   sock: FakeSocket
   overlayId: string
@@ -240,13 +246,13 @@ class FakeSocket implements SocketLike {
     this.onClosed?.()
     queueMicrotask(() => this.onclose?.({ code: 1000 }))
   }
-  /** Server-side drop (tests: "socket drops"). */
-  drop(): void {
+  /** Server-side drop (tests: "socket drops"), with a close code (1006: no close frame). */
+  drop(code = 1006): void {
     if (this.readyState === 3) return
     this.readyState = 3
     this.onClosed?.()
     this.onerror?.({})
-    this.onclose?.({ code: 1006 })
+    this.onclose?.({ code })
   }
 }
 
@@ -347,6 +353,12 @@ export class DemoEngine {
     () => VOICES,
     () => this.tts.voice,
   )
+  /** Pro "Dashboard anywhere": devices, links, the audit (Settings on the PC). */
+  readonly remoteDevices = new DemoRemote(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+  )
+  /** Acting as a phone: the role and whether the PC is on. */
+  private remote: DemoRemoteSession | null = null
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
   readonly autoReplies: DemoAutoReplies
@@ -401,6 +413,8 @@ export class DemoEngine {
       opts.cloudBackups ?? 'demo',
     )
     if (opts.tips === 'empty') this.resetTips()
+    if (opts.remote)
+      this.remote = { role: opts.remote.role, pcOnline: opts.remote.pcOnline ?? true }
     const now = Date.now()
     const on = this.setupDone
     this.connectors = {
@@ -495,7 +509,8 @@ export class DemoEngine {
     this.welcome = new DemoWelcome(this.host)
     this.studio = new DemoStudio(this.host, () => this.commands)
     this.autoReplies = new DemoAutoReplies(this.host, {
-      botOn: () => (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
+      botOn: () =>
+        (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
       commands: () => this.commands,
       game: () => this.studio.history.find((h) => h.info.category)?.info.category?.name ?? null,
       title: () => this.studio.history.find((h) => h.info.title)?.info.title ?? null,
@@ -584,6 +599,25 @@ export class DemoEngine {
   /** Pro cloud backups: this PC's few (demo), none yet, or a new PC's view. */
   setCloudBackups(mode: DemoCloudMode): void {
     this.cloudBackups.setMode(mode)
+  }
+
+  /** Acting as a phone: the relay closes its live sockets with `code` (4401 removed…). */
+  closeRemoteLive(code: number): void {
+    for (const sub of [...this.liveSubs]) sub.sock.drop(code)
+  }
+
+  /** Acting as a phone: calls the role may not make that still reached "the relay" (tests). */
+  readonly remoteRefused: string[] = []
+
+  /** Acting as a phone: the streaming PC goes off or comes back (a `remote` frame says so). */
+  setRemotePc(online: boolean): void {
+    if (!this.remote) return
+    this.remote.pcOnline = online
+    this.broadcastLive({
+      v: 1,
+      type: 'remote',
+      data: { pc_online: online, role: this.remote.role },
+    })
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */
@@ -703,6 +737,29 @@ export class DemoEngine {
             'Open the dashboard again from the Ferrocast app.',
           )
       }
+      if (this.remote && url.pathname.startsWith('/api/v1/')) {
+        // Like the relay: the role first, then whether the PC is there at all.
+        const rel = url.pathname.slice('/api/v1'.length)
+        if (!remoteAllowed(this.remote.role, method, rel)) {
+          // What the relay would have logged; the dashboard should never send these.
+          this.remoteRefused.push(`${method} ${rel}`)
+          throw new HttpError(
+            403,
+            'not_allowed_for_role',
+            this.remote.role === 'mod'
+              ? 'Mods can’t do that from here.'
+              : 'That only works on the streaming PC.',
+            'Accounts, secrets, Pro, export and import stay on the PC itself.',
+          )
+        }
+        if (!this.remote.pcOnline)
+          throw new HttpError(
+            503,
+            'pc_offline',
+            'Your streaming PC is off.',
+            'Turn it on and open Ferrocast. This works again on its own.',
+          )
+      }
       const body = await readBody(init?.body)
       const result = await this.route(method, url, body)
       if (result instanceof Response) return result
@@ -733,12 +790,28 @@ export class DemoEngine {
           return
         }
         const sub: LiveSub = { sock }
+        const remote = this.remote
+        if (remote) {
+          // A phone's socket: the relay says whether the PC is on, and mods get chat frames only.
+          const deliver = sock.deliver.bind(sock)
+          sock.deliver = (data: unknown) => {
+            const f = (typeof data === 'string' ? JSON.parse(data) : data) as { type?: unknown }
+            if (remoteLiveAllowed(remote.role, f) && (remote.pcOnline || f.type === 'remote'))
+              deliver(data)
+          }
+        }
         sock.onClosed = () => this.liveSubs.delete(sub)
         sock.onClientFrame = () => {
           /* the dashboard sends only pings */
         }
         this.liveSubs.add(sub)
         sock.open()
+        if (remote)
+          sock.deliver({
+            v: 1,
+            type: 'remote',
+            data: { pc_online: remote.pcOnline, role: remote.role },
+          })
         sock.deliver({ v: 1, type: 'hello', data: { seq: this.seq } })
         sock.deliver({ v: 1, type: 'status', data: { connectors: clone(this.connectors) } })
         sock.deliver({ v: 1, type: 'queue', data: this.queue.snapshot() })
@@ -1352,6 +1425,7 @@ export class DemoEngine {
       this.tipBrand,
       this.autoReplies,
       this.ttsVoices,
+      this.remoteDevices,
     ]
   }
 

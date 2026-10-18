@@ -24,6 +24,8 @@ const LIVE_TYPES = new Set([
   'poll',
   'giveaway',
   'chatter',
+  // Dashboard anywhere: the relay says whether the streaming PC is reachable (remote.ts).
+  'remote',
   // Studio (studio.ts)
   'lane',
   'marker',
@@ -89,10 +91,16 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
 }
 
 export interface LiveOptions {
-  url: (sinceSeq: number | undefined) => string
+  /** May be fetched first (a phone's single-use ticket, `FerroClient.liveSocketUrl`). */
+  url: (sinceSeq: number | undefined) => string | Promise<string>
   factory: SocketFactory
   onFrames: (frames: LiveFrame[]) => void
   onState?: (state: ConnectionState, attempt: number) => void
+  /**
+   * The server closed the socket with this code (0 when unknown). Return 'stop' to stop
+   * reconnecting: a phone's 4401 (removed), 4402 (Pro paused), 4409 (opened elsewhere).
+   */
+  onClose?: (code: number) => 'stop' | void
   flushMs?: number
   tuning?: Partial<ReconnectTuning>
 }
@@ -111,6 +119,7 @@ export class LiveConnection {
       factory: opts.factory,
       onMessage: (d) => this.receive(d),
       ...(opts.onState ? { onState: opts.onState } : {}),
+      ...(opts.onClose ? { onClose: opts.onClose } : {}),
       ...(opts.tuning ? { tuning: opts.tuning } : {}),
     })
   }

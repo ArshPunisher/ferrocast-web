@@ -35,7 +35,8 @@ export function backoffDelay(attempt: number, t: ReconnectTuning, rand = Math.ra
 export type ConnectionState = 'connecting' | 'open' | 'retrying' | 'closed'
 
 export interface ReconnectingOptions {
-  url: () => string
+  /** The URL for each (re)connect; may be fetched first (a phone's single-use ticket). */
+  url: () => string | Promise<string>
   factory: SocketFactory
   onMessage: (data: unknown) => void
   onState?: (state: ConnectionState, attempt: number) => void
@@ -62,6 +63,8 @@ export class ReconnectingSocket {
   private silenceTimer: unknown = null
   private stopped = false
   private paused = false
+  /** Counts `open` calls, so a URL that arrives after a newer open (or a stop) is dropped. */
+  private opening = 0
   private readonly t: ReconnectTuning
   private readonly timers: NonNullable<ReconnectingOptions['timers']>
   state: ConnectionState = 'connecting'
@@ -83,6 +86,7 @@ export class ReconnectingSocket {
   /** Closes for good (page unload, component unmount). */
   stop(): void {
     this.stopped = true
+    this.opening++
     this.clearTimers()
     this.detach()
     this.setState('closed')
@@ -91,6 +95,7 @@ export class ReconnectingSocket {
   /** Closes and stays closed until `resume` (OBS hid the source). */
   pause(): void {
     this.paused = true
+    this.opening++
     this.clearTimers()
     this.detach()
     this.setState('closed')
@@ -118,9 +123,35 @@ export class ReconnectingSocket {
   private open(): void {
     if (this.stopped || this.paused) return
     this.setState(this.attempt === 0 ? 'connecting' : 'retrying')
+    let url: string | Promise<string>
+    try {
+      url = this.opts.url()
+    } catch {
+      this.scheduleRetry()
+      return
+    }
+    if (typeof url === 'string') {
+      this.connect(url)
+      return
+    }
+    const epoch = ++this.opening
+    url.then(
+      (u) => {
+        // Stopped, paused or restarted while the URL was on its way: drop it.
+        if (epoch !== this.opening || this.stopped || this.paused) return
+        this.connect(u)
+      },
+      () => {
+        if (epoch !== this.opening || this.stopped || this.paused) return
+        this.scheduleRetry()
+      },
+    )
+  }
+
+  private connect(url: string): void {
     let s: SocketLike
     try {
-      s = this.opts.factory(this.opts.url())
+      s = this.opts.factory(url)
     } catch {
       this.scheduleRetry()
       return

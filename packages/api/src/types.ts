@@ -1269,6 +1269,8 @@ export type LiveFrame =
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
   | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
+  /** Dashboard anywhere (sent by the relay, not the PC): whether the streaming PC is reachable. */
+  | { v: 1; type: 'remote'; data: { pc_online: boolean; role: 'owner' | 'mod' } }
   /** Studio: the "Don't miss" lane, markers, counters, the show, OBS health, BRB. */
   | import('./studio').StudioFrame
 

@@ -71,6 +71,27 @@ export interface ClientOptions {
   startupRetries?: number
   /** Injected for tests so retries don't really sleep. */
   sleep?: (ms: number) => Promise<void>
+  /**
+   * A phone through Ferrocast's servers (Dashboard anywhere): which calls its role may make
+   * (`remoteAllowed`). Others are refused here, without a request, so the relay's audit log
+   * never fills with calls the dashboard knew would be refused.
+   */
+  allow?: (method: string, path: string) => boolean
+  /**
+   * A phone: short-lived tickets for URLs (`POST /r/v1/ticket`), so the 30-day device token
+   * never sits in a URL. Without it the session token goes in the query (the PC's own pages).
+   */
+  ticket?: (kind: 'live' | 'media') => Promise<{ ticket: string; expires_in: number }>
+}
+
+/** The 403 a refused call gets without leaving this page (same words as the relay's). */
+function notAllowedHere(): ApiError {
+  return new ApiError(
+    403,
+    'not_allowed_for_role',
+    'That only works on the streaming PC.',
+    'Accounts, secrets, Pro, export and import stay on the PC itself.',
+  )
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -86,6 +107,9 @@ export class FerroClient {
   private readonly doFetch: FetchLike
   private readonly startupRetries: number
   private readonly sleep: (ms: number) => Promise<void>
+  private readonly allow: ClientOptions['allow']
+  private readonly ticket: ClientOptions['ticket']
+  private mediaTicket: { ticket: string; until: number } | null = null
 
   constructor(opts: ClientOptions) {
     this.base = opts.base.replace(/\/+$/, '')
@@ -93,6 +117,19 @@ export class FerroClient {
     this.doFetch = opts.fetch ?? ((i, init) => fetch(i, init))
     this.startupRetries = opts.startupRetries ?? 5
     this.sleep = opts.sleep ?? defaultSleep
+    this.allow = opts.allow
+    this.ticket = opts.ticket
+  }
+
+  /** Whether this dashboard may call `method path` (always, except on a phone). */
+  may(method: string, path: string): boolean {
+    if (!this.allow) return true
+    const rel = path.replace(/^\/api\/v1/, '').split('?')[0] ?? ''
+    return this.allow(method.toUpperCase(), rel)
+  }
+
+  private check(method: string, path: string): void {
+    if (!this.may(method, path)) throw notAllowedHere()
   }
 
   get baseUrl(): string {
@@ -107,7 +144,7 @@ export class FerroClient {
     this.token = token
   }
 
-  /** WebSocket URL for the live socket (API.md §5). */
+  /** WebSocket URL for the live socket (API.md §5), with the session in the query. */
   liveUrl(sinceSeq?: number): string {
     const ws = this.base.replace(/^http/, 'ws')
     const q = new URLSearchParams({ session: this.token ?? '' })
@@ -115,13 +152,42 @@ export class FerroClient {
     return `${ws}/api/v1/live?${q.toString()}`
   }
 
-  /** URL for a media preview in `<img>`/`<audio>` (API.md §6 notes: session in the query). */
+  /**
+   * The live socket's URL to open now: on a phone with a fresh single-use ticket (API.md
+   * §9.5), never the device token; elsewhere `liveUrl`.
+   */
+  async liveSocketUrl(sinceSeq?: number): Promise<string> {
+    if (!this.ticket) return this.liveUrl(sinceSeq)
+    const { ticket } = await this.ticket('live')
+    const q = new URLSearchParams({ ticket })
+    if (sinceSeq !== undefined) q.set('since', String(sinceSeq))
+    return `${this.base.replace(/^http/, 'ws')}/api/v1/live?${q.toString()}`
+  }
+
+  /**
+   * On a phone: gets a media ticket (5 minutes, `GET /media/{id}` only) for `mediaUrl`, unless
+   * the one it has lasts another minute. Call it before showing previews, and now and then.
+   */
+  async refreshMediaTicket(now = Date.now()): Promise<void> {
+    if (!this.ticket || (this.mediaTicket && this.mediaTicket.until - now > 60_000)) return
+    const t = await this.ticket('media')
+    this.mediaTicket = { ticket: t.ticket, until: now + t.expires_in * 1000 }
+  }
+
+  /**
+   * URL for a media preview in `<img>`/`<audio>`/`<video>` (API.md §6 notes): the session in
+   * the query, or on a phone its media ticket (`refreshMediaTicket`), never the device token.
+   */
   mediaUrl(id: string): string {
-    const q = new URLSearchParams({ session: this.token ?? '' })
-    return `${this.base}/api/v1/media/${encodeURIComponent(id)}?${q.toString()}`
+    const q = this.ticket
+      ? new URLSearchParams(this.mediaTicket ? { ticket: this.mediaTicket.ticket } : {})
+      : new URLSearchParams({ session: this.token ?? '' })
+    const query = q.toString()
+    return `${this.base}/api/v1/media/${encodeURIComponent(id)}${query ? `?${query}` : ''}`
   }
 
   async request<T>(method: string, path: string, body?: unknown, raw?: BodyInit): Promise<T> {
+    this.check(method, path)
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let payload: BodyInit | undefined = raw
@@ -154,7 +220,8 @@ export class FerroClient {
         }
       }
       const err = await errorFromResponse(res)
-      if (err.status === 503 && attempt < this.startupRetries) {
+      // A phone's PC that's off (Dashboard anywhere) isn't starting up: say so at once.
+      if (err.status === 503 && err.code !== 'pc_offline' && attempt < this.startupRetries) {
         await this.sleep(Math.max(err.retryAfter ?? 1, 1) * 1000)
         continue
       }
@@ -229,6 +296,7 @@ export class FerroClient {
     this.put<{ design_id: string | null }>('/api/v1/designs/active-alert', { design_id: id })
   /** The design as a `.ferrodesign` file to save or share. */
   exportDesign = async (id: string): Promise<Blob> => {
+    this.check('POST', `/api/v1/designs/${enc(id)}/export`)
     const headers: Record<string, string> = {}
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let res: Response
@@ -414,6 +482,7 @@ export class FerroClient {
   saveSettings = (s: Settings) => this.put<Settings>('/api/v1/settings', s)
   completeSetup = () => this.post<void>('/api/v1/setup/complete')
   exportPack = async (): Promise<Blob> => {
+    this.check('POST', '/api/v1/export')
     const headers: Record<string, string> = {}
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let res: Response
@@ -427,6 +496,7 @@ export class FerroClient {
   }
   /** A GET that answers a file (Studio's marker export), as a Blob. */
   downloadFile = async (path: string): Promise<Blob> => {
+    this.check('GET', path)
     const headers: Record<string, string> = {}
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let res: Response
