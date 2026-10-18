@@ -40,3 +40,21 @@ input[type='range'] {
     color: var(--nc-l);
   }
 }
+
+/* Alerts editor: labels and inputs a step bigger and bolder than the default Field. */
+.fc-label,
+.fc-editor label[for] {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+.fc-label {
+  color: var(--fc-text-2);
+}
+.fc-editor
+  :is(input:not([type='range'], [type='radio'], [type='file']), select, textarea):not(
+    .font-mono,
+    .font-display
+  ) {
+  font-size: 14.5px;
+}

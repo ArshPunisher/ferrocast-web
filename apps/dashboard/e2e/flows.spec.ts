@@ -137,8 +137,12 @@ test.describe('alerts', () => {
     await expect(page.getByText(/“Tips” saved/)).toBeVisible()
   })
 
-  test('turning a rule off is one click', async ({ page }) => {
+  test('turning a rule off is one click from its editor', async ({ page }) => {
     await open(page, 'alerts')
+    await page
+      .getByRole('navigation', { name: 'Alert rules' })
+      .getByRole('link', { name: /Raids/ })
+      .click()
     await page.getByRole('switch', { name: 'Raids alert' }).click()
     await expect(page.getByText(/Raids off/)).toBeVisible()
   })

@@ -60,15 +60,25 @@ export function AlertStage({
   theme,
   className,
   label = 'Alert preview',
+  controls = true,
+  sound: soundProp,
+  replay = 0,
 }: {
   alert: RenderedAlert | null
   theme: string
   className?: string
   label?: string
+  /** Show the mute and replay buttons on the stage. Off when the caller draws its own. */
+  controls?: boolean
+  /** Play the alert's sound (controlled). Leave unset to use the stage's own button. */
+  sound?: boolean
+  /** Bump to replay the alert from the start. */
+  replay?: number
 }) {
   const [host, root] = useShadowRoot()
   const [nonce, setNonce] = useState(0)
-  const [sound, setSound] = useState(false)
+  const [ownSound, setSound] = useState(false)
+  const sound = soundProp ?? ownSound
   const box = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   useEffect(() => {
@@ -83,7 +93,7 @@ export function AlertStage({
   useEffect(() => {
     if (!root || !alert) return
     return playAlertPreview(root, alert, { theme, audio: sound, loop: true })
-  }, [root, alert, theme, sound, nonce])
+  }, [root, alert, theme, sound, nonce, replay])
   return (
     <figure
       className={cx(
@@ -109,24 +119,26 @@ export function AlertStage({
           </p>
         )}
       </div>
-      <figcaption className="absolute top-2 right-2 flex gap-1">
-        <IconButton
-          size="sm"
-          variant="secondary"
-          label={sound ? 'Mute preview' : 'Play preview sound'}
-          onClick={() => setSound((s) => !s)}
-        >
-          {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-        </IconButton>
-        <IconButton
-          size="sm"
-          variant="secondary"
-          label="Replay preview"
-          onClick={() => setNonce((n) => n + 1)}
-        >
-          <ArrowCounterClockwise size={15} />
-        </IconButton>
-      </figcaption>
+      {controls && (
+        <figcaption className="absolute top-2 right-2 flex gap-1">
+          <IconButton
+            size="sm"
+            variant="secondary"
+            label={sound ? 'Mute preview' : 'Play preview sound'}
+            onClick={() => setSound((s) => !s)}
+          >
+            {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
+          </IconButton>
+          <IconButton
+            size="sm"
+            variant="secondary"
+            label="Replay preview"
+            onClick={() => setNonce((n) => n + 1)}
+          >
+            <ArrowCounterClockwise size={15} />
+          </IconButton>
+        </figcaption>
+      )}
     </figure>
   )
 }

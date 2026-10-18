@@ -1,18 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
-  CaretLeft,
+  ArrowCounterClockwise,
+  Bell,
+  BracketsCurly,
+  CaretDown,
+  ChatCircleText,
+  Diamond,
+  Gift,
+  HandCoins,
+  Heart,
   Lightning,
   PaintBrushBroad,
   Plus,
+  RocketLaunch,
+  Sparkle,
+  SpeakerHigh,
+  SpeakerSlash,
+  Star,
   Trash,
   UploadSimple,
+  type Icon,
 } from '@phosphor-icons/react'
 import {
-  KIND_LABEL,
   KNOWN_VARS,
   PLATFORM_LABEL,
   checkTemplate,
+  eventVars,
   newVariation,
   platformsFor,
   renderAlert,
@@ -26,7 +40,6 @@ import {
   type Variation,
 } from '@ferrocast/api'
 import {
-  Badge,
   Button,
   EmptyState,
   Field,
@@ -44,8 +57,9 @@ import {
 import { LoadError, PageHeader } from '../components/Panel'
 import { TestAlertMenu } from '../components/alerts-live'
 import { AlertStage } from '../components/AlertStage'
-import { useAction, useClient, useMediaQuery, useResource } from '../lib/hooks'
-import { go, href } from '../lib/router'
+import { Menu } from '../components/Menu'
+import { useAction, useClient, useResource } from '../lib/hooks'
+import { href } from '../lib/router'
 import { useUnsavedWarning } from '../lib/unsaved'
 import { useLive } from '../lib/store'
 
@@ -60,6 +74,18 @@ const COND_LABEL: Record<CondType, string> = {
   is_gifted: 'Is a gift',
   has_message: 'Has a message',
   message_contains: 'Message contains',
+}
+
+/** One emblem per event kind, the same glyphs the alert designs use (event-icons.ts). */
+const KIND_ICON: Record<string, Icon> = {
+  follow: Heart,
+  subscription: Star,
+  gift_batch: Gift,
+  platform_gift: Diamond,
+  paid_message: ChatCircleText,
+  tip: HandCoins,
+  raid: RocketLaunch,
+  reward_redemption: Sparkle,
 }
 
 function defaultCondition(t: CondType): Condition {
@@ -87,22 +113,51 @@ function sampleFor(rule: AlertRule, platform: Platform | null): FerroEvent | nul
   return sample(kind, p, Date.now())
 }
 
-/** Inserts `{var}` at the caret of the focused template field. */
-function VarChips({ onPick }: { onPick: (v: string) => void }) {
+/** What a rule's row says on the right: off, how many looks, or on. */
+function ruleStatus(r: AlertRule): string {
+  if (!r.enabled) return 'Off'
+  return r.variations.length > 1 ? `${r.variations.length} looks` : 'On'
+}
+
+/**
+ * "Insert" menu: puts `{var}` at the caret of the last focused template field. Lists the
+ * variables this kind of event fills in (with the sample's value), else the common ones.
+ */
+function InsertVarMenu({
+  event,
+  onPick,
+}: {
+  event: FerroEvent | null
+  onPick: (v: string) => void
+}) {
+  const vars = event ? eventVars(event) : {}
+  const names = KNOWN_VARS.filter((v) => v in vars)
+  const list = names.length > 0 ? names : KNOWN_VARS.slice(0, 10)
+  const short = (x: string) => (x.length > 18 ? `${x.slice(0, 17)}…` : x)
   return (
-    <div className="flex flex-wrap gap-1" aria-label="Insert a variable">
-      {KNOWN_VARS.slice(0, 10).map((v) => (
-        <button
-          key={v}
-          type="button"
+    <Menu
+      label="Insert a variable"
+      align="end"
+      trigger={(p) => (
+        <Button
+          {...p}
+          size="sm"
+          variant="ghost"
+          icon={<BracketsCurly size={15} />}
+          title="Insert a variable where the cursor is"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onPick(v)}
-          className="fc-press rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[11.5px] text-text-2 hover:border-accent-line hover:text-text"
         >
-          {`{${v}}`}
-        </button>
-      ))}
-    </div>
+          Insert
+          <CaretDown size={12} className="-mr-0.5 opacity-70" />
+        </Button>
+      )}
+      items={list.map((v) => ({
+        key: v,
+        label: <span className="font-mono text-[13px]">{`{${v}}`}</span>,
+        ...(vars[v] ? { hint: short(vars[v]) } : {}),
+        onSelect: () => onPick(v),
+      }))}
+    />
   )
 }
 
@@ -152,15 +207,12 @@ function MediaPicker({
     kind === 'sound'
       ? 'audio/mpeg,audio/ogg,audio/wav,.mp3,.ogg,.wav'
       : 'image/png,image/jpeg,image/gif,image/webp,video/webm,video/mp4'
+  const limits =
+    kind === 'sound'
+      ? 'MP3, OGG or WAV, up to 5 MB'
+      : 'PNG, JPEG, GIF or WebP up to 10 MB, WebM or MP4 up to 50 MB'
   return (
-    <Field
-      label={kind === 'sound' ? 'Sound' : 'Image or video'}
-      hint={
-        kind === 'sound'
-          ? 'MP3, OGG or WAV, up to 5 MB.'
-          : 'PNG, JPEG, GIF, WebP up to 10 MB, or WebM/MP4 up to 50 MB.'
-      }
-    >
+    <Field label={kind === 'sound' ? 'Sound' : 'Image or video'}>
       {(p) => (
         <div className="flex gap-2">
           <Select
@@ -206,6 +258,8 @@ function MediaPicker({
             type="button"
             icon={<UploadSimple size={16} />}
             busy={busy === 'upload'}
+            title={limits}
+            aria-label={`Upload ${kind === 'sound' ? 'a sound' : 'an image or video'} (${limits})`}
             onClick={() => file.current?.click()}
           >
             Upload
@@ -228,7 +282,7 @@ function ConditionEditor({
       ? value
       : defaultCondition('amount_at_least')
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2">
       <Field label="Use this look when">
         {(p) => (
           <Select
@@ -246,19 +300,20 @@ function ConditionEditor({
       </Field>
       {(c.type === 'amount_at_least' || c.type === 'amount_below') && (
         <div className="grid grid-cols-[1fr_96px] gap-2">
-          <Field label="Amount" hint="Money, bits, viewers or gifted subs.">
+          <Field label="Amount">
             {(p) => (
               <Input
                 {...p}
                 type="number"
                 inputMode="decimal"
                 min={0}
+                title="Money, bits, viewers or gifted subs"
                 value={c.value}
                 onChange={(e) => onChange({ ...c, value: Number(e.target.value) || 0 })}
               />
             )}
           </Field>
-          <Field label="Currency" optional>
+          <Field label="Currency">
             {(p) => (
               <Select
                 {...p}
@@ -335,10 +390,35 @@ function ConditionEditor({
   )
 }
 
+/** A short settings group with its own heading, divided from the one above by a hairline. */
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  const id = useId()
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-4 border-t border-line pt-5">
+      <div className="-my-1 flex min-h-8 items-center justify-between gap-3">
+        <h3 id={id} className="font-display text-base font-bold tracking-tight text-text">
+          {title}
+        </h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
 function VariationEditor({
   v,
   isDefault,
   media,
+  event,
   onChange,
   onUploaded,
   onDelete,
@@ -346,6 +426,7 @@ function VariationEditor({
   v: Variation
   isDefault: boolean
   media: Media[]
+  event: FerroEvent | null
   onChange: (v: Variation) => void
   onUploaded: (m: Media) => void
   onDelete: () => void
@@ -370,10 +451,11 @@ function VariationEditor({
       el?.setSelectionRange(at + token.length, at + token.length)
     })
   }
+  const seconds = Math.round(v.duration_ms / 100) / 10
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {!isDefault && (
-        <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-3">
+        <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
           <div className="flex items-end gap-2">
             <Field label="Look name" className="flex-1">
               {(p) => (
@@ -395,67 +477,71 @@ function VariationEditor({
           />
         </div>
       )}
-      <Field label="Headline" error={titleCheck.ok ? null : titleCheck.error}>
-        {(p) => (
-          <Input
-            {...p}
-            value={v.title}
-            maxLength={300}
-            onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'title' })}
-            onChange={(e) => onChange({ ...v, title: e.target.value })}
-          />
-        )}
-      </Field>
-      <Field
-        label="Second line"
-        error={bodyCheck.ok ? null : bodyCheck.error}
-        hint="Usually {message}. Leave empty for a one-line alert."
-      >
-        {(p) => (
-          <Textarea
-            {...p}
-            rows={2}
-            value={v.body}
-            maxLength={500}
-            onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'body' })}
-            onChange={(e) => onChange({ ...v, body: e.target.value })}
-          />
-        )}
-      </Field>
-      <VarChips onPick={insert} />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-text-2">Layout</span>
-          <Segmented
-            label="Layout"
-            value={
-              (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
-                'stack' | 'side' | 'banner'
-            }
-            onChange={(layout) => onChange({ ...v, layout })}
-            options={[
-              { value: 'stack', label: 'Stacked' },
-              { value: 'side', label: 'Side' },
-              { value: 'banner', label: 'Banner' },
-            ]}
-          />
-        </div>
-        <Field label={`On screen for ${Math.round(v.duration_ms / 100) / 10} s`}>
+
+      <Section title="Message" action={<InsertVarMenu event={event} onPick={insert} />}>
+        <Field label="Headline" error={titleCheck.ok ? null : titleCheck.error}>
           {(p) => (
-            <input
+            <Input
               {...p}
-              type="range"
-              min={1000}
-              max={30000}
-              step={500}
-              value={v.duration_ms}
-              onChange={(e) => onChange({ ...v, duration_ms: Number(e.target.value) })}
-              className="h-10 w-full"
+              value={v.title}
+              maxLength={300}
+              onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'title' })}
+              onChange={(e) => onChange({ ...v, title: e.target.value })}
             />
           )}
         </Field>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Second line" error={bodyCheck.ok ? null : bodyCheck.error}>
+          {(p) => (
+            <Textarea
+              {...p}
+              rows={2}
+              value={v.body}
+              maxLength={500}
+              placeholder="Empty for a one-line alert"
+              onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'body' })}
+              onChange={(e) => onChange({ ...v, body: e.target.value })}
+            />
+          )}
+        </Field>
+      </Section>
+
+      <Section title="Look">
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="fc-label">Layout</span>
+            <Segmented
+              label="Layout"
+              value={
+                (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
+                  'stack' | 'side' | 'banner'
+              }
+              onChange={(layout) => onChange({ ...v, layout })}
+              options={[
+                { value: 'stack', label: 'Stacked' },
+                { value: 'side', label: 'Side' },
+                { value: 'banner', label: 'Banner' },
+              ]}
+            />
+          </div>
+          <Field label={`On screen for ${seconds} s`} className="min-w-44 flex-1">
+            {(p) => (
+              <input
+                {...p}
+                type="range"
+                min={1000}
+                max={30000}
+                step={500}
+                value={v.duration_ms}
+                aria-valuetext={`${seconds} seconds`}
+                onChange={(e) => onChange({ ...v, duration_ms: Number(e.target.value) })}
+                className="h-10 w-full"
+              />
+            )}
+          </Field>
+        </div>
+      </Section>
+
+      <Section title="Sound and media">
         <MediaPicker
           kind="sound"
           value={v.sound}
@@ -470,41 +556,50 @@ function VariationEditor({
           onChange={(image) => onChange({ ...v, image })}
           onUploaded={onUploaded}
         />
-      </div>
-      <Field label={`Volume ${v.volume}%`}>
-        {(p) => (
-          <input
-            {...p}
-            type="range"
-            min={0}
-            max={100}
-            value={v.volume}
-            onChange={(e) => onChange({ ...v, volume: Number(e.target.value) })}
-            className="h-8 w-full"
+        <Field label={`Volume ${v.volume}%`}>
+          {(p) => (
+            <input
+              {...p}
+              type="range"
+              min={0}
+              max={100}
+              value={v.volume}
+              aria-valuetext={`${v.volume} percent`}
+              onChange={(e) => onChange({ ...v, volume: Number(e.target.value) })}
+              className="h-8 w-full"
+            />
+          )}
+        </Field>
+      </Section>
+
+      <details className="group border-t border-line pt-4">
+        <summary className="-mx-1 flex cursor-pointer list-none items-center gap-2 rounded-control px-1 py-1 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+          <span className="font-display text-base font-bold tracking-tight text-text">More</span>
+          <CaretDown
+            size={14}
+            weight="bold"
+            aria-hidden="true"
+            className="text-text-3 transition-transform duration-200 group-open:rotate-180"
           />
-        )}
-      </Field>
-      <Switch
-        checked={v.tts}
-        onChange={(tts) => onChange({ ...v, tts })}
-        label="Read the message aloud"
-        description="Uses text-to-speech with your TTS rules: minimum amount, word filter and approval first. TTS itself is off until you turn it on in Settings."
-      />
-      <details className="group rounded-[12px] border border-line">
-        <summary className="cursor-pointer list-none px-3 py-2.5 text-[13px] font-semibold text-text-2 hover:text-text">
-          Advanced: custom CSS and priority
+          <span className="ml-auto truncate text-[13px] font-medium text-text-3">
+            {isDefault ? 'Read aloud, custom CSS' : 'Read aloud, CSS, priority'}
+          </span>
         </summary>
-        <div className="flex flex-col gap-3 px-3 pb-3">
-          <Field
-            label="Custom CSS"
-            hint="Applies only inside this alert. Example: .fc-alert-title { letter-spacing: 0.02em }"
-          >
+        <div className="flex flex-col gap-4 pt-4">
+          <Switch
+            checked={v.tts}
+            onChange={(tts) => onChange({ ...v, tts })}
+            label="Read the message aloud"
+            description="Follows your TTS rules. Turn TTS on in Settings first."
+          />
+          <Field label="Custom CSS" hint="Applies only inside this alert.">
             {(p) => (
               <Textarea
                 {...p}
                 rows={4}
                 spellCheck={false}
                 className="font-mono text-[12.5px]"
+                placeholder=".fc-alert-title { letter-spacing: 0.02em }"
                 value={v.css}
                 maxLength={20000}
                 onChange={(e) => onChange({ ...v, css: e.target.value })}
@@ -533,27 +628,33 @@ function VariationEditor({
   )
 }
 
+/**
+ * The editor for one rule: the settings panel and, beside it on wide screens, the live
+ * preview. Renders two grid cells (the parent grid places them).
+ */
 function RuleEditor({
   rule,
   media,
   onSaved,
   onUploaded,
-  onBack,
+  onToggle,
 }: {
   rule: AlertRule
   media: Media[]
   onSaved: (r: AlertRule) => void
   onUploaded: (m: Media) => void
-  onBack?: () => void
+  onToggle: (enabled: boolean) => void
 }) {
   const client = useClient()
   const { run, busy } = useAction()
   const [draft, setDraft] = useState(rule)
   const [vi, setVi] = useState(0)
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null)
+  const [sound, setSound] = useState(false)
+  const [replay, setReplay] = useState(0)
   const reduce = useReducedMotion()
   // A different rule replaces the draft. The same rule changing underneath (saved, or
-  // switched on/off from the list) must not throw away edits in progress.
+  // switched on/off) must not throw away edits in progress.
   const lastRule = useRef(rule)
   useEffect(() => {
     const prev = lastRule.current
@@ -561,6 +662,7 @@ function RuleEditor({
     if (prev.id !== rule.id) {
       setDraft(rule)
       setVi(0)
+      setPreviewPlatform(null)
       return
     }
     setDraft((d) =>
@@ -573,11 +675,14 @@ function RuleEditor({
   const v = draft.variations[vi] ?? draft.variations[0]
   const kind = draft.kinds[0] ?? 'follow'
   const kindPlatforms = kind === 'tip' ? [] : platformsFor(kind)
+  // The platform picked in "Preview as", if this kind has it; the preview, the control and
+  // "Test on stream" all use this one value.
+  const pickedPlatform =
+    previewPlatform && kindPlatforms.includes(previewPlatform) ? previewPlatform : null
+  const event = useMemo(() => sampleFor(draft, pickedPlatform), [draft, pickedPlatform])
   const preview = useMemo(() => {
-    if (!v) return null
-    const e = sampleFor(draft, previewPlatform)
-    if (!e) return null
-    const a = renderAlert('preview', draft, v, e)
+    if (!v || !event) return null
+    const a = renderAlert('preview', draft, v, event)
     const url = (id: string | null) => {
       if (!id) return null
       const m = media.find((x) => x.id === id)
@@ -588,7 +693,7 @@ function RuleEditor({
         : null
     }
     return { ...a, sound: url(a.sound), image: url(a.image) }
-  }, [draft, v, previewPlatform, media, client])
+  }, [draft, v, event, media, client])
   if (!v) return null
   const setV = (nv: Variation) =>
     setDraft({ ...draft, variations: draft.variations.map((x, i) => (i === vi ? nv : x)) })
@@ -617,100 +722,70 @@ function RuleEditor({
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-3">
-        {onBack && (
-          <IconButton label="Back to all alerts" onClick={onBack}>
-            <CaretLeft size={18} />
-          </IconButton>
-        )}
-        <div className="min-w-0 flex-1">
-          <label htmlFor="rule-name" className="sr-only">
-            Rule name
-          </label>
-          <input
-            id="rule-name"
-            value={draft.name}
-            maxLength={40}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            className="w-full rounded-control border border-transparent bg-transparent px-1 font-display text-xl font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none"
-          />
-          <p className="px-1 text-[13px] text-text-3">Plays for: {KIND_LABEL[kind] ?? kind}</p>
-        </div>
-        <Switch
-          checked={draft.enabled}
-          onChange={(enabled) => setDraft({ ...draft, enabled })}
-          label="Alert on"
-          hideLabel
-        />
-      </div>
-
-      {kindPlatforms.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-medium text-text-2">Platforms</span>
-          {kindPlatforms.map((p) => {
-            const on = draft.platforms.length === 0 || draft.platforms.includes(p)
-            return (
-              <button
-                key={p}
-                type="button"
-                aria-pressed={on}
-                onClick={() => togglePlatform(p)}
-                className={cx(
-                  'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium',
-                  on
-                    ? 'border-accent-line bg-accent-soft text-text'
-                    : 'border-line text-text-3 line-through decoration-text-3/60',
-                )}
-              >
-                <PlatformMark platform={p} size={13} />
-                {PLATFORM_LABEL[p]}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="flex min-w-0 flex-col gap-4 2xl:order-2">
-          <AlertStage alert={preview} theme="molten" />
-          <div className="flex flex-wrap items-center gap-2">
-            {kindPlatforms.length > 1 && (
-              <Segmented
-                label="Preview as"
-                size="sm"
-                value={
-                  previewPlatform && kindPlatforms.includes(previewPlatform)
-                    ? previewPlatform
-                    : (kindPlatforms[0] as Platform)
-                }
-                onChange={setPreviewPlatform}
-                options={kindPlatforms.map((p) => ({
-                  value: p,
-                  label: <PlatformMark platform={p} size={12} />,
-                  title: `Preview a ${PLATFORM_LABEL[p]} event`,
-                }))}
+    <>
+      <div className="order-3 flex min-w-0 flex-col gap-4 xl:order-2">
+        <div className="fc-editor @container rounded-panel border border-line bg-surface-1 p-4 shadow-1 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="rule-name" className="sr-only">
+                Rule name
+              </label>
+              <input
+                id="rule-name"
+                value={draft.name}
+                maxLength={40}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                className="-ml-1.5 w-full rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-xl font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none"
               />
-            )}
-            <Button
-              size="sm"
-              className="ml-auto"
-              icon={<Lightning size={15} weight="fill" />}
-              busy={busy === 'test'}
-              onClick={() =>
-                void run('test', () => client.test(kind, previewPlatform ?? undefined), {
-                  success: dirty
-                    ? 'Test sent. It uses the saved version; save to test your changes.'
-                    : 'Test sent to your overlays.',
-                })
-              }
-            >
-              Test on stream
-            </Button>
+            </div>
+            <div className="order-3 flex w-full flex-wrap items-center gap-1.5 @lg:order-none @lg:w-auto">
+              {kindPlatforms.length > 1 ? (
+                <div role="group" aria-label="Platforms" className="flex flex-wrap gap-1.5">
+                  {kindPlatforms.map((p) => {
+                    const on = draft.platforms.length === 0 || draft.platforms.includes(p)
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        aria-pressed={on}
+                        title={
+                          on ? `Plays for ${PLATFORM_LABEL[p]}` : `Off for ${PLATFORM_LABEL[p]}`
+                        }
+                        onClick={() => togglePlatform(p)}
+                        className={cx(
+                          'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                          on
+                            ? 'border-accent-line bg-accent-soft text-text'
+                            : 'border-line text-text-3 line-through decoration-text-3/60 hover:text-text-2',
+                        )}
+                      >
+                        <PlatformMark platform={p} size={12} />
+                        {PLATFORM_LABEL[p]}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                (kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms).map((p) => (
+                  <span
+                    key={p}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[12.5px] font-semibold text-text-2"
+                  >
+                    <PlatformMark platform={p} size={12} />
+                    {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
+                  </span>
+                ))
+              )}
+            </div>
+            <Switch
+              checked={rule.enabled}
+              onChange={onToggle}
+              label={`${rule.name} alert`}
+              hideLabel
+            />
           </div>
-        </div>
-        <div className="min-w-0 2xl:order-1">
-          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+
+          <div className="mb-5 flex flex-wrap items-center gap-1.5">
             <div role="tablist" aria-label="Looks" className="contents">
               {draft.variations.map((x, i) => (
                 <button
@@ -720,24 +795,31 @@ function RuleEditor({
                   aria-selected={i === vi}
                   onClick={() => setVi(i)}
                   className={cx(
-                    'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3 text-[12.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                    'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3.5 text-[13px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                     i === vi
                       ? 'border-accent-line bg-accent-soft text-text'
-                      : 'border-line text-text-3 hover:text-text',
+                      : 'border-line text-text-2 hover:border-line-strong hover:text-text',
                   )}
                 >
                   {x.condition === null ? 'Default' : x.name || 'Untitled'}
                 </button>
               ))}
             </div>
-            <Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={addVariation}>
+            <button
+              type="button"
+              onClick={addVariation}
+              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[13px] font-semibold text-text-2 hover:border-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <Plus size={14} aria-hidden="true" />
               Add a look
-            </Button>
+            </button>
           </div>
+
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={v.id}
               role="tabpanel"
+              aria-label={v.condition === null ? 'Default look' : v.name || 'Untitled look'}
               initial={reduce ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4, transition: { duration: 0.1 } }}
@@ -747,6 +829,7 @@ function RuleEditor({
                 v={v}
                 isDefault={v.condition === null}
                 media={media}
+                event={event}
                 onChange={setV}
                 onUploaded={onUploaded}
                 onDelete={() => {
@@ -757,42 +840,107 @@ function RuleEditor({
             </motion.div>
           </AnimatePresence>
         </div>
+
+        <AnimatePresence>
+          {dirty && (
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-4"
+            >
+              <p
+                className={cx(
+                  'min-w-0 flex-1 text-[13.5px]',
+                  error ? 'font-semibold text-danger' : 'font-medium text-text-2',
+                )}
+                role={error ? 'alert' : undefined}
+              >
+                {error ?? 'Unsaved changes'}
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => setDraft(rule)}>
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={!!error}
+                busy={busy === 'save'}
+                onClick={save}
+              >
+                Save
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <AnimatePresence>
-        {dirty && (
-          <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-4"
+      <aside
+        aria-label="Live preview"
+        className="order-2 flex min-w-0 flex-col gap-3 xl:sticky xl:top-[calc(env(safe-area-inset-top)+76px)] xl:order-3 xl:self-start"
+      >
+        <AlertStage
+          alert={preview}
+          theme="molten"
+          controls={false}
+          sound={sound}
+          replay={replay}
+          className="shadow-1"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            icon={<ArrowCounterClockwise size={15} />}
+            onClick={() => setReplay((n) => n + 1)}
           >
-            <p
-              className={cx(
-                'min-w-0 flex-1 text-[13px]',
-                error ? 'font-medium text-danger' : 'text-text-2',
-              )}
-              role={error ? 'alert' : undefined}
-            >
-              {error ?? 'Unsaved changes'}
-            </p>
-            <Button size="sm" variant="ghost" onClick={() => setDraft(rule)}>
-              Discard
-            </Button>
-            <Button
+            Replay
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-pressed={!sound}
+            title={sound ? 'Mute the preview' : 'Play the preview with sound'}
+            icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
+            onClick={() => setSound((s) => !s)}
+          >
+            Mute
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            className="ml-auto"
+            icon={<Lightning size={15} weight="fill" />}
+            busy={busy === 'test'}
+            onClick={() =>
+              void run('test', () => client.test(kind, pickedPlatform ?? undefined), {
+                success: dirty
+                  ? 'Test sent. It uses the saved version; save to test your changes.'
+                  : 'Test sent to your overlays.',
+              })
+            }
+          >
+            Test on stream
+          </Button>
+        </div>
+        {kindPlatforms.length > 1 && (
+          <div className="flex items-center gap-2.5">
+            <span className="fc-label">Preview as</span>
+            <Segmented
+              label="Preview as"
               size="sm"
-              variant="primary"
-              disabled={!!error}
-              busy={busy === 'save'}
-              onClick={save}
-            >
-              Save
-            </Button>
-          </motion.div>
+              value={pickedPlatform ?? (kindPlatforms[0] as Platform)}
+              onChange={setPreviewPlatform}
+              options={kindPlatforms.map((p) => ({
+                value: p,
+                label: <PlatformMark platform={p} size={12} />,
+                title: `Preview a ${PLATFORM_LABEL[p]} event`,
+              }))}
+            />
+          </div>
         )}
-      </AnimatePresence>
-    </div>
+      </aside>
+    </>
   )
 }
 
@@ -803,11 +951,66 @@ function AlertDesignButton() {
   return (
     <a
       href={id ? href({ name: 'designer', id }) : href({ name: 'designs' })}
-      className="fc-press inline-flex h-10 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold text-text hover:border-text-3"
+      className="fc-press inline-flex h-10 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
     >
-      <PaintBrushBroad size={16} />
+      <PaintBrushBroad size={16} aria-hidden="true" />
       {id ? 'Alert designer' : 'Alert designs'}
     </a>
+  )
+}
+
+/** The event list: a column on wide screens, a row of pills that scrolls sideways below. */
+function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string | undefined }) {
+  const row = useRef<HTMLElement>(null)
+  // Keep the chosen pill in view in the sideways row (no effect on the column layout).
+  useEffect(() => {
+    const nav = row.current
+    const el = nav?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!nav || !el || nav.scrollWidth <= nav.clientWidth) return
+    const left = el.offsetLeft - nav.offsetLeft
+    if (left < nav.scrollLeft || left + el.offsetWidth > nav.scrollLeft + nav.clientWidth)
+      nav.scrollLeft = left - 16
+  }, [selectedId])
+  return (
+    <nav
+      ref={row}
+      aria-label="Alert rules"
+      className="fc-scroll order-1 -mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 xl:mx-0 xl:flex-col xl:gap-1 xl:overflow-visible xl:px-0 xl:pb-0"
+    >
+      {list.map((r) => {
+        const active = selectedId === r.id
+        const Glyph = KIND_ICON[r.kinds[0] ?? ''] ?? Bell
+        const status = ruleStatus(r)
+        return (
+          <a
+            key={r.id}
+            href={href({ name: 'alerts', rule: r.id })}
+            aria-current={active ? 'page' : undefined}
+            className={cx(
+              'fc-press relative flex h-11 shrink-0 items-center gap-2.5 rounded-full border pr-4 pl-3.5 text-[15px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150',
+              'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none xl:w-full xl:pr-3.5',
+              active
+                ? 'border-line-strong bg-surface-1 text-text shadow-1'
+                : 'border-line text-text-2 hover:bg-surface-2 hover:text-text xl:border-transparent',
+            )}
+          >
+            <Glyph
+              size={19}
+              weight={active ? 'fill' : 'regular'}
+              aria-hidden="true"
+              className={cx('shrink-0', active ? 'text-accent-text' : 'text-text-3')}
+            />
+            <span className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}>
+              {r.name}
+            </span>
+            <span className="ml-auto pl-1 text-[12px] font-semibold text-text-3">
+              <span className="sr-only">, </span>
+              {status}
+            </span>
+          </a>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -816,11 +1019,9 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
   const media = useResource((c) => c.media())
   const client = useClient()
   const { run } = useAction()
-  const wide = useMediaQuery('(min-width: 1024px)')
   const queue = useLive((s) => s.queue)
   const list = rules.data ?? []
-  const selected = list.find((r) => r.id === ruleId) ?? (wide ? list[0] : undefined)
-  const showList = wide || !ruleId
+  const selected = list.find((r) => r.id === ruleId) ?? list[0]
 
   const toggle = (r: AlertRule, enabled: boolean) => {
     rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? { ...x, enabled } : x)))
@@ -835,100 +1036,44 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
     <div>
       <PageHeader
         title="Alerts"
-        description="What plays on stream for each kind of support. Every rule has a default look; add looks for bigger moments."
         actions={
           <>
             <AlertDesignButton />
-            <TestAlertMenu />
+            <TestAlertMenu variant="primary" />
           </>
         }
       />
+      {queue?.paused && (
+        <p className="mb-4 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[13.5px] font-medium text-warn">
+          Alerts are paused. Resume them from Home.
+        </p>
+      )}
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
       ) : rules.loading && !rules.data ? (
-        <div className="grid gap-2 lg:grid-cols-[300px_1fr]">
-          <div className="flex flex-col gap-2">
-            {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="h-14" />
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[212px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5">
+          <div className="flex gap-2 overflow-hidden xl:flex-col xl:gap-1">
+            {Array.from({ length: 8 }, (_, i) => (
+              <Skeleton key={i} className="h-11 w-32 shrink-0 rounded-full xl:w-full" />
             ))}
           </div>
-          <Skeleton className="hidden h-[480px] lg:block" />
+          <Skeleton className="h-[520px] rounded-panel" />
+          <Skeleton className="hidden aspect-video rounded-panel xl:block" />
         </div>
-      ) : list.length === 0 ? (
+      ) : list.length === 0 || !selected ? (
         <EmptyState title="No alert rules">
           Reset to the defaults in Settings → Data, or import from StreamElements or Streamlabs.
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
-          {showList && (
-            <nav aria-label="Alert rules" className="flex flex-col gap-1">
-              {queue?.paused && (
-                <p className="mb-2 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[12.5px] text-warn">
-                  Alerts are paused. Resume them from Home.
-                </p>
-              )}
-              {list.map((r) => {
-                const active = selected?.id === r.id
-                return (
-                  <div
-                    key={r.id}
-                    className={cx(
-                      'flex items-center gap-3 rounded-[12px] border px-3 py-2.5 transition-colors',
-                      active
-                        ? 'border-accent-line bg-accent-soft'
-                        : 'border-transparent hover:bg-surface-2',
-                    )}
-                  >
-                    <a
-                      href={href({ name: 'alerts', rule: r.id })}
-                      aria-current={active ? 'page' : undefined}
-                      className="min-w-0 flex-1 focus-visible:outline-none"
-                    >
-                      <span
-                        className={cx(
-                          'block truncate text-sm font-semibold',
-                          r.enabled ? 'text-text' : 'text-text-3',
-                        )}
-                      >
-                        {r.name}
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-[12px] text-text-3">
-                        {r.variations.length > 1 ? `${r.variations.length} looks` : '1 look'}
-                        {r.platforms.length > 0 && (
-                          <span className="inline-flex gap-1">
-                            ·{' '}
-                            {r.platforms.map((p) => (
-                              <PlatformMark key={p} platform={p} size={11} />
-                            ))}
-                          </span>
-                        )}
-                        {!r.enabled && <Badge>Off</Badge>}
-                      </span>
-                    </a>
-                    <Switch
-                      checked={r.enabled}
-                      onChange={(on) => toggle(r, on)}
-                      label={`${r.name} alert`}
-                      hideLabel
-                    />
-                  </div>
-                )
-              })}
-            </nav>
-          )}
-          {selected && (wide || ruleId) && (
-            <div className="min-w-0 rounded-panel border border-line bg-surface-1 p-4 shadow-1 sm:p-5">
-              <RuleEditor
-                rule={selected}
-                media={media.data ?? []}
-                onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
-                onSaved={(r) =>
-                  rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))
-                }
-                {...(!wide ? { onBack: () => go({ name: 'alerts' }) } : {})}
-              />
-            </div>
-          )}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[212px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:items-start xl:gap-5">
+          <RuleList list={list} selectedId={selected.id} />
+          <RuleEditor
+            rule={selected}
+            media={media.data ?? []}
+            onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
+            onSaved={(r) => rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))}
+            onToggle={(on) => toggle(selected, on)}
+          />
         </div>
       )}
     </div>
