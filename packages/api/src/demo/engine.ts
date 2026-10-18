@@ -76,6 +76,10 @@ import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
 import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoStudio } from './features/studio'
+import { DemoHistory } from './features/history'
+import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
+import type { ProView } from '../pro'
+import { DemoTipBrand } from './features/tip-brand'
 import {
   CHATTERS,
   FILTERS,
@@ -131,6 +135,10 @@ export interface DemoOptions {
   designs?: readonly Design[]
   /** Pro's starting state: off sale, not Pro, no features (like the real relay today). */
   pro?: DemoProSetup
+  /** Pro stream history: a demo year of streams (default) or none yet. */
+  history?: 'demo' | 'empty'
+  /** Pro cloud backups: a few from this PC (default), none yet, or a new PC's view. */
+  cloudBackups?: DemoCloudMode
 }
 
 /** Tip page names someone else already has, for trying the 409 in the demo. */
@@ -322,6 +330,16 @@ export class DemoEngine {
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
   private readonly pro: DemoPro
+  private readonly history: DemoHistory
+  private readonly cloudBackups: DemoCloudBackups
+  /** Pro tip page branding and goal (on with Pro and its feature). */
+  private readonly tipBrand = new DemoTipBrand(
+    () => {
+      const v = this.pro.route('GET', ['pro'], undefined) as ProView
+      return v.active && v.features.tip_brand
+    },
+    () => this.tips,
+  )
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
   private readonly starter = new DemoStarter(() => this.commands)
@@ -365,6 +383,15 @@ export class DemoEngine {
     this.token = opts.token ?? DEMO_TOKEN
     this.relayOn = opts.relay ?? true
     this.pro = new DemoPro(opts.pro)
+    this.history = new DemoHistory(
+      () => this.pro.route('GET', ['pro'], null) as ProView,
+      opts.history === 'empty',
+    )
+    this.cloudBackups = new DemoCloudBackups(
+      () => this.pro.route('GET', ['pro'], null) as ProView,
+      (label) => this.takeBackup(label),
+      opts.cloudBackups ?? 'demo',
+    )
     if (opts.tips === 'empty') this.resetTips()
     const now = Date.now()
     const on = this.setupDone
@@ -528,6 +555,16 @@ export class DemoEngine {
   /** Pro on sale, active or with its features on (tests of Pro panels). */
   setPro(s: DemoProSetup): void {
     this.pro.setup(s)
+  }
+
+  /** Stream history with no streams yet (true) or the demo year (false). */
+  setHistoryEmpty(on: boolean): void {
+    this.history.setEmpty(on)
+  }
+
+  /** Pro cloud backups: this PC's few (demo), none yet, or a new PC's view. */
+  setCloudBackups(mode: DemoCloudMode): void {
+    this.cloudBackups.setMode(mode)
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */
@@ -1289,8 +1326,11 @@ export class DemoEngine {
       this.starter,
       this.importers,
       this.pro,
+      this.history,
+      this.cloudBackups,
       this.designs,
       this.studio,
+      this.tipBrand,
     ]
   }
 
@@ -2839,6 +2879,8 @@ async function readBody(body: BodyInit | null | undefined): Promise<unknown> {
     }
   }
   if (body instanceof FormData) return body
+  // A raw upload (tip page images): the Blob keeps its type, like a Content-Type header.
+  if (body instanceof Blob) return body
   return undefined
 }
 

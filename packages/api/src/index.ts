@@ -10,6 +10,9 @@ export * from './samples'
 export * from './queue'
 export * from './tips'
 export * from './pro'
+export * from './history'
+export * from './tip-brand'
+export * from './cloud-backups'
 export * from './studio'
 export {
   amountOf,
