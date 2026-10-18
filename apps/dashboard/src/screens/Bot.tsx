@@ -406,21 +406,23 @@ export function Bot() {
           ) : !commands.data ? (
             <Skeleton className="h-40" />
           ) : commands.data.length === 0 ? (
-            <EmptyState compact title="No commands yet">
-              Viewers type <span className="font-mono">!discord</span> and the bot answers. Start
-              with <span className="font-mono">!socials</span>,{' '}
-              <span className="font-mono">!lurk</span>, <span className="font-mono">!uptime</span>{' '}
-              and <span className="font-mono">!so</span> in one click.
-              <Button
-                size="sm"
-                variant="primary"
-                className="mt-3"
-                icon={<Lightning size={14} weight="fill" />}
-                busy={starting === 'starter'}
-                onClick={addStarter}
-              >
-                Add starter commands
-              </Button>
+            <EmptyState
+              compact
+              title="No commands yet"
+              action={
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<Lightning size={14} weight="fill" />}
+                  busy={starting === 'starter'}
+                  onClick={addStarter}
+                >
+                  Add starter commands
+                </Button>
+              }
+            >
+              Add <span className="font-mono">!socials</span>, <span className="font-mono">!lurk</span>,{' '}
+              <span className="font-mono">!uptime</span> and <span className="font-mono">!so</span> in one click.
             </EmptyState>
           ) : (
             <ul className="-mx-2 flex flex-col">
