@@ -131,7 +131,7 @@ function FeaturedCard({
       ref={ref}
       data-card
       aria-labelledby={titleId}
-      className="relative w-[88%] shrink-0 snap-center overflow-hidden rounded-panel border border-line bg-surface-1 sm:w-[min(760px,80%)]"
+      className="relative w-[86%] shrink-0 snap-start overflow-hidden rounded-panel border border-line bg-surface-1 sm:w-[62%] lg:w-[46%] 2xl:w-[40%]"
     >
       <button
         type="button"
@@ -145,15 +145,12 @@ function FeaturedCard({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent sm:block" />
       <div className="flex flex-col gap-3 p-3.5 sm:absolute sm:inset-x-0 sm:bottom-0 sm:flex-row sm:items-end sm:p-5">
         <div className="min-w-0 flex-1 text-text sm:text-white">
-          <p className="mb-1 font-mono text-[11px] font-semibold tracking-[0.12em] text-text-3 uppercase sm:text-white/70">
-            Theme · {bundleLine(theme)}
+          <p className="mb-0.5 text-[12.5px] font-semibold text-text-3 sm:text-white/80">
+            {bundleLine(theme)}
           </p>
-          <h3 id={titleId} className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+          <h3 id={titleId} className="font-display text-lg font-bold tracking-tight sm:text-xl">
             {theme.name}
           </h3>
-          <p className="mt-0.5 line-clamp-2 max-w-[52ch] text-[13px] text-text-3 sm:line-clamp-1 sm:text-white/75">
-            {theme.description}
-          </p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="secondary" icon={<Play size={13} />} onClick={onOpen}>
@@ -246,6 +243,26 @@ export function ThemeSheet({
   onDuplicate: (t: Theme) => void
 }) {
   const [view, setView] = useState<string>('')
+  // The big preview first; then, once the dialog has opened, one thumbnail per frame so
+  // no single frame has to draw five scenes.
+  const [thumbs, setThumbs] = useState(0)
+  useEffect(() => {
+    if (!theme) return
+    setThumbs(0)
+    let frame = 0
+    let shown = 0
+    const total = theme.content.scenes.length
+    const step = () => {
+      shown += 1
+      setThumbs(shown)
+      if (shown < total) frame = requestAnimationFrame(step)
+    }
+    const t = window.setTimeout(() => (frame = requestAnimationFrame(step)), 240)
+    return () => {
+      window.clearTimeout(t)
+      cancelAnimationFrame(frame)
+    }
+  }, [theme])
   const alert = useMemo(
     () =>
       alertDesign?.kind === 'alert'
@@ -295,7 +312,7 @@ export function ThemeSheet({
           aria-label={`${theme.name} scenes`}
           className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-flow-col sm:auto-cols-fr sm:overflow-visible sm:px-0"
         >
-          {views.map((v) => (
+          {views.map((v, i) => (
             <button
               key={v.key}
               type="button"
@@ -314,8 +331,10 @@ export function ThemeSheet({
                   <span className="grid aspect-video place-items-center bg-[radial-gradient(circle_at_50%_40%,var(--color-accent-soft),var(--color-surface-3))] text-accent-text">
                     <Lightning size={22} weight="fill" />
                   </span>
-                ) : (
+                ) : i < thumbs ? (
                   <ScenePreview design={theme} sceneKey={v.key} />
+                ) : (
+                  <span className="block aspect-video animate-pulse bg-surface-3" />
                 )}
               </span>
               <span className="truncate px-0.5 text-[12px] font-semibold text-text">{v.label}</span>
