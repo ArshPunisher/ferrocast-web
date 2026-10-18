@@ -74,7 +74,7 @@ import { DemoDiscord } from './features/discord'
 import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
-import { DemoPro } from './features/pro'
+import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoStudio } from './features/studio'
 import {
   CHATTERS,
@@ -129,6 +129,8 @@ export interface DemoOptions {
   tips?: 'set' | 'empty'
   /** The built-in design catalogue (`@ferrocast/designs`); none by default. */
   designs?: readonly Design[]
+  /** Pro's starting state: off sale, not Pro, no features (like the real relay today). */
+  pro?: DemoProSetup
 }
 
 /** Tip page names someone else already has, for trying the 409 in the demo. */
@@ -319,7 +321,7 @@ export class DemoEngine {
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
   private readonly discord = new DemoDiscord()
-  private readonly pro = new DemoPro()
+  private readonly pro: DemoPro
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
   private readonly starter = new DemoStarter(() => this.commands)
@@ -362,6 +364,7 @@ export class DemoEngine {
     this.setupDone = opts.setupDone ?? true
     this.token = opts.token ?? DEMO_TOKEN
     this.relayOn = opts.relay ?? true
+    this.pro = new DemoPro(opts.pro)
     if (opts.tips === 'empty') this.resetTips()
     const now = Date.now()
     const on = this.setupDone
@@ -520,6 +523,11 @@ export class DemoEngine {
   /** Builds with and without a relay (saving tips without one is a 422). */
   setRelay(on: boolean): void {
     this.relayOn = on
+  }
+
+  /** Pro on sale, active or with its features on (tests of Pro panels). */
+  setPro(s: DemoProSetup): void {
+    this.pro.setup(s)
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */

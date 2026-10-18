@@ -5,6 +5,38 @@ import type { FerroClient } from './client'
 
 export type ProPlan = 'monthly' | 'yearly'
 
+/** Which Pro features the relay has, built and configured (API.md §9). All false until each ships. */
+export interface ProFeatures {
+  cloud_bot: boolean
+  remote: boolean
+  tts: boolean
+  discord: boolean
+  backups: boolean
+  tip_brand: boolean
+  history: boolean
+}
+export type ProFeature = keyof ProFeatures
+
+export const NO_PRO_FEATURES: ProFeatures = {
+  cloud_bot: false,
+  remote: false,
+  tts: false,
+  discord: false,
+  backups: false,
+  tip_brand: false,
+  history: false,
+}
+
+/** One of the subscription's usage counters (API.md §9). */
+export interface ProQuota {
+  used: number
+  limit: number
+  /** UTC calendar periods. */
+  period: 'day' | 'month'
+  /** When it starts again (ms). */
+  reset_at: number
+}
+
 export interface ProView {
   /** Pro right now, offline grace included. Use this, not `pro`. */
   active: boolean
@@ -35,6 +67,21 @@ export interface ProView {
   offline_grace_days: number
   launch_note: string
   warning: string | null
+  features: ProFeatures
+  /** By counter name; empty without a subscription. */
+  quotas: Record<string, ProQuota>
+}
+
+/**
+ * How a Pro feature's panel shows (API.md §9): hidden unless the feature is on this relay
+ * and Pro is active or on sale; one calm line when it's only on sale; the feature when Pro.
+ * `feature` left out: only the Pro and sale state count.
+ */
+export function proPanelState(p: ProView | null, feature?: ProFeature): 'hidden' | 'locked' | 'open' {
+  if (!p) return 'hidden'
+  if (feature && !p.features[feature]) return 'hidden'
+  if (p.active) return 'open'
+  return p.sales_open ? 'locked' : 'hidden'
 }
 
 export interface ProCheckout {

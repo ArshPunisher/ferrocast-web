@@ -1,8 +1,10 @@
 // Ferrocast Pro in the demo, matching the engine and relay (`crates/engine/src/pro.rs`,
 // `crates/relay/src/billing`): not on sale (409 with the relay's hint), nothing to manage
 // until Pro is restored, and Restore works with the demo's own subscription id.
+// Honest by default: no Pro feature exists yet, so `features` are all off. `DemoProSetup`
+// (`?pro=open|active&pro_features=on` in the dashboard) switches each part on for tests.
 
-import type { ProView } from '../../pro'
+import { NO_PRO_FEATURES, type ProFeatures, type ProView } from '../../pro'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, requireObj, type Routed } from './host'
 
@@ -11,6 +13,16 @@ export const DEMO_PRO_SUBSCRIPTION = 'sub_DemoPro00001'
 const LAUNCH =
   'Ferrocast Pro launches after version 1. Everything Ferrocast does today is free, and stays free.'
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** What the demo's Pro starts as (all off by default, like the real relay today). */
+export interface DemoProSetup {
+  /** `PRO_SALES_OPEN` on. */
+  salesOpen?: boolean
+  /** An active subscription (the restored demo one). */
+  active?: boolean
+  /** Every Pro feature built and configured on the "relay". */
+  features?: boolean
+}
 
 export class DemoPro {
   private state: ProView = {
@@ -31,6 +43,49 @@ export class DemoPro {
     offline_grace_days: 7,
     launch_note: LAUNCH,
     warning: null,
+    features: { ...NO_PRO_FEATURES },
+    quotas: {},
+  }
+
+  constructor(setup: DemoProSetup = {}) {
+    this.setup(setup)
+  }
+
+  /** Switches the demo's Pro state (tests, `?pro=` in the dashboard). */
+  setup(s: DemoProSetup): void {
+    if (s.salesOpen !== undefined) this.state.sales_open = s.salesOpen
+    if (s.features !== undefined) {
+      const on = s.features
+      this.state.features = Object.fromEntries(
+        Object.keys(NO_PRO_FEATURES).map((k) => [k, on]),
+      ) as unknown as ProFeatures
+    }
+    if (s.active) this.activate(DEMO_PRO_SUBSCRIPTION)
+    else if (s.active === false)
+      Object.assign(this.state, {
+        active: false,
+        pro: false,
+        status: 'none',
+        plan: null,
+        subscription_id: null,
+        current_end: null,
+        access_until: null,
+        installs: 0,
+      })
+  }
+
+  private activate(id: string): void {
+    const end = Date.now() + 30 * 86_400_000
+    Object.assign(this.state, {
+      active: true,
+      pro: true,
+      status: 'active',
+      plan: 'monthly',
+      subscription_id: id,
+      current_end: end,
+      access_until: end + 3 * 86_400_000,
+      installs: 1,
+    })
   }
 
   private view(): ProView {
@@ -88,17 +143,7 @@ export class DemoPro {
           'We couldn’t find Ferrocast Pro with that subscription id and email.',
           'Check the id (sub_…) in Razorpay’s email, and use the email you gave at checkout.',
         )
-      const end = Date.now() + 30 * 86_400_000
-      Object.assign(this.state, {
-        active: true,
-        pro: true,
-        status: 'active',
-        plan: 'monthly',
-        subscription_id: id,
-        current_end: end,
-        access_until: end + 3 * 86_400_000,
-        installs: 1,
-      })
+      this.activate(id)
       return this.view()
     }
     return NOT_MINE
