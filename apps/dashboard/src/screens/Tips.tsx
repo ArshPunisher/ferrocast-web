@@ -149,6 +149,8 @@ const GUIDES: Record<TipProviderKey, Guide> = {
 }
 
 const EASE = [0.22, 1, 0.36, 1] as const
+/** Where tip pages live before the relay has said so (the first save). */
+const TIP_HOST = 'tip.clearcraftlabs.com'
 
 type PageDraft = { handle: string; display_name: string; message: string }
 type Problem = { message: string; hint: string | null }
@@ -307,7 +309,8 @@ export function Tips() {
     page.display_name !== saved.display_name ||
     page.message !== saved.message
   const handle = normaliseTipHandle(page.handle)
-  const origin = saved.page_url ? saved.page_url.replace(/\/t\/[^/]*$/, '') : null
+  // The link minus its name: the relay says where pages live once there is one.
+  const linkBase = (saved.page_url ?? `https://${TIP_HOST}/`).replace(/[^/]*$/, '')
 
   const edit = (patch: Partial<PageDraft>) => {
     setPage({ ...page, ...patch })
@@ -415,8 +418,11 @@ export function Tips() {
                   error={fieldError('handle')}
                   hint={
                     <>
-                      3 to 30 of a-z, 0-9, - and _. Your link ends in{' '}
-                      <span className="font-mono text-text-2">/t/{handle || 'yourname'}</span>
+                      3 to 30 of a-z, 0-9, - and _. Your link:{' '}
+                      <span className="font-mono text-text-2">
+                        {linkBase.replace(/^https?:\/\//, '')}
+                        {handle || 'yourname'}
+                      </span>
                     </>
                   }
                 >
@@ -472,8 +478,8 @@ export function Tips() {
               {pageError && !serverField && <ErrorNote problem={pageError} />}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-[12.5px] text-text-3">
-                  {live && origin && handle !== saved.handle && !problems.handle
-                    ? `New link: ${origin}/t/${handle}`
+                  {live && handle !== saved.handle && !problems.handle
+                    ? `New link: ${linkBase}${handle}`
                     : live
                       ? `Up to ${TIP_LIMITS.handleChangesPerDay} name changes a day. A new name means a new link.`
                       : `You can change the name later, up to ${TIP_LIMITS.handleChangesPerDay} times a day.`}

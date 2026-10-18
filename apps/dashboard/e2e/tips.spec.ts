@@ -33,15 +33,15 @@ test.describe('tips: first-time setup', () => {
 
     await page.getByLabel('Page name').fill('  NoVa ')
     await page.getByLabel('Name viewers see').fill('Nova')
-    await expect(pagePanel(page)).toContainText('/t/nova')
+    await expect(pagePanel(page)).toContainText('tip.clearcraftlabs.com/nova')
     await page.getByRole('button', { name: 'Create tip page' }).click()
     await expect(page.getByText('Your tip page is up. Now add a way to pay.')).toBeVisible()
     // The server's normalised name comes back into the field.
     await expect(page.getByLabel('Page name')).toHaveValue('nova')
-    await expect(pagePanel(page).locator('code')).toHaveText(/\/t\/nova$/)
+    await expect(pagePanel(page).locator('code')).toHaveText(/tip\.clearcraftlabs\.com\/nova$/)
     await expect(pagePanel(page).getByRole('link', { name: /Open/ })).toHaveAttribute(
       'href',
-      /\/t\/nova$/,
+      /tip\.clearcraftlabs\.com\/nova$/,
     )
 
     // Razorpay opens by itself, with its webhook address and events.
@@ -119,13 +119,13 @@ test.describe('tips: every error the server can send', () => {
       await page.getByLabel('Page name').fill(h)
       await expect(pagePanel(page)).toContainText(`New link:`)
       await save.click()
-      await expect(pagePanel(page).locator('code')).toHaveText(new RegExp(`/t/${h}$`))
+      await expect(pagePanel(page).locator('code')).toHaveText(new RegExp(`tip\\.clearcraftlabs\\.com/${h}$`))
     }
     await page.getByLabel('Page name').fill('nova-four')
     await save.click()
     await expect(page.getByText(/You changed your tip page name too often today\./)).toBeVisible()
     await expect(page.getByText(/Try again tomorrow/)).toBeVisible()
-    await expect(pagePanel(page).locator('code')).toHaveText(/\/t\/nova-three$/)
+    await expect(pagePanel(page).locator('code')).toHaveText(/tip\.clearcraftlabs\.com\/nova-three$/)
   })
 
   test('422: a build with no relay says so', async ({ page }) => {
@@ -276,7 +276,7 @@ test.describe('tips: the rest', () => {
     await open(page, 'tips')
     await pagePanel(page).getByRole('button', { name: 'Copy tip page link' }).click()
     await expect(pagePanel(page).getByRole('button', { name: 'Link copied' })).toBeVisible()
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/t\/novaplays$/)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/tip\.clearcraftlabs\.com\/novaplays$/)
     await providers(page)
       .getByRole('button', { name: /^Ko-fi/ })
       .click()
@@ -311,7 +311,7 @@ test.describe('tips: the rest', () => {
     await expect(page.getByRole('heading', { name: 'Create your tip page' })).toBeVisible()
     await expect(page.getByLabel('Page name')).toHaveValue('novaplays')
     await page.getByRole('button', { name: 'Create tip page' }).click()
-    await expect(pagePanel(page).locator('code')).toHaveText(/\/t\/novaplays$/)
+    await expect(pagePanel(page).locator('code')).toHaveText(/tip\.clearcraftlabs\.com\/novaplays$/)
   })
 
   test('saving a provider keeps unsaved page edits', async ({ page }) => {

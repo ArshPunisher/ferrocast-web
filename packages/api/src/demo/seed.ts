@@ -373,7 +373,7 @@ export function seedTimers(): Timer[] {
       id: 't-socials',
       name: 'Socials',
       message:
-        'New videos every Friday on YouTube. Tips go straight to me: ferrocast-relay.clearcraftlabs.com/t/novaplays',
+        'New videos every Friday on YouTube. Tips go straight to me: tip.clearcraftlabs.com/novaplays',
       every_min: 45,
       min_chat_lines: 20,
       platforms: [],
@@ -401,6 +401,8 @@ export const VOICES: TtsVoice[] = [
 /** The relay the demo pretends to use, and this install's id on it. */
 export const DEMO_RELAY = 'https://ferrocast-relay.clearcraftlabs.com'
 export const DEMO_INSTALL = 'ins_7q2kx9m4'
+/** Where tip pages live: `<DEMO_TIP_HOST>/<name>`. */
+export const DEMO_TIP_HOST = 'https://tip.clearcraftlabs.com'
 
 export function tipWebhooks(base = DEMO_RELAY, install = DEMO_INSTALL) {
   return {
@@ -415,7 +417,7 @@ export const TIPS: TipSettings = {
   handle: 'novaplays',
   display_name: 'NovaPlays',
   message: 'Thanks for hanging out. Every tip goes into the new mic fund.',
-  page_url: `${DEMO_RELAY}/t/novaplays`,
+  page_url: `${DEMO_TIP_HOST}/novaplays`,
   webhooks: tipWebhooks(),
   razorpay: {
     page_url: 'https://razorpay.me/@novaplays',

@@ -148,7 +148,7 @@ describe('demo engine: tips', () => {
     const t = await client.saveTips(page({ handle: '  NoVa ', display_name: ' Nova\u202e ' }))
     expect(t.handle).toBe('nova')
     expect(t.display_name).toBe('Nova')
-    expect(t.page_url).toMatch(/\/t\/nova$/)
+    expect(t.page_url).toBe('https://tip.clearcraftlabs.com/nova')
     expect(t.webhooks?.razorpay).toMatch(/\/v1\/tips\/razorpay\//)
     expect(t.webhooks?.kofi).toMatch(/\/v1\/tips\/kofi\//)
     expect(t.webhooks?.stripe).toMatch(/\/v1\/tips\/stripe\//)
