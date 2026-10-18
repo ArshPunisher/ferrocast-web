@@ -6,7 +6,10 @@ export interface MenuItem {
   key: string
   label: ReactNode
   icon?: ReactNode
+  /** Short, on the right (a shortcut or a state). */
   hint?: ReactNode
+  /** A line under the label saying what the item does. */
+  description?: ReactNode
   danger?: boolean
   disabled?: boolean
   onSelect: () => void
@@ -108,7 +111,8 @@ export function Menu({
             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             style={{ transformOrigin: align === 'end' ? 'top right' : 'top left' }}
             className={cx(
-              'absolute top-full z-40 mt-1.5 min-w-52 rounded-[12px] border border-line-strong bg-surface-1 p-1 shadow-pop',
+              'absolute top-full z-40 mt-1.5 rounded-[12px] border border-line-strong bg-surface-1 p-1 shadow-pop',
+              items.some((it) => it.description) ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-52',
               align === 'end' ? 'right-0' : 'left-0',
             )}
           >
@@ -126,15 +130,27 @@ export function Menu({
                     it.onSelect()
                   }}
                   className={cx(
-                    'flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left text-[13.5px] font-medium',
+                    'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] font-semibold',
+                    it.description ? 'items-start py-2.5' : 'items-center py-2',
                     'focus-visible:bg-surface-3 focus-visible:outline-none disabled:opacity-40',
                     it.danger
                       ? 'text-danger hover:bg-danger-soft focus-visible:bg-danger-soft'
                       : 'text-text hover:bg-surface-3',
                   )}
                 >
-                  {it.icon && <span className="shrink-0 text-text-3">{it.icon}</span>}
-                  <span className="min-w-0 flex-1">{it.label}</span>
+                  {it.icon && (
+                    <span className={cx('shrink-0 text-text-3', it.description ? 'mt-0.5' : null)}>
+                      {it.icon}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{it.label}</span>
+                    {it.description && (
+                      <span className="mt-0.5 block text-[12.5px] font-normal leading-snug text-text-3">
+                        {it.description}
+                      </span>
+                    )}
+                  </span>
                   {it.hint && <span className="shrink-0 text-[12px] text-text-3">{it.hint}</span>}
                 </button>
               </li>

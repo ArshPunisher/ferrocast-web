@@ -353,7 +353,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
               items={IMPORTS.map((x) => ({
                 key: x.key,
                 label: x.title,
-                hint: x.text,
+                description: x.text,
                 icon: <x.icon size={16} />,
                 onSelect: () =>
                   x.key === 'se'
