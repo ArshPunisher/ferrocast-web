@@ -19,6 +19,8 @@ export type Route =
   | { name: 'designs'; tab?: GalleryTab }
   | { name: 'designer'; id: string }
   | { name: 'studio'; section?: StudioSection }
+  /** Demo only: component previews (`#/preview/pro`). */
+  | { name: 'preview'; what: 'pro' }
 
 /** Gallery tabs; themes is the default (`#/designs`). */
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
@@ -59,6 +61,8 @@ export function parseRoute(hash: string): Route {
       return STUDIO_SECTIONS.includes(b as StudioSection)
         ? { name: 'studio', section: b as StudioSection }
         : { name: 'studio' }
+    case 'preview':
+      return b === 'pro' ? { name: 'preview', what: 'pro' } : { name: 'home' }
     case 'import':
       return b === 'streamelements' || b === 'streamlabs'
         ? { name: 'import', source: b }
@@ -86,6 +90,8 @@ export function href(r: Route): string {
       return `#/designer/${encodeURIComponent(r.id)}`
     case 'studio':
       return r.section ? `#/studio/${r.section}` : '#/studio'
+    case 'preview':
+      return `#/preview/${r.what}`
     default:
       return `#/${r.name}`
   }

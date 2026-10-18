@@ -31,7 +31,8 @@ export default defineConfig({
     {
       name: 'mobile',
       use: { ...devices['iPhone 13'], browserName: 'chromium' },
-      testMatch: /mobile/,
+      // pro-foundation checks its Pro panels on a phone too (its 375 px tests also run on desktop).
+      testMatch: /mobile|pro-foundation/,
     },
   ],
 })

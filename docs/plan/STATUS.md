@@ -1,5 +1,10 @@
 # Status
 
+## 19 Oct 2026 (Pro M0: foundations)
+- `packages/api`: `ProView` gains `features` (`ProFeatures`) and `quotas` (`ProQuota`), API.md §8/§9; `proPanelState()` decides hidden / calm line / open. The demo stays honest (off sale, no Pro, no features) with `?pro=open|active` and `?pro_features=on` (or `setPro()`) for tests.
+- Dashboard: `components/pro/ProChip.tsx` (outline chip, named "Part of Ferrocast Pro") and `ProPanel.tsx` (hidden unless the feature exists and `active || sales_open`; one line "Runs on Ferrocast’s servers, part of Pro." + Settings › Pro link). Demo-only `#/preview/pro` shows them until M1 has a real Pro panel.
+- Tests: vitest (api `pro.test.ts`, dashboard `components/pro/pro.test.tsx`), Playwright `e2e/pro-foundation.spec.ts` (chromium, webkit, mobile project, 375 px).
+
 ## 18 Oct 2026 (editors redesigned, QA pass, dashboard access)
 
 - Owner picked two layouts from `../design/editor-options.html`: S1 Studio for the theme/scene/overlay editor (scenes rail, canvas on a dark stage with quick-add buttons, inspector for the selected layer with layers below; shapes get real names) and A1 Preview first for Alerts (events list, short sections, sticky preview, one Insert menu for variables).

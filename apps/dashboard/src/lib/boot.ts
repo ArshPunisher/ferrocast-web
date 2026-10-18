@@ -124,6 +124,13 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
     ...(params.get('tips') === 'empty' ? { tips: 'empty' as const } : {}),
     ...(params.get('relay') === '0' ? { relay: false } : {}),
+    // Pro starts off sale with no features, like the relay today. `?pro=open` puts it on
+    // sale, `?pro=active` makes this install Pro, `?pro_features=on` switches every feature on.
+    pro: {
+      salesOpen: params.get('pro') === 'open',
+      active: params.get('pro') === 'active',
+      features: params.get('pro_features') === 'on',
+    },
     designs: BUILTINS,
   })
   window.__ferrocastDemo = engine
