@@ -1,5 +1,12 @@
 # Status
 
+## 18 Oct 2026 (editors redesigned, QA pass, dashboard access)
+
+- Owner picked two layouts from `../design/editor-options.html`: S1 Studio for the theme/scene/overlay editor (scenes rail, canvas on a dark stage with quick-add buttons, inspector for the selected layer with layers below; shapes get real names) and A1 Preview first for Alerts (events list, short sections, sticky preview, one Insert menu for variables).
+- A full click-through QA pass fixed: menus running off-screen (Menu now shifts inside the window), the Import menu overlap, a slow theme sheet (thumbnails mount one per frame), featured cards (smaller, caption under the picture), the boxed design-name field, duplicate React keys, a doubled demo ban row, faded-but-clickable TTS options, the sidebar theme toggle disagreeing with Settings, and the dev-only theme-boot 404.
+- Text: shorter copy on Settings, Tips, Moderation, Studio, Community and Import; field labels 13.5px semibold, hints 13px, inputs 14.5px, small text up half a step to a step; a disabled primary button is neutral.
+- Open in browser (desktop sidebar) makes a pair link and the desktop hands it to the default browser. The site has a Dashboard page explaining this, and the download page's beta buttons live in the system cards.
+
 ## 18 Oct 2026 (every built-in design is free)
 
 - Owner's call: every built-in design is free. The 26 designs marked Pro are now free (`pro` stays in the `Design` type because API.md has it, but the library always sets it false). Gone with it: the Pro chip on design cards, the theme sheet and the designer, the "Free only" filter, "(Pro)" in widget Look menus and "· Pro" on the overlay preview sheets. Settings › Pro is unchanged. The library test now asserts no built-in is Pro.
