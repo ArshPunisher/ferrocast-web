@@ -18,6 +18,7 @@ import {
 import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { CountersPanel, ModulesPanel, QuotesPanel } from '../components/studio/chatbot'
+import { AutoRepliesPanel } from '../components/bot/autoreplies'
 
 const ROLE_LABEL: Record<Command['roles'], string> = {
   everyone: 'Everyone',
@@ -370,7 +371,7 @@ export function Bot() {
     <div>
       <PageHeader
         title="Bot"
-        description="Commands and timers. The bot speaks as your own account, so it can’t be banned everywhere at once like a shared bot."
+        description="Commands, auto-replies and timers. The bot speaks as your own account, so it can’t be banned everywhere at once like a shared bot."
       />
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Panel
@@ -569,6 +570,9 @@ export function Bot() {
             </ul>
           )}
         </Panel>
+      </div>
+      <div className="mt-5">
+        <AutoRepliesPanel />
       </div>
       <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-5">
