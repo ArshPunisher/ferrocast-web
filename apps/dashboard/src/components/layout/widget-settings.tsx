@@ -168,7 +168,7 @@ function PlatformChecks({
               onChange(next.length ? next : [p])
             }}
             className={cx(
-              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium',
+              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium',
               on ? 'border-accent-line bg-accent-soft text-text' : 'border-line text-text-3',
             )}
           >
@@ -487,7 +487,7 @@ export function WidgetSettings({
         </>
       )}
       <details className="rounded-[12px] border border-line">
-        <summary className="cursor-pointer list-none px-3 py-2.5 text-[13px] font-semibold text-text-2 hover:text-text">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-[13.5px] font-semibold text-text-2 hover:text-text">
           Exact position
         </summary>
         <div className="grid grid-cols-4 gap-2 px-3 pb-3">

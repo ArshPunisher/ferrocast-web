@@ -399,7 +399,7 @@ function Canvas({
             {(!preview || sel) && (
               <span
                 className={cx(
-                  'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold',
+                  'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[12px] font-semibold',
                   sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                 )}
               >
@@ -947,7 +947,7 @@ function LayerSettings({
       </div>
     )
   return (
-    <p className="text-[13px] text-text-3">
+    <p className="text-[13.5px] text-text-3">
       Built-in designs keep this small Ferrocast mark. Duplicate the design in the gallery to make
       an unbranded copy.
     </p>

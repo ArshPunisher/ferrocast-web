@@ -136,7 +136,7 @@ export function UseDialog({ design, onClose }: { design: Design | null; onClose:
           />
         )}
         {target !== 'new' && !needsOverlay && (
-          <p className="text-[13px] text-warn">
+          <p className="text-[13.5px] text-warn">
             The overlay’s current widgets are replaced. You can undo it by using your old design
             again.
           </p>
@@ -228,7 +228,7 @@ export function ImportDesignDialog({
       >
         <FileArrowUp size={28} className="text-accent-text" />
         <b className="text-sm text-text">{file ? file.name : 'Drop a .ferrodesign file here'}</b>
-        <span className="text-[12.5px] text-text-3">or choose one. Up to 100 MB.</span>
+        <span className="text-[13px] text-text-3">or choose one. Up to 100 MB.</span>
         <input
           ref={input}
           type="file"
@@ -242,7 +242,7 @@ export function ImportDesignDialog({
         />
       </label>
       {error && (
-        <p role="alert" className="mt-3 text-[13px] font-medium text-danger">
+        <p role="alert" className="mt-3 text-[13.5px] font-medium text-danger">
           {error}
         </p>
       )}

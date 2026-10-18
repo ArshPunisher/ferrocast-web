@@ -311,7 +311,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
   const testBar = (
     <div className="flex flex-wrap items-center gap-2">
       {hasAmount(ev) && (
-        <label className="flex items-center gap-1.5 text-[13px] text-text-3">
+        <label className="flex items-center gap-1.5 text-[13.5px] text-text-3">
           Amount
           <div className="w-24">
             <Input
@@ -416,7 +416,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           title={conditionText(v.condition)}
           onClick={() => setVi(i)}
           className={cx(
-            'fc-press inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[12.5px] font-medium',
+            'fc-press inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-medium',
             i === index
               ? 'border-accent-line bg-accent-soft text-text'
               : 'border-line text-text-2 hover:border-line-strong',
@@ -563,7 +563,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
 function BrandNote({ onDuplicate }: { onDuplicate: () => void }) {
   return (
     <div className="flex flex-col items-start gap-2.5 rounded-[14px] border border-line bg-surface-2 px-3.5 py-3">
-      <p className="text-[13px] leading-snug text-text-2">
+      <p className="text-[13.5px] leading-snug text-text-2">
         <b className="font-semibold text-text">Built-in design.</b> It shows a small Ferrocast mark
         on stream. Your edits stay a draft until you save your own copy.
       </p>
@@ -602,93 +602,98 @@ export function DesignerHeader({
   onDuplicate: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <a
-        href={href({
-          name: 'designs',
-          tab: design.built_in ? galleryTab(design) : 'mine',
-        })}
-        className="fc-press inline-flex size-10 items-center justify-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text"
-        aria-label="Back to designs"
-      >
-        <CaretLeft size={18} />
-      </a>
-      {design.built_in ? (
-        <h1 className="min-w-0 truncate font-display text-2xl font-bold tracking-tight">{name}</h1>
-      ) : (
-        // Reads as the page title; a pencil on hover says it can be renamed, and editing shows
-        // a soft fill and an underline instead of a boxed field.
-        <label className="group inline-flex min-w-0 items-center gap-1.5 rounded-control px-1.5 py-0.5 hover:bg-surface-2 focus-within:bg-surface-2 focus-within:shadow-[inset_0_-2px_0_var(--color-accent)]">
-          <input
-            aria-label="Design name"
-            value={name}
-            maxLength={60}
-            size={Math.min(28, Math.max(6, name.length + 1))}
-            spellCheck={false}
-            onChange={(e) => onName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-            className="min-w-0 bg-transparent font-display text-2xl font-bold tracking-tight text-text outline-none"
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <a
+          href={href({
+            name: 'designs',
+            tab: design.built_in ? galleryTab(design) : 'mine',
+          })}
+          className="fc-press inline-flex size-10 items-center justify-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text"
+          aria-label="Back to designs"
+        >
+          <CaretLeft size={18} />
+        </a>
+        {design.built_in ? (
+          <h1 className="min-w-0 truncate font-display text-2xl font-bold tracking-tight">
+            {name}
+          </h1>
+        ) : (
+          // Reads as the page title; a pencil on hover says it can be renamed, and editing shows
+          // a soft fill and an underline instead of a boxed field.
+          <label className="group inline-flex min-w-0 items-center gap-1.5 rounded-control px-1.5 py-0.5 hover:bg-surface-2 focus-within:bg-surface-2 focus-within:shadow-[inset_0_-2px_0_var(--color-accent)]">
+            <input
+              aria-label="Design name"
+              value={name}
+              maxLength={60}
+              size={Math.min(28, Math.max(6, name.length + 1))}
+              spellCheck={false}
+              onChange={(e) => onName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              className="min-w-0 bg-transparent font-display text-2xl font-bold tracking-tight text-text outline-none"
+            />
+            <PencilSimple
+              size={16}
+              aria-hidden="true"
+              className="shrink-0 text-text-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-0"
+            />
+          </label>
+        )}
+        {design.built_in ? <BrandChip label="Built-in" /> : <Badge tone="accent">Mine</Badge>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {view && onView && (
+          <Segmented
+            label="Designer view"
+            size="sm"
+            value={view}
+            options={[
+              { value: 'stage', label: 'Stage', title: 'Big stage, inspector and timeline' },
+              { value: 'guided', label: 'Guided', title: 'Step by step cards' },
+            ]}
+            onChange={onView}
           />
-          <PencilSimple
-            size={16}
-            aria-hidden="true"
-            className="shrink-0 text-text-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-0"
-          />
-        </label>
-      )}
-      {design.built_in ? <BrandChip label="Built-in" /> : <Badge tone="accent">Mine</Badge>}
-      <span className="flex-1" />
-      {view && onView && (
-        <Segmented
-          label="Designer view"
-          size="sm"
-          value={view}
-          options={[
-            { value: 'stage', label: 'Stage', title: 'Big stage, inspector and timeline' },
-            { value: 'guided', label: 'Guided', title: 'Step by step cards' },
-          ]}
-          onChange={onView}
-        />
-      )}
-      <IconButton size="sm" label="Undo" disabled={!history.canUndo} onClick={history.undo}>
-        <ArrowArcLeft size={16} />
-      </IconButton>
-      <IconButton size="sm" label="Redo" disabled={!history.canRedo} onClick={history.redo}>
-        <ArrowArcRight size={16} />
-      </IconButton>
-      {onUse && (
-        <Button
-          size="sm"
-          variant="secondary"
-          icon={<Play size={14} />}
-          busy={using ?? false}
-          onClick={onUse}
-        >
-          Use
-        </Button>
-      )}
-      {design.built_in ? (
-        <Button
-          size="sm"
-          variant={dirty ? 'primary' : 'secondary'}
-          icon={<Copy size={14} />}
-          busy={saving}
-          onClick={dirty ? onSave : onDuplicate}
-        >
-          {dirty ? 'Save my copy' : 'Duplicate & customise'}
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          variant="secondary"
-          icon={<Check size={14} />}
-          busy={saving}
-          disabled={!dirty}
-          onClick={onSave}
-        >
-          {dirty ? 'Save' : 'Saved'}
-        </Button>
-      )}
+        )}
+        <IconButton size="sm" label="Undo" disabled={!history.canUndo} onClick={history.undo}>
+          <ArrowArcLeft size={16} />
+        </IconButton>
+        <IconButton size="sm" label="Redo" disabled={!history.canRedo} onClick={history.redo}>
+          <ArrowArcRight size={16} />
+        </IconButton>
+        {onUse && (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Play size={14} />}
+            busy={using ?? false}
+            onClick={onUse}
+          >
+            Use
+          </Button>
+        )}
+        {design.built_in ? (
+          <Button
+            size="sm"
+            variant={dirty ? 'primary' : 'secondary'}
+            icon={<Copy size={14} />}
+            busy={saving}
+            onClick={dirty ? onSave : onDuplicate}
+          >
+            {dirty ? 'Save my copy' : 'Duplicate & customise'}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Check size={14} />}
+            busy={saving}
+            disabled={!dirty}
+            onClick={onSave}
+          >
+            {dirty ? 'Save' : 'Saved'}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -734,7 +739,7 @@ export function DuplicateDialog({
         </>
       }
     >
-      <label className="flex flex-col gap-1.5 text-[13px] font-medium text-text-2">
+      <label className="flex flex-col gap-1.5 text-[13.5px] font-medium text-text-2">
         Name
         <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
       </label>
@@ -800,7 +805,7 @@ function StageView({
       {tab === 'motion' && (
         <>
           <MotionSection {...props} onReplay={onReplay} />
-          <p className="text-[12.5px] text-text-3">Timing lives in the timeline: drag its edges.</p>
+          <p className="text-[13px] text-text-3">Timing lives in the timeline: drag its edges.</p>
         </>
       )}
       {tab === 'sound' && <SoundSection {...props} />}
@@ -833,7 +838,7 @@ function StageView({
             }
           }}
           className={cx(
-            'flex min-h-12 flex-1 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[9px] px-2 text-[11.5px] font-semibold',
+            'flex min-h-12 flex-1 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[9px] px-2 text-[12.5px] font-semibold',
             t.id === tab
               ? 'bg-surface-3 text-text [&_svg]:text-accent-text'
               : 'text-text-3 hover:bg-surface-2 hover:text-text',
@@ -979,7 +984,7 @@ function GuidedView({
               aria-pressed={k === ev}
               onClick={() => onEv(k)}
               className={cx(
-                'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium',
+                'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-medium',
                 k === ev
                   ? 'border-accent-line bg-accent-soft text-text'
                   : 'border-line text-text-2 hover:border-line-strong',
@@ -1011,7 +1016,7 @@ function GuidedView({
               >
                 <span
                   className={cx(
-                    'grid size-6 place-items-center rounded-full font-mono text-[12px] font-bold',
+                    'grid size-6 place-items-center rounded-full font-mono text-[12.5px] font-bold',
                     done.has(i) && i !== step
                       ? 'bg-btn-primary text-on-btn-primary'
                       : i === step
@@ -1057,7 +1062,7 @@ function GuidedView({
                       <b className="font-display text-[17px] font-bold tracking-tight text-text">
                         {s.label}
                       </b>
-                      <span className="truncate text-[13px] text-text-3">{s.sub}</span>
+                      <span className="truncate text-[13.5px] text-text-3">{s.sub}</span>
                     </span>
                   </button>
                 </h3>
@@ -1071,7 +1076,7 @@ function GuidedView({
                     {s.id === 'motion' && <MotionSection {...p} onReplay={onReplay} />}
                     {s.id === 'motion' && advanced && (
                       <div className="flex flex-col gap-3 rounded-[14px] border border-dashed border-line-strong bg-surface-2 p-3.5">
-                        <span className="font-mono text-[11.5px] font-semibold text-accent-text">
+                        <span className="font-mono text-[12.5px] font-semibold text-accent-text">
                           Advanced
                         </span>
                         {when}
