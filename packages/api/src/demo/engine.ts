@@ -71,6 +71,7 @@ import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
 import { DemoRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
+import { DemoDiscordPro } from './features/discord-pro'
 import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
@@ -335,8 +336,12 @@ export class DemoEngine {
   /** First-time chatter marks and the welcome setting. */
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
-  private readonly discord = new DemoDiscord()
   private readonly pro: DemoPro
+  /** The Ferrocast bot in Discord (Pro): go-live posts and roles. */
+  private readonly discordPro = new DemoDiscordPro(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+  )
+  private readonly discord = new DemoDiscord(() => this.discordPro.proGoLive())
   private readonly history: DemoHistory
   private readonly cloudBackups: DemoCloudBackups
   /** Pro tip page branding and goal (on with Pro and its feature). */
@@ -594,6 +599,15 @@ export class DemoEngine {
   /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
   setTtsVoices(state: { resting?: boolean; used?: number }): void {
     this.ttsVoices.setState(state)
+  }
+
+  /** The Ferrocast bot (Pro): start connected, or Discord unreachable. */
+  setDiscordPro(state: {
+    connected?: boolean
+    discordDown?: boolean
+    perkBlocked?: boolean
+  }): void {
+    this.discordPro.setState(state)
   }
 
   /** Pro cloud backups: this PC's few (demo), none yet, or a new PC's view. */
@@ -1414,6 +1428,7 @@ export class DemoEngine {
       this.welcome,
       this.recap,
       this.discord,
+      this.discordPro,
       this.obsDetect,
       this.starter,
       this.importers,

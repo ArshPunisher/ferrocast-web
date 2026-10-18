@@ -31,4 +31,5 @@ export {
   MAX_DURATION_MS,
 } from './alert'
 export * from './design'
+export * from './discord-pro'
 export * from './remote'

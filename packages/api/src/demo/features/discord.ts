@@ -21,6 +21,11 @@ export function checkWebhook(raw: string): string {
 }
 
 export class DemoDiscord {
+  constructor(
+    /** The Ferrocast bot (Pro) posts go-live instead of this webhook. */
+    private readonly proGoLive: () => boolean = () => false,
+  ) {}
+
   private webhook: string | null = null
   private cfg = {
     enabled: true,
@@ -36,6 +41,7 @@ export class DemoDiscord {
         ? `${this.webhook.includes('discordapp.com') ? 'discordapp.com' : 'discord.com'} webhook …${id.slice(-4)}`
         : null,
       ...clone(this.cfg),
+      pro_go_live: this.proGoLive(),
     }
   }
 

@@ -963,6 +963,8 @@ export interface DiscordSettings {
   /** 1–1,500 characters; {name}, {platform}, {title}, {url}. */
   template: string
   mention_everyone: boolean
+  /** The Ferrocast bot (Pro) posts go-live instead, so this webhook post is skipped. */
+  pro_go_live?: boolean
 }
 
 /** `PUT /api/v1/discord`: only what's given changes; `webhook_url: null` removes it. */
