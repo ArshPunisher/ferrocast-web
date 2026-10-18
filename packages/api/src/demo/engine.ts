@@ -93,7 +93,6 @@ import {
   TIPS,
   TTS,
   VOICES,
-  DEMO_RELAY,
   DEMO_TIP_HOST,
   presetWidgets,
   seedBans,
