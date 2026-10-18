@@ -35,6 +35,7 @@ import { href } from '../lib/router'
 import { DiscordSettingsForm } from '../components/discord'
 import { ObsAutoDetect } from '../components/obs-detect'
 import { ProSettings } from '../components/pro'
+import { CloudBackups } from '../components/cloud-backups'
 import { useLive } from '../lib/store'
 
 const SECTIONS = [
@@ -961,6 +962,7 @@ export function Settings({ section }: { section?: string | undefined }) {
             <>
               <Appearance settings={res.data} save={save} />
               <Data />
+              <CloudBackups />
               <Updates settings={res.data} save={save} />
               <Section
                 id="pro"
