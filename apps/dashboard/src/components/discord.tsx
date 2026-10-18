@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PaperPlaneTilt, Trash } from '@phosphor-icons/react'
 import { fieldError, type DiscordSettings } from '@ferrocast/api'
 import {
@@ -13,6 +13,7 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { LoadError } from './Panel'
+import { DISCORD_PRO_CHANGED } from './discord-pro'
 import { useAction, useClient, useResource } from '../lib/hooks'
 
 function DiscordForm({
@@ -96,6 +97,11 @@ function DiscordForm({
           />
         )}
       </Field>
+      {cfg.pro_go_live && (
+        <p className="text-[13.5px] text-text-2" data-testid="discord-pro-posts">
+          The Ferrocast bot posts your go-live now, so this webhook stays quiet.
+        </p>
+      )}
       <Switch
         label="Post when I go live"
         description="Once per platform, not again for 30 minutes if a stream drops and comes back."
@@ -187,6 +193,12 @@ function DiscordForm({
 /** Discord go-live posts. The webhook is kept in the engine’s secret store and never shown again. */
 export function DiscordSettingsForm() {
   const d = useResource((c) => c.discord())
+  const { reload } = d
+  // The Ferrocast bot (below) took over or gave back go-live posts.
+  useEffect(() => {
+    window.addEventListener(DISCORD_PRO_CHANGED, reload)
+    return () => window.removeEventListener(DISCORD_PRO_CHANGED, reload)
+  }, [reload])
   if (d.error) return <LoadError error={d.error} onRetry={d.reload} />
   if (!d.data) return <Skeleton className="h-64" />
   return <DiscordForm cfg={d.data} onSaved={(v) => d.set(v)} />

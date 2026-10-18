@@ -32,6 +32,7 @@ import { THEME_EVENT } from '../components/Shell'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { DiscordSettingsForm } from '../components/discord'
+import { DiscordPro } from '../components/discord-pro'
 import { ObsAutoDetect } from '../components/obs-detect'
 import { ProSettings } from '../components/pro'
 import { CloudBackups } from '../components/cloud-backups'
@@ -949,6 +950,7 @@ export function Settings({ section }: { section?: string | undefined }) {
               <DiscordSettingsForm />
             </Section>
           )}
+          {show('discord') && <DiscordPro />}
           {res.error ? (
             <LoadError error={res.error} onRetry={res.reload} />
           ) : !res.data ? (
