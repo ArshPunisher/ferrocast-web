@@ -1,5 +1,19 @@
 # Status
 
+## 19 Oct 2026 (Pro M3: cloud backups)
+- Settings › Your data: "Cloud backups" (`components/cloud-backups.tsx`) in `ProPanel` (feature `backups`), one line added in `Settings.tsx`. Save-your-recovery-key step before the first upload (Download / Copy, "If you lose it, your backups are lost", a confirm checkbox), key status with passphrase add/change/remove, automatic toggle, Back up now with usage (of 7 / 250 MB), the list (This PC / Another PC, Automatic / By you) with Restore (confirm dialog; key or passphrase fields with inline errors for another PC's backup) and Delete. On a fresh install with backups from another PC: "Use your newest backup from another PC". Empty state "No cloud backups yet. They're encrypted on this PC before upload." Larger, bolder type than the rest of Settings; light/dark; 375 px.
+- `packages/api`: `cloud-backups.ts` (types, `cloudBackupsApi`, helpers), demo `features/cloud-backups.ts` (402 without Pro, key-first, pruning, restore errors; `?cloud=empty|new-pc`, `setCloudBackups()`). API.md §9.3.
+- Tests: vitest `test/cloud-backups.test.ts` (8), Playwright `e2e/cloud-backups.spec.ts` (9 per project, chromium + mobile: hidden/on-sale line, 402, key then back up, restore confirm, delete + passphrase, new PC, axe, 375 px). `playwright.config.ts` mobile `testMatch` gains `cloud-backups`.
+
+## 19 Oct 2026 (Pro M2: tip page branding and goal page)
+- Tips screen: "Branding" and "Goal page" sections in `ProPanelView` (feature `tip_brand`): colour pickers + hex fields with a live contrast note (the same fix the relay makes), avatar/banner upload with inline 413/415/422 reasons, a goal form (title, target, currency, end date) with progress, Copy link / Copy for OBS / Open. The preview (`components/tips/TipPreview.tsx`) draws the relay's palette, avatar, banner and goal card live.
+- `packages/api`: `tip-brand.ts` (types, `tipBrandApi`, contrast helpers mirroring the relay, `majorToMinor`, checks), demo `features/tip-brand.ts` (402 without Pro, the relay's errors, counts the demo's tips); the demo passes raw `Blob` bodies through. API.md §9.2.
+- Tests: vitest `test/tip-brand.test.ts` (12), Playwright `e2e/tip-brand.spec.ts` (8, chromium + mobile project, 375 px, axe, 402, offline, 413/415).
+## 19 Oct 2026 (Pro M1: stream history)
+- `#/history` (`screens/History.tsx`, `components/history/{charts,StreamTable}.tsx`): range chips (4 weeks, 3 months, 1 year), big numbers, a viewers line, streams per week, platform split, every stream (sticky first column, scrolls sideways on a phone), Export CSV. Plain SVG charts with titles, descriptions and screen-reader tables; light and dark; 375 px. Wrapped in ProPanel (`feature: 'history'`). Nav entry "History" only when the panel would show.
+- `packages/api`: `history.ts` (types, `historyApi`, `weeklyTotals`, `historySummary`), demo `features/history.ts` (a seeded year of streams, 402 without Pro, the relay's range errors, CSV); `?history=empty` / `setHistoryEmpty()`.
+- The demo-only `#/preview/pro` and `ProPreview.tsx` are gone; `e2e/pro-foundation.spec.ts` now checks the Pro panel on History. New `e2e/history.spec.ts` (also in the mobile project).
+
 ## 19 Oct 2026 (Pro M0: foundations)
 - `packages/api`: `ProView` gains `features` (`ProFeatures`) and `quotas` (`ProQuota`), API.md §8/§9; `proPanelState()` decides hidden / calm line / open. The demo stays honest (off sale, no Pro, no features) with `?pro=open|active` and `?pro_features=on` (or `setPro()`) for tests.
 - Dashboard: `components/pro/ProChip.tsx` (outline chip, named "Part of Ferrocast Pro") and `ProPanel.tsx` (hidden unless the feature exists and `active || sales_open`; one line "Runs on Ferrocast’s servers, part of Pro." + Settings › Pro link). Demo-only `#/preview/pro` shows them until M1 has a real Pro panel.
