@@ -150,7 +150,7 @@ function Leaderboard({ name }: { name: string }) {
         </div>
       ) : board.data.length === 0 ? (
         <EmptyState compact title="Nobody has points yet">
-          Viewers earn {name} by chatting while you’re live, and with follows, subs, tips and raids.
+          Viewers earn {name} by chatting live, following, subbing, tipping and raiding.
         </EmptyState>
       ) : (
         <ol className="-mx-2 flex flex-col" aria-label={`Leaderboard by ${name}`}>
@@ -227,9 +227,9 @@ function Leaderboard({ name }: { name: string }) {
 
 const RATE_FIELDS: { key: keyof LoyaltyConfig; label: string; hint: string }[] = [
   { key: 'follow_bonus', label: 'Per follow', hint: 'Once per person.' },
-  { key: 'sub_bonus', label: 'Per sub', hint: 'Gifters get it for each gift.' },
+  { key: 'sub_bonus', label: 'Per sub', hint: 'Gifters get it per gift.' },
   { key: 'tip_bonus', label: 'Per tip', hint: 'Tips, Super Chats, Bits, Kicks.' },
-  { key: 'raid_bonus', label: 'Per raid', hint: 'For the streamer who raided.' },
+  { key: 'raid_bonus', label: 'Per raid', hint: 'To the raiding streamer.' },
 ]
 
 function PointsSettings({
@@ -273,7 +273,7 @@ function PointsSettings({
   )
   const errFor = (k: string) => (err?.field === k ? err.message : null)
   return (
-    <Panel title="Earning" description="Smart defaults are on. Change only what you want.">
+    <Panel title="Earning">
       <form
         className="flex flex-col gap-5"
         onSubmit={(e) => {
@@ -283,7 +283,7 @@ function PointsSettings({
       >
         <Switch
           label={`Viewers earn ${cfg.name}`}
-          description="The streamer, bots and anonymous supporters never earn."
+          description="You, bots and anonymous supporters never earn."
           checked={cfg.enabled}
           onChange={(enabled) =>
             void run('on', () => client.saveLoyalty({ enabled })).then((c) => {
@@ -308,7 +308,7 @@ function PointsSettings({
           )}
         </Field>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-[13px] font-medium text-text-2">
+          <legend className="mb-1.5 text-[13.5px] font-medium text-text-2">
             For chatting while live
           </legend>
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 text-sm text-text-2">
@@ -331,7 +331,7 @@ function PointsSettings({
             <span aria-hidden="true">min</span>
           </div>
           {(errFor('per_interval') ?? errFor('interval_min')) && (
-            <p role="alert" className="text-[12.5px] font-medium text-danger">
+            <p role="alert" className="text-[13.5px] font-medium text-danger">
               {errFor('per_interval') ?? errFor('interval_min')}
             </p>
           )}
@@ -344,7 +344,7 @@ function PointsSettings({
           ))}
         </div>
         {err && !err.field && (
-          <p role="alert" className="text-[13px] text-danger">
+          <p role="alert" className="text-[13.5px] text-danger">
             {err.message}
           </p>
         )}

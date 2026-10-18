@@ -73,7 +73,7 @@ test('Streamlabs: YouTube names alone are listed as needing a match', async ({ p
     buffer: Buffer.from('Name,Points\nAna Plays,40\n'),
   })
   await page.getByLabel('These viewers watch you on').selectOption('youtube')
-  await expect(page.getByText('YouTube names aren’t unique, so without a Channel ID')).toBeVisible()
+  await expect(page.getByText('YouTube names aren’t unique. Without a Channel ID')).toBeVisible()
   await page.getByRole('button', { name: 'Preview' }).click()
   await expect(page.getByText('Need a match', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Import', exact: true }).click()

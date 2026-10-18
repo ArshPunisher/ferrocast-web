@@ -66,7 +66,7 @@ export function linkRule(allowRoles: number): string {
   if (allowRoles & Roles.VIP) who.push('VIPs')
   if (allowRoles & Roles.SUBSCRIBER) who.push('subscribers')
   const list = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who.at(-1)}` : who[0]
-  return `${list} can post links. Everyone else’s links get the action below, unless the site is always allowed.`
+  return `${list} can post links. Other links get the action below.`
 }
 
 function PanicCard() {
@@ -94,15 +94,16 @@ function PanicCard() {
             Panic mode {on && <Badge tone="danger">On</Badge>}
           </h2>
           <p className="mt-1 max-w-[56ch] text-sm leading-relaxed text-text-2">
-            For hate raids and bot floods. One press locks chat down on every connected platform at
-            once and pauses alerts. It runs on your computer, so it works even if our servers don’t.
+            For hate raids and bot floods. One press locks chat on every platform and pauses alerts.
           </p>
-          <p className="mt-2 flex items-center gap-1.5 text-[13px] text-text-3">
+          <p
+            className="mt-2 flex flex-wrap items-center gap-1.5 text-[13.5px] font-medium text-text-2"
+            title="Works in this window and anywhere on the computer running Ferrocast."
+          >
             Shortcut <Kbd>Ctrl</Kbd>
             <Kbd>{mac ? 'Option' : 'Alt'}</Kbd>
             <Kbd>Shift</Kbd>
-            <Kbd>P</Kbd> works in this window, and anywhere on the computer running the Ferrocast
-            app.
+            <Kbd>P</Kbd>
           </p>
         </div>
         <Button
@@ -133,7 +134,7 @@ function PanicCard() {
               checked={c.hold_new_accounts}
               onChange={(v) => save({ ...c, hold_new_accounts: v })}
               label="Hold first-time chatters"
-              description="Their messages wait for a mod instead of showing."
+              description="Their messages wait for a mod."
             />
             <Switch
               checked={c.slow_mode_seconds > 0}
@@ -145,13 +146,13 @@ function PanicCard() {
               checked={c.emote_only}
               onChange={(v) => save({ ...c, emote_only: v })}
               label="Emote-only"
-              description="Twitch and Kick. YouTube has no emote-only mode."
+              description="Twitch and Kick only."
             />
             <Switch
               checked={c.pause_alerts}
               onChange={(v) => save({ ...c, pause_alerts: v })}
               label="Pause alerts"
-              description="Raid alerts and follows wait until you turn panic off."
+              description="Raids and follows wait until panic ends."
             />
             <Switch
               checked={c.pause_tts}
@@ -210,7 +211,7 @@ function BanList() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
-            className="h-8 w-36 rounded-control border border-line bg-inset pr-2 pl-8 text-[13px] text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none sm:w-48"
+            className="h-8 w-36 rounded-control border border-line bg-inset pr-2 pl-8 text-[13.5px] text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none sm:w-48"
           />
         </div>
       }
@@ -224,9 +225,7 @@ function BanList() {
         </div>
       ) : list.length === 0 ? (
         <EmptyState compact title={q ? 'Nobody matches' : 'Nobody is banned'}>
-          {q
-            ? 'Try another name.'
-            : 'When you ban someone from chat, they show up here with the reason.'}
+          {q ? 'Try another name.' : 'Bans show up here with the reason.'}
         </EmptyState>
       ) : (
         <ul className="-mx-2 flex flex-col">
@@ -246,7 +245,7 @@ function BanList() {
                     </span>
                     {b.everywhere && <Badge tone="accent">Every platform</Badge>}
                   </p>
-                  <p className="mt-0.5 truncate text-[12.5px] text-text-3">
+                  <p className="mt-0.5 truncate text-[13.5px] text-text-3">
                     {b.reason ?? 'No reason given'} ·{' '}
                     {new Date(b.banned_at).toLocaleDateString(undefined, {
                       day: 'numeric',
@@ -288,7 +287,7 @@ function FiltersPanel() {
   return (
     <Panel
       title="Chat filters"
-      description="Checked on your computer before anything reaches your overlays. Mods and the streamer are never filtered."
+      description="Runs before anything reaches overlays. Mods and you are never filtered."
       actions={
         <Button
           size="sm"
@@ -311,7 +310,7 @@ function FiltersPanel() {
             checked={f.solicitation.enabled}
             onChange={(v) => set('solicitation', { enabled: v })}
             label="Scam and self-promotion"
-            description="“I do commissions, DM me”, viewer selling, fake promoters. The most common spam right now."
+            description="“I do commissions, DM me”, viewer sellers, fake promoters."
           />
           {f.solicitation.enabled && (
             <ActionSelect
@@ -326,11 +325,11 @@ function FiltersPanel() {
             checked={f.words.enabled}
             onChange={(v) => set('words', { enabled: v })}
             label="Blocked words"
-            description="One per line. Lookalike letters (like 0 for o) are caught too."
+            description="Lookalike letters (0 for o) are caught too."
           />
           {f.words.enabled && (
             <>
-              <Field label="Words and phrases">
+              <Field label="Words and phrases" hint="One per line.">
                 {(p) => (
                   <Textarea
                     {...p}
@@ -397,7 +396,7 @@ function FiltersPanel() {
                 checked={f.links.hold_first_time !== false}
                 onChange={(v) => set('links', { hold_first_time: v })}
                 label="Hold a first message with a link"
-                description="Someone’s very first message with a link waits for a mod, even if they may post links. Allowed sites always go through."
+                description="A first-ever message with a link waits for a mod. Allowed sites pass."
               />
               <ActionSelect
                 label="Then"
@@ -407,7 +406,7 @@ function FiltersPanel() {
             </>
           )}
         </div>
-        <div className="grid grid-cols-1 gap-4 py-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
           <div className="flex flex-col gap-3">
             <Switch
               checked={f.caps.enabled}
@@ -476,13 +475,12 @@ function FiltersPanel() {
           </div>
         </div>
         <div className="py-4 last:pb-1">
-          <Field label="Timeout length" hint="Used whenever a filter times someone out.">
+          <Field label="Timeout length" hint="For every filter that times out.">
             {(p) => (
               <Select
                 {...p}
                 value={f.timeout_seconds}
                 onChange={(e) => setF({ ...f, timeout_seconds: Number(e.target.value) })}
-                className="max-w-xs"
               >
                 {[
                   [60, '1 minute'],

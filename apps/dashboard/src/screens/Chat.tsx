@@ -78,7 +78,7 @@ export function Chat() {
                 label: (
                   <span className="inline-flex items-center gap-1.5">
                     <PlatformMark platform={p} size={12} />
-                    <span className="hidden font-mono text-[11px] tabular-nums sm:inline">
+                    <span className="hidden font-mono text-[12.5px] tabular-nums sm:inline">
                       {counts[p] ?? 0}
                     </span>
                   </span>
@@ -92,7 +92,7 @@ export function Chat() {
           onClick={() => setOnlyHeld((v) => !v)}
           title="Messages waiting for a mod"
           className={cx(
-            'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold',
+            'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
             'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
             onlyHeld
               ? 'border-warn bg-warn-soft text-text'
@@ -105,7 +105,7 @@ export function Chat() {
           <span className="font-mono tabular-nums">{heldItems.length}</span>
           <span className="sr-only">{heldItems.length === 1 ? 'message' : 'messages'} waiting</span>
         </button>
-        <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-text-3">
+        <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-medium text-text-2">
           <input
             type="checkbox"
             checked={hideBots}
@@ -156,8 +156,8 @@ export function Chat() {
         <h2 id="events-title" className="font-display text-[15px] font-semibold tracking-tight">
           Events
         </h2>
-        <p className="mt-0.5 text-[12.5px] text-text-3">
-          Hover an event to replay it or ask why it didn’t alert.
+        <p className="mt-0.5 text-[13.5px] text-text-2">
+          Hover to replay, or see why it didn’t alert.
         </p>
       </header>
       <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">

@@ -14,7 +14,7 @@ export function Community({ section }: { section?: string | undefined }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Community"
-        description="Reward the people who show up. Everything here works the same on Twitch, YouTube and Kick."
+        description="Reward the people who show up, on Twitch, YouTube and Kick."
       />
       <section id="community-live" aria-label="Live with chat" className="scroll-mt-20">
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
@@ -40,9 +40,7 @@ export function Community({ section }: { section?: string | undefined }) {
         <PointsSection />
       </section>
       <section id="community-welcome" aria-label="New faces" className="scroll-mt-20">
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-          <WelcomePanel />
-        </div>
+        <WelcomePanel />
       </section>
     </div>
   )

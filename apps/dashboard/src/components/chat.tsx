@@ -253,7 +253,7 @@ export const ChatLine = memo(function ChatLine({
         {held && !deleted && actions && (
           <span className="mt-1.5 flex flex-wrap items-center gap-2">
             <HeldButtons event={event} onApprove={actions.approve} onRemove={actions.drop} />
-            <span className="text-[12px] text-text-3">{held}</span>
+            <span className="text-[12.5px] text-text-2">{held}</span>
           </span>
         )}
       </div>
@@ -290,7 +290,7 @@ export const ChatLine = memo(function ChatLine({
         </div>
       )}
       {!dense && (
-        <time className="mt-[3px] shrink-0 font-mono text-[11px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
+        <time className="mt-[3px] shrink-0 font-mono text-[12px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
           {relativeTime(event.received_at, now)}
         </time>
       )}
@@ -505,7 +505,7 @@ export function Composer({
       className="flex flex-col gap-2"
     >
       {reply && (
-        <div className="flex items-center gap-2 rounded-control border border-accent-line bg-accent-soft px-2.5 py-1.5 text-[12.5px] text-text-2">
+        <div className="flex items-center gap-2 rounded-control border border-accent-line bg-accent-soft px-2.5 py-1.5 text-[13.5px] text-text-2">
           <ArrowBendUpLeft size={14} className="shrink-0 text-accent-text" />
           <span className="min-w-0 flex-1 truncate">
             Replying to <span className="font-semibold text-text">{reply.name}</span> on{' '}
@@ -735,7 +735,7 @@ export function BanDialog({
       onClose={onClose}
       size="sm"
       title={actor ? `Ban ${tameText(actor.display_name)}?` : 'Ban'}
-      description="They can't chat or come back with this account. You can unban them later from Moderation."
+      description="They can't chat with this account. Unban any time in Moderation."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -760,8 +760,8 @@ export function BanDialog({
           ]}
         />
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="ban-reason" className="text-[13px] font-medium text-text-2">
-            Reason <span className="font-normal text-text-3">optional, only mods see it</span>
+          <label htmlFor="ban-reason" className="text-[13.5px] font-semibold text-text">
+            Reason <span className="font-normal text-text-2">(optional, only mods see it)</span>
           </label>
           <input
             id="ban-reason"
@@ -869,14 +869,14 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
               ['Timeouts', String(card.timeouts)],
             ].map(([k, v]) => (
               <div key={k} className="rounded-control border border-line bg-surface-2 px-3 py-2">
-                <dt className="text-[12px] text-text-3">{k}</dt>
+                <dt className="text-[12.5px] font-medium text-text-2">{k}</dt>
                 <dd className="mt-0.5 font-mono text-sm text-text tabular-nums">{v}</dd>
               </div>
             ))}
           </dl>
           <div className="flex flex-col gap-2 rounded-control border border-line bg-surface-2 px-3 py-2.5">
             <p className="flex items-baseline justify-between gap-2">
-              <span className="text-[12px] text-text-3">Points</span>
+              <span className="text-[12.5px] font-medium text-text-2">Points</span>
               <span className="font-mono text-sm font-semibold text-text tabular-nums">
                 {pointsLabel(card.points, 'points')}
               </span>
@@ -890,7 +890,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             />
           </div>
           {card.other_identities.length > 0 && (
-            <p className="text-[13px] text-text-3">
+            <p className="text-[13.5px] text-text-2">
               Also seen as{' '}
               {card.other_identities.map((o) => (
                 <span key={o.platform} className="font-medium text-text-2">
@@ -900,8 +900,8 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="viewer-note" className="text-[13px] font-medium text-text-2">
-              Note <span className="font-normal text-text-3">only you and your mods see it</span>
+            <label htmlFor="viewer-note" className="text-[13.5px] font-semibold text-text">
+              Note <span className="font-normal text-text-2">(only you and your mods see it)</span>
             </label>
             <Textarea
               id="viewer-note"
@@ -912,10 +912,11 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
               placeholder="Regular from the Sunday streams…"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13.5px] font-semibold text-text">Time out</span>
             <Button
-              size="sm"
               variant="secondary"
+              aria-label="Time out 1 minute"
               busy={busy === 't1'}
               onClick={() =>
                 void run('t1', () => client.timeout(card.platform, card.user_id, 60), {
@@ -923,11 +924,11 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
                 })
               }
             >
-              Time out 1 min
+              1 min
             </Button>
             <Button
-              size="sm"
               variant="secondary"
+              aria-label="Time out 10 minutes"
               busy={busy === 't10'}
               onClick={() =>
                 void run('t10', () => client.timeout(card.platform, card.user_id, 600), {
@@ -939,8 +940,8 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             </Button>
             {card.banned ? (
               <Button
-                size="sm"
                 variant="secondary"
+                className="ml-auto"
                 busy={busy === 'unban'}
                 onClick={() =>
                   void run('unban', () => done(client.unban(card.platform, card.user_id)), {
@@ -951,7 +952,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
                 Unban
               </Button>
             ) : (
-              <Button size="sm" variant="danger" onClick={() => setBanning(true)}>
+              <Button variant="danger" className="ml-auto" onClick={() => setBanning(true)}>
                 Ban…
               </Button>
             )}

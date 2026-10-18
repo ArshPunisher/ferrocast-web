@@ -43,7 +43,7 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
       title="This stream"
       actions={
         stats?.live && stats.started_at ? (
-          <span className="font-mono text-[12.5px] text-text-3 tabular-nums">
+          <span className="font-mono text-[13.5px] font-medium text-text-2 tabular-nums">
             live {duration(now - stats.started_at)}
           </span>
         ) : null
@@ -59,7 +59,7 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
         <dl className="grid grid-cols-2 gap-x-2 gap-y-2">
           {tiles.map(([k, v]) => (
             <div key={k} className="rounded-[12px] bg-surface-2 px-3 py-2.5">
-              <dt className="text-[12px] text-text-3">{k}</dt>
+              <dt className="text-[12.5px] font-medium text-text-2">{k}</dt>
               <dd
                 className="mt-0.5 truncate font-mono text-[19px] font-semibold tracking-tight text-text tabular-nums"
                 title={v}
@@ -125,7 +125,7 @@ export function Home() {
           <h1 className="font-display text-[26px] font-bold tracking-[-0.03em] text-text sm:text-3xl">
             {stats.data?.live ? 'You’re live' : 'Ready when you are'}
           </h1>
-          <p className="mt-1 text-sm text-text-3">Everything for this stream, on one screen.</p>
+          <p className="mt-1 text-[15px] text-text-2">Everything for this stream, on one screen.</p>
         </div>
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           <StartShowButton />
@@ -192,7 +192,7 @@ export function Home() {
           actions={
             <a
               href={href({ name: 'chat' })}
-              className="rounded-control px-2 py-1 text-[13px] font-semibold text-accent-text hover:bg-surface-2"
+              className="rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2"
             >
               All events
             </a>
@@ -219,7 +219,7 @@ export function Home() {
           actions={
             <a
               href={href({ name: 'chat' })}
-              className="rounded-control px-2 py-1 text-[13px] font-semibold text-accent-text hover:bg-surface-2"
+              className="rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2"
             >
               Open chat
             </a>

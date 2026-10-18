@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { ArrowsClockwise, DotsThree, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
+import {
+  ArrowsClockwise,
+  DotsThree,
+  Layout,
+  PencilSimple,
+  Plus,
+  Trash,
+} from '@phosphor-icons/react'
 import { describeError, type Overlay, type OverlayPreset } from '@ferrocast/api'
 import { Button, Dialog, EmptyState, Field, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
@@ -98,7 +105,7 @@ export function Overlays() {
     <div>
       <PageHeader
         title="Overlays"
-        description="Each overlay is one Browser source in OBS. Put several widgets in one to keep OBS light."
+        description="Each overlay is one OBS Browser source. Group widgets to keep OBS light."
         actions={
           <Button
             variant="primary"
@@ -150,7 +157,7 @@ export function Overlays() {
                   <h2 className="truncate font-display text-base font-semibold tracking-tight">
                     {o.name}
                   </h2>
-                  <p className="mt-0.5 truncate text-[12.5px] text-text-3">
+                  <p className="mt-0.5 truncate text-[13.5px] text-text-2">
                     {o.widgets.length
                       ? o.widgets.map((w) => WIDGET_NAME[w.kind]).join(', ')
                       : 'No widgets yet'}
@@ -168,7 +175,7 @@ export function Overlays() {
                     {
                       key: 'edit',
                       label: 'Edit layout',
-                      icon: <PencilSimple size={15} />,
+                      icon: <Layout size={15} />,
                       onSelect: () => go({ name: 'overlay', id: o.id }),
                     },
                     {
@@ -179,8 +186,7 @@ export function Overlays() {
                     },
                     {
                       key: 'regen',
-                      label: 'New URL',
-                      hint: 'old one stops',
+                      label: 'New URL…',
                       icon: <ArrowsClockwise size={15} />,
                       onSelect: () => setRegen(o),
                     },
@@ -257,7 +263,7 @@ export function Overlays() {
             )}
           </Field>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1.5 text-[13px] font-medium text-text-2">Start with</legend>
+            <legend className="mb-1.5 text-[13.5px] font-semibold text-text">Start with</legend>
             {PRESETS.map((p) => (
               <label
                 key={p.value}
@@ -278,7 +284,7 @@ export function Overlays() {
                 />
                 <span>
                   <span className="block text-sm font-semibold text-text">{p.title}</span>
-                  <span className="block text-[13px] text-text-3">{p.body}</span>
+                  <span className="block text-[13.5px] text-text-2">{p.body}</span>
                 </span>
               </label>
             ))}
@@ -291,7 +297,7 @@ export function Overlays() {
         onClose={() => setRegen(null)}
         size="sm"
         title="Make a new URL?"
-        description="Use this if someone saw your overlay URL. The old one stops working at once, so you’ll need to paste the new one into OBS (or press Add to OBS again)."
+        description="Use this if someone saw your URL. The old one stops at once, so press Add to OBS again."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRegen(null)}>

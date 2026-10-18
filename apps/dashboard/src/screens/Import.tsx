@@ -63,18 +63,18 @@ function Items({ title, items, total }: { title: string; items: ImportItem[]; to
   if (total === 0) return null
   return (
     <details className="group mt-2 rounded-control bg-inset px-3 py-2">
-      <summary className="cursor-pointer text-[13px] font-medium text-text-2 select-none hover:text-text">
+      <summary className="cursor-pointer text-[13.5px] font-medium text-text-2 select-none hover:text-text">
         {title} ({n(total)})
       </summary>
       <ul className="mt-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
         {items.map((i, idx) => (
-          <li key={`${i.name}-${idx}`} className="text-[13px] leading-snug break-words">
+          <li key={`${i.name}-${idx}`} className="text-[13.5px] leading-snug break-words">
             <span className="font-medium text-text">{i.name}</span>
             <span className="text-text-3">: {i.reason}</span>
           </li>
         ))}
         {total > items.length && (
-          <li className="text-[12.5px] text-text-3">and {n(total - items.length)} more</li>
+          <li className="text-[13.5px] text-text-3">and {n(total - items.length)} more</li>
         )}
       </ul>
     </details>
@@ -86,7 +86,7 @@ function Notes({ notes }: { notes: string[] }) {
   return (
     <ul className="mt-2 flex flex-col gap-1">
       {notes.map((t) => (
-        <li key={t} className="flex gap-2 text-[13px] leading-snug text-text-2">
+        <li key={t} className="flex gap-2 text-[13.5px] leading-snug text-text-2">
           <Info size={15} className="mt-0.5 shrink-0 text-text-3" aria-hidden="true" />
           <span className="min-w-0 break-words">{t}</span>
         </li>
@@ -106,7 +106,7 @@ function Count({ value, label, tone }: { value: number; label: string; tone?: 'w
       >
         {n(value)}
       </span>
-      <span className="mt-1 text-[12px] text-text-3">{label}</span>
+      <span className="mt-1 text-[13.5px] font-medium text-text-2">{label}</span>
     </div>
   )
 }
@@ -149,7 +149,7 @@ function FilePick({
   const tooBig = file !== null && file.size > MAX_FILE
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] font-medium text-text-2">
+      <label htmlFor={id} className="text-[13.5px] font-medium text-text-2">
         {label}
         {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
       </label>
@@ -168,7 +168,7 @@ function FilePick({
         </Button>
         {file && (
           <>
-            <span className="min-w-0 truncate text-[13px] text-text-2" title={file.name}>
+            <span className="min-w-0 truncate text-[13.5px] text-text-2" title={file.name}>
               {file.name}
             </span>
             <Button
@@ -185,11 +185,11 @@ function FilePick({
         )}
       </div>
       {tooBig ? (
-        <p role="alert" className="text-[12.5px] font-medium text-danger">
+        <p role="alert" className="text-[13px] font-medium text-danger">
           That file is over 10 MB, the most Ferrocast reads. Export only the columns you need.
         </p>
       ) : (
-        <p id={`${id}-hint`} className="text-[12.5px] leading-snug text-text-3">
+        <p id={`${id}-hint`} className="text-[13px] leading-snug text-text-3">
           {hint}
         </p>
       )}
@@ -326,13 +326,13 @@ export function Import({
     <div className="mx-auto max-w-3xl">
       <a
         href={href({ name: 'settings', section: 'data' })}
-        className="mb-3 inline-flex items-center gap-1.5 rounded-control text-[13px] font-medium text-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        className="mb-3 inline-flex items-center gap-1.5 rounded-control text-[13.5px] font-medium text-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
       >
         <ArrowLeft size={14} aria-hidden="true" /> Your data
       </a>
       <PageHeader
         title="Bring your setup"
-        description="Copy your commands, timers and points from StreamElements, or points and tip history from Streamlabs exports. You see everything before anything changes."
+        description="Move over from StreamElements or Streamlabs. You review it first."
       />
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {status}
@@ -367,9 +367,8 @@ export function Import({
                       label="StreamElements JWT token"
                       hint={
                         <>
-                          On streamelements.com: Account → Channels → Show secrets → JWT Token. It’s
-                          used once to read your channel and is never saved. Ferrocast only reads;
-                          nothing on StreamElements changes.
+                          streamelements.com: Account → Channels → Show secrets → JWT Token. Used
+                          once, never saved, read-only.
                         </>
                       }
                     >
@@ -387,26 +386,24 @@ export function Import({
                       )}
                     </Field>
                     {demo && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="self-start"
+                      <button
+                        type="button"
+                        className="self-start rounded-control text-[13.5px] font-semibold text-accent-text underline underline-offset-2 hover:no-underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                         onClick={() => setToken(DEMO_SE_TOKEN)}
                       >
                         Use the demo’s sample token
-                      </Button>
+                      </button>
                     )}
                   </>
                 ) : (
                   <>
                     <p className="text-[13.5px] leading-relaxed text-text-2">
-                      Streamlabs doesn’t let other apps read your Cloudbot, so this works from files
-                      you export. Commands and timers can’t be exported from Streamlabs, so they
-                      can’t come over.
+                      Streamlabs works from files you export. Its commands and timers can’t be
+                      exported, so they can’t come over.
                     </p>
                     <FilePick
                       label="Points export"
-                      hint="Streamlabs Chatbot: Currency tab, then Export. CSV or Excel .xlsx with Name and Points columns (a User ID or Channel ID column helps), up to 10 MB."
+                      hint="Chatbot → Currency → Export. CSV or .xlsx with Name and Points (plus a User ID if you have it), up to 10 MB."
                       file={pointsFile}
                       onPick={pickPoints}
                       optional={tipsFile !== null}
@@ -416,8 +413,8 @@ export function Import({
                         label="These viewers watch you on"
                         hint={
                           platform === 'youtube'
-                            ? 'YouTube names aren’t unique, so without a Channel ID column these points are listed as needing a match and never paid automatically.'
-                            : 'Ferrocast matches people by their login here (or a user id column), never by display name.'
+                            ? 'YouTube names aren’t unique. Without a Channel ID column, points wait for a match.'
+                            : 'Matched by login or user id, never by display name.'
                         }
                       >
                         {(p) => (
@@ -438,7 +435,7 @@ export function Import({
                     )}
                     <FilePick
                       label="Tip history"
-                      hint="A donations export with Date, Name, Amount and Currency columns (Message is optional)."
+                      hint="A donations export with Date, Name, Amount and Currency (Message optional)."
                       file={tipsFile}
                       onPick={pickTips}
                       optional
@@ -473,7 +470,7 @@ export function Import({
               >
                 What will come over
               </h2>
-              <p className="mt-0.5 text-[13px] text-text-3">
+              <p className="mt-0.5 text-[13.5px] text-text-3">
                 {preview.account
                   ? `From ${preview.account.name} on ${SOURCE_LABEL[preview.source]}${
                       preview.account.platform
@@ -489,7 +486,7 @@ export function Import({
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
                       <h3 className="text-sm font-semibold text-text">{KIND_LABEL[s.kind]}</h3>
                       {s.found === 0 && (
-                        <span className="text-[12.5px] text-text-3">
+                        <span className="text-[13.5px] text-text-3">
                           None found on {SOURCE_LABEL[preview.source]}
                         </span>
                       )}
@@ -534,7 +531,7 @@ export function Import({
               <div className="mt-5 flex flex-col gap-4 border-t border-line pt-4">
                 {conflicts > 0 && (
                   <div className="flex flex-col gap-2">
-                    <span id="conflict-label" className="text-[13px] font-medium text-text-2">
+                    <span id="conflict-label" className="text-[13.5px] font-medium text-text-2">
                       {n(conflicts)} {conflicts === 1 ? 'thing is' : 'things are'} already in
                       Ferrocast. Keep or replace them?
                     </span>
@@ -548,7 +545,7 @@ export function Import({
                       ]}
                       className="self-start"
                     />
-                    <p className="text-[12.5px] text-text-3">
+                    <p className="text-[13.5px] text-text-3">
                       {choice === 'keep'
                         ? 'Your Ferrocast versions stay as they are.'
                         : 'The imported versions replace yours. Nothing is deleted.'}
@@ -556,8 +553,8 @@ export function Import({
                   </div>
                 )}
                 {error && <ErrorNote error={error} />}
-                <p className="text-[12.5px] text-text-3">
-                  A backup is taken first, so you can undo this from Settings → Your data.
+                <p className="text-[13.5px] text-text-3">
+                  A backup is taken first. Undo it in Settings → Your data.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -573,7 +570,7 @@ export function Import({
                   </Button>
                 </div>
                 {nothingNew && (
-                  <p className="text-[13px] text-text-2">
+                  <p className="text-[13.5px] text-text-2">
                     There’s nothing new to bring over from this {SOURCE_LABEL[preview.source]}{' '}
                     {preview.source === 'streamelements' ? 'account' : 'export'}.
                   </p>
@@ -623,15 +620,15 @@ function Report({
         </h2>
         <Badge>{SOURCE_LABEL[report.source]}</Badge>
       </div>
-      <p className="mt-1 text-[13px] text-text-3">
-        A backup was taken first. To undo, restore it in Settings → Your data.
+      <p className="mt-1 text-[13.5px] text-text-3">
+        A backup was taken first. Undo it in Settings → Your data.
       </p>
       <ul className="mt-4 flex flex-col divide-y divide-line">
         {report.sections.map((s) => (
           <li key={s.kind} className="py-3 first:pt-0">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h3 className="text-sm font-semibold text-text">{KIND_LABEL[s.kind]}</h3>
-              <span className="text-[13px] text-text-2">{line(s)}</span>
+              <span className="text-[13.5px] text-text-2">{line(s)}</span>
             </div>
             <Items
               title="Need a match, not paid automatically"

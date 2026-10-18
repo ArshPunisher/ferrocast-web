@@ -85,7 +85,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
         )}
       </Field>
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1.5 flex w-full items-center justify-between gap-2 text-[13px] font-medium text-text-2">
+        <legend className="mb-1.5 flex w-full items-center justify-between gap-2 text-[13.5px] font-medium text-text-2">
           Answers
           <span className="flex gap-1">
             {PRESETS.map((pr) => (
@@ -93,7 +93,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
                 key={pr.label}
                 type="button"
                 onClick={() => setOptions([...pr.options])}
-                className="fc-press rounded-full border border-line px-2.5 py-0.5 text-[12px] font-medium text-text-3 hover:border-line-strong hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="fc-press rounded-full border border-line px-2.5 py-0.5 text-[12.5px] font-medium text-text-3 hover:border-line-strong hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 {pr.label}
               </button>
@@ -104,7 +104,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
           <div key={i} className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="w-14 shrink-0 font-mono text-[12.5px] whitespace-nowrap text-text-3"
+              className="w-14 shrink-0 font-mono text-[13.5px] whitespace-nowrap text-text-3"
             >
               !vote {i + 1}
             </span>
@@ -129,7 +129,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
           </div>
         ))}
         {err?.field === 'options' && (
-          <p role="alert" className="text-[12.5px] font-medium text-danger">
+          <p role="alert" className="text-[13.5px] font-medium text-danger">
             {err.message}
           </p>
         )}
@@ -146,7 +146,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
         )}
       </fieldset>
       <div className="flex flex-col gap-1.5">
-        <span id="poll-len" className="text-[13px] font-medium text-text-2">
+        <span id="poll-len" className="text-[13.5px] font-medium text-text-2">
           How long
         </span>
         <Segmented
@@ -157,7 +157,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
         />
       </div>
       {err && err.field !== 'question' && err.field !== 'options' && (
-        <p role="alert" className="text-[13px] text-danger">
+        <p role="alert" className="text-[13.5px] text-danger">
           {err.message}
         </p>
       )}
@@ -179,12 +179,12 @@ function Results({ poll }: { poll: PollView }) {
         return (
           <li key={i} className={cx('flex flex-col gap-1.5', poll.closed && !lead && 'opacity-60')}>
             <div className="flex items-baseline gap-2 text-sm">
-              <span className="w-5 shrink-0 font-mono text-[12.5px] text-text-3">{i + 1}</span>
+              <span className="w-5 shrink-0 font-mono text-[13.5px] text-text-3">{i + 1}</span>
               <span dir="auto" className="min-w-0 flex-1 truncate font-semibold text-text">
                 {tameText(o.text)}
               </span>
               {lead && <Badge tone="accent">Winner</Badge>}
-              <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+              <span className="shrink-0 font-mono text-[13.5px] text-text-2 tabular-nums">
                 {formatCount(o.votes)} · {Math.round(share * 100)}%
               </span>
             </div>
@@ -225,7 +225,7 @@ export function PollPanel() {
   return (
     <Panel
       title="Poll"
-      description="Viewers vote in chat with !vote 1. Works the same on every platform."
+      description="Viewers vote in chat with !vote 1, on every platform."
       actions={
         poll && open ? (
           <span
@@ -250,7 +250,7 @@ export function PollPanel() {
             <Badge tone={open ? 'ok' : 'neutral'}>{open ? 'Live' : 'Closed'}</Badge>
           </div>
           <Results poll={poll} />
-          <p className="text-[13px] text-text-3" aria-live="polite">
+          <p className="text-[13.5px] text-text-3" aria-live="polite">
             {formatCount(poll.total)} {poll.total === 1 ? 'vote' : 'votes'}
             {open ? '' : '. The result was posted to chat.'}
           </p>
