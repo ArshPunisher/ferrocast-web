@@ -17,7 +17,6 @@ import {
   Dialog,
   Field,
   Input,
-  ProBadge,
   Segmented,
   Select,
   Skeleton,
@@ -36,6 +35,7 @@ import { DiscordSettingsForm } from '../components/discord'
 import { ObsAutoDetect } from '../components/obs-detect'
 import { ProSettings } from '../components/pro'
 import { CloudBackups } from '../components/cloud-backups'
+import { TtsVoicePicker } from '../components/tts-voices'
 import { useLive } from '../lib/store'
 
 const SECTIONS = [
@@ -328,24 +328,13 @@ function Tts({ currency }: { currency?: string | undefined }) {
               onChange={(read_names) => save({ ...t, read_names })}
               label="Read the sender’s name"
             />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Voice">
-                {(p) => (
-                  <Select
-                    {...p}
-                    disabled={!t.enabled}
-                    value={t.voice}
-                    onChange={(e) => save({ ...t, voice: e.target.value })}
-                  >
-                    {(voices.data ?? []).map((v) => (
-                      <option key={v.id} value={v.id} disabled={v.pro}>
-                        {v.name}, {v.language}
-                        {v.pro ? ' (Pro)' : ''}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
+            <TtsVoicePicker
+              systemVoice={t.voice}
+              voices={voices.data ?? []}
+              disabled={!t.enabled}
+              onSystemVoice={(voice) => save({ ...t, voice })}
+            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field
                 label="Minimum amount"
                 hint={
@@ -382,12 +371,6 @@ function Tts({ currency }: { currency?: string | undefined }) {
                   />
                 )}
               </Field>
-            </div>
-            <div className="flex items-start gap-2 text-[13.5px] text-text-2">
-              <span className="shrink-0">
-                <ProBadge />
-              </span>
-              <span>Studio voices are optional. Free voices run on this computer.</span>
             </div>
           </div>
         </div>
