@@ -123,6 +123,15 @@ export const PAGES = {
     ogKicker: 'Compare',
     crumb: 'Compare',
   }),
+  dashboard: p({
+    path: '/dashboard/',
+    title: 'Open your Ferrocast dashboard in a browser',
+    description:
+      'Your Ferrocast dashboard runs on your own PC. Open it in any browser in one click from the app, with no account or password, and on your phone over Wi-Fi.',
+    ogTitle: 'Your dashboard, in any browser',
+    ogKicker: 'Dashboard',
+    crumb: 'Dashboard',
+  }),
   faq: p({
     path: '/faq/',
     title: 'Ferrocast FAQ: free, offline, platforms and tips',

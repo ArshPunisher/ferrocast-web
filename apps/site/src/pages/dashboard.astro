@@ -1,0 +1,150 @@
+---
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Icon from '../components/Icon.astro'
+import { PAGES } from '../data/pages'
+import { SITE } from '../data/company'
+import { webPage } from '../data/schema'
+
+const page = PAGES.dashboard
+// The app serves its dashboard here on the same computer; nothing goes through our servers.
+const LOCAL = 'http://127.0.0.1:47820/app/'
+const steps = [
+  {
+    icon: 'app-window',
+    title: 'Open the Ferrocast app',
+    text: 'The dashboard lives in the app on your PC, so the app has to be running.',
+  },
+  {
+    icon: 'arrow-square-out',
+    title: 'Click Open in browser',
+    text: 'It’s at the bottom of the app’s sidebar. Your browser opens your dashboard, already signed in.',
+  },
+  {
+    icon: 'bookmark-simple',
+    title: 'Bookmark it',
+    text: 'Next time, Open my dashboard on this page takes you straight there while the app runs.',
+  },
+]
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Your dashboard, in any browser.</h1>
+      <p class="lede">
+        Ferrocast runs on your PC, and so does your dashboard. There’s no account and no password:
+        the app signs your browser in for you.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href={LOCAL} rel="noopener">
+          <Icon name="arrow-square-out" size={18} />
+          Open my dashboard
+        </a>
+        <a class="btn btn-secondary" href="/download/">Get the app</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container">
+    <h2 class="sr-only">First time on this computer</h2>
+    <ol class="steps">
+      {steps.map((s) => (
+        <li>
+          <Icon name={s.icon} size={28} />
+          <h3>{s.title}</h3>
+          <p>{s.text}</p>
+        </li>
+      ))}
+    </ol>
+  </section>
+
+  <section class="container more">
+    <div>
+      <h2 class="display-3">On your phone or another PC</h2>
+      <p>
+        In the app, open Settings, Advanced, turn on <strong>Allow other devices</strong> and restart
+        it. Then press <strong>Make a link</strong> and open that link on your phone. Both need to be
+        on the same Wi-Fi.
+      </p>
+    </div>
+    <div>
+      <h2 class="display-3">Not opening?</h2>
+      <p>
+        Make sure the app is running on this computer. A link from Make a link works once and lasts 2
+        minutes, so make a new one if it has expired.
+      </p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 28px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 40px;
+    }
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+  @media (min-width: 900px) {
+    .steps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .steps li {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+  }
+  .steps :global(svg) {
+    color: var(--fc-accent-text);
+  }
+  .steps h3 {
+    font-size: 1.25rem;
+  }
+  .steps p {
+    color: var(--fc-text-2);
+  }
+  .more {
+    display: grid;
+    gap: 28px;
+    padding-block: 48px 72px;
+  }
+  @media (min-width: 900px) {
+    .more {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .more p {
+    margin-top: 10px;
+    color: var(--fc-text-2);
+    max-width: 60ch;
+  }
+</style>

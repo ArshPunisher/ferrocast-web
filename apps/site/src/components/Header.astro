@@ -10,6 +10,7 @@ const links = [
   { href: '/compare/', label: 'Compare' },
   { href: '/docs/getting-started/', label: 'Docs' },
   { href: '/faq/', label: 'FAQ' },
+  { href: '/dashboard/', label: 'Dashboard' },
 ]
 const here = Astro.url.pathname
 const isCurrent = (href: string) => here === href || (href !== '/' && here.startsWith(href))
