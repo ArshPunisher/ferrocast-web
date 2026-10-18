@@ -80,6 +80,8 @@ import { DemoHistory } from './features/history'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
 import type { ProView } from '../pro'
 import { DemoTipBrand } from './features/tip-brand'
+import { DemoTtsVoices } from './features/tts-voices'
+import { DemoAutoReplies } from './features/autoreplies'
 import {
   CHATTERS,
   FILTERS,
@@ -340,8 +342,15 @@ export class DemoEngine {
     },
     () => this.tips,
   )
+  /** Ferrocast voices (Pro): listed with Pro and the feature, previews count characters. */
+  private readonly ttsVoices = new DemoTtsVoices(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+    () => VOICES,
+    () => this.tts.voice,
+  )
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
+  readonly autoReplies: DemoAutoReplies
   private readonly starter = new DemoStarter(() => this.commands)
   private readonly importers = new DemoImporters(
     () => this.commands,
@@ -486,6 +495,12 @@ export class DemoEngine {
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.welcome = new DemoWelcome(this.host)
     this.studio = new DemoStudio(this.host, () => this.commands)
+    this.autoReplies = new DemoAutoReplies(this.host, {
+      botOn: () => (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
+      commands: () => this.commands,
+      game: () => this.studio.history.find((h) => h.info.category)?.info.category?.name ?? null,
+      title: () => this.studio.history.find((h) => h.info.title)?.info.title ?? null,
+    })
     this.designs = new DemoDesigns(
       {
         overlays: () => this.overlays,
@@ -560,6 +575,11 @@ export class DemoEngine {
   /** Stream history with no streams yet (true) or the demo year (false). */
   setHistoryEmpty(on: boolean): void {
     this.history.setEmpty(on)
+  }
+
+  /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
+  setTtsVoices(state: { resting?: boolean; used?: number }): void {
+    this.ttsVoices.setState(state)
   }
 
   /** Pro cloud backups: this PC's few (demo), none yet, or a new PC's view. */
@@ -1331,6 +1351,8 @@ export class DemoEngine {
       this.designs,
       this.studio,
       this.tipBrand,
+      this.autoReplies,
+      this.ttsVoices,
     ]
   }
 

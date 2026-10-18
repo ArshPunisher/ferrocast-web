@@ -13,7 +13,9 @@ export * from './pro'
 export * from './history'
 export * from './tip-brand'
 export * from './cloud-backups'
+export * from './tts-voices'
 export * from './studio'
+export * from './autoreplies'
 export {
   amountOf,
   appliesTo,

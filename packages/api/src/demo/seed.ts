@@ -395,7 +395,6 @@ export const VOICES: TtsVoice[] = [
   { id: 'kokoro-af-heart', name: 'Heart', language: 'English (US)', pro: false },
   { id: 'kokoro-bm-george', name: 'George', language: 'English (UK)', pro: false },
   { id: 'kokoro-hf-alpha', name: 'Alpha', language: 'Hindi', pro: false },
-  { id: 'studio-aria', name: 'Aria (studio)', language: 'English (US)', pro: true },
 ]
 
 /** The relay the demo pretends to use, and this install's id on it. */

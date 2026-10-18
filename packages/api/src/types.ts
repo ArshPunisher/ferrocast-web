@@ -875,8 +875,11 @@ export interface TtsVoice {
   id: string
   name: string
   language: string
-  /** Not in API.md yet: studio voices that need Pro. Absent means free. */
+  /** A Ferrocast voice (Pro, API.md §9.4): `google:…`, read through the relay. Absent or false: this computer's own voice. */
   pro?: boolean
+  /** Ferrocast voices only. */
+  gender?: string
+  family?: string
 }
 /** Pending TTS item. Shape proposed in docs/API-REQUESTS.md (R4). */
 export interface TtsPending {
