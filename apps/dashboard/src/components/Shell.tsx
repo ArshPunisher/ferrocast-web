@@ -20,6 +20,7 @@ import {
 import { Dialog, Wordmark, cx } from '@ferrocast/ui'
 import { href, useRoute, type Route } from '../lib/router'
 import { useLive } from '../lib/store'
+import { useClient } from '../lib/hooks'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
 
@@ -56,7 +57,11 @@ export const NAV: NavItem[] = [
 
 const MOBILE_MAIN = ['home', 'chat', 'alerts', 'moderation']
 
+/** Fired after the sidebar changes the theme, so an open Settings screen can follow. */
+export const THEME_EVENT = 'fc-theme-change'
+
 function useTheme(): ['dark' | 'light', () => void] {
+  const client = useClient()
   const read = (): 'dark' | 'light' => {
     const t = document.documentElement.dataset.theme
     if (t === 'dark' || t === 'light') return t
@@ -80,6 +85,14 @@ function useTheme(): ['dark' | 'light', () => void] {
         // ignore
       }
       setTheme(next)
+      // Same place Settings › Appearance keeps it, so the two never disagree.
+      void client
+        .settings()
+        .then((s) => client.saveSettings({ ...s, theme: next }))
+        .then(() => window.dispatchEvent(new Event(THEME_EVENT)))
+        .catch(() => {
+          // The local choice above still applies; the engine copy catches up next time.
+        })
     },
   ]
 }
@@ -171,7 +184,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           <button
             type="button"
             onClick={toggleTheme}
-            className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             <ThemeIcon size={17} />
             {theme === 'dark' ? 'Light theme' : 'Dark theme'}
@@ -272,7 +285,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                   href={href(i.route)}
                   aria-current={active ? 'page' : undefined}
                   className={cx(
-                    'flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium',
+                    'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
                     active ? 'text-text' : 'text-text-3',
                   )}
                 >
@@ -292,7 +305,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               onClick={() => setMore(true)}
               aria-haspopup="dialog"
               className={cx(
-                'flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium',
+                'flex h-full w-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
                 ['overlays', 'overlay', 'bot', 'community', 'tips', 'settings', 'import'].includes(
                   route.name,
                 )
@@ -338,7 +351,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
 function DemoNote() {
   return (
-    <div className="rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 text-[12.5px] leading-snug text-text-2">
+    <div className="rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 text-[13px] leading-snug text-text-2">
       <span className="font-semibold text-text">Demo mode.</span> This is a simulated stream. Open
       the dashboard from the Ferrocast app to see yours.
     </div>
