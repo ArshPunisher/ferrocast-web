@@ -2536,11 +2536,9 @@ export class DemoEngine {
       'want more viewers? cheap_viewers dot com, real and fast',
       'Your stream is great, I can promote it to 10k people, DM me',
     ])
-    const actor = namedActor(
-      p,
-      this.pickOf(['art_by_lumi_x', 'promo_wizard22', 'viewbooster_live']),
-      { id: `${p}-spam-${this.seq}`, roles: 512 },
-    )
+    const login = this.pickOf(['art_by_lumi_x', 'promo_wizard22', 'viewbooster_live'])
+    // One id per spammer name, so banning the same account twice replaces its ban row.
+    const actor = namedActor(p, login, { id: `${p}-spam-${login}`, roles: 512 })
     return {
       actor,
       kind: {
