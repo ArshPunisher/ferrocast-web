@@ -94,7 +94,7 @@ function CommandDialog({
       footer={
         <>
           {err && !err.field && (
-            <p role="alert" className="mr-auto text-[13px] text-danger">
+            <p role="alert" className="mr-auto text-[13.5px] text-danger">
               {err.message}
             </p>
           )}
@@ -151,14 +151,14 @@ function CommandDialog({
         {placeholder && (
           <p
             role="status"
-            className="rounded-control border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-text-2"
+            className="rounded-control border border-warn/50 bg-warn-soft px-3 py-2 text-[13.5px] text-text-2"
           >
             Replace this reply with your links, like “Twitter: x.com/you · Discord: discord.gg/you”.{' '}
             {c.name} stays off until you do, so viewers never see this text.
           </p>
         )}
         {switchesOn && (
-          <p role="status" className="text-[13px] text-text-3">
+          <p role="status" className="text-[13.5px] text-text-3">
             {c.name} switches on when you save.
           </p>
         )}
@@ -263,7 +263,7 @@ function TimerDialog({
       footer={
         <>
           {err && !err.field && (
-            <p role="alert" className="mr-auto text-[13px] text-danger">
+            <p role="alert" className="mr-auto text-[13.5px] text-danger">
               {err.message}
             </p>
           )}
@@ -377,17 +377,20 @@ export function Bot() {
           title="Commands"
           actions={
             <>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Lightning size={14} weight="fill" />}
-                busy={starting === 'starter'}
-                onClick={addStarter}
-                aria-label="Add starter commands"
-              >
-                <span className="sm:hidden">Add starter</span>
-                <span className="hidden sm:inline">Add starter commands</span>
-              </Button>
+              {/* The empty state has its own big button for this. */}
+              {(commands.data?.length ?? 0) > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Lightning size={14} weight="fill" />}
+                  busy={starting === 'starter'}
+                  onClick={addStarter}
+                  aria-label="Add starter commands"
+                >
+                  <span className="sm:hidden">Add starter</span>
+                  <span className="hidden sm:inline">Add starter commands</span>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="primary"
@@ -421,8 +424,9 @@ export function Bot() {
                 </Button>
               }
             >
-              Add <span className="font-mono">!socials</span>, <span className="font-mono">!lurk</span>,{' '}
-              <span className="font-mono">!uptime</span> and <span className="font-mono">!so</span> in one click.
+              Add <span className="font-mono">!socials</span>,{' '}
+              <span className="font-mono">!lurk</span>, <span className="font-mono">!uptime</span>{' '}
+              and <span className="font-mono">!so</span> in one click.
             </EmptyState>
           ) : (
             <ul className="-mx-2 flex flex-col">
@@ -435,7 +439,7 @@ export function Bot() {
                     <p className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-text">{c.name}</span>
                       {c.aliases.map((a) => (
-                        <span key={a} className="font-mono text-[12px] text-text-3">
+                        <span key={a} className="font-mono text-[12.5px] text-text-3">
                           {a}
                         </span>
                       ))}
@@ -444,7 +448,7 @@ export function Bot() {
                         <Badge tone="warn">Add your links</Badge>
                       )}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[13px] break-words text-text-3">
+                    <p className="mt-0.5 line-clamp-2 text-[13.5px] break-words text-text-3">
                       {c.response}
                     </p>
                   </div>
@@ -544,7 +548,7 @@ export function Bot() {
                     <span className="block text-sm font-semibold text-text">
                       {t.name || 'Timer'}
                     </span>
-                    <span className="mt-0.5 block text-[12.5px] text-text-3">
+                    <span className="mt-0.5 block text-[13px] text-text-3">
                       Every {t.every_min} min · after{' '}
                       {plural(t.min_chat_lines, 'message', 'messages')}
                     </span>
