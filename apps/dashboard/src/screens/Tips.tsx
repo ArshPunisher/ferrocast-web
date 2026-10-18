@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
-  ArrowCounterClockwise,
   ArrowSquareOut,
   CaretDown,
   Check,
@@ -79,13 +78,12 @@ const GUIDES: Record<TipProviderKey, Guide> = {
     blurb: 'UPI, cards and netbanking for viewers in India.',
     button: 'Tip with UPI or card',
     pageLabel: 'Your Razorpay page link',
-    pageHint:
-      'Make a razorpay.me page or a Payment Link where the viewer chooses the amount, then paste its link. It must be on razorpay.me, pages.razorpay.com or rzp.io.',
+    pageHint: 'A page where viewers pick the amount, on razorpay.me, pages.razorpay.com or rzp.io.',
     pagePlaceholder: 'https://razorpay.me/@yourname',
     createUrl: 'https://dashboard.razorpay.com/app/paymentlinks',
     createLabel: 'Open Payment Links',
     webhookHow:
-      'In Razorpay go to Account & Settings, then Webhooks, then Add new webhook. Paste this address, type a secret of your own, and tick these events:',
+      'In Razorpay: Account & Settings → Webhooks → Add new webhook. Paste this address, set a secret, and tick:',
     events: [
       'payment.captured',
       'payment_link.paid',
@@ -95,42 +93,36 @@ const GUIDES: Record<TipProviderKey, Guide> = {
     webhookUrl: 'https://dashboard.razorpay.com/app/webhooks',
     webhookLabel: 'Open Razorpay webhooks',
     secretLabel: 'Webhook secret',
-    secretHint:
-      'The secret you typed in Razorpay when you added the webhook. At least 8 characters.',
+    secretHint: 'The one you set in Razorpay. At least 8 characters.',
     secretPlaceholder: 'The secret you chose in Razorpay',
-    testHint:
-      'Accept notices from Razorpay test mode so you can try the setup. Test payments alert like real tips.',
+    testHint: 'For trying Razorpay test mode. Test payments alert like real tips.',
   },
   kofi: {
     blurb: 'Your Ko-fi page. Ko-fi takes no cut of tips.',
     button: 'Tip on Ko-fi',
     pageLabel: 'Your Ko-fi page link',
-    pageHint: 'The link to your Ko-fi page, like ko-fi.com/yourname.',
+    pageHint: 'Like ko-fi.com/yourname.',
     pagePlaceholder: 'https://ko-fi.com/yourname',
     createUrl: 'https://ko-fi.com/manage',
     createLabel: 'Open Ko-fi',
-    webhookHow:
-      'In Ko-fi go to Settings, then More, then API, then Webhooks. Paste this address as the webhook URL and press Update.',
+    webhookHow: 'In Ko-fi: Settings → More → API → Webhooks. Paste this address and press Update.',
     events: [],
     webhookUrl: 'https://ko-fi.com/manage/webhooks',
     webhookLabel: 'Open Ko-fi webhooks',
     secretLabel: 'Verification token',
-    secretHint: 'On the same Ko-fi page, under Advanced. Copy the verification token.',
+    secretHint: 'On the same Ko-fi page, under Advanced.',
     secretPlaceholder: 'Ko-fi verification token',
-    testHint:
-      'Accept the notice Ko-fi sends when you press “Send test” so you can try the setup. Tests alert like real tips.',
+    testHint: 'For Ko-fi’s “Send test”. Tests alert like real tips.',
   },
   stripe: {
     blurb: 'Cards and wallets worldwide, paid out to your bank.',
     button: 'Tip with card',
     pageLabel: 'Your Stripe Payment Link',
-    pageHint:
-      'Make a Payment Link in Stripe with “Customers choose what to pay”, then paste its buy.stripe.com link.',
+    pageHint: 'A buy.stripe.com link set to “Customers choose what to pay”.',
     pagePlaceholder: 'https://buy.stripe.com/…',
     createUrl: 'https://dashboard.stripe.com/payment-links',
     createLabel: 'Open Payment Links',
-    webhookHow:
-      'In Stripe go to Developers, then Webhooks, then Add endpoint. Paste this address and pick these events:',
+    webhookHow: 'In Stripe: Developers → Webhooks → Add endpoint. Paste this address and pick:',
     events: [
       'checkout.session.completed',
       'checkout.session.async_payment_succeeded',
@@ -140,11 +132,9 @@ const GUIDES: Record<TipProviderKey, Guide> = {
     webhookUrl: 'https://dashboard.stripe.com/webhooks',
     webhookLabel: 'Open Stripe webhooks',
     secretLabel: 'Signing secret',
-    secretHint:
-      'On the webhook’s page in Stripe, under Signing secret. It starts with whsec_. Never paste an API key (sk_…).',
+    secretHint: 'Starts with whsec_. Never paste an API key (sk_…).',
     secretPlaceholder: 'whsec_…',
-    testHint:
-      'Accept notices from Stripe test mode so you can try the setup with a test card. Test payments alert like real tips.',
+    testHint: 'For trying Stripe test cards. Test payments alert like real tips.',
   },
 }
 
@@ -379,16 +369,14 @@ export function Tips() {
     <div>
       <PageHeader
         title="Tips"
-        description="Viewers tip you on your own Razorpay, Ko-fi or Stripe page. Money goes straight to you. Ferrocast never touches it and takes no cut."
+        description="Tips go straight to you via Razorpay, Ko-fi or Stripe. No cut."
       />
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
           <Panel
             id="tip-page"
             title={live ? 'Your tip page' : 'Create your tip page'}
-            description={
-              live ? undefined : 'Pick a name for the page. You’ll add payment pages right after.'
-            }
+            description={live ? undefined : 'Pick a name. Add ways to pay next.'}
           >
             <AnimatePresence initial={false}>
               {live && saved.page_url && (
@@ -443,7 +431,7 @@ export function Tips() {
                 <Field
                   label="Name viewers see"
                   error={fieldError('display_name')}
-                  hint={`The only name on your page and in alerts. ${tipTextLength(page.display_name)}/${TIP_LIMITS.displayNameMax}`}
+                  hint={`Shown on your page and alerts. ${tipTextLength(page.display_name)}/${TIP_LIMITS.displayNameMax}`}
                 >
                   {(p) => (
                     <Input
@@ -477,12 +465,12 @@ export function Tips() {
               </Field>
               {pageError && !serverField && <ErrorNote problem={pageError} />}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-[12.5px] text-text-3">
+                <p className="text-[13.5px] text-text-2">
                   {live && handle !== saved.handle && !problems.handle
                     ? `New link: ${linkBase}${handle}`
                     : live
-                      ? `Up to ${TIP_LIMITS.handleChangesPerDay} name changes a day. A new name means a new link.`
-                      : `You can change the name later, up to ${TIP_LIMITS.handleChangesPerDay} times a day.`}
+                      ? `New name, new link. Up to ${TIP_LIMITS.handleChangesPerDay} changes a day.`
+                      : `You can change it later (${TIP_LIMITS.handleChangesPerDay} times a day).`}
                 </p>
                 <Button type="submit" variant="primary" busy={savingPage} disabled={!dirty}>
                   {live ? 'Save changes' : 'Create tip page'}
@@ -502,9 +490,7 @@ export function Tips() {
             id="tip-providers"
             title="Ways to pay"
             description={
-              live
-                ? 'Add one or more. Each takes three short steps in that provider’s dashboard.'
-                : 'Create your tip page first. Each provider then gets its own webhook address.'
+              live ? 'Add one or more. Three short steps each.' : 'Create your tip page first.'
             }
           >
             <ul className="flex flex-col gap-3">
@@ -537,7 +523,7 @@ export function Tips() {
         onClose={() => setTakingDown(false)}
         size="sm"
         title="Take your tip page down?"
-        description={`The link stops working and tips stop arriving. The name ${saved.handle} stays reserved for you for ${TIP_LIMITS.holdDays} days. Your payment pages with each provider are not touched.`}
+        description={`The link stops working. ${saved.handle} stays yours for ${TIP_LIMITS.holdDays} days. Your provider pages aren’t touched.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setTakingDown(false)}>
@@ -560,7 +546,7 @@ function ErrorNote({ problem }: { problem: Problem }) {
       className="flex gap-2.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5"
     >
       <Warning size={16} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
-      <div className="min-w-0 text-[13px] leading-snug">
+      <div className="min-w-0 text-[13.5px] leading-snug">
         <p className="font-semibold text-text">{problem.message}</p>
         {problem.hint && <p className="mt-0.5 text-text-2">{problem.hint}</p>}
       </div>
@@ -598,14 +584,14 @@ const linkButton =
 function PageLink({ url }: { url: string }) {
   return (
     <div className="rounded-[12px] border border-accent-line bg-accent-soft p-3.5">
-      <p className="flex items-center gap-2 text-[13px] font-semibold text-text">
+      <p className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
         <Check size={14} weight="bold" className="text-ok" aria-hidden="true" />
         Your tip page is up
       </p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <code
           translate="no"
-          className="min-w-0 flex-1 font-mono text-[13px] break-all text-text-2 sm:truncate"
+          className="min-w-0 flex-1 font-mono text-[13.5px] break-all text-text-2 sm:truncate"
           title={url}
         >
           {url}
@@ -618,9 +604,7 @@ function PageLink({ url }: { url: string }) {
           </a>
         </div>
       </div>
-      <p className="mt-2 text-[12.5px] text-text-3">
-        Put it in your stream panels and a !tip command.
-      </p>
+      <p className="mt-2 text-[13.5px] text-text-2">Put it in your panels and a !tip command.</p>
     </div>
   )
 }
@@ -668,7 +652,7 @@ function ProviderRow({
           )}
           {state?.test_mode && <Badge tone="warn">Test mode</Badge>}
         </span>
-        <span className="mt-0.5 block text-[13px] text-text-3">{g.blurb}</span>
+        <span className="mt-0.5 block text-[13.5px] text-text-2">{g.blurb}</span>
       </span>
     </>
   )
@@ -690,7 +674,7 @@ function ProviderRow({
           className="fc-press flex w-full items-center gap-3 rounded-[12px] p-3.5 text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
           {head}
-          <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-accent-text">
+          <span className="inline-flex shrink-0 items-center gap-1 text-[13.5px] font-semibold text-accent-text">
             <span className="hidden sm:inline">{open ? 'Close' : on ? 'Edit' : 'Set up'}</span>
             <span className="sr-only sm:hidden">{open ? 'Close' : on ? 'Edit' : 'Set up'}</span>
             <CaretDown
@@ -902,21 +886,21 @@ function ProviderSetup({
             href={g.createUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-accent-text hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent-text hover:underline"
           >
             No page yet? {g.createLabel} <ArrowSquareOut size={13} aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         </Step>
         <Step n={2} done={secretOk && hasSecret} title={`Add this webhook in ${name}`}>
-          <p className="text-[13px] leading-relaxed text-text-2">{g.webhookHow}</p>
+          <p className="text-[13.5px] leading-relaxed text-text-2">{g.webhookHow}</p>
           {g.events.length > 0 && (
             <ul aria-label="Events to tick" className="mt-2 flex flex-wrap gap-1.5">
               {g.events.map((e) => (
                 <li
                   key={e}
                   translate="no"
-                  className="rounded-full border border-line bg-inset px-2 py-0.5 font-mono text-[11.5px] text-text-2"
+                  className="rounded-full border border-line bg-inset px-2 py-0.5 font-mono text-[12.5px] text-text-2"
                 >
                   {e}
                 </li>
@@ -926,7 +910,7 @@ function ProviderSetup({
           <div className="mt-3 flex flex-col gap-2.5 rounded-control border border-line-strong bg-inset p-3">
             <code
               translate="no"
-              className="font-mono text-[12.5px] leading-relaxed break-all text-text"
+              className="font-mono text-[13.5px] leading-relaxed break-all text-text"
             >
               {webhook}
             </code>
@@ -971,7 +955,7 @@ function ProviderSetup({
           ) : (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3 rounded-control border border-line bg-inset py-1.5 pr-1.5 pl-3">
-                <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-text">
+                <span className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-text">
                   <Lock size={14} aria-hidden="true" className="text-ok" />
                   {g.secretLabel} saved
                 </span>
@@ -987,7 +971,7 @@ function ProviderSetup({
                 </Button>
               </div>
               {fieldError('secret') && (
-                <p role="alert" className="text-[12.5px] font-medium text-danger">
+                <p role="alert" className="text-[13px] font-medium text-danger">
                   {fieldError('secret')}
                 </p>
               )}
@@ -997,7 +981,7 @@ function ProviderSetup({
       </ol>
 
       <details ref={advancedRef} className="group mt-4 rounded-control border border-line">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-control px-3 py-2.5 text-[13px] font-semibold text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-control px-3 py-2.5 text-[13.5px] font-semibold text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
           More options
           <CaretDown
             size={14}
@@ -1011,7 +995,7 @@ function ProviderSetup({
               label="Only payments from this link"
               optional
               error={fieldError('page_id')}
-              hint={`The Payment Link id from ${name} (it starts with plink_). Then only payments through that link alert, so merch sales on the same account don’t.`}
+              hint={`Starts with plink_. Only payments through this ${name} link alert, not merch.`}
             >
               {(p) => (
                 <Input
@@ -1060,7 +1044,7 @@ function ProviderSetup({
         onClose={() => setConfirmOff(false)}
         size="sm"
         title={`Turn off ${name} tips?`}
-        description={`The ${name} button leaves your tip page and Ferrocast forgets its secret. Your page on ${name} stays as it is, and you can add it back any time.`}
+        description={`The ${name} button leaves your page and its secret is deleted. Your ${name} page isn’t touched.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmOff(false)}>
@@ -1106,22 +1090,22 @@ function Preview({ saved, page }: { saved: TipSettings; page: PageDraft }) {
                   className="flex items-center justify-between rounded-[12px] border border-[#263047] bg-[#151a24] px-4 py-3 text-left text-[13.5px] font-semibold"
                 >
                   {GUIDES[k].button}
-                  <span className="text-[12px] font-normal text-[#9aa3b2]">
+                  <span className="text-[12.5px] font-normal text-[#9aa3b2]">
                     {TIP_PROVIDER_NAMES[k]}
                   </span>
                 </span>
               ))
             ) : (
-              <span className="text-[13px] text-[#9aa3b2]">Tips aren’t set up yet.</span>
+              <span className="text-[13.5px] text-[#9aa3b2]">Tips aren’t set up yet.</span>
             )}
           </div>
-          <p className="mx-auto mt-5 max-w-[36ch] text-[11.5px] text-[#9aa3b2]">
+          <p className="mx-auto mt-5 max-w-[36ch] text-[12.5px] text-[#9aa3b2]">
             Your name and message can show on stream. Payments go straight to the streamer through
             the provider you pick.
           </p>
         </div>
-        <figcaption className="mt-2 text-[12.5px] text-text-3">
-          Preview of your public tip page. It has no ads, trackers or Ferrocast branding.
+        <figcaption className="mt-2 text-[13.5px] text-text-2">
+          Your public page. No ads, trackers or branding.
         </figcaption>
       </figure>
     </Panel>
@@ -1133,35 +1117,26 @@ function Safety() {
     [
       EyeSlash,
       'Your legal name stays off the page',
-      'Your tip page and alerts show only the name you choose. The provider’s own checkout or receipt may show the name on that account, so use a business name there if you want it private.',
+      'A provider’s checkout may show its account name.',
     ],
-    [
-      Lock,
-      'Ferrocast never touches the money',
-      'Viewers pay on your own Razorpay, Ko-fi or Stripe page, straight to you. Ferrocast never sees card or bank details and holds no balance.',
-    ],
+    [Lock, 'No card or bank details', 'Ferrocast never sees them and holds no money.'],
     [
       ShieldCheck,
-      'Every payment is checked',
-      'Each payment notice is verified with your webhook secret before an alert plays. Only the name, amount and message are kept, never email or phone.',
-    ],
-    [
-      ArrowCounterClockwise,
-      'Only real reversals take a tip back',
-      'A full refund or a real dispute takes the tip back out of your goals. Nothing else does.',
+      'Every payment is verified',
+      'Only name, amount and message are kept. Only refunds and disputes undo a tip.',
     ],
   ] as const
   return (
     <Panel title="Why it’s safe" as="div">
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-3">
         {items.map(([Icon, title, text]) => (
           <li key={title} className="flex gap-3">
             <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
               <Icon size={18} aria-hidden="true" />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-text">{title}</p>
-              <p className="mt-0.5 text-[13px] leading-relaxed text-text-3">{text}</p>
+              <p className="mt-0.5 text-[13.5px] leading-snug text-text-2">{text}</p>
             </div>
           </li>
         ))}

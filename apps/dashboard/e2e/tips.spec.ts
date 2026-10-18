@@ -119,13 +119,17 @@ test.describe('tips: every error the server can send', () => {
       await page.getByLabel('Page name').fill(h)
       await expect(pagePanel(page)).toContainText(`New link:`)
       await save.click()
-      await expect(pagePanel(page).locator('code')).toHaveText(new RegExp(`tip\\.clearcraftlabs\\.com/${h}$`))
+      await expect(pagePanel(page).locator('code')).toHaveText(
+        new RegExp(`tip\\.clearcraftlabs\\.com/${h}$`),
+      )
     }
     await page.getByLabel('Page name').fill('nova-four')
     await save.click()
     await expect(page.getByText(/You changed your tip page name too often today\./)).toBeVisible()
     await expect(page.getByText(/Try again tomorrow/)).toBeVisible()
-    await expect(pagePanel(page).locator('code')).toHaveText(/tip\.clearcraftlabs\.com\/nova-three$/)
+    await expect(pagePanel(page).locator('code')).toHaveText(
+      /tip\.clearcraftlabs\.com\/nova-three$/,
+    )
   })
 
   test('422: a build with no relay says so', async ({ page }) => {
@@ -276,7 +280,9 @@ test.describe('tips: the rest', () => {
     await open(page, 'tips')
     await pagePanel(page).getByRole('button', { name: 'Copy tip page link' }).click()
     await expect(pagePanel(page).getByRole('button', { name: 'Link copied' })).toBeVisible()
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/tip\.clearcraftlabs\.com\/novaplays$/)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(
+      /tip\.clearcraftlabs\.com\/novaplays$/,
+    )
     await providers(page)
       .getByRole('button', { name: /^Ko-fi/ })
       .click()
@@ -291,7 +297,7 @@ test.describe('tips: the rest', () => {
       .click()
     await page.getByRole('button', { name: 'Turn off Razorpay' }).click()
     const dialog = page.getByRole('dialog', { name: 'Turn off Razorpay tips?' })
-    await expect(dialog).toContainText('forgets its secret')
+    await expect(dialog).toContainText('its secret is deleted')
     await dialog.getByRole('button', { name: 'Turn off' }).click()
     await expect(page.getByText('Razorpay is off.')).toBeVisible()
     await expect(page.getByText('Tips aren’t set up yet.')).toBeVisible()
@@ -302,7 +308,7 @@ test.describe('tips: the rest', () => {
     await open(page, 'tips')
     await page.getByRole('button', { name: 'Take the tip page down' }).click()
     const dialog = page.getByRole('dialog', { name: 'Take your tip page down?' })
-    await expect(dialog).toContainText('stays reserved for you for 30 days')
+    await expect(dialog).toContainText('stays yours for 30 days')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
     await page.getByRole('button', { name: 'Take the tip page down' }).click()
