@@ -26,7 +26,7 @@ export function Studio({ section = 'show' }: { section?: StudioSection | undefin
     <div>
       <PageHeader
         title="Studio"
-        description="Go live in one go, set your title everywhere, run OBS and keep the big moments."
+        description="Go live, set your title everywhere, run OBS, keep the big moments."
       />
       <Segmented
         label="Studio section"

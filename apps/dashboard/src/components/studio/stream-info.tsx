@@ -84,7 +84,7 @@ function Results({ results }: { results: PlatformResult[] }) {
               )}
             </p>
             {r.error && (
-              <p className="text-[13px] break-words text-text-2">
+              <p className="text-[13.5px] break-words text-text-2">
                 {r.error.message}{' '}
                 {r.error.code === 'reconnect_needed' || r.error.code === 'not_connected' ? (
                   <a
@@ -99,7 +99,7 @@ function Results({ results }: { results: PlatformResult[] }) {
               </p>
             )}
             {r.skipped.map((s) => (
-              <p key={s} className="text-[12.5px] text-text-3">
+              <p key={s} className="text-[13.5px] text-text-3">
                 Skipped {s}
               </p>
             ))}
@@ -287,7 +287,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             </Field>
           </div>
           <fieldset>
-            <legend className="text-[13px] font-medium text-text-2">Send to</legend>
+            <legend className="text-[13.5px] font-medium text-text-2">Send to</legend>
             <ul className="mt-2 flex flex-col gap-2">
               {v.platforms.map((p) => (
                 <li key={p.platform} className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -308,7 +308,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     {PLATFORM_LABEL[p.platform]}
                   </label>
                   {p.needs && (
-                    <span className="text-[12.5px] text-text-3">
+                    <span className="text-[13.5px] text-text-3">
                       {p.connected ? <Badge tone="warn">Reconnect needed</Badge> : 'Not connected.'}{' '}
                       <a
                         href="#/settings/accounts"
@@ -323,7 +323,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             </ul>
           </fieldset>
           {err && (
-            <p role="alert" className="text-[13px] font-medium text-danger">
+            <p role="alert" className="text-[13.5px] font-medium text-danger">
               {err}
             </p>
           )}
@@ -379,8 +379,8 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
       <div className="flex flex-col gap-5">
         <Panel title="Presets">
           {v.presets.length === 0 ? (
-            <p className="text-[13px] text-text-3">
-              Save the form as a preset, like “Valorant ranked”, to fill it in one click.
+            <p className="text-[13.5px] text-text-3">
+              Save the form as a preset to fill it in one click.
             </p>
           ) : (
             <ul className="-mx-2 flex flex-col">
@@ -403,7 +403,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     }}
                   >
                     <span className="block truncate text-sm font-semibold text-text">{p.name}</span>
-                    <span className="block truncate text-[12.5px] text-text-3">
+                    <span className="block truncate text-[13.5px] text-text-3">
                       {p.info.title ?? p.info.category?.name}
                     </span>
                   </button>
@@ -432,7 +432,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
         </Panel>
         <Panel title="Last sent">
           {v.history.length === 0 ? (
-            <p className="text-[13px] text-text-3">Nothing sent from Ferrocast yet.</p>
+            <p className="text-[13.5px] text-text-3">Nothing sent from Ferrocast yet.</p>
           ) : (
             <ul className="-mx-2 flex flex-col">
               {v.history.slice(0, 5).map((h) => (
@@ -445,7 +445,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     <span className="block truncate text-sm text-text">
                       {h.info.title ?? h.info.category?.name ?? 'Tags and language'}
                     </span>
-                    <span className="block text-[12.5px] text-text-3">
+                    <span className="block text-[13.5px] text-text-3">
                       {relativeTime(h.at, now)} · {h.results.filter((r) => r.ok).length} of{' '}
                       {h.results.length} platforms
                     </span>

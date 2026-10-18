@@ -61,33 +61,41 @@ export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Pre
   const studio = useStudio()
   const { run, busy } = useAction()
   const row = (c: PreflightCheck) => (
-    <li key={c.id} className="flex items-start gap-3 rounded-control px-1 py-2">
-      <StatusIcon status={c.status} className="mt-0.5" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text">{c.label}</p>
-        <p className="text-[13px] break-words text-text-3">{c.detail}</p>
+    <li
+      key={c.id}
+      className="flex flex-col gap-1.5 rounded-control px-1 py-2 sm:flex-row sm:items-start sm:gap-3"
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <StatusIcon status={c.status} className="mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-text">{c.label}</p>
+          <p className="text-[13.5px] break-words text-text-2">{c.detail}</p>
+        </div>
       </div>
-      {c.fix &&
-        (c.fix.href.startsWith('action:') ? (
-          <Button
-            size="sm"
-            busy={busy === c.id}
-            onClick={() =>
-              void run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' }).then(
-                (p) => p && onFixed(p),
-              )
-            }
-          >
-            {c.fix.label}
-          </Button>
-        ) : (
-          <a
-            href={c.fix.href}
-            className="shrink-0 rounded-control px-2 py-1 text-[13px] font-semibold text-accent-text hover:bg-surface-2"
-          >
-            {c.fix.label}
-          </a>
-        ))}
+      {c.fix && (
+        <div className="shrink-0 pl-[30px] sm:pl-0">
+          {c.fix.href.startsWith('action:') ? (
+            <Button
+              size="sm"
+              busy={busy === c.id}
+              onClick={() =>
+                void run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' }).then(
+                  (p) => p && onFixed(p),
+                )
+              }
+            >
+              {c.fix.label}
+            </Button>
+          ) : (
+            <a
+              href={c.fix.href}
+              className="-ml-2 inline-block rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2 sm:ml-0"
+            >
+              {c.fix.label}
+            </a>
+          )}
+        </div>
+      )}
     </li>
   )
   // Problems first; the checks that passed fold away so the fixes stand out.
@@ -102,7 +110,7 @@ export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Pre
       )}
       {fine.length > 0 && (
         <details className="rounded-control" open={issues.length === 0}>
-          <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-2 text-[13px] font-medium text-text-2 hover:text-text">
+          <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-2 text-[13.5px] font-medium text-text-2 hover:text-text">
             <StatusIcon status="ok" />
             {fine.length} {fine.length === 1 ? 'check' : 'checks'} passed
           </summary>
@@ -142,7 +150,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
       open={open}
       onClose={onClose}
       title="Start show"
-      description="Checks first, then your go-live checklist runs in one go."
+      description="Checks first, then your go-live checklist runs."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -174,7 +182,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
       ) : (
         <>
           {!pf.ready && (
-            <p role="status" className="mb-2 text-[13px] text-text-2">
+            <p role="status" className="mb-2 text-[13.5px] font-medium text-text-2">
               Fix the red items, or start anyway.
             </p>
           )}
@@ -215,9 +223,8 @@ export function ShowPanel() {
             </p>
           )}
           {!show && (
-            <p className="text-sm text-text-3">
-              Start show sets your stream info, switches OBS to Starting Soon, counts down to the
-              live scene and turns alerts and the bot on.
+            <p className="text-sm text-text-2">
+              Sets your stream info, shows Starting Soon, counts down, then goes live.
             </p>
           )}
           {show && show.steps.length > 0 && (
@@ -228,7 +235,9 @@ export function ShowPanel() {
                   <span className="min-w-0">
                     <span className="font-medium text-text">{s.label}</span>
                     {s.detail && (
-                      <span className="block text-[13px] break-words text-text-3">{s.detail}</span>
+                      <span className="block text-[13.5px] break-words text-text-2">
+                        {s.detail}
+                      </span>
                     )}
                   </span>
                 </li>
@@ -298,16 +307,44 @@ export function ShowPanel() {
 export function PreflightPanel() {
   const studio = useStudio()
   const pf = useResource(() => studio.preflight(), [studio])
+  const [checking, setChecking] = useState(false)
+  const recheck = () => {
+    setChecking(true)
+    studio
+      .preflight()
+      .then((p) => {
+        pf.set(p)
+        const n = p.checks.filter((c) => c.status === 'fail' || c.status === 'warn').length
+        toast({
+          key: 'preflight',
+          tone: n ? 'warn' : 'ok',
+          message: n ? `${n} ${n === 1 ? 'thing' : 'things'} to fix.` : 'All checks passed.',
+        })
+      })
+      .catch((e: unknown) => {
+        const d = describeError(e)
+        toast({ key: 'preflight', tone: 'error', message: d.message, hint: d.hint })
+      })
+      .finally(() => setChecking(false))
+  }
   return (
     <Panel
       title="Pre-flight"
-      description="What could go wrong at go-live, with the fix."
       actions={
-        <Button size="sm" variant="ghost" icon={<ArrowsClockwise size={14} />} onClick={pf.reload}>
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<ArrowsClockwise size={14} />}
+          busy={checking}
+          onClick={recheck}
+        >
           Check again
         </Button>
       }
     >
+      <p className="mb-2 text-[13.5px] text-text-2">
+        What could go wrong at go-live, with the fix.
+      </p>
       {pf.error ? (
         <LoadError error={pf.error} onRetry={pf.reload} />
       ) : !pf.data ? (
@@ -436,7 +473,9 @@ export function ShowSettings({
           {sceneSelect('Live scene', 'live_scene')}
           {sceneSelect('Ending scene', 'ending_scene')}
         </div>
-        {!scenes && <p className="text-[13px] text-text-3">Open OBS to pick scenes from a list.</p>}
+        {!scenes && (
+          <p className="text-[13.5px] text-text-2">Open OBS to pick scenes from a list.</p>
+        )}
         <div className="flex flex-col gap-3">
           <Switch
             label="Turn alerts on"
@@ -450,7 +489,7 @@ export function ShowSettings({
           />
           <Switch
             label="Post the Discord go-live message"
-            description="Uses your message in Settings, Discord."
+            description="The message from Settings, Discord."
             checked={c.discord}
             onChange={(v) => set({ discord: v })}
           />
@@ -463,14 +502,14 @@ export function ShowSettings({
         </div>
         {audio.length > 0 && (
           <fieldset>
-            <legend className="text-[13px] font-medium text-text-2">
+            <legend className="text-[13.5px] font-medium text-text-2">
               Check these mics aren’t muted
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {audio.map((i) => (
                 <label
                   key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
                 >
                   <input
                     type="checkbox"
@@ -486,14 +525,14 @@ export function ShowSettings({
         )}
         {cams.length > 0 && (
           <fieldset>
-            <legend className="text-[13px] font-medium text-text-2">
+            <legend className="text-[13.5px] font-medium text-text-2">
               Check these cameras are shown
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {cams.map((i) => (
                 <label
                   key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
                 >
                   <input
                     type="checkbox"
@@ -510,7 +549,7 @@ export function ShowSettings({
         <Field
           label="End show: thank-you in chat"
           optional
-          hint="Variables: {thanks}, {follows}, {subs}, {duration}. Leave empty to post nothing."
+          hint="Use {thanks}, {follows}, {subs}, {duration}. Empty posts nothing."
           error={err?.field === 'recap_message' ? err.message : null}
         >
           {(p) => (
@@ -526,7 +565,7 @@ export function ShowSettings({
           )}
         </Field>
         {err && !err.field && (
-          <p role="alert" className="text-[13px] text-danger">
+          <p role="alert" className="text-[13.5px] font-medium text-danger">
             {err.message}
           </p>
         )}

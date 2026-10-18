@@ -24,7 +24,7 @@ export function useObsHealth(): ObsHealth | null | undefined {
 function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="min-w-0 rounded-control bg-surface-2 px-3 py-2">
-      <p className="text-[12px] text-text-3">{label}</p>
+      <p className="text-[12.5px] font-medium text-text-2">{label}</p>
       <p
         className={cx(
           'font-mono text-[15px] font-semibold tabular-nums',
@@ -40,11 +40,11 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
 export function HealthPanel() {
   const h = useObsHealth()
   return (
-    <Panel title="OBS health" description="Checked every 5 seconds while OBS is connected.">
+    <Panel title="OBS health" description="Checked every 5 seconds while connected.">
       {h === undefined ? (
         <Skeleton className="h-24" />
       ) : h === null ? (
-        <p className="text-[13px] text-text-3">
+        <p className="text-[13.5px] text-text-3">
           No reading yet. Open OBS and check{' '}
           <a href="#/settings/obs" className="font-semibold text-accent-text hover:underline">
             Settings, OBS
@@ -74,14 +74,14 @@ export function HealthPanel() {
 }
 
 export function HealthWarnings({ h }: { h: ObsHealth }) {
-  if (h.warnings.length === 0) return <p className="text-[13px] text-text-3">All good.</p>
+  if (h.warnings.length === 0) return <p className="text-[13.5px] text-text-3">All good.</p>
   return (
     <ul className="flex flex-col gap-2" aria-label="OBS warnings">
       {h.warnings.map((w) => (
         <li
           key={w.id}
           className={cx(
-            'rounded-control border px-3 py-2 text-[13px]',
+            'rounded-control border px-3 py-2 text-[13.5px]',
             w.level === 'error' ? 'border-danger/40 bg-danger-soft' : 'border-warn/40 bg-warn-soft',
           )}
         >
@@ -179,7 +179,7 @@ export function ScenesPanel({
                   )}
                 >
                   <span className="w-full truncate text-sm font-semibold text-text">{sc.name}</span>
-                  <span className="text-[12px] text-text-3">
+                  <span className="text-[12.5px] text-text-3">
                     {on
                       ? 'On air'
                       : `${sc.items.length} ${sc.items.length === 1 ? 'source' : 'sources'}`}
@@ -284,17 +284,19 @@ export function SwitcherSettings({
       <div className="flex flex-col gap-4">
         <Switch
           label="Mods can switch scenes from chat"
-          description="!scene <name>, !brb and !back. Only the scenes ticked below."
+          description="!scene <name>, !brb and !back, for the scenes ticked below."
           checked={c.chat_enabled}
           onChange={(v) => save({ chat_enabled: v })}
         />
         <fieldset>
-          <legend className="text-[13px] font-medium text-text-2">Scenes mods may switch to</legend>
+          <legend className="text-[13.5px] font-medium text-text-2">
+            Scenes mods may switch to
+          </legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {names.map((n) => (
               <label
                 key={n}
-                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-2"
+                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
               >
                 <input
                   type="checkbox"
@@ -308,11 +310,11 @@ export function SwitcherSettings({
           </div>
         </fieldset>
         <fieldset>
-          <legend className="text-[13px] font-medium text-text-2">
+          <legend className="text-[13.5px] font-medium text-text-2">
             Keyboard shortcuts in the dashboard
           </legend>
-          <p className="mt-0.5 text-[12.5px] text-text-3">
-            Ticked scenes get Alt+1, Alt+2 and so on, in the order you tick them.
+          <p className="mt-0.5 text-[13.5px] text-text-3">
+            Ticked scenes get Alt+1, Alt+2 and on, in tick order.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {names.map((n) => {
@@ -320,7 +322,7 @@ export function SwitcherSettings({
               return (
                 <label
                   key={n}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
                 >
                   <input
                     type="checkbox"
@@ -366,12 +368,12 @@ export function SwitcherSettings({
         />
         {audio.length > 0 && (
           <fieldset>
-            <legend className="text-[13px] font-medium text-text-2">Mute on BRB</legend>
+            <legend className="text-[13.5px] font-medium text-text-2">Mute on BRB</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {audio.map((i) => (
                 <label
                   key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
                 >
                   <input
                     type="checkbox"

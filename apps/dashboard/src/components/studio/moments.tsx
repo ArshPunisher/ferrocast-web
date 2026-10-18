@@ -82,12 +82,12 @@ export function DontMissLane() {
             key={i.id}
             className="relative flex w-64 shrink-0 flex-col gap-1 rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 pr-9"
           >
-            <span className="text-[12px] font-semibold text-accent-text">
+            <span className="text-[12.5px] font-semibold text-accent-text">
               {KIND[i.kind] ?? 'Moment'} · {relativeTime(i.at, now)}
             </span>
             <span className="text-sm font-semibold break-words text-text">{i.title}</span>
             {i.detail && (
-              <span className="line-clamp-2 text-[13px] break-words text-text-2">{i.detail}</span>
+              <span className="line-clamp-2 text-[13.5px] break-words text-text-2">{i.detail}</span>
             )}
             <IconButton
               size="sm"
@@ -122,7 +122,7 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
   return (
     <Panel
       title={title}
-      description="Big moments and chat spikes, with their time in the stream, for editing."
+      description="Big moments with their stream time, for editing."
       actions={
         <>
           <Button
@@ -178,8 +178,8 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
       ) : !list.data ? (
         <Skeleton className="h-24" />
       ) : list.data.length === 0 ? (
-        <p className="text-[13px] text-text-3">
-          No markers yet. Big tips, raids, chat spikes and clips add them by themselves.
+        <p className="text-[13.5px] text-text-2">
+          No markers yet. Big moments add them by themselves.
         </p>
       ) : (
         <ol className="-mx-2 flex flex-col">
@@ -188,12 +188,18 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
               key={m.id}
               className="flex items-center gap-3 rounded-control px-2 py-1.5 hover:bg-surface-2"
             >
-              <span className="w-20 shrink-0 font-mono text-[13px] tabular-nums text-text-2">
+              <span className="w-20 shrink-0 font-mono text-[13.5px] tabular-nums text-text-2">
                 {m.offset_ms === null ? '--:--:--' : timecode(m.offset_ms)}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm text-text">{m.label}</span>
-              <Badge>{KIND[m.kind] ?? m.kind}</Badge>
-              {m.clip && <Badge tone="accent">Clip</Badge>}
+              {/* One chip: a clip marker is already "Clip"; anything else that was clipped says so. */}
+              {m.clip || m.kind === 'clip' ? (
+                <Badge tone="accent">
+                  {m.kind === 'clip' ? 'Clip' : `${KIND[m.kind] ?? m.kind}, clipped`}
+                </Badge>
+              ) : (
+                <Badge>{KIND[m.kind] ?? m.kind}</Badge>
+              )}
               <IconButton
                 size="sm"
                 variant="danger-ghost"
@@ -256,7 +262,7 @@ export function MomentsSettings() {
           {num('Tips and Super Chats from', 'big_tip', 'In your main currency.')}
           {num('Bits or Kicks from', 'big_gift_value')}
           {num('Gifted subs at once from', 'big_sub_gift')}
-          {num('Raids with at least', 'raid_viewers', 'Viewers. 1 pins every raid.')}
+          {num('Raids from (viewers)', 'raid_viewers', 'Set 1 to pin every raid.')}
         </div>
         <Switch
           label="Pin first-time chatters"

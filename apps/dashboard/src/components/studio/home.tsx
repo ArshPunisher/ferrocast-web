@@ -54,10 +54,10 @@ export function ObsWarnings() {
           }
         >
           <p className="text-sm font-semibold text-text">OBS: {w.message}</p>
-          <p className="min-w-0 flex-1 text-[13px] text-text-2">{w.hint}</p>
+          <p className="min-w-0 flex-1 text-[13.5px] text-text-2">{w.hint}</p>
           <a
             href={href({ name: 'studio', section: 'obs' })}
-            className="shrink-0 text-[13px] font-semibold text-accent-text hover:underline"
+            className="shrink-0 text-[13.5px] font-semibold text-accent-text hover:underline"
           >
             OBS health
           </a>

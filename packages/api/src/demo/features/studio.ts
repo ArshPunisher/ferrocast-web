@@ -388,8 +388,6 @@ export class DemoStudio {
   private access(): PlatformAccess[] {
     return (['twitch', 'youtube', 'kick'] as const).map((p) => {
       const connected = this.host.connectedChat().includes(p)
-      const scope =
-        p === 'twitch' ? 'channel:manage:broadcast' : p === 'kick' ? 'channel:write' : ''
       const old = p === 'kick' && this.kickNeedsReconnect
       return {
         platform: p,
@@ -398,7 +396,7 @@ export class DemoStudio {
         needs: !connected
           ? `Connect ${label(p)} in Settings, Accounts.`
           : old
-            ? `Reconnect ${label(p)} in Settings, Accounts to let Ferrocast change your stream info (it needs the "${scope}" permission).`
+            ? `Reconnect ${label(p)} in Settings, Accounts so Ferrocast can change your stream info.`
             : null,
         supports: { title: true, category: true, tags: true, language: p !== 'kick' },
       }
@@ -431,7 +429,7 @@ export class DemoStudio {
         skipped,
         error: {
           code: 'reconnect_needed',
-          message: 'Kick needs a permission it didn’t get when you connected ("channel:write").',
+          message: 'Kick needs a permission it didn’t get when you connected.',
           hint: 'Reconnect it in Settings, Accounts, then try again.',
         },
       }
