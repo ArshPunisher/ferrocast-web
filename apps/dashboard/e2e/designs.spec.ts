@@ -363,11 +363,20 @@ test.describe('asset pack importer', () => {
 test.describe('layout editor layers', () => {
   test('add a text layer, hide and lock it, undo', async ({ page }) => {
     await open(page, 'overlays/ov-brb')
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Text layer' }).click()
+    await page
+      .getByRole('toolbar', { name: 'Canvas' })
+      .getByRole('button', { name: 'Text', exact: true })
+      .click()
     const layer = page.getByRole('button', { name: /^Text: Your text here layer at/ })
     await expect(layer).toBeVisible()
+    // Row actions show on hover or focus.
+    const row = page
+      .getByRole('list', { name: 'Layers, top first' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Text: Your text here' })
+    await row.hover()
     await page.getByRole('button', { name: 'Hide Text: Your text here' }).click()
+    await row.hover()
     await expect(layer).toHaveAccessibleName(/Hidden on stream/)
     await page.getByRole('button', { name: 'Lock Text: Your text here' }).click()
     await expect(layer).toHaveAccessibleName(/Locked/)

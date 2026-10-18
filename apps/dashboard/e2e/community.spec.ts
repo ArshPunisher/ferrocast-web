@@ -429,7 +429,7 @@ test.describe('overlay editor: poll and giveaway widgets', () => {
   test('add both and save', async ({ page }) => {
     await open(page, 'overlays/ov-brb')
     for (const kind of ['Poll', 'Giveaway']) {
-      await page.getByRole('button', { name: 'Add', exact: true }).click()
+      await page.getByRole('button', { name: 'More to add' }).click()
       await page.getByRole('menuitem', { name: kind }).click()
       await expect(
         page.getByRole('button', { name: new RegExp(`^${kind} widget at`) }),

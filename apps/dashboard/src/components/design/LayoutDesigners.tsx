@@ -1,7 +1,7 @@
 // Designers for theme, scene and widget designs. A theme's scenes are edited with the same
 // layout editor as overlays (layers, align, snapping, undo); a widget design is a style.
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import {
   DEFAULT_THEME,
   SCENE_LABEL,
@@ -22,7 +22,7 @@ import { useLeaveGuard } from '../../lib/unsaved'
 import { DesignerHeader, DuplicateDialog, useDesignSave } from '../../screens/Designer'
 import { ColorField, Range } from './inspector'
 import { UseDialog } from './dialogs'
-import { useSampleState, WidgetPreview } from './previews'
+import { ScenePreview, useSampleState, WidgetPreview } from './previews'
 
 function LeaveDialog({
   open,
@@ -66,6 +66,50 @@ function LeaveDialog({
     />
   )
 }
+
+/** A scene in the theme editor's rail: its picture and name. Only redraws when that scene changes. */
+const SceneTab = memo(function SceneTab({
+  scene,
+  design,
+  selected,
+  onSelect,
+}: {
+  scene: Scene
+  design: ThemeDesign
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onSelect}
+      className="fc-press flex w-[132px] shrink-0 flex-col gap-1.5 text-left xl:w-full"
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'block overflow-hidden rounded-[10px] border-2',
+          selected ? 'border-accent-text' : 'border-transparent hover:border-line-strong',
+        )}
+      >
+        <ScenePreview
+          design={{ ...design, content: { ...design.content, scenes: [scene] } }}
+          sceneKey={scene.key}
+        />
+      </span>
+      <span
+        className={cx(
+          'truncate text-[13.5px] font-semibold',
+          selected ? 'text-accent-text' : 'text-text-2',
+        )}
+      >
+        {scene.name || SCENE_LABEL[scene.key] || scene.key}
+      </span>
+    </button>
+  )
+})
 
 export function SceneDesigner({
   design,
@@ -122,46 +166,9 @@ export function SceneDesigner({
         onUse={() => setUsing(true)}
         onDuplicate={() => setAskDuplicate(true)}
       />
-      {draft.kind === 'theme' && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            role="tablist"
-            aria-label="Scenes"
-            className="flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]"
-          >
-            {scenes.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                role="tab"
-                aria-selected={s.key === key}
-                onClick={() => setKey(s.key)}
-                className={cx(
-                  'fc-press inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-[13px] font-medium',
-                  s.key === key
-                    ? 'border-accent-line bg-accent-soft text-text'
-                    : 'border-line text-text-2 hover:border-line-strong',
-                )}
-              >
-                {s.name || SCENE_LABEL[s.key] || s.key}
-              </button>
-            ))}
-          </div>
-          <span className="flex-1" />
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-pressed={preview}
-            onClick={() => setPreview((p) => !p)}
-          >
-            {preview ? 'Hide live view' : 'Live view'}
-          </Button>
-        </div>
-      )}
       {design.built_in && (
-        <p className="text-[13px] text-text-3">
-          Built-in theme: it keeps a small Ferrocast mark on stream. Your edits stay a draft until
-          you save your own copy, which has no branding.
+        <p className="rounded-control bg-surface-2 px-3 py-2 text-[13.5px] font-medium text-text-2">
+          Built-in: edits stay a draft until you save your own copy, which drops the Ferrocast mark.
         </p>
       )}
       <LayoutEditor
@@ -178,37 +185,56 @@ export function SceneDesigner({
         goals={goals.data ?? []}
         onGoalCreated={(g) => goals.set((p) => [...(p ?? []), g])}
         preview={preview}
+        onPreview={setPreview}
         media={media.data ?? []}
         onUploaded={(m: Media) => media.set((p) => [...(p ?? []), m])}
-      />
-      {draft.kind === 'theme' && !design.built_in && (
-        <Field
-          label="Alert style that goes with this theme"
-          hint="Used when you press Use and keep “Also use its alert style” on."
-        >
-          {(p) => (
-            <Select
-              {...p}
-              value={draft.content.alert_design ?? ''}
-              onChange={(e) =>
-                h.set((d) =>
-                  d.kind === 'theme'
-                    ? { ...d, content: { ...d.content, alert_design: e.target.value || null } }
-                    : d,
-                )
-              }
-              className="max-w-sm"
+        rail={
+          draft.kind === 'theme' ? (
+            <div
+              role="tablist"
+              aria-label="Scenes"
+              aria-orientation="vertical"
+              className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] xl:mx-0 xl:flex-col xl:overflow-visible xl:px-0"
             >
-              <option value="">None</option>
-              {(alerts.data ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
+              {scenes.map((s) => (
+                <SceneTab
+                  key={s.key}
+                  scene={s}
+                  design={draft}
+                  selected={s.key === key}
+                  onSelect={() => setKey(s.key)}
+                />
               ))}
-            </Select>
-          )}
-        </Field>
-      )}
+            </div>
+          ) : undefined
+        }
+        extra={
+          draft.kind === 'theme' && !design.built_in ? (
+            <Field label="Alert style for this theme">
+              {(p) => (
+                <Select
+                  {...p}
+                  value={draft.content.alert_design ?? ''}
+                  onChange={(e) =>
+                    h.set((d) =>
+                      d.kind === 'theme'
+                        ? { ...d, content: { ...d.content, alert_design: e.target.value || null } }
+                        : d,
+                    )
+                  }
+                >
+                  <option value="">None</option>
+                  {(alerts.data ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          ) : undefined
+        }
+      />
       {using && <UseDialog design={draft} onClose={() => setUsing(false)} />}
       <DuplicateDialog
         open={askDuplicate}

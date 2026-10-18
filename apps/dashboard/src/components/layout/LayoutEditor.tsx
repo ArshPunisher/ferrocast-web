@@ -3,7 +3,13 @@
 // duplicate, delete), align buttons, and settings for widgets and static layers (text,
 // pictures, shapes, frames, webcam frames). The parent owns the draft and its undo history.
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import {
   AlignBottom,
   AlignCenterHorizontal,
@@ -14,13 +20,16 @@ import {
   ArrowDown,
   ArrowUp,
   CopySimple,
+  DotsThree,
   Eye,
   EyeSlash,
   FrameCorners,
   ImageSquare,
+  Keyboard,
   Lock,
   LockOpen,
-  Plus,
+  Play,
+  Pause,
   Shapes,
   TextT,
   Trash,
@@ -104,7 +113,21 @@ export function layerName(w: Widget): string {
     const t = c.text.trim()
     return t ? `Text: ${t.length > 22 ? `${t.slice(0, 21)}…` : t}` : 'Text'
   }
+  if (c.type === 'shape') {
+    // Names people recognise in the list instead of seven rows of "Shape".
+    if (w.x <= 0 && w.y <= 0 && w.w >= 1280 && w.h >= 720) return 'Background'
+    if (c.pattern) return 'Pattern'
+    return SHAPE_LABEL[c.shape ?? 'rect']
+  }
   return LAYER_LABEL[c.type] ?? 'Layer'
+}
+
+const SHAPE_LABEL: Record<NonNullable<Extract<LayerConfig, { type: 'shape' }>['shape']>, string> = {
+  rect: 'Box',
+  ellipse: 'Circle',
+  line: 'Line',
+  slant: 'Slanted bar',
+  triangle: 'Triangle',
 }
 
 function iconFor(w: Widget) {
@@ -460,7 +483,7 @@ function LayersPanel({
           <li
             key={w.id}
             className={cx(
-              'group flex items-center gap-1 rounded-control pr-1',
+              'group flex items-center gap-0.5 rounded-control pr-1',
               w.id === selected ? 'bg-accent-soft' : 'hover:bg-surface-2',
             )}
           >
@@ -469,8 +492,8 @@ function LayersPanel({
               onClick={() => onSelect(w.id)}
               aria-pressed={w.id === selected}
               className={cx(
-                'flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-[13px] font-medium',
-                w.id === selected ? 'text-text' : 'text-text-2',
+                'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-[14px] font-semibold',
+                w.id === selected ? 'text-accent-text' : 'text-text',
                 w.hidden && 'opacity-55',
               )}
               title={
@@ -481,12 +504,11 @@ function LayersPanel({
             >
               {mark ? <SparkGlyph /> : <Icon size={15} className="shrink-0" />}
               <span className="truncate">{layerName(w)}</span>
-              <span className="ml-auto shrink-0 font-mono text-[11px] text-text-3">
-                {w.w}×{w.h}
-              </span>
             </button>
             {!fixed && (
-              <>
+              // Row actions stay out of the way until the row is hovered or focused; a hidden
+              // or locked layer keeps its icon showing so its state is visible.
+              <span className="hidden items-center group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">
                 <IconButton
                   size="sm"
                   label={w.hidden ? `Show ${layerName(w)}` : `Hide ${layerName(w)}`}
@@ -521,7 +543,13 @@ function LayersPanel({
                 >
                   <ArrowDown size={14} />
                 </IconButton>
-              </>
+              </span>
+            )}
+            {!fixed && (w.hidden || w.locked) && (
+              <span className="flex items-center gap-1 pr-1.5 text-text-3 group-focus-within:hidden group-hover:hidden [@media(hover:none)]:hidden">
+                {w.hidden && <EyeSlash size={14} aria-label="Hidden" />}
+                {w.locked && <Lock size={14} aria-label="Locked" />}
+              </span>
             )}
             {fixed && mark && (
               <Lock
@@ -938,6 +966,9 @@ export function LayoutEditor({
   preview,
   media,
   onUploaded,
+  onPreview,
+  rail,
+  extra,
 }: {
   layout: Layout
   onWidgets: (widgets: Widget[], opts?: { merge?: boolean }) => void
@@ -950,6 +981,12 @@ export function LayoutEditor({
   preview: boolean
   media: Media[]
   onUploaded: (m: Media) => void
+  /** Shows the live-view switch in the canvas toolbar. */
+  onPreview?: (on: boolean) => void
+  /** A column on the left, e.g. a theme's scenes. */
+  rail?: ReactNode
+  /** Shown under the layers when nothing is selected, e.g. a theme's settings. */
+  extra?: ReactNode
 }) {
   const client = useClient()
   const [selected, setSelected] = useState<string | null>(null)
@@ -997,84 +1034,128 @@ export function LayoutEditor({
     update({ ...sel, x, y })
   }
   const lockedSel = !!sel && (readOnly || (isBrandLayer(sel) && brandLocked))
+  const addMenu = [
+    ...KINDS.filter((k) => !QUICK_KINDS.includes(k.kind)).map((k) => ({
+      key: k.kind,
+      label: k.label,
+      icon: <k.icon size={15} />,
+      onSelect: () => add(newWidget(k.kind, layout, goals)),
+    })),
+    {
+      key: 'shape',
+      label: 'Shape',
+      icon: <Shapes size={15} />,
+      onSelect: () => add(newLayer('shape', layout)),
+    },
+    {
+      key: 'frame',
+      label: 'Frame',
+      icon: <FrameCorners size={15} />,
+      onSelect: () => add(newLayer('frame', layout)),
+    },
+    {
+      key: 'webcam',
+      label: 'Webcam frame',
+      icon: <VideoCamera size={15} />,
+      onSelect: () => add(newLayer('webcam', layout)),
+    },
+  ]
+  const addPicture = () => {
+    const first = media.find((m) => m.kind === 'image')
+    if (first) add(newLayer('image', layout, first.id))
+    else file.current?.click()
+  }
+  const layers = (
+    <section aria-label="Layers" className="flex flex-col gap-2">
+      <h2 className="font-display text-[15px] font-bold">Layers</h2>
+      <LayersPanel
+        layout={layout}
+        selected={selected}
+        onSelect={setSelected}
+        onChange={(ws) => onWidgets(ws)}
+        readOnly={readOnly}
+        brandLocked={brandLocked}
+      />
+    </section>
+  )
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div
+      className={cx(
+        'grid grid-cols-1 gap-4',
+        rail
+          ? 'xl:grid-cols-[148px_minmax(0,1fr)_310px]'
+          : 'xl:grid-cols-[minmax(0,1fr)_320px]',
+      )}
+    >
+      {rail}
       <div className="flex min-w-0 flex-col gap-3">
-        <Canvas
-          layout={layout}
-          selected={selected}
-          onSelect={setSelected}
-          onChange={update}
-          preview={preview}
-          state={state}
-          readOnly={readOnly}
-          brandLocked={brandLocked}
-        />
-        <p className="text-[12.5px] text-text-3">
-          Drag to move, drag the corner to resize; it snaps to the middle and to other layers. With
-          the keyboard: Tab to a layer, arrows move it, Alt + arrows resizes, Shift for bigger
-          steps. Cmd or Ctrl + Z undoes.
-        </p>
-      </div>
-      <aside
-        className="flex flex-col gap-4 rounded-panel border border-line bg-surface-1 p-4 shadow-1"
-        aria-label="Widget settings"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-[15px] font-semibold">Layers</h2>
+        <div className="rounded-panel bg-[#0d0f13] bg-[radial-gradient(rgb(255_255_255/0.06)_1px,transparent_1px)] [background-size:18px_18px] p-2.5 sm:p-5">
+          <Canvas
+            layout={layout}
+            selected={selected}
+            onSelect={setSelected}
+            onChange={update}
+            preview={preview}
+            state={state}
+            readOnly={readOnly}
+            brandLocked={brandLocked}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Canvas">
           {!readOnly && (
-            <Menu
-              label="Add a widget"
-              align="end"
-              trigger={(p) => (
-                <Button {...p} size="sm" icon={<Plus size={14} weight="bold" />}>
-                  Add
-                </Button>
-              )}
-              items={[
-                ...KINDS.map((k) => ({
-                  key: k.kind,
-                  label: k.label,
-                  icon: <k.icon size={15} />,
-                  onSelect: () => add(newWidget(k.kind, layout, goals)),
-                })),
-                {
-                  key: 'text',
-                  label: 'Text layer',
-                  icon: <TextT size={15} />,
-                  onSelect: () => add(newLayer('text', layout)),
-                },
-                {
-                  key: 'image',
-                  label: 'Picture layer',
-                  icon: <ImageSquare size={15} />,
-                  onSelect: () => {
-                    const first = media.find((m) => m.kind === 'image')
-                    if (first) add(newLayer('image', layout, first.id))
-                    else file.current?.click()
-                  },
-                },
-                {
-                  key: 'shape',
-                  label: 'Shape layer',
-                  icon: <Shapes size={15} />,
-                  onSelect: () => add(newLayer('shape', layout)),
-                },
-                {
-                  key: 'frame',
-                  label: 'Frame layer',
-                  icon: <FrameCorners size={15} />,
-                  onSelect: () => add(newLayer('frame', layout)),
-                },
-                {
-                  key: 'webcam',
-                  label: 'Webcam frame',
-                  icon: <VideoCamera size={15} />,
-                  onSelect: () => add(newLayer('webcam', layout)),
-                },
-              ]}
-            />
+            <>
+              <Button size="sm" icon={<TextT size={15} />} onClick={() => add(newLayer('text', layout))}>
+                Text
+              </Button>
+              <Button size="sm" icon={<ImageSquare size={15} />} onClick={addPicture}>
+                Picture
+              </Button>
+              {QUICK_KINDS.map((k) => {
+                const info = kindInfo(k)
+                return (
+                  <Button
+                    key={k}
+                    size="sm"
+                    icon={<info.icon size={15} />}
+                    onClick={() => add(newWidget(k, layout, goals))}
+                  >
+                    {info.label}
+                  </Button>
+                )
+              })}
+              <Menu
+                label="Add something else"
+                trigger={(p) => (
+                  <IconButton {...p} size="sm" variant="secondary" label="More to add">
+                    <DotsThree size={18} weight="bold" />
+                  </IconButton>
+                )}
+                items={addMenu}
+              />
+            </>
           )}
+          <span className="flex-1" />
+          {onPreview && (
+            <IconButton
+              size="sm"
+              aria-pressed={preview}
+              label={preview ? 'Pause the live view' : 'Play the live view'}
+              title={preview ? 'Pause the live view' : 'Play the live view'}
+              onClick={() => onPreview(!preview)}
+            >
+              {preview ? <Pause size={16} /> : <Play size={16} />}
+            </IconButton>
+          )}
+          <span
+            className="inline-flex size-8 items-center justify-center rounded-control text-text-3"
+            title="Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows resize, Shift for bigger steps. Cmd or Ctrl + Z undoes."
+          >
+            <Keyboard size={17} aria-hidden="true" />
+            <span className="sr-only">
+              Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
+              resize, Shift for bigger steps. Cmd or Ctrl + Z undoes.
+            </span>
+          </span>
           <input
             ref={file}
             type="file"
@@ -1099,19 +1180,54 @@ export function LayoutEditor({
             }}
           />
         </div>
-        <LayersPanel
-          layout={layout}
-          selected={selected}
-          onSelect={setSelected}
-          onChange={(ws) => onWidgets(ws)}
-          readOnly={readOnly}
-          brandLocked={brandLocked}
-        />
-        {sel && (
-          <div className="flex flex-col gap-4 border-t border-line pt-4">
+      </div>
+      <aside
+        className="flex flex-col gap-4 self-start rounded-panel border border-line bg-surface-1 p-4 shadow-1 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto"
+        aria-label="Inspector"
+      >
+        {sel ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              {(() => {
+                const Icon = iconFor(sel)
+                return <Icon size={18} className="shrink-0 text-accent-text" aria-hidden="true" />
+              })()}
+              <h2 className="min-w-0 flex-1 truncate font-display text-base font-bold">
+                {layerName(sel)}
+              </h2>
+              {!lockedSel && (
+                <>
+                  <IconButton
+                    size="sm"
+                    label="Duplicate"
+                    onClick={() =>
+                      add({
+                        ...sel,
+                        id: `${sel.kind === 'layer' ? 'l' : 'w'}-${Date.now().toString(36)}`,
+                        x: Math.min(sel.x + 24, layout.width - sel.w),
+                        y: Math.min(sel.y + 24, layout.height - sel.h),
+                        locked: false,
+                      } as Widget)
+                    }
+                  >
+                    <CopySimple size={16} />
+                  </IconButton>
+                  {sel.kind === 'layer' && (
+                    <IconButton
+                      size="sm"
+                      variant="danger-ghost"
+                      label="Remove layer"
+                      onClick={() => remove(sel.id)}
+                    >
+                      <Trash size={16} />
+                    </IconButton>
+                  )}
+                </>
+              )}
+            </div>
             {!lockedSel && (
               <div
-                className="flex flex-wrap items-center gap-1"
+                className="flex flex-wrap items-center gap-0.5 rounded-control bg-surface-2 p-0.5"
                 role="group"
                 aria-label="Align on the canvas"
               >
@@ -1131,52 +1247,21 @@ export function LayoutEditor({
                     label={label}
                     onClick={() => align(k)}
                     disabled={sel.locked}
+                    className="flex-1"
                   >
                     <I size={16} />
                   </IconButton>
                 ))}
-                <span className="flex-1" />
-                <IconButton
-                  size="sm"
-                  label="Duplicate"
-                  onClick={() =>
-                    add({
-                      ...sel,
-                      id: `${sel.kind === 'layer' ? 'l' : 'w'}-${Date.now().toString(36)}`,
-                      x: Math.min(sel.x + 24, layout.width - sel.w),
-                      y: Math.min(sel.y + 24, layout.height - sel.h),
-                      locked: false,
-                    } as Widget)
-                  }
-                >
-                  <CopySimple size={16} />
-                </IconButton>
               </div>
             )}
             {sel.kind === 'layer' ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-[15px] font-semibold">{layerName(sel)}</h3>
-                  {!lockedSel && (
-                    <IconButton
-                      size="sm"
-                      variant="danger-ghost"
-                      label="Remove layer"
-                      onClick={() => remove(sel.id)}
-                    >
-                      <Trash size={16} />
-                    </IconButton>
-                  )}
-                </div>
-                {!lockedSel ? (
-                  <LayerSettings w={sel} onChange={update} media={media} />
-                ) : (
-                  <p className="text-[13px] text-text-3">
-                    Built-in designs keep this small Ferrocast mark. Duplicate the design in the
-                    gallery to make an unbranded copy.
-                  </p>
-                )}
-              </>
+              !lockedSel ? (
+                <LayerSettings w={sel} onChange={update} media={media} />
+              ) : (
+                <p className="text-[13.5px] text-text-2">
+                  Built-in designs keep this mark. Duplicate the design to remove it.
+                </p>
+              )
             ) : (
               !readOnly && (
                 <WidgetSettings
@@ -1209,9 +1294,18 @@ export function LayoutEditor({
                 />
               </div>
             )}
+            <div className="border-t border-line pt-4 [&_ul]:max-h-72 [&_ul]:overflow-y-auto">{layers}</div>
           </div>
+        ) : (
+          <>
+            {layers}
+            {extra && <div className="border-t border-line pt-4">{extra}</div>}
+          </>
         )}
       </aside>
     </div>
   )
 }
+
+/** Widgets with their own button under the canvas; the rest are in the "more" menu. */
+const QUICK_KINDS: Widget['kind'][] = ['chat', 'goal', 'alerts', 'events']
