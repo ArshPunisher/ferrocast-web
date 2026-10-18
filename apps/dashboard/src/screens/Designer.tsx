@@ -17,6 +17,7 @@ import {
   Monitor,
   Palette,
   PaperPlaneTilt,
+  PencilSimple,
   Play,
   Plus,
   Shuffle,
@@ -615,13 +616,25 @@ export function DesignerHeader({
       {design.built_in ? (
         <h1 className="min-w-0 truncate font-display text-2xl font-bold tracking-tight">{name}</h1>
       ) : (
-        <Input
-          aria-label="Design name"
-          value={name}
-          maxLength={60}
-          onChange={(e) => onName(e.target.value)}
-          className="h-10 w-auto max-w-[280px] min-w-[8ch] border-transparent bg-transparent font-display text-xl font-bold hover:border-line"
-        />
+        // Reads as the page title; a pencil on hover says it can be renamed, and editing shows
+        // a soft fill and an underline instead of a boxed field.
+        <label className="group inline-flex min-w-0 items-center gap-1.5 rounded-control px-1.5 py-0.5 hover:bg-surface-2 focus-within:bg-surface-2 focus-within:shadow-[inset_0_-2px_0_var(--color-accent)]">
+          <input
+            aria-label="Design name"
+            value={name}
+            maxLength={60}
+            size={Math.min(28, Math.max(6, name.length + 1))}
+            spellCheck={false}
+            onChange={(e) => onName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            className="min-w-0 bg-transparent font-display text-2xl font-bold tracking-tight text-text outline-none"
+          />
+          <PencilSimple
+            size={16}
+            aria-hidden="true"
+            className="shrink-0 text-text-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-0"
+          />
+        </label>
       )}
       {design.built_in ? <BrandChip label="Built-in" /> : <Badge tone="accent">Mine</Badge>}
       <span className="flex-1" />
