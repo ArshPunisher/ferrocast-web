@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
+  ArrowSquareOut,
   Bell,
   Broadcast,
   ChatsCircle,
@@ -17,7 +18,8 @@ import {
   UsersThree,
   X,
 } from '@phosphor-icons/react'
-import { Dialog, Wordmark, cx } from '@ferrocast/ui'
+import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
+import { describeError } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import { useLive } from '../lib/store'
 import { useClient } from '../lib/hooks'
@@ -59,6 +61,40 @@ const MOBILE_MAIN = ['home', 'chat', 'alerts', 'moderation']
 
 /** Fired after the sidebar changes the theme, so an open Settings screen can follow. */
 export const THEME_EVENT = 'fc-theme-change'
+
+/**
+ * Desktop window only: makes a one-time link and opens the dashboard in the default browser,
+ * already linked. The desktop sends any pair link to the browser instead of loading it here.
+ */
+function OpenInBrowser() {
+  const client = useClient()
+  const [busy, setBusy] = useState(false)
+  if (!window.__FERROCAST__) return null
+  const open = () => {
+    setBusy(true)
+    client
+      .pairCode()
+      .then((l) => {
+        window.location.assign(`${window.location.origin}/app/#pair=${encodeURIComponent(l.code)}`)
+      })
+      .catch((e: unknown) => {
+        const d = describeError(e)
+        toast({ tone: 'error', message: d.message, hint: d.hint })
+      })
+      .finally(() => setBusy(false))
+  }
+  return (
+    <button
+      type="button"
+      onClick={open}
+      disabled={busy}
+      className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60"
+    >
+      <ArrowSquareOut size={17} />
+      Open in browser
+    </button>
+  )
+}
 
 function useTheme(): ['dark' | 'light', () => void] {
   const client = useClient()
@@ -181,6 +217,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         </nav>
         <div className="mt-auto flex flex-col gap-2 px-1">
           {demo && <DemoNote />}
+          <OpenInBrowser />
           <button
             type="button"
             onClick={toggleTheme}
@@ -330,6 +367,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               onNavigate={() => setMore(false)}
             />
           ))}
+          <OpenInBrowser />
           <button
             type="button"
             onClick={toggleTheme}
