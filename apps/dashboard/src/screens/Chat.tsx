@@ -33,6 +33,9 @@ export function Chat() {
   const [card, setCard] = useState<Actor | null>(null)
   const { actions, dialogs } = useChatActions(setReply, setCard)
   const wide = useMediaQuery('(min-width: 1024px)')
+  // A mod's phone through Ferrocast's servers reads and moderates chat: no composer, no events.
+  const remote = useLive((s) => s.remote)
+  const mod = remote?.role === 'mod'
 
   const lines = useMemo(() => {
     // "Held" lists every held message, also ones from before the chat on screen.
@@ -141,9 +144,11 @@ export function Chat() {
           </ul>
         )}
       </ChatScroller>
-      <div className="border-t border-line p-3 sm:p-4">
-        <Composer reply={reply} onClearReply={() => setReply(null)} />
-      </div>
+      {!mod && (
+        <div className="border-t border-line p-3 sm:p-4">
+          <Composer reply={reply} onClearReply={() => setReply(null)} />
+        </div>
+      )}
     </section>
   )
 
@@ -175,8 +180,13 @@ export function Chat() {
   )
 
   return (
-    <div className="flex h-[calc(100dvh-56px-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-56px-28px-88px)] lg:h-[calc(100dvh-56px-28px-48px)] lg:flex-row lg:gap-5">
-      {wide ? (
+    <div
+      style={{ '--fc-top': remote ? '96px' : '56px' } as React.CSSProperties}
+      className="flex h-[calc(100dvh-var(--fc-top)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top)-28px-48px)] lg:flex-row lg:gap-5"
+    >
+      {mod ? (
+        chatPane
+      ) : wide ? (
         <>
           {chatPane}
           <div className="flex w-[360px] shrink-0 flex-col xl:w-[400px]">{feedPane}</div>

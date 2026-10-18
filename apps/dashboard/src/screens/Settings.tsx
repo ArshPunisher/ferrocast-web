@@ -36,7 +36,9 @@ import { ObsAutoDetect } from '../components/obs-detect'
 import { ProSettings } from '../components/pro'
 import { CloudBackups } from '../components/cloud-backups'
 import { TtsVoicePicker } from '../components/tts-voices'
+import { RemoteDevices } from '../components/remote'
 import { useLive } from '../lib/store'
+import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
 const SECTIONS = [
   ['accounts', 'Accounts'],
@@ -719,6 +721,8 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
   const u = info.data
   const client = useClient()
   const { run, busy } = useAction()
+  // A phone can't install an update on the PC (the same rule the relay checks).
+  const canInstall = client.may('POST', '/api/v1/updates/install')
   return (
     <Section
       id="updates"
@@ -745,7 +749,10 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
                 </span>
               )}
             </p>
-            {u.latest && u.latest !== u.current && (
+            {u.latest && u.latest !== u.current && !canInstall && (
+              <span className="text-[14px] font-semibold text-text-2">Update on the PC</span>
+            )}
+            {u.latest && u.latest !== u.current && canInstall && (
               <Button
                 size="sm"
                 variant="primary"
@@ -902,6 +909,9 @@ export function Settings({ section }: { section?: string | undefined }) {
     window.addEventListener(THEME_EVENT, reload)
     return () => window.removeEventListener(THEME_EVENT, reload)
   }, [reload])
+  // On a phone through Ferrocast's servers, the sections that need the PC itself are hidden.
+  const remote = useLive((s) => s.remote)
+  const show = (id: string) => !remote || !OWNER_HIDDEN_SETTINGS.includes(id)
   return (
     <div>
       <PageHeader title="Settings" />
@@ -910,7 +920,7 @@ export function Settings({ section }: { section?: string | undefined }) {
           aria-label="Settings sections"
           className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
         >
-          {SECTIONS.map(([id, label]) => (
+          {SECTIONS.filter(([id]) => show(id)).map(([id, label]) => (
             <a
               key={id}
               href={href({ name: 'settings', section: id })}
@@ -927,16 +937,18 @@ export function Settings({ section }: { section?: string | undefined }) {
           ))}
         </nav>
         <div className="flex min-w-0 flex-col gap-5">
-          <Accounts />
-          <Obs />
+          {show('accounts') && <Accounts />}
+          {show('obs') && <Obs />}
           <Tts currency={res.data?.currency} />
-          <Section
-            id="discord"
-            title="Discord"
-            description="Tell your server when you go live. The webhook stays on this computer."
-          >
-            <DiscordSettingsForm />
-          </Section>
+          {show('discord') && (
+            <Section
+              id="discord"
+              title="Discord"
+              description="Tell your server when you go live. The webhook stays on this computer."
+            >
+              <DiscordSettingsForm />
+            </Section>
+          )}
           {res.error ? (
             <LoadError error={res.error} onRetry={res.reload} />
           ) : !res.data ? (
@@ -944,17 +956,20 @@ export function Settings({ section }: { section?: string | undefined }) {
           ) : (
             <>
               <Appearance settings={res.data} save={save} />
-              <Data />
-              <CloudBackups />
+              {show('data') && <Data />}
+              {show('data') && <CloudBackups />}
               <Updates settings={res.data} save={save} />
-              <Section
-                id="pro"
-                title="Ferrocast Pro"
-                description="Optional hosted extras. Everything free stays free."
-              >
-                <ProSettings />
-              </Section>
-              <Advanced settings={res.data} save={save} />
+              {show('remote') && <RemoteDevices />}
+              {show('pro') && (
+                <Section
+                  id="pro"
+                  title="Ferrocast Pro"
+                  description="Optional hosted extras. Everything free stays free."
+                >
+                  <ProSettings />
+                </Section>
+              )}
+              {show('advanced') && <Advanced settings={res.data} save={save} />}
             </>
           )}
         </div>

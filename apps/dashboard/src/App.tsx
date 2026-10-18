@@ -9,14 +9,31 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from 'react'
-import { ApiError, describeError, type FerroEvent } from '@ferrocast/api'
+import {
+  ApiError,
+  describeError,
+  remoteHome,
+  remoteScreenAllowed,
+  type FerroEvent,
+} from '@ferrocast/api'
 import { Button, SparkMark, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
-import { clearSession, connect, demo, pair, pairCodeFromHash, type Connection } from './lib/boot'
+import {
+  clearRemote,
+  clearSession,
+  connect,
+  demo,
+  pair,
+  pairCodeFromHash,
+  pairRemote,
+  type Connection,
+  type RemoteProblem,
+} from './lib/boot'
 import { startLive, stopLive, useLive } from './lib/store'
-import { useRoute } from './lib/router'
+import { parseRoute, useRoute } from './lib/router'
 import { Shell } from './components/Shell'
 import { Home } from './screens/Home'
 import { StudioGlobal } from './components/studio/moments'
+import { RemoteGate } from './components/remote'
 
 // Home is in the first bundle; other screens load when first opened.
 const Chat = lazy(() => import('./screens/Chat').then((m) => ({ default: m.Chat })))
@@ -47,6 +64,11 @@ type Phase =
   | { kind: 'pairing'; base: string; code: string; error: string | null; hint: string | null }
   | { kind: 'failed'; error: ApiError | null; message: string; hint: string | null }
   | { kind: 'ready' }
+  /** A phone through Ferrocast's servers that can't show the dashboard yet. */
+  | {
+      kind: 'remote'
+      problem: RemoteProblem | { pairing: string } | { failed: string; hint: string | null }
+    }
 
 async function hydrate(conn: Connection): Promise<boolean> {
   const live = useLive.getState()
@@ -84,7 +106,8 @@ export function App() {
     try {
       const done = await hydrate(c)
       if (id !== bootId.current) return
-      setSetupDone(done)
+      // A phone never runs first-time setup: that's on the PC (accounts, OBS).
+      setSetupDone(done || c.mode === 'remote' || c.remote !== undefined)
       setPhase({ kind: 'ready' })
     } catch (e) {
       if (id !== bootId.current) return
@@ -92,6 +115,16 @@ export function App() {
       const err = e instanceof ApiError ? e : null
       const d = describeError(e)
       if (err?.status === 401 && c.mode === 'browser') clearSession()
+      if (c.mode === 'remote') {
+        // The PC went off between "online" and loading, or this phone was removed.
+        if (err?.code === 'pc_offline') return setPhase({ kind: 'remote', problem: 'pc_offline' })
+        // Removed: forget the token. Pro paused: keep it, it works again once Pro is back.
+        if (err?.status === 401) {
+          clearRemote()
+          return setPhase({ kind: 'remote', problem: 'unpaired' })
+        }
+        if (err?.status === 402) return setPhase({ kind: 'remote', problem: 'pro_paused' })
+      }
       setPhase({ kind: 'failed', error: err, message: d.message, hint: d.hint })
     }
   }, [])
@@ -99,8 +132,37 @@ export function App() {
   const boot = useCallback(async () => {
     const id = ++bootId.current
     setPhase({ kind: 'booting' })
-    const r = await connect()
+    let r
+    try {
+      r = await connect()
+    } catch (e) {
+      // Only a phone's first check can fail here (the relay can't be reached).
+      if (id !== bootId.current) return
+      const d = describeError(e)
+      setPhase({ kind: 'remote', problem: { failed: d.message, hint: d.hint } })
+      return
+    }
     if (id !== bootId.current) return
+    if ('remoteProblem' in r) {
+      setPhase({ kind: 'remote', problem: r.remoteProblem })
+      return
+    }
+    if ('remotePairing' in r) {
+      setPhase({ kind: 'remote', problem: { pairing: r.remotePairing.code } })
+      try {
+        await pairRemote(r.remotePairing.api, r.remotePairing.code)
+      } catch (e) {
+        if (id !== bootId.current) return
+        // The code is single use: drop it so "Try again" doesn't resend a spent code.
+        history.replaceState(null, '', location.pathname + location.search)
+        const d = describeError(e)
+        setPhase({ kind: 'remote', problem: { failed: d.message, hint: d.hint } })
+        return
+      }
+      if (id !== bootId.current) return
+      void boot()
+      return
+    }
     if ('unpaired' in r) {
       setPhase({
         kind: 'failed',
@@ -150,8 +212,9 @@ export function App() {
   // old data that never updates.
   const socket = useLive((s) => s.socket)
   useEffect(() => {
-    // (The desktop window's token can't go stale: the app reloads it.)
-    if (socket !== 'retrying' || !conn || conn.mode === 'desktop') return
+    // (The desktop window's token can't go stale: the app reloads it. A phone hears it from
+    // its live socket's close code or ticket instead, below.)
+    if (socket !== 'retrying' || !conn || conn.mode === 'desktop' || conn.mode === 'remote') return
     let gone = false
     const c = conn
     void c.client.status().catch((e: unknown) => {
@@ -163,6 +226,15 @@ export function App() {
       gone = true
     }
   }, [socket, conn, boot])
+
+  // A phone's live socket closed for good (removed 4401, Pro paused 4402, open in another
+  // tab 4409): show why instead of a dashboard that never updates.
+  const remoteGone = useLive((s) => s.remoteGone)
+  useEffect(() => {
+    if (!remoteGone) return
+    useLive.setState({ remoteGone: null })
+    setPhase({ kind: 'remote', problem: remoteGone })
+  }, [remoteGone])
 
   // A pairing link pasted into a tab that's already open only changes the hash: pair now
   // instead of waiting for a reload.
@@ -181,6 +253,8 @@ export function App() {
   }
 
   if (phase.kind === 'booting' || (phase.kind === 'ready' && !conn)) return <Splash />
+  if (phase.kind === 'remote')
+    return <RemoteGate problem={phase.problem} onRetry={() => void boot()} />
   if (phase.kind === 'pairing')
     return <Pairing phase={phase} onRetry={() => void boot()} onDemo={() => void tryDemo()} />
   if (phase.kind === 'failed')
@@ -199,19 +273,25 @@ export function App() {
       </>
     )
 
+  // A phone sees only its role's screens: others open its home instead (hidden, not greyed).
+  const remoteRole = conn?.remote?.role
+  const shown =
+    remoteRole && !remoteScreenAllowed(remoteRole, route.name)
+      ? parseRoute(`#/${remoteHome(remoteRole)}`)
+      : route
   let screen
-  switch (route.name) {
+  switch (shown.name) {
     case 'chat':
       screen = <Chat />
       break
     case 'alerts':
-      screen = <Alerts ruleId={route.rule} />
+      screen = <Alerts ruleId={shown.rule} />
       break
     case 'overlays':
       screen = <Overlays />
       break
     case 'overlay':
-      screen = <OverlayEditor id={route.id} />
+      screen = <OverlayEditor id={shown.id} />
       break
     case 'moderation':
       screen = <Moderation />
@@ -220,7 +300,7 @@ export function App() {
       screen = <Bot />
       break
     case 'community':
-      screen = <Community section={route.section} />
+      screen = <Community section={shown.section} />
       break
     case 'recap':
       screen = <Recap />
@@ -229,19 +309,19 @@ export function App() {
       screen = <Tips />
       break
     case 'settings':
-      screen = <Settings section={route.section} />
+      screen = <Settings section={shown.section} />
       break
     case 'import':
-      screen = <Import source={route.source} demo={isDemo} />
+      screen = <Import source={shown.source} demo={isDemo} />
       break
     case 'designs':
-      screen = <Designs tab={route.tab ?? 'themes'} />
+      screen = <Designs tab={shown.tab ?? 'themes'} />
       break
     case 'designer':
-      screen = <Designer id={route.id} />
+      screen = <Designer id={shown.id} />
       break
     case 'studio':
-      screen = <Studio section={route.section} />
+      screen = <Studio section={shown.section} />
       break
     case 'history':
       screen = <History />

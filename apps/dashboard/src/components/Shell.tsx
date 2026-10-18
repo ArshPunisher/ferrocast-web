@@ -20,12 +20,19 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
-import { describeError, proApi, proPanelState, type ProFeature } from '@ferrocast/api'
+import {
+  describeError,
+  proApi,
+  proPanelState,
+  remoteScreenAllowed,
+  type ProFeature,
+} from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import { useLive } from '../lib/store'
 import { useClient, useResource } from '../lib/hooks'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
+import { RemoteStrip } from './remote'
 
 type NavItem = {
   route: Route
@@ -84,7 +91,8 @@ export const THEME_EVENT = 'fc-theme-change'
 function OpenInBrowser() {
   const client = useClient()
   const [busy, setBusy] = useState(false)
-  if (!window.__FERROCAST__) return null
+  // The desktop window only (a phone's injected config has no session token).
+  if (!window.__FERROCAST__?.token) return null
   const open = () => {
     setBusy(true)
     client
@@ -188,6 +196,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const [theme, toggleTheme] = useTheme()
   const [more, setMore] = useState(false)
   const notices = useLive((s) => s.notices)
+  const remote = useLive((s) => s.remote)
   const dismiss = useLive((s) => s.dismissNotice)
   const reduce = useReducedMotion()
 
@@ -207,7 +216,13 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   // Pro entries show only when their panel would (no nagging): a failed check hides them.
   const pro = useResource((c) => proApi(c).status())
   const proView = pro.error ? null : pro.data
-  const nav = NAV.filter((i) => !i.pro || proPanelState(proView, i.pro) !== 'hidden')
+  const nav = NAV.filter(
+    (i) =>
+      (!i.pro || proPanelState(proView, i.pro) !== 'hidden') &&
+      // A phone through Ferrocast's servers: only its role's screens (hidden, not greyed).
+      (!remote || remoteScreenAllowed(remote.role, i.route.name)),
+  )
+  const tabs = nav.filter((i) => MOBILE_MAIN.includes(i.route.name))
   const ThemeIcon = theme === 'dark' ? Sun : Moon
 
   return (
@@ -255,6 +270,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       <div className="lg:pl-60">
         {/* Top bar */}
         <header className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm">
+          {remote && <RemoteStrip remote={remote} />}
           <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
             <a href="#/home" className="shrink-0 lg:hidden" aria-label="Ferrocast home">
               <Wordmark
@@ -335,32 +351,33 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm lg:hidden"
       >
-        <ul className="mx-auto grid h-16 max-w-lg grid-cols-5">
-          {nav
-            .filter((i) => MOBILE_MAIN.includes(i.route.name))
-            .map((i) => {
-              const Icon = i.icon
-              const active = isActive(i)
-              return (
-                <li key={i.label}>
-                  <a
-                    href={href(i.route)}
-                    aria-current={active ? 'page' : undefined}
-                    className={cx(
-                      'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
-                      active ? 'text-text' : 'text-text-3',
-                    )}
-                  >
-                    <Icon
-                      size={22}
-                      weight={active ? 'fill' : 'regular'}
-                      className={active ? 'text-accent-text' : ''}
-                    />
-                    {i.label === 'Moderation' ? 'Mod' : i.label}
-                  </a>
-                </li>
-              )
-            })}
+        <ul
+          className="mx-auto grid h-16 max-w-lg"
+          style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
+        >
+          {tabs.map((i) => {
+            const Icon = i.icon
+            const active = isActive(i)
+            return (
+              <li key={i.label}>
+                <a
+                  href={href(i.route)}
+                  aria-current={active ? 'page' : undefined}
+                  className={cx(
+                    'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
+                    active ? 'text-text' : 'text-text-3',
+                  )}
+                >
+                  <Icon
+                    size={22}
+                    weight={active ? 'fill' : 'regular'}
+                    className={active ? 'text-accent-text' : ''}
+                  />
+                  {i.label === 'Moderation' ? 'Mod' : i.label}
+                </a>
+              </li>
+            )
+          })}
           <li>
             <button
               type="button"

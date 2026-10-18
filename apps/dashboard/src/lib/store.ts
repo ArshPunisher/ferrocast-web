@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import {
   ApiError,
   LiveConnection,
+  REMOTE_CLOSE,
   isAlertable,
   type ConnectionState,
   type Connectors,
@@ -21,7 +22,7 @@ import {
   type TtsPending,
 } from '@ferrocast/api'
 import { toast } from '@ferrocast/ui'
-import type { Connection } from './boot'
+import { clearRemote, type Connection, type RemoteProblem } from './boot'
 import { EMPTY_STUDIO, isStudioFrame, reduceStudio, type StudioLive } from './studio-live'
 
 const CHAT_CAP = 500
@@ -32,8 +33,20 @@ export interface NoticeItem extends Notice {
   at: number
 }
 
+/** This dashboard opened on a phone through Ferrocast's servers (Pro "Dashboard anywhere"). */
+export interface RemoteState {
+  role: 'owner' | 'mod'
+  name: string
+  /** The relay can reach the streaming PC (its tunnel is open). */
+  pcOnline: boolean
+}
+
 interface LiveStore {
   conn: Connection | null
+  /** `null` on the PC itself (desktop window, a linked browser, the demo). */
+  remote: RemoteState | null
+  /** A phone's live socket said it can't go on (removed, Pro paused, open elsewhere). */
+  remoteGone: RemoteProblem | null
   status: Status | null
   bootError: ApiError | null
   socket: ConnectionState
@@ -135,6 +148,8 @@ function panicToast(n: Notice): void {
 
 export const useLive = create<LiveStore>((set, get) => ({
   conn: null,
+  remote: null,
+  remoteGone: null,
   status: null,
   bootError: null,
   socket: 'connecting',
@@ -156,7 +171,7 @@ export const useLive = create<LiveStore>((set, get) => ({
   giveaway: undefined,
   chatters: new Map(),
   studio: EMPTY_STUDIO,
-  setConn: (conn) => set({ conn }),
+  setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   setBootError: (bootError) => set({ bootError }),
   setQueue: (queue) => set({ queue }),
@@ -200,6 +215,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let giveaway = s.giveaway
     let chatters = s.chatters
     let studio = s.studio
+    let remote = s.remote
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
@@ -299,6 +315,9 @@ export const useLive = create<LiveStore>((set, get) => ({
           if (chatters.size > 1000) chatters.delete(chatters.keys().next().value as string)
           break
         }
+        case 'remote':
+          if (remote) remote = { ...remote, pcOnline: f.data.pc_online }
+          break
         case 'hello':
           break
       }
@@ -324,6 +343,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       giveaway,
       chatters,
       studio,
+      remote,
     })
   },
 }))
@@ -341,6 +361,13 @@ async function resync(): Promise<void> {
   const conn = useLive.getState().conn
   if (!conn) return
   try {
+    if (conn.remote?.role === 'mod') {
+      // A mod's phone reads chat only (no queue or event log through Ferrocast's servers).
+      const [status, chat] = await Promise.all([conn.client.status(), conn.client.chat(200)])
+      useLive.getState().setStatus(status)
+      useLive.getState().seed({ chat, events: useLive.getState().events })
+      return
+    }
     const [status, queue, chat, page] = await Promise.all([
       conn.client.status(),
       conn.client.queue(),
@@ -361,20 +388,82 @@ async function resync(): Promise<void> {
   }
 }
 
+let mediaTimer: ReturnType<typeof setInterval> | null = null
+
+/** What a phone's live socket close code means (API.md §9.5); `null`: just reconnect. */
+export function remoteCloseProblem(code: number): RemoteProblem | null {
+  if (code === REMOTE_CLOSE.revoked) return 'unpaired'
+  if (code === REMOTE_CLOSE.proPaused) return 'pro_paused'
+  if (code === REMOTE_CLOSE.elsewhere) return 'elsewhere'
+  return null
+}
+
+/** A phone can't go on: stop the socket, forget a removed phone's token, show why. */
+function remoteEnded(problem: RemoteProblem): void {
+  stopLive()
+  if (problem === 'unpaired') clearRemote()
+  useLive.setState({ remoteGone: problem })
+}
+
 export function startLive(conn: Connection): void {
   live?.stop()
+  // A phone through the relay (or the demo acting as one, `?remote=`).
+  const phone = conn.mode === 'remote' || conn.remote !== undefined
+  // A phone that fell behind (4408) refetches once it's back.
+  let refetch = false
   live = new LiveConnection({
-    url: (since) => conn.client.liveUrl(since),
+    url: async (since) => {
+      try {
+        return await conn.client.liveSocketUrl(since)
+      } catch (e) {
+        // The ticket call says why a phone can't connect (a refused socket can't).
+        const problem =
+          phone && e instanceof ApiError
+            ? e.status === 401
+              ? 'unpaired'
+              : e.status === 402
+                ? 'pro_paused'
+                : null
+            : null
+        if (problem) queueMicrotask(() => remoteEnded(problem))
+        throw e
+      }
+    },
     factory: conn.socket,
     onFrames: (frames) => useLive.getState().apply(frames),
-    onState: (state) => useLive.setState({ socket: state }),
+    onState: (state) => {
+      useLive.setState({ socket: state })
+      if (state === 'open' && refetch) {
+        refetch = false
+        void resync()
+      }
+    },
+    onClose: (code) => {
+      if (!phone) return
+      if (code === REMOTE_CLOSE.lagged) {
+        refetch = true
+        return
+      }
+      const problem = remoteCloseProblem(code)
+      if (!problem) return
+      queueMicrotask(() => remoteEnded(problem))
+      return 'stop'
+    },
   })
   live.start()
+  if (mediaTimer) clearInterval(mediaTimer)
+  mediaTimer = null
+  if (phone) {
+    // Media tickets last 5 minutes: keep one fresh for previews.
+    mediaTimer = setInterval(() => void conn.client.refreshMediaTicket().catch(() => {}), 60_000)
+  }
 }
 
 export function stopLive(): void {
   live?.stop()
   live = null
+  if (mediaTimer) clearInterval(mediaTimer)
+  mediaTimer = null
 }
 
 /** Alertable events, newest first, for feeds. */

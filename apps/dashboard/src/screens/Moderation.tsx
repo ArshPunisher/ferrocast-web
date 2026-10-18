@@ -28,6 +28,7 @@ import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { HeldPanel } from '../components/held'
 import { usePanic } from '../components/PanicButton'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
+import { useLive } from '../lib/store'
 
 const ACTIONS: { value: FilterAction; label: string }[] = [
   { value: 'delete', label: 'Delete the message' },
@@ -80,6 +81,8 @@ function PanicCard() {
     void run('panic-cfg', () => client.savePanicConfig(next), { success: 'Panic plan saved.' })
   }
   const c = cfg.data
+  // A mod's phone switches panic on and off; the plan stays the streamer's.
+  const mod = useLive((s) => s.remote?.role === 'mod')
   return (
     <section
       aria-labelledby="panic-title"
@@ -116,52 +119,54 @@ function PanicCard() {
           {on ? 'Turn panic off' : 'Start panic mode'}
         </Button>
       </div>
-      <div className="mt-5 grid grid-cols-1 gap-4 border-t border-line pt-4 md:grid-cols-2">
-        {!c ? (
-          <>
-            <Skeleton className="h-10" />
-            <Skeleton className="h-10" />
-          </>
-        ) : (
-          <>
-            <Switch
-              checked={c.followers_only}
-              onChange={(v) => save({ ...c, followers_only: v })}
-              label="Followers-only chat"
-              description={`Only people who followed at least ${plural(c.followers_only_minutes, 'minute', 'minutes')} ago can talk.`}
-            />
-            <Switch
-              checked={c.hold_new_accounts}
-              onChange={(v) => save({ ...c, hold_new_accounts: v })}
-              label="Hold first-time chatters"
-              description="Their messages wait for a mod."
-            />
-            <Switch
-              checked={c.slow_mode_seconds > 0}
-              onChange={(v) => save({ ...c, slow_mode_seconds: v ? 10 : 0 })}
-              label="Slow mode"
-              description="One message every 10 seconds per person."
-            />
-            <Switch
-              checked={c.emote_only}
-              onChange={(v) => save({ ...c, emote_only: v })}
-              label="Emote-only"
-              description="Twitch and Kick only."
-            />
-            <Switch
-              checked={c.pause_alerts}
-              onChange={(v) => save({ ...c, pause_alerts: v })}
-              label="Pause alerts"
-              description="Raids and follows wait until panic ends."
-            />
-            <Switch
-              checked={c.pause_tts}
-              onChange={(v) => save({ ...c, pause_tts: v })}
-              label="Pause text-to-speech"
-            />
-          </>
-        )}
-      </div>
+      {!mod && (
+        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-line pt-4 md:grid-cols-2">
+          {!c ? (
+            <>
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </>
+          ) : (
+            <>
+              <Switch
+                checked={c.followers_only}
+                onChange={(v) => save({ ...c, followers_only: v })}
+                label="Followers-only chat"
+                description={`Only people who followed at least ${plural(c.followers_only_minutes, 'minute', 'minutes')} ago can talk.`}
+              />
+              <Switch
+                checked={c.hold_new_accounts}
+                onChange={(v) => save({ ...c, hold_new_accounts: v })}
+                label="Hold first-time chatters"
+                description="Their messages wait for a mod."
+              />
+              <Switch
+                checked={c.slow_mode_seconds > 0}
+                onChange={(v) => save({ ...c, slow_mode_seconds: v ? 10 : 0 })}
+                label="Slow mode"
+                description="One message every 10 seconds per person."
+              />
+              <Switch
+                checked={c.emote_only}
+                onChange={(v) => save({ ...c, emote_only: v })}
+                label="Emote-only"
+                description="Twitch and Kick only."
+              />
+              <Switch
+                checked={c.pause_alerts}
+                onChange={(v) => save({ ...c, pause_alerts: v })}
+                label="Pause alerts"
+                description="Raids and follows wait until panic ends."
+              />
+              <Switch
+                checked={c.pause_tts}
+                onChange={(v) => save({ ...c, pause_tts: v })}
+                label="Pause text-to-speech"
+              />
+            </>
+          )}
+        </div>
+      )}
     </section>
   )
 }
@@ -503,6 +508,7 @@ function FiltersPanel() {
 }
 
 export function Moderation() {
+  const mod = useLive((s) => s.remote?.role === 'mod')
   return (
     <div>
       <PageHeader
@@ -514,7 +520,7 @@ export function Moderation() {
         <HeldPanel />
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           <BanList />
-          <FiltersPanel />
+          {!mod && <FiltersPanel />}
         </div>
       </div>
     </div>

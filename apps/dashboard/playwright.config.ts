@@ -31,8 +31,8 @@ export default defineConfig({
     {
       name: 'mobile',
       use: { ...devices['iPhone 13'], browserName: 'chromium' },
-      // pro-foundation, history, tip-brand, cloud-backups, autoreplies and tts-voices check their screens on a phone too (their 375 px tests also run on desktop).
-      testMatch: /mobile|pro-foundation|history|tip-brand|cloud-backups|autoreplies|tts-voices/,
+      // pro-foundation, history, tip-brand, cloud-backups, autoreplies, tts-voices and remote check their screens on a phone too (their 375 px tests also run on desktop).
+      testMatch: /mobile|pro-foundation|history|tip-brand|cloud-backups|autoreplies|tts-voices|remote/,
     },
   ],
 })

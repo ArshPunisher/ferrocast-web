@@ -4,23 +4,137 @@
 //  3. Browser reopened later: the token saved for this tab (sessionStorage).
 //  4. Anything else (a plain `pnpm dev`, the website preview, screenshots): demo mode with
 //     an in-browser engine, clearly labelled.
+//  5. A phone through Ferrocast's servers (Pro "Dashboard anywhere", API.md §9.5): the relay
+//     injects `window.__FERROCAST__ = { api: "<origin>/r", remote: true }`; the phone pairs
+//     once with `#pair=<code>` and keeps its device token in localStorage (30 days from the
+//     last use, revocable on the PC). `?remote=owner|mod` (and `&pc=off`) shows it in the demo.
 
-import { FerroClient, type SocketFactory } from '@ferrocast/api'
+import { ApiError, FerroClient, phoneApi, remoteAllowed, type SocketFactory } from '@ferrocast/api'
+import type { RemoteState } from './store'
 
 declare global {
   interface Window {
-    __FERROCAST__?: { api: string; token: string }
+    __FERROCAST__?: { api: string; token?: string; remote?: boolean }
     /** Demo engine handle for tests (Playwright) and the "simulate" menu. */
     __ferrocastDemo?: import('@ferrocast/api/demo').DemoEngine
   }
 }
 
-export type Mode = 'desktop' | 'browser' | 'demo'
+export type Mode = 'desktop' | 'browser' | 'demo' | 'remote'
 
 export interface Connection {
   mode: Mode
   client: FerroClient
   socket: SocketFactory
+  /** Set when this dashboard reaches the PC through Ferrocast's servers (or the demo acts so). */
+  remote?: RemoteState
+}
+
+const REMOTE_KEY = 'fc-remote'
+
+function readRemote(api: string): string | null {
+  try {
+    const raw = localStorage.getItem(REMOTE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as { api?: unknown; token?: unknown }
+    return v.api === api && typeof v.token === 'string' ? v.token : null
+  } catch {
+    return null
+  }
+}
+
+function saveRemote(api: string, token: string): void {
+  try {
+    localStorage.setItem(REMOTE_KEY, JSON.stringify({ api, token }))
+  } catch {
+    // private mode: pair again next time
+  }
+}
+
+export function clearRemote(): void {
+  try {
+    localStorage.removeItem(REMOTE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Why a phone can't show the dashboard (the App shows it with the strip): not paired (or
+ * removed), the PC is off, the streamer's Pro is paused (still paired), or it's open in more
+ * tabs than the relay keeps.
+ */
+export type RemoteProblem = 'unpaired' | 'pc_offline' | 'pro_paused' | 'elsewhere'
+
+/** A phone's client: role-checked calls, and tickets instead of the token in URLs. */
+export function remoteClient(api: string, token: string, role: 'owner' | 'mod'): FerroClient {
+  const phone = phoneApi(api)
+  return new FerroClient({
+    base: api,
+    token,
+    allow: (method, path) => remoteAllowed(role, method, path),
+    ticket: (kind) => phone.ticket(token, kind),
+  })
+}
+
+async function remoteConnect(
+  api: string,
+): Promise<
+  | Connection
+  | { remoteProblem: RemoteProblem; api: string }
+  | { remotePairing: { api: string; code: string } }
+> {
+  const code = pairCodeFromHash()
+  if (code) return { remotePairing: { api, code } }
+  const token = readRemote(api)
+  if (!token) return { remoteProblem: 'unpaired', api }
+  try {
+    const me = await phoneApi(api).me(token)
+    if (!me.pc_online) return { remoteProblem: 'pc_offline', api }
+    const client = remoteClient(api, token, me.role)
+    // Previews need their ticket before they render; they still work without one (no image).
+    await client.refreshMediaTicket().catch(() => {})
+    return {
+      mode: 'remote',
+      client,
+      socket: wsFactory,
+      remote: { role: me.role, name: me.name, pcOnline: true },
+    }
+  } catch (e) {
+    // Removed (401): forget the token. Pro paused (402): keep it, it works again later.
+    if (e instanceof ApiError && e.status === 401) {
+      clearRemote()
+      return { remoteProblem: 'unpaired', api }
+    }
+    if (e instanceof ApiError && e.status === 402) return { remoteProblem: 'pro_paused', api }
+    throw e
+  }
+}
+
+/**
+ * A quiet look at this phone's state (the "PC is off" screen polls it): `online` once the PC
+ * is back, the problem otherwise, `null` when the relay can't be reached right now.
+ */
+export async function checkRemote(): Promise<RemoteProblem | 'online' | null> {
+  const api = window.__FERROCAST__?.remote === true ? window.__FERROCAST__.api : null
+  if (!api) return null
+  const token = readRemote(api)
+  if (!token) return 'unpaired'
+  try {
+    const me = await phoneApi(api).me(token)
+    return me.pc_online ? 'online' : 'pc_offline'
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return 'unpaired'
+    if (e instanceof ApiError && e.status === 402) return 'pro_paused'
+    return null
+  }
+}
+
+/** Trades a one-time code from the PC for this phone's device token, then connects. */
+export async function pairRemote(api: string, code: string): Promise<void> {
+  const paired = await phoneApi(api).pair(code)
+  saveRemote(api, paired.token)
+  history.replaceState(null, '', location.pathname + location.search + '#/')
 }
 
 const TOKEN_KEY = 'fc-session'
@@ -82,10 +196,17 @@ async function engineAnswers(base: string): Promise<boolean> {
   }
 }
 
-export async function connect(): Promise<
-  Connection | { pairing: { base: string; code: string } } | { unpaired: { base: string } }
-> {
+export type ConnectResult =
+  | Connection
+  | { pairing: { base: string; code: string } }
+  | { unpaired: { base: string } }
+  | { remoteProblem: RemoteProblem; api: string }
+  | { remotePairing: { api: string; code: string } }
+
+export async function connect(): Promise<ConnectResult> {
   const injected = window.__FERROCAST__
+  if (injected?.remote === true && typeof injected.api === 'string')
+    return remoteConnect(injected.api)
   if (injected && typeof injected.api === 'string' && typeof injected.token === 'string') {
     return {
       mode: 'desktop',
@@ -126,6 +247,15 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     ...(params.get('relay') === '0' ? { relay: false } : {}),
     // `?history=empty`: Pro stream history with no streams yet.
     ...(params.get('history') === 'empty' ? { history: 'empty' as const } : {}),
+    // `?remote=owner|mod&pc=off`: this dashboard as a paired phone, the PC on or off.
+    ...(params.get('remote') === 'owner' || params.get('remote') === 'mod'
+      ? {
+          remote: {
+            role: params.get('remote') as 'owner' | 'mod',
+            pcOnline: params.get('pc') !== 'off',
+          },
+        }
+      : {}),
     // `?cloud=empty|new-pc`: Pro cloud backups with none yet, or as a fresh install.
     ...(params.get('cloud') === 'empty' || params.get('cloud') === 'new-pc'
       ? { cloudBackups: params.get('cloud') as 'empty' | 'new-pc' }
@@ -140,10 +270,26 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     designs: BUILTINS,
   })
   window.__ferrocastDemo = engine
+  const role = params.get('remote')
+  const remote: RemoteState | undefined =
+    role === 'owner' || role === 'mod'
+      ? {
+          role,
+          name: role === 'mod' ? 'Meera (mod)' : 'Pixel 8',
+          pcOnline: params.get('pc') !== 'off',
+        }
+      : undefined
   return {
     mode: 'demo',
-    client: new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+    client: new FerroClient({
+      base: engine.base,
+      token: DEMO_TOKEN,
+      fetch: engine.fetch,
+      // As a phone, skip what the role can't call, like the real one.
+      ...(remote ? { allow: (m: string, p: string) => remoteAllowed(remote.role, m, p) } : {}),
+    }),
     socket: engine.socket,
+    ...(remote ? { remote } : {}),
   }
 }
 
