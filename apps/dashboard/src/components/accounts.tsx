@@ -25,7 +25,7 @@ import { stateCopy } from './StatusStrip'
 const BLURB: Record<ChatPlatform, string> = {
   twitch: 'Chat, follows, subs, Bits, raids and channel points.',
   youtube: 'Chat, Super Chats and memberships while you’re live.',
-  kick: 'Chat, follows, subs and KICKs, through the Ferrocast relay (usually within a second).',
+  kick: 'Chat, follows, subs and KICKs, through the Ferrocast relay.',
 }
 
 /** Connect one platform: Twitch shows a device code; YouTube and Kick finish in the browser. */
@@ -82,8 +82,8 @@ export function useConnect(): {
         done
           ? 'You can close this.'
           : flow.flow.flow === 'device_code'
-            ? 'Your browser opened Twitch. Enter this code there and approve Ferrocast.'
-            : 'Your browser opened the sign-in page. Approve Ferrocast there and come back.'
+            ? 'Enter this code on Twitch and approve Ferrocast.'
+            : 'Approve Ferrocast in your browser, then come back.'
       }
       footer={
         <Button variant={done ? 'primary' : 'ghost'} onClick={() => setFlow(null)}>
@@ -122,7 +122,7 @@ export function useConnect(): {
         </div>
       )}
       {flow.flow.flow === 'browser' && !done && (
-        <p className="pb-1 text-center text-[13px] text-text-3">
+        <p className="pb-1 text-center text-[13.5px] text-text-2">
           Nothing opened?{' '}
           <a
             href={flow.flow.url}
@@ -186,7 +186,7 @@ export function AccountRow({
             <Badge tone={tone === 'off' ? 'neutral' : tone === 'ok' ? 'ok' : tone}>{label}</Badge>
           )}
         </p>
-        <p className="mt-0.5 text-[13px] text-text-3">
+        <p className="mt-0.5 text-[13.5px] text-text-2">
           {c.detail && !on ? c.detail : BLURB[platform]}
         </p>
       </div>
@@ -195,7 +195,7 @@ export function AccountRow({
           Disconnect
         </Button>
       ) : on ? (
-        <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-ok">
+        <span className="inline-flex items-center gap-1 text-[13.5px] font-semibold text-ok">
           <Check size={15} weight="bold" /> Done
         </span>
       ) : (

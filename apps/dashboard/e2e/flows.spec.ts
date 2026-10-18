@@ -351,7 +351,7 @@ test.describe('tips and settings', () => {
     await page.getByLabel('Main currency').selectOption('USD')
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')
     // The TTS minimum's hint follows straight away, without a reload.
-    await expect(page.getByText('In USD, your main currency (Appearance).')).toBeVisible()
+    await expect(page.getByText('In USD (set in Appearance).')).toBeVisible()
     await page.getByRole('link', { name: 'Text-to-speech' }).click()
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')
   })

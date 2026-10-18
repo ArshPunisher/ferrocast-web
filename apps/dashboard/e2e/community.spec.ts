@@ -386,7 +386,7 @@ test.describe('settings: Discord and OBS', () => {
     await expect(s.getByText('Using OBS’s own settings')).toBeVisible()
     await expect(s.getByLabel('Password', { exact: true })).toHaveAttribute(
       'placeholder',
-      'From OBS — type to replace',
+      'From OBS. Type to replace',
     )
     await expect(s.getByText('Found OBS on this computer')).toBeHidden()
 

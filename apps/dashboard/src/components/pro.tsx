@@ -116,7 +116,7 @@ export function ProSettings() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={s.tone}>{s.badge}</Badge>
             {p.subscription_id && (
-              <span className="truncate font-mono text-[12.5px] text-text-3">
+              <span className="truncate font-mono text-[13.5px] text-text-3">
                 {p.subscription_id}
               </span>
             )}
@@ -125,13 +125,13 @@ export function ProSettings() {
             {s.text}
           </p>
           {p.stale && (
-            <p role="status" className="text-[13px] font-medium text-warn">
+            <p role="status" className="text-[13.5px] font-medium text-warn">
               {p.checked_at
-                ? `Couldn’t reach the Ferrocast relay, so this is what it said on ${day(p.checked_at)}. A confirmed Pro keeps working offline for ${p.offline_grace_days} days.`
-                : 'Couldn’t reach the Ferrocast relay to check Pro. Everything else keeps working.'}
+                ? `Couldn’t reach the relay. Last check: ${day(p.checked_at)}. Pro works offline for ${p.offline_grace_days} days.`
+                : 'Couldn’t reach the relay to check Pro. Everything else works.'}
             </p>
           )}
-          {!p.stale && p.warning && <p className="text-[13px] text-text-3">{p.warning}</p>}
+          {!p.stale && p.warning && <p className="text-[13.5px] text-text-2">{p.warning}</p>}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button
@@ -158,8 +158,8 @@ export function ProSettings() {
       {manageUrl && (
         <div className="flex flex-col gap-2">
           <ExternalLink href={manageUrl}>Open the manage page</ExternalLink>
-          <p className="text-[13px] text-text-3">
-            It shows your plan and lets you stop renewing. The link works for 30 minutes.
+          <p className="text-[13.5px] text-text-2">
+            See your plan or stop renewing. The link works for 30 minutes.
           </p>
         </div>
       )}
@@ -183,10 +183,7 @@ export function ProSettings() {
               { value: 'yearly', label: `${rupeesFromPaise(prices.yearly)} a year` },
             ]}
           />
-          <Field
-            label="Email for receipts"
-            hint="Razorpay sends receipts here. You also use it to move Pro to another PC."
-          >
+          <Field label="Email for receipts" hint="For receipts, and to move Pro to another PC.">
             {(f) => (
               <Input
                 {...f}
@@ -204,7 +201,7 @@ export function ProSettings() {
           {checkoutUrl && (
             <div className="flex flex-col gap-2">
               <ExternalLink href={checkoutUrl}>Open Razorpay checkout</ExternalLink>
-              <p className="text-[13px] text-text-3">After paying, press Check again.</p>
+              <p className="text-[13.5px] text-text-2">After paying, press Check again.</p>
             </div>
           )}
         </form>
@@ -225,10 +222,7 @@ export function ProSettings() {
               }).then((v) => v && res.set(v))
             }}
           >
-            <Field
-              label="Subscription id"
-              hint="Starts with sub_. It’s in Razorpay’s emails about your Pro subscription."
-            >
+            <Field label="Subscription id" hint="Starts with sub_. It’s in Razorpay’s emails.">
               {(f) => (
                 <Input
                   {...f}

@@ -29,6 +29,7 @@ import {
 import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { AccountRow, useConnect } from '../components/accounts'
 import { stateCopy } from '../components/StatusStrip'
+import { THEME_EVENT } from '../components/Shell'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { DiscordSettingsForm } from '../components/discord'
@@ -78,7 +79,7 @@ function Accounts() {
     <Section
       id="accounts"
       title="Accounts"
-      description="Sign-in tokens are stored privately on this computer, never in exports or logs."
+      description="Sign-ins stay on this computer, never in exports or logs."
     >
       <ul className="flex flex-col gap-2">
         {(['twitch', 'youtube', 'kick'] as const).map((p) => (
@@ -97,7 +98,7 @@ function Accounts() {
         onClose={() => setLeaving(null)}
         size="sm"
         title={`Disconnect ${name}?`}
-        description={`Chat and alerts from ${name} stop until you connect again. Your overlays, commands and settings stay.`}
+        description={`${name} chat and alerts stop. Your overlays and settings stay.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setLeaving(null)}>
@@ -190,13 +191,9 @@ function Obs() {
   const auto = obs.data?.auto === true
   const saved = obs.data?.has_password === true
   return (
-    <Section
-      id="obs"
-      title="OBS"
-      description="Lets “Add to OBS” put overlays into your scene in one click."
-    >
+    <Section id="obs" title="OBS" description="Lets “Add to OBS” drop overlays into your scene.">
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-text-3">Status</span>
+        <span className="font-medium text-text-2">Status</span>
         {conn && (
           <Badge tone={stateCopy(conn).tone === 'ok' ? 'ok' : 'warn'}>
             {stateCopy(conn).label}
@@ -208,7 +205,7 @@ function Obs() {
         {auto && <span className="text-text-3">Using OBS’s own settings</span>}
       </div>
       {conn && conn.state !== 'connected' && conn.detail && (
-        <p className="mb-4 text-[13px] text-text-2">{conn.detail}</p>
+        <p className="mb-4 text-[13.5px] text-text-2">{conn.detail}</p>
       )}
       <ObsAutoDetect
         key={detectKey}
@@ -218,12 +215,9 @@ function Obs() {
           obsToast(o)
         }}
       />
-      <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13px] text-text-3">
-        <li>In OBS open Tools → WebSocket Server Settings and tick “Enable WebSocket server”.</li>
-        <li>
-          Ferrocast connects by itself. Only for OBS on another computer: click “Show Connect Info”
-          there and copy the address and password here.
-        </li>
+      <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13.5px] text-text-2">
+        <li>In OBS: Tools → WebSocket Server Settings → tick “Enable WebSocket server”.</li>
+        <li>OBS on another PC? Copy its “Show Connect Info” address and password here.</li>
       </ol>
       <form
         className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]"
@@ -257,8 +251,8 @@ function Obs() {
           className="sm:col-span-2"
           hint={
             auto && saved
-              ? 'Read from OBS’s settings, never shown. Type one only to use a different password.'
-              : 'Stored privately on this computer, never shown or exported.'
+              ? 'Read from OBS. Type one only to use a different password.'
+              : 'Stays on this computer, never shown or exported.'
           }
           error={err}
         >
@@ -268,7 +262,7 @@ function Obs() {
               type="password"
               value={password}
               placeholder={
-                saved ? (auto ? 'From OBS — type to replace' : 'Saved — type to replace') : ''
+                saved ? (auto ? 'From OBS. Type to replace' : 'Saved. Type to replace') : ''
               }
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="off"
@@ -300,7 +294,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
     <Section
       id="tts"
       title="Text-to-speech"
-      description="Off by default. When on, nothing is read until it passes your rules, and you can make every message wait for your approval."
+      description="Off by default. Only messages that pass your rules are read."
     >
       {res.error ? (
         <LoadError error={res.error} onRetry={res.reload} />
@@ -312,20 +306,24 @@ function Tts({ currency }: { currency?: string | undefined }) {
             checked={t.enabled}
             onChange={(enabled) => save({ ...t, enabled })}
             label="Read messages aloud"
-            description="Only messages attached to tips, Super Chats, Bits and subs, and only when the alert asks for it."
+            description="Messages on tips, Super Chats, Bits and subs, when the alert asks."
           />
-          <div
-            className={cx('flex flex-col gap-4', !t.enabled && 'pointer-events-none opacity-50')}
-            aria-disabled={!t.enabled}
-          >
+          <div className="flex flex-col gap-4">
+            {!t.enabled && (
+              <p className="text-[13.5px] font-medium text-text-2">
+                Turn on “Read messages aloud” to change these.
+              </p>
+            )}
             <Switch
               checked={t.hold_for_approval}
+              disabled={!t.enabled}
               onChange={(hold_for_approval) => save({ ...t, hold_for_approval })}
               label="Ask me first"
-              description="Messages wait on Home until you press “Read it”. Deleted messages are dropped."
+              description="Messages wait on Home until you press “Read it”."
             />
             <Switch
               checked={t.read_names}
+              disabled={!t.enabled}
               onChange={(read_names) => save({ ...t, read_names })}
               label="Read the sender’s name"
             />
@@ -334,6 +332,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
                 {(p) => (
                   <Select
                     {...p}
+                    disabled={!t.enabled}
                     value={t.voice}
                     onChange={(e) => save({ ...t, voice: e.target.value })}
                   >
@@ -350,7 +349,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
                 label="Minimum amount"
                 hint={
                   (currency ?? t.currency)
-                    ? `In ${currency ?? t.currency}, your main currency (Appearance).`
+                    ? `In ${currency ?? t.currency} (set in Appearance).`
                     : 'In your main currency (Appearance).'
                 }
               >
@@ -359,6 +358,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
                     {...p}
                     type="number"
                     min={0}
+                    disabled={!t.enabled}
                     value={t.min_amount}
                     onChange={(e) =>
                       res.set({ ...t, min_amount: Math.max(0, Number(e.target.value) || 0) })
@@ -367,13 +367,14 @@ function Tts({ currency }: { currency?: string | undefined }) {
                   />
                 )}
               </Field>
-              <Field label="Longest message" hint="Characters; the rest is cut.">
+              <Field label="Longest message" hint="10 to 500 characters.">
                 {(p) => (
                   <Input
                     {...p}
                     type="number"
                     min={10}
                     max={500}
+                    disabled={!t.enabled}
                     value={t.max_chars}
                     onChange={(e) => res.set({ ...t, max_chars: Number(e.target.value) || 10 })}
                     onBlur={() => save(t)}
@@ -381,9 +382,12 @@ function Tts({ currency }: { currency?: string | undefined }) {
                 )}
               </Field>
             </div>
-            <p className="flex items-center gap-2 text-[12.5px] text-text-3">
-              Studio voices <ProBadge /> are optional. The free voices run on your computer.
-            </p>
+            <div className="flex items-start gap-2 text-[13.5px] text-text-2">
+              <span className="shrink-0">
+                <ProBadge />
+              </span>
+              <span>Studio voices are optional. Free voices run on this computer.</span>
+            </div>
           </div>
         </div>
       )}
@@ -441,7 +445,7 @@ function Appearance({
     <Section id="appearance" title="Appearance">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-text-2">Theme</span>
+          <span className="text-[13.5px] font-semibold text-text">Theme</span>
           <Segmented
             label="Theme"
             value={settings.theme}
@@ -460,12 +464,9 @@ function Appearance({
           checked={settings.low_motion_overlays}
           onChange={(low_motion_overlays) => save({ ...settings, low_motion_overlays })}
           label="Light overlays"
-          description="Overlays fade instead of moving. Use it if OBS stutters, especially on Linux."
+          description="Overlays fade instead of move. Helps if OBS stutters."
         />
-        <Field
-          label="Main currency"
-          hint="The TTS minimum uses it. Tips in other currencies still show as sent, never converted."
-        >
+        <Field label="Main currency" hint="Tips in other currencies show as sent, never converted.">
           {(p) => (
             <Select
               {...p}
@@ -545,9 +546,7 @@ function Data() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-text">Export everything</h3>
-          <p className="text-[13px] text-text-3">
-            One file with your {EXPORT_CONTENTS}, in an open format.
-          </p>
+          <p className="text-[13.5px] text-text-2">One file with your {EXPORT_CONTENTS}.</p>
           <Button
             className="mt-1 self-start"
             icon={<DownloadSimple size={16} />}
@@ -559,9 +558,8 @@ function Data() {
         </div>
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-text">Bring your setup</h3>
-          <p className="text-[13px] text-text-3">
-            Coming from StreamElements or Streamlabs? Bring your commands, timers, points and tip
-            history. You see everything before anything changes.
+          <p className="text-[13.5px] text-text-2">
+            Commands, timers, points and tips. You review it first.
           </p>
           <div className="mt-1 flex flex-wrap gap-2">
             <a
@@ -603,9 +601,11 @@ function Data() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-text">Backups</h3>
-            <p className="mt-0.5 text-[13px] text-text-3">
-              Taken automatically every day, before every update and before every import. The last 7
-              daily ones and the last 10 others are kept.
+            <p
+              className="mt-0.5 text-[13.5px] text-text-2"
+              title="Keeps the last 7 daily backups and the last 10 others."
+            >
+              Daily, and before every update or import.
             </p>
           </div>
           <Button
@@ -625,8 +625,8 @@ function Data() {
         ) : !backups.data ? (
           <Skeleton className="mt-3 h-20" />
         ) : backups.data.length === 0 ? (
-          <p className="mt-3 text-[13px] text-text-3">
-            No backups yet. The first daily one is taken soon after Ferrocast starts.
+          <p className="mt-3 text-[13.5px] text-text-2">
+            No backups yet. The first one comes soon after start.
           </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-1">
@@ -644,7 +644,7 @@ function Data() {
                       minute: '2-digit',
                     })}
                   </span>
-                  <span className="text-[12.5px] text-text-3">
+                  <span className="text-[13.5px] text-text-3">
                     {BACKUP_REASON[b.reason] ?? BACKUP_REASON.other}
                     {b.version ? ` · v${b.version}` : ''} · {formatBytes(b.bytes)}
                   </span>
@@ -687,8 +687,8 @@ function Data() {
                 <span className="font-mono text-text">{report.media_files}</span>
               </li>
             </ul>
-            <p className="text-[13px] text-text-3">
-              A backup was taken first (“Before an import” below); restore it to undo.
+            <p className="text-[13.5px] text-text-2">
+              To undo, restore the “Before an import” backup.
             </p>
           </div>
         )}
@@ -698,7 +698,7 @@ function Data() {
         onClose={() => setRestore(null)}
         size="sm"
         title="Restore this backup?"
-        description="It’s swapped in the next time Ferrocast starts. Your current setup is saved as a backup first, so you can come back to it."
+        description="It applies at the next start. Your current setup is backed up first."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRestore(null)}>
@@ -739,22 +739,24 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
     <Section
       id="updates"
       title="Updates"
-      description="Never forced and never while you’re live. You can always go back to the previous version."
+      description="Never forced, never while you’re live. You can always roll back."
     >
       <div className="flex flex-col gap-4">
         {u ? (
           <div className="flex flex-col gap-2 rounded-[12px] border border-line bg-surface-2 p-3.5 sm:flex-row sm:items-center">
             <p className="min-w-0 flex-1 text-sm text-text-2">
-              You have <span className="font-mono text-text">v{u.current}</span>
               {u.latest && u.latest !== u.current ? (
                 <>
-                  . <span className="font-mono text-text">v{u.latest}</span> is ready.
+                  Version <span className="font-mono text-text">{u.latest}</span> is ready (you have{' '}
+                  <span className="font-mono text-text">{u.current}</span>).
                 </>
               ) : (
-                ', the latest.'
+                <>
+                  Version <span className="font-mono text-text">{u.current}</span> is the latest.
+                </>
               )}
               {u.blocked_while_live && (
-                <span className="mt-1 block text-[13px] text-warn">
+                <span className="mt-1 block text-[13.5px] font-medium text-warn">
                   You’re live, so it will wait until your stream ends.
                 </span>
               )}
@@ -785,7 +787,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
           label="Never update while I’m live"
         />
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-text-2">Channel</span>
+          <span className="text-[13.5px] font-semibold text-text">Channel</span>
           <Segmented
             label="Update channel"
             value={settings.update_channel}
@@ -810,10 +812,10 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
   const lanPending = settings.lan_access !== startedWith
   const lanNote = link?.lan
     ? link.lan.active
-      ? 'Open it on a phone or PC on the same Wi-Fi. It works once.'
+      ? 'Open it on a device on the same Wi-Fi. It works once.'
       : link.lan.restart_needed
-        ? 'This link only works on this computer until you restart Ferrocast. After the restart, make a new one for other devices.'
-        : 'This link only works on this computer. To open the dashboard on a phone, turn on “Allow other devices” and restart Ferrocast.'
+        ? 'Works on this computer only until you restart Ferrocast.'
+        : 'Works on this computer only. For a phone, allow other devices and restart.'
     : null
   return (
     <Section id="advanced" title="Advanced">
@@ -844,10 +846,10 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
               })
             }}
             label="Allow other devices on my network"
-            description="Lets a mod’s phone or a second PC on your Wi-Fi open this dashboard with a pairing link. Off means only this computer can connect. Takes effect the next time Ferrocast starts."
+            description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
           />
           {lanPending && (
-            <p role="status" className="text-[13px] font-medium text-warn">
+            <p role="status" className="text-[13.5px] font-medium text-warn">
               Restart Ferrocast to{' '}
               {settings.lan_access ? 'let other devices in' : 'close it to other devices'}.
             </p>
@@ -855,11 +857,11 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
         </div>
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-semibold text-text">Open in another browser</p>
-          <p className="text-[13px] text-text-3">Makes a one-time link that works for 2 minutes.</p>
+          <p className="text-[13.5px] text-text-2">A one-time link, good for 2 minutes.</p>
           {link ? (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
-                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[12.5px] text-text-2">
+                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[13.5px] text-text-2">
                   {link.url}
                 </code>
                 <Button
@@ -875,8 +877,8 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
               {lanNote && (
                 <p
                   className={cx(
-                    'text-[13px]',
-                    link.lan?.active ? 'text-text-3' : 'font-medium text-warn',
+                    'text-[13.5px]',
+                    link.lan?.active ? 'text-text-2' : 'font-medium text-warn',
                   )}
                 >
                   {lanNote}
@@ -910,6 +912,12 @@ export function Settings({ section }: { section?: string | undefined }) {
     res.set(s)
     void run('settings', () => client.saveSettings(s))
   }
+  // The sidebar theme toggle saves the theme itself; reload so Appearance isn't stale.
+  const reload = res.reload
+  useEffect(() => {
+    window.addEventListener(THEME_EVENT, reload)
+    return () => window.removeEventListener(THEME_EVENT, reload)
+  }, [reload])
   return (
     <div>
       <PageHeader title="Settings" />
@@ -941,7 +949,7 @@ export function Settings({ section }: { section?: string | undefined }) {
           <Section
             id="discord"
             title="Discord"
-            description="Tell your server when you go live. The webhook is stored privately on this computer and is never exported."
+            description="Tell your server when you go live. The webhook stays on this computer."
           >
             <DiscordSettingsForm />
           </Section>

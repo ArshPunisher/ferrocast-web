@@ -38,7 +38,7 @@ test.describe('confirmations', () => {
     })
     await twitch.getByRole('button', { name: 'Disconnect' }).click()
     const ask = page.getByRole('dialog', { name: 'Disconnect Twitch?' })
-    await expect(ask).toContainText('Chat and alerts from Twitch stop until you connect again.')
+    await expect(ask).toContainText('Twitch chat and alerts stop.')
     await ask.getByRole('button', { name: 'Cancel' }).click()
     await expect(twitch.getByRole('button', { name: 'Disconnect' })).toBeVisible()
     await twitch.getByRole('button', { name: 'Disconnect' }).click()
@@ -169,9 +169,7 @@ test.describe('settings', () => {
   test('backups say why they were taken, and an import adds one', async ({ page }) => {
     await open(page, 'settings/data')
     const data = page.locator('#settings-data')
-    await expect(
-      data.getByText(/every day, before every update and before every import/),
-    ).toBeVisible()
+    await expect(data.getByText(/Daily, and before every update or import/)).toBeVisible()
     await expect(data.getByText(/^Daily · v/)).toBeVisible()
     await expect(data.getByText(/^Before an update · v0\.3\.0/)).toBeVisible()
     await data.locator('input[type=file]').setInputFiles({
@@ -206,7 +204,7 @@ test.describe('settings', () => {
     ).toBeVisible()
     await expect(page.getByText('Restart Ferrocast to let other devices in.')).toBeVisible()
     await page.getByRole('button', { name: 'Make a link' }).click()
-    await expect(page.getByText(/only works on this computer until you restart/)).toBeVisible()
+    await expect(page.getByText(/on this computer only until you restart/)).toBeVisible()
   })
 })
 
