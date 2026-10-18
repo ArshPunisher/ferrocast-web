@@ -75,7 +75,11 @@ function OpenInBrowser() {
     client
       .pairCode()
       .then((l) => {
-        window.location.assign(`${window.location.origin}/app/#pair=${encodeURIComponent(l.code)}`)
+        // The query makes this a real navigation: a change after # alone stays inside the
+        // page, and the desktop would never see it to hand it to the browser.
+        window.location.assign(
+          `${window.location.origin}/app/?browser=1#pair=${encodeURIComponent(l.code)}`,
+        )
       })
       .catch((e: unknown) => {
         const d = describeError(e)
