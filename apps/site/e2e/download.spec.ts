@@ -9,14 +9,20 @@ const dl = (tag: string, name: string) => ({
 })
 
 test.describe('download page: beta', () => {
-  test('shows the beta section with a clear warning and install notes', async ({ page }) => {
+  test('each system card carries its own beta download and install tip', async ({ page }) => {
     await page.goto('/download/')
     const beta = page.locator('#beta')
-    await expect(beta.getByRole('heading', { name: 'Try the beta' })).toBeVisible()
-    await expect(beta.getByRole('note')).toContainText('Betas are test builds')
-    await expect(beta.getByText('right-click it and choose')).toBeVisible()
-    await expect(beta.getByText('More info')).toBeVisible()
-    await expect(beta.getByText('Run anyway')).toBeVisible()
+    // One release line, not a second box of buttons.
+    await expect(beta.getByRole('note')).toContainText(/test build|first beta/)
+    await expect(beta.getByRole('heading', { name: 'Try the beta' })).toHaveCount(0)
+    for (const os of ['mac', 'windows', 'linux']) {
+      const card = beta.locator(`.os[data-os="${os}"]`)
+      await expect(card.locator('a[data-beta-download], .soon').first()).toBeVisible()
+    }
+    if ((await beta.locator('.os[data-os="mac"] a[data-beta-download]').count()) > 0) {
+      await expect(beta.getByText('right-click Ferrocast')).toBeVisible()
+      await expect(beta.getByText('Run anyway')).toBeVisible()
+    }
     // Either real downloads from the newest prerelease, or (before the first beta) a link
     // to the releases page. Never a dead button.
     const downloads = beta.locator('a[data-beta-download]')
