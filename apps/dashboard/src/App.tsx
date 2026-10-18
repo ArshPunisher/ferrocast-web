@@ -37,9 +37,7 @@ const Designer = lazy(() => import('./screens/Designer').then((m) => ({ default:
 const Import = lazy(() => import('./screens/Import').then((m) => ({ default: m.Import })))
 const Studio = lazy(() => import('./screens/Studio').then((m) => ({ default: m.Studio })))
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })))
-const ProPreview = lazy(() =>
-  import('./screens/ProPreview').then((m) => ({ default: m.ProPreview })),
-)
+const History = lazy(() => import('./screens/History').then((m) => ({ default: m.History })))
 const Onboarding = lazy(() =>
   import('./screens/Onboarding').then((m) => ({ default: m.Onboarding })),
 )
@@ -245,9 +243,8 @@ export function App() {
     case 'studio':
       screen = <Studio section={route.section} />
       break
-    case 'preview':
-      // Component previews exist in the demo only; a real engine shows Home.
-      screen = isDemo ? <ProPreview /> : <Home />
+    case 'history':
+      screen = <History />
       break
     default:
       screen = <Home />

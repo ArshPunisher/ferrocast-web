@@ -72,10 +72,10 @@ describe('ProPanelView', () => {
   })
 })
 
-describe('the demo preview route', () => {
-  it('round-trips, and anything else under preview is Home', () => {
-    expect(parseRoute('#/preview/pro')).toEqual({ name: 'preview', what: 'pro' })
-    expect(href({ name: 'preview', what: 'pro' })).toBe('#/preview/pro')
-    expect(parseRoute('#/preview/other')).toEqual({ name: 'home' })
+describe('the history route', () => {
+  it('round-trips, and the old demo preview is gone (Home)', () => {
+    expect(parseRoute('#/history')).toEqual({ name: 'history' })
+    expect(href({ name: 'history' })).toBe('#/history')
+    expect(parseRoute('#/preview/pro')).toEqual({ name: 'home' })
   })
 })

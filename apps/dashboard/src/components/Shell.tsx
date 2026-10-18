@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowSquareOut,
   Bell,
+  ChartLine,
   Broadcast,
   ChatsCircle,
   Command,
@@ -19,14 +20,21 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
-import { describeError } from '@ferrocast/api'
+import { describeError, proApi, proPanelState, type ProFeature } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import { useLive } from '../lib/store'
-import { useClient } from '../lib/hooks'
+import { useClient, useResource } from '../lib/hooks'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
 
-type NavItem = { route: Route; label: string; icon: typeof House; match: Route['name'][] }
+type NavItem = {
+  route: Route
+  label: string
+  icon: typeof House
+  match: Route['name'][]
+  /** A Pro feature: listed only when its panel would show (on this relay, and Pro or on sale). */
+  pro?: ProFeature
+}
 
 export const NAV: NavItem[] = [
   { route: { name: 'home' }, label: 'Home', icon: House, match: ['home', 'recap'] },
@@ -54,6 +62,13 @@ export const NAV: NavItem[] = [
     match: ['community'],
   },
   { route: { name: 'tips' }, label: 'Tips', icon: HandCoins, match: ['tips'] },
+  {
+    route: { name: 'history' },
+    label: 'History',
+    icon: ChartLine,
+    match: ['history'],
+    pro: 'history',
+  },
   { route: { name: 'settings' }, label: 'Settings', icon: GearSix, match: ['settings', 'import'] },
 ]
 
@@ -189,6 +204,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   }, [route.name])
 
   const isActive = (i: NavItem) => i.match.includes(route.name)
+  // Pro entries show only when their panel would (no nagging): a failed check hides them.
+  const pro = useResource((c) => proApi(c).status())
+  const proView = pro.error ? null : pro.data
+  const nav = NAV.filter((i) => !i.pro || proPanelState(proView, i.pro) !== 'hidden')
   const ThemeIcon = theme === 'dark' ? Sun : Moon
 
   return (
@@ -215,7 +234,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           <Wordmark size="sm" />
         </a>
         <nav aria-label="Main" className="flex flex-col gap-0.5">
-          {NAV.map((i) => (
+          {nav.map((i) => (
             <NavLink key={i.label} item={i} active={isActive(i)} />
           ))}
         </nav>
@@ -317,29 +336,31 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm lg:hidden"
       >
         <ul className="mx-auto grid h-16 max-w-lg grid-cols-5">
-          {NAV.filter((i) => MOBILE_MAIN.includes(i.route.name)).map((i) => {
-            const Icon = i.icon
-            const active = isActive(i)
-            return (
-              <li key={i.label}>
-                <a
-                  href={href(i.route)}
-                  aria-current={active ? 'page' : undefined}
-                  className={cx(
-                    'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
-                    active ? 'text-text' : 'text-text-3',
-                  )}
-                >
-                  <Icon
-                    size={22}
-                    weight={active ? 'fill' : 'regular'}
-                    className={active ? 'text-accent-text' : ''}
-                  />
-                  {i.label === 'Moderation' ? 'Mod' : i.label}
-                </a>
-              </li>
-            )
-          })}
+          {nav
+            .filter((i) => MOBILE_MAIN.includes(i.route.name))
+            .map((i) => {
+              const Icon = i.icon
+              const active = isActive(i)
+              return (
+                <li key={i.label}>
+                  <a
+                    href={href(i.route)}
+                    aria-current={active ? 'page' : undefined}
+                    className={cx(
+                      'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
+                      active ? 'text-text' : 'text-text-3',
+                    )}
+                  >
+                    <Icon
+                      size={22}
+                      weight={active ? 'fill' : 'regular'}
+                      className={active ? 'text-accent-text' : ''}
+                    />
+                    {i.label === 'Moderation' ? 'Mod' : i.label}
+                  </a>
+                </li>
+              )
+            })}
           <li>
             <button
               type="button"
@@ -347,9 +368,16 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               aria-haspopup="dialog"
               className={cx(
                 'flex h-full w-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
-                ['overlays', 'overlay', 'bot', 'community', 'tips', 'settings', 'import'].includes(
-                  route.name,
-                )
+                [
+                  'overlays',
+                  'overlay',
+                  'bot',
+                  'community',
+                  'tips',
+                  'history',
+                  'settings',
+                  'import',
+                ].includes(route.name)
                   ? 'text-text'
                   : 'text-text-3',
               )}
@@ -363,14 +391,16 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
       <Dialog open={more} onClose={() => setMore(false)} title="More" size="sm">
         <nav aria-label="More" className="flex flex-col gap-1 pb-2">
-          {NAV.filter((i) => !MOBILE_MAIN.includes(i.route.name)).map((i) => (
-            <NavLink
-              key={i.label}
-              item={i}
-              active={isActive(i)}
-              onNavigate={() => setMore(false)}
-            />
-          ))}
+          {nav
+            .filter((i) => !MOBILE_MAIN.includes(i.route.name))
+            .map((i) => (
+              <NavLink
+                key={i.label}
+                item={i}
+                active={isActive(i)}
+                onNavigate={() => setMore(false)}
+              />
+            ))}
           <OpenInBrowser />
           <button
             type="button"
