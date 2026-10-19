@@ -410,16 +410,15 @@ test.describe('settings: Discord and OBS', () => {
 })
 
 test.describe('bot: starter commands', () => {
-  test('adding them twice makes no duplicates', async ({ page }) => {
+  test('the button goes away once all four are there', async ({ page }) => {
     await open(page, 'bot')
-    const add = page.getByRole('button', { name: 'Add starter commands' }).first()
-    await add.click()
+    const add = page.getByRole('button', { name: 'Add starter commands' })
+    await add.first().click()
     await expect(page.getByText(/^Added /)).toBeVisible()
     const dialog = page.getByRole('dialog')
     if (await dialog.isVisible()) await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
-    await add.click()
-    await expect(page.getByText('You already have all the starter commands.')).toBeVisible()
+    await expect(add).toHaveCount(0)
     for (const name of ['!socials', '!lurk', '!uptime', '!so'])
       await expect(page.getByRole('button', { name: `Edit ${name}`, exact: true })).toHaveCount(1)
   })

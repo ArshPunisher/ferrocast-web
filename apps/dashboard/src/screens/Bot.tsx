@@ -20,6 +20,7 @@ import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { CountersPanel, ModulesPanel, QuotesPanel } from '../components/studio/chatbot'
 import { AutoRepliesPanel } from '../components/bot/autoreplies'
 import { CloudBotPanel } from '../components/bot/cloud-bot'
+import { missingStarters } from '../lib/starters'
 
 const ROLE_LABEL: Record<Command['roles'], string> = {
   everyone: 'Everyone',
@@ -379,20 +380,21 @@ export function Bot() {
           title="Commands"
           actions={
             <>
-              {/* The empty state has its own big button for this. */}
-              {(commands.data?.length ?? 0) > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Lightning size={14} weight="fill" />}
-                  busy={starting === 'starter'}
-                  onClick={addStarter}
-                  aria-label="Add starter commands"
-                >
-                  <span className="sm:hidden">Add starter</span>
-                  <span className="hidden sm:inline">Add starter commands</span>
-                </Button>
-              )}
+              {/* The empty state has its own big button for this; gone once all starters exist. */}
+              {(commands.data?.length ?? 0) > 0 &&
+                missingStarters(commands.data ?? []).length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Lightning size={14} weight="fill" />}
+                    busy={starting === 'starter'}
+                    onClick={addStarter}
+                    aria-label="Add starter commands"
+                  >
+                    <span className="sm:hidden">Add starter</span>
+                    <span className="hidden sm:inline">Add starter commands</span>
+                  </Button>
+                )}
               <Button
                 size="sm"
                 variant="primary"
