@@ -89,6 +89,10 @@ import { COMPANY } from '../data/company'
     </li>
   </ul>
   <p>
+    The relay runs on Oracle Cloud in Mumbai, India (region ap-mumbai-1), so the data it keeps is
+    stored in India.
+  </p>
+  <p>
     If you use Ferrocast Pro, the relay also runs the Pro features you turn on. See
     <a href="#pro-data">what each Pro feature stores</a>.
   </p>
@@ -127,6 +131,12 @@ import { COMPANY } from '../data/company'
     card or UPI details). We also keep which of your PCs share the subscription (up to 3). The
     details of each Pro feature are below.
   </p>
+  <p>
+    <strong>Billing records are kept for 8 years.</strong> These are your Razorpay subscription id,
+    payment ids, amounts and dates, never your card or UPI details. Indian tax law (GST and income
+    tax) requires us to keep them that long. Everything else about Pro follows the deletion rules
+    below.
+  </p>
 
   <h2 id="pro-data">What each Pro feature stores</h2>
   <p>
@@ -147,7 +157,9 @@ import { COMPANY } from '../data/company'
     </li>
     <li>
       <strong>Deleted 30 days after Pro ends</strong>, unless a shorter time is given below. Many
-      items can be removed sooner from the app, as noted.
+      items can be removed sooner from the app, as noted. If you buy Pro again within those 30
+      days, nothing is deleted: your stream history, backups, cloud bot, Discord setup and weekly
+      email move to the new subscription.
     </li>
   </ul>
 
@@ -232,8 +244,9 @@ import { COMPANY } from '../data/company'
       <strong>Why:</strong> to post when you go live and give the right roles.
     </li>
     <li>
-      <strong>How long:</strong> until you disconnect the server, or 30 days after Pro ends. A
-      viewer can ask us to delete their link at any time.
+      <strong>How long:</strong> roles the Ferrocast bot gave are removed when Pro ends, and their
+      records with them. The rest stays until you disconnect the server, or 30 days after Pro ends,
+      when the bot also leaves your server. A viewer can ask us to delete their link at any time.
     </li>
   </ul>
 
@@ -283,7 +296,7 @@ import { COMPANY } from '../data/company'
     </li>
   </ul>
 
-  <h3>Tip page upgrades</h3>
+  <h3>Tip branding and goal</h3>
   <ul>
     <li>
       <strong>What:</strong> your three page colours and your avatar and banner. Images are redrawn
@@ -292,16 +305,11 @@ import { COMPANY } from '../data/company'
       fingerprint of the payment, never the tipper’s name, message or payment id.
     </li>
     <li>
-      <strong>Your own address:</strong> the address, its Cloudflare id and status, the verification
-      records and when the proof was last seen. Nothing about visitors.
-    </li>
-    <li>
-      <strong>Why:</strong> to show your tip page and goal in your style and at your address.
+      <strong>Why:</strong> to show your tip page and goal in your style.
     </li>
     <li>
       <strong>How long:</strong> a goal’s tip records 60 days after the goal ends. Colours, images
-      and goals 30 days after Pro ends. Your own address 7 days after Pro ends, or 7 days after it
-      stops working, and then it is also removed from Cloudflare.
+      and goals 30 days after Pro ends.
     </li>
   </ul>
 
@@ -334,8 +342,7 @@ import { COMPANY } from '../data/company'
       <strong>Brevo</strong>: sends the weekly email and its confirmation email.
     </li>
     <li>
-      <strong>Cloudflare</strong>: carries the connection to your phone dashboard, sets up and
-      secures custom tip addresses, and answers the DNS check for them.
+      <strong>Cloudflare</strong>: carries the connection to your phone dashboard.
     </li>
     <li>
       <strong>Discord</strong>: go-live posts and roles in your server.
