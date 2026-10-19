@@ -1286,7 +1286,7 @@ export type LiveFrame =
         role: 'owner' | 'mod'
         cloud?: boolean
         cloud_paused?: boolean
-        cloud_moderation?: { twitch?: boolean; kick?: boolean }
+        cloud_moderation?: { twitch?: boolean; kick?: boolean; youtube?: boolean }
         history?: boolean
       }
     }

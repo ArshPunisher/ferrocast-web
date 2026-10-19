@@ -96,11 +96,13 @@ export interface RemoteMe {
 export interface CloudModeration {
   twitch?: boolean
   kick?: boolean
+  /** YouTube (M12): deletes any time, bans and timeouts while live. */
+  youtube?: boolean
 }
 
 /** Whether the cloud bot can moderate anywhere (bans "still work"). */
 export function cloudCanModerate(m: CloudModeration | null | undefined): boolean {
-  return m?.twitch === true || m?.kick === true
+  return m?.twitch === true || m?.kick === true || m?.youtube === true
 }
 
 /** Close codes on a phone's live socket (the relay's `proxy.rs`). */

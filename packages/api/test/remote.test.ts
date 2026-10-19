@@ -231,7 +231,7 @@ describe('demo: acting as a phone', () => {
         role: 'mod',
         cloud: false,
         cloud_paused: false,
-        cloud_moderation: { twitch: false, kick: false },
+        cloud_moderation: { twitch: false, kick: false, youtube: false },
         history: false,
       },
     })
@@ -246,7 +246,7 @@ describe('demo: acting as a phone', () => {
         role: 'mod',
         cloud: false,
         cloud_paused: false,
-        cloud_moderation: { twitch: false, kick: false },
+        cloud_moderation: { twitch: false, kick: false, youtube: false },
         history: false,
       },
     })

@@ -55,7 +55,7 @@ export interface RemoteState {
 
 /** `cloudModeration` as a stable string ("twitch,kick"), for memo keys. */
 export function cloudModerationKey(m: CloudModeration | null | undefined): string {
-  return (['twitch', 'kick'] as const).filter((p) => m?.[p] === true).join(',')
+  return (['twitch', 'kick', 'youtube'] as const).filter((p) => m?.[p] === true).join(',')
 }
 
 /** The PC is off and the cloud bot stands in: the phone's limited dashboard. */

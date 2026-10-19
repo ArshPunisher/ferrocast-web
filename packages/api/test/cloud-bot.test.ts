@@ -4,9 +4,15 @@ import {
   cloudBotCanEnable,
   cloudChannel,
   describeCloudBotError,
+  cloudAvailable,
   dropLine,
   dutyLine,
+  issueMessage,
   lastReplyLine,
+  platformList,
+  quotaBackLine,
+  quotaLine,
+  quotaUsedUpLine,
   syncLine,
   type CloudBotChannel,
 } from '../src/cloud-bot'
@@ -61,6 +67,10 @@ describe('cloud bot helpers', () => {
       channels: [ch({ duty: 'desktop' }), ch({ platform: 'kick', duty: 'cloud' })],
     })
     expect(split.detail).toBe('Ferrocast’s servers answer Kick. This PC answers Twitch.')
+    expect(platformList(['twitch', 'kick', 'youtube'])).toBe('Twitch, Kick and YouTube')
+    expect(platformList(['twitch', 'youtube'])).toBe('Twitch and YouTube')
+    expect(platformList(['kick'])).toBe('Kick')
+    expect(platformList([])).toBe('')
   })
 
   it('notes a dropped reply until a later one goes out', () => {
@@ -203,13 +213,103 @@ describe('the cloud bot in the demo', () => {
     expect((await fails(api.retry('kick'))).code).toBe('not_connected')
   })
 
-  it('needs Kick in Accounts, and YouTube comes later', async () => {
+  it('needs Kick in Accounts', async () => {
     const { api, e } = setup()
     e.setCloudBot({ kickLinked: false })
     expect((await fails(api.connect('kick'))).code).toBe('kick_not_linked')
-    const yt = await fails(api.connect('youtube' as 'kick'))
-    expect([yt.status, yt.code]).toEqual([503, 'platform_unavailable'])
     const nope = await fails(api.connect('tiktok' as 'kick'))
     expect([nope.status, nope.code]).toEqual([404, 'platform_not_found'])
+  })
+})
+
+describe('the YouTube cloud bot (M12)', () => {
+  it('words the daily units and when they are back', () => {
+    const q = { used: 212, limit: 1500, reset_at: Date.UTC(2026, 9, 20, 7), exhausted: false }
+    expect(quotaLine(q)).toBe('Uses about 212 of 1,500 YouTube units today')
+    expect(quotaLine({ ...q, used: 1499.6 })).toBe('Uses about 1,500 of 1,500 YouTube units today')
+    expect(quotaLine(null)).toBeNull()
+    expect(quotaUsedUpLine(q.reset_at)).toMatch(
+      /^YouTube’s daily limit for the cloud bot is used up; it’s back at \d{1,2}:\d\d(\s?[AP]M)?\.$/i,
+    )
+    expect(quotaBackLine(q.reset_at)).toMatch(/^It’s back at /)
+    expect(quotaBackLine(null)).toBeNull()
+    // The relay's words say UTC; the dashboard shows the viewer's own clock.
+    const e = {
+      code: 'youtube_quota',
+      message: '… 07:00 UTC.',
+      hint: 'h',
+      at: 1,
+      reset_at: q.reset_at,
+    }
+    expect(issueMessage(e)).toBe(quotaUsedUpLine(q.reset_at))
+    expect(issueMessage({ ...e, code: 'youtube_refused' })).toBe('… 07:00 UTC.')
+    expect(describeCloudBotError(new ApiError(429, 'youtube_quota', '', null)).hint).toMatch(
+      /midnight Pacific/,
+    )
+  })
+
+  it('treats a relay without YouTube as not having it', () => {
+    expect(cloudAvailable({ available: { twitch: true, kick: true } }, 'youtube')).toBe(false)
+    expect(
+      cloudAvailable({ available: { twitch: true, kick: true, youtube: true } }, 'youtube'),
+    ).toBe(true)
+  })
+
+  let engine: DemoEngine | null = null
+  afterEach(() => {
+    engine?.dispose()
+    engine = null
+  })
+  const setup = () => {
+    engine = new DemoEngine({
+      autoplay: false,
+      latencyMs: 0,
+      pro: { salesOpen: true, active: true, features: true },
+    })
+    const c = new FerroClient({
+      base: 'http://127.0.0.1:47820',
+      token: DEMO_TOKEN,
+      fetch: engine.fetch,
+      startupRetries: 0,
+    })
+    return { e: engine, api: cloudBotApi(c) }
+  }
+
+  it('connects YouTube in one Google step, a beta with its units', async () => {
+    const { api } = setup()
+    let v = await api.get()
+    expect(v.available.youtube).toBe(true)
+    expect(v.limits.youtube_daily_units).toBe(1500)
+    const link = await api.connect('youtube')
+    expect(link.auth_url).toMatch(/^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/)
+    expect(link.auth_url).toContain('youtube.force-ssl')
+    v = await api.get()
+    const y = cloudChannel(v, 'youtube')
+    expect(y).toMatchObject({ state: 'ready', beta: true, moderation: false })
+    expect(y?.quota).toMatchObject({ limit: 1500, exhausted: false })
+    const again = await api.connect('youtube').then(
+      () => null,
+      (x: unknown) => x as ApiError,
+    )
+    expect(again?.code).toBe('already_connected')
+    await expect(api.connect('youtube', { moderation: true })).resolves.toBeTruthy()
+    expect(cloudChannel(await api.get(), 'youtube')?.moderation).toBe(true)
+    await api.disconnect('youtube')
+    expect(cloudChannel(await api.get(), 'youtube')).toBeNull()
+  })
+
+  it('needs YouTube in Accounts and shows a spent budget', async () => {
+    const { api, e } = setup()
+    e.setCloudBot({ youtubeLinked: false })
+    const err = await api.connect('youtube').then(
+      () => null,
+      (x: unknown) => x as ApiError,
+    )
+    expect([err?.status, err?.code]).toEqual([409, 'youtube_not_linked'])
+    e.setCloudBot({ youtube: 'quota' })
+    const y = cloudChannel(await api.get(), 'youtube')
+    expect(y?.quota?.exhausted).toBe(true)
+    expect(y?.error?.code).toBe('youtube_quota')
+    expect(y?.error?.reset_at).toBeGreaterThan(Date.now())
   })
 })

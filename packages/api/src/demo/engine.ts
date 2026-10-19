@@ -716,10 +716,10 @@ export class DemoEngine {
     }
   }
 
-  /** Where the demo's cloud bot can moderate while the PC is off (Twitch and Kick, opt-in). */
-  cloudModeration(): { twitch: boolean; kick: boolean } {
+  /** Where the demo's cloud bot can moderate while the PC is off (opt-in). */
+  cloudModeration(): { twitch: boolean; kick: boolean; youtube: boolean } {
     const on = this.remote?.cloud === 'on' && this.remote.moderation
-    return { twitch: !!on, kick: !!on }
+    return { twitch: !!on, kick: !!on, youtube: !!on }
   }
 
   private broadcastRemote(): void {

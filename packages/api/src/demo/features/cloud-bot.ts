@@ -3,11 +3,13 @@
 // start, Connect hands back a sign-in link and the account shows up on the next look (the demo
 // can't open Twitch), Twitch's second step ("Allow it in your channel"), 422 `no_platform` to
 // switch on without a ready channel, the PC "going quiet" for tests (`duty: cloud`), Twitch
-// unreachable with Try again, and a dropped reply.
+// unreachable with Try again, and a dropped reply. YouTube (M12, a beta): one step through
+// Google, a units-per-day budget (`quota`), and the budget used up (`youtube: 'quota'`).
 
 import {
   CLOUD_BOT_LIMITS,
   type CloudBotChannel,
+  type CloudBotQuota,
   type CloudBotPlatform,
   type CloudBotView,
 } from '../../cloud-bot'
@@ -18,6 +20,9 @@ import { NOT_MINE, clone, requireObj, type DemoFeature, type Routed } from './ho
 export const DEMO_TWITCH_BOT = { id: '903218447', login: 'AshaBot' }
 export const DEMO_TWITCH_CHANNEL = { id: '141981764', login: 'Asha_Live' }
 export const DEMO_KICK_CHANNEL = { id: '4739102', login: 'asha_live' }
+export const DEMO_YOUTUBE_CHANNEL = { id: 'UCq8mX3vB2rT5nWk1yLp0aZw', login: 'Asha Live' }
+/** YouTube units a subscription may use a day (the relay's default). */
+export const DEMO_YOUTUBE_UNITS = 1_500
 
 export interface DemoCloudBotState {
   /** Start with nothing connected. */
@@ -34,6 +39,17 @@ export interface DemoCloudBotState {
   otherPc?: boolean
   /** Kick connected in Accounts (needed to connect it here). */
   kickLinked?: boolean
+  /** YouTube connected for the cloud bot (`ready`), with its daily units used up (`quota`). */
+  youtube?: 'ready' | 'quota' | 'none'
+  /** YouTube connected in Accounts (needed to connect it here). */
+  youtubeLinked?: boolean
+}
+
+/** The next midnight Pacific (YouTube's quota day), roughly: 07:00 or 08:00 UTC. */
+function nextPacificMidnight(now: number): number {
+  const d = new Date(now)
+  const utc7 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 7)
+  return utc7 > now ? utc7 : utc7 + 86_400_000
 }
 
 export class DemoCloudBot implements DemoFeature {
@@ -41,6 +57,7 @@ export class DemoCloudBot implements DemoFeature {
   private channels: CloudBotChannel[] = []
   private onDuty = false
   private kickLinked = true
+  private youtubeLinked = true
   private otherPc = false
   private since = Date.now() - 42 * 60_000
   /** Connect pressed: the account shows up on the next look. */
@@ -64,6 +81,11 @@ export class DemoCloudBot implements DemoFeature {
       this.since = Date.now() - 42 * 60_000
     }
     if (s.kickLinked !== undefined) this.kickLinked = s.kickLinked
+    if (s.youtubeLinked !== undefined) this.youtubeLinked = s.youtubeLinked
+    if (s.youtube !== undefined) {
+      this.channels = this.channels.filter((c) => c.platform !== 'youtube')
+      if (s.youtube !== 'none') this.channels.push(this.youtubeReady(s.youtube === 'quota'))
+    }
     if (s.otherPc !== undefined) this.otherPc = s.otherPc
     const tw = this.channels.find((c) => c.platform === 'twitch')
     if (tw && s.twitchUnreachable !== undefined)
@@ -110,6 +132,34 @@ export class DemoCloudBot implements DemoFeature {
     }
   }
 
+  private youtubeReady(spent = false): CloudBotChannel {
+    const reset = nextPacificMidnight(Date.now())
+    const quota: CloudBotQuota = spent
+      ? { used: 1_486, limit: DEMO_YOUTUBE_UNITS, reset_at: reset, exhausted: true }
+      : { used: 212, limit: DEMO_YOUTUBE_UNITS, reset_at: reset, exhausted: false }
+    return {
+      platform: 'youtube',
+      state: 'ready',
+      bot: { ...DEMO_YOUTUBE_CHANNEL },
+      channel: { ...DEMO_YOUTUBE_CHANNEL },
+      moderation: false,
+      connected_at: Date.now() - 2 * 86_400_000,
+      last_reply_at: Date.now() - 31 * 60_000,
+      error: spent
+        ? {
+            code: 'youtube_quota',
+            message: 'YouTube’s daily limit for the cloud bot is used up; it’s back at 07:00 UTC.',
+            hint: 'The bot on your PC isn’t affected. The cloud bot answers again after that.',
+            at: Date.now() - 20 * 60_000,
+            reset_at: reset,
+            retry: true,
+          }
+        : null,
+      beta: true,
+      quota,
+    }
+  }
+
   private on(): boolean {
     const p = this.pro()
     return p.active && p.features.cloud_bot
@@ -145,8 +195,8 @@ export class DemoCloudBot implements DemoFeature {
       config_updated_at: Date.now() - 3_600_000,
       counts: { commands: 12, timers: 3, counters: 2, auto_replies: 4 },
       channels: this.channels.map((c) => ({ ...c, duty: c.state === 'ready' ? who : 'off' })),
-      available: { twitch: true, kick: true },
-      limits: { ...CLOUD_BOT_LIMITS },
+      available: { twitch: true, kick: true, youtube: true },
+      limits: { ...CLOUD_BOT_LIMITS, youtube_daily_units: DEMO_YOUTUBE_UNITS },
       pro_available: true,
       sync: this.enabled
         ? { state: 'synced', version: 14, synced_at: Date.now() - 3_600_000, error: null }
@@ -166,6 +216,15 @@ export class DemoCloudBot implements DemoFeature {
     )
     if (again && p.moderation && p.account === 'bot') {
       again.moderation = true
+      return
+    }
+    if (p.platform === 'youtube') {
+      const y = this.youtubeReady()
+      y.connected_at = now
+      y.last_reply_at = null
+      y.moderation = p.moderation
+      if (y.quota) y.quota.used = 1
+      this.channels.push(y)
       return
     }
     if (p.platform === 'kick') {
@@ -247,13 +306,6 @@ export class DemoCloudBot implements DemoFeature {
         have.error = null
         return this.view()
       }
-      if (platform === 'youtube')
-        throw new HttpError(
-          503,
-          'platform_unavailable',
-          'The YouTube cloud bot comes later.',
-          'This PC keeps answering YouTube chat.',
-        )
       const b = body === undefined || body === null ? {} : requireObj(body)
       const account = b.account === 'channel' ? 'channel' : 'bot'
       const moderation = b.moderation === true
@@ -262,6 +314,21 @@ export class DemoCloudBot implements DemoFeature {
       const upgrade = account === 'bot' && moderation && !!have && !have.moderation
       if (upgrade) {
         // falls through to the sign-in link
+      } else if (platform === 'youtube') {
+        if (have)
+          throw new HttpError(
+            409,
+            'already_connected',
+            'YouTube is already connected for the cloud bot.',
+            'Disconnect it first to use another account.',
+          )
+        if (!this.youtubeLinked)
+          throw new HttpError(
+            409,
+            'youtube_not_linked',
+            'Connect YouTube in Accounts on this PC first.',
+            'Connect YouTube in Accounts on this PC, then try again: the cloud bot speaks in that channel.',
+          )
       } else if (platform === 'kick') {
         if (have)
           throw new HttpError(
@@ -288,19 +355,21 @@ export class DemoCloudBot implements DemoFeature {
         )
       this.pending = { platform: platform as CloudBotPlatform, account, moderation }
       const url =
-        platform === 'kick'
-          ? `https://id.kick.com/oauth/authorize?client_id=demo&scope=user%3Aread+chat%3Awrite${
-              moderation ? '+moderation%3Aban+moderation%3Achat_message%3Amanage' : ''
-            }&state=demo`
-          : `https://id.twitch.tv/oauth2/authorize?client_id=demo&scope=${
-              account === 'bot'
-                ? `user%3Abot+user%3Aread%3Achat+user%3Awrite%3Achat${
-                    moderation
-                      ? '+moderator%3Amanage%3Abanned_users+moderator%3Amanage%3Achat_messages'
-                      : ''
-                  }`
-                : 'channel%3Abot'
-            }&force_verify=true&state=demo`
+        platform === 'youtube'
+          ? 'https://accounts.google.com/o/oauth2/v2/auth?client_id=demo.apps.googleusercontent.com&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube.force-ssl&access_type=offline&prompt=consent&state=demo'
+          : platform === 'kick'
+            ? `https://id.kick.com/oauth/authorize?client_id=demo&scope=user%3Aread+chat%3Awrite${
+                moderation ? '+moderation%3Aban+moderation%3Achat_message%3Amanage' : ''
+              }&state=demo`
+            : `https://id.twitch.tv/oauth2/authorize?client_id=demo&scope=${
+                account === 'bot'
+                  ? `user%3Abot+user%3Aread%3Achat+user%3Awrite%3Achat${
+                      moderation
+                        ? '+moderator%3Amanage%3Abanned_users+moderator%3Amanage%3Achat_messages'
+                        : ''
+                    }`
+                  : 'channel%3Abot'
+              }&force_verify=true&state=demo`
       return { auth_url: url, expires_at: Date.now() + 600_000 }
     }
     if (rest.length === 1 && method === 'DELETE') {

@@ -89,6 +89,68 @@ test.describe('Cloud bot', () => {
     await expect(kick.getByRole('button', { name: 'Connect Kick' })).toBeVisible()
   })
 
+  test('connects YouTube (beta) in one step and shows its daily units', async ({ page }) => {
+    await open(page, 'bot', PRO)
+    const yt = panel(page).getByTestId('cloud-bot-youtube')
+    await expect(yt).toContainText('YouTube')
+    await expect(yt).toContainText('Beta')
+    await expect(yt).toContainText('midnight Pacific')
+    await yt.getByRole('button', { name: 'Connect YouTube' }).click()
+    const link = yt.getByRole('link', { name: /Open YouTube/ })
+    await expect(link).toHaveAttribute('href', /^https:\/\/accounts\.google\.com\//)
+    await expect(link).toHaveAttribute('href', /youtube\.force-ssl/)
+    await yt.getByRole('button', { name: 'Check again' }).click()
+    await expect(yt).toContainText('Ready')
+    await expect(yt).toContainText('Speaks as Asha Live')
+    await expect(yt.getByTestId('cloud-bot-youtube-quota')).toHaveText(
+      'Uses about 1 of 1,500 YouTube units today',
+    )
+    await expect(yt.getByTestId('cloud-bot-youtube-moderation')).toContainText('while you’re live')
+    await yt.getByRole('button', { name: 'Turn on' }).click()
+    await yt.getByRole('button', { name: 'Check again' }).click()
+    await expect(yt.getByTestId('cloud-bot-youtube-moderation')).toContainText('On.')
+
+    await yt.getByRole('button', { name: 'Disconnect' }).click()
+    const dlg = page.getByRole('dialog', { name: 'Disconnect YouTube?' })
+    await dlg.getByRole('button', { name: 'Disconnect', exact: true }).click()
+    await expect(yt.getByRole('button', { name: 'Connect YouTube' })).toBeVisible()
+  })
+
+  test('YouTube without Accounts, and a used-up daily limit, say what to do', async ({ page }) => {
+    await open(page, 'bot', PRO)
+    await demo(page, '(d) => d.setCloudBot({ youtubeLinked: false })')
+    await revisit(page)
+    const yt = panel(page).getByTestId('cloud-bot-youtube')
+    await yt.getByRole('button', { name: 'Connect YouTube' }).click()
+    await expect(yt.getByRole('alert')).toContainText(
+      'Connect YouTube in Accounts on this PC first.',
+    )
+
+    await demo(page, '(d) => d.setCloudBot({ youtube: "quota" })')
+    await revisit(page)
+    await expect(yt).toContainText('Ready')
+    await expect(yt.getByTestId('cloud-bot-youtube-quota')).toContainText('1,486 of 1,500')
+    await expect(yt.getByRole('status')).toContainText(
+      /YouTube’s daily limit for the cloud bot is used up; it’s back at \d{1,2}:\d\d/,
+    )
+    await expect(yt.getByRole('status')).toContainText('isn’t affected')
+    await expect(yt.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  })
+
+  test('YouTube on duty and offline offers Check now', async ({ page }) => {
+    await open(page, 'bot', PRO)
+    await demo(page, '(d) => d.setCloudBot({ youtube: "ready", onDuty: true })')
+    await revisit(page)
+    const yt = panel(page).getByTestId('cloud-bot-youtube')
+    await expect(yt).toContainText('looks less often')
+    await yt.getByRole('button', { name: 'Check now' }).click()
+    await expect(page.getByText('Looking for your YouTube stream now.')).toBeVisible()
+    // Standing by (the PC answers): nothing to check from here.
+    await demo(page, '(d) => d.setCloudBot({ youtube: "ready", onDuty: false })')
+    await revisit(page)
+    await expect(yt.getByRole('button', { name: 'Check now' })).toHaveCount(0)
+  })
+
   test('errors say what to do', async ({ page }) => {
     await open(page, 'bot', PRO)
     await demo(page, '(d) => d.setCloudBot({ empty: true, kickLinked: false })')
@@ -194,15 +256,28 @@ test.describe('Cloud bot', () => {
 test.describe('Cloud bot at 375 px', () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
-  for (const mode of ['ready', 'empty', 'on sale', 'retry'] as const) {
+  for (const mode of [
+    'ready',
+    'empty',
+    'on sale',
+    'retry',
+    'youtube quota',
+    'youtube check',
+  ] as const) {
     test(`fits the phone width (${mode})`, async ({ page }) => {
       await open(page, 'bot', mode === 'on sale' ? ON_SALE : PRO)
-      if (mode === 'empty' || mode === 'retry') {
+      if (mode === 'youtube check') {
+        await demo(page, '(d) => d.setCloudBot({ youtube: "ready", onDuty: true })')
+        await revisit(page)
+      }
+      if (mode === 'empty' || mode === 'retry' || mode === 'youtube quota') {
         await demo(
           page,
           mode === 'empty'
             ? '(d) => d.setCloudBot({ empty: true })'
-            : '(d) => d.setCloudBot({ twitchUnreachable: true, dropped: true })',
+            : mode === 'retry'
+              ? '(d) => d.setCloudBot({ twitchUnreachable: true, dropped: true })'
+              : '(d) => d.setCloudBot({ youtube: "quota" })',
         )
         await revisit(page)
       }
@@ -214,6 +289,14 @@ test.describe('Cloud bot at 375 px', () => {
       expect(overflow).toBe(false)
       const box = await panel(page).boundingBox()
       expect(box && box.x + box.width).toBeLessThanOrEqual(375)
+      if (mode === 'youtube check') {
+        const yt = panel(page).getByTestId('cloud-bot-youtube')
+        for (const scheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme: scheme })
+          const row = yt.getByRole('button', { name: 'Check now' }).locator('..')
+          await row.screenshot({ path: test.info().outputPath(`youtube-check-${scheme}.png`) })
+        }
+      }
     })
   }
 })

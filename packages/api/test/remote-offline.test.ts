@@ -75,6 +75,7 @@ describe('the PC is off: what still works', () => {
       'Your PC is off. Chat still works.',
     )
     expect(cloudCanModerate({ kick: true })).toBe(true)
+    expect(cloudCanModerate({ youtube: true })).toBe(true)
     expect(cloudCanModerate({ twitch: false })).toBe(false)
     expect(cloudCanModerate(undefined)).toBe(false)
   })
@@ -117,7 +118,7 @@ describe('the PC is off: what still works', () => {
           role: 'mod',
           cloud: true,
           cloud_paused: false,
-          cloud_moderation: { twitch: true, kick: true },
+          cloud_moderation: { twitch: true, kick: true, youtube: true },
           history: false,
         },
       }),
@@ -194,7 +195,7 @@ describe('demo: a phone whose PC is off', () => {
         role: 'mod',
         cloud: true,
         cloud_paused: false,
-        cloud_moderation: { twitch: true, kick: true },
+        cloud_moderation: { twitch: true, kick: true, youtube: true },
         history: false,
       },
     })

@@ -1,12 +1,13 @@
 // The 24/7 cloud bot (Pro, API.md §9.7): Ferrocast's servers answer the streamer's own
-// commands, counters, timers and auto-replies on Twitch and Kick while their PC is off. The
+// commands, counters, timers and auto-replies on Twitch, Kick and YouTube (a beta, M12) while
+// their PC is off. The
 // PC answers while it's on (the cloud stands by), the cloud takes over after 90 s of silence
 // and hands back when the PC returns. Chat is never stored.
 
 import type { FerroClient } from './client'
 import { ApiError } from './errors'
 
-export type CloudBotPlatform = 'twitch' | 'kick'
+export type CloudBotPlatform = 'twitch' | 'kick' | 'youtube'
 
 export interface CloudBotAccount {
   id: string
@@ -20,6 +21,24 @@ export interface CloudBotIssue {
   at: number
   /** "Try again" can fix it (Twitch unreachable, a refusal); otherwise connect again. */
   retry?: boolean
+  /** `youtube_quota`: when YouTube's daily budget is back (ms, midnight Pacific). */
+  reset_at?: number
+  /** `youtube_quota`: the relay's budget for everyone ran out, not this subscription's. */
+  relay_wide?: boolean
+}
+
+/**
+ * YouTube's daily quota units for this subscription (M12): every call to YouTube costs some
+ * (a reply 50, a live check 1, reading chat 5 per stream), counted per Pacific day.
+ */
+export interface CloudBotQuota {
+  used: number
+  limit: number
+  /** Midnight Pacific (ms), when YouTube's quota day starts again. */
+  reset_at: number
+  /** Not even one more reply fits today. */
+  exhausted: boolean
+  by_call?: Partial<Record<'detect' | 'read' | 'send' | 'moderate' | 'channel', number>>
 }
 
 /** A message the platform took but didn't show (AutoMod, slow mode, too long). Not an error. */
@@ -46,6 +65,10 @@ export interface CloudBotChannel {
   last_reply_at: number | null
   error: CloudBotIssue | null
   last_drop?: CloudBotDrop | null
+  /** YouTube is a beta. */
+  beta?: boolean
+  /** YouTube only: today's units. */
+  quota?: CloudBotQuota | null
 }
 
 export interface CloudBotDuty {
@@ -70,6 +93,8 @@ export interface CloudBotLimits {
   messages_per_minute: number
   channels_per_platform: number
   takeover_after_s: number
+  /** YouTube units a subscription may use a day (`null` without YouTube on the relay). */
+  youtube_daily_units?: number | null
 }
 
 /** `GET /api/v1/pro/bot`: the relay's view plus the engine's `available` and `sync`. */
@@ -81,7 +106,8 @@ export interface CloudBotView {
   counts: { commands: number; timers: number; counters: number; auto_replies: number }
   /** At most one per platform. */
   channels: CloudBotChannel[]
-  available: { twitch: boolean; kick: boolean }
+  /** `youtube` is missing on relays from before M12. */
+  available: { twitch: boolean; kick: boolean; youtube?: boolean }
   limits: CloudBotLimits
   /** This PC's short code ("7F3A-90C2"), the same one the sign-in pages show. */
   pc_code?: string
@@ -98,7 +124,8 @@ export interface CloudBotView {
 export type CloudBotConnect = { auth_url: string; expires_at: number }
 
 export interface CloudBotConnectOptions {
-  /** Twitch: `bot` (the account that speaks, default) or `channel` (the streamer allows it). */
+  /** Twitch: `bot` (the account that speaks, default) or `channel` (the streamer allows it).
+   * Kick and YouTube have one step. */
   account?: 'bot' | 'channel'
   moderation?: boolean
 }
@@ -112,9 +139,18 @@ export const CLOUD_BOT_LIMITS: CloudBotLimits = {
   takeover_after_s: 90,
 }
 
-export const CLOUD_BOT_PLATFORMS: readonly CloudBotPlatform[] = ['twitch', 'kick']
+export const CLOUD_BOT_PLATFORMS: readonly CloudBotPlatform[] = ['twitch', 'kick', 'youtube']
 
-export const CLOUD_BOT_LABEL: Record<CloudBotPlatform, string> = { twitch: 'Twitch', kick: 'Kick' }
+export const CLOUD_BOT_LABEL: Record<CloudBotPlatform, string> = {
+  twitch: 'Twitch',
+  kick: 'Kick',
+  youtube: 'YouTube',
+}
+
+/** Whether the relay has the platform (YouTube is missing on older relays: off). */
+export function cloudAvailable(v: Pick<CloudBotView, 'available'>, p: CloudBotPlatform): boolean {
+  return v.available[p] === true
+}
 
 /** The platform's channel, if connected. */
 export function cloudChannel(
@@ -133,7 +169,14 @@ export function cloudBotCanEnable(v: Pick<CloudBotView, 'channels'>): boolean {
 const hhmm = (ms: number) =>
   new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(ms)
 
-const list = (ps: CloudBotPlatform[]) => ps.map((p) => CLOUD_BOT_LABEL[p]).join(' and ')
+/** "Twitch", "Twitch and Kick", "Twitch, Kick and YouTube". */
+export const platformList = (ps: CloudBotPlatform[]): string => {
+  const names = ps.map((p) => CLOUD_BOT_LABEL[p])
+  return names.length <= 2
+    ? names.join(' and ')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+const list = platformList
 
 /**
  * The headline: who answers chat right now. `phone`: seen through Ferrocast's servers, so
@@ -192,6 +235,33 @@ export function lastReplyLine(at: number | null, now = Date.now()): string {
   return `Last reply ${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(at)}`
 }
 
+const units = (n: number) => new Intl.NumberFormat('en').format(Math.max(0, Math.round(n)))
+
+/** "Uses about 120 of 1,500 YouTube units today" (YouTube's row). */
+export function quotaLine(q: CloudBotQuota | null | undefined): string | null {
+  if (!q) return null
+  return `Uses about ${units(q.used)} of ${units(q.limit)} YouTube units today`
+}
+
+/** When the budget is back, in the viewer's own time: "It’s back at 9:30 AM." */
+export function quotaBackLine(resetAt: number | null | undefined): string | null {
+  if (!resetAt) return null
+  return `It’s back at ${hhmm(resetAt)}.`
+}
+
+/**
+ * "YouTube's daily limit for the cloud bot is used up; it's back at 12:30." in the viewer's
+ * own time (the relay's message says UTC).
+ */
+export function quotaUsedUpLine(resetAt: number): string {
+  return `YouTube’s daily limit for the cloud bot is used up; it’s back at ${hhmm(resetAt)}.`
+}
+
+/** A channel's issue as shown: `youtube_quota` gets the reset in the viewer's own clock. */
+export function issueMessage(e: CloudBotIssue): string {
+  return e.code === 'youtube_quota' && e.reset_at ? quotaUsedUpLine(e.reset_at) : e.message
+}
+
 /** The sync line under the switch. */
 export function syncLine(s: CloudBotSync): string {
   switch (s.state) {
@@ -241,7 +311,7 @@ const HINTS: Record<string, { message: string; hint: string }> = {
     hint: 'Kick’s chat reaches the cloud through that connection.',
   },
   no_platform: {
-    message: 'Connect Twitch or Kick for the cloud bot first.',
+    message: 'Connect Twitch, Kick or YouTube for the cloud bot first.',
     hint: 'Then switch it on.',
   },
   bot_rate: { message: 'Too many changes at once.', hint: 'Wait a minute and try again.' },
@@ -256,6 +326,31 @@ const HINTS: Record<string, { message: string; hint: string }> = {
   twitch_unreachable: {
     message: 'Couldn’t reach Twitch.',
     hint: 'Try again in a minute.',
+  },
+  youtube_not_linked: {
+    message: 'Connect YouTube in Accounts on this PC first.',
+    hint: 'The cloud bot speaks in the channel this PC is signed in to.',
+  },
+  wrong_youtube_app: {
+    message: 'That YouTube sign-in isn’t from Ferrocast on this PC.',
+    hint: 'Connect YouTube in Accounts again, then try again.',
+  },
+  youtube_no_channel: {
+    message: 'The Google account on this PC has no YouTube channel.',
+    hint: 'Connect the account that owns your channel in Accounts.',
+  },
+  youtube_unreachable: { message: 'Couldn’t reach YouTube.', hint: 'Try again in a minute.' },
+  youtube_rate: {
+    message: 'YouTube asked Ferrocast to slow down.',
+    hint: 'Try again in a minute.',
+  },
+  youtube_quota: {
+    message: 'YouTube’s daily limit for the cloud bot is used up.',
+    hint: 'It starts again at midnight Pacific time. The bot on your PC isn’t affected.',
+  },
+  youtube_not_live: {
+    message: 'YouTube bans from the cloud work while you’re live.',
+    hint: 'Ban them in YouTube Studio, or once your PC is on.',
   },
   connect_again: {
     message: 'This sign-in has to be made again.',

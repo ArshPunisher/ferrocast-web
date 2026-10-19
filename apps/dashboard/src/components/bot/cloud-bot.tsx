@@ -1,6 +1,7 @@
 // Bot › "Keep the bot on when this PC is off" (Pro, API.md §9.7). Ferrocast's servers answer
-// the streamer's commands, counters, timers and auto-replies on Twitch and Kick while the PC
-// is off; the PC answers while it's on. Hidden without the feature; one calm line on sale
+// the streamer's commands, counters, timers and auto-replies on Twitch, Kick and YouTube (a
+// beta with a daily budget of YouTube's quota units, M12) while the PC is off; the PC answers
+// while it's on. Hidden without the feature; one calm line on sale
 // without Pro. On a phone through Ferrocast's servers an owner may look and switch it, never
 // connect or disconnect (those open sign-ins on the PC).
 
@@ -18,13 +19,17 @@ import {
 import {
   CLOUD_BOT_LABEL,
   CLOUD_BOT_PLATFORMS,
+  cloudAvailable,
   cloudBotApi,
   cloudBotCanEnable,
   cloudChannel,
   describeCloudBotError,
   dropLine,
   dutyLine,
+  issueMessage,
   lastReplyLine,
+  quotaLine,
+  quotaUsedUpLine,
   syncLine,
   type CloudBotChannel,
   type CloudBotConnect,
@@ -155,8 +160,12 @@ function Loaded({
   // One Molten button per view (DESIGN.md): the first platform with a step to take.
   const nextStep = CLOUD_BOT_PLATFORMS.find((p) => {
     const c = cloudChannel(v, p)
-    return c ? c.state === 'needs_channel' : v.available[p]
+    return c ? c.state === 'needs_channel' : cloudAvailable(v, p)
   })
+  // A relay from before YouTube (M12) doesn't name it: no row at all there.
+  const platforms = CLOUD_BOT_PLATFORMS.filter(
+    (p) => p !== 'youtube' || v.available.youtube !== undefined || !!cloudChannel(v, p),
+  )
   const last = v.channels.reduce<number | null>(
     (m, c) => (c.last_reply_at && (!m || c.last_reply_at > m) ? c.last_reply_at : m),
     null,
@@ -218,13 +227,13 @@ function Loaded({
       )}
 
       <ul className="flex flex-col divide-y divide-line" data-testid="cloud-bot-platforms">
-        {CLOUD_BOT_PLATFORMS.map((p) => (
+        {platforms.map((p) => (
           <PlatformRow
             key={p}
             platform={p}
             lead={p === nextStep}
             channel={cloudChannel(v, p)}
-            available={v.available[p]}
+            available={cloudAvailable(v, p)}
             phone={phone}
             reload={reload}
             onGone={(n) => set(n)}
@@ -299,6 +308,7 @@ function ModerationOptIn({
 }) {
   const bot = c.bot?.login ?? 'the bot account'
   const own = c.bot && c.channel && c.bot.id === c.channel.id
+  const youtube = c.platform === 'youtube'
   return (
     <div
       className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3 sm:flex-row sm:items-center sm:justify-between"
@@ -311,11 +321,15 @@ function ModerationOptIn({
             Let the cloud bot moderate when this PC is off
           </p>
           <p className="text-[13.5px] text-text-2" translate="no">
-            {c.moderation
-              ? `On. Bans, timeouts and deletes from a phone go out as ${bot}.`
-              : own
-                ? 'Bans, timeouts and deletes from a phone while this PC is off.'
-                : `Bans, timeouts and deletes from a phone while this PC is off. ${bot} must be a moderator in your channel.`}
+            {youtube
+              ? c.moderation
+                ? 'On. Deletes from a phone any time, bans and timeouts while you’re live. Each uses 50 units.'
+                : 'Deletes from a phone while this PC is off, bans while you’re live. Each uses 50 units.'
+              : c.moderation
+                ? `On. Bans, timeouts and deletes from a phone go out as ${bot}.`
+                : own
+                  ? 'Bans, timeouts and deletes from a phone while this PC is off.'
+                  : `Bans, timeouts and deletes from a phone while this PC is off. ${bot} must be a moderator in your channel.`}
           </p>
         </div>
       </div>
@@ -404,6 +418,16 @@ function PlatformRow({
       setErr(fail(e))
     }
   }
+  // YouTube: look for a live stream on the relay's next pass (Try again's route).
+  const checkNow = async () => {
+    setErr(null)
+    try {
+      onGone(await api.retry(platform))
+      toast({ tone: 'ok', message: 'Looking for your YouTube stream now.' })
+    } catch (e) {
+      setErr(fail(e))
+    }
+  }
   const leave = async () => {
     setLeaveErr(null)
     try {
@@ -444,6 +468,7 @@ function PlatformRow({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-display text-[17px] font-bold tracking-tight text-text">{label}</p>
+              {platform === 'youtube' && <Badge tone="neutral">Beta</Badge>}
               {badge}
             </div>
             <p className="truncate text-[14px] text-text-2" translate="no">
@@ -451,6 +476,14 @@ function PlatformRow({
             </p>
             {c?.state === 'ready' && (
               <p className="text-[13px] text-text-3">{lastReplyLine(c.last_reply_at)}</p>
+            )}
+            {c?.quota && (
+              <p
+                className="text-[13px] text-text-3 tabular-nums"
+                data-testid={`cloud-bot-${platform}-quota`}
+              >
+                {quotaLine(c.quota)}
+              </p>
             )}
           </div>
         </div>
@@ -462,7 +495,7 @@ function PlatformRow({
                 busy={busy === 'connect'}
                 onClick={() => void run('connect', () => connect('bot'), { quiet: true })}
               >
-                {platform === 'twitch' ? 'Connect bot account' : 'Connect Kick'}
+                {platform === 'twitch' ? 'Connect bot account' : `Connect ${label}`}
               </Button>
             )}
             {c?.state === 'needs_channel' && (
@@ -506,10 +539,10 @@ function PlatformRow({
         <div className="flex flex-col items-start gap-2">
           <Notice
             tone={c.error.retry ? 'warn' : 'danger'}
-            message={c.error.message}
+            message={issueMessage(c.error)}
             hint={c.error.hint}
           />
-          {c.error.retry && !phone && (
+          {c.error.retry && c.error.code !== 'youtube_quota' && !phone && (
             <Button
               size="sm"
               icon={<ArrowsClockwise size={16} />}
@@ -520,6 +553,41 @@ function PlatformRow({
             </Button>
           )}
         </div>
+      )}
+      {platform === 'youtube' &&
+        c?.state === 'ready' &&
+        !c.error &&
+        c.duty === 'cloud' &&
+        !c.live &&
+        !phone &&
+        !link && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Button
+              size="sm"
+              icon={<ArrowsClockwise size={16} />}
+              busy={busy === 'check'}
+              onClick={() => void run('check', checkNow, { quiet: true })}
+            >
+              Check now
+            </Button>
+            <span className="text-[13px] text-text-3">
+              While you’re offline, Ferrocast looks less often. Going live on Twitch or Kick wakes
+              it.
+            </span>
+          </div>
+        )}
+      {c?.quota?.exhausted && c.error?.code !== 'youtube_quota' && (
+        <Notice
+          tone="warn"
+          message={quotaUsedUpLine(c.quota.reset_at)}
+          hint="The bot on your PC isn’t affected."
+        />
+      )}
+      {platform === 'youtube' && !c && available && !phone && (
+        <p className="text-[13.5px] text-text-3">
+          Sign in with the Google account of the channel this PC is connected to. YouTube gives the
+          cloud bot a daily budget, so it may pause until midnight Pacific time.
+        </p>
       )}
       {c && dropLine(c) && (
         <p className="text-[13.5px] text-text-3" data-testid={`cloud-bot-${platform}-drop`}>
