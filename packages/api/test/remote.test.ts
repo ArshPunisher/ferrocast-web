@@ -84,6 +84,26 @@ describe('the role rules (same as the PC and the relay)', () => {
       expect(remoteAllowed('owner', m, p), `${m} ${p}`).toBe(false)
   })
 
+  it('lets an owner phone look at and switch the cloud bot, nothing else under /pro', () => {
+    expect(remoteAllowed('owner', 'GET', '/pro/bot')).toBe(true)
+    expect(remoteAllowed('owner', 'PUT', '/pro/bot/enabled')).toBe(true)
+    for (const [m, p] of [
+      ['POST', '/pro/bot/twitch/connect'],
+      ['DELETE', '/pro/bot/kick'],
+      ['PUT', '/pro/bot'],
+      ['GET', '/pro/bot/enabled'],
+      ['DELETE', '/pro/bot/enabled'],
+      ['GET', '/pro/bots'],
+      ['GET', '/pro'],
+    ] as const)
+      expect(remoteAllowed('owner', m, p), `${m} ${p}`).toBe(false)
+    for (const [m, p] of [
+      ['GET', '/pro/bot'],
+      ['PUT', '/pro/bot/enabled'],
+    ] as const)
+      expect(remoteAllowed('mod', m, p), `${m} ${p}`).toBe(false)
+  })
+
   it('refuses odd paths for everyone', () => {
     for (const p of [
       '',

@@ -34,3 +34,4 @@ export {
 export * from './design'
 export * from './discord-pro'
 export * from './remote'
+export * from './cloud-bot'

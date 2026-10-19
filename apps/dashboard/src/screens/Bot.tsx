@@ -19,6 +19,7 @@ import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { CountersPanel, ModulesPanel, QuotesPanel } from '../components/studio/chatbot'
 import { AutoRepliesPanel } from '../components/bot/autoreplies'
+import { CloudBotPanel } from '../components/bot/cloud-bot'
 
 const ROLE_LABEL: Record<Command['roles'], string> = {
   everyone: 'Everyone',
@@ -581,6 +582,7 @@ export function Bot() {
         </div>
         <ModulesPanel />
       </div>
+      <CloudBotPanel className="mt-5" />
       <CommandDialog
         value={editCmd}
         onClose={() => setEditCmd(null)}

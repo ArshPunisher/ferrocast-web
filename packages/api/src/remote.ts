@@ -181,10 +181,14 @@ export const MOD_ALLOWED: readonly Rule[] = [
 
 /**
  * What an owner's phone may do although `OWNER_DENIED` would refuse it (the server's
- * `OWNER_ALLOWED`, checked first): the weekly email's state, the address only as a hint
- * (API.md §9.8). Changing it stays on the PC.
+ * `OWNER_ALLOWED`, checked first): look at the cloud bot and switch it on or off (API.md §9.7).
  */
-export const OWNER_ALLOWED: readonly Rule[] = [['GET', '/pro/history/email']]
+export const OWNER_ALLOWED: readonly Rule[] = [
+  ['GET', '/pro/bot'],
+  ['PUT', '/pro/bot/enabled'],
+  // The weekly email's state (the address only as a hint); changing it stays on the PC.
+  ['GET', '/pro/history/email'],
+]
 
 /** What an owner's phone may never do (the server's `OWNER_DENIED`). */
 export const OWNER_DENIED: readonly Rule[] = [

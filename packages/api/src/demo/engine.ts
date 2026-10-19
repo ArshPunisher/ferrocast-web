@@ -72,6 +72,7 @@ import { DemoWelcome } from './features/welcome'
 import { DemoRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
 import { DemoDiscordPro } from './features/discord-pro'
+import { DemoCloudBot, type DemoCloudBotState } from './features/cloud-bot'
 import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
@@ -343,6 +344,10 @@ export class DemoEngine {
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
   )
   private readonly discord = new DemoDiscord(() => this.discordPro.proGoLive())
+  /** The 24/7 cloud bot (Pro): Twitch and Kick while the PC is off. */
+  private readonly cloudBot = new DemoCloudBot(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+  )
   private readonly history: DemoHistory
   private readonly cloudBackups: DemoCloudBackups
   /** Pro tip page branding and goal (on with Pro and its feature). */
@@ -621,6 +626,11 @@ export class DemoEngine {
     perkBlocked?: boolean
   }): void {
     this.discordPro.setState(state)
+  }
+
+  /** The cloud bot (Pro): nothing connected, the PC gone quiet, Twitch revoked, Kick unlinked. */
+  setCloudBot(state: DemoCloudBotState): void {
+    this.cloudBot.setState(state)
   }
 
   /** Pro cloud backups: this PC's few (demo), none yet, or a new PC's view. */
@@ -1442,6 +1452,7 @@ export class DemoEngine {
       this.recap,
       this.discord,
       this.discordPro,
+      this.cloudBot,
       this.obsDetect,
       this.starter,
       this.importers,
