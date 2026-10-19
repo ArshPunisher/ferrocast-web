@@ -203,7 +203,9 @@ export function ThemeCard({
         aria-hidden="true"
       >
         <ScenePreview design={theme} live={hover} />
-        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-1 font-mono text-[12px] font-semibold text-white backdrop-blur-sm">
+        {/* A solid chip, no backdrop blur: on Linux WebKit (the desktop webview) one blurred
+            chip per card over a live scene stalled painting and ate memory without limit. */}
+        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/75 px-2.5 py-1 font-mono text-[12px] font-semibold text-white">
           {bundleLine(theme)}
         </span>
         {isNew && (
