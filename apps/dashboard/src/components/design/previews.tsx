@@ -1,7 +1,7 @@
 // Live previews for gallery tiles and the scene and widget designers: the real overlay
 // renderer with believable sample state, so every tile shows what OBS will show.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   anySample,
   namedActor,
@@ -96,18 +96,50 @@ export function useSampleState(widgets: Widget[]): OverlayState {
   }, [labelKey])
 }
 
+/**
+ * True once the element has come within `margin` of the viewport, and stays true. Gallery
+ * grids hold dozens of full scenes; drawing only the ones near the screen keeps the first
+ * paint cheap in software-rendered webviews (WebKitGTK on Linux), where painting all of
+ * them at once stalled the page for tens of seconds.
+ */
+function useNear<T extends Element>(enabled: boolean, margin = '400px') {
+  const ref = useRef<T>(null)
+  const [near, setNear] = useState(!enabled)
+  useEffect(() => {
+    if (near) return
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setNear(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setNear(true)
+      },
+      { rootMargin: margin },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [near, margin])
+  return [ref, near] as const
+}
+
 /** One scene of a theme (or a scene design), drawn whole. */
 export function ScenePreview({
   design,
   sceneKey,
   className,
   live = false,
+  lazy = false,
 }: {
   design: Design
   sceneKey?: string
   className?: string
   live?: boolean
+  /** Draw the scene only once it is near the screen (gallery grids). */
+  lazy?: boolean
 }) {
+  const [box, near] = useNear<HTMLDivElement>(lazy)
   const scene =
     design.kind === 'theme'
       ? (design.content.scenes.find((s) => s.key === sceneKey) ??
@@ -130,12 +162,14 @@ export function ScenePreview({
     design: null,
   }
   return (
-    <div className={className ?? 'relative aspect-video w-full'}>
+    <div ref={box} className={className ?? 'relative aspect-video w-full'}>
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,#2a3550,#0d1016_70%)]"
       />
-      <OverlayPreview overlay={overlay} state={state} live={live} className="absolute inset-0" />
+      {near && (
+        <OverlayPreview overlay={overlay} state={state} live={live} className="absolute inset-0" />
+      )}
     </div>
   )
 }
@@ -145,11 +179,15 @@ export function WidgetPreview({
   design,
   className,
   styleOverride,
+  lazy = false,
 }: {
   design: Design
   className?: string
   styleOverride?: Record<string, unknown>
+  /** Draw the widget only once it is near the screen (gallery grids). */
+  lazy?: boolean
 }) {
+  const [box, near] = useNear<HTMLDivElement>(lazy)
   const w = design.kind === 'widget' ? design.content : null
   const widget = w
     ? ({
@@ -184,12 +222,12 @@ export function WidgetPreview({
     design: null,
   }
   return (
-    <div className={className ?? 'relative aspect-video w-full'}>
+    <div ref={box} className={className ?? 'relative aspect-video w-full'}>
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,#3a2a20,#0d1016_70%)]"
       />
-      <OverlayPreview overlay={overlay} state={state} live className="absolute inset-0" />
+      {near && <OverlayPreview overlay={overlay} state={state} live className="absolute inset-0" />}
     </div>
   )
 }

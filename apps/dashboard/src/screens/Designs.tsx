@@ -141,9 +141,9 @@ function Tile({
             </div>
           </DesignStage>
         ) : design.kind === 'widget' ? (
-          <WidgetPreview design={design} />
+          <WidgetPreview design={design} lazy />
         ) : (
-          <ScenePreview design={design} live={hover} />
+          <ScenePreview design={design} live={hover} lazy />
         )}
       </div>
       <div className="flex flex-col gap-1 px-3.5 pt-3">
