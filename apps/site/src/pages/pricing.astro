@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro'
 import Breadcrumbs from '../components/Breadcrumbs.astro'
 import Icon from '../components/Icon.astro'
 import { PAGES } from '../data/pages'
-import { COMPANY, PRO, inr } from '../data/company'
+import { COMPANY, PRO, inr, taxNote } from '../data/company'
 
 const page = PAGES.pricing
 const usd = (amount: string) => `US$${amount}`
@@ -122,7 +122,7 @@ const promises = [
         </p>
         <p class="muted">
           {`or ${inr(PRO.yearlyInr)} a year. Approx. ${usd(PRO.monthlyUsdApprox)} a month or ${usd(PRO.yearlyUsdApprox)} a year.`}
-          Billed in INR through Razorpay, GST included where applicable.
+          Billed in INR through Razorpay. {taxNote()} Renews automatically until you cancel.
         </p>
       </header>
       <dl class="pro-list">
