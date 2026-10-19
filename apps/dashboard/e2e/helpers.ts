@@ -20,6 +20,23 @@ export async function open(
   await expect(page.locator('#main')).toBeVisible()
 }
 
+/** Waits until no CSS or Web Animation in the page is still running (a dialog's scale-in,
+ *  a sheet sliding up), so sizes and colours are measured at rest. Infinite, paused and
+ *  stopped animations are ignored: they never finish. */
+export async function settled(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const finite = document
+      .getAnimations()
+      .filter(
+        (a) =>
+          a.playState === 'running' &&
+          a.playbackRate !== 0 &&
+          a.effect?.getComputedTiming().endTime !== Infinity,
+      )
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)))
+  })
+}
+
 export async function fault(page: Page, f: Fault): Promise<void> {
   await page.evaluate((x) => {
     const d = window.__ferrocastDemo

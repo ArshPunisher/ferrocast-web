@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { demo, fault, open } from './helpers'
+import { demo, fault, open, settled } from './helpers'
 
 // The Ferrocast bot (Pro) in Settings › Discord, on the demo engine.
 const PRO = 'autoplay=0&latency=0&pro=active&pro_features=on'
@@ -264,7 +264,7 @@ test.describe('Ferrocast bot in Discord', () => {
       expect(r.violations).toEqual([])
       await bot(page).getByRole('button', { name: 'Add rule' }).click()
       await expect(page.getByRole('dialog', { name: 'Add a rule' })).toBeVisible()
-      await page.waitForTimeout(400) // the dialog's scale-in settles
+      await settled(page)
       const d = await new AxeBuilder({ page }).include('dialog[open]').analyze()
       expect(d.violations).toEqual([])
     })
@@ -278,7 +278,12 @@ test.describe('Ferrocast bot at 375 px', () => {
     test(`fits the phone width (${mode})`, async ({ page }, info) => {
       if (mode === 'connected') await connected(page)
       else await open(page, 'settings/discord', mode === 'on sale' ? ON_SALE : PRO)
+      // Measure the finished section, not its loading state.
+      if (mode === 'on sale') await expect(bot(page).getByTestId('pro-line')).toBeVisible()
+      if (mode === 'not connected')
+        await expect(bot(page).getByRole('button', { name: 'Connect server' })).toBeVisible()
       await bot(page).scrollIntoViewIfNeeded()
+      await settled(page)
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
       )
@@ -299,6 +304,7 @@ test.describe('Ferrocast bot at 375 px', () => {
         await bot(page).getByRole('button', { name: 'Add rule' }).click()
         const dlg = page.getByRole('dialog', { name: 'Add a rule' })
         await dlg.getByLabel('Who gets it').selectOption('tip_min')
+        await settled(page)
         const b = await dlg.boundingBox()
         expect(b && b.x + b.width).toBeLessThanOrEqual(375)
       }
