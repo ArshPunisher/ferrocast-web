@@ -110,6 +110,19 @@ describe('FerroClient', () => {
     expect(e.message).toBe(STATUS_COPY[503].message)
   })
 
+  it('never retries a save or a named 503', async () => {
+    const sleep = vi.fn(async () => {})
+    const named = () => json(503, { error: { code: 'mail_unavailable', message: 'Off' } })
+    const { fn } = mockFetch([named(), named()])
+    const c = new FerroClient({ base: 'http://x', token: 't', fetch: fn, sleep })
+    await expect(c.request('PUT', '/api/v1/pro/history/email', { address: 'a@b.co' })).rejects.toMatchObject({
+      code: 'mail_unavailable',
+    })
+    await expect(c.overlays()).rejects.toMatchObject({ code: 'mail_unavailable' })
+    expect(fn).toHaveBeenCalledTimes(2)
+    expect(sleep).not.toHaveBeenCalled()
+  })
+
   it('reports an unreachable engine as offline', async () => {
     const { fn } = mockFetch([new TypeError('Failed to fetch')])
     const c = new FerroClient({ base: 'http://x', token: 't', fetch: fn })

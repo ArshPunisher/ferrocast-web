@@ -232,8 +232,12 @@ export class FerroClient {
         }
       }
       const err = await errorFromResponse(res)
-      // A phone's PC that's off (Dashboard anywhere) isn't starting up: say so at once.
-      if (err.status === 503 && err.code !== 'pc_offline' && attempt < this.startupRetries) {
+      // Only a read is waited out, and only while the app is starting (no error code of its
+      // own): a save can have side effects (an email sent) and a named 503 (`mail_unavailable`,
+      // `pc_offline`) won't fix itself in a few seconds.
+      const starting = err.code === 'starting' || err.code === 'http_503'
+      const read = method === 'GET' || method === 'HEAD'
+      if (err.status === 503 && read && starting && attempt < this.startupRetries) {
         await this.sleep(Math.max(err.retryAfter ?? 1, 1) * 1000)
         continue
       }
