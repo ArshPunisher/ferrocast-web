@@ -15,6 +15,8 @@ export interface ProFeatures {
   tip_brand: boolean
   history: boolean
   weekly_email: boolean
+  /** The tip page on the streamer's own subdomain (Cloudflare for SaaS on the relay). */
+  tip_domain: boolean
 }
 export type ProFeature = keyof ProFeatures
 
@@ -27,6 +29,7 @@ export const NO_PRO_FEATURES: ProFeatures = {
   tip_brand: false,
   history: false,
   weekly_email: false,
+  tip_domain: false,
 }
 
 /** One of the subscription's usage counters (API.md §9). */

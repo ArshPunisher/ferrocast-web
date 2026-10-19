@@ -17,6 +17,7 @@ import {
   proApi,
   proPanelState,
   tipBrandApi,
+  tipDomainApi,
   tipPalette,
   TIP_PAGE_ID_PROVIDERS,
   TIP_PROVIDER_KEYS,
@@ -38,6 +39,7 @@ import {
   type TipBrand,
   type TipColours,
   type TipGoal,
+  type TipDomain,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -58,6 +60,7 @@ import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { ProPanelView } from '../components/pro/ProPanel'
 import { Branding, savedColours } from '../components/tips/Branding'
 import { GoalPage, goalPct } from '../components/tips/GoalPage'
+import { OwnAddress } from '../components/tips/OwnAddress'
 import { TipPreview } from '../components/tips/TipPreview'
 import { useClient, useResource } from '../lib/hooks'
 import { useUnsavedWarning } from '../lib/unsaved'
@@ -312,6 +315,39 @@ export function Tips() {
       alive = false
     }
   }, [proOpen, client, brandTry])
+
+  // Pro: the tip page on the streamer's own address (its own feature switch on the relay).
+  const domainOpen = proPanelState(pro.error ? null : pro.data, 'tip_domain') === 'open'
+  const [domain, setDomain] = useState<TipDomain | null>(null)
+  const [domainLoaded, setDomainLoaded] = useState(false)
+  const [domainError, setDomainError] = useState<unknown>(null)
+  const [domainTry, setDomainTry] = useState(0)
+  useEffect(() => {
+    if (!domainOpen) return
+    let alive = true
+    setDomainError(null)
+    setDomainLoaded(false)
+    tipDomainApi(client)
+      .get()
+      .then(
+        (d) => {
+          if (!alive) return
+          setDomain(d)
+          setDomainLoaded(true)
+        },
+        (e: unknown) => {
+          if (!alive) return
+          // None yet is a 404; anything else shows with Try again.
+          if (e instanceof ApiError && e.status === 404) {
+            setDomain(null)
+            setDomainLoaded(true)
+          } else setDomainError(e)
+        },
+      )
+    return () => {
+      alive = false
+    }
+  }, [domainOpen, client, domainTry])
 
   useEffect(() => {
     // Set the draft once; `savePage` refreshes it after a save. Provider saves and taking the
@@ -590,6 +626,21 @@ export function Tips() {
               <GoalPage goal={goal} hasPage={live} defaultCurrency="INR" onSaved={setGoal} />
             ) : goalError ? (
               <LoadError error={goalError} onRetry={() => setBrandTry((n) => n + 1)} />
+            ) : (
+              <Skeleton className="h-40" />
+            )}
+          </ProPanelView>
+
+          <ProPanelView
+            pro={pro.error ? null : pro.data}
+            feature="tip_domain"
+            id="tip-domain"
+            title="Your own address"
+          >
+            {domainLoaded ? (
+              <OwnAddress domain={domain} hasPage={live} onChange={setDomain} />
+            ) : domainError ? (
+              <LoadError error={domainError} onRetry={() => setDomainTry((n) => n + 1)} />
             ) : (
               <Skeleton className="h-40" />
             )}

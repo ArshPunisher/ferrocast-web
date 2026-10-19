@@ -211,6 +211,8 @@ export const OWNER_ALLOWED: readonly Rule[] = [
   ['GET', '/pro/history'],
   // The weekly email's state (the address only as a hint); changing it stays on the PC.
   ['GET', '/pro/history/email'],
+  // The tip page's own address: its status only; adding or removing stays on the PC.
+  ['GET', '/pro/tips/domain'],
 ]
 
 /** What an owner's phone may never do (the server's `OWNER_DENIED`). */

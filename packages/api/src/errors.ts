@@ -13,6 +13,9 @@ export class ApiError extends Error {
   readonly hint: string | null
   /** Seconds to wait before trying again (429 and 503). */
   readonly retryAfter: number | null
+  /** The whole error answer, for the few errors that carry more than the message (a 409
+   * `domain_taken` with the DNS record to add, say). Read it with a typed helper. */
+  readonly body: unknown
 
   constructor(
     status: number,
@@ -20,6 +23,7 @@ export class ApiError extends Error {
     message: string,
     hint: string | null = null,
     retryAfter: number | null = null,
+    body: unknown = null,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -27,6 +31,7 @@ export class ApiError extends Error {
     this.code = code
     this.hint = hint
     this.retryAfter = retryAfter
+    this.body = body
   }
 
   /** The engine is down or unreachable, as opposed to refusing the request. */
@@ -106,7 +111,7 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
   if (isErrorBody(body)) {
     const msg = body.error.message.trim() || fallback.message
     const hint = body.error.hint?.trim() || fallback.hint
-    return new ApiError(res.status, body.error.code, msg, hint, retry)
+    return new ApiError(res.status, body.error.code, msg, hint, retry, body)
   }
   return new ApiError(res.status, `http_${res.status}`, fallback.message, fallback.hint, retry)
 }

@@ -83,6 +83,7 @@ import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
 import type { ProView } from '../pro'
 import { DemoTipBrand } from './features/tip-brand'
 import { DemoTtsVoices } from './features/tts-voices'
+import { DemoTipDomain, type DemoTipDomainState } from './features/tip-domain'
 import { DemoWeeklyEmail, type DemoWeeklyEmailState } from './features/weekly-email'
 import { DemoAutoReplies } from './features/autoreplies'
 import { DemoRemote } from './features/remote'
@@ -387,6 +388,11 @@ export class DemoEngine {
     () => VOICES,
     () => this.tts.voice,
   )
+  /** Pro's own tip address: the record to add and its status. */
+  readonly tipDomain = new DemoTipDomain(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+    () => this.tips,
+  )
   /** Pro's weekly email: the double opt-in, the address only as a hint. */
   readonly weeklyEmail = new DemoWeeklyEmail(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
@@ -640,6 +646,11 @@ export class DemoEngine {
     const { confirm, ...rest } = state
     this.weeklyEmail.setState(rest)
     if (confirm) this.weeklyEmail.confirm()
+  }
+
+  /** Pro's own tip address: one added already, its status, today's changes. */
+  setTipDomain(state: DemoTipDomainState): void {
+    this.tipDomain.setState(state)
   }
 
   /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
@@ -1549,6 +1560,7 @@ export class DemoEngine {
       this.ttsVoices,
       this.remoteDevices,
       this.weeklyEmail,
+      this.tipDomain,
     ]
   }
 
