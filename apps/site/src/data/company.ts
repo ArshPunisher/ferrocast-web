@@ -49,8 +49,8 @@ export const COMPANY = {
   github: 'https://github.com/ArshPunisher/ferrocast',
   githubWeb: 'https://github.com/ArshPunisher/ferrocast-web',
   /** Date the legal pages were last changed. */
-  legalUpdated: '17 October 2026',
-  legalUpdatedIso: '2026-10-17',
+  legalUpdated: '19 October 2026',
+  legalUpdatedIso: '2026-10-19',
 } as const
 
 export type CompanyField = keyof typeof COMPANY
