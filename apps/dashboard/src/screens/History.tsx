@@ -21,6 +21,7 @@ import { LoadError, PageHeader } from '../components/Panel'
 import { ProPanelView } from '../components/pro/ProPanel'
 import { PlatformSplit, ViewersChart, WeeklyBars } from '../components/history/charts'
 import { StreamTable } from '../components/history/StreamTable'
+import { WeeklyEmail } from '../components/history/WeeklyEmail'
 import { saveBlob } from '../components/studio/common'
 import { useAction, useClient, useResource } from '../lib/hooks'
 
@@ -95,7 +96,7 @@ function Loading() {
   )
 }
 
-function Body() {
+function Body({ email }: { email: boolean }) {
   const client = useClient()
   const [range, setRange] = useState<HistoryRange>('4w')
   // The range is fixed when picked, so a reload asks for the same window.
@@ -183,6 +184,7 @@ function Body() {
           </Section>
         </div>
       )}
+      {email ? <WeeklyEmail /> : null}
     </div>
   )
 }
@@ -200,7 +202,7 @@ export function History() {
         <EmptyState title="Not available here yet" />
       ) : (
         <ProPanelView pro={view} feature="history" id="history" title="Your streams">
-          <Body />
+          <Body email={!!view?.features.weekly_email} />
         </ProPanelView>
       )}
     </div>

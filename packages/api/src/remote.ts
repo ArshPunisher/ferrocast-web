@@ -179,6 +179,13 @@ export const MOD_ALLOWED: readonly Rule[] = [
   ['GET', '/viewers/*/*/note'],
 ]
 
+/**
+ * What an owner's phone may do although `OWNER_DENIED` would refuse it (the server's
+ * `OWNER_ALLOWED`, checked first): the weekly email's state, the address only as a hint
+ * (API.md §9.8). Changing it stays on the PC.
+ */
+export const OWNER_ALLOWED: readonly Rule[] = [['GET', '/pro/history/email']]
+
 /** What an owner's phone may never do (the server's `OWNER_DENIED`). */
 export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/accounts'],
@@ -234,6 +241,7 @@ export function remoteAllowed(role: RemoteRole, method: string, path: string): b
   if (!['GET', 'POST', 'PUT', 'DELETE'].includes(method)) return false
   const is = (m: string) => m === '*' || m === method
   if (role === 'mod') return MOD_ALLOWED.some(([m, p]) => is(m) && matches(p, segs))
+  if (OWNER_ALLOWED.some(([m, p]) => is(m) && matches(p, segs))) return true
   return !OWNER_DENIED.some(([m, p]) => is(m) && matches(p, segs))
 }
 

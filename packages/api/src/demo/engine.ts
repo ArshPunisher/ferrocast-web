@@ -82,6 +82,7 @@ import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
 import type { ProView } from '../pro'
 import { DemoTipBrand } from './features/tip-brand'
 import { DemoTtsVoices } from './features/tts-voices'
+import { DemoWeeklyEmail, type DemoWeeklyEmailState } from './features/weekly-email'
 import { DemoAutoReplies } from './features/autoreplies'
 import { DemoRemote } from './features/remote'
 import { remoteAllowed, remoteLiveAllowed, type RemoteRole } from '../remote'
@@ -358,6 +359,10 @@ export class DemoEngine {
     () => VOICES,
     () => this.tts.voice,
   )
+  /** Pro's weekly email: the double opt-in, the address only as a hint. */
+  readonly weeklyEmail = new DemoWeeklyEmail(
+    () => this.pro.route('GET', ['pro'], undefined) as ProView,
+  )
   /** Pro "Dashboard anywhere": devices, links, the audit (Settings on the PC). */
   readonly remoteDevices = new DemoRemote(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
@@ -594,6 +599,14 @@ export class DemoEngine {
   /** Stream history with no streams yet (true) or the demo year (false). */
   setHistoryEmpty(on: boolean): void {
     this.history.setEmpty(on)
+  }
+
+  /** The weekly email: start pending / on (maybe with a new address waiting) / paused, or the
+   * confirm link pressed. */
+  setWeeklyEmail(state: DemoWeeklyEmailState & { confirm?: boolean }): void {
+    const { confirm, ...rest } = state
+    this.weeklyEmail.setState(rest)
+    if (confirm) this.weeklyEmail.confirm()
   }
 
   /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
@@ -1441,6 +1454,7 @@ export class DemoEngine {
       this.autoReplies,
       this.ttsVoices,
       this.remoteDevices,
+      this.weeklyEmail,
     ]
   }
 

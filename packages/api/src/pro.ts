@@ -14,6 +14,7 @@ export interface ProFeatures {
   backups: boolean
   tip_brand: boolean
   history: boolean
+  weekly_email: boolean
 }
 export type ProFeature = keyof ProFeatures
 
@@ -25,6 +26,7 @@ export const NO_PRO_FEATURES: ProFeatures = {
   backups: false,
   tip_brand: false,
   history: false,
+  weekly_email: false,
 }
 
 /** One of the subscription's usage counters (API.md §9). */
