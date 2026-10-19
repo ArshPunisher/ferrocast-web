@@ -19,7 +19,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How is Ferrocast paid for?',
-        a: 'By Ferrocast Pro, an optional subscription. It sells only things that run on our servers and cost us money, such as a bot that keeps going when your PC is off. Pro is not on sale yet. We do not sell sponsorships, take a cut of tips or show ads.',
+        a: 'By Ferrocast Pro, an optional subscription. It sells only things that run on our servers and cost us money, such as a bot that keeps going when your PC is off. Buy it in the app under Settings › Pro. We do not sell sponsorships, take a cut of tips or show ads.',
       },
       {
         q: 'Will free features move behind Pro later?',
