@@ -1017,7 +1017,6 @@ export interface Settings {
   reduced_motion: 'system' | 'on' | 'off'
   low_motion_overlays: boolean
   lan_access: boolean
-  update_channel: 'stable' | 'beta'
   never_update_while_live: boolean
   launch_at_login: boolean
   close_to_tray: boolean
@@ -1243,6 +1242,7 @@ export interface Theme {
 export interface UpdateInfo {
   current: string
   latest: string | null
+  /** Read-only: follows the installed build (a prerelease version is 'beta'). */
   channel: 'stable' | 'beta'
   blocked_while_live: boolean
   notes_url: string | null

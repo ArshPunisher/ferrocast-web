@@ -445,7 +445,6 @@ export const SETTINGS: Settings = {
   reduced_motion: 'system',
   low_motion_overlays: false,
   lan_access: false,
-  update_channel: 'stable',
   never_update_while_live: true,
   launch_at_login: true,
   close_to_tray: true,

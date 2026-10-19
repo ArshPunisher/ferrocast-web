@@ -1512,7 +1512,7 @@ export class DemoEngine {
       return {
         current: DEMO_VERSION,
         latest: '0.4.1',
-        channel: this.settings.update_channel,
+        channel: DEMO_VERSION.includes('-') ? 'beta' : 'stable',
         blocked_while_live: this.isLive() && this.settings.never_update_while_live,
         notes_url: 'https://ferrocast.clearcraftlabs.com/docs/getting-started',
       }

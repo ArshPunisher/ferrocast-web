@@ -73,7 +73,7 @@ A mod deleting the source message removes the item (R-48).
 ```ts
 type Settings = { theme: "system" | "dark" | "light"; reduced_motion: "system" | "on" | "off";
                   low_motion_overlays: boolean /* R-40 Linux preset */; lan_access: boolean;
-                  update_channel: "stable" | "beta"; never_update_while_live: boolean;
+                  never_update_while_live: boolean;
                   launch_at_login: boolean; close_to_tray: boolean; language: string }
 ```
 
@@ -104,7 +104,7 @@ type SessionStats = { started_at: number | null; follows: number; subs: number; 
 
 ## R9. Updates
 
-`GET /api/v1/updates` → `{ current: string; latest: string | null; channel: "stable" | "beta"; blocked_while_live: boolean; notes_url: string | null }`. The dashboard never offers "Update now" while `blocked_while_live` (R-60).
+`GET /api/v1/updates` → `{ current: string; latest: string | null; channel: "stable" | "beta" /* read-only, from the build version */; blocked_while_live: boolean; notes_url: string | null }`. The dashboard never offers "Update now" while `blocked_while_live` (R-60).
 
 ## R10. Finish first run
 

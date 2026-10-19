@@ -778,18 +778,22 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
           onChange={(v) => save({ ...settings, never_update_while_live: v })}
           label="Never update while I’m live"
         />
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[13.5px] font-semibold text-text">Channel</span>
-          <Segmented
-            label="Update channel"
-            value={settings.update_channel}
-            onChange={(update_channel) => save({ ...settings, update_channel })}
-            options={[
-              { value: 'stable', label: 'Stable' },
-              { value: 'beta', label: 'Beta' },
-            ]}
-          />
-        </div>
+        {u && (
+          // The channel follows the installed build: no switch (a beta build also gets stable).
+          <p className="text-[13.5px] text-text-2">
+            {u.channel === 'beta' ? (
+              <>
+                <span className="font-semibold text-text">Beta version:</span> updates include
+                betas and stable releases.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-text">Stable version:</span> you get stable
+                updates only.
+              </>
+            )}
+          </p>
+        )}
       </div>
     </Section>
   )
