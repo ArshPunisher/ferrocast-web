@@ -15,6 +15,19 @@ async function connected(page: Page) {
 }
 
 test.describe('Ferrocast bot in Discord', () => {
+  test('no roles: Add rule says why, and Refresh picks up a new role', async ({ page }) => {
+    await open(page, 'home', PRO)
+    await demo(page, '(d) => d.setDiscordPro({ connected: true, discordDown: true })')
+    await page.evaluate(() => (location.hash = '#/settings/discord'))
+    const hint = bot(page).getByTestId('discord-roles-hint')
+    await expect(hint).toContainText('Make a role in Discord first')
+    await expect(bot(page).getByRole('button', { name: 'Add rule' })).toBeDisabled()
+    await demo(page, '(d) => d.setDiscordPro({ discordDown: false })')
+    await hint.getByRole('button', { name: 'Refresh' }).click()
+    await expect(hint).toHaveCount(0)
+    await expect(bot(page).getByRole('button', { name: 'Add rule' })).toBeEnabled()
+  })
+
   test('hidden without the feature; one calm line on sale without Pro', async ({ page }) => {
     await open(page, 'settings/discord', 'autoplay=0&latency=0')
     await expect(page.locator('#s-discord')).toBeVisible()

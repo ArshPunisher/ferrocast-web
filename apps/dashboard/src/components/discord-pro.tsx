@@ -432,6 +432,15 @@ function RoleName({ role }: { role: DiscordRole | undefined }) {
   )
 }
 
+/** Why Add rule can't be used yet, or null when some role can be given. */
+export function rolesHint(roles: readonly Pick<DiscordRole, 'assignable'>[]): string | null {
+  if (roles.length === 0)
+    return 'Make a role in Discord first (Server Settings › Roles), keep Ferrocast’s role above it, then press Refresh.'
+  if (!roles.some((r) => r.assignable))
+    return 'Move Ferrocast’s role above the roles it should give (Server Settings › Roles), then press Refresh.'
+  return null
+}
+
 function Rules({
   view: v,
   onChange,
@@ -457,13 +466,24 @@ function Rules({
         <Button
           size="sm"
           icon={<Plus size={15} weight="bold" />}
-          disabled={full || v.roles.length === 0}
+          disabled={full || rolesHint(v.roles) !== null}
           title={full ? `Up to ${v.limits.rules} rules.` : undefined}
           onClick={() => setEditing('new')}
         >
           Add rule
         </Button>
       </div>
+      {rolesHint(v.roles) && (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[14px] text-text-2"
+          data-testid="discord-roles-hint"
+        >
+          <p className="min-w-0 flex-1 basis-60">{rolesHint(v.roles)}</p>
+          <Button size="sm" variant="ghost" icon={<ArrowsClockwise size={15} />} onClick={reload}>
+            Refresh
+          </Button>
+        </div>
+      )}
       {issue && (
         <p
           role="status"
