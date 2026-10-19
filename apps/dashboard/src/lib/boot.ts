@@ -8,8 +8,18 @@
 //     injects `window.__FERROCAST__ = { api: "<origin>/r", remote: true }`; the phone pairs
 //     once with `#pair=<code>` and keeps its device token in localStorage (30 days from the
 //     last use, revocable on the PC). `?remote=owner|mod` (and `&pc=off`) shows it in the demo.
+//     While the PC is off and the cloud bot stands in (M10), the phone gets a limited
+//     dashboard: chat, bans and history from the relay (`&cloud=on|paused` in the demo).
 
-import { ApiError, FerroClient, phoneApi, remoteAllowed, type SocketFactory } from '@ferrocast/api'
+import {
+  ApiError,
+  FerroClient,
+  cloudCanModerate,
+  phoneApi,
+  remoteAllowed,
+  remoteOfflineGuard,
+  type SocketFactory,
+} from '@ferrocast/api'
 import type { RemoteState } from './store'
 
 declare global {
@@ -64,7 +74,52 @@ export function clearRemote(): void {
  * removed), the PC is off, the streamer's Pro is paused (still paired), or it's open in more
  * tabs than the relay keeps.
  */
-export type RemoteProblem = 'unpaired' | 'pc_offline' | 'pro_paused' | 'elsewhere'
+export type RemoteProblem =
+  | 'unpaired'
+  | 'pc_offline'
+  /** The PC is off and the cloud bot is connected but switched off (an owner can switch it on). */
+  | 'cloud_paused'
+  | 'pro_paused'
+  | 'elsewhere'
+
+/**
+ * Whether a phone's PC is reachable and, while it's off, whether the cloud bot stands in
+ * (M10). Set at connect and by the relay's `remote` frames (`store.ts`); a phone's client
+ * reads it on every call.
+ */
+export interface RemoteLink {
+  pcOnline: boolean
+  cloud: boolean
+  /** For the 503's words: what still works depends on the role and the opt-in. */
+  role?: 'owner' | 'mod'
+  canBan?: boolean
+}
+
+let remoteLink: RemoteLink = { pcOnline: true, cloud: false }
+
+export function setRemoteLink(link: RemoteLink): void {
+  remoteLink = { ...link }
+}
+
+/** The link for a phone's state (`store.ts` keeps it current from the `remote` frames). */
+export function linkOf(r: RemoteState): RemoteLink {
+  return {
+    pcOnline: r.pcOnline,
+    cloud: r.cloud === true,
+    role: r.role,
+    canBan: cloudCanModerate(r.cloudModeration),
+  }
+}
+
+/** While the PC is off, only what the relay answers itself goes out (the rest: 503 here). */
+function phoneGuard(method: string, path: string): ApiError | null {
+  if (remoteLink.pcOnline) return null
+  return remoteOfflineGuard(
+    remoteLink.cloud,
+    remoteLink.role ?? 'owner',
+    remoteLink.canBan ?? true,
+  )(method, path)
+}
 
 /** A phone's client: role-checked calls, and tickets instead of the token in URLs. */
 export function remoteClient(api: string, token: string, role: 'owner' | 'mod'): FerroClient {
@@ -73,8 +128,16 @@ export function remoteClient(api: string, token: string, role: 'owner' | 'mod'):
     base: api,
     token,
     allow: (method, path) => remoteAllowed(role, method, path),
+    guard: phoneGuard,
     ticket: (kind) => phone.ticket(token, kind),
   })
+}
+
+/** The phone's own client for the "PC is off" screen (switching the cloud bot back on). */
+export function savedRemoteClient(role: 'owner' | 'mod'): FerroClient | null {
+  const api = window.__FERROCAST__?.remote === true ? window.__FERROCAST__.api : null
+  const token = api ? readRemote(api) : null
+  return api && token ? remoteClient(api, token, role) : null
 }
 
 async function remoteConnect(
@@ -90,16 +153,29 @@ async function remoteConnect(
   if (!token) return { remoteProblem: 'unpaired', api }
   try {
     const me = await phoneApi(api).me(token)
-    if (!me.pc_online) return { remoteProblem: 'pc_offline', api }
+    if (!me.pc_online && !me.cloud) {
+      setRemoteLink({ pcOnline: false, cloud: false })
+      return {
+        remoteProblem: me.cloud_paused && me.role === 'owner' ? 'cloud_paused' : 'pc_offline',
+        api,
+      }
+    }
+    // The PC is off but the cloud bot stands in: the limited dashboard (chat, bans, history).
+    const limited = !me.pc_online
+    const remote: RemoteState = {
+      role: me.role,
+      name: me.name,
+      pcOnline: me.pc_online,
+      cloud: me.cloud === true,
+      cloudPaused: me.cloud_paused === true,
+      cloudModeration: me.cloud_moderation ?? {},
+      history: me.history === true,
+    }
+    setRemoteLink(linkOf(remote))
     const client = remoteClient(api, token, me.role)
     // Previews need their ticket before they render; they still work without one (no image).
-    await client.refreshMediaTicket().catch(() => {})
-    return {
-      mode: 'remote',
-      client,
-      socket: wsFactory,
-      remote: { role: me.role, name: me.name, pcOnline: true },
-    }
+    if (!limited) await client.refreshMediaTicket().catch(() => {})
+    return { mode: 'remote', client, socket: wsFactory, remote }
   } catch (e) {
     // Removed (401): forget the token. Pro paused (402): keep it, it works again later.
     if (e instanceof ApiError && e.status === 401) {
@@ -122,7 +198,9 @@ export async function checkRemote(): Promise<RemoteProblem | 'online' | null> {
   if (!token) return 'unpaired'
   try {
     const me = await phoneApi(api).me(token)
-    return me.pc_online ? 'online' : 'pc_offline'
+    // The cloud bot standing in counts as "back": the limited dashboard opens.
+    if (me.pc_online || me.cloud) return 'online'
+    return me.cloud_paused && me.role === 'owner' ? 'cloud_paused' : 'pc_offline'
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return 'unpaired'
     if (e instanceof ApiError && e.status === 402) return 'pro_paused'
@@ -247,12 +325,16 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     ...(params.get('relay') === '0' ? { relay: false } : {}),
     // `?history=empty`: Pro stream history with no streams yet.
     ...(params.get('history') === 'empty' ? { history: 'empty' as const } : {}),
-    // `?remote=owner|mod&pc=off`: this dashboard as a paired phone, the PC on or off.
+    // `?remote=owner|mod&pc=off`: this dashboard as a paired phone, the PC on or off;
+    // `&cloud=on|paused`: with the PC off, the cloud bot stands in or is switched off (M10).
     ...(params.get('remote') === 'owner' || params.get('remote') === 'mod'
       ? {
           remote: {
             role: params.get('remote') as 'owner' | 'mod',
             pcOnline: params.get('pc') !== 'off',
+            cloud: demoCloud(params),
+            // `&cloud_mod=off`: the cloud bot without the moderation opt-in.
+            moderation: params.get('cloud_mod') !== 'off',
           },
         }
       : {}),
@@ -277,8 +359,13 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
           role,
           name: role === 'mod' ? 'Meera (mod)' : 'Pixel 8',
           pcOnline: params.get('pc') !== 'off',
+          cloud: demoCloud(params) === 'on',
+          cloudPaused: demoCloud(params) === 'paused',
+          cloudModeration: engine.cloudModeration(),
+          history: role === 'owner',
         }
       : undefined
+  if (remote) setRemoteLink(linkOf(remote))
   return {
     mode: 'demo',
     client: new FerroClient({
@@ -286,7 +373,9 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
       token: DEMO_TOKEN,
       fetch: engine.fetch,
       // As a phone, skip what the role can't call, like the real one.
-      ...(remote ? { allow: (m: string, p: string) => remoteAllowed(remote.role, m, p) } : {}),
+      ...(remote
+        ? { allow: (m: string, p: string) => remoteAllowed(remote.role, m, p), guard: phoneGuard }
+        : {}),
     }),
     socket: engine.socket,
     ...(remote ? { remote } : {}),
@@ -301,4 +390,10 @@ export async function pair(base: string, code: string): Promise<Connection> {
   saveSession(base, token)
   history.replaceState(null, '', location.pathname + location.search + '#/home')
   return { mode: 'browser', client, socket: wsFactory }
+}
+
+/** `&cloud=on|paused` with a phone's PC off in the demo (`empty` and `new-pc` are backups'). */
+function demoCloud(params: URLSearchParams): 'on' | 'paused' | 'off' {
+  const c = params.get('cloud')
+  return c === 'on' || c === 'paused' ? c : 'off'
 }

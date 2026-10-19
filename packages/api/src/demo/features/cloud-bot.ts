@@ -160,6 +160,14 @@ export class DemoCloudBot implements DemoFeature {
     if (!p) return
     this.pending = null
     const now = Date.now()
+    // The moderation opt-in signed the bot in again: same channel, moderator scopes on.
+    const again = this.channels.find(
+      (c) => c.platform === p.platform && c.state !== 'needs_channel',
+    )
+    if (again && p.moderation && p.account === 'bot') {
+      again.moderation = true
+      return
+    }
     if (p.platform === 'kick') {
       this.channels.push({
         platform: 'kick',
@@ -250,7 +258,11 @@ export class DemoCloudBot implements DemoFeature {
       const account = b.account === 'channel' ? 'channel' : 'bot'
       const moderation = b.moderation === true
       const have = this.channels.find((c) => c.platform === platform)
-      if (platform === 'kick') {
+      // The moderation opt-in (M10) signs the bot account in again over a connected channel.
+      const upgrade = account === 'bot' && moderation && !!have && !have.moderation
+      if (upgrade) {
+        // falls through to the sign-in link
+      } else if (platform === 'kick') {
         if (have)
           throw new HttpError(
             409,
@@ -277,10 +289,16 @@ export class DemoCloudBot implements DemoFeature {
       this.pending = { platform: platform as CloudBotPlatform, account, moderation }
       const url =
         platform === 'kick'
-          ? 'https://id.kick.com/oauth/authorize?client_id=demo&scope=user%3Aread+chat%3Awrite&state=demo'
+          ? `https://id.kick.com/oauth/authorize?client_id=demo&scope=user%3Aread+chat%3Awrite${
+              moderation ? '+moderation%3Aban+moderation%3Achat_message%3Amanage' : ''
+            }&state=demo`
           : `https://id.twitch.tv/oauth2/authorize?client_id=demo&scope=${
               account === 'bot'
-                ? 'user%3Abot+user%3Aread%3Achat+user%3Awrite%3Achat'
+                ? `user%3Abot+user%3Aread%3Achat+user%3Awrite%3Achat${
+                    moderation
+                      ? '+moderator%3Amanage%3Abanned_users+moderator%3Amanage%3Achat_messages'
+                      : ''
+                  }`
                 : 'channel%3Abot'
             }&force_verify=true&state=demo`
       return { auth_url: url, expires_at: Date.now() + 600_000 }

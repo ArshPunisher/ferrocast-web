@@ -64,7 +64,8 @@ describe('weekly email helpers', () => {
     expect(remoteAllowed('owner', 'GET', '/pro/history/email')).toBe(true)
     expect(remoteAllowed('owner', 'PUT', '/pro/history/email')).toBe(false)
     expect(remoteAllowed('owner', 'DELETE', '/pro/history/email')).toBe(false)
-    expect(remoteAllowed('owner', 'GET', '/pro/history')).toBe(false)
+    // The history itself is readable from an owner's phone since M10 (offline remote mode).
+    expect(remoteAllowed('owner', 'GET', '/pro/history')).toBe(true)
     expect(remoteAllowed('mod', 'GET', '/pro/history/email')).toBe(false)
   })
 })

@@ -10,7 +10,8 @@ import {
   type ReplyTarget,
 } from '../components/chat'
 import { EventRow } from '../components/EventRow'
-import { useLive } from '../lib/store'
+import { NeedsPc } from '../components/remote'
+import { isLimited, useLive } from '../lib/store'
 import { useMediaQuery, useNow } from '../lib/hooks'
 import { useHeldItems, useHeldSync } from '../lib/held'
 
@@ -36,6 +37,8 @@ export function Chat() {
   // A mod's phone through Ferrocast's servers reads and moderates chat: no composer, no events.
   const remote = useLive((s) => s.remote)
   const mod = remote?.role === 'mod'
+  // The PC is off, the cloud bot stands in (M10): its chat, bans; no sending, no events.
+  const limited = isLimited(remote)
 
   const lines = useMemo(() => {
     // "Held" lists every held message, also ones from before the chat on screen.
@@ -89,25 +92,29 @@ export function Chat() {
               })),
           ]}
         />
-        <button
-          type="button"
-          aria-pressed={onlyHeld}
-          onClick={() => setOnlyHeld((v) => !v)}
-          title="Messages waiting for a mod"
-          className={cx(
-            'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
-            'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-            onlyHeld
-              ? 'border-warn bg-warn-soft text-text'
-              : heldItems.length > 0
-                ? 'border-warn/60 text-text-2 hover:bg-surface-2'
-                : 'border-line text-text-3 hover:bg-surface-2',
-          )}
-        >
-          Held
-          <span className="font-mono tabular-nums">{heldItems.length}</span>
-          <span className="sr-only">{heldItems.length === 1 ? 'message' : 'messages'} waiting</span>
-        </button>
+        {!limited && (
+          <button
+            type="button"
+            aria-pressed={onlyHeld}
+            onClick={() => setOnlyHeld((v) => !v)}
+            title="Messages waiting for a mod"
+            className={cx(
+              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+              'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              onlyHeld
+                ? 'border-warn bg-warn-soft text-text'
+                : heldItems.length > 0
+                  ? 'border-warn/60 text-text-2 hover:bg-surface-2'
+                  : 'border-line text-text-3 hover:bg-surface-2',
+            )}
+          >
+            Held
+            <span className="font-mono tabular-nums">{heldItems.length}</span>
+            <span className="sr-only">
+              {heldItems.length === 1 ? 'message' : 'messages'} waiting
+            </span>
+          </button>
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-medium text-text-2">
           <input
             type="checkbox"
@@ -144,10 +151,16 @@ export function Chat() {
           </ul>
         )}
       </ChatScroller>
-      {!mod && (
-        <div className="border-t border-line p-3 sm:p-4">
-          <Composer reply={reply} onClearReply={() => setReply(null)} />
+      {limited && !mod ? (
+        <div className="border-t border-line px-4 py-3">
+          <NeedsPc>Sending messages needs your PC.</NeedsPc>
         </div>
+      ) : (
+        !mod && (
+          <div className="border-t border-line p-3 sm:p-4">
+            <Composer reply={reply} onClearReply={() => setReply(null)} />
+          </div>
+        )
       )}
     </section>
   )
@@ -181,10 +194,10 @@ export function Chat() {
 
   return (
     <div
-      style={{ '--fc-top': remote ? '96px' : '56px' } as React.CSSProperties}
-      className="flex h-[calc(100dvh-var(--fc-top)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top)-28px-48px)] lg:flex-row lg:gap-5"
+      // `--fc-top`: the sticky header's measured height (Shell), the phone's strip included.
+      className="flex h-[calc(100dvh-var(--fc-top,56px)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top,56px)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top,56px)-28px-48px)] lg:flex-row lg:gap-5"
     >
-      {mod ? (
+      {mod || limited ? (
         chatPane
       ) : wide ? (
         <>

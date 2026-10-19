@@ -791,6 +791,8 @@ export interface BanEntry {
   banned_at: Millis
   everywhere: boolean
   by: string | null
+  /** Banned from a phone through the cloud bot while the PC was off (M10). */
+  offline?: boolean
 }
 
 export type FilterAction = 'delete' | 'timeout' | 'ban' | 'hold'
@@ -1272,7 +1274,22 @@ export type LiveFrame =
   | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
   /** Dashboard anywhere (sent by the relay, not the PC): whether the streaming PC is reachable. */
-  | { v: 1; type: 'remote'; data: { pc_online: boolean; role: 'owner' | 'mod' } }
+  | {
+      v: 1
+      type: 'remote'
+      /**
+       * `cloud`: while the PC is off the cloud bot stands in (chat, bans, history; M10);
+       * `cloud_moderation`: where it can ban; `history`: an owner's phone gets History.
+       */
+      data: {
+        pc_online: boolean
+        role: 'owner' | 'mod'
+        cloud?: boolean
+        cloud_paused?: boolean
+        cloud_moderation?: { twitch?: boolean; kick?: boolean }
+        history?: boolean
+      }
+    }
   /** Studio: the "Don't miss" lane, markers, counters, the show, OBS health, BRB. */
   | import('./studio').StudioFrame
 

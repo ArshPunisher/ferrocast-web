@@ -78,6 +78,11 @@ export interface ClientOptions {
    */
   allow?: (method: string, path: string) => boolean
   /**
+   * A phone while its PC is off (M10): the error a call gets without leaving this page when
+   * the relay can't answer it itself (`null`: send it). Checked after `allow`.
+   */
+  guard?: (method: string, path: string) => ApiError | null
+  /**
    * A phone: short-lived tickets for URLs (`POST /r/v1/ticket`), so the 30-day device token
    * never sits in a URL. Without it the session token goes in the query (the PC's own pages).
    */
@@ -108,6 +113,7 @@ export class FerroClient {
   private readonly startupRetries: number
   private readonly sleep: (ms: number) => Promise<void>
   private readonly allow: ClientOptions['allow']
+  private readonly guard: ClientOptions['guard']
   private readonly ticket: ClientOptions['ticket']
   private mediaTicket: { ticket: string; until: number } | null = null
 
@@ -118,6 +124,7 @@ export class FerroClient {
     this.startupRetries = opts.startupRetries ?? 5
     this.sleep = opts.sleep ?? defaultSleep
     this.allow = opts.allow
+    this.guard = opts.guard
     this.ticket = opts.ticket
   }
 
@@ -130,6 +137,11 @@ export class FerroClient {
 
   private check(method: string, path: string): void {
     if (!this.may(method, path)) throw notAllowedHere()
+    if (this.guard) {
+      const rel = path.replace(/^\/api\/v1/, '').split('?')[0] ?? ''
+      const refused = this.guard(method.toUpperCase(), rel)
+      if (refused) throw refused
+    }
   }
 
   get baseUrl(): string {

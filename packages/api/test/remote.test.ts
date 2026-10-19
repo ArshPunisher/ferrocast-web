@@ -223,11 +223,33 @@ describe('demo: acting as a phone', () => {
     const sock = engine.socket(client.liveUrl())
     sock.onmessage = (ev) => got.push(JSON.parse(String(ev.data)))
     await new Promise((r) => setTimeout(r, 5))
-    expect(got[0]).toEqual({ v: 1, type: 'remote', data: { pc_online: true, role: 'mod' } })
+    expect(got[0]).toEqual({
+      v: 1,
+      type: 'remote',
+      data: {
+        pc_online: true,
+        role: 'mod',
+        cloud: false,
+        cloud_paused: false,
+        cloud_moderation: { twitch: false, kick: false },
+        history: false,
+      },
+    })
     expect(got.map((f) => f.type)).not.toContain('queue')
     expect(got.map((f) => f.type)).not.toContain('tts_pending')
     engine.setRemotePc(false)
-    expect(got.at(-1)).toEqual({ v: 1, type: 'remote', data: { pc_online: false, role: 'mod' } })
+    expect(got.at(-1)).toEqual({
+      v: 1,
+      type: 'remote',
+      data: {
+        pc_online: false,
+        role: 'mod',
+        cloud: false,
+        cloud_paused: false,
+        cloud_moderation: { twitch: false, kick: false },
+        history: false,
+      },
+    })
     sock.close()
   })
 })

@@ -86,7 +86,13 @@ import { DemoTtsVoices } from './features/tts-voices'
 import { DemoWeeklyEmail, type DemoWeeklyEmailState } from './features/weekly-email'
 import { DemoAutoReplies } from './features/autoreplies'
 import { DemoRemote } from './features/remote'
-import { remoteAllowed, remoteLiveAllowed, type RemoteRole } from '../remote'
+import {
+  pcOfflineError,
+  remoteAllowed,
+  remoteLiveAllowed,
+  remoteOfflineAllowed,
+  type RemoteRole,
+} from '../remote'
 import {
   CHATTERS,
   FILTERS,
@@ -146,8 +152,20 @@ export interface DemoOptions {
   /** Pro cloud backups: a few from this PC (default), none yet, or a new PC's view. */
   cloudBackups?: DemoCloudMode
   /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
-  remote?: { role: RemoteRole; pcOnline?: boolean }
+  remote?: {
+    role: RemoteRole
+    pcOnline?: boolean
+    cloud?: DemoRemoteCloud
+    /** The cloud bot has the moderation opt-in (bans while the PC is off); default on. */
+    moderation?: boolean
+  }
 }
+
+/**
+ * Acting as a phone whose PC is off (M10): the cloud bot stands in (`on`: chat, bans and
+ * history from the relay), is connected but switched off (`paused`), or isn't there (`off`).
+ */
+export type DemoRemoteCloud = 'on' | 'paused' | 'off'
 
 /** Tip page names someone else already has, for trying the 409 in the demo. */
 export const DEMO_TAKEN_HANDLES: readonly string[] = ['asha', 'rohanlive', 'meghna']
@@ -211,7 +229,12 @@ function connector(
 
 type LiveSub = { sock: FakeSocket }
 /** The demo acting as a phone through the relay (`?remote=owner|mod`). */
-type DemoRemoteSession = { role: RemoteRole; pcOnline: boolean }
+type DemoRemoteSession = {
+  role: RemoteRole
+  pcOnline: boolean
+  cloud: DemoRemoteCloud
+  moderation: boolean
+}
 type OverlaySub = {
   sock: FakeSocket
   overlayId: string
@@ -429,7 +452,12 @@ export class DemoEngine {
     )
     if (opts.tips === 'empty') this.resetTips()
     if (opts.remote)
-      this.remote = { role: opts.remote.role, pcOnline: opts.remote.pcOnline ?? true }
+      this.remote = {
+        role: opts.remote.role,
+        pcOnline: opts.remote.pcOnline ?? true,
+        cloud: opts.remote.cloud ?? 'off',
+        moderation: opts.remote.moderation ?? true,
+      }
     const now = Date.now()
     const on = this.setupDone
     this.connectors = {
@@ -650,11 +678,43 @@ export class DemoEngine {
   setRemotePc(online: boolean): void {
     if (!this.remote) return
     this.remote.pcOnline = online
-    this.broadcastLive({
+    this.broadcastRemote()
+  }
+
+  /** Acting as a phone: the cloud bot stands in, is paused, or isn't there (M10). */
+  setRemoteCloud(cloud: DemoRemoteCloud): void {
+    if (!this.remote) return
+    this.remote.cloud = cloud
+    this.broadcastRemote()
+  }
+
+  /** The relay's `remote` frame (and, with the PC off and the cloud on, a `resync`). */
+  private remoteFrame(): object {
+    const r = this.remote
+    return {
       v: 1,
       type: 'remote',
-      data: { pc_online: online, role: this.remote.role },
-    })
+      data: {
+        pc_online: r?.pcOnline ?? true,
+        role: r?.role ?? 'owner',
+        cloud: r?.cloud === 'on',
+        cloud_paused: r?.cloud === 'paused',
+        cloud_moderation: this.cloudModeration(),
+        history: r?.role === 'owner',
+      },
+    }
+  }
+
+  /** Where the demo's cloud bot can moderate while the PC is off (Twitch and Kick, opt-in). */
+  cloudModeration(): { twitch: boolean; kick: boolean } {
+    const on = this.remote?.cloud === 'on' && this.remote.moderation
+    return { twitch: !!on, kick: !!on }
+  }
+
+  private broadcastRemote(): void {
+    this.broadcastLive(this.remoteFrame())
+    if (this.remote && !this.remote.pcOnline && this.remote.cloud === 'on')
+      this.broadcastLive({ v: 1, type: 'resync', data: { missed: 0 } })
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */
@@ -789,13 +849,37 @@ export class DemoEngine {
             'Accounts, secrets, Pro, export and import stay on the PC itself.',
           )
         }
-        if (!this.remote.pcOnline)
-          throw new HttpError(
-            503,
-            'pc_offline',
-            'Your streaming PC is off.',
-            'Turn it on and open Ferrocast. This works again on its own.',
-          )
+        if (!this.remote.pcOnline) {
+          // Like the relay while the PC is off (M10): chat and bans from the cloud bot while
+          // it's on, history and the cloud bot's switch; everything else 503 `pc_offline`.
+          const cloud = this.remote.cloud === 'on'
+          const canBan = cloud && this.remote.moderation
+          if (!remoteOfflineAllowed(method, rel, cloud)) {
+            const e = pcOfflineError(cloud, this.remote.role, canBan)
+            throw new HttpError(e.status, e.code, e.message, e.hint ?? undefined)
+          }
+          if (rel.startsWith('/mod/') && !canBan)
+            throw new HttpError(
+              403,
+              'needs_moderation_scope',
+              'The cloud bot can’t moderate Twitch yet.',
+              'On your PC, open Bot › Keep the bot on when this PC is off and turn on “Let the cloud bot moderate when this PC is off”.',
+            )
+          if (method === 'PUT' && rel === '/pro/bot/enabled') {
+            if (this.remote.cloud === 'off')
+              throw new HttpError(
+                422,
+                'no_platform',
+                'Connect Twitch or Kick for the cloud bot first.',
+                'Press Connect next to a platform below.',
+              )
+            const b = (await readBody(init?.body)) as { enabled?: unknown } | null
+            if (typeof b?.enabled === 'boolean') {
+              this.remote.cloud = b.enabled ? 'on' : 'paused'
+              setTimeout(() => this.broadcastRemote(), 0)
+            }
+          }
+        }
       }
       const body = await readBody(init?.body)
       const result = await this.route(method, url, body)
@@ -833,7 +917,7 @@ export class DemoEngine {
           const deliver = sock.deliver.bind(sock)
           sock.deliver = (data: unknown) => {
             const f = (typeof data === 'string' ? JSON.parse(data) : data) as { type?: unknown }
-            if (remoteLiveAllowed(remote.role, f) && (remote.pcOnline || f.type === 'remote'))
+            if (remoteLiveAllowed(remote.role, f) && (remote.pcOnline || cloudFrame(remote, f)))
               deliver(data)
           }
         }
@@ -843,12 +927,11 @@ export class DemoEngine {
         }
         this.liveSubs.add(sub)
         sock.open()
-        if (remote)
-          sock.deliver({
-            v: 1,
-            type: 'remote',
-            data: { pc_online: remote.pcOnline, role: remote.role },
-          })
+        if (remote) {
+          sock.deliver(this.remoteFrame())
+          if (!remote.pcOnline && remote.cloud === 'on')
+            sock.deliver({ v: 1, type: 'resync', data: { missed: 0 } })
+        }
         sock.deliver({ v: 1, type: 'hello', data: { seq: this.seq } })
         sock.deliver({ v: 1, type: 'status', data: { connectors: clone(this.connectors) } })
         sock.deliver({ v: 1, type: 'queue', data: this.queue.snapshot() })
@@ -2028,6 +2111,9 @@ export class DemoEngine {
       banned_at: Date.now(),
       everywhere: !!o.everywhere,
       by: 'NovaPlays',
+      // A phone banning through the cloud bot while the PC is off (M10): the PC records it
+      // when it's back, marked so.
+      ...(this.remote && !this.remote.pcOnline ? { offline: true } : {}),
     })
     for (const p of banned) {
       this.ingest(
@@ -3127,4 +3213,16 @@ function validateTimer(t: Partial<Timer>, _list: Timer[], id: string | null): vo
 /** Frees an uploaded file's bytes; other URLs (bundled samples) are left alone. */
 function revokeBlobUrl(url: string): void {
   if (url.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url)
+}
+
+/**
+ * What a phone's socket gets while its PC is off (M10): the relay's own `remote` and
+ * `resync` frames, and with the cloud bot on its chat lines (and the deletions it made).
+ */
+function cloudFrame(remote: DemoRemoteSession, f: { type?: unknown; data?: unknown }): boolean {
+  if (f.type === 'remote') return true
+  if (remote.cloud !== 'on') return false
+  if (f.type === 'resync') return true
+  const k = (f.data as { kind?: { type?: unknown } } | undefined)?.kind?.type
+  return f.type === 'event' && (k === 'chat_message' || k === 'message_deleted')
 }

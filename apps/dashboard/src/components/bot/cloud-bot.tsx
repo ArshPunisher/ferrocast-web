@@ -11,6 +11,7 @@ import {
   CloudCheck,
   Desktop,
   Moon,
+  ShieldCheck,
   Trash,
   WarningCircle,
 } from '@phosphor-icons/react'
@@ -279,6 +280,60 @@ function Notice({
   )
 }
 
+/**
+ * "Let the cloud bot moderate when this PC is off" (M10): signs the bot account in again with
+ * the moderator scopes, so a phone's bans, timeouts and deletes work while the PC is off.
+ */
+function ModerationOptIn({
+  channel: c,
+  phone,
+  busy,
+  showButton,
+  onTurnOn,
+}: {
+  channel: CloudBotChannel
+  phone: boolean
+  busy: boolean
+  showButton: boolean
+  onTurnOn: () => void
+}) {
+  const bot = c.bot?.login ?? 'the bot account'
+  const own = c.bot && c.channel && c.bot.id === c.channel.id
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+      data-testid={`cloud-bot-${c.platform}-moderation`}
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        <ShieldCheck size={20} weight="bold" className="mt-0.5 shrink-0 text-text-3" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-[14.5px] font-semibold text-text">
+            Let the cloud bot moderate when this PC is off
+          </p>
+          <p className="text-[13.5px] text-text-2" translate="no">
+            {c.moderation
+              ? `On. Bans, timeouts and deletes from a phone go out as ${bot}.`
+              : own
+                ? 'Bans, timeouts and deletes from a phone while this PC is off.'
+                : `Bans, timeouts and deletes from a phone while this PC is off. ${bot} must be a moderator in your channel.`}
+          </p>
+        </div>
+      </div>
+      {c.moderation ? (
+        <Badge tone="ok">On</Badge>
+      ) : phone ? (
+        <span className="text-[13px] text-text-3">Turn it on at the PC</span>
+      ) : (
+        showButton && (
+          <Button size="sm" busy={busy} onClick={onTurnOn} className="shrink-0">
+            Turn on
+          </Button>
+        )
+      )}
+    </div>
+  )
+}
+
 function who(c: CloudBotChannel): string {
   if (!c.bot) return 'Connected'
   if (!c.channel) return `${c.bot.login} is signed in`
@@ -325,12 +380,17 @@ function PlatformRow({
   }, [link, reload])
   // A step finished: the old link is spent.
   const step = c?.state ?? 'none'
-  useEffect(() => setLink(null), [step])
+  // A used moderation link goes too once moderation turns on (the step stays 'ready').
+  const modOn = c?.moderation === true
+  useEffect(() => setLink(null), [step, modOn])
 
-  const connect = async (account: 'bot' | 'channel') => {
+  const connect = async (account: 'bot' | 'channel', moderation = false) => {
     setErr(null)
     try {
-      const r = await api.connect(platform, platform === 'twitch' ? { account } : {})
+      const r = await api.connect(platform, {
+        ...(platform === 'twitch' ? { account } : {}),
+        ...(moderation ? { moderation: true } : {}),
+      })
       setLink(r)
     } catch (e) {
       setErr(fail(e))
@@ -427,6 +487,15 @@ function PlatformRow({
         )}
       </div>
 
+      {c?.state === 'ready' && (
+        <ModerationOptIn
+          channel={c}
+          phone={phone}
+          busy={busy === 'moderation'}
+          showButton={!link}
+          onTurnOn={() => void run('moderation', () => connect('bot', true), { quiet: true })}
+        />
+      )}
       {c?.state === 'needs_channel' && !phone && (
         <p className="text-[14px] text-text-2">
           Now sign in with your channel account on Twitch so {c.bot?.login ?? 'the bot'} may speak

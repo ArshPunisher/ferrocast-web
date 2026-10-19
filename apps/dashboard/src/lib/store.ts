@@ -6,6 +6,7 @@ import {
   LiveConnection,
   REMOTE_CLOSE,
   isAlertable,
+  type CloudModeration,
   type ConnectionState,
   type Connectors,
   type FerroEvent,
@@ -22,7 +23,7 @@ import {
   type TtsPending,
 } from '@ferrocast/api'
 import { toast } from '@ferrocast/ui'
-import { clearRemote, type Connection, type RemoteProblem } from './boot'
+import { clearRemote, linkOf, setRemoteLink, type Connection, type RemoteProblem } from './boot'
 import { EMPTY_STUDIO, isStudioFrame, reduceStudio, type StudioLive } from './studio-live'
 
 const CHAT_CAP = 500
@@ -39,6 +40,27 @@ export interface RemoteState {
   name: string
   /** The relay can reach the streaming PC (its tunnel is open). */
   pcOnline: boolean
+  /**
+   * While the PC is off the cloud bot stands in (M10): chat, bans and history still work
+   * (the limited dashboard). Meaningless while `pcOnline`.
+   */
+  cloud?: boolean
+  /** The cloud bot is connected but switched off (the "PC is off" screen offers it to owners). */
+  cloudPaused?: boolean
+  /** While the PC is off: where the cloud bot can ban, time out and delete (the opt-in). */
+  cloudModeration?: CloudModeration
+  /** An owner's phone gets stream history (Pro F7, when the relay has it). */
+  history?: boolean
+}
+
+/** `cloudModeration` as a stable string ("twitch,kick"), for memo keys. */
+export function cloudModerationKey(m: CloudModeration | null | undefined): string {
+  return (['twitch', 'kick'] as const).filter((p) => m?.[p] === true).join(',')
+}
+
+/** The PC is off and the cloud bot stands in: the phone's limited dashboard. */
+export function isLimited(r: RemoteState | null | undefined): boolean {
+  return !!r && !r.pcOnline && r.cloud === true
 }
 
 interface LiveStore {
@@ -300,7 +322,8 @@ export const useLive = create<LiveStore>((set, get) => ({
           break
         case 'resync':
           resyncs += 1
-          void resync()
+          // After this batch is in the store (a `remote` frame before it may change the mode).
+          queueMicrotask(() => void resync())
           break
         case 'poll':
           poll = f.data.poll
@@ -316,7 +339,27 @@ export const useLive = create<LiveStore>((set, get) => ({
           break
         }
         case 'remote':
-          if (remote) remote = { ...remote, pcOnline: f.data.pc_online }
+          if (remote) {
+            const was = remote
+            remote = {
+              ...remote,
+              pcOnline: f.data.pc_online,
+              cloud: f.data.cloud === true,
+              cloudPaused: f.data.cloud_paused === true,
+              cloudModeration: f.data.cloud_moderation ?? {},
+              ...(f.data.history !== undefined ? { history: f.data.history } : {}),
+            }
+            setRemoteLink(linkOf(remote))
+            // The PC came back while the phone showed the cloud's limited dashboard: the
+            // PC's `resync` that follows loads everything (status, queue, TTS, stats, media).
+            if (isLimited(was) && remote.pcOnline) fullReload = true
+            // The cloud bot stopped standing in while the PC is off (switched off): show why.
+            if (isLimited(was) && !remote.pcOnline && !remote.cloud) {
+              const problem: RemoteProblem =
+                f.data.cloud_paused && remote.role === 'owner' ? 'cloud_paused' : 'pc_offline'
+              queueMicrotask(() => remoteEnded(problem))
+            }
+          }
           break
         case 'hello':
           break
@@ -349,6 +392,34 @@ export const useLive = create<LiveStore>((set, get) => ({
 }))
 
 let live: LiveConnection | null = null
+/** Set when a phone's PC comes back while it showed the limited dashboard (see `resync`). */
+let fullReload = false
+
+/**
+ * Everything the full dashboard loads at boot: status, chat, the event log, the alert
+ * queue, TTS waiting and session stats (a phone's media ticket is fetched by its caller). Returns
+ * whether first-time setup is done. Used at boot (`App.tsx`) and when a phone leaves the
+ * limited dashboard because its PC came back.
+ */
+export async function loadFull(conn: Connection): Promise<boolean> {
+  const live = useLive.getState()
+  const status = await conn.client.status()
+  live.setStatus(status)
+  const [chat, page, queue, tts, stats] = await Promise.all([
+    conn.client.chat(200).catch(() => [] as FerroEvent[]),
+    conn.client
+      .events({ limit: 60 })
+      .catch(() => ({ events: [] as FerroEvent[], next_before: null })),
+    conn.client.queue().catch(() => null),
+    conn.client.ttsPending().catch(() => []),
+    conn.client.sessionStats().catch(() => null),
+  ])
+  live.seed({ chat, events: page.events })
+  if (queue) live.setQueue(queue)
+  live.setTts(tts)
+  if (stats) useLive.setState({ viewers: stats.viewers })
+  return status.setup_done
+}
 
 function reloadHref(): string {
   const q = new URLSearchParams(location.search)
@@ -361,6 +432,21 @@ async function resync(): Promise<void> {
   const conn = useLive.getState().conn
   if (!conn) return
   try {
+    if (fullReload && !isLimited(useLive.getState().remote)) {
+      // Back from the cloud's limited dashboard: load what it never had.
+      fullReload = false
+      // Previews need a media ticket (the limited dashboard had none).
+      await Promise.all([loadFull(conn), conn.client.refreshMediaTicket().catch(() => {})])
+      return
+    }
+    if (isLimited(useLive.getState().remote)) {
+      // The PC is off: the cloud's chat replaces what's on screen (the PC's had other ids);
+      // a line that came in while this loaded is kept.
+      const fetched = await conn.client.chat(200)
+      const st = useLive.getState()
+      st.seed({ chat: mergeChat(fetched, st.chat), events: [] })
+      return
+    }
     if (conn.remote?.role === 'mod') {
       // A mod's phone reads chat only (no queue or event log through Ferrocast's servers).
       const [status, chat] = await Promise.all([conn.client.status(), conn.client.chat(200)])
@@ -386,6 +472,17 @@ async function resync(): Promise<void> {
       action: { label: 'Reload', href: reloadHref() },
     })
   }
+}
+
+/**
+ * The cloud's chat as fetched, plus lines already on screen that are newer than its last
+ * one and not in it (they came on the socket while the fetch was answered).
+ */
+export function mergeChat(fetched: FerroEvent[], current: FerroEvent[]): FerroEvent[] {
+  const ids = new Set(fetched.map((e) => e.id))
+  const last = fetched.reduce((m, e) => Math.max(m, e.occurred_at), 0)
+  const extra = current.filter((e) => !ids.has(e.id) && e.occurred_at > last)
+  return [...fetched, ...extra]
 }
 
 let mediaTimer: ReturnType<typeof setInterval> | null = null

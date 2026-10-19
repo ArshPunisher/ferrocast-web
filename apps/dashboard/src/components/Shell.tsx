@@ -28,7 +28,7 @@ import {
   type ProFeature,
 } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
-import { useLive } from '../lib/store'
+import { isLimited, useLive } from '../lib/store'
 import { useClient, useResource } from '../lib/hooks'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
@@ -191,6 +191,31 @@ function NavLink({
   )
 }
 
+/**
+ * The sticky header's real height as `--fc-top` on the page (the phone's strip and the top
+ * bar together, safe area included), so full-height screens like Chat fit the viewport
+ * whatever the strip says or how it wraps.
+ */
+function useHeaderHeight() {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const set = () =>
+      root.style.setProperty('--fc-top', `${Math.ceil(el.getBoundingClientRect().height)}px`)
+    set()
+    if (typeof ResizeObserver !== 'function') return () => root.style.removeProperty('--fc-top')
+    const ro = new ResizeObserver(set)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      root.style.removeProperty('--fc-top')
+    }
+  }, [])
+  return ref
+}
+
 export function Shell({ children, demo }: { children: ReactNode; demo: boolean }) {
   const route = useRoute()
   const [theme, toggleTheme] = useTheme()
@@ -216,13 +241,22 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   // Pro entries show only when their panel would (no nagging): a failed check hides them.
   const pro = useResource((c) => proApi(c).status())
   const proView = pro.error ? null : pro.data
+  // The PC is off and the cloud bot stands in: chat, bans and history only (M10).
+  const limited = isLimited(remote)
   const nav = NAV.filter(
     (i) =>
-      (!i.pro || proPanelState(proView, i.pro) !== 'hidden') &&
+      // A phone can't read Pro's status (it stays on the PC): the relay says whether an
+      // owner's phone gets history (`history` on /r/v1/me and the `remote` frame).
+      (remote
+        ? !i.pro ||
+          (i.route.name === 'history' && remote.role === 'owner' && remote.history === true)
+        : !i.pro || proPanelState(proView, i.pro) !== 'hidden') &&
       // A phone through Ferrocast's servers: only its role's screens (hidden, not greyed).
-      (!remote || remoteScreenAllowed(remote.role, i.route.name)),
+      (!remote || remoteScreenAllowed(remote.role, i.route.name, limited)),
   )
-  const tabs = nav.filter((i) => MOBILE_MAIN.includes(i.route.name))
+  const main = limited ? [...MOBILE_MAIN, 'history'] : MOBILE_MAIN
+  const headerRef = useHeaderHeight()
+  const tabs = nav.filter((i) => main.includes(i.route.name))
   const ThemeIcon = theme === 'dark' ? Sun : Moon
 
   return (
@@ -269,7 +303,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
       <div className="lg:pl-60">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm">
+        <header
+          ref={headerRef}
+          className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm"
+        >
           {remote && <RemoteStrip remote={remote} />}
           <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
             <a href="#/home" className="shrink-0 lg:hidden" aria-label="Ferrocast home">
@@ -294,7 +331,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
             >
               <ThemeIcon size={18} />
             </button>
-            <PanicButton />
+            {!limited && <PanicButton />}
           </div>
         </header>
 
@@ -409,7 +446,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       <Dialog open={more} onClose={() => setMore(false)} title="More" size="sm">
         <nav aria-label="More" className="flex flex-col gap-1 pb-2">
           {nav
-            .filter((i) => !MOBILE_MAIN.includes(i.route.name))
+            .filter((i) => !main.includes(i.route.name))
             .map((i) => (
               <NavLink
                 key={i.label}

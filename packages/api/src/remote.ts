@@ -5,7 +5,7 @@
 // words the audit log is shown in.
 
 import type { FerroClient, FetchLike } from './client'
-import { errorFromResponse, offlineError } from './errors'
+import { ApiError, errorFromResponse, offlineError } from './errors'
 
 export type RemoteRole = 'owner' | 'mod'
 
@@ -26,6 +26,8 @@ export interface RemoteAuditLine {
   action: string
   status: number
   at: number
+  /** Where it was answered: the PC, or the relay itself while the PC was off (M10). */
+  source?: 'pc' | 'cloud'
 }
 
 export interface RemoteTunnel {
@@ -80,6 +82,25 @@ export interface RemoteMe {
   role: RemoteRole
   expires_at: number
   pc_online: boolean
+  /** While the PC is off: the cloud bot stands in (chat, bans and history still work). */
+  cloud?: boolean
+  /** The cloud bot is connected but switched off (an owner can switch it back on). */
+  cloud_paused?: boolean
+  /** Where the cloud bot can ban, time out and delete while the PC is off (the opt-in). */
+  cloud_moderation?: CloudModeration
+  /** Stream history (Pro F7) for this phone: owners, while the relay has the feature. */
+  history?: boolean
+}
+
+/** Per platform: the cloud bot has the moderation opt-in with every scope it needs. */
+export interface CloudModeration {
+  twitch?: boolean
+  kick?: boolean
+}
+
+/** Whether the cloud bot can moderate anywhere (bans "still work"). */
+export function cloudCanModerate(m: CloudModeration | null | undefined): boolean {
+  return m?.twitch === true || m?.kick === true
 }
 
 /** Close codes on a phone's live socket (the relay's `proxy.rs`). */
@@ -186,6 +207,8 @@ export const MOD_ALLOWED: readonly Rule[] = [
 export const OWNER_ALLOWED: readonly Rule[] = [
   ['GET', '/pro/bot'],
   ['PUT', '/pro/bot/enabled'],
+  // Stream history (Pro F7): read it from the phone; the relay answers it while the PC is off.
+  ['GET', '/pro/history'],
   // The weekly email's state (the address only as a hint); changing it stays on the PC.
   ['GET', '/pro/history/email'],
 ]
@@ -267,14 +290,15 @@ export const OWNER_HIDDEN_SETTINGS: readonly string[] = [
   'remote',
 ]
 
-export function remoteScreenAllowed(role: RemoteRole, screen: string): boolean {
+export function remoteScreenAllowed(role: RemoteRole, screen: string, limited = false): boolean {
+  if (limited) return REMOTE_LIMITED_SCREENS[role].includes(screen)
   const s = REMOTE_SCREENS[role]
   return s === 'all-but' ? !OWNER_HIDDEN_SCREENS.includes(screen) : s.includes(screen)
 }
 
 /** Where a phone lands when the screen it asked for isn't its role's. */
-export function remoteHome(role: RemoteRole): string {
-  return role === 'mod' ? 'chat' : 'home'
+export function remoteHome(role: RemoteRole, limited = false): string {
+  return role === 'mod' || limited ? 'chat' : 'home'
 }
 
 // ---------------------------------------------------------------- the audit log, in words
@@ -298,6 +322,7 @@ const ACTIONS: Record<string, string> = {
   'POST /queue/skip': 'Skipped an alert',
   'POST /obs/scene': 'Switched the OBS scene',
   'POST /stream-info/apply': 'Changed the stream title',
+  'PUT /pro/bot/enabled': 'Switched the cloud bot',
 }
 
 /** "Banned someone", or a plain fallback for anything not listed ("Changed: /goals/{id}"). */
@@ -308,6 +333,101 @@ export function auditLabel(line: Pick<RemoteAuditLine, 'action' | 'status'>): st
   if (line.status === 403) return `Tried: ${base.toLowerCase()} (not allowed)`
   if (line.status >= 400) return `${base} (failed)`
   return base
+}
+
+/** "while the PC was off" for a change the relay answered itself (the cloud bot, M10). */
+export function auditSource(line: Pick<RemoteAuditLine, 'source'>): string | null {
+  return line.source === 'cloud' ? 'while the PC was off' : null
+}
+
+// ---------------------------------------------------------------- the PC is off (M10)
+
+/**
+ * What still works while the PC is off and the cloud bot stands in, for this phone (the
+ * relay's `offline_message`): owners also have history; bans only with the moderation
+ * opt-in. Used for the banner and the 503 a call gets.
+ */
+export function remoteOfflineMessage(role: RemoteRole, canBan: boolean): string {
+  if (role === 'owner')
+    return canBan
+      ? 'Your PC is off. Chat, bans and history still work.'
+      : 'Your PC is off. Chat and history still work.'
+  return canBan ? 'Your PC is off. Chat and bans still work.' : 'Your PC is off. Chat still works.'
+}
+
+/** An owner's words with bans (kept for older callers). */
+export const REMOTE_OFFLINE_MESSAGE = remoteOfflineMessage('owner', true)
+
+/**
+ * What the relay answers itself while the PC is off (API.md §9.5, offline): chat and
+ * moderation from the cloud bot (only while it's on), history and the cloud bot's switch.
+ * The role rules still apply on top (`remoteAllowed`).
+ */
+export const REMOTE_OFFLINE_ROUTES: readonly (readonly [
+  method: string,
+  path: string,
+  cloud: boolean,
+])[] = [
+  ['GET', '/chat', true],
+  ['POST', '/mod/delete', true],
+  ['POST', '/mod/timeout', true],
+  ['POST', '/mod/ban', true],
+  ['GET', '/pro/history', false],
+  ['PUT', '/pro/bot/enabled', false],
+]
+
+/** Whether the relay answers `method path` itself while the PC is off (`cloud`: the bot is on). */
+export function remoteOfflineAllowed(method: string, path: string, cloud: boolean): boolean {
+  return REMOTE_OFFLINE_ROUTES.some(
+    ([m, p, needs]) => m === method && p === path && (cloud || !needs),
+  )
+}
+
+/** The 503 a phone gets for a call the relay can't answer while the PC is off. */
+export function pcOfflineError(
+  cloud: boolean,
+  role: RemoteRole = 'owner',
+  canBan = true,
+): ApiError {
+  return cloud
+    ? new ApiError(
+        503,
+        'pc_offline',
+        remoteOfflineMessage(role, canBan),
+        'Settings and everything else need your PC. Turn it on and open Ferrocast.',
+      )
+    : new ApiError(
+        503,
+        'pc_offline',
+        'Your streaming PC is off.',
+        'Turn it on and open Ferrocast. This works again on its own.',
+      )
+}
+
+/**
+ * The client guard for a phone whose PC is off (`FerroClient` `guard`): what the relay
+ * can't answer is refused here, so screens hear "needs your PC" without a request.
+ */
+export function remoteOfflineGuard(
+  cloud: boolean,
+  role: RemoteRole = 'owner',
+  canBan = true,
+): (method: string, path: string) => ApiError | null {
+  return (method, path) =>
+    remoteOfflineAllowed(method, path, cloud) ? null : pcOfflineError(cloud, role, canBan)
+}
+
+/** Screens each role gets while the PC is off and the cloud bot stands in. */
+export const REMOTE_LIMITED_SCREENS: Record<RemoteRole, readonly string[]> = {
+  mod: ['chat', 'moderation'],
+  owner: ['chat', 'moderation', 'history'],
+}
+
+/** The phone's mode: the full dashboard through the PC, or the cloud's limited one. */
+export type RemoteMode = 'full' | 'limited' | 'off'
+
+export function remoteMode(r: { pcOnline: boolean; cloud?: boolean }): RemoteMode {
+  return r.pcOnline ? 'full' : r.cloud ? 'limited' : 'off'
 }
 
 /** Event kinds a mod's live socket gets (the server's `MOD_EVENT_KINDS`). */

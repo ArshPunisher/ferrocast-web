@@ -24,6 +24,7 @@ import { StreamTable } from '../components/history/StreamTable'
 import { WeeklyEmail } from '../components/history/WeeklyEmail'
 import { saveBlob } from '../components/studio/common'
 import { useAction, useClient, useResource } from '../lib/hooks'
+import { useLive } from '../lib/store'
 
 function Section({
   title,
@@ -96,7 +97,7 @@ function Loading() {
   )
 }
 
-function Body({ email }: { email: boolean }) {
+function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
   const client = useClient()
   const [range, setRange] = useState<HistoryRange>('4w')
   // The range is fixed when picked, so a reload asks for the same window.
@@ -126,15 +127,18 @@ function Body({ email }: { email: boolean }) {
           options={HISTORY_RANGES.map((r) => ({ value: r.value, label: r.label }))}
           onChange={setRange}
         />
-        <Button
-          size="sm"
-          icon={<DownloadSimple size={15} />}
-          busy={busy === 'export'}
-          disabled={!!empty}
-          onClick={exportCsv}
-        >
-          Export CSV
-        </Button>
+        {/* Exports stay on the PC (a phone gets the numbers, not the file). */}
+        {!phone && (
+          <Button
+            size="sm"
+            icon={<DownloadSimple size={15} />}
+            busy={busy === 'export'}
+            disabled={!!empty}
+            onClick={exportCsv}
+          >
+            Export CSV
+          </Button>
+        )}
       </div>
       {res.error && !v ? (
         <LoadError error={res.error} onRetry={res.reload} />
@@ -178,7 +182,9 @@ function Body({ email }: { email: boolean }) {
             <StreamTable streams={v.streams} now={now} />
             {v.truncated && (
               <p className="text-[13px] text-text-3">
-                Showing the newest 2,000. Export CSV has them all.
+                {phone
+                  ? 'Showing the newest 2,000. Export CSV on your PC has them all.'
+                  : 'Showing the newest 2,000. Export CSV has them all.'}
               </p>
             )}
           </Section>
@@ -190,6 +196,20 @@ function Body({ email }: { email: boolean }) {
 }
 
 export function History() {
+  // An owner's phone can't read Pro's status (it stays on the PC); the relay answers the
+  // history itself, also while the PC is off (M10).
+  const phone = useLive((s) => s.remote?.role === 'owner')
+  if (phone)
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Stream history" />
+        <Body email={false} phone />
+      </div>
+    )
+  return <DesktopHistory />
+}
+
+function DesktopHistory() {
   const pro = useResource((c) => proApi(c).status())
   const view = pro.error ? null : pro.data
   const state = proPanelState(view, 'history')

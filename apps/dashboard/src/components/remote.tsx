@@ -5,14 +5,16 @@
 // Ferrocast's servers and whether the PC is online, and the gate screens cover "not paired
 // yet" and "PC is off".
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowClockwise,
   CloudCheck,
   CloudSlash,
   Copy,
   DeviceMobile,
+  ChatsCircle,
   PauseCircle,
+  Power,
   ShieldCheck,
   Trash,
 } from '@phosphor-icons/react'
@@ -20,6 +22,10 @@ import {
   REMOTE_LIMITS,
   linkSecondsLeft,
   auditLabel,
+  auditSource,
+  cloudBotApi,
+  cloudCanModerate,
+  remoteOfflineMessage,
   describeError,
   relativeTime,
   remoteApi,
@@ -43,7 +49,7 @@ import {
 import { LoadError } from './Panel'
 import { ProPanel } from './pro/ProPanel'
 import { useAction, useClient, useNow, useResource } from '../lib/hooks'
-import type { RemoteState } from '../lib/store'
+import { isLimited, type RemoteState } from '../lib/store'
 import { checkRemote, type RemoteProblem } from '../lib/boot'
 import { qrEncode } from '../lib/qr'
 
@@ -91,6 +97,7 @@ export function QrCode({
 
 /** The strip on top of a phone's dashboard. */
 export function RemoteStrip({ remote }: { remote: RemoteState }) {
+  if (isLimited(remote)) return <LimitedStrip remote={remote} />
   const on = remote.pcOnline
   const Icon = on ? CloudCheck : CloudSlash
   return (
@@ -115,6 +122,113 @@ export function RemoteStrip({ remote }: { remote: RemoteState }) {
   )
 }
 
+/**
+ * The PC is off and the cloud bot stands in (M10): a clear banner saying what still works.
+ * An owner can pause the cloud bot from here (it's the one thing relay-side to switch).
+ */
+function LimitedStrip({ remote }: { remote: RemoteState }) {
+  const client = useClient()
+  // "Chat, bans and history still work." without the "Your PC is off." the title says.
+  const stillWorks = remoteOfflineMessage(
+    remote.role,
+    cloudCanModerate(remote.cloudModeration),
+  ).replace(/^Your PC is off\. /, '')
+  const [asking, setAsking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const { run, busy } = useAction()
+  const pause = () =>
+    void run(
+      'pause',
+      async () => {
+        setError(null)
+        try {
+          await cloudBotApi(client).setEnabled(false)
+          setAsking(false)
+        } catch (e) {
+          const d = describeError(e)
+          setError(d.hint ? `${d.message} ${d.hint}` : d.message)
+        }
+      },
+      { quiet: true },
+    )
+  return (
+    <>
+      <div
+        data-testid="remote-strip"
+        data-online="no"
+        data-limited="yes"
+        className="flex items-center gap-3 border-b border-warn/30 bg-warn-soft px-4 py-2.5 sm:px-6"
+      >
+        <CloudSlash size={22} weight="bold" className="shrink-0 text-warn" aria-hidden="true" />
+        {/* Only the words are announced (not the Pause button) when the mode changes. */}
+        <p role="status" aria-live="polite" className="min-w-0 flex-1 leading-tight">
+          <span className="block font-display text-[16px] font-bold tracking-tight text-text">
+            Your PC is off
+          </span>
+          <span className="block text-[13.5px] font-medium text-text-2" data-testid="limited-works">
+            {stillWorks}
+          </span>
+        </p>
+        {remote.role === 'mod' ? (
+          <Badge tone="neutral">Mod</Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<PauseCircle size={17} weight="bold" />}
+            onClick={() => setAsking(true)}
+            className="shrink-0"
+          >
+            {/* Icon only on a phone, so what still works fits on one line at 375 px. */}
+            <span className="sr-only sm:not-sr-only">Pause bot</span>
+          </Button>
+        )}
+      </div>
+      <Dialog
+        open={asking}
+        onClose={() => {
+          setAsking(false)
+          setError(null)
+        }}
+        size="sm"
+        title="Pause the cloud bot?"
+        description={`It stops answering in your chat. ${
+          cloudCanModerate(remote.cloudModeration) ? 'Chat and bans here stop' : 'Chat here stops'
+        } too, until you switch it back on or your PC is on.`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAsking(false)}>
+              Keep it on
+            </Button>
+            <Button variant="danger" busy={busy === 'pause'} onClick={pause}>
+              Pause
+            </Button>
+          </>
+        }
+      >
+        {error && (
+          <p role="alert" className="text-[14px] font-semibold text-danger">
+            {error}
+          </p>
+        )}
+      </Dialog>
+    </>
+  )
+}
+
+/** A screen part that needs the PC while it's off: a plain line instead of the controls. */
+export function NeedsPc({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <p
+      className={cx('flex items-center gap-2 text-[14px] font-semibold text-text-2', className)}
+      data-testid="needs-pc"
+    >
+      <Power size={18} weight="bold" className="shrink-0 text-text-3" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
+  )
+}
+
 type GateProblem = RemoteProblem | { pairing: string } | { failed: string; hint: string | null }
 
 const GATE_COPY: Record<RemoteProblem, { title: string; body: string }> = {
@@ -125,6 +239,10 @@ const GATE_COPY: Record<RemoteProblem, { title: string; body: string }> = {
   pc_offline: {
     title: 'Your streaming PC is off.',
     body: 'Turn it on and open Ferrocast. This page comes back by itself.',
+  },
+  cloud_paused: {
+    title: 'Your streaming PC is off.',
+    body: 'The cloud bot is paused. Switch it on for chat and bans here.',
   },
   pro_paused: {
     title: 'Pro is paused',
@@ -144,24 +262,41 @@ const GATE_COPY: Record<RemoteProblem, { title: string; body: string }> = {
 export function RemoteGate({
   problem,
   onRetry,
+  onCloudOn,
   check = checkRemote,
   every = 10_000,
 }: {
   problem: GateProblem
   onRetry: () => void
+  /** The owner switched the cloud bot back on (`cloud_paused`): opens chat and bans. */
+  onCloudOn?: () => Promise<void>
   /** Injected in tests. */
   check?: () => Promise<RemoteProblem | 'online' | null>
   every?: number
 }) {
-  const offline = problem === 'pc_offline'
+  const paused = problem === 'cloud_paused'
+  const offline = problem === 'pc_offline' || paused
+  const [switching, setSwitching] = useState(false)
+  const [switchError, setSwitchError] = useState<{ message: string; hint: string | null } | null>(
+    null,
+  )
+  const cloudOn = () => {
+    if (!onCloudOn) return
+    setSwitching(true)
+    setSwitchError(null)
+    onCloudOn()
+      .catch((e: unknown) => setSwitchError(describeError(e)))
+      .finally(() => setSwitching(false))
+  }
   const [checking, setChecking] = useState(false)
   const latest = useRef({ onRetry, check })
   latest.current = { onRetry, check }
   const look = useRef<() => Promise<void>>(async () => {})
   look.current = async () => {
     const r = await latest.current.check()
-    // Only a change starts the dashboard again; "still off" changes nothing on screen.
-    if (r !== null && r !== 'pc_offline') latest.current.onRetry()
+    // Only a change starts the dashboard again; "still off" changes nothing on screen. The
+    // cloud bot paused (or back from paused) is a change too: the owner gets its switch.
+    if (r !== null && r !== problem) latest.current.onRetry()
   }
   useEffect(() => {
     if (!offline) return
@@ -206,13 +341,31 @@ export function RemoteGate({
             className={tone === 'warn' ? 'text-warn' : 'text-accent-text'}
             aria-hidden="true"
           />
-          <h1 className="font-display text-[32px] leading-[1.1] font-bold tracking-tight">
+          <h1 className="font-display text-[38px] leading-[1.05] font-extrabold tracking-[-0.02em] sm:text-[44px]">
             {title}
           </h1>
-          {body && <p className="text-[17px] leading-relaxed font-medium text-text-2">{body}</p>}
-          {!busy && (
+          {body && <p className="text-[18px] leading-snug font-semibold text-text-2">{body}</p>}
+          {paused && onCloudOn && (
             <Button
               variant="primary"
+              size="lg"
+              icon={<ChatsCircle size={20} weight="bold" />}
+              onClick={cloudOn}
+              busy={switching}
+              className="w-full sm:w-auto"
+            >
+              Switch cloud bot on
+            </Button>
+          )}
+          {switchError && (
+            <p role="alert" className="text-[15px] font-semibold text-danger">
+              {switchError.message}
+              {switchError.hint ? ` ${switchError.hint}` : ''}
+            </p>
+          )}
+          {!busy && (
+            <Button
+              variant={paused && onCloudOn ? 'secondary' : 'primary'}
               size="lg"
               icon={<ArrowClockwise size={20} weight="bold" />}
               onClick={retry}
@@ -423,7 +576,7 @@ function Activity({ view, now }: { view: RemoteView; now: number }) {
           <li key={`${a.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-[14px]">
             <span className="font-medium text-text">{auditLabel(a)}</span>
             <span className="text-text-3">
-              by {a.device_name},{' '}
+              by {a.device_name},{auditSource(a) ? ` ${auditSource(a)},` : ''}{' '}
               {now - a.at < 60_000 ? 'just now' : `${relativeTime(a.at, now)} ago`}
             </span>
           </li>

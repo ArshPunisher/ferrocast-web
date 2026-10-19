@@ -11,10 +11,10 @@ import {
 } from 'react'
 import {
   ApiError,
+  cloudBotApi,
   describeError,
   remoteHome,
   remoteScreenAllowed,
-  type FerroEvent,
 } from '@ferrocast/api'
 import { Button, SparkMark, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
 import {
@@ -25,10 +25,13 @@ import {
   pair,
   pairCodeFromHash,
   pairRemote,
+  savedRemoteClient,
+  linkOf,
+  setRemoteLink,
   type Connection,
   type RemoteProblem,
 } from './lib/boot'
-import { startLive, stopLive, useLive } from './lib/store'
+import { isLimited, loadFull, startLive, stopLive, useLive } from './lib/store'
 import { parseRoute, useRoute } from './lib/router'
 import { Shell } from './components/Shell'
 import { Home } from './screens/Home'
@@ -73,29 +76,24 @@ type Phase =
 async function hydrate(conn: Connection): Promise<boolean> {
   const live = useLive.getState()
   live.setConn(conn)
-  const status = await conn.client.status()
-  live.setStatus(status)
-  const [chat, page, queue, tts, stats] = await Promise.all([
-    conn.client.chat(200).catch(() => [] as FerroEvent[]),
-    conn.client
-      .events({ limit: 60 })
-      .catch(() => ({ events: [] as FerroEvent[], next_before: null })),
-    conn.client.queue().catch(() => null),
-    conn.client.ttsPending().catch(() => []),
-    conn.client.sessionStats().catch(() => null),
-  ])
-  live.seed({ chat, events: page.events })
-  if (queue) live.setQueue(queue)
-  live.setTts(tts)
-  if (stats) useLive.setState({ viewers: stats.viewers })
+  if (isLimited(conn.remote)) {
+    // A phone whose PC is off, the cloud bot standing in (M10): only the cloud's chat loads
+    // (the relay answers no status, queue or events); the screens are chat, bans, history.
+    const chat = await conn.client.chat(200)
+    live.seed({ chat, events: [] })
+    startLive(conn)
+    return true
+  }
+  const done = await loadFull(conn)
   startLive(conn)
-  return status.setup_done
+  return done
 }
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: 'booting' })
   const [setupDone, setSetupDone] = useState(true)
   const conn = useLive((s) => s.conn)
+  const remoteNow = useLive((s) => s.remote)
   const route = useRoute()
 
   // StrictMode (and "Try again") can start a boot while another is still running; only
@@ -115,9 +113,14 @@ export function App() {
       const err = e instanceof ApiError ? e : null
       const d = describeError(e)
       if (err?.status === 401 && c.mode === 'browser') clearSession()
-      if (c.mode === 'remote') {
+      if (c.mode === 'remote' || c.remote) {
         // The PC went off between "online" and loading, or this phone was removed.
-        if (err?.code === 'pc_offline') return setPhase({ kind: 'remote', problem: 'pc_offline' })
+        if (err?.code === 'pc_offline')
+          return setPhase({
+            kind: 'remote',
+            problem:
+              c.remote?.cloudPaused && c.remote.role === 'owner' ? 'cloud_paused' : 'pc_offline',
+          })
         // Removed: forget the token. Pro paused: keep it, it works again once Pro is back.
         if (err?.status === 401) {
           clearRemote()
@@ -246,6 +249,28 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [boot])
 
+  // An owner's phone with the PC off switches the cloud bot back on: chat and bans open.
+  const cloudOn = async () => {
+    const c = useLive.getState().conn
+    const client = c?.client ?? savedRemoteClient('owner')
+    if (!client) throw new ApiError(401, 'unauthorized', 'This phone isn’t paired any more.')
+    await cloudBotApi(client).setEnabled(true)
+    if (c?.mode === 'demo' && c.remote) {
+      // The demo keeps its engine (a boot would start it again from the address).
+      const remote = {
+        ...c.remote,
+        cloud: true,
+        cloudPaused: false,
+        cloudModeration: window.__ferrocastDemo?.cloudModeration() ?? {},
+      }
+      const next = { ...c, remote }
+      setRemoteLink(linkOf(remote))
+      await start(next, ++bootId.current)
+      return
+    }
+    await boot()
+  }
+
   const tryDemo = async () => {
     const id = ++bootId.current
     setPhase({ kind: 'booting' })
@@ -254,7 +279,7 @@ export function App() {
 
   if (phase.kind === 'booting' || (phase.kind === 'ready' && !conn)) return <Splash />
   if (phase.kind === 'remote')
-    return <RemoteGate problem={phase.problem} onRetry={() => void boot()} />
+    return <RemoteGate problem={phase.problem} onRetry={() => void boot()} onCloudOn={cloudOn} />
   if (phase.kind === 'pairing')
     return <Pairing phase={phase} onRetry={() => void boot()} onDemo={() => void tryDemo()} />
   if (phase.kind === 'failed')
@@ -274,10 +299,15 @@ export function App() {
     )
 
   // A phone sees only its role's screens: others open its home instead (hidden, not greyed).
-  const remoteRole = conn?.remote?.role
+  // While its PC is off and the cloud bot stands in, only chat, bans and history (M10).
+  const remoteRole = remoteNow?.role
+  const limited = isLimited(remoteNow)
+  // History is the one Pro screen a phone gets, and only when the relay says so.
+  const phoneHistoryOff =
+    remoteRole !== undefined && route.name === 'history' && !remoteNow?.history
   const shown =
-    remoteRole && !remoteScreenAllowed(remoteRole, route.name)
-      ? parseRoute(`#/${remoteHome(remoteRole)}`)
+    remoteRole && (!remoteScreenAllowed(remoteRole, route.name, limited) || phoneHistoryOff)
+      ? parseRoute(`#/${remoteHome(remoteRole, limited)}`)
       : route
   let screen
   switch (shown.name) {

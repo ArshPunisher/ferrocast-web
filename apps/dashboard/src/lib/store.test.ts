@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
 import { currentToasts } from '@ferrocast/ui'
-import { selectFeed, useLive } from './store'
+import { cloudModerationKey, isLimited, mergeChat, selectFeed, useLive } from './store'
+import type { Connection } from './boot'
 import { href, parseRoute } from './router'
-import { readableColors } from '../components/chat'
+import { lineActions, readableColors } from '../components/chat'
 import { stageScale } from '../components/AlertStage'
 
 const chat = (id: string, text = 'hi'): FerroEvent => ({
@@ -243,5 +244,116 @@ describe('alert preview', () => {
     expect(stageScale(640)).toBe(1)
     expect(stageScale(335)).toBeCloseTo(335 / 640)
     expect(stageScale(0)).toBe(1)
+  })
+})
+
+describe('a phone whose PC is off (M10)', () => {
+  it('is limited only with the cloud bot standing in', () => {
+    expect(isLimited({ role: 'mod', name: 'M', pcOnline: false, cloud: true })).toBe(true)
+    expect(isLimited({ role: 'mod', name: 'M', pcOnline: false, cloud: false })).toBe(false)
+    expect(isLimited({ role: 'owner', name: 'P', pcOnline: true, cloud: true })).toBe(false)
+    expect(isLimited(null)).toBe(false)
+  })
+
+  it('the cloud’s chat replaces the screen, keeping newer lines that came meanwhile', () => {
+    const at = (e: FerroEvent, t: number): FerroEvent => ({ ...e, occurred_at: t })
+    const fetched = [at(chat('c1'), 10), at(chat('c2'), 20)]
+    const current = [at(chat('p9'), 5), at(chat('c2'), 20), at(chat('c3'), 30)]
+    expect(mergeChat(fetched, current).map((e) => e.id)).toEqual(['c1', 'c2', 'c3'])
+    expect(mergeChat([], current).map((e) => e.id)).toEqual(['p9', 'c2', 'c3'])
+  })
+
+  it('a remote frame switches the mode and the store remembers the cloud', () => {
+    useLive.setState({ remote: { role: 'owner', name: 'P', pcOnline: true } })
+    const f = {
+      v: 1,
+      type: 'remote',
+      data: { pc_online: false, role: 'owner', cloud: true, cloud_paused: false },
+    } as LiveFrame
+    useLive.getState().apply([f])
+    expect(isLimited(useLive.getState().remote)).toBe(true)
+  })
+
+  it('remembers where the cloud bot can ban and whether history is shown', () => {
+    useLive.setState({ remote: { role: 'owner', name: 'P', pcOnline: true } })
+    useLive.getState().apply([
+      {
+        v: 1,
+        type: 'remote',
+        data: {
+          pc_online: false,
+          role: 'owner',
+          cloud: true,
+          cloud_paused: false,
+          cloud_moderation: { twitch: true, kick: false },
+          history: true,
+        },
+      } as LiveFrame,
+    ])
+    const r = useLive.getState().remote
+    expect(r?.cloudModeration).toEqual({ twitch: true, kick: false })
+    expect(r?.history).toBe(true)
+    expect(cloudModerationKey(r?.cloudModeration)).toBe('twitch')
+    expect(cloudModerationKey({})).toBe('')
+  })
+
+  it('back from the limited dashboard, the PC’s resync loads everything (TTS, stats, media)', async () => {
+    const calls: string[] = []
+    const call =
+      <T>(name: string, v: T) =>
+      async () => {
+        calls.push(name)
+        return v
+      }
+    const client = {
+      status: call('status', { setup_done: true, connectors: {} }),
+      chat: call('chat', []),
+      events: call('events', { events: [], next_before: null }),
+      queue: call('queue', null),
+      ttsPending: call('tts', []),
+      sessionStats: call('stats', { viewers: 12 }),
+      refreshMediaTicket: call('media', undefined),
+    }
+    useLive.setState({
+      conn: { mode: 'remote', client, socket: () => null } as unknown as Connection,
+      remote: { role: 'owner', name: 'P', pcOnline: false, cloud: true },
+    })
+    useLive
+      .getState()
+      .apply([
+        { v: 1, type: 'remote', data: { pc_online: true, role: 'owner' } } as LiveFrame,
+        { v: 1, type: 'resync', data: { missed: 0 } } as LiveFrame,
+      ])
+    await vi.waitFor(() => expect(calls).toContain('stats'))
+    expect(calls).toEqual(expect.arrayContaining(['status', 'tts', 'stats', 'media', 'queue']))
+    expect(useLive.getState().viewers).toBe(12)
+    // The next resync is the plain one again (no TTS or stats).
+    calls.length = 0
+    useLive.getState().apply([{ v: 1, type: 'resync', data: { missed: 0 } } as LiveFrame])
+    await vi.waitFor(() => expect(calls).toContain('events'))
+    expect(calls).not.toContain('tts')
+  })
+})
+
+describe('what a chat line offers', () => {
+  const line = (source_id: string | null, platform: 'twitch' | 'kick' = 'twitch'): FerroEvent => ({
+    ...chat('c1'),
+    platform,
+    source_id,
+  })
+  it('never offers Delete without the platform’s message id', () => {
+    expect(lineActions({}, line('m1')).remove).toBe(true)
+    expect(lineActions({}, line(null)).remove).toBe(false)
+  })
+  it('with the PC off, only moderation where the cloud bot has the opt-in', () => {
+    const offline = { offline: true, moderates: (p: string) => p === 'twitch' }
+    expect(lineActions(offline, line('m1'))).toEqual({
+      reply: false,
+      card: false,
+      remove: true,
+      timeout: true,
+      ban: true,
+    })
+    expect(Object.values(lineActions(offline, line('m2', 'kick'))).some(Boolean)).toBe(false)
   })
 })

@@ -47,7 +47,7 @@ import {
 } from '@ferrocast/ui'
 import { done, useAction, useClient } from '../lib/hooks'
 import { PointsAdjuster, pointsLabel } from './community/points'
-import { useLive } from '../lib/store'
+import { cloudModerationKey, isLimited, useLive } from '../lib/store'
 import { useHeldActions } from '../lib/held'
 
 const SAFE_IMG =
@@ -178,6 +178,32 @@ export interface ChatActions {
   card: (a: Actor) => void
   /** Touch screens: tap a line to get its actions in a sheet. */
   sheet: (e: FerroEvent) => void
+  /**
+   * The PC is off and the cloud bot moderates (M10): no replies or viewer cards (they need
+   * the PC), and a ban is on the message's platform only.
+   */
+  offline?: boolean
+  /**
+   * Whether bans, timeouts and deletes are offered for a platform. Always while the PC is on;
+   * while it's off only where the cloud bot has the moderation opt-in (`cloud_moderation`).
+   */
+  moderates?: (platform: Platform) => boolean
+}
+
+/** What a chat line offers: deleting needs the platform's own message id (`source_id`). */
+export function lineActions(
+  actions: Pick<ChatActions, 'offline' | 'moderates'>,
+  event: FerroEvent,
+): { reply: boolean; card: boolean; remove: boolean; timeout: boolean; ban: boolean } {
+  const online = !actions.offline
+  const mods = actions.moderates ? actions.moderates(event.platform) : true
+  return {
+    reply: online,
+    card: online,
+    remove: mods && !!event.source_id,
+    timeout: mods,
+    ban: mods,
+  }
 }
 
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
@@ -208,6 +234,7 @@ export const ChatLine = memo(function ChatLine({
     <li
       onClick={(ev) => {
         if (!actions || deleted || mine || !coarse()) return
+        if (!Object.values(lineActions(actions, event)).some(Boolean)) return
         if ((ev.target as HTMLElement).closest('button')) return
         actions.sheet(event)
       }}
@@ -224,7 +251,7 @@ export const ChatLine = memo(function ChatLine({
         <span className="mr-1.5 inline-flex flex-wrap items-center gap-1 align-baseline">
           <button
             type="button"
-            disabled={!actions || a.id === null}
+            disabled={!actions || a.id === null || actions.offline === true}
             onClick={() => actions?.card(a)}
             dir="auto"
             style={
@@ -257,38 +284,7 @@ export const ChatLine = memo(function ChatLine({
           </span>
         )}
       </div>
-      {actions && !deleted && !mine && (
-        <div className="absolute top-0.5 right-1 hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 group-hover:flex group-focus-within:flex">
-          <IconButton
-            size="sm"
-            label="Reply on the same platform"
-            onClick={() => actions.reply(event)}
-          >
-            <ArrowBendUpLeft size={15} />
-          </IconButton>
-          <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
-            <Trash size={15} />
-          </IconButton>
-          <IconButton
-            size="sm"
-            label="Time out for 10 minutes"
-            onClick={() => actions.timeout(event, 600)}
-          >
-            <Clock size={15} />
-          </IconButton>
-          <IconButton
-            size="sm"
-            label="Ban everywhere"
-            variant="danger-ghost"
-            onClick={() => actions.ban(event)}
-          >
-            <Prohibit size={15} />
-          </IconButton>
-          <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
-            <IdentificationCard size={15} />
-          </IconButton>
-        </div>
-      )}
+      {actions && !deleted && !mine && <LineToolbar actions={actions} event={event} />}
       {!dense && (
         <time className="mt-[3px] shrink-0 font-mono text-[12px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
           {relativeTime(event.received_at, now)}
@@ -297,6 +293,55 @@ export const ChatLine = memo(function ChatLine({
     </li>
   )
 })
+
+/** The hover toolbar on a chat line: only what works for this line right now. */
+function LineToolbar({ actions, event }: { actions: ChatActions; event: FerroEvent }) {
+  const can = lineActions(actions, event)
+  if (event.kind.type !== 'chat_message' || !Object.values(can).some(Boolean)) return null
+  const a = event.kind.actor
+  return (
+    <div className="absolute top-0.5 right-1 hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 group-hover:flex group-focus-within:flex">
+      {can.reply && (
+        <IconButton
+          size="sm"
+          label="Reply on the same platform"
+          onClick={() => actions.reply(event)}
+        >
+          <ArrowBendUpLeft size={15} />
+        </IconButton>
+      )}
+      {can.remove && (
+        <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
+          <Trash size={15} />
+        </IconButton>
+      )}
+      {can.timeout && (
+        <IconButton
+          size="sm"
+          label="Time out for 10 minutes"
+          onClick={() => actions.timeout(event, 600)}
+        >
+          <Clock size={15} />
+        </IconButton>
+      )}
+      {can.ban && (
+        <IconButton
+          size="sm"
+          label={actions.offline ? `Ban on ${PLATFORM_LABEL[event.platform]}` : 'Ban everywhere'}
+          variant="danger-ghost"
+          onClick={() => actions.ban(event)}
+        >
+          <Prohibit size={15} />
+        </IconButton>
+      )}
+      {can.card && (
+        <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
+          <IdentificationCard size={15} />
+        </IconButton>
+      )}
+    </div>
+  )
+}
 
 /** The two buttons, used on a held chat line and in the review list. */
 export function HeldButtons({
@@ -581,17 +626,27 @@ export function useChatActions(
   const { approve, remove: drop } = heldActions
   const [banning, setBanning] = useState<FerroEvent | null>(null)
   const [sheet, setSheet] = useState<FerroEvent | null>(null)
+  const remote = useLive((s) => s.remote)
+  const offline = isLimited(remote)
+  // While the PC is off: where the cloud bot can moderate (a string keeps the memo stable).
+  const modKey = offline ? cloudModerationKey(remote?.cloudModeration) : 'all'
   const actions = useMemo<ChatActions>(
     () => ({
+      offline,
+      moderates: (p) => modKey === 'all' || modKey.split(',').includes(p),
       approve,
       drop,
       reply: (e) =>
         e.kind.type === 'chat_message' &&
         setReply({ event: e, name: tameText(e.kind.actor.display_name) }),
-      remove: (e) =>
-        void run('del', () => client.deleteMessage(e.platform, e.source_id ?? e.id), {
+      remove: (e) => {
+        // Only the platform's own id deletes anything (a line without one isn't offered).
+        if (!e.source_id) return
+        const id = e.source_id
+        void run('del', () => client.deleteMessage(e.platform, id), {
           success: 'Message deleted.',
-        }),
+        })
+      },
       timeout: (e) => {
         if (e.kind.type !== 'chat_message' || !e.kind.actor.id) return
         const name = tameText(e.kind.actor.display_name)
@@ -613,7 +668,7 @@ export function useChatActions(
       sheet: (e) => setSheet(e),
     }),
     // Stable across renders so memo(ChatLine) can skip unchanged lines during a chat flood.
-    [client, run, setReply, openCard, approve, drop],
+    [client, run, setReply, openCard, approve, drop, offline, modKey],
   )
   const sheetActor = sheet?.kind.type === 'chat_message' ? sheet.kind.actor : null
   const target = banning?.kind.type === 'chat_message' ? banning.kind.actor : null
@@ -637,47 +692,67 @@ export function useChatActions(
             {(
               [
                 [
+                  'reply',
                   'Reply on ' + PLATFORM_LABEL[sheet.platform],
                   () => actions.reply(sheet),
                   <ArrowBendUpLeft key="r" size={17} />,
                   false,
                 ],
-                ['Delete message', () => actions.remove(sheet), <Trash key="d" size={17} />, false],
                 [
+                  'remove',
+                  'Delete message',
+                  () => actions.remove(sheet),
+                  <Trash key="d" size={17} />,
+                  false,
+                ],
+                [
+                  'timeout',
                   'Time out 10 minutes',
                   () => actions.timeout(sheet, 600),
                   <Clock key="t" size={17} />,
                   false,
                 ],
                 [
+                  'card',
                   'Viewer card',
                   () => actions.card(sheetActor),
                   <IdentificationCard key="c" size={17} />,
                   false,
                 ],
-                ['Ban everywhere', () => actions.ban(sheet), <Prohibit key="b" size={17} />, true],
+                [
+                  'ban',
+                  offline ? `Ban on ${PLATFORM_LABEL[sheet.platform]}` : 'Ban everywhere',
+                  () => actions.ban(sheet),
+                  <Prohibit key="b" size={17} />,
+                  true,
+                ],
               ] as const
-            ).map(([label, fn, icon, danger]) => (
-              <Button
-                key={label}
-                size="lg"
-                variant={danger ? 'danger' : 'secondary'}
-                icon={icon}
-                className="justify-start"
-                onClick={() => {
-                  setSheet(null)
-                  fn()
-                }}
-              >
-                {label}
-              </Button>
-            ))}
+            )
+              // Only what works for this line now (the PC off: no replies or cards; the
+              // cloud bot without the opt-in on this platform: no bans).
+              .filter(([what]) => lineActions(actions, sheet)[what])
+              .map(([, label, fn, icon, danger]) => (
+                <Button
+                  key={label}
+                  size="lg"
+                  variant={danger ? 'danger' : 'secondary'}
+                  icon={icon}
+                  className="justify-start"
+                  onClick={() => {
+                    setSheet(null)
+                    fn()
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
           </div>
         )}
       </Dialog>
       <BanDialog
         actor={target}
         platform={banning?.platform ?? null}
+        onlyHere={offline}
         busy={busy === 'ban'}
         onClose={() => setBanning(null)}
         onBan={(everywhere, reason) => {
@@ -711,24 +786,27 @@ export function useChatActions(
 export function BanDialog({
   actor,
   platform,
+  onlyHere = false,
   busy,
   onClose,
   onBan,
 }: {
   actor: Pick<Actor, 'display_name'> | null
   platform: Platform | null
+  /** The PC is off: the cloud bot bans on this platform only (linked accounts are on the PC). */
+  onlyHere?: boolean
   busy: boolean
   onClose: () => void
   onBan: (everywhere: boolean, reason: string) => void
 }) {
   const [reason, setReason] = useState('')
-  const [everywhere, setEverywhere] = useState(true)
+  const [everywhere, setEverywhere] = useState(!onlyHere)
   useEffect(() => {
     if (actor) {
       setReason('')
-      setEverywhere(true)
+      setEverywhere(!onlyHere)
     }
-  }, [actor])
+  }, [actor, onlyHere])
   return (
     <Dialog
       open={actor !== null}
@@ -750,15 +828,22 @@ export function BanDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <Segmented
-          label="Where"
-          value={everywhere ? 'all' : 'one'}
-          onChange={(v) => setEverywhere(v === 'all')}
-          options={[
-            { value: 'all', label: 'Twitch, YouTube and Kick' },
-            { value: 'one', label: platform ? `Only ${PLATFORM_LABEL[platform]}` : 'Only here' },
-          ]}
-        />
+        {onlyHere ? (
+          <p className="text-[14px] text-text-2">
+            Your PC is off, so this bans on {platform ? PLATFORM_LABEL[platform] : 'this platform'}{' '}
+            only.
+          </p>
+        ) : (
+          <Segmented
+            label="Where"
+            value={everywhere ? 'all' : 'one'}
+            onChange={(v) => setEverywhere(v === 'all')}
+            options={[
+              { value: 'all', label: 'Twitch, YouTube and Kick' },
+              { value: 'one', label: platform ? `Only ${PLATFORM_LABEL[platform]}` : 'Only here' },
+            ]}
+          />
+        )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="ban-reason" className="text-[13.5px] font-semibold text-text">
             Reason <span className="font-normal text-text-2">(optional, only mods see it)</span>

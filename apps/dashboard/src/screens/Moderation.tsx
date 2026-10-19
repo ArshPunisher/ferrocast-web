@@ -28,7 +28,9 @@ import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { HeldPanel } from '../components/held'
 import { usePanic } from '../components/PanicButton'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
-import { useLive } from '../lib/store'
+import { isLimited, useLive } from '../lib/store'
+import { NeedsPc } from '../components/remote'
+import { href } from '../lib/router'
 
 const ACTIONS: { value: FilterAction; label: string }[] = [
   { value: 'delete', label: 'Delete the message' },
@@ -258,6 +260,11 @@ function BanList() {
                     })}
                     {b.by ? ` · by ${b.by}` : ''}
                   </p>
+                  {b.offline && (
+                    <p className="mt-0.5 text-[13px] font-medium text-text-2">
+                      From your phone while the PC was off
+                    </p>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -507,8 +514,40 @@ function FiltersPanel() {
   )
 }
 
+/**
+ * The PC is off and the cloud bot moderates (M10): bans, timeouts and deletes happen on the
+ * chat lines; the ban list, held messages, filters and panic live on the PC.
+ */
+function OfflineModeration() {
+  return (
+    <Panel id="mod-offline" title="Moderate from chat">
+      <div className="flex flex-col items-start gap-4">
+        <p className="max-w-[55ch] text-[16px] leading-relaxed font-medium text-text">
+          Ban, time out and delete messages right on the chat lines. The cloud bot does it for you
+          while your PC is off.
+        </p>
+        <a
+          href={href({ name: 'chat' })}
+          className="fc-press inline-flex h-11 items-center rounded-control bg-btn-primary px-5 text-[15px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
+        >
+          Open chat
+        </a>
+        <NeedsPc>The ban list, held messages, filters and panic need your PC.</NeedsPc>
+      </div>
+    </Panel>
+  )
+}
+
 export function Moderation() {
   const mod = useLive((s) => s.remote?.role === 'mod')
+  const limited = useLive((s) => isLimited(s.remote))
+  if (limited)
+    return (
+      <div>
+        <PageHeader title="Moderation" description="Your PC is off. The cloud bot moderates." />
+        <OfflineModeration />
+      </div>
+    )
   return (
     <div>
       <PageHeader
