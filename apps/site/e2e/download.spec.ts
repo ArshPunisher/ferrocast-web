@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { compareVersions, pickBeta } from '../src/data/releases'
+import { compareVersions, pickBeta, pickStable } from '../src/data/releases'
 
 const GH = 'https://github.com/ArshPunisher/ferrocast'
 const dl = (tag: string, name: string) => ({
@@ -8,40 +8,44 @@ const dl = (tag: string, name: string) => ({
   size: 12_400_000,
 })
 
-test.describe('download page: beta', () => {
-  test('each system card carries its own beta download and install tip', async ({ page }) => {
+test.describe('download page', () => {
+  test('each system card carries its own download and install tip', async ({ page }) => {
     await page.goto('/download/')
-    const beta = page.locator('#beta')
-    // One release line, not a second box of buttons.
-    await expect(beta.getByRole('note')).toContainText(/test build|first beta/)
-    await expect(beta.getByRole('heading', { name: 'Try the beta' })).toHaveCount(0)
+    // Stable first; before the first stable release the beta section takes its place.
+    const stable = (await page.locator('#get').count()) > 0
+    const main = page.locator(stable ? '#get' : '#beta')
+    await expect(main.getByRole('note')).toContainText(
+      stable ? /stable release/ : /test build|first beta/,
+    )
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      stable ? 'Download Ferrocast' : 'Ferrocast is almost here.',
+    )
     for (const os of ['mac', 'windows', 'linux']) {
-      const card = beta.locator(`.os[data-os="${os}"]`)
+      const card = main.locator(`.os[data-os="${os}"]`)
       await expect(card.locator('a[data-beta-download], .soon').first()).toBeVisible()
     }
-    if ((await beta.locator('.os[data-os="mac"] a[data-beta-download]').count()) > 0) {
-      await expect(beta.getByText('right-click Ferrocast')).toBeVisible()
-      await expect(beta.getByText('Run anyway')).toBeVisible()
+    if ((await main.locator('.os[data-os="mac"] a[data-beta-download]').count()) > 0) {
+      await expect(main.getByText('right-click Ferrocast')).toBeVisible()
+      await expect(main.getByText('Run anyway')).toBeVisible()
     }
-    // Either real downloads from the newest prerelease, or (before the first beta) a link
-    // to the releases page. Never a dead button.
-    const downloads = beta.locator('a[data-beta-download]')
+    const downloads = main.locator('a[data-beta-download]')
+    const tag = stable ? String.raw`v\d+\.\d+\.\d+/` : String.raw`v\d+\.\d+\.\d+-`
     if ((await downloads.count()) > 0) {
       for (const href of await downloads.evaluateAll((as) =>
         as.map((a) => a.getAttribute('href')),
       )) {
-        expect(href).toMatch(new RegExp(`^${GH}/releases/download/v\\d+\\.\\d+\\.\\d+-`))
+        expect(href).toMatch(new RegExp(`^${GH}/releases/download/${tag}`))
       }
     } else {
-      await expect(beta.getByText('The first beta isn’t out yet.')).toBeVisible()
-      await expect(beta.locator('a[data-beta-releases]')).toHaveAttribute('href', `${GH}/releases`)
+      await expect(main.getByText('The first beta isn’t out yet.')).toBeVisible()
+      await expect(main.locator('a[data-beta-releases]')).toHaveAttribute('href', `${GH}/releases`)
     }
   })
 
   test('fits a 375 px phone without sideways scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await page.goto('/download/')
-    await expect(page.locator('#beta')).toBeVisible()
+    await expect(page.locator('#get, #beta').first()).toBeVisible()
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     )
@@ -112,5 +116,69 @@ test.describe('picking the beta from GitHub releases', () => {
     ])
     expect(evil?.assets).toEqual([])
     expect(evil?.url).toBe(`${GH}/releases/tag/v0.2.0-beta.1`)
+  })
+})
+
+test.describe('picking the stable release from GitHub releases', () => {
+  test('takes the newest published non-prerelease and its files', () => {
+    const tag = 'v1.0.0'
+    const r = pickStable([
+      { tag_name: 'v1.0.1-beta.1', prerelease: true, draft: false, assets: [] },
+      {
+        tag_name: tag,
+        prerelease: false,
+        draft: false,
+        html_url: `${GH}/releases/tag/${tag}`,
+        published_at: '2026-10-20T12:00:00Z',
+        assets: [
+          dl(tag, 'Ferrocast_1.0.0_universal.dmg'),
+          dl(tag, 'Ferrocast_1.0.0_x64-setup.exe'),
+          dl(tag, 'Ferrocast_1.0.0_amd64.AppImage'),
+          dl(tag, 'Ferrocast_1.0.0_amd64.deb'),
+          dl(tag, 'SHA256SUMS.txt'),
+          dl(tag, 'latest.json'),
+        ],
+      },
+      { tag_name: 'v1.0.0-beta.9', prerelease: true, draft: false, assets: [] },
+    ])
+    expect(r?.version).toBe('1.0.0')
+    expect(r?.assets.map((a) => a.os)).toEqual(['mac', 'windows', 'linux', 'linux'])
+    expect(r?.checksums).toBe(`${GH}/releases/download/${tag}/SHA256SUMS.txt`)
+  })
+
+  test('picks the highest stable, not the first GitHub lists', () => {
+    const r = pickStable(
+      ['v1.0.2', 'v1.0.10', 'v1.0.4'].map((tag_name) => ({
+        tag_name,
+        prerelease: false,
+        draft: false,
+        assets: [],
+      })),
+    )
+    expect(r?.tag).toBe('v1.0.10')
+  })
+
+  test('ignores betas, drafts, foreign links and junk', () => {
+    expect(
+      pickStable([{ tag_name: 'v1.0.0-beta.1', prerelease: true, draft: false, assets: [] }]),
+    ).toBeNull()
+    expect(pickStable([{ tag_name: 'v1.0.0', prerelease: false, draft: true }])).toBeNull()
+    expect(pickStable({ message: 'API rate limit exceeded' })).toBeNull()
+    expect(pickStable([])).toBeNull()
+    expect(pickStable([{ tag_name: 'v1.0.0', prerelease: false, assets: [null] }])?.assets).toEqual(
+      [],
+    )
+    const evil = pickStable([
+      {
+        tag_name: 'v1.0.0',
+        prerelease: false,
+        html_url: 'https://evil.example/x',
+        assets: [
+          { name: 'Ferrocast_universal.dmg', browser_download_url: 'https://evil.example/f.dmg' },
+        ],
+      },
+    ])
+    expect(evil?.assets).toEqual([])
+    expect(evil?.url).toBe(`${GH}/releases/tag/v1.0.0`)
   })
 })

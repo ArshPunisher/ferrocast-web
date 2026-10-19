@@ -56,6 +56,8 @@ const howTo = {
     url: `${url}#${s.id}`,
   })),
 }
+import { latestStable } from '../../data/releases'
+const stable = await latestStable()
 ---
 
 <Base page={page} schema={[howTo]} ogType="article">
@@ -84,10 +86,19 @@ const howTo = {
 
     <article class="prose">
       <p class="callout">
-        <Icon name="hourglass-medium" size={18} />
+        <Icon name={stable ? 'seal-check' : 'hourglass-medium'} size={18} />
         <span>
-          Ferrocast is not released yet. This guide shows how setup works in version 1; the
-          <a href="/download/">download page</a> says when it ships.
+          {stable ? (
+            <>
+              Ferrocast {stable.version} is out. Get it from the{' '}
+              <a href="/download/">download page</a>.
+            </>
+          ) : (
+            <>
+              Ferrocast is not released yet. This guide shows how setup works in version 1; the{' '}
+              <a href="/download/">download page</a> says when it ships.
+            </>
+          )}
         </span>
       </p>
 

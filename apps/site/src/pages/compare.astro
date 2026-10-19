@@ -20,6 +20,8 @@ const markIcon: Record<Mark, { icon: string; sr: string }> = {
   unknown: { icon: 'question', sr: '' },
   info: { icon: 'dot-outline', sr: '' },
 }
+import { latestStable } from '../data/releases'
+const stable = await latestStable()
 ---
 
 <Base
@@ -37,7 +39,7 @@ const markIcon: Record<Mark, { icon: string; sr: string }> = {
       <p class="note">
         <Icon name="info" size={18} />
         <!-- prettier-ignore -->
-        <span>Ferrocast is still being built; its column describes version 1. Corrections are welcome on <a href="/contact/" class="text-link">our contact page</a>.</span>
+        <span>{stable ? `Ferrocast's column describes version ${stable.version}.` : 'Ferrocast is still being built; its column describes version 1.'} Corrections are welcome on <a href="/contact/" class="text-link">our contact page</a>.</span>
       </p>
     </div>
   </section>

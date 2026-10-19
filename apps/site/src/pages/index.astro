@@ -9,9 +9,24 @@ import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
 import { COMPANY } from '../data/company'
 import { organization, softwareApplication } from '../data/schema'
+import { latestStable } from '../data/releases'
+import { SITE } from '../data/company'
+const stable = await latestStable()
 ---
 
-<Base page={PAGES.home} schema={[softwareApplication, organization]}>
+<Base
+  page={PAGES.home}
+  schema={[
+    stable
+      ? {
+          ...softwareApplication,
+          softwareVersion: stable.version,
+          downloadUrl: `${SITE.url}/download/`,
+        }
+      : softwareApplication,
+    organization,
+  ]}
+>
   <script is:inline>
     // every load of the home page plays the opening (On air, Spark drop, Level check). Set
     // before the banner is parsed so its start states hold from the first frame.
@@ -21,7 +36,11 @@ import { organization, softwareApplication } from '../data/schema'
   <section class="hero" data-hero>
     <div class="container hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow">Free and open source · Version 1 in development</p>
+        <p class="eyebrow">
+          {stable
+            ? `Free and open source · Version ${stable.version}`
+            : 'Free and open source · Version 1 in development'}
+        </p>
         <h1 class="display-1">
           <span class="line">Your stream tools,</span>
           <span class="line">on your own PC.</span>

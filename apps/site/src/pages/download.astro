@@ -7,10 +7,21 @@ import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
 import { COMPANY, SITE } from '../data/company'
 import { webPage } from '../data/schema'
-import { latestBeta } from '../data/releases'
+import { betaAhead, latestStable } from '../data/releases'
 
-const page = PAGES.download
-const beta = await latestBeta()
+const stable = await latestStable()
+const ahead = await betaAhead()
+// Stable first. Before the first stable release the beta takes its place, as before.
+const beta = stable ?? ahead
+const isStable = stable !== null
+const extraBeta = isStable ? ahead : null
+const page = isStable
+  ? {
+      ...PAGES.download,
+      title: 'Download Ferrocast for macOS, Windows and Linux',
+      description: `Download Ferrocast ${stable.version} for macOS, Windows and Linux, free and open source, with install notes and checksums. Nothing to sign up for.`,
+    }
+  : PAGES.download
 const mb = (bytes: number) => (bytes > 0 ? `${Math.round(bytes / 1_000_000)} MB` : '')
 const released = beta?.publishedAt
   ? new Date(beta.publishedAt).toLocaleDateString('en-GB', {
@@ -66,25 +77,42 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
     <div class="container head-grid">
       <div class="head-inner">
         <Breadcrumbs page={page} />
-        <h1 class="display-2">Ferrocast is almost here.</h1>
-        <p class="lede">
-          Version 1 is being built in the open. The beta is free on macOS, Windows and Linux, with
-          nothing to sign up for.
-        </p>
+        {isStable ? (
+          <>
+            <h1 class="display-2">Download Ferrocast</h1>
+            <p class="lede">
+              Version <span class="mono">{stable.version}</span> is free on macOS, Windows and
+              Linux, with nothing to sign up for.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 class="display-2">Ferrocast is almost here.</h1>
+            <p class="lede">
+              Version 1 is being built in the open. The beta is free on macOS, Windows and Linux,
+              with nothing to sign up for.
+            </p>
+          </>
+        )}
       </div>
       <Bot />
     </div>
   </section>
 
-  <section class="container" id="beta" aria-labelledby="beta-title">
-    <h2 id="beta-title" class="sr-only">
-      Download the beta
+  <section class="container" id={isStable ? 'get' : 'beta'} aria-labelledby="get-title">
+    <h2 id="get-title" class="sr-only">
+      {isStable ? 'Download Ferrocast' : 'Download the beta'}
     </h2>
     {beta && beta.assets.length > 0 ? (
       <p class="release" role="note">
-        <Icon name="flask" size={18} />
-        <!-- prettier-ignore -->
-        <span><strong>Beta <span class="mono">{beta.version}</span></strong>{released && `, ${released}`}. A test build: keep your old tools for big streams.</span>
+        <Icon name={isStable ? 'seal-check' : 'flask'} size={18} />
+        {isStable ? (
+          // prettier-ignore
+          <span><strong>Version <span class="mono">{beta.version}</span></strong>{released && `, ${released}`}. The stable release, with updates built in.</span>
+        ) : (
+          // prettier-ignore
+          <span><strong>Beta <span class="mono">{beta.version}</span></strong>{released && `, ${released}`}. A test build: keep your old tools for big streams.</span>
+        )}
         <span class="release-links">
           <a href={beta.url} rel="noopener">
             Release notes
@@ -138,7 +166,7 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
                     data-bot-excite
                   >
                     <Icon name="download-simple" size={18} />
-                    Download beta
+                    {isStable ? 'Download' : 'Download beta'}
                     <span class="sr-only">
                       for {p.name} ({short(main.url)})
                     </span>
@@ -172,18 +200,45 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
         )
       })}
     </ul>
-    <p class="after">
-      A beta build offers new betas and stable releases by itself; once you’re on a stable release
-      you get stable updates only. To try a beta, download it here. It never updates while you’re
-      live.
-    </p>
+    {isStable ? (
+      <p class="after">
+        Ferrocast updates itself to new stable releases, and never while you’re live.
+      </p>
+    ) : (
+      <p class="after">
+        A beta build offers new betas and stable releases by itself; once you’re on a stable release
+        you get stable updates only. To try a beta, download it here. It never updates while you’re
+        live.
+      </p>
+    )}
   </section>
+
+  {extraBeta && (
+    <section class="container" id="beta" aria-labelledby="beta-title">
+      <div class="beta-offer">
+        <Icon name="flask" size={22} />
+        <div>
+          <h2 id="beta-title">Want new features first? Get the beta.</h2>
+          <p>
+            Beta <span class="mono">{extraBeta.version}</span> is a test build of what comes next.
+            It offers new betas and stable releases by itself, so keep your old tools for big
+            streams.
+          </p>
+        </div>
+        <a class="btn btn-secondary" href={extraBeta.url} rel="noopener" data-beta-releases>
+          Get the beta
+        </a>
+      </div>
+    </section>
+  )}
 
   <section class="section">
     <div class="container">
       <div class="notify">
         <div class="notify-copy">
-          <h2 class="display-3">Hear the moment it ships.</h2>
+          <h2 class="display-3">
+            {isStable ? 'Hear about every release.' : 'Hear the moment it ships.'}
+          </h2>
           <p class="lede">
             No mailing list needed. Follow releases on GitHub, or add the release feed to any feed
             reader.
@@ -286,6 +341,29 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
     gap: 16px;
     margin-left: auto;
     font-weight: 600;
+  }
+  .beta-offer {
+    display: grid;
+    gap: 12px 20px;
+    margin-top: 40px;
+    padding: 20px 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px dashed var(--fc-line-strong);
+    color: var(--fc-text-2);
+  }
+  .beta-offer > :global(svg) {
+    color: var(--fc-accent-text);
+  }
+  .beta-offer h2 {
+    font-size: 1.125rem;
+    color: var(--fc-text);
+    margin-bottom: 4px;
+  }
+  @media (min-width: 768px) {
+    .beta-offer {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+    }
   }
   .get {
     margin-top: auto;

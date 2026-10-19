@@ -48,7 +48,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Will it run on Mac and Linux?',
-        a: 'Yes. From version 1, Ferrocast will be built for macOS (Apple Silicon and Intel), Windows and Linux, including Wayland and ARM64 Linux.',
+        a: 'Yes. Ferrocast is built for macOS (Apple Silicon and Intel), Windows and Linux, including Wayland and ARM64 Linux.',
       },
       {
         q: 'How do I add Ferrocast to OBS?',
