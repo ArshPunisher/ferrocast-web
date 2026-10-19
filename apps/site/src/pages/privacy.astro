@@ -23,7 +23,11 @@ import { COMPANY } from '../data/company'
     </li>
     <li>
       Kick events (including chat) and tip notices wait on the relay only while your app is offline,
-      for up to 7 days, and are then deleted. Nothing else from your stream is kept.
+      for up to 7 days, and are then deleted. Without Pro, nothing else from your stream is kept.
+    </li>
+    <li>
+      If you use Ferrocast Pro, our relay keeps only what each Pro feature needs to run. It never
+      stores your chat. <a href="#pro-data">Every item is listed below</a>.
     </li>
     <li>Payment details stay with the payment provider. We never see card or UPI details.</li>
     <li>This website has no analytics, no tracking cookies and no third-party scripts.</li>
@@ -85,6 +89,14 @@ import { COMPANY } from '../data/company'
     </li>
   </ul>
   <p>
+    The relay runs on Oracle Cloud in Mumbai, India (region ap-mumbai-1), so the data it keeps is
+    stored in India.
+  </p>
+  <p>
+    If you use Ferrocast Pro, the relay also runs the Pro features you turn on. See
+    <a href="#pro-data">what each Pro feature stores</a>.
+  </p>
+  <p>
     The relay also keeps short technical logs (time, request type, an account id, IP address and
     errors) for up to 14 days to keep the service working and safe. These logs never contain chat
     text, tip messages or a tipper’s contact details.
@@ -116,10 +128,189 @@ import { COMPANY } from '../data/company'
   <p>
     Pro is not on sale yet. When it is, we will need an email address for your account and will
     receive billing records from Razorpay (what you bought, when, and the payment status, not your
-    card or UPI details). Pro features that sync your setup will store a copy of it on our servers,
-    encrypted in transit and at rest, and only while you use them. This policy will be updated with
-    the details before Pro launches.
+    card or UPI details). We also keep which of your PCs share the subscription (up to 3). The
+    details of each Pro feature are below.
   </p>
+  <p>
+    <strong>Billing records are kept for 8 years.</strong> These are your Razorpay subscription id,
+    payment ids, amounts and dates, never your card or UPI details. Indian tax and accounting rules
+    require us to keep them that long. Everything else about Pro follows the deletion rules below.
+  </p>
+
+  <h2 id="pro-data">What each Pro feature stores</h2>
+  <p>
+    Pro features run on the Ferrocast relay, so each one keeps a little data there. We keep only
+    what the feature needs to work, and only while you use it. Nothing here is used for ads or sold.
+  </p>
+  <p>Three rules apply to all of them:</p>
+  <ul>
+    <li>
+      <strong>Chat is never stored.</strong> The cloud bot keeps the last 200 lines of each chat in
+      the relay’s memory only, so your phone can show recent chat. It is gone when the relay
+      restarts, when you switch the bot off and when you disconnect.
+    </li>
+    <li>
+      <strong>Secrets are sealed.</strong> Platform sign-in tokens and email addresses are encrypted
+      with AES-256-GCM before they are saved. Phone sign-ins are kept only as a hash. Backups are
+      encrypted on your PC, and we never have the key.
+    </li>
+    <li>
+      <strong>Deleted 30 days after Pro ends</strong>, unless a shorter time is given below. Many
+      items can be removed sooner from the app, as noted. If you buy Pro again within those 30 days,
+      nothing is deleted: your stream history, backups, cloud bot, Discord setup and weekly email
+      move to the new subscription.
+    </li>
+  </ul>
+
+  <h3>24/7 cloud bot (Twitch and Kick)</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> for each platform, the bot and channel account ids and names, the
+      permissions you granted, the platform’s event subscription ids, when it connected, last
+      replied and went live, and the last error or refused reply. Your bot settings: commands,
+      timers, auto-replies, counter names and values. Counter changes wait until your PC picks them
+      up, for 30 days at most.
+    </li>
+    <li>
+      <strong>Sealed:</strong> the sign-in tokens for the bot account and your channel.
+    </li>
+    <li>
+      <strong>Why:</strong> so the bot can answer in your chat while your PC is off.
+    </li>
+    <li>
+      <strong>How long:</strong> until you disconnect, when the tokens are also revoked at the
+      platform, or 30 days after Pro ends. Message ids for skipping duplicates live in memory only.
+    </li>
+  </ul>
+
+  <h3>Dashboard from anywhere</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> for each phone or mod you add, its id, the PC it belongs to, its role
+      (owner or mod), the name you gave it, a hash of its sign-in and when it was created, last used
+      and expires. An unused invite link is kept as a hash for 10 minutes. A short activity log
+      records each change made from a phone: the kind of action, the result, the device and the
+      time, never what was sent.
+    </li>
+    <li>
+      <strong>Why:</strong> so only devices you approved can reach your dashboard, and you can see
+      what they changed.
+    </li>
+    <li>
+      <strong>Passing through only:</strong> requests and answers between your phone and your PC,
+      and the live feed, are held in the relay’s memory only while they pass through. When your PC
+      is off, bans and timeouts made from a phone wait on the relay until your PC picks them up.
+      Moderation details such as reasons are never stored. A Twitch access token for moderation is
+      held in memory for up to an hour.
+    </li>
+    <li>
+      <strong>How long:</strong> the activity log for 30 days. A device until you remove it, which
+      you can do at any time, and at most 30 days after Pro ends. A phone’s sign-in also stops
+      working after 30 days without use.
+    </li>
+  </ul>
+
+  <h3>Ferrocast voices</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> a count of characters read this month for your subscription, and one
+      total a month for all of Pro together. Never the text, the voice or the audio.
+    </li>
+    <li>
+      <strong>Why:</strong> to keep within the monthly limit. Only lines that passed your own
+      approval and filters are sent. Their text goes to Google Cloud Text-to-Speech to make the
+      audio, which passes back to your PC and is not kept on the relay.
+    </li>
+    <li>
+      <strong>How long:</strong> the monthly counts, deleted with the rest after Pro ends.
+    </li>
+  </ul>
+
+  <h3>Discord bot</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> your server’s id, name and icon, the channel for go-live posts, your
+      go-live switch and message, a random link code and your role rules. The last go-live post per
+      platform, for 30 days. For each role given: the Discord user, role, rule and end date.
+    </li>
+    <li>
+      <strong>Viewers who link Discord:</strong> a viewer can choose to link their Discord account
+      to get a role. We keep only their Discord user id and the ids of the Twitch or YouTube
+      accounts Discord has verified for them. Never their names or email. Discord’s sign-in token is
+      revoked right after we read those ids.
+    </li>
+    <li>
+      <strong>Why:</strong> to post when you go live and give the right roles.
+    </li>
+    <li>
+      <strong>How long:</strong> roles the Ferrocast bot gave are removed when Pro ends, and their
+      records with them. The rest stays until you disconnect the server, or 30 days after Pro ends,
+      when the bot also leaves your server. A viewer can ask us to delete their link at any time.
+    </li>
+  </ul>
+
+  <h3>Cloud backups</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> the encrypted backup file, plus its id, which of your PCs uploaded it,
+      its size, a checksum of the encrypted file, the app version, whether it was automatic or
+      manual, and dates.
+    </li>
+    <li>
+      <strong>Encrypted on your PC:</strong> the backup is locked on your computer before upload.
+      The key stays in your PC’s secure storage, and your recovery key and optional passphrase are
+      never sent to us. We cannot open a backup.
+    </li>
+    <li>
+      <strong>Why:</strong> so you can restore your setup on this PC or another one.
+    </li>
+    <li>
+      <strong>How long:</strong> until you delete it or a newer one replaces it (7 backups at most).
+      Unfinished uploads are deleted after a day. All backups are deleted 30 days after Pro ends,
+      and you can still download them until then.
+    </li>
+  </ul>
+
+  <h3>Stream history and weekly email</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> for each stream and platform, its start and end, title, category, peak
+      and average viewers, and totals for chat lines, chatters, new chatters, follows, subs and
+      tips. A viewer count every 5 minutes while you are live. Only counts: never chat, viewer names
+      or who watched.
+    </li>
+    <li>
+      <strong>Weekly email:</strong> your email address, sealed, plus a keyed fingerprint of it for
+      unsubscribe links. Its status, when it was saved and confirmed, and the confirmation link’s
+      hash and expiry. When each week’s report went, for 120 days. The email is built from your
+      history when it is sent and is not stored. Brevo sends it.
+    </li>
+    <li>
+      <strong>Why:</strong> to show your stream history and send the weekly report you asked for.
+    </li>
+    <li>
+      <strong>How long:</strong> history while you have Pro, up to 400 days, then 30 days after Pro
+      ends. Your email address goes as soon as you stop the emails or unsubscribe, a week after an
+      unconfirmed link expires, or 30 days after Pro ends.
+    </li>
+  </ul>
+
+  <h3>Tip branding and goal</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> your three page colours and your avatar and banner. Images are redrawn
+      from their pixels, so location and camera details are removed. A tip goal’s title, target,
+      currency and dates. For each tip counted toward a goal, only its amount and a one-way
+      fingerprint of the payment, never the tipper’s name, message or payment id.
+    </li>
+    <li>
+      <strong>Why:</strong> to show your tip page and goal in your style.
+    </li>
+    <li>
+      <strong>How long:</strong> a goal’s tip records 60 days after the goal ends. Colours, images
+      and goals 30 days after Pro ends.
+    </li>
+  </ul>
 
   <h2>This website</h2>
   <p>
@@ -135,12 +326,70 @@ import { COMPANY } from '../data/company'
     with the services needed to run what you ask for (hosting for the relay, Razorpay for Pro
     payments) or when the law requires it.
   </p>
-
-  <h2>Your rights</h2>
   <p>
-    You can ask us what data we hold about you, ask us to correct or delete it, and withdraw consent
-    at any time. Users in India have these rights under the Digital Personal Data Protection Act,
-    2023; users in the EU and UK have them under the GDPR. Write to
+    For Pro, these companies process data for us, each only for a feature you turned on, and each
+    receives only what that feature needs:
+  </p>
+  <ul>
+    <li>
+      <strong>Razorpay</strong>: Pro payments and subscriptions.
+    </li>
+    <li>
+      <strong>Google Cloud Text-to-Speech</strong>: the text of lines read by Ferrocast voices.
+    </li>
+    <li>
+      <strong>Brevo</strong>: sends the weekly email and its confirmation email.
+    </li>
+    <li>
+      <strong>Cloudflare</strong>: carries the connection to your phone dashboard.
+    </li>
+    <li>
+      <strong>Discord</strong>: go-live posts and roles in your server.
+    </li>
+    <li>
+      <strong>Twitch and Kick</strong>: the cloud bot’s messages and moderation.
+    </li>
+    <li>
+      <strong>Oracle Cloud</strong>: hosts the relay in Mumbai, India.
+    </li>
+  </ul>
+  <p>
+    Each one handles data under its own privacy policy. The relay’s data is stored in India, but
+    some of these companies may process data in other countries. We do not send data to any country
+    the Government of India has restricted.
+  </p>
+
+  <h2>Why we use your data</h2>
+  <p>
+    We use the data above only to run the features you choose: the relay, tip pages and Pro. For
+    streamers, we rely on your consent, which you give by turning a feature on or subscribing. For
+    Pro, we also use billing records to take payment and to keep the records the law requires.
+  </p>
+  <p>
+    Viewers who send a tip give their name, message and amount themselves, for that tip, and we use
+    them only to deliver it. Kick chat passes through the relay only so it can reach the streamer’s
+    app.
+  </p>
+
+  <h2 id="rights">Your rights</h2>
+  <p>You can, at any time:</p>
+  <ul>
+    <li>ask what data we hold about you and who we shared it with;</li>
+    <li>ask us to correct, complete or update it;</li>
+    <li>ask us to delete it, unless the law makes us keep it (like billing records);</li>
+    <li>
+      withdraw your consent. To stop a feature using your data now, switch it off or disconnect it
+      in the app, delete what it keeps, or email us. Cancelling Pro only stops the next renewal: Pro
+      keeps running until the paid period ends. Withdrawing does not affect what happened before.
+    </li>
+    <li>complain to us (see the grievance officer below);</li>
+    <li>
+      name another person to use these rights for you if you die or can no longer use them yourself.
+    </li>
+  </ul>
+  <p>
+    Users in India have these rights under the Digital Personal Data Protection Act, 2023; users in
+    the EU and UK have them under the GDPR. Write to
     <a href={`mailto:${COMPANY.privacyEmail}`}>{COMPANY.privacyEmail}</a> and we will answer within
     {COMPANY.responseDays} working days and act within 30 days.
   </p>
@@ -149,14 +398,22 @@ import { COMPANY } from '../data/company'
   <p>
     Ferrocast’s hosted services (the relay, tip pages and Pro) are for people aged 18 or over. If
     you are under 18, you may use them only with the consent of a parent or lawful guardian, who
-    agrees to this policy for you. We do not knowingly process a child’s data without that consent.
-    Streaming platforms also set their own age limits.
+    agrees to this policy for you. We do not knowingly process a child’s data without that consent,
+    and we never track children or use their data for ads (we don’t do either for anyone). If we
+    learn we hold a child’s data without a parent’s consent, we delete it. Streaming platforms also
+    set their own age limits.
   </p>
 
   <h2>Grievance officer</h2>
   <p>
     For complaints under Indian law, contact our grievance officer: {COMPANY.grievanceOfficer.name},
-    <a href={`mailto:${COMPANY.grievanceOfficer.email}`}>{COMPANY.grievanceOfficer.email}</a>.
+    <a href={`mailto:${COMPANY.grievanceOfficer.email}`}>{COMPANY.grievanceOfficer.email}</a>,
+    {COMPANY.phone}. We acknowledge every complaint within {COMPANY.grievanceOfficer.ackHours} hours
+    and resolve it within one month.
+  </p>
+  <p>
+    If you are not satisfied with our answer, you can complain to the Data Protection Board of India
+    once it starts taking complaints under the DPDP Act.
   </p>
 
   <h2>Changes</h2>

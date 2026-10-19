@@ -94,6 +94,7 @@ export const FEATURES: Feature[] = [
     notes: [
       'Twitch hides some follows from low-trust accounts on purpose. Ferrocast shows them in the log with that reason, but cannot alert on follows Twitch never sends.',
       'Kick events come through the Ferrocast relay and can arrive a few seconds late.',
+      'The offline voices are free. Ferrocast Pro adds Ferrocast voices, natural Google voices in Hindi and English, read only after your own approval and filters. Pro is not on sale yet.',
     ],
   },
   {
@@ -226,7 +227,7 @@ export const FEATURES: Feature[] = [
     ],
     notes: [
       'Each platform has its own limits, for example YouTube timeouts last at most 24 hours. Ferrocast tells you when a platform refuses an action.',
-      'Smart filters that learn from your bans are planned for Ferrocast Pro. The rule-based filters above are free.',
+      'Every filter above is free. Ferrocast Pro adds moderation from your phone, for you and your mods, which keeps working on Twitch and Kick when your PC is off. Pro is not on sale yet.',
     ],
   },
   {
@@ -276,7 +277,7 @@ export const FEATURES: Feature[] = [
       },
     ],
     notes: [
-      'A 24/7 cloud bot that keeps running when your PC is off is planned for Ferrocast Pro, because it costs money to run.',
+      'Ferrocast Pro adds a 24/7 cloud bot. When your PC is off, it answers your commands, runs your timers and sends your auto-replies on Twitch and Kick, with YouTube coming later. It runs on our servers, so it costs money. Pro is not on sale yet.',
       'Loyalty points, giveaways and song requests are planned for a later version.',
     ],
   },
@@ -329,7 +330,7 @@ export const FEATURES: Feature[] = [
     notes: [
       'Tip pages are hosted by the Ferrocast relay because payment providers need a public address. Payment details stay with the provider.',
       'The payment provider’s checkout and receipt show the name on your provider account. Use a business or brand name there to keep your own name private.',
-      'A custom domain and design for your tip page are planned for Ferrocast Pro.',
+      'The built-in tip page design is free. Ferrocast Pro adds your own colours and images and a tip goal page. Your own tip address is coming later. Pro is not on sale yet.',
     ],
   },
   {
@@ -384,6 +385,7 @@ export const FEATURES: Feature[] = [
     ],
     notes: [
       'Ferrocast is GPL-3.0. The licence will not change, and if we ever close a cloud feature we will give 180 days’ notice and keep export open until the end.',
+      'Ferrocast Pro adds cloud backups, locked on your PC before they leave it, so we can’t read them. Export stays free. Pro is not on sale yet.',
     ],
   },
 ]

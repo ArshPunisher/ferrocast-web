@@ -19,7 +19,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'How is Ferrocast paid for?',
-        a: 'By Ferrocast Pro, an optional subscription that sells only things that cost money to run on servers: a 24/7 cloud bot, sync and a web dashboard, smart filters, premium voices and a custom tip page domain. We do not sell sponsorships, take a cut of tips or show ads.',
+        a: 'By Ferrocast Pro, an optional subscription. It sells only things that run on our servers and cost us money, such as a bot that keeps going when your PC is off. Pro is not on sale yet. We do not sell sponsorships, take a cut of tips or show ads.',
       },
       {
         q: 'Will free features move behind Pro later?',
@@ -61,7 +61,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'Is my data uploaded anywhere?',
-        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens are stored privately on your computer, never in exports or logs. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept.',
+        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens are stored privately on your computer, never in exports or logs. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept. If you use Pro, the relay also keeps what each Pro feature needs to run, and never your chat. The privacy policy lists every item.',
       },
       {
         q: 'How do tips work, and will tippers see my legal name?',
@@ -73,7 +73,32 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Does Ferrocast use AI?',
-        a: 'Not in the free app. Pro will include smart filters that learn from your own bans to catch spam and scam messages. Ferrocast never posts in your chat on its own and never talks to your audience.',
+        a: 'No. Filters follow the rules you set. The only outside model is in Pro: Ferrocast voices are spoken by Google Cloud Text-to-Speech. Ferrocast never posts in your chat on its own and never talks to your audience.',
+      },
+    ],
+  },
+  {
+    title: 'Ferrocast Pro',
+    items: [
+      {
+        q: 'What is in Ferrocast Pro?',
+        a: 'Eight things that run on our servers. A 24/7 cloud bot for Twitch and Kick. Your dashboard on your phone, for you and your mods, with an offline mode: with the cloud bot on, chat, bans and history still work when your PC is off. Ferrocast voices for text-to-speech. A Discord bot that posts when you go live and gives roles to supporters. Cloud backups of your setup. Stream history. An optional weekly email. And tip branding: your own colours and a tip goal. A YouTube cloud bot and your own tip address are coming later.',
+      },
+      {
+        q: 'Can I buy Pro now?',
+        a: 'Not yet. Pro goes on sale after version 1. Everything in the free app works without it.',
+      },
+      {
+        q: 'Will Pro ever post to my audience?',
+        a: 'No. Pro never adds messages to your chat and never puts our name on your overlays or tip page. The cloud bot only sends the commands, timers and replies you wrote, from your own account or your own bot account.',
+      },
+      {
+        q: 'What happens when Pro ends?',
+        a: 'Cloud work stops within the hour and the free app carries on as before. We keep your Pro data for 30 days so you can download your backups and history, then delete it. Buy Pro again within those 30 days and you keep it all. Discord roles the bot gave are removed when Pro ends.',
+      },
+      {
+        q: 'What if you close a cloud feature?',
+        a: 'We give at least 180 days’ notice, keep export open until the end and refund unused prepaid time. The app and the relay are open source under GPL-3.0, so anyone can keep running them.',
       },
     ],
   },

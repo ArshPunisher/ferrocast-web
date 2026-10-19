@@ -2,19 +2,38 @@
 import Legal from '../layouts/Legal.astro'
 import Address from '../components/Address.astro'
 import { PAGES } from '../data/pages'
-import { COMPANY } from '../data/company'
+import { COMPANY, taxNote } from '../data/company'
 ---
 
 <Legal
   page={PAGES.refunds}
   h1="Refund and cancellation policy"
-  intro="The Ferrocast app is free, so this policy only applies to Ferrocast Pro, which is billed in Indian rupees through Razorpay."
+  intro="The Ferrocast app is free, so this policy only applies to Ferrocast Pro subscriptions, which are billed in Indian rupees through Razorpay."
 >
   <h2>Delivery</h2>
   <p>
-    Pro is a digital service. It is activated on your Ferrocast account right after a successful
-    payment, and you get a receipt by email. Nothing is shipped.
+    Pro is a digital service, provided from India. It is activated on your Ferrocast account right
+    after a successful payment, and Razorpay emails you a receipt. Nothing is shipped.
   </p>
+
+  <h2>Price</h2>
+  <p>Prices are in Indian rupees. {taxNote()}</p>
+
+  <h2 id="auto-renew">Automatic renewal</h2>
+  <ul>
+    <li>
+      Pro renews automatically, every month or every year, until you cancel. When you subscribe, you
+      set up a recurring payment (an e-mandate) on your card or UPI through Razorpay.
+    </li>
+    <li>
+      Before each renewal charge, your bank, card issuer or UPI app sends you a notice of the amount
+      and date, as Reserve Bank of India rules require.
+    </li>
+    <li>
+      You can stop renewals in three ways: cancel from your account, email us, or cancel the mandate
+      yourself in your UPI app or with your bank or card issuer.
+    </li>
+  </ul>
 
   <h2>Cancelling</h2>
   <ul>
@@ -55,6 +74,29 @@ import { COMPANY } from '../data/company'
     renew.
   </p>
 
+  <h2>When Pro ends</h2>
+  <p>
+    Pro ends when a cancelled period runs out, when every renewal attempt fails, or when a payment
+    is refunded. A refund ends Pro for the period it covers.
+  </p>
+  <ul>
+    <li>Cloud work, like the cloud bot and Ferrocast voices, stops within the hour.</li>
+    <li>
+      Your Pro data stays for 30 days, so you can still download your cloud backups and stream
+      history. Then we delete it. Billing records are kept for 8 years, as Indian tax law requires.
+    </li>
+    <li>Discord roles the Ferrocast bot gave are removed when Pro ends.</li>
+    <li>
+      If you buy Pro again within those 30 days, you keep your stream history, backups, cloud bot,
+      Discord setup and weekly email.
+    </li>
+    <li>The free app keeps working, with your setup on your computer.</li>
+  </ul>
+  <p>
+    The <a href="/privacy/#pro-data">privacy policy</a> lists what each Pro feature keeps and for
+    how long.
+  </p>
+
   <h2>How refunds are paid</h2>
   <p>
     Refunds go back to the original payment method through Razorpay. Once we approve a refund,
@@ -74,6 +116,10 @@ import { COMPANY } from '../data/company'
     Email <a href={`mailto:${COMPANY.billingEmail}`}>{COMPANY.billingEmail}</a> with the email on
     your account and the Razorpay payment id from your receipt. We reply within{' '}
     {COMPANY.responseDays} working days.
+  </p>
+  <!-- prettier-ignore -->
+  <p>
+    Not happy with the answer? Write to our grievance officer, {COMPANY.grievanceOfficer.name}, at <a href={`mailto:${COMPANY.grievanceOfficer.email}`}>{COMPANY.grievanceOfficer.email}</a>. We acknowledge within {COMPANY.grievanceOfficer.ackHours} hours and resolve within one month.
   </p>
 
   <h2>Contact</h2>

@@ -109,7 +109,7 @@ export const PAGES = {
     path: '/pricing/',
     title: 'Ferrocast pricing: free forever, Pro for cloud extras',
     description:
-      'The Ferrocast app is free forever. Pro adds only things that cost us money to run, like a 24/7 cloud bot and sync, priced for India first and billed in INR.',
+      'The Ferrocast app is free forever. Pro adds only things that cost us money to run, like a 24/7 cloud bot and backups, priced for India first and billed in INR.',
     ogTitle: 'Free stays free',
     ogKicker: 'Pricing',
     crumb: 'Pricing',

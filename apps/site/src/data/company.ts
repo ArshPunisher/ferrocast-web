@@ -41,6 +41,9 @@ export const COMPANY = {
   grievanceOfficer: {
     name: 'Arshdeep Singh',
     email: 'privacy@clearcraftlabs.com',
+    /** E-Commerce Rules 2020: acknowledge within 48 hours, resolve within one month. */
+    ackHours: 48,
+    resolveDays: 30,
   },
   /** Courts for disputes. */
   jurisdiction: 'the courts at Amritsar, Punjab',
@@ -49,8 +52,8 @@ export const COMPANY = {
   github: 'https://github.com/ArshPunisher/ferrocast',
   githubWeb: 'https://github.com/ArshPunisher/ferrocast-web',
   /** Date the legal pages were last changed. */
-  legalUpdated: '17 October 2026',
-  legalUpdatedIso: '2026-10-17',
+  legalUpdated: '19 October 2026',
+  legalUpdatedIso: '2026-10-19',
 } as const
 
 export type CompanyField = keyof typeof COMPANY
@@ -70,6 +73,12 @@ export const SITE = {
 } as const
 
 /** Rupee amount as people write it in India: ₹1,999. */
+/** How tax reads next to a price, from the GSTIN above. */
+export const taxNote = (): string =>
+  COMPANY.gstin
+    ? 'The price includes GST, with no other charges.'
+    : 'We are not registered for GST (our turnover is below the limit), so no GST is added: the price shown is the full price, with no other charges.'
+
 export const inr = (n: number): string =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',

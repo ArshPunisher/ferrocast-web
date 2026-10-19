@@ -141,7 +141,10 @@ export const COMPARE: Group[] = [
       },
       {
         topic: 'Chatbot',
-        ferrocast: c('yes', 'Runs on your PC; 24/7 cloud bot planned for Pro'),
+        ferrocast: c(
+          'yes',
+          'Runs on your PC; Pro (planned) adds a 24/7 cloud bot for Twitch and Kick',
+        ),
         streamelements: c('yes', 'Cloud bot with many modules'),
         streamlabs: c('yes', 'Cloudbot, runs 24/7'),
       },

@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro'
 import Breadcrumbs from '../components/Breadcrumbs.astro'
 import Icon from '../components/Icon.astro'
 import { PAGES } from '../data/pages'
-import { COMPANY, PRO, inr } from '../data/company'
+import { COMPANY, PRO, inr, taxNote } from '../data/company'
 
 const page = PAGES.pricing
 const usd = (amount: string) => `US$${amount}`
@@ -19,11 +19,38 @@ const free = [
   'Export everything, and import from StreamElements and Streamlabs',
 ]
 const pro = [
-  { t: '24/7 cloud bot', d: 'Commands and timers keep running when your PC is off.' },
-  { t: 'Sync and web dashboard', d: 'Your setup on every computer; mods sign in from anywhere.' },
-  { t: 'Smart filters', d: 'Spam and scam detection that learns from your own bans.' },
-  { t: 'Premium voices', d: 'Studio-quality text-to-speech voices that run on our servers.' },
-  { t: 'Custom tip page domain', d: 'Your own domain and design for the tip page.' },
+  {
+    t: '24/7 cloud bot',
+    d: 'Your commands, timers and auto-replies keep answering when your PC is off. Twitch and Kick; YouTube is coming later.',
+  },
+  {
+    t: 'Dashboard from anywhere',
+    d: 'Open your dashboard on your phone and invite your mods. Offline mode: with the cloud bot on, chat, bans and history work even when your PC is off.',
+  },
+  {
+    t: 'Ferrocast voices',
+    d: 'Natural text-to-speech voices from Google, in Hindi and English. 20,000 characters a month.',
+  },
+  {
+    t: 'Discord bot',
+    d: 'Posts when you go live and gives roles to your subs, members and tippers.',
+  },
+  {
+    t: 'Cloud backups',
+    d: 'Your setup backed up on each day it changes, locked on your PC before upload. We can’t read it.',
+  },
+  {
+    t: 'Stream history',
+    d: 'Every stream’s viewers, chat and support in one place.',
+  },
+  {
+    t: 'Weekly email',
+    d: 'An optional report of your week’s streams, sent only in weeks you streamed.',
+  },
+  {
+    t: 'Tip branding and goal',
+    d: 'Your colours and images on the tip page, and a tip goal. Your own tip address is coming later.',
+  },
 ]
 const promises = [
   {
@@ -95,7 +122,7 @@ const promises = [
         </p>
         <p class="muted">
           {`or ${inr(PRO.yearlyInr)} a year. Approx. ${usd(PRO.monthlyUsdApprox)} a month or ${usd(PRO.yearlyUsdApprox)} a year.`}
-          Billed in INR through Razorpay, GST included where applicable.
+          Billed in INR through Razorpay. {taxNote()} Renews automatically until you cancel.
         </p>
       </header>
       <dl class="pro-list">
@@ -152,6 +179,14 @@ const promises = [
           <p>
             No, on Free or Pro. Tips go straight into your own payment account and the provider
             charges its usual fees.
+          </p>
+        </details>
+        <details>
+          <summary>What happens if I stop paying?</summary>
+          <p>
+            Pro’s cloud work stops, and the free app keeps working as before. Most Pro data stays
+            for 30 days so you can download it, then we delete it. If we ever close a cloud feature,
+            you get 180 days’ notice. See the <a href="/terms/#closing">terms</a>.
           </p>
         </details>
         <details>
@@ -218,7 +253,7 @@ const promises = [
   }
   @media (min-width: 900px) {
     .plans {
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     }
   }
   .plan {
@@ -311,6 +346,12 @@ const promises = [
     margin: 0;
     display: grid;
     gap: 16px;
+  }
+  @media (min-width: 1100px) {
+    .pro-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px 28px;
+    }
   }
   .pro-list dt {
     font-weight: 650;
