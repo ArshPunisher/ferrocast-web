@@ -82,7 +82,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'What is in Ferrocast Pro?',
-        a: 'Seven things that run on our servers. A 24/7 cloud bot for Twitch and Kick, with YouTube coming soon. Your dashboard on your phone, for you and your mods; with the cloud bot on, chat, bans and history still work when your PC is off. Ferrocast voices for text-to-speech. A Discord bot that posts when you go live and gives roles to supporters. Cloud backups of your setup. Stream history with an optional weekly email. And tip page upgrades: your own colours, a tip goal and your own address.',
+        a: 'Eight things that run on our servers. A 24/7 cloud bot for Twitch and Kick. Your dashboard on your phone, for you and your mods, with an offline mode: with the cloud bot on, chat, bans and history still work when your PC is off. Ferrocast voices for text-to-speech. A Discord bot that posts when you go live and gives roles to supporters. Cloud backups of your setup. Stream history. An optional weekly email. And tip branding: your own colours and a tip goal. A YouTube cloud bot and your own tip address are coming later.',
       },
       {
         q: 'Can I buy Pro now?',
@@ -94,7 +94,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'What happens when Pro ends?',
-        a: 'Cloud work stops within the hour and the free app carries on as before. We keep your Pro data for 30 days so you can download your backups and history, then delete it. A custom tip address is released after 7 days.',
+        a: 'Cloud work stops within the hour and the free app carries on as before. We keep your Pro data for 30 days so you can download your backups and history, then delete it. Buy Pro again within those 30 days and you keep it all. Discord roles the bot gave are removed when Pro ends.',
       },
       {
         q: 'What if you close a cloud feature?',

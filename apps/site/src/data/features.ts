@@ -277,7 +277,7 @@ export const FEATURES: Feature[] = [
       },
     ],
     notes: [
-      'Ferrocast Pro adds a 24/7 cloud bot. When your PC is off, it answers your commands, runs your timers and sends your auto-replies on Twitch and Kick, with YouTube coming soon. It runs on our servers, so it costs money. Pro is not on sale yet.',
+      'Ferrocast Pro adds a 24/7 cloud bot. When your PC is off, it answers your commands, runs your timers and sends your auto-replies on Twitch and Kick, with YouTube coming later. It runs on our servers, so it costs money. Pro is not on sale yet.',
       'Loyalty points, giveaways and song requests are planned for a later version.',
     ],
   },
@@ -330,7 +330,7 @@ export const FEATURES: Feature[] = [
     notes: [
       'Tip pages are hosted by the Ferrocast relay because payment providers need a public address. Payment details stay with the provider.',
       'The payment provider’s checkout and receipt show the name on your provider account. Use a business or brand name there to keep your own name private.',
-      'The built-in tip page design is free. Ferrocast Pro adds your own colours and images, a tip goal page and your own address, such as tips.yourname.com. Pro is not on sale yet.',
+      'The built-in tip page design is free. Ferrocast Pro adds your own colours and images and a tip goal page. Your own tip address is coming later. Pro is not on sale yet.',
     ],
   },
   {
