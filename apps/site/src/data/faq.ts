@@ -86,7 +86,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Can I buy Pro now?',
-        a: 'Not yet. Pro goes on sale after version 1. Everything in the free app works without it.',
+        a: 'Yes. Buy it in the app under Settings › Pro: ₹199 a month or ₹1,999 a year. Everything in the free app works without it.',
       },
       {
         q: 'Will Pro ever post to my audience?',
