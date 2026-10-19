@@ -1,4 +1,4 @@
-// The newest Ferrocast beta, read from GitHub's public API when the site is built (no
+// The newest Ferrocast stable release and beta, read from GitHub's public API when the site is built (no
 // token, no client-side requests). Anything going wrong (no network, rate limit, no beta
 // published yet) gives `null`, and the download page falls back to the releases page.
 //
@@ -79,6 +79,15 @@ export function compareVersions(a: string, b: string): number {
 
 /** The newest published prerelease in a GitHub API answer, or null. Exported for tests. */
 export function pickBeta(data: unknown): BetaRelease | null {
+  return pick(data, true)
+}
+
+/** The newest published stable (non-prerelease) release in a GitHub API answer, or null. */
+export function pickStable(data: unknown): BetaRelease | null {
+  return pick(data, false)
+}
+
+function pick(data: unknown, prerelease: boolean): BetaRelease | null {
   if (!Array.isArray(data)) return null
   // Highest version, not the first listed: GitHub orders releases by the tagged commit's
   // date, which doesn't follow the version.
@@ -86,14 +95,16 @@ export function pickBeta(data: unknown): BetaRelease | null {
     .filter(
       (x) =>
         x &&
-        x.prerelease === true &&
+        (prerelease ? x.prerelease === true : x.prerelease === false) &&
         x.draft !== true &&
         typeof x.tag_name === 'string' &&
         x.tag_name !== 'beta',
     )
     .sort((a, b) => compareVersions(String(b.tag_name), String(a.tag_name)))[0]
   if (!r || typeof r.tag_name !== 'string') return null
-  const files = Array.isArray(r.assets) ? (r.assets as GhAsset[]) : []
+  const files = Array.isArray(r.assets)
+    ? (r.assets as unknown[]).filter((a): a is GhAsset => typeof a === 'object' && a !== null)
+    : []
   const assets: BetaAsset[] = []
   for (const k of KINDS) {
     const f = files.find(
@@ -123,19 +134,41 @@ export function pickBeta(data: unknown): BetaRelease | null {
   }
 }
 
-let cached: Promise<BetaRelease | null> | undefined
+let cached: Promise<unknown> | undefined
 
-/** The newest beta, fetched once per build. */
-export function latestBeta(): Promise<BetaRelease | null> {
+/** The GitHub API answer, fetched once per build (null when it can't be read). */
+function releases(): Promise<unknown> {
   cached ??= load()
   return cached
 }
 
-async function load(): Promise<BetaRelease | null> {
+/** The newest beta, fetched once per build. */
+export async function latestBeta(): Promise<BetaRelease | null> {
+  return pickBeta(await releases())
+}
+
+/**
+ * The newest stable release, or null before the first one (or when GitHub can't be read).
+ * A stable release with no installers attached yet counts as not out, so the site keeps
+ * offering the beta until there is something to download.
+ */
+export async function latestStable(): Promise<BetaRelease | null> {
+  const stable = pickStable(await releases())
+  return stable && stable.assets.length > 0 ? stable : null
+}
+
+/** The beta only when it is newer than the stable release (or there is no stable yet). */
+export async function betaAhead(): Promise<BetaRelease | null> {
+  const [beta, stable] = await Promise.all([latestBeta(), latestStable()])
+  if (!beta) return null
+  return !stable || compareVersions(beta.tag, stable.tag) > 0 ? beta : null
+}
+
+async function load(): Promise<unknown> {
   const mode = process.env.FERROCAST_RELEASES ?? ''
   if (mode === 'off') return null
   try {
-    if (mode) return pickBeta(JSON.parse(await readFile(mode, 'utf8')))
+    if (mode) return JSON.parse(await readFile(mode, 'utf8'))
     const res = await fetch(API, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ferrocast-site-build' },
       signal: AbortSignal.timeout(8000),
@@ -146,7 +179,7 @@ async function load(): Promise<BetaRelease | null> {
       )
       return null
     }
-    return pickBeta(await res.json())
+    return await res.json()
   } catch (e) {
     console.warn(
       `[releases] couldn't read GitHub releases (${String(e)}); the download page links to the releases page.`,
