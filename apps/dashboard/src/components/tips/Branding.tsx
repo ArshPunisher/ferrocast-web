@@ -30,7 +30,9 @@ const FIELDS: { key: Field; label: string; against: string }[] = [
 ]
 
 export const savedColours = (b: TipBrand | null): TipColours | null =>
-  b?.accent && b.background && b.text ? { accent: b.accent, background: b.background, text: b.text } : null
+  b?.accent && b.background && b.text
+    ? { accent: b.accent, background: b.background, text: b.text }
+    : null
 
 export function Branding({
   brand,
@@ -50,7 +52,8 @@ export function Branding({
   const [raw, setRaw] = useState<Record<Field, string>>(() => ({ ...current }))
   const [busy, setBusy] = useState<'save' | 'reset' | null>(null)
   const { changes } = fixTipColours(current)
-  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(saved ?? DEFAULT_TIP_COLOURS)
+  const dirty =
+    draft !== null && JSON.stringify(draft) !== JSON.stringify(saved ?? DEFAULT_TIP_COLOURS)
 
   const set = (key: Field, value: string) => {
     setRaw((r) => ({ ...r, [key]: value }))
@@ -64,7 +67,11 @@ export function Branding({
       const b = await tipBrandApi(client).saveColours(current)
       onSaved(b)
       onDraft(null)
-      setRaw({ accent: b.accent ?? current.accent, background: b.background ?? current.background, text: b.text ?? current.text })
+      setRaw({
+        accent: b.accent ?? current.accent,
+        background: b.background ?? current.background,
+        text: b.text ?? current.text,
+      })
       toast({
         tone: 'ok',
         message: 'Colours saved. Your tip page uses them now.',
@@ -125,7 +132,9 @@ export function Branding({
               <div className="text-[14px] leading-snug text-text">
                 {changes.map((c) => (
                   <p key={c.field}>
-                    <span className="font-semibold">{c.field === 'text' ? 'Text' : 'Accent'} is hard to read.</span>{' '}
+                    <span className="font-semibold">
+                      {c.field === 'text' ? 'Text' : 'Accent'} is hard to read.
+                    </span>{' '}
                     We’ll use{' '}
                     <span className="inline-flex items-center gap-1 font-mono text-[13px]">
                       <span
@@ -141,7 +150,10 @@ export function Branding({
               </div>
             </div>
           ) : (
-            <p data-testid="contrast-note" className="flex items-center gap-1.5 text-[14px] font-semibold text-ok">
+            <p
+              data-testid="contrast-note"
+              className="flex items-center gap-1.5 text-[14px] font-semibold text-ok"
+            >
               <Check size={15} weight="bold" aria-hidden="true" /> Easy to read
             </p>
           )}
@@ -160,7 +172,12 @@ export function Branding({
           ) : (
             <span />
           )}
-          <Button variant="primary" busy={busy === 'save'} disabled={!dirty} onClick={() => void save()}>
+          <Button
+            variant="primary"
+            busy={busy === 'save'}
+            disabled={!dirty}
+            onClick={() => void save()}
+          >
             Save colours
           </Button>
         </div>
@@ -217,7 +234,12 @@ function ColourField({
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
-      <p className={cx('text-[13px] leading-snug', invalid ? 'font-semibold text-danger' : 'text-text-3')}>
+      <p
+        className={cx(
+          'text-[13px] leading-snug',
+          invalid ? 'font-semibold text-danger' : 'text-text-3',
+        )}
+      >
         {invalid ? 'Use a hex colour like #3461F5.' : (note ?? 'The page behind everything.')}
       </p>
     </div>
@@ -278,10 +300,14 @@ function ImageSlot({
       <div
         className={cx(
           'shrink-0 overflow-hidden border border-line-strong bg-inset',
-          kind === 'avatar' ? 'size-16 rounded-full' : 'aspect-[3/1] h-16 rounded-[10px] max-sm:h-12',
+          kind === 'avatar'
+            ? 'size-16 rounded-full'
+            : 'aspect-[3/1] h-16 rounded-[10px] max-sm:h-12',
         )}
       >
-        {url && <img src={url} alt={`Your ${label.toLowerCase()}`} className="size-full object-cover" />}
+        {url && (
+          <img src={url} alt={`Your ${label.toLowerCase()}`} className="size-full object-cover" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold text-text">{label}</p>
@@ -300,7 +326,12 @@ function ImageSlot({
             <span className="sr-only"> {label.toLowerCase()}</span>
           </Button>
           {url && (
-            <Button size="sm" variant="danger-ghost" busy={busy === 'rm'} onClick={() => void remove()}>
+            <Button
+              size="sm"
+              variant="danger-ghost"
+              busy={busy === 'rm'}
+              onClick={() => void remove()}
+            >
               Remove<span className="sr-only"> {label.toLowerCase()}</span>
             </Button>
           )}
@@ -318,7 +349,11 @@ function ImageSlot({
           }}
         />
         {error && (
-          <p id={errId} role="alert" className="mt-2 flex gap-1.5 text-[13.5px] leading-snug font-semibold text-danger">
+          <p
+            id={errId}
+            role="alert"
+            className="mt-2 flex gap-1.5 text-[13.5px] leading-snug font-semibold text-danger"
+          >
             <Warning size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>
               {error.message}

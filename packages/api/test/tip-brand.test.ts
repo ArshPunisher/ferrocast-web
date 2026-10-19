@@ -28,13 +28,19 @@ describe('tip page colours (mirrors the relay)', () => {
   })
 
   it('lifts unreadable text and accent and says what changed', () => {
-    const { colours, changes } = fixTipColours({ accent: '#2b2b2b', background: '#202020', text: '#555555' })
+    const { colours, changes } = fixTipColours({
+      accent: '#2b2b2b',
+      background: '#202020',
+      text: '#555555',
+    })
     expect(colours.background).toBe('#202020')
     expect(contrastRatio(colours.text, '#202020')).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(colours.accent, '#202020')).toBeGreaterThanOrEqual(3)
     expect(changes.map((c) => c.field)).toEqual(['text', 'accent'])
     expect(changes[0]?.message).toContain('4.5:1')
-    expect(fixTipColours({ accent: '#ffa424', background: '#0a0b0d', text: '#eef0f4' }).changes).toEqual([])
+    expect(
+      fixTipColours({ accent: '#ffa424', background: '#0a0b0d', text: '#eef0f4' }).changes,
+    ).toEqual([])
   })
 
   it('always finds a readable colour', () => {
@@ -66,14 +72,22 @@ describe('goal and image checks', () => {
       target: expect.any(String),
       currency: expect.any(String),
     })
-    expect(tipGoalProblem({ title: 'Mic', target: '500', currency: 'INR', ends: '2000-01-01' }).ends).toBeTruthy()
+    expect(
+      tipGoalProblem({ title: 'Mic', target: '500', currency: 'INR', ends: '2000-01-01' }).ends,
+    ).toBeTruthy()
     expect(tipGoalProblem({ title: 'Mic', target: '500', currency: 'INR', ends: '' })).toEqual({})
   })
 
   it('refuses images before sending', () => {
-    expect(tipImageProblem('avatar', { type: 'image/gif', size: 10 })).toContain('PNG, JPEG or WebP')
-    expect(tipImageProblem('avatar', { type: 'image/png', size: 1_000_001 })).toBe('Avatars can be up to 1 MB.')
-    expect(tipImageProblem('banner', { type: 'image/jpeg', size: 3_000_001 })).toBe('Banners can be up to 3 MB.')
+    expect(tipImageProblem('avatar', { type: 'image/gif', size: 10 })).toContain(
+      'PNG, JPEG or WebP',
+    )
+    expect(tipImageProblem('avatar', { type: 'image/png', size: 1_000_001 })).toBe(
+      'Avatars can be up to 1 MB.',
+    )
+    expect(tipImageProblem('banner', { type: 'image/jpeg', size: 3_000_001 })).toBe(
+      'Banners can be up to 3 MB.',
+    )
     expect(tipImageProblem('banner', { type: 'image/webp', size: 2_000 })).toBeNull()
   })
 })
@@ -92,7 +106,11 @@ describe('the demo engine', () => {
       latencyMs: 0,
       pro: { salesOpen: true, active: pro, features: true },
     })
-    const c = new FerroClient({ base: 'http://127.0.0.1:47820', token: DEMO_TOKEN, fetch: engine.fetch })
+    const c = new FerroClient({
+      base: 'http://127.0.0.1:47820',
+      token: DEMO_TOKEN,
+      fetch: engine.fetch,
+    })
     return { c, api: tipBrandApi(c) }
   }
   const fails = async (p: Promise<unknown>) => {
@@ -115,7 +133,9 @@ describe('the demo engine', () => {
     const b = await api.saveColours({ accent: '#2b2b2b', background: '#202020', text: '#555555' })
     expect(b.changes).toHaveLength(2)
     expect(b.applied).toBe(true)
-    expect((await fails(api.saveColours({ accent: 'red', background: '#000', text: '#fff' }))).status).toBe(400)
+    expect(
+      (await fails(api.saveColours({ accent: 'red', background: '#000', text: '#fff' }))).status,
+    ).toBe(400)
     await api.resetColours()
     expect((await api.brand()).accent).toBeNull()
   })
@@ -138,8 +158,17 @@ describe('the demo engine', () => {
   it('counts tips in the goal currency and takes refunds off', async () => {
     const { c, api } = setup(true)
     await c.deleteTips()
-    expect((await fails(api.saveGoal({ title: 'Mic', target: 100_000, currency: 'INR' }))).code).toBe('no_tip_page')
-    await c.saveTips({ handle: 'novademo', display_name: 'Nova', message: '', razorpay: null, kofi: null, stripe: null })
+    expect(
+      (await fails(api.saveGoal({ title: 'Mic', target: 100_000, currency: 'INR' }))).code,
+    ).toBe('no_tip_page')
+    await c.saveTips({
+      handle: 'novademo',
+      display_name: 'Nova',
+      message: '',
+      razorpay: null,
+      kofi: null,
+      stripe: null,
+    })
     expect((await fails(api.goal())).status).toBe(404)
     const g = await api.saveGoal({ title: 'Mic', target: 100_000, currency: 'inr' })
     expect([g.currency, g.raised]).toEqual(['INR', 0])
@@ -156,7 +185,15 @@ describe('the demo engine', () => {
         origin: 'live',
         kind: {
           type: 'tip',
-          actor: { platform: 'tips', id: 'a', login: null, display_name: 'A', color: null, roles: [], avatar_url: null },
+          actor: {
+            platform: 'tips',
+            id: 'a',
+            login: null,
+            display_name: 'A',
+            color: null,
+            roles: [],
+            avatar_url: null,
+          },
           money: { minor, currency },
           message: null,
           provider: 'razorpay',

@@ -346,7 +346,9 @@ export function ThemeSheet({
                   <span className="block aspect-video animate-pulse bg-surface-3" />
                 )}
               </span>
-              <span className="truncate px-0.5 text-[12.5px] font-semibold text-text">{v.label}</span>
+              <span className="truncate px-0.5 text-[12.5px] font-semibold text-text">
+                {v.label}
+              </span>
             </button>
           ))}
         </div>

@@ -783,8 +783,8 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
           <p className="text-[13.5px] text-text-2">
             {u.channel === 'beta' ? (
               <>
-                <span className="font-semibold text-text">Beta version:</span> updates include
-                betas and stable releases.
+                <span className="font-semibold text-text">Beta version:</span> updates include betas
+                and stable releases.
               </>
             ) : (
               <>

@@ -606,7 +606,12 @@ export function Tips() {
             </ul>
           </Panel>
 
-          <ProPanelView pro={pro.error ? null : pro.data} feature="tip_brand" id="tip-brand" title="Branding">
+          <ProPanelView
+            pro={pro.error ? null : pro.data}
+            feature="tip_brand"
+            id="tip-brand"
+            title="Branding"
+          >
             {brand ? (
               <Branding
                 brand={brand}
@@ -621,7 +626,12 @@ export function Tips() {
             )}
           </ProPanelView>
 
-          <ProPanelView pro={pro.error ? null : pro.data} feature="tip_brand" id="tip-goal" title="Goal page">
+          <ProPanelView
+            pro={pro.error ? null : pro.data}
+            feature="tip_brand"
+            id="tip-goal"
+            title="Goal page"
+          >
             {goalLoaded ? (
               <GoalPage goal={goal} hasPage={live} defaultCurrency="INR" onSaved={setGoal} />
             ) : goalError ? (
@@ -1241,7 +1251,9 @@ function Preview({
           }
         />
         <figcaption className="mt-2 text-[13.5px] text-text-2">
-          {brand ? 'Your public page, in your colours.' : 'Your public page. No ads, trackers or branding.'}
+          {brand
+            ? 'Your public page, in your colours.'
+            : 'Your public page. No ads, trackers or branding.'}
         </figcaption>
       </figure>
     </Panel>

@@ -115,7 +115,9 @@ describe('FerroClient', () => {
     const named = () => json(503, { error: { code: 'mail_unavailable', message: 'Off' } })
     const { fn } = mockFetch([named(), named()])
     const c = new FerroClient({ base: 'http://x', token: 't', fetch: fn, sleep })
-    await expect(c.request('PUT', '/api/v1/pro/history/email', { address: 'a@b.co' })).rejects.toMatchObject({
+    await expect(
+      c.request('PUT', '/api/v1/pro/history/email', { address: 'a@b.co' }),
+    ).rejects.toMatchObject({
       code: 'mail_unavailable',
     })
     await expect(c.overlays()).rejects.toMatchObject({ code: 'mail_unavailable' })

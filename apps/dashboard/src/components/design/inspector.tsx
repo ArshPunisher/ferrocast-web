@@ -1073,7 +1073,9 @@ export function WhenSection({
               >
                 {v.name}
               </button>
-              <span className="shrink-0 text-[12.5px] text-text-3">{conditionText(v.condition)}</span>
+              <span className="shrink-0 text-[12.5px] text-text-3">
+                {conditionText(v.condition)}
+              </span>
               {v.condition !== null && (
                 <IconButton
                   size="sm"

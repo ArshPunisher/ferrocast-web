@@ -82,7 +82,10 @@ export interface ProView {
  * and Pro is active or on sale; one calm line when it's only on sale; the feature when Pro.
  * `feature` left out: only the Pro and sale state count.
  */
-export function proPanelState(p: ProView | null, feature?: ProFeature): 'hidden' | 'locked' | 'open' {
+export function proPanelState(
+  p: ProView | null,
+  feature?: ProFeature,
+): 'hidden' | 'locked' | 'open' {
   if (!p) return 'hidden'
   if (feature && !p.features[feature]) return 'hidden'
   if (p.active) return 'open'

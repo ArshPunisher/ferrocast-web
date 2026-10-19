@@ -66,9 +66,9 @@ describe('ProPanelView', () => {
 
   it('stays hidden for a feature the relay does not have yet', () => {
     expect(panel(view({ active: true }), 'history')).toBe('')
-    expect(panel(view({ active: true, features: { ...NO_PRO_FEATURES, history: true } }), 'history')).toContain(
-      'the feature',
-    )
+    expect(
+      panel(view({ active: true, features: { ...NO_PRO_FEATURES, history: true } }), 'history'),
+    ).toContain('the feature')
   })
 })
 

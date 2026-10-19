@@ -60,7 +60,13 @@ export class DemoTipBrand implements DemoFeature {
 
   private goalView(): TipGoal {
     const g = this.goalState
-    if (!g) throw new HttpError(404, 'not_found', 'There’s no goal yet.', 'Set one up on the Tips screen.')
+    if (!g)
+      throw new HttpError(
+        404,
+        'not_found',
+        'There’s no goal yet.',
+        'Set one up on the Tips screen.',
+      )
     const page = this.tips().page_url
     const raised = [...g.counted.values()].reduce((a, b) => a + b, 0)
     return {
@@ -93,7 +99,12 @@ export class DemoTipBrand implements DemoFeature {
     if (seg[1] === 'brand' && seg.length === 3) {
       const kind = seg[2]
       if (kind !== 'avatar' && kind !== 'banner')
-        throw new HttpError(404, 'not_found', 'There’s no such tip page image.', 'Use avatar or banner.')
+        throw new HttpError(
+          404,
+          'not_found',
+          'There’s no such tip page image.',
+          'Use avatar or banner.',
+        )
       if (method === 'DELETE') {
         this.setImage(kind, null)
         return undefined
@@ -130,7 +141,8 @@ export class DemoTipBrand implements DemoFeature {
 
   private setImage(kind: TipImageKind, url: string | null): void {
     const old = this.images[kind]
-    if (old?.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(old)
+    if (old?.startsWith('blob:') && typeof URL.revokeObjectURL === 'function')
+      URL.revokeObjectURL(old)
     this.images[kind] = url
   }
 
@@ -162,8 +174,7 @@ export class DemoTipBrand implements DemoFeature {
           : null
     if (body.size === 0 || head.length < 4)
       throw new HttpError(422, 'image_unreadable', 'That image couldn’t be read.')
-    if (!real)
-      throw new HttpError(415, 'unsupported_type', `${label} can be PNG, JPEG or WebP.`)
+    if (!real) throw new HttpError(415, 'unsupported_type', `${label} can be PNG, JPEG or WebP.`)
     const url =
       typeof URL.createObjectURL === 'function'
         ? URL.createObjectURL(body)
@@ -176,7 +187,11 @@ export class DemoTipBrand implements DemoFeature {
     const b = requireObj(body)
     const title = typeof b.title === 'string' ? b.title.trim() : ''
     if (Array.from(title).length < 1 || Array.from(title).length > TIP_BRAND_LIMITS.goalTitleMax)
-      throw new HttpError(400, 'invalid', `The goal title must be 1 to ${TIP_BRAND_LIMITS.goalTitleMax} characters.`)
+      throw new HttpError(
+        400,
+        'invalid',
+        `The goal title must be 1 to ${TIP_BRAND_LIMITS.goalTitleMax} characters.`,
+      )
     const currency = typeof b.currency === 'string' ? b.currency.trim().toUpperCase() : ''
     if (!/^[A-Z]{3}$/.test(currency))
       throw new HttpError(400, 'invalid', 'currency must be a 3-letter code like INR or USD.')
@@ -189,7 +204,12 @@ export class DemoTipBrand implements DemoFeature {
       )
     const ends = b.ends_at ?? null
     const now = Date.now()
-    if (ends !== null && (typeof ends !== 'number' || ends <= now || ends > now + TIP_BRAND_LIMITS.goalMaxDays * 86_400_000))
+    if (
+      ends !== null &&
+      (typeof ends !== 'number' ||
+        ends <= now ||
+        ends > now + TIP_BRAND_LIMITS.goalMaxDays * 86_400_000)
+    )
       throw new HttpError(400, 'invalid', 'ends_at must be in the future and within a year.')
     if (!this.tips().page_url)
       throw new HttpError(
@@ -216,7 +236,11 @@ export class DemoTipBrand implements DemoFeature {
     // Only real tips: test alerts and replays never reach the relay's count.
     if (!g || !this.pro() || e.origin !== 'live') return
     const k = e.kind
-    if (k.type === 'tip' && k.status === 'captured' && k.money.currency.toUpperCase() === g.currency) {
+    if (
+      k.type === 'tip' &&
+      k.status === 'captured' &&
+      k.money.currency.toUpperCase() === g.currency
+    ) {
       if (g.ends_at !== null && Date.now() >= g.ends_at) return
       g.counted.set(e.source_id ?? e.id, k.money.minor)
     }
@@ -225,6 +249,10 @@ export class DemoTipBrand implements DemoFeature {
 
   /** Tests: the goal's raw state. */
   snapshot(): { colours: unknown; images: unknown; goal: TipGoal | null } {
-    return { colours: clone(this.colours), images: clone(this.images), goal: this.goalState ? this.goalView() : null }
+    return {
+      colours: clone(this.colours),
+      images: clone(this.images),
+      goal: this.goalState ? this.goalView() : null,
+    }
   }
 }

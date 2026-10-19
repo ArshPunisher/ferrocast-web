@@ -65,7 +65,10 @@ export function TipPreview({
           {name}
         </p>
         {message && (
-          <p className="mx-auto mt-1.5 max-w-[34ch] text-[13.5px] break-words" style={{ color: p.muted }}>
+          <p
+            className="mx-auto mt-1.5 max-w-[34ch] text-[13.5px] break-words"
+            style={{ color: p.muted }}
+          >
             {message}
           </p>
         )}

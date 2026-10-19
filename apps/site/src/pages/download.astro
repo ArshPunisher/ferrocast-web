@@ -77,14 +77,18 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
   </section>
 
   <section class="container" id="beta" aria-labelledby="beta-title">
-    <h2 id="beta-title" class="sr-only">Download the beta</h2>
+    <h2 id="beta-title" class="sr-only">
+      Download the beta
+    </h2>
     {beta && beta.assets.length > 0 ? (
       <p class="release" role="note">
         <Icon name="flask" size={18} />
         <!-- prettier-ignore -->
         <span><strong>Beta <span class="mono">{beta.version}</span></strong>{released && `, ${released}`}. A test build: keep your old tools for big streams.</span>
         <span class="release-links">
-          <a href={beta.url} rel="noopener">Release notes</a>
+          <a href={beta.url} rel="noopener">
+            Release notes
+          </a>
           {beta.checksums && (
             <a href={beta.checksums} rel="noopener">
               Checksums
@@ -135,9 +139,13 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
                   >
                     <Icon name="download-simple" size={18} />
                     Download beta
-                    <span class="sr-only">for {p.name} ({short(main.url)})</span>
+                    <span class="sr-only">
+                      for {p.name} ({short(main.url)})
+                    </span>
                   </a>
-                  <span class="size">{[short(main.url), mb(main.size)].filter(Boolean).join(', ')}</span>
+                  <span class="size">
+                    {[short(main.url), mb(main.size)].filter(Boolean).join(', ')}
+                  </span>
                 </div>
                 {more.length > 0 && (
                   <p class="more">
@@ -165,9 +173,9 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
       })}
     </ul>
     <p class="after">
-      A beta build offers new betas and stable releases by itself; once you’re on a stable
-      release you get stable updates only. To try a beta, download it here. It never updates
-      while you’re live.
+      A beta build offers new betas and stable releases by itself; once you’re on a stable release
+      you get stable updates only. To try a beta, download it here. It never updates while you’re
+      live.
     </p>
   </section>
 

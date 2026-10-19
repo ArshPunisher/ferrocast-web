@@ -21,7 +21,14 @@ type Props = {
 }
 
 /** The panel for a known status (`null` while it loads: nothing shows). */
-export function ProPanelView({ pro, feature, title, id, className, children }: Props & { pro: ProView | null }) {
+export function ProPanelView({
+  pro,
+  feature,
+  title,
+  id,
+  className,
+  children,
+}: Props & { pro: ProView | null }) {
   const state = proPanelState(pro, feature)
   if (state === 'hidden') return null
   return (

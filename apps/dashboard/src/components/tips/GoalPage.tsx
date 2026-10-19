@@ -30,10 +30,16 @@ function draftOf(g: TipGoal | null, currency: string): Draft {
   if (!g) return { title: '', target: '', currency, ends: '' }
   const d = g.digits
   const major = d ? (g.target / 10 ** d).toFixed(d).replace(/\.0+$/, '') : String(g.target)
-  return { title: g.title, target: major, currency: g.currency, ends: g.ends_at ? day(g.ends_at) : '' }
+  return {
+    title: g.title,
+    target: major,
+    currency: g.currency,
+    ends: g.ends_at ? day(g.ends_at) : '',
+  }
 }
 
-export const goalPct = (g: TipGoal) => (g.target > 0 ? Math.min(100, Math.floor((g.raised * 100) / g.target)) : 0)
+export const goalPct = (g: TipGoal) =>
+  g.target > 0 ? Math.min(100, Math.floor((g.raised * 100) / g.target)) : 0
 
 export function GoalPage({
   goal,
@@ -100,7 +106,11 @@ export function GoalPage({
   }
 
   if (!hasPage)
-    return <p className="text-[15px] text-text-2">Create your tip page first. The goal page sits next to it.</p>
+    return (
+      <p className="text-[15px] text-text-2">
+        Create your tip page first. The goal page sits next to it.
+      </p>
+    )
 
   const currencies = CURRENCIES.includes(d.currency as (typeof CURRENCIES)[number])
     ? CURRENCIES
@@ -118,7 +128,11 @@ export function GoalPage({
           void save()
         }}
       >
-        <Field label="Goal" error={show('title')} hint={`${Array.from(d.title).length}/${TIP_BRAND_LIMITS.goalTitleMax}`}>
+        <Field
+          label="Goal"
+          error={show('title')}
+          hint={`${Array.from(d.title).length}/${TIP_BRAND_LIMITS.goalTitleMax}`}
+        >
           {(p) => (
             <Input
               {...p}
@@ -145,7 +159,12 @@ export function GoalPage({
           </Field>
           <Field label="Currency" error={show('currency')}>
             {(p) => (
-              <Select {...p} name="goal_currency" value={d.currency} onChange={(e) => setD({ ...d, currency: e.target.value })}>
+              <Select
+                {...p}
+                name="goal_currency"
+                value={d.currency}
+                onChange={(e) => setD({ ...d, currency: e.target.value })}
+              >
                 {currencies.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -230,7 +249,11 @@ function Progress({ goal }: { goal: TipGoal }) {
       </div>
       <p className="mt-2 text-[13.5px] text-text-2">
         {goal.tips === 1 ? '1 tip' : `${goal.tips} tips`}
-        {goal.ended ? ', ended' : goal.ends_at ? `, ends ${new Date(goal.ends_at).toLocaleDateString()}` : ''}
+        {goal.ended
+          ? ', ended'
+          : goal.ends_at
+            ? `, ends ${new Date(goal.ends_at).toLocaleDateString()}`
+            : ''}
       </p>
       {goal.page_url && (
         <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
@@ -239,7 +262,9 @@ function Progress({ goal }: { goal: TipGoal }) {
           </code>
           <div className="flex flex-wrap gap-2">
             <Copy text={goal.page_url} label="Copy link" what="Goal link" />
-            {goal.overlay_url && <Copy text={goal.overlay_url} label="Copy for OBS" what="OBS link" />}
+            {goal.overlay_url && (
+              <Copy text={goal.overlay_url} label="Copy for OBS" what="OBS link" />
+            )}
             <a
               href={goal.page_url}
               target="_blank"
@@ -265,7 +290,13 @@ function Copy({ text, label, what }: { text: string; label: string; what: string
       icon={copied ? <Check size={15} weight="bold" /> : <CopySimple size={15} />}
       onClick={() =>
         void copyText(text).then((ok) =>
-          ok ? flash() : toast({ tone: 'error', message: `Couldn’t copy the ${what.toLowerCase()}.`, hint: 'Select it and copy it by hand.' }),
+          ok
+            ? flash()
+            : toast({
+                tone: 'error',
+                message: `Couldn’t copy the ${what.toLowerCase()}.`,
+                hint: 'Select it and copy it by hand.',
+              }),
         )
       }
     >

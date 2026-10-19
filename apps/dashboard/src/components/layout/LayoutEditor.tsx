@@ -1082,9 +1082,7 @@ export function LayoutEditor({
     <div
       className={cx(
         'grid grid-cols-1 gap-4',
-        rail
-          ? 'xl:grid-cols-[148px_minmax(0,1fr)_310px]'
-          : 'xl:grid-cols-[minmax(0,1fr)_320px]',
+        rail ? 'xl:grid-cols-[148px_minmax(0,1fr)_310px]' : 'xl:grid-cols-[minmax(0,1fr)_320px]',
       )}
     >
       {rail}
@@ -1104,7 +1102,11 @@ export function LayoutEditor({
         <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Canvas">
           {!readOnly && (
             <>
-              <Button size="sm" icon={<TextT size={15} />} onClick={() => add(newLayer('text', layout))}>
+              <Button
+                size="sm"
+                icon={<TextT size={15} />}
+                onClick={() => add(newLayer('text', layout))}
+              >
                 Text
               </Button>
               <Button size="sm" icon={<ImageSquare size={15} />} onClick={addPicture}>
@@ -1294,7 +1296,9 @@ export function LayoutEditor({
                 />
               </div>
             )}
-            <div className="border-t border-line pt-4 [&_ul]:max-h-72 [&_ul]:overflow-y-auto">{layers}</div>
+            <div className="border-t border-line pt-4 [&_ul]:max-h-72 [&_ul]:overflow-y-auto">
+              {layers}
+            </div>
           </div>
         ) : (
           <>

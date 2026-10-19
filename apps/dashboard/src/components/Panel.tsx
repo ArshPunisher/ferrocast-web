@@ -76,7 +76,9 @@ export function PageHeader({
           {title}
         </h1>
         {description && (
-          <p className="mt-1 max-w-[70ch] text-[15px] leading-relaxed text-pretty text-text-2">{description}</p>
+          <p className="mt-1 max-w-[70ch] text-[15px] leading-relaxed text-pretty text-text-2">
+            {description}
+          </p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

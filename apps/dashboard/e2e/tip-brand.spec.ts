@@ -22,12 +22,16 @@ test.describe('tips: Pro branding and goal', () => {
     await expect(brand(page)).toHaveCount(0)
     await expect(goal(page)).toHaveCount(0)
     await open(page, 'tips', 'autoplay=0&latency=0&pro=open&pro_features=on')
-    await expect(brand(page).getByTestId('pro-line')).toContainText('Runs on Ferrocast’s servers, part of Pro.')
+    await expect(brand(page).getByTestId('pro-line')).toContainText(
+      'Runs on Ferrocast’s servers, part of Pro.',
+    )
     await expect(goal(page).getByTestId('pro-line')).toBeVisible()
     await expect(brand(page).getByLabel('Background')).toHaveCount(0)
   })
 
-  test('colours: a live contrast note, the preview follows, and Save keeps them', async ({ page }) => {
+  test('colours: a live contrast note, the preview follows, and Save keeps them', async ({
+    page,
+  }) => {
     await open(page, 'tips', PRO)
     const b = brand(page)
     await expect(b.getByRole('heading', { name: 'Colours' })).toBeVisible()
@@ -47,17 +51,33 @@ test.describe('tips: Pro branding and goal', () => {
     await expect(b.getByLabel('Background', { exact: true })).toHaveValue('#0c0e12')
   })
 
-  test('pictures: wrong type and too big are refused with the reason, a PNG shows in the preview', async ({ page }) => {
+  test('pictures: wrong type and too big are refused with the reason, a PNG shows in the preview', async ({
+    page,
+  }) => {
     await open(page, 'tips', PRO)
     const b = brand(page)
-    await b.getByTestId('file-avatar').setInputFiles({ name: 'a.gif', mimeType: 'image/gif', buffer: Buffer.from('GIF89a') })
-    await expect(b.getByTestId('slot-avatar').getByRole('alert')).toHaveText(/Avatars can be PNG, JPEG or WebP\./)
-    await b.getByTestId('file-avatar').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: Buffer.alloc(1_000_001) })
-    await expect(b.getByTestId('slot-avatar').getByRole('alert')).toHaveText('Avatars can be up to 1 MB.')
+    await b
+      .getByTestId('file-avatar')
+      .setInputFiles({ name: 'a.gif', mimeType: 'image/gif', buffer: Buffer.from('GIF89a') })
+    await expect(b.getByTestId('slot-avatar').getByRole('alert')).toHaveText(
+      /Avatars can be PNG, JPEG or WebP\./,
+    )
+    await b
+      .getByTestId('file-avatar')
+      .setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: Buffer.alloc(1_000_001) })
+    await expect(b.getByTestId('slot-avatar').getByRole('alert')).toHaveText(
+      'Avatars can be up to 1 MB.',
+    )
     // The engine's answer reaches the slot too (415 from the relay's own check).
-    await b.getByTestId('file-banner').setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: Buffer.from('not a png') })
-    await expect(b.getByTestId('slot-banner').getByRole('alert')).toContainText('Banners can be PNG, JPEG or WebP.')
-    await b.getByTestId('file-avatar').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG })
+    await b
+      .getByTestId('file-banner')
+      .setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: Buffer.from('not a png') })
+    await expect(b.getByTestId('slot-banner').getByRole('alert')).toContainText(
+      'Banners can be PNG, JPEG or WebP.',
+    )
+    await b
+      .getByTestId('file-avatar')
+      .setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG })
     await expect(page.getByText('Avatar saved.')).toBeVisible()
     await expect(b.getByTestId('slot-avatar').getByRole('alert')).toHaveCount(0)
     await expect(preview(page).locator('img')).toHaveCount(1)
@@ -75,8 +95,12 @@ test.describe('tips: Pro branding and goal', () => {
       message: 'Banners can be up to 3 MB.',
       hint: 'Make the file smaller (or export it as JPEG) and try again.',
     })
-    await brand(page).getByTestId('file-banner').setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: PNG })
-    await expect(brand(page).getByTestId('slot-banner').getByRole('alert')).toContainText('Banners can be up to 3 MB.')
+    await brand(page)
+      .getByTestId('file-banner')
+      .setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: PNG })
+    await expect(brand(page).getByTestId('slot-banner').getByRole('alert')).toContainText(
+      'Banners can be up to 3 MB.',
+    )
   })
 
   test('goal: start one, see progress and the link, then remove it', async ({ page }) => {
@@ -116,12 +140,16 @@ test.describe('tips: Pro branding and goal', () => {
     const b = brand(page)
     await b.getByLabel('Background', { exact: true }).fill('#111111')
     await b.getByRole('button', { name: 'Save colours' }).click()
-    await expect(page.getByText('This runs on Ferrocast’s servers and is part of Pro.')).toBeVisible()
+    await expect(
+      page.getByText('This runs on Ferrocast’s servers and is part of Pro.'),
+    ).toBeVisible()
     await page.evaluate(() => window.__ferrocastDemo?.setOffline(true))
     await goal(page).getByLabel('Goal', { exact: true }).fill('Mic')
     await goal(page).getByLabel('Target').fill('500')
     await goal(page).getByRole('button', { name: 'Start goal' }).click()
-    await expect(page.getByText('Can’t reach Ferrocast.').or(page.getByText("Can't reach Ferrocast.")).first()).toBeVisible()
+    await expect(
+      page.getByText('Can’t reach Ferrocast.').or(page.getByText("Can't reach Ferrocast.")).first(),
+    ).toBeVisible()
     await page.evaluate(() => window.__ferrocastDemo?.setOffline(false))
   })
 

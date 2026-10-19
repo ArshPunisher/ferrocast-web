@@ -197,7 +197,8 @@ export function tipPalette(c: TipColours | null): {
   const bg = rgb(colours.background)
   const fg = rgb(colours.text)
   const m = hex(mix(fg, bg, 0.3))
-  const muted = contrastRatio(m, colours.background) >= TIP_BRAND_LIMITS.textContrast ? m : colours.text
+  const muted =
+    contrastRatio(m, colours.background) >= TIP_BRAND_LIMITS.textContrast ? m : colours.text
   const onAccent =
     contrastRatio('#ffffff', colours.accent) >= contrastRatio('#000000', colours.accent)
       ? '#ffffff'
@@ -217,7 +218,10 @@ export function tipPalette(c: TipColours | null): {
 // ── Images and goal ──────────────────────────────────────────────────────────────────
 
 /** The plain reason a file can't be uploaded, before sending it (the relay checks again). */
-export function tipImageProblem(kind: TipImageKind, file: { type: string; size: number }): string | null {
+export function tipImageProblem(
+  kind: TipImageKind,
+  file: { type: string; size: number },
+): string | null {
   if (!(TIP_IMAGE_TYPES as readonly string[]).includes(file.type))
     return `${kind === 'avatar' ? 'Avatars' : 'Banners'} can be PNG, JPEG or WebP.`
   const max = kind === 'avatar' ? TIP_BRAND_LIMITS.avatarBytes : TIP_BRAND_LIMITS.bannerBytes
@@ -233,8 +237,22 @@ export function currencyDigits(currency: string): number {
   if (['BHD', 'JOD', 'KWD', 'OMR', 'TND'].includes(c)) return 3
   if (
     [
-      'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'VND', 'VUV', 'XAF',
-      'XOF', 'XPF', 'UGX',
+      'BIF',
+      'CLP',
+      'DJF',
+      'GNF',
+      'JPY',
+      'KMF',
+      'KRW',
+      'MGA',
+      'PYG',
+      'RWF',
+      'VND',
+      'VUV',
+      'XAF',
+      'XOF',
+      'XPF',
+      'UGX',
     ].includes(c)
   )
     return 0
@@ -252,7 +270,12 @@ export function majorToMinor(raw: string, currency: string): number | null {
   return Number.isSafeInteger(n) ? n : null
 }
 
-export function tipGoalProblem(g: { title: string; target: string; currency: string; ends: string }): {
+export function tipGoalProblem(g: {
+  title: string
+  target: string
+  currency: string
+  ends: string
+}): {
   title?: string
   target?: string
   currency?: string
@@ -262,12 +285,17 @@ export function tipGoalProblem(g: { title: string; target: string; currency: str
   const t = Array.from(g.title.trim()).length
   if (t < 1 || t > TIP_BRAND_LIMITS.goalTitleMax)
     out.title = `The goal title must be 1 to ${TIP_BRAND_LIMITS.goalTitleMax} characters.`
-  if (!/^[A-Za-z]{3}$/.test(g.currency.trim())) out.currency = 'Use a 3-letter code like INR or USD.'
+  if (!/^[A-Za-z]{3}$/.test(g.currency.trim()))
+    out.currency = 'Use a 3-letter code like INR or USD.'
   const minor = majorToMinor(g.target, g.currency.trim() || 'INR')
   if (minor === null || minor < 1) out.target = 'Enter an amount above 0.'
   if (g.ends) {
     const at = Date.parse(g.ends)
-    if (!Number.isFinite(at) || at <= Date.now() || at > Date.now() + TIP_BRAND_LIMITS.goalMaxDays * 86_400_000)
+    if (
+      !Number.isFinite(at) ||
+      at <= Date.now() ||
+      at > Date.now() + TIP_BRAND_LIMITS.goalMaxDays * 86_400_000
+    )
       out.ends = 'Pick a date in the future, within a year.'
   }
   return out
