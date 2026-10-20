@@ -566,8 +566,12 @@ export class FerroClient {
   recap = (since?: number) =>
     this.get<Recap>(since === undefined ? '/api/v1/recap' : `/api/v1/recap?since=${since}`)
   updates = () => this.get<UpdateInfo>('/api/v1/updates')
-  /** The desktop app downloads, checks and installs it, then restarts. 409 while live. */
+  /** "Check for updates": answers once the desktop app has read the feed. 409 `no_updater` headless. */
+  checkUpdates = () => this.post<UpdateInfo>('/api/v1/updates/check')
+  /** The desktop app downloads, checks and installs it (progress in `update` frames). 409 while live. */
   installUpdate = () => this.post<{ installing: string }>('/api/v1/updates/install')
+  /** "Restart to finish" after an install. 409 `not_ready`, 409 `live`. */
+  restartForUpdate = () => this.post<{ restarting: string }>('/api/v1/updates/restart')
 }
 
 function enc(s: string): string {

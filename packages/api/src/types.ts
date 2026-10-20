@@ -1326,14 +1326,45 @@ export interface Theme {
   pro: boolean
 }
 
-/** Update state. Shape proposed in docs/API-REQUESTS.md (R9). */
+/** Why an update check or install didn't work (API.md §4 `UpdateProblem`). */
+export interface UpdateProblem {
+  /** offline, feed_unavailable, no_build, bad_signature, download_failed, install_failed, … */
+  code: string
+  message: string
+  hint: string
+}
+
+export type UpdatePhase = 'idle' | 'downloading' | 'installing' | 'ready' | 'failed'
+
+export interface UpdateInstall {
+  phase: UpdatePhase
+  version: string | null
+  /** Bytes so far and in all (`total` when the server said). */
+  downloaded: number
+  total: number | null
+  error: UpdateProblem | null
+}
+
+/** Update state (API.md §4 `UpdateView`); also the live `update` frame. */
 export interface UpdateInfo {
   current: string
   latest: string | null
   /** Read-only: follows the installed build (a prerelease version is 'beta'). */
   channel: 'stable' | 'beta'
   blocked_while_live: boolean
+  /** The GitHub release page. */
   notes_url: string | null
+  /** What's new as plain text ("- " lines are a list); null when the release has none. */
+  notes?: string | null
+  published_at?: string | null
+  /** The desktop app can download and install it (false in the headless app). Older engines leave it out. */
+  can_install?: boolean
+  checking?: boolean
+  /** ms; when the last check finished. `null`: not checked yet (which is not "up to date"). */
+  checked_at?: number | null
+  /** The last check's problem. */
+  error?: UpdateProblem | null
+  install?: UpdateInstall
 }
 
 export interface Notice {
@@ -1361,6 +1392,8 @@ export type LiveFrame =
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
   | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
+  /** App updates: on every change (a check, download progress, installing, ready, failed). */
+  | { v: 1; type: 'update'; data: UpdateInfo }
   /** Dashboard anywhere (sent by the relay, not the PC): whether the streaming PC is reachable. */
   | {
       v: 1

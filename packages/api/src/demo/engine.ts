@@ -12,6 +12,8 @@ import { anySample, namedActor, sample } from '../samples'
 import type { FetchLike } from '../client'
 import type { SocketFactory, SocketLike } from '../socket'
 import type {
+  UpdateInfo,
+  UpdateInstall,
   Account,
   Actor,
   AlertRule,
@@ -175,6 +177,21 @@ export const DEMO_TOKEN = 'demo-session'
 
 /** The version the demo engine says it is. */
 const DEMO_VERSION = '0.4.0'
+const DEMO_UPDATE_BYTES = 18_400_000
+const DEMO_UPDATE = () => ({
+  current: DEMO_VERSION,
+  latest: '0.4.1' as string | null,
+  checking: false,
+  checked_at: (Date.now() - 42 * 60_000) as number | null,
+  installed: false,
+  install: {
+    phase: 'idle',
+    version: null,
+    downloaded: 0,
+    total: null,
+    error: null,
+  } as UpdateInstall,
+})
 /** Pairing codes the demo treats specially, for tests of the pairing screen. */
 export const DEMO_PAIR = { expired: 'EXPIRED', used: 'USED00' } as const
 
@@ -290,6 +307,8 @@ export class DemoEngine {
   private faults: (Fault & { left: number })[] = []
   private offline = false
   private timers = new Set<ReturnType<typeof setTimeout>>()
+  /** The pretend update: 0.4.1 is out, nothing downloaded yet. */
+  private upd = DEMO_UPDATE()
   private autoplayOn = false
 
   // State
@@ -1510,23 +1529,72 @@ export class DemoEngine {
       }
     }
     if (is('GET', 'stats', 'session')) return clone({ ...this.stats, live: this.isLive() })
-    if (is('GET', 'updates'))
-      return {
-        current: DEMO_VERSION,
-        latest: '0.4.1',
-        channel: DEMO_VERSION.includes('-') ? 'beta' : 'stable',
-        blocked_while_live: this.isLive() && this.settings.never_update_while_live,
-        notes_url: 'https://ferrocast.clearcraftlabs.com/docs/getting-started',
-      }
+    if (is('GET', 'updates')) return this.updateView()
+    if (is('POST', 'updates', 'check')) {
+      this.upd.checking = true
+      this.broadcastUpdate()
+      await new Promise<void>((r) => this.later(r, 700))
+      this.upd.checking = false
+      this.upd.checked_at = Date.now()
+      this.broadcastUpdate()
+      return this.updateView()
+    }
     if (is('POST', 'updates', 'install')) {
+      if (this.upd.installed)
+        throw new HttpError(
+          409,
+          'restart_needed',
+          'The update is already installed.',
+          'Restart Ferrocast to finish (Restart to finish in the sidebar).',
+        )
+      if (!this.upd.latest)
+        throw new HttpError(
+          404,
+          'no_update',
+          'There’s no update to install. You’re on the newest version.',
+          'Ferrocast checks for updates every few hours on its own, or press Check for updates.',
+        )
+      const phase = this.upd.install.phase
+      if (phase === 'downloading' || phase === 'installing')
+        throw new HttpError(
+          409,
+          'update_busy',
+          'The update is already downloading.',
+          'Wait for it to finish; the progress is in the sidebar.',
+        )
       if (this.isLive() && this.settings.never_update_while_live)
         throw new HttpError(
           409,
-          'conflict',
-          'You’re live, so the update waits until the stream ends (Settings › Updates).',
+          'live',
+          'You’re live, so the update waits until the stream ends.',
+          'Update after your stream, or turn off Never update while I’m live in Settings › Updates.',
         )
       this.takeBackup('before-update')
-      return { installing: '0.4.1' }
+      this.demoDownload()
+      return { installing: this.upd.latest }
+    }
+    if (is('POST', 'updates', 'restart')) {
+      if (this.upd.install.phase !== 'ready')
+        throw new HttpError(
+          409,
+          'not_ready',
+          'There’s no installed update waiting for a restart.',
+          'Install the update first (Update now), then restart.',
+        )
+      if (this.isLive() && this.settings.never_update_while_live)
+        throw new HttpError(
+          409,
+          'live',
+          'You’re live, so Ferrocast won’t restart until the stream ends.',
+          'Restart after your stream. The update is installed and waits.',
+        )
+      const v = this.upd.latest ?? ''
+      // The demo "restarts" into the new version.
+      this.later(() => {
+        this.upd = { ...DEMO_UPDATE(), current: v, latest: null, checked_at: Date.now() }
+        this.broadcastUpdate()
+      }, 900)
+      return { restarting: v }
     }
 
     throw new HttpError(
@@ -3069,6 +3137,54 @@ export class DemoEngine {
       if (a && a.platform === platform && a.id === userId) return a.display_name
     }
     return null
+  }
+
+  private updateView(): UpdateInfo {
+    const u = this.upd
+    return {
+      current: u.current,
+      latest: u.latest,
+      channel: u.current.includes('-') ? 'beta' : 'stable',
+      blocked_while_live: this.isLive() && this.settings.never_update_while_live,
+      notes_url: u.latest
+        ? `https://github.com/ArshPunisher/ferrocast/releases/tag/v${u.latest}`
+        : null,
+      notes: u.latest
+        ? '- Updates you can see: the sidebar says when a new version is out.\n- Check for updates in Settings, with what went wrong and what to do.\n- Alerts on Kick arrive a little sooner.'
+        : null,
+      published_at: u.latest ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null,
+      can_install: true,
+      checking: u.checking,
+      checked_at: u.checked_at,
+      error: null,
+      install: clone(u.install),
+    }
+  }
+
+  private broadcastUpdate(): void {
+    this.broadcastLive({ v: 1, type: 'update', data: this.updateView() })
+  }
+
+  /** About four seconds of pretend download, a moment of installing, then ready. */
+  private demoDownload(): void {
+    const version = this.upd.latest ?? ''
+    const total = DEMO_UPDATE_BYTES
+    const step = (got: number) => {
+      this.upd.install = { phase: 'downloading', version, downloaded: got, total, error: null }
+      this.broadcastUpdate()
+      if (got < total) {
+        this.later(() => step(Math.min(total, got + Math.round(total / 18))), 220)
+        return
+      }
+      this.upd.install = { ...this.upd.install, phase: 'installing' }
+      this.broadcastUpdate()
+      this.later(() => {
+        this.upd.install = { ...this.upd.install, phase: 'ready' }
+        this.upd.installed = true
+        this.broadcastUpdate()
+      }, 700)
+    }
+    step(0)
   }
 
   private later(fn: () => void, ms: number): void {

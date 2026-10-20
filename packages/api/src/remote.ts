@@ -238,7 +238,7 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/backups/*/restore'],
   ['POST', '/media'],
   ['*', '/tips/brand/*'],
-  ['*', '/updates/install'],
+  ['*', '/updates/*'],
   ['*', '/live'],
 ]
 

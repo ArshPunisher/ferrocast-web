@@ -24,6 +24,8 @@ const LIVE_TYPES = new Set([
   'poll',
   'giveaway',
   'chatter',
+  // App updates (the sidebar's "Update available" and its progress).
+  'update',
   // Dashboard anywhere: the relay says whether the streaming PC is reachable (remote.ts).
   'remote',
   // Studio (studio.ts)
@@ -34,6 +36,8 @@ const LIVE_TYPES = new Set([
   'obs_health',
   'brb',
 ])
+
+const UPDATE_PHASES = new Set(['idle', 'downloading', 'installing', 'ready', 'failed'])
 
 /** Parses one frame; returns null for anything malformed or from a future protocol. */
 export function parseLiveFrame(raw: unknown): LiveFrame | null {
@@ -80,6 +84,17 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
   if (f.type === 'chatter') {
     if (typeof d.event_id !== 'string') return null
     if (d.kind !== 'first' && !(d.kind === 'returning' && typeof d.days === 'number')) return null
+  }
+  if (f.type === 'update') {
+    if (typeof d.current !== 'string' || (d.latest !== null && typeof d.latest !== 'string'))
+      return null
+    if (d.notes !== undefined && d.notes !== null && typeof d.notes !== 'string') return null
+    const i = d.install as Record<string, unknown> | undefined
+    if (i !== undefined) {
+      if (typeof i !== 'object' || i === null) return null
+      if (!UPDATE_PHASES.has(i.phase as string) || typeof i.downloaded !== 'number') return null
+      if (i.error !== null && i.error !== undefined && typeof i.error !== 'object') return null
+    }
   }
   // Studio frames the dashboard renders directly.
   if (f.type === 'lane' && !Array.isArray(d.items)) return null
