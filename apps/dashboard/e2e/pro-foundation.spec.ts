@@ -31,7 +31,9 @@ test.describe('Pro panels', () => {
     await expect(p.getByTestId('history-tiles')).toHaveCount(0)
     await p.getByRole('link', { name: 'Settings › Pro' }).click()
     await expect(page).toHaveURL(/#\/settings\/pro$/)
-    await expect(page.locator('#settings-pro').getByTestId('pro-summary')).toBeVisible()
+    await expect(
+      page.locator('#settings-pro').getByRole('heading', { name: /Pro adds the always-on parts/ }),
+    ).toBeVisible()
   })
 
   test('a feature the relay lacks stays hidden, on sale or Pro', async ({ page }) => {
