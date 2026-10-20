@@ -489,3 +489,13 @@ describe('library alerts', () => {
     }
   })
 })
+
+describe('frames and layouts a design wasn’t drawn for', () => {
+  it('Text over keeps the picture under the words, whatever a design or frame says', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync(`${process.cwd()}/src/styles/design-alert.css`, 'utf8')
+    const rule = (sel: string) => css.slice(css.indexOf(`${sel} {`)).split('}')[0]!
+    expect(rule('.fa.lay-over .fa-media')).toContain('z-index: 0')
+    expect(rule('.fa.lay-over .fa-text')).toContain('z-index: 1')
+  })
+})

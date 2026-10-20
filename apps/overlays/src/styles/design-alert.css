@@ -61,16 +61,53 @@
 .fa.lay-custom > * {
   grid-area: 1 / 1;
 }
+/* Text over: the picture is the card's backdrop and the text sits on it. The picture
+   stretches to the text when the text is the bigger of the two, and always stays under it
+   (a design's own CSS or a frame can't lift the art over the words). */
 .fa.lay-over .fa-media {
-  width: 560px;
-  height: 300px;
+  z-index: 0;
+  width: auto;
+  height: auto;
+  min-width: 560px;
+  min-height: 300px;
+  justify-self: stretch;
+  align-self: stretch;
   border-radius: 18px;
+  overflow: hidden;
+  translate: none;
+  rotate: none;
+}
+/* The event art sits in the top part, clear of the text, on a plain backdrop (a design's
+   shaped art, like a star or a flower, would stretch across the whole card). */
+.fa.lay-over .fa-emblem {
+  place-items: start center;
+  padding-top: 34px;
+  clip-path: none;
+}
+.fa.lay-over .fa-emblem svg {
+  width: 112px;
+  height: 112px;
 }
 .fa.lay-over .fa-text {
+  z-index: 1;
   align-self: end;
   justify-self: center;
-  margin: 0 0 22px;
+  margin: 72px 20px 22px;
   max-width: 520px;
+}
+/* On a picture the words keep their plate (unless the plate is switched off), even on
+   frames that drop it beside the art (Slim pill, Text only). */
+.fa.plate.lay-over .fa-text {
+  background: var(--plate);
+}
+.fa.f-pill.lay-over {
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.fa.f-pill.lay-over .fa-text {
+  border-radius: 999px;
 }
 .fa.lay-custom .fa-media {
   translate: var(--mx) var(--my);
