@@ -12,6 +12,7 @@ import {
   Heart,
   Lightning,
   PaintBrushBroad,
+  Play,
   Plus,
   RocketLaunch,
   Sparkle,
@@ -23,8 +24,11 @@ import {
   type Icon,
 } from '@phosphor-icons/react'
 import {
+  BUILTIN_SOUND_PREFIX,
   KNOWN_VARS,
   PLATFORM_LABEL,
+  SOUND_GROUPS,
+  SOUND_LABEL,
   checkTemplate,
   eventVars,
   newVariation,
@@ -32,6 +36,7 @@ import {
   platformsFor,
   renderAlert,
   renderOnto,
+  ruleBuiltinSound,
   sample,
   validateRule,
   type AlertRule,
@@ -66,7 +71,7 @@ import { href } from '../lib/router'
 import { useUnsavedWarning } from '../lib/unsaved'
 import { useLive } from '../lib/store'
 import { previewMediaUrl } from '../lib/media-url'
-import { unlockAudio } from '@ferrocast/overlays'
+import { builtinSoundUrl, playBuiltin, unlockAudio } from '@ferrocast/overlays'
 
 type CondType = Exclude<Condition['type'], 'all' | 'any'>
 
@@ -195,9 +200,12 @@ function MediaPicker({
   media,
   onChange,
   onUploaded,
+  volume,
 }: {
   kind: 'sound' | 'image'
   value: string | null
+  /** For the built-in sound preview. */
+  volume?: number
   media: Media[]
   onChange: (id: string | null) => void
   onUploaded: (m: Media) => void
@@ -227,12 +235,48 @@ function MediaPicker({
             className="min-w-0 flex-1"
           >
             <option value="">{kind === 'sound' ? 'No sound' : 'No image'}</option>
-            {list.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            {kind === 'sound' ? (
+              <>
+                {SOUND_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.sounds.map((id) => (
+                      <option key={id} value={`${BUILTIN_SOUND_PREFIX}${id}`}>
+                        {SOUND_LABEL[id]}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                {(list.length > 0 || (value && !ruleBuiltinSound(value))) && (
+                  <optgroup label="Your sounds">
+                    {list.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </>
+            ) : (
+              list.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))
+            )}
           </Select>
+          {kind === 'sound' && ruleBuiltinSound(value) && (
+            <IconButton
+              variant="secondary"
+              label={`Play ${SOUND_LABEL[ruleBuiltinSound(value) ?? 'none']}`}
+              onClick={() => {
+                unlockAudio()
+                const b = ruleBuiltinSound(value)
+                if (b) playBuiltin(b, volume ?? 70, true)
+              }}
+            >
+              <Play size={16} />
+            </IconButton>
+          )}
           <input
             ref={file}
             type="file"
@@ -550,6 +594,7 @@ function VariationEditor({
         <MediaPicker
           kind="sound"
           value={v.sound}
+          volume={v.volume}
           media={media}
           onChange={(sound) => onChange({ ...v, sound })}
           onUploaded={onUploaded}
@@ -697,8 +742,11 @@ function RuleEditor({
     let a = renderAlert('preview', draft, v, event)
     const look = design ? pickLook(design, event) : null
     if (design && look) a = renderOnto(a, design, look.key, look.variation, event)
-    const url = (id: string | null) =>
-      id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
+    const url = (id: string | null) => {
+      const b = ruleBuiltinSound(id)
+      if (b) return builtinSoundUrl(b)
+      return id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
+    }
     return { ...a, sound: url(a.sound), image: url(a.image) }
   }, [draft, v, event, media, client, design])
   if (!v) return null

@@ -43,6 +43,7 @@ import {
   type DesignVariation,
   type EventKey,
   type Media,
+  withSuggestedSounds,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -252,6 +253,14 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
   const props: SectionProps = {
     look,
     set: setLook,
+    onSuggestSounds: () => {
+      h.set((d) => withSuggestedSounds(d))
+      toast({
+        tone: 'ok',
+        message: 'Each event has its suggested sound now.',
+        hint: 'Undo puts them back. Save to keep them.',
+      })
+    },
     advanced: true,
     ev,
     media: media.data ?? [],

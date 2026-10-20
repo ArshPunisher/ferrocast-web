@@ -120,3 +120,32 @@ input[type='range'] {
 .fc-unlock::backdrop {
   background: rgb(4 5 8 / 0.62);
 }
+
+/* The sound picker's little level meter while a preview plays. */
+.fc-eq i {
+  width: 3px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fc-accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fc-eq i {
+    animation: fc-eq 600ms ease-in-out infinite alternate;
+  }
+  .fc-eq i:nth-child(2) {
+    animation-delay: -200ms;
+  }
+  .fc-eq i:nth-child(3) {
+    animation-delay: -400ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-eq i {
+    height: 10px;
+  }
+}
+@keyframes fc-eq {
+  to {
+    height: 14px;
+  }
+}

@@ -12,7 +12,6 @@ import {
   Heart,
   Image as ImageIcon,
   Lightning,
-  Play,
   Plus,
   RocketLaunch,
   Sparkle,
@@ -25,14 +24,12 @@ import {
   ANIM_IN_LABEL,
   ANIM_OUT,
   ANIM_OUT_LABEL,
-  BUILTIN_SOUNDS,
   EVENT_LABEL,
   FRAMES,
   FRAME_LABEL,
   KNOWN_VARS,
   LAYOUTS,
   LAYOUT_LABEL,
-  SOUND_LABEL,
   TEXT_ANIMS,
   TEXT_ANIM_LABEL,
   checkCss,
@@ -44,7 +41,8 @@ import {
   type Media,
   type Platform,
 } from '@ferrocast/api'
-import { DESIGN_FONTS, GOOGLE_FONTS, SYSTEM_FONTS, playBuiltin } from '@ferrocast/overlays'
+import { DESIGN_FONTS, GOOGLE_FONTS, SYSTEM_FONTS } from '@ferrocast/overlays'
+import { SoundPicker } from './SoundPicker'
 import {
   Button,
   Field,
@@ -406,6 +404,8 @@ function MediaChoice({
 export interface SectionProps {
   look: AlertLook
   set: SetLook
+  /** Gives every event in the design its pre-matched sound (Designer only). */
+  onSuggestSounds?: () => void
   advanced: boolean
   ev: EventKey
   media: Media[]
@@ -897,41 +897,35 @@ export function MotionSection({
   )
 }
 
-export function SoundSection({ look, set, advanced, ev, media, onUploaded }: SectionProps) {
+export function SoundSection({
+  look,
+  set,
+  advanced,
+  ev,
+  media,
+  onUploaded,
+  onSuggestSounds,
+}: SectionProps) {
   const paid = ev === 'tip' || ev === 'superchat' || ev === 'bits' || ev === 'kicks'
   return (
     <div className="flex flex-col gap-4">
-      <Group label="Sound">
-        <ul className="flex flex-col gap-1.5">
-          {BUILTIN_SOUNDS.map((s) => (
-            <li key={s} className="flex items-center gap-1.5">
-              <button
-                type="button"
-                aria-pressed={!look.sound.ref && look.sound.builtin === s}
-                onClick={() => set({ sound: { ...look.sound, ref: null, builtin: s } })}
-                className={cx(
-                  'fc-press flex h-10 flex-1 items-center rounded-[12px] border px-3 text-left text-[13.5px] font-medium',
-                  !look.sound.ref && look.sound.builtin === s
-                    ? 'border-accent-line bg-accent-soft text-text'
-                    : 'border-line text-text-2 hover:border-line-strong',
-                )}
-              >
-                {SOUND_LABEL[s]}
-              </button>
-              {s !== 'none' && (
-                <IconButton
-                  size="sm"
-                  variant="secondary"
-                  label={`Play ${SOUND_LABEL[s]}`}
-                  onClick={() => playBuiltin(s, look.sound.volume)}
-                >
-                  <Play size={14} />
-                </IconButton>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Group>
+      <SoundPicker
+        label="Sound"
+        value={look.sound.ref ? null : look.sound.builtin}
+        volume={look.sound.volume}
+        onChange={(builtin) => set({ sound: { ...look.sound, ref: null, builtin } })}
+      />
+      {onSuggestSounds && (
+        <div className="flex flex-col gap-1.5 rounded-[12px] border border-dashed border-line-strong p-3">
+          <Button size="sm" className="self-start" onClick={onSuggestSounds}>
+            Use suggested sounds
+          </Button>
+          <p className="text-[13px] leading-snug text-text-3">
+            Every event gets the sound picked for it: Glint for follows, Cascade for subs, Tally for
+            tips, Bloom for big ones, Lift for raids. Your own sound files stay.
+          </p>
+        </div>
+      )}
       {advanced && (
         <Group label="Or your own sound">
           <MediaChoice

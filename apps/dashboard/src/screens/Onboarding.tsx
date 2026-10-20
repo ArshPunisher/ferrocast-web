@@ -228,8 +228,8 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       Pick a look
                     </h1>
                     <p className="mt-2 text-sm leading-relaxed text-text-2">
-                      This is how alerts and chat appear on stream. Change it any time. Alerts start
-                      silent; give each one a sound in Alerts or with an alert design.
+                      This is how alerts and chat appear on stream. Change it any time. Each alert
+                      starts with its own sound; change it in Alerts or with an alert design.
                     </p>
                   </div>
                   <AlertStage alert={alert} theme={theme} label={`Preview of the ${theme} look`} />
