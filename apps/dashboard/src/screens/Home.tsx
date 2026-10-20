@@ -18,6 +18,7 @@ import { useAction, useClient, useFocusHeldTail, useNow, useResource } from '../
 import { href } from '../lib/router'
 import { ObsWarnings, StartShowButton } from '../components/studio/home'
 import { DontMissLane } from '../components/studio/moments'
+import { ProWelcome } from '../components/pro/ProWelcome'
 
 function duration(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60_000))
@@ -174,6 +175,7 @@ export function Home() {
         </div>
       </div>
 
+      <ProWelcome />
       <TtsApprovals />
       <ObsWarnings />
       <DontMissLane />

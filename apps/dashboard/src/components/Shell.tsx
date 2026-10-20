@@ -13,6 +13,7 @@ import {
   PaintBrushBroad,
   House,
   Moon,
+  SealCheck,
   ShieldCheck,
   SquaresFour,
   Sun,
@@ -22,14 +23,16 @@ import {
 import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
 import {
   describeError,
-  proApi,
   proPanelState,
   remoteScreenAllowed,
   type ProFeature,
+  type ProView,
 } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import { isLimited, useLive } from '../lib/store'
-import { useClient, useResource } from '../lib/hooks'
+import { useClient } from '../lib/hooks'
+import { PRO_UNLOCKED_EVENT, accountInitials, proPlanLine, useProStatus } from '../lib/pro-status'
+import { ProUnlock } from './pro/ProUnlock'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
 import { RemoteStrip } from './remote'
@@ -164,10 +167,13 @@ function NavLink({
   item,
   active,
   onNavigate,
+  seam = false,
 }: {
   item: NavItem
   active: boolean
   onNavigate?: () => void
+  /** Pro: the active item carries the two-tone seam. */
+  seam?: boolean
 }) {
   const Icon = item.icon
   return (
@@ -176,11 +182,17 @@ function NavLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cx(
-        'fc-press group flex h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors duration-150',
+        'fc-press group relative flex h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors duration-150',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
         active ? 'bg-surface-3 text-text' : 'text-text-3 hover:bg-surface-2 hover:text-text',
       )}
     >
+      {seam && active && (
+        <span
+          aria-hidden="true"
+          className="fc-seam absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-[3px]"
+        />
+      )}
       <Icon
         size={19}
         weight={active ? 'fill' : 'regular'}
@@ -189,6 +201,62 @@ function NavLink({
       {item.label}
     </a>
   )
+}
+
+/** The chrome "PRO" mark by the logo, once Pro is on. */
+function ProMark() {
+  return (
+    <span
+      role="img"
+      aria-label="Ferrocast Pro is on"
+      className="fc-pro-mark inline-flex h-5 shrink-0 items-center rounded-full px-2 font-mono text-[10.5px] font-bold tracking-[0.06em]"
+    >
+      <span aria-hidden="true">PRO</span>
+    </span>
+  )
+}
+
+/** Bottom of the sidebar once Pro is on: who's signed in, and the plan. */
+function AccountChip({ pro }: { pro: ProView }) {
+  const connectors = useLive((s) => s.connectors)
+  const name =
+    connectors?.twitch.account?.name ??
+    connectors?.youtube.account?.name ??
+    connectors?.kick.account?.name ??
+    'Your channel'
+  const initials = accountInitials(name)
+  return (
+    <a
+      href={href({ name: 'settings', section: 'pro' })}
+      className="fc-press flex items-center gap-2.5 rounded-[12px] border border-line bg-surface-2 p-2.5 hover:border-line-strong focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      data-testid="pro-account"
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 font-display text-[12px] font-bold text-text"
+      >
+        {initials}
+      </span>
+      <span className="min-w-0">
+        <b className="block truncate text-[13.5px] leading-tight font-semibold text-text">{name}</b>
+        <small className="flex items-center gap-1 text-[12px] text-text-3">
+          <SealCheck size={14} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
+          {proPlanLine(pro)}
+        </small>
+      </span>
+    </a>
+  )
+}
+
+/** The sidebar's seam draws down once, right after the unlock closes. */
+function useSeamDraw(): boolean {
+  const [draw, setDraw] = useState(false)
+  useEffect(() => {
+    const on = () => setDraw(true)
+    window.addEventListener(PRO_UNLOCKED_EVENT, on)
+    return () => window.removeEventListener(PRO_UNLOCKED_EVENT, on)
+  }, [])
+  return draw
 }
 
 /**
@@ -239,8 +307,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
   const isActive = (i: NavItem) => i.match.includes(route.name)
   // Pro entries show only when their panel would (no nagging): a failed check hides them.
-  const pro = useResource((c) => proApi(c).status())
-  const proView = pro.error ? null : pro.data
+  const proView = useProStatus()
+  const isPro = !remote && !!proView?.active
+  const seamDraw = useSeamDraw()
   // The PC is off and the cloud bot stands in: chat, bans and history only (M10).
   const limited = isLimited(remote)
   const nav = NAV.filter(
@@ -275,19 +344,35 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
-        <a
-          href="#/home"
-          className="mb-6 flex items-center px-2 focus-visible:outline-none"
-          aria-label="Ferrocast home"
-        >
-          <Wordmark size="sm" />
-        </a>
+        {isPro && (
+          <motion.span
+            // Remounts when the unlock closes, so the new `initial` draws it down once.
+            key={seamDraw ? 'draw' : 'still'}
+            aria-hidden="true"
+            data-testid="pro-seam"
+            className="fc-seam pointer-events-none absolute inset-y-0 -right-px w-px origin-top opacity-85"
+            initial={seamDraw && !reduce ? { scaleY: 0 } : false}
+            animate={{ scaleY: 1 }}
+            transition={{ duration: 0.7, delay: 0.12, ease: [0.65, 0, 0.35, 1] }}
+          />
+        )}
+        <div className="mb-6 flex items-center gap-2 px-2">
+          <a
+            href="#/home"
+            className="flex items-center focus-visible:outline-none"
+            aria-label="Ferrocast home"
+          >
+            <Wordmark size="sm" />
+          </a>
+          {isPro && <ProMark />}
+        </div>
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {nav.map((i) => (
-            <NavLink key={i.label} item={i} active={isActive(i)} />
+            <NavLink key={i.label} item={i} active={isActive(i)} seam={isPro} />
           ))}
         </nav>
         <div className="mt-auto flex flex-col gap-2 px-1">
+          {isPro && proView && <AccountChip pro={proView} />}
           {demo && <DemoNote />}
           <OpenInBrowser />
           <button
@@ -315,6 +400,11 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                 className="[&>span:last-child]:hidden sm:[&>span:last-child]:inline"
               />
             </a>
+            {isPro && (
+              <span className="hidden shrink-0 sm:inline-flex lg:hidden">
+                <ProMark />
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <div className="hidden sm:block">
                 <StatusStrip />
@@ -443,6 +533,8 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         </ul>
       </nav>
 
+      {!remote && <ProUnlock pro={proView} />}
+
       <Dialog open={more} onClose={() => setMore(false)} title="More" size="sm">
         <nav aria-label="More" className="flex flex-col gap-1 pb-2">
           {nav
@@ -455,6 +547,11 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                 onNavigate={() => setMore(false)}
               />
             ))}
+          {isPro && proView && (
+            <div className="mt-1">
+              <AccountChip pro={proView} />
+            </div>
+          )}
           <OpenInBrowser />
           <button
             type="button"

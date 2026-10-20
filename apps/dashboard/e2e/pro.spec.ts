@@ -29,6 +29,11 @@ test.describe('settings: Ferrocast Pro', () => {
     ).toBeVisible()
     await pro.getByLabel('Subscription id').fill('sub_DemoPro00001')
     await pro.getByRole('button', { name: 'Move Pro here' }).click()
+    // Pro just turned on here: the one-time unlock, then the app stays Pro.
+    const unlock = page.getByTestId('pro-unlock')
+    await expect(unlock.getByRole('heading', { name: 'You’re Pro' })).toBeVisible()
+    await unlock.getByRole('button', { name: 'Done' }).click()
+    await expect(unlock).toHaveCount(0)
     await expect(pro.getByTestId('pro-summary')).toHaveText(/is active\. Renews on/)
     await expect(pro.getByText('sub_DemoPro00001')).toBeVisible()
     await pro.getByRole('button', { name: 'Manage' }).click()

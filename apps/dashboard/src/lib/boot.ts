@@ -21,6 +21,7 @@ import {
   type SocketFactory,
 } from '@ferrocast/api'
 import type { RemoteState } from './store'
+import { markUnlockShown } from './pro-status'
 
 declare global {
   interface Window {
@@ -309,7 +310,7 @@ export async function connect(): Promise<ConnectResult> {
 }
 
 export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connection> {
-  const [{ DemoEngine, DEMO_TOKEN }, { BUILTINS }] = await Promise.all([
+  const [{ DemoEngine, DEMO_TOKEN, DEMO_PRO_SUBSCRIPTION }, { BUILTINS }] = await Promise.all([
     import('@ferrocast/api/demo'),
     import('@ferrocast/designs'),
   ])
@@ -352,6 +353,10 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     designs: BUILTINS,
   })
   window.__ferrocastDemo = engine
+  // `?pro=active` is a PC that was already Pro, so the one-time unlock doesn't cover the
+  // screen under test; `&unlock=1` plays it.
+  if (params.get('pro') === 'active' && params.get('unlock') !== '1')
+    markUnlockShown({ subscription_id: DEMO_PRO_SUBSCRIPTION })
   const role = params.get('remote')
   const remote: RemoteState | undefined =
     role === 'owner' || role === 'mod'
