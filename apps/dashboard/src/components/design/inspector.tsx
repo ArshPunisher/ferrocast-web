@@ -20,18 +20,12 @@ import {
   UploadSimple,
 } from '@phosphor-icons/react'
 import {
-  ANIM_IN,
-  ANIM_IN_LABEL,
-  ANIM_OUT,
-  ANIM_OUT_LABEL,
   EVENT_LABEL,
   FRAMES,
   FRAME_LABEL,
   KNOWN_VARS,
   LAYOUTS,
   LAYOUT_LABEL,
-  TEXT_ANIMS,
-  TEXT_ANIM_LABEL,
   checkCss,
   isColor,
   type AlertLook,
@@ -793,106 +787,6 @@ export function StyleSection({ look, set }: SectionProps) {
         />
         {color('outline', 'Outline colour')}
       </div>
-    </div>
-  )
-}
-
-export function MotionSection({
-  look,
-  set,
-  advanced,
-  onReplay,
-}: SectionProps & { onReplay?: () => void }) {
-  const anim = (patch: Partial<AlertLook['anim']>, merge = false) => {
-    set({ anim: { ...look.anim, ...patch } }, { merge })
-    if (!merge) onReplay?.()
-  }
-  return (
-    <div className="flex flex-col gap-4">
-      <Chips
-        label="Entrance"
-        value={look.anim.in}
-        options={(advanced
-          ? ANIM_IN
-          : (['fade', 'rise', 'pop', 'bounce', 'slide_left', 'magnet'] as const)
-        ).map((v) => ({ value: v, label: ANIM_IN_LABEL[v] }))}
-        onChange={(v) => anim({ in: v })}
-      />
-      <Chips
-        label="Text animation"
-        value={look.anim.text}
-        options={(advanced
-          ? TEXT_ANIMS
-          : (['none', 'wave', 'bounce', 'type', 'glow'] as const)
-        ).map((v) => ({ value: v, label: TEXT_ANIM_LABEL[v] }))}
-        onChange={(v) => anim({ text: v })}
-      />
-      <Segmented
-        label="How long it stays"
-        size="sm"
-        value={look.duration_ms <= 4500 ? '4' : look.duration_ms <= 7500 ? '6' : '9'}
-        options={[
-          { value: '4', label: 'Short' },
-          { value: '6', label: 'Normal' },
-          { value: '9', label: 'Long' },
-        ]}
-        onChange={(v) =>
-          set({ duration_ms: Math.max(Number(v) * 1000, look.anim.in_ms + look.anim.out_ms + 500) })
-        }
-      />
-      {advanced && (
-        <>
-          <Chips
-            label="Exit"
-            value={look.anim.out}
-            options={ANIM_OUT.map((v) => ({ value: v, label: ANIM_OUT_LABEL[v] }))}
-            onChange={(v) => anim({ out: v })}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Range
-              label="Entrance length"
-              value={look.anim.in_ms}
-              min={150}
-              max={1500}
-              step={50}
-              unit="ms"
-              onChange={(v, m) => anim({ in_ms: v }, m)}
-            />
-            <Range
-              label="Exit length"
-              value={look.anim.out_ms}
-              min={150}
-              max={1500}
-              step={50}
-              unit="ms"
-              onChange={(v, m) => anim({ out_ms: v }, m)}
-            />
-          </div>
-          <Range
-            label="Text delay"
-            value={look.anim.text_delay_ms}
-            min={0}
-            max={3000}
-            step={100}
-            format={(v) => `${(v / 1000).toFixed(1)} s`}
-            onChange={(v, m) => anim({ text_delay_ms: v }, m)}
-          />
-          <Range
-            label="Alert length"
-            value={look.duration_ms}
-            min={2000}
-            max={20_000}
-            step={500}
-            format={(v) => `${(v / 1000).toFixed(1)} s`}
-            onChange={(v, m) =>
-              set(
-                { duration_ms: Math.max(v, look.anim.in_ms + look.anim.out_ms + 500) },
-                { merge: m },
-              )
-            }
-          />
-        </>
-      )}
     </div>
   )
 }

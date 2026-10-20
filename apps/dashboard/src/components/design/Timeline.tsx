@@ -1,9 +1,16 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react'
+import { Lightning } from '@phosphor-icons/react'
 import {
-  ANIM_IN_LABEL,
-  ANIM_OUT_LABEL,
+  IDLE_INFO,
+  IN_INFO,
+  OUT_INFO,
   SOUND_LABEL,
-  TEXT_ANIM_LABEL,
+  TEXT_INFO,
+  isMotionIn,
+  isMotionOut,
+  isMotionText,
+  motionOf,
+  motionPlan,
   type AlertLook,
 } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
@@ -52,7 +59,18 @@ export function Timeline({
   const inMs = look.anim.in_ms
   const outMs = look.anim.out_ms
   const hold = Math.max(200, total - inMs - outMs)
-  const textStart = inMs * 0.35 + look.anim.text_delay_ms
+  // The motion designer's entrances and exits take their length from Feel (speed and
+  // bounce), so only the simple ones have draggable edges.
+  const plan = motionPlan(look)
+  const m = motionOf(look)
+  const freshIn = isMotionIn(look.anim.in)
+  const freshOut = isMotionOut(look.anim.out)
+  const wait = plan.delay
+  const textStart = plan.textAt
+  const textBase = textStart - look.anim.text_delay_ms
+  const textLen = isMotionText(look.anim.text)
+    ? Math.min(plan.text, Math.max(0, total - textStart))
+    : Math.max(0, inMs + hold - textStart)
   const clamp = (h: Handle, v: number) => {
     const [lo, hi, step] = LIMITS[h]
     return Math.round(Math.min(hi, Math.max(lo, v)) / step) * step
@@ -70,7 +88,7 @@ export function Timeline({
       )
     if (h === 'end') set({ duration_ms: clamp('end', Math.max(ms, inMs + outMs + 500)) }, { merge })
     if (h === 'delay')
-      set({ anim: { ...look.anim, text_delay_ms: clamp('delay', ms - inMs * 0.35) } }, { merge })
+      set({ anim: { ...look.anim, text_delay_ms: clamp('delay', ms - textBase) } }, { merge })
   }
   const at = (e: PointerEvent) => {
     const r = lane.current?.getBoundingClientRect()
@@ -140,37 +158,51 @@ export function Timeline({
       'Alert',
       <>
         {seg(
-          'bg-[color-mix(in_srgb,var(--fc-accent)_85%,transparent)] text-[#1a0e00]',
-          0,
-          inMs,
-          ANIM_IN_LABEL[look.anim.in],
+          'bg-accent-soft text-accent-text shadow-[inset_0_0_0_1px_var(--fc-accent-line)]',
+          wait,
+          Math.max(0, inMs - wait),
+          IN_INFO[look.anim.in].name,
         )}
         {seg(
           'bg-surface-3 text-text-2 shadow-[inset_0_0_0_1px_var(--fc-line-strong)]',
           inMs,
           hold,
-          'Hold',
+          m.idle === 'none' ? 'Hold' : IDLE_INFO[m.idle].name,
         )}
         {seg(
-          'bg-[color-mix(in_srgb,var(--fc-arc)_80%,transparent)] text-[#00202b]',
+          'bg-accent-soft text-accent-text shadow-[inset_0_0_0_1px_var(--fc-accent-line)]',
           inMs + hold,
           outMs,
-          ANIM_OUT_LABEL[look.anim.out],
+          OUT_INFO[look.anim.out].name,
         )}
-        {handle('in', inMs, 'Entrance length', inMs, `${inMs} ms`)}
-        {handle('out', inMs + hold, 'Exit length', outMs, `${outMs} ms`)}
+        {!freshIn && handle('in', inMs, 'Entrance length', inMs, `${inMs} ms`)}
+        {!freshOut && handle('out', inMs + hold, 'Exit length', outMs, `${outMs} ms`)}
         {handle('end', total, 'Alert length', total, `${(total / 1000).toFixed(1)} seconds`)}
+        {plan.hit !== null && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-0.5 -bottom-0.5 z-[3] w-0.5 -translate-x-px rounded-[2px] bg-accent"
+            style={{ left: pct(plan.hit) }}
+          >
+            <Lightning
+              size={13}
+              weight="fill"
+              className="absolute -top-3.5 -left-[5.5px] text-molten-text"
+            />
+          </span>
+        )}
       </>,
     ],
     [
       'Text',
       <>
-        {seg(
-          'bg-accent-soft text-accent-text shadow-[inset_0_0_0_1px_var(--fc-accent-line)]',
-          textStart,
-          Math.max(0, inMs + hold - textStart),
-          TEXT_ANIM_LABEL[look.anim.text],
-        )}
+        {look.anim.text !== 'none' &&
+          seg(
+            'bg-[color-mix(in_srgb,var(--fc-accent)_14%,transparent)] text-text shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--fc-accent)_45%,transparent)]',
+            textStart,
+            Math.max(textLen, span * 0.06),
+            TEXT_INFO[look.anim.text].name,
+          )}
         {handle(
           'delay',
           textStart,
@@ -215,8 +247,12 @@ export function Timeline({
       <div className="mb-1.5 flex items-center gap-3 text-[13px] text-text-3">
         <b className="font-semibold text-text">Timeline</b>
         <span>
-          {(total / 1000).toFixed(1)} s total, text after{' '}
-          {(look.anim.text_delay_ms / 1000).toFixed(1)} s
+          {(total / 1000).toFixed(1)} s total
+          {plan.beat !== null
+            ? `, waits ${Math.round(wait)} ms for the beat`
+            : plan.hit !== null
+              ? `, hit lands at ${Math.round(plan.hit)} ms`
+              : `, text after ${(look.anim.text_delay_ms / 1000).toFixed(1)} s`}
         </span>
         <span className="ml-auto hidden lg:inline">
           Drag an edge, or focus it and use the arrow keys

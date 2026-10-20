@@ -18,7 +18,15 @@ export interface StageHandle {
 }
 
 /** A backdrop that reads like a game behind the alert, so contrast looks like it will on stream. */
-function Backdrop({ scene }: { scene: Scene }) {
+function Backdrop({ scene, shot }: { scene: Scene; shot?: string | null }) {
+  if (shot)
+    return (
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[#0d1016] bg-cover bg-center"
+        style={{ backgroundImage: `url("${shot.replace(/["\\]/g, '')}")` }}
+      />
+    )
   if (scene === 'checker')
     return (
       <div
@@ -50,6 +58,7 @@ function Backdrop({ scene }: { scene: Scene }) {
 export function DesignStage({
   alert,
   scene = 'game',
+  shot = null,
   autoplay = false,
   loop = false,
   sound = false,
@@ -65,6 +74,8 @@ export function DesignStage({
 }: {
   alert: RenderedAlert | null
   scene?: Scene
+  /** A screenshot of the streamer's scene to preview over (an object URL). */
+  shot?: string | null
   autoplay?: boolean
   loop?: boolean
   sound?: boolean
@@ -111,9 +122,13 @@ export function DesignStage({
       let d: DesignAlert
       try {
         const toUrl = latest.current.mediaUrl
+        // Impact hits sound only with the preview's sound on, like the alert's own sound.
+        const sound = latest.current.sound
         d = buildDesignAlert(
           a,
-          toUrl ? { lowMotion: reduce, mediaUrl: toUrl } : { lowMotion: reduce },
+          toUrl
+            ? { lowMotion: reduce, mediaUrl: toUrl, impactSound: sound }
+            : { lowMotion: reduce, impactSound: sound },
         )
       } catch {
         return null
@@ -222,7 +237,7 @@ export function DesignStage({
       aria-label={label}
     >
       <div className={fill ? 'absolute inset-0' : 'relative aspect-video w-full'}>
-        <Backdrop scene={scene} />
+        <Backdrop scene={scene} shot={shot} />
         <div ref={box} className="absolute inset-0" data-playing={playing ? 'true' : undefined} />
         {!alert?.design && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-white/70">

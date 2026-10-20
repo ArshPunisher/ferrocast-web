@@ -66,11 +66,11 @@ import {
   type StageTick,
 } from '../components/design/DesignStage'
 import { Timeline } from '../components/design/Timeline'
+import { MotionSection, type MotionStage } from '../components/design/motion'
 import {
   CssSection,
   EVENT_ICON,
   LookSection,
-  MotionSection,
   SoundSection,
   StyleSection,
   TextSection,
@@ -88,7 +88,7 @@ import { go, href, leaveTo } from '../lib/router'
 import { galleryTab } from '../components/design/gallery'
 import { useLeaveGuard } from '../lib/unsaved'
 import { previewMediaUrl } from '../lib/media-url'
-import { unlockAudio } from '@ferrocast/overlays'
+import { unlockAudio, unlockImpactAudio } from '@ferrocast/overlays'
 
 export type DesignerView = 'stage' | 'guided'
 const VIEW_KEY = 'fc.designer.view'
@@ -169,6 +169,9 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
   const [amount, setAmount] = useState<number | null>(null)
   const [longName, setLongName] = useState(false)
   const [scene, setScene] = useState<Scene>('game')
+  // A screenshot of the streamer's own scene to preview over (an object URL, never uploaded).
+  const [shot, setShot] = useState<string | null>(null)
+  useEffect(() => () => void (shot && URL.revokeObjectURL(shot)), [shot])
   const [sound, setSound] = useState(false)
   const [tick, setTick] = useState<StageTick | null>(null)
   const media = useResource((c) => c.media())
@@ -385,6 +388,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           aria-pressed={sound}
           onClick={() => {
             unlockAudio()
+            unlockImpactAudio()
             setSound((v) => !v)
           }}
         >
@@ -452,6 +456,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
     <DesignStage
       alert={alert}
       scene={scene}
+      shot={shot}
       sound={sound}
       // Every change replays the alert, so the effect of a setting is seen (and heard).
       autoplay
@@ -468,6 +473,27 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
     </DesignStage>
   )
 
+  const motionStage: MotionStage = {
+    play: () => stage.current?.play(),
+    sound,
+    onSound: () => {
+      unlockAudio()
+      unlockImpactAudio()
+      setSound((v) => !v)
+    },
+    scene,
+    onScene: setScene,
+    onShot: setShot,
+    amount,
+    onAmount: setAmount,
+    others: EVENT_KEYS.filter((k) => k !== ev && draft.content.events[k]).flatMap((k) => {
+      const v = draft.content.events[k]?.variations[0]
+      return v ? [{ key: k, look: v.look }] : []
+    }),
+    tick,
+    soundUrl: (id) => mediaUrl(id),
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {header}
@@ -482,6 +508,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           look={look}
           setLook={setLook}
           tick={tick}
+          motion={motionStage}
           onReplay={() => stage.current?.play()}
           when={
             <WhenSection
@@ -505,6 +532,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           preview={preview}
           props={props}
           variationTabs={variationTabs}
+          motion={motionStage}
           onReplay={() => stage.current?.play()}
           brand={design.built_in ? <BrandNote onDuplicate={() => setAskDuplicate(true)} /> : null}
           onSave={() => void save(draft)}
@@ -788,6 +816,7 @@ function StageView({
   look,
   setLook,
   tick,
+  motion,
   onReplay,
   when,
   brand,
@@ -801,6 +830,7 @@ function StageView({
   look: AlertLook
   setLook: SetLook
   tick: StageTick | null
+  motion: MotionStage
   onReplay: () => void
   when: React.ReactNode
   brand: React.ReactNode
@@ -820,12 +850,7 @@ function StageView({
       {tab === 'look' && <LookSection {...props} />}
       {tab === 'text' && <TextSection {...props} />}
       {tab === 'style' && <StyleSection {...props} />}
-      {tab === 'motion' && (
-        <>
-          <MotionSection {...props} onReplay={onReplay} />
-          <p className="text-[13px] text-text-3">Timing lives in the timeline: drag its edges.</p>
-        </>
-      )}
+      {tab === 'motion' && <MotionSection {...props} stage={motion} />}
       {tab === 'sound' && <SoundSection {...props} />}
       {tab === 'when' && when}
       {tab === 'css' && <CssSection {...props} />}
@@ -938,7 +963,7 @@ function GuidedView({
   preview,
   props,
   variationTabs,
-  onReplay,
+  motion,
   brand,
   onSave,
   when,
@@ -953,6 +978,7 @@ function GuidedView({
   preview: React.ReactNode
   props: SectionProps
   variationTabs: React.ReactNode
+  motion: MotionStage
   onReplay: () => void
   brand: React.ReactNode
   onSave: () => void
@@ -1091,7 +1117,7 @@ function GuidedView({
                     {s.id === 'text' && <TextSection {...p} />}
                     {s.id === 'text' && advanced && <StyleSection {...p} />}
                     {s.id === 'sound' && <SoundSection {...p} />}
-                    {s.id === 'motion' && <MotionSection {...p} onReplay={onReplay} />}
+                    {s.id === 'motion' && <MotionSection {...p} stage={motion} timing={advanced} />}
                     {s.id === 'motion' && advanced && (
                       <div className="flex flex-col gap-3 rounded-[14px] border border-dashed border-line-strong bg-surface-2 p-3.5">
                         <span className="font-mono text-[12.5px] font-semibold text-accent-text">
