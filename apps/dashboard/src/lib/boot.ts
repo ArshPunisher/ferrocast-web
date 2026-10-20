@@ -347,6 +347,8 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     // sale, `?pro=active` makes this install Pro, `?pro_features=on` switches every feature on.
     pro: {
       salesOpen: params.get('pro') === 'open',
+      // `?pro_sale=on`: a live sale (30% off monthly).
+      sale: params.get('pro_sale') === 'on',
       active: params.get('pro') === 'active',
       features: params.get('pro_features') === 'on',
     },

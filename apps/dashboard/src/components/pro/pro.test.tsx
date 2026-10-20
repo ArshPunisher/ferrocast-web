@@ -5,7 +5,15 @@ import { ProChip } from './ProChip'
 import { PRO_LINE, ProPanelView } from './ProPanel'
 import { href, parseRoute } from '../../lib/router'
 import { accountInitials, proPlanLine } from '../../lib/pro-status'
-import { canBuyPro, canManagePro, emailProblem, planCopy, proSummary, renewsOn } from '../pro'
+import {
+  canBuyPro,
+  canManagePro,
+  emailProblem,
+  offer,
+  planCopy,
+  proSummary,
+  renewsOn,
+} from '../pro'
 
 const view = (over: Partial<ProView> = {}): ProView => ({
   active: false,
@@ -146,6 +154,47 @@ describe('Settings › Pro card', () => {
     expect(proSummary({ ...grant, active: false, status: 'cancelled' }).text).toBe(
       'Your test Pro has ended.',
     )
+  })
+})
+
+describe('Pro offers (sales and discount codes)', () => {
+  const prices = { currency: 'INR' as const, monthly: 19900, yearly: 199900 }
+
+  it('shows list prices with nothing struck through when there is no sale', () => {
+    const o = offer(view({ prices }), null)
+    expect(o).toEqual({ prices, was: {}, note: null, code: null })
+  })
+
+  it('strikes through the old price during a sale and names it', () => {
+    const sale = {
+      name: 'Diwali',
+      headline: '30% off Pro',
+      message: null,
+      ends_at: null,
+      percent_off: 30,
+      was: { monthly: 19900 },
+    }
+    const o = offer(view({ prices: { ...prices, monthly: 13900 }, sale }), null)
+    expect(o.was).toEqual({ monthly: 19900 })
+    expect(o.note).toBe('30% off Pro.')
+    expect(o.prices.monthly).toBe(13900)
+  })
+
+  it('uses a discount code only where it is cheaper, and keeps the code for checkout', () => {
+    const o = offer(view({ prices }), {
+      kind: 'discount',
+      code: 'SAVE20',
+      percent_off: 20,
+      applies_period: 'monthly',
+      prices: {
+        monthly: { list: 19900, amount: 15900, code_applies: true },
+        yearly: { list: 199900, amount: 199900, code_applies: false },
+      },
+    })
+    expect(o.prices).toEqual({ ...prices, monthly: 15900 })
+    expect(o.was).toEqual({ monthly: 19900 })
+    expect(o.code).toBe('SAVE20')
+    expect(o.note).toBe('Code SAVE20: 20% off.')
   })
 })
 

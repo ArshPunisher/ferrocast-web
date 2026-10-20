@@ -32,6 +32,7 @@ import {
   rupeesFromPaise,
   type ProCheckout,
   type ProPlan,
+  type ProRedeem,
   type ProView,
 } from '@ferrocast/api'
 import { Badge, Button, Field, Input, Skeleton, cx, toast } from '@ferrocast/ui'
@@ -220,6 +221,7 @@ export function ProSettings() {
   const pro = proApi(client)
   const res = useResource(() => pro.status())
   const [email, setEmail] = useState('')
+  const [discount, setDiscount] = useState<Discount | null>(null)
 
   // Every fresh answer reaches the rest of the app (the sidebar, Home, the unlock).
   useEffect(() => {
@@ -237,7 +239,15 @@ export function ProSettings() {
         <StatusCard p={p} onView={res.set} email={email} />
       )}
       {buy && p.prices && (
-        <Checkout prices={p.prices} email={email} setEmail={setEmail} onView={(v) => res.set(v)} />
+        <Checkout
+          {...offer(p, discount)}
+          email={email}
+          setEmail={setEmail}
+          onView={(v) => res.set(v)}
+        />
+      )}
+      {!p.active && (
+        <CodeField discount={discount} onDiscount={setDiscount} onView={res.set} canBuy={buy} />
       )}
       {canRestore(p) && <Restore onView={res.set} />}
     </div>
@@ -342,11 +352,13 @@ const POLL_FOR_MS = 15 * 60_000
 
 function Checkout({
   prices,
+  was,
+  note,
+  code,
   email,
   setEmail,
   onView,
-}: {
-  prices: NonNullable<ProView['prices']>
+}: Offer & {
   email: string
   setEmail: (v: string) => void
   onView: (v: ProView) => void
@@ -373,7 +385,7 @@ function Checkout({
   const pay = async () => {
     setPaying(true)
     try {
-      const r = await pro.checkout(plan, email.trim())
+      const r = await pro.checkout(plan, email.trim(), code ?? undefined)
       setCheckout(r)
       moved.current = true
       // In the desktop app this hands the page to the browser; elsewhere a new tab (a
@@ -465,7 +477,12 @@ function Checkout({
                 your PC is off.
               </p>
             </div>
-            <PlanCards prices={prices} plan={plan} setPlan={setPlan} />
+            {note && (
+              <p className="text-[14px] font-semibold text-molten-text" data-testid="pro-offer">
+                {note}
+              </p>
+            )}
+            <PlanCards prices={prices} was={was} plan={plan} setPlan={setPlan} />
             <ul className="grid grid-cols-1 gap-x-5 gap-y-2.5 border-y border-line py-4 sm:grid-cols-2">
               {FEATURES.map((f) => (
                 <li key={f.title} className="grid grid-cols-[20px_1fr] items-start gap-2.5">
@@ -542,7 +559,20 @@ function Checkout({
               className="grid gap-2 rounded-[12px] border border-dashed border-line-strong px-4 py-3.5 text-[14.5px]"
               data-testid="pro-receipt"
             >
-              <Row k={`Ferrocast Pro, ${plan}`} v={<span className="font-mono">{c.price}</span>} />
+              <Row
+                k={`Ferrocast Pro, ${plan}`}
+                v={
+                  <span className="font-mono">
+                    {was[plan] && (
+                      <s className="mr-2 text-text-3">
+                        <span className="sr-only">was </span>
+                        {rupeesFromPaise(was[plan])}
+                      </s>
+                    )}
+                    {c.price}
+                  </span>
+                }
+              />
               <Row k="Renews" v={renewsOn(plan)} />
               <Row
                 k="Receipts to"
@@ -599,10 +629,12 @@ function StepNav({ onBack, children }: { onBack: () => void; children: ReactNode
 /** Two plan cards as one radio group: arrow keys move, the price never hides. */
 function PlanCards({
   prices,
+  was,
   plan,
   setPlan,
 }: {
   prices: NonNullable<ProView['prices']>
+  was: Partial<Record<ProPlan, number>>
   plan: ProPlan
   setPlan: (p: ProPlan) => void
 }) {
@@ -661,6 +693,12 @@ function PlanCards({
               )}
             </span>
             <span className="font-display text-[24px] leading-tight font-bold tracking-tight text-text">
+              {was[k] && (
+                <s className="mr-1.5 font-sans text-[16px] font-medium tracking-normal text-text-3">
+                  <span className="sr-only">was </span>
+                  {rupeesFromPaise(was[k])}
+                </s>
+              )}
               {c.price}{' '}
               <small className="font-sans text-[14px] font-medium tracking-normal text-text-3">
                 {c.per}
@@ -778,6 +816,145 @@ function Waiting({
         </div>
       </div>
     </>
+  )
+}
+
+/** A discount code the relay accepted, waiting for checkout. */
+type Discount = Extract<ProRedeem, { kind: 'discount' }>
+
+/** What the plan cards show: today's prices, the old ones struck through, and why. */
+interface Offer {
+  prices: NonNullable<ProView['prices']>
+  was: Partial<Record<ProPlan, number>>
+  note: string | null
+  code: string | null
+}
+
+/** Prices with the live sale, or a discount code when that's lower. */
+export function offer(p: ProView, d: Discount | null): Offer {
+  const prices = p.prices ?? { currency: 'INR' as const, monthly: 0, yearly: 0 }
+  const sale = p.sale ?? null
+  const until = sale?.ends_at ? ` Ends ${day(sale.ends_at)}.` : ''
+  const base: Offer = {
+    prices,
+    was: sale?.was ?? {},
+    note: sale ? `${sale.headline}.${until}` : null,
+    code: null,
+  }
+  if (!d) return base
+  const out: Offer = { prices: { ...prices }, was: { ...base.was }, note: base.note, code: d.code }
+  let better = false
+  for (const k of ['monthly', 'yearly'] as const) {
+    const q = d.prices[k]
+    if (q?.code_applies && q.amount < out.prices[k]) {
+      out.prices[k] = q.amount
+      out.was[k] = q.list
+      better = true
+    }
+  }
+  if (better) out.note = `Code ${d.code}: ${d.percent_off}% off.`
+  return out
+}
+
+/** "Have a code?": a free-Pro code turns Pro on; a discount code lowers the prices above. */
+function CodeField({
+  discount,
+  onDiscount,
+  onView,
+  canBuy,
+}: {
+  discount: Discount | null
+  onDiscount: (d: Discount | null) => void
+  onView: (v: ProView) => void
+  canBuy: boolean
+}) {
+  const pro = proApi(useClient())
+  const [code, setCode] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    const c = code.trim()
+    if (!c) {
+      setErr('Type the code first.')
+      return
+    }
+    setBusy(true)
+    setErr(null)
+    try {
+      const r = await pro.redeem(c)
+      if (r.kind === 'grant') {
+        onView(r.status)
+        setCode('')
+        toast({ tone: 'ok', message: `Pro is on until ${day(r.redeemed.until)}.` })
+      } else if (!canBuy) {
+        setErr('That code is a discount. It works once Pro is on sale.')
+      } else if (!Object.values(r.prices).some((q) => q.code_applies)) {
+        setErr('Today’s price is already lower than this code, so you don’t need it.')
+      } else {
+        onDiscount(r)
+        setCode('')
+        toast({ tone: 'ok', message: `Code ${r.code} applied to the prices above.` })
+      }
+    } catch (e) {
+      const d = describeError(e)
+      setErr(d.hint ? `${d.message} ${d.hint}` : d.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <details className="group max-w-[640px] border-t border-line pt-4" open={!!discount}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-text [&::-webkit-details-marker]:hidden">
+        Have a code?
+        <CaretDown
+          size={14}
+          aria-hidden
+          className="text-text-3 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+        />
+      </summary>
+      {discount ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-text-2">
+          <span>
+            <b className="font-mono text-text">{discount.code}</b> is applied:{' '}
+            {discount.percent_off}% off
+            {discount.applies_period ? ` the ${discount.applies_period} plan` : ''}.
+          </span>
+          <Button variant="ghost" onClick={() => onDiscount(null)}>
+            Remove
+          </Button>
+        </div>
+      ) : (
+        <form
+          noValidate
+          className="mt-3 flex max-w-md flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void submit()
+          }}
+        >
+          <Field label="Code" hint="Free Pro or a discount, from Ferrocast." error={err}>
+            {(f) => (
+              <Input
+                {...f}
+                spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="characters"
+                maxLength={32}
+                className="font-mono uppercase"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value)
+                  if (err) setErr(null)
+                }}
+              />
+            )}
+          </Field>
+          <Button type="submit" className="self-start" busy={busy}>
+            Apply code
+          </Button>
+        </form>
+      )}
+    </details>
   )
 }
 
