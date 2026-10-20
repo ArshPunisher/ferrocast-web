@@ -86,6 +86,7 @@ import { useAction, useClient, useMediaQuery, useResource } from '../lib/hooks'
 import { go, href, leaveTo } from '../lib/router'
 import { galleryTab } from '../components/design/gallery'
 import { useLeaveGuard } from '../lib/unsaved'
+import { previewMediaUrl } from '../lib/media-url'
 
 export type DesignerView = 'stage' | 'guided'
 const VIEW_KEY = 'fc.designer.view'
@@ -195,8 +196,9 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
       }),
     [draft, ev, amount, longName, variation?.id],
   )
-  const mediaUrl = (mid: string) =>
-    media.data?.find((m) => m.id === mid)?.url ?? client.mediaUrl(mid)
+  // Through the client: the engine's own url needs the session (1.0.0 showed the event art
+  // instead of an uploaded picture because the request was refused).
+  const mediaUrl = (mid: string) => previewMediaUrl(client, media.data, mid)
 
   /** Edits the variation on screen (for an event without its own look yet, it gets one). */
   const editVariations = (

@@ -62,6 +62,7 @@ import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useUnsavedWarning } from '../lib/unsaved'
 import { useLive } from '../lib/store'
+import { previewMediaUrl } from '../lib/media-url'
 
 type CondType = Exclude<Condition['type'], 'all' | 'any'>
 
@@ -683,15 +684,8 @@ function RuleEditor({
   const preview = useMemo(() => {
     if (!v || !event) return null
     const a = renderAlert('preview', draft, v, event)
-    const url = (id: string | null) => {
-      if (!id) return null
-      const m = media.find((x) => x.id === id)
-      return m
-        ? m.url.startsWith('data:') || m.url.startsWith('blob:')
-          ? m.url
-          : client.mediaUrl(id)
-        : null
-    }
+    const url = (id: string | null) =>
+      id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
     return { ...a, sound: url(a.sound), image: url(a.image) }
   }, [draft, v, event, media, client])
   if (!v) return null
