@@ -245,8 +245,8 @@ const GATE_COPY: Record<RemoteProblem, { title: string; body: string }> = {
     body: 'The cloud bot is paused. Switch it on for chat and bans here.',
   },
   pro_paused: {
-    title: 'Pro is paused',
-    body: 'This phone stays paired. It works again as soon as Ferrocast Pro is back on the PC.',
+    title: 'Sign in on your PC',
+    body: 'Update Ferrocast on your streaming PC to 1.3 or newer and sign in there with this account. The web dashboard is free with an account. This page comes back by itself.',
   },
   signing_in: {
     title: 'Signing you in…',

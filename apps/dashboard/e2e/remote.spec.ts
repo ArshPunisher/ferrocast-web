@@ -167,7 +167,7 @@ test.describe('The relay closes a phone’s live socket', () => {
     await open(page, 'chat', 'autoplay=0&latency=0&remote=mod')
     await page.evaluate(() => localStorage.setItem('fc-remote', '{"api":"x","token":"t"}'))
     await page.evaluate(() => window.__ferrocastDemo?.closeRemoteLive(4402))
-    await expect(page.getByRole('heading', { name: 'Pro is paused' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Sign in on your PC' })).toBeVisible()
     expect(await page.evaluate(() => localStorage.getItem('fc-remote'))).not.toBeNull()
   })
 
@@ -320,7 +320,7 @@ test.describe('A real phone page (config from the relay, relay answers mocked)',
       }),
     )
     await page.goto('./')
-    await expect(page.getByRole('heading', { name: 'Pro is paused' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Sign in on your PC' })).toBeVisible()
     expect(await page.evaluate(() => localStorage.getItem('fc-remote'))).toContain('fcr_dv_1.s')
   })
 
