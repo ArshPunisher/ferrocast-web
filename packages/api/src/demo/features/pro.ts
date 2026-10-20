@@ -10,6 +10,9 @@ import { NOT_MINE, clone, requireObj, type Routed } from './host'
 
 /** Restore with this id (any valid email) to see an active Pro in the demo. */
 export const DEMO_PRO_SUBSCRIPTION = 'sub_DemoPro00001'
+/** Redeem these in the demo: 14 days of free Pro, or 20% off the monthly plan. */
+export const DEMO_GRANT_CODE = 'DEMO-FREE'
+export const DEMO_DISCOUNT_CODE = 'DEMO-SAVE20'
 const LAUNCH =
   'Ferrocast Pro launches after version 1. Everything Ferrocast does today is free, and stays free.'
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -26,6 +29,8 @@ export interface DemoProSetup {
   paid?: boolean
   /** An owner's test grant (`comp_…`, no Razorpay): running, or ended. */
   testGrant?: 'active' | 'ended'
+  /** A live sale: 30% off monthly, ending in 5 days. */
+  sale?: boolean
 }
 
 export class DemoPro {
@@ -58,6 +63,18 @@ export class DemoPro {
   /** Switches the demo's Pro state (tests, `?pro=` in the dashboard). */
   setup(s: DemoProSetup): void {
     if (s.salesOpen !== undefined) this.state.sales_open = s.salesOpen
+    if (s.sale) {
+      this.state.list_prices = { currency: 'INR', monthly: 19_900, yearly: 199_900 }
+      this.state.prices = { currency: 'INR', monthly: 13_900, yearly: 199_900 }
+      this.state.sale = {
+        name: 'Diwali',
+        headline: '30% off Pro monthly for Diwali',
+        message: null,
+        ends_at: Date.now() + 5 * 86_400_000,
+        percent_off: 30,
+        was: { monthly: 19_900 },
+      }
+    }
     if (s.features !== undefined) {
       const on = s.features
       this.state.features = Object.fromEntries(
@@ -126,6 +143,54 @@ export class DemoPro {
     if (!sub && method === 'GET') return this.view()
     if (method !== 'POST') return NOT_MINE
     if (sub === 'refresh') return this.view()
+    if (sub === 'redeem') {
+      const b = requireObj(body)
+      const code = typeof b.code === 'string' ? b.code.trim().toUpperCase() : ''
+      if (!code) throw new HttpError(422, 'invalid_code', 'Type the code first.')
+      if (code === DEMO_DISCOUNT_CODE) {
+        const list = this.state.list_prices ?? this.state.prices
+        const m = list?.monthly ?? 19_900
+        const y = list?.yearly ?? 199_900
+        const now = this.state.prices?.monthly ?? m
+        const off = Math.floor((m * 0.8) / 100) * 100
+        return {
+          kind: 'discount',
+          code,
+          percent_off: 20,
+          applies_period: 'monthly',
+          prices: {
+            monthly: { list: m, amount: Math.min(off, now), code_applies: off < now },
+            yearly: { list: y, amount: this.state.prices?.yearly ?? y, code_applies: false },
+          },
+        }
+      }
+      if (code !== DEMO_GRANT_CODE)
+        throw new HttpError(
+          404,
+          'code_not_found',
+          'That code isn’t valid.',
+          'Check the spelling; codes are letters, digits and dashes.',
+        )
+      if (this.state.active && !this.state.subscription_id?.startsWith('comp_'))
+        throw new HttpError(409, 'already_pro', 'This install already pays for Pro.')
+      const until = Date.now() + 14 * 86_400_000
+      Object.assign(this.state, {
+        active: true,
+        pro: true,
+        status: 'active',
+        plan: 'comp' as unknown as null,
+        subscription_id: 'comp_DemoCode01',
+        current_end: until,
+        access_until: until,
+        cancel_at_period_end: true,
+        installs: 1,
+      })
+      return {
+        kind: 'grant',
+        status: this.view(),
+        redeemed: { code, days: 14, until, extended: false },
+      }
+    }
     if (sub === 'checkout') {
       if (!this.state.sales_open)
         throw new HttpError(409, 'pro_not_on_sale', 'Ferrocast Pro isn’t on sale yet.', LAUNCH)

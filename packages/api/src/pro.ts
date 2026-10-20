@@ -65,8 +65,12 @@ export interface ProView {
   refunded: boolean
   installs: number
   sales_open: boolean
-  /** Paise. */
+  /** Paise, as a buyer pays them now (a live sale applied). */
   prices: { currency: 'INR'; monthly: number; yearly: number } | null
+  /** Paise without the sale. Missing from older relays. */
+  list_prices?: { currency: 'INR'; monthly: number; yearly: number } | null
+  /** The live sale, if one is on. Missing from older relays. */
+  sale?: ProSale | null
   checked_at: number
   stale: boolean
   offline_grace_days: number
@@ -92,21 +96,57 @@ export function proPanelState(
   return p.sales_open ? 'locked' : 'hidden'
 }
 
+/** A timed sale on Pro (the relay's `sale`). */
+export interface ProSale {
+  name: string
+  headline: string
+  message: string | null
+  /** When it ends (ms), or null until stopped. */
+  ends_at: number | null
+  percent_off: number
+  /** The price before the sale, for the plans it lowers (paise). */
+  was: Partial<Record<ProPlan, number>>
+}
+
 export interface ProCheckout {
   checkout_url: string
   subscription_id: string
   plan: ProPlan
+  /** What is charged each period (paise). */
   amount: number
+  list_amount?: number
   currency: 'INR'
+  /** The discount code was used (false when the sale was already cheaper). */
+  code_applied?: boolean
 }
+
+/** What redeeming a code did: free Pro (grant) or a price to pass to checkout (discount). */
+export type ProRedeem =
+  | {
+      kind: 'grant'
+      status: ProView
+      redeemed: { code: string; days: number; until: number; extended: boolean }
+    }
+  | {
+      kind: 'discount'
+      code: string
+      percent_off: number
+      applies_period: ProPlan | null
+      prices: Record<ProPlan, { list: number; amount: number; code_applies: boolean }>
+    }
 
 /** Pro's routes on a dashboard client. */
 export function proApi(c: FerroClient) {
   return {
     status: () => c.request<ProView>('GET', '/api/v1/pro'),
     refresh: () => c.request<ProView>('POST', '/api/v1/pro/refresh', {}),
-    checkout: (plan: ProPlan, email: string) =>
-      c.request<ProCheckout>('POST', '/api/v1/pro/checkout', { plan, email }),
+    checkout: (plan: ProPlan, email: string, code?: string) =>
+      c.request<ProCheckout>(
+        'POST',
+        '/api/v1/pro/checkout',
+        code ? { plan, email, code } : { plan, email },
+      ),
+    redeem: (code: string) => c.request<ProRedeem>('POST', '/api/v1/pro/redeem', { code }),
     manage: () => c.request<{ url: string; expires_at: number }>('POST', '/api/v1/pro/manage', {}),
     cancel: () => c.request<ProView>('POST', '/api/v1/pro/cancel', {}),
     restore: (subscription_id: string, email: string) =>
