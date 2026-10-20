@@ -79,6 +79,7 @@ import { DemoObsDetect } from './features/obs-detect'
 import { DemoStarter } from './features/starter'
 import { DemoImporters } from './features/importers'
 import { DemoPro, type DemoProSetup } from './features/pro'
+import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
 import { DemoHistory } from './features/history'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
@@ -150,6 +151,8 @@ export interface DemoOptions {
   designs?: readonly Design[]
   /** Pro's starting state: off sale, not Pro, no features (like the real relay today). */
   pro?: DemoProSetup
+  /** The Ferrocast account on this PC: signed out (default), signed in or disabled. */
+  account?: DemoAccountSetup
   /** Pro stream history: a demo year of streams (default) or none yet. */
   history?: 'demo' | 'empty'
   /** Pro cloud backups: a few from this PC (default), none yet, or a new PC's view. */
@@ -382,6 +385,7 @@ export class DemoEngine {
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
   private readonly pro: DemoPro
+  private account!: DemoAccount
   /** The Ferrocast bot in Discord (Pro): go-live posts and roles. */
   private readonly discordPro = new DemoDiscordPro(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
@@ -573,6 +577,11 @@ export class DemoEngine {
     this.labels.set('latest_sub', 'DesertFoxx')
     this.labels.set('latest_tip', 'Asha (₹500)')
     this.host = this.makeHost()
+    this.account = new DemoAccount(
+      this.host,
+      () => this.pro.route('GET', ['pro'], undefined) as ProView,
+      opts.account,
+    )
     this.loyalty = new DemoLoyalty(this.host)
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
@@ -654,6 +663,11 @@ export class DemoEngine {
   /** Pro on sale, active or with its features on (tests of Pro panels). */
   setPro(s: DemoProSetup): void {
     this.pro.setup(s)
+  }
+
+  /** The Ferrocast account: signed out, signed in or disabled (tests). */
+  setAccount(s: DemoAccountSetup): void {
+    this.account.setup(s)
   }
 
   /** Stream history with no streams yet (true) or the demo year (false). */
@@ -1609,6 +1623,7 @@ export class DemoEngine {
 
   private features(): DemoFeature[] {
     return [
+      this.account,
       this.loyalty,
       this.polls,
       this.giveaways,
