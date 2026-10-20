@@ -50,7 +50,7 @@ import { LoadError } from './Panel'
 import { ProPanel } from './pro/ProPanel'
 import { useAction, useClient, useNow, useResource } from '../lib/hooks'
 import { isLimited, type RemoteState } from '../lib/store'
-import { checkRemote, type RemoteProblem } from '../lib/boot'
+import { accountPcs, checkRemote, connectAccountPc, type RemoteProblem } from '../lib/boot'
 import { qrEncode } from '../lib/qr'
 
 // ---------------------------------------------------------------- QR code
@@ -248,6 +248,22 @@ const GATE_COPY: Record<RemoteProblem, { title: string; body: string }> = {
     title: 'Pro is paused',
     body: 'This phone stays paired. It works again as soon as Ferrocast Pro is back on the PC.',
   },
+  signing_in: {
+    title: 'Signing you in…',
+    body: 'The web dashboard needs your free Ferrocast account. The sign-in page opens next.',
+  },
+  account_disabled: {
+    title: 'This account is turned off',
+    body: 'Write to support@clearcraftlabs.com and we’ll sort it out.',
+  },
+  choose_pc: {
+    title: 'Which PC?',
+    body: 'Your account is signed in on more than one PC. Pick the one to open.',
+  },
+  no_pcs: {
+    title: 'Sign in on your PC',
+    body: 'Open Ferrocast on your streaming PC and press Sign in at the bottom of the sidebar. Then try again here.',
+  },
   elsewhere: {
     title: 'Open in another tab',
     body: 'This phone has the dashboard open in too many tabs. Use the newest one, or reload here.',
@@ -357,6 +373,7 @@ export function RemoteGate({
               Switch cloud bot on
             </Button>
           )}
+          {problem === 'choose_pc' && <PcChoice onDone={onRetry} />}
           {switchError && (
             <p role="alert" className="text-[15px] font-semibold text-danger">
               {switchError.message}
@@ -377,6 +394,53 @@ export function RemoteGate({
           )}
         </div>
       </main>
+    </div>
+  )
+}
+
+/** The account's PCs, each with Open (the "Which PC?" screen on the web dashboard). */
+function PcChoice({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const api = window.__FERROCAST__?.api ?? ''
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <ul className="divide-y divide-line rounded-[14px] border border-line bg-surface-1">
+        {accountPcs.map((pc) => (
+          <li key={pc.id} className="flex items-center gap-3 px-3.5 py-3">
+            <span className="min-w-0 flex-1">
+              <b className="block truncate text-[15px] font-semibold text-text">
+                {pc.label || 'Your PC'}
+              </b>
+              <small className="block text-[13px] text-text-3">
+                {pc.pc_online ? 'On now' : 'Off'}
+              </small>
+            </span>
+            <Button
+              size="sm"
+              busy={busy === pc.id}
+              onClick={() => {
+                setBusy(pc.id)
+                setErr(null)
+                connectAccountPc(api, pc.id)
+                  .then(onDone)
+                  .catch((e: unknown) => {
+                    const d = describeError(e)
+                    setErr(d.hint ? `${d.message} ${d.hint}` : d.message)
+                  })
+                  .finally(() => setBusy(null))
+              }}
+            >
+              Open
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {err && (
+        <p role="alert" className="text-[14px] font-semibold text-danger">
+          {err}
+        </p>
+      )}
     </div>
   )
 }

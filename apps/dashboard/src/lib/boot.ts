@@ -22,6 +22,8 @@ import {
 } from '@ferrocast/api'
 import type { RemoteState } from './store'
 import { markUnlockShown } from './pro-status'
+import { accountApi, publishAccount } from './account-status'
+import type { AccountPc, WebAccountApi } from '@ferrocast/api'
 
 declare global {
   interface Window {
@@ -77,6 +79,12 @@ export function clearRemote(): void {
  */
 export type RemoteProblem =
   | 'unpaired'
+  /** The web dashboard needs an account: on the way to the sign-in page. */
+  | 'signing_in'
+  | 'account_disabled'
+  /** Signed in, with more than one PC to open (or none signed in yet). */
+  | 'choose_pc'
+  | 'no_pcs'
   | 'pc_offline'
   /** The PC is off and the cloud bot is connected but switched off (an owner can switch it on). */
   | 'cloud_paused'
@@ -148,9 +156,31 @@ async function remoteConnect(
   | { remoteProblem: RemoteProblem; api: string }
   | { remotePairing: { api: string; code: string } }
 > {
+  // Accounts (1.3): the web dashboard needs a signed-in account. A relay without accounts
+  // answers 404 (`off`) and everything works as before.
+  const web = accountApi() as WebAccountApi | null
+  const account = web ? await web.status().catch(() => null) : null
+  if (account) publishAccount(account)
+  if (account?.state === 'signed_out') {
+    window.location.assign(`${webOrigin(api)}/login?next=${encodeURIComponent('/app/')}`)
+    return { remoteProblem: 'signing_in', api }
+  }
+  if (account?.state === 'disabled') return { remoteProblem: 'account_disabled', api }
   const code = pairCodeFromHash()
   if (code) return { remotePairing: { api, code } }
-  const token = readRemote(api)
+  let token = readRemote(api)
+  if (!token && web && account?.state === 'signed_in') {
+    // No device token yet: open the account's PC (one online PC opens by itself).
+    const pcs = await web.pcs().catch(() => [] as AccountPc[])
+    accountPcs = pcs
+    const online = pcs.filter((p) => p.pc_online)
+    const only = online.length === 1 ? online[0] : pcs.length === 1 ? pcs[0] : undefined
+    if (!pcs.length) return { remoteProblem: 'no_pcs', api }
+    if (!only) return { remoteProblem: 'choose_pc', api }
+    const c = await web.connectPc(only.id)
+    saveRemote(api, c.token)
+    token = c.token
+  }
   if (!token) return { remoteProblem: 'unpaired', api }
   try {
     const me = await phoneApi(api).me(token)
@@ -209,9 +239,26 @@ export async function checkRemote(): Promise<RemoteProblem | 'online' | null> {
   }
 }
 
+/** The account's PCs from the last connect, for the "choose a PC" screen. */
+export let accountPcs: AccountPc[] = []
+
+/** `https://remote.example` from the injected `https://remote.example/r`. */
+export function webOrigin(api: string): string {
+  return api.replace(/\/r\/?$/, '')
+}
+
+/** Opens one of the account's PCs in this browser (the "choose a PC" screen). */
+export async function connectAccountPc(api: string, id: string): Promise<void> {
+  const web = accountApi() as WebAccountApi | null
+  if (!web) throw new Error('No account here.')
+  const c = await web.connectPc(id)
+  saveRemote(api, c.token)
+}
+
 /** Trades a one-time code from the PC for this phone's device token, then connects. */
 export async function pairRemote(api: string, code: string): Promise<void> {
-  const paired = await phoneApi(api).pair(code)
+  const web = accountApi() as WebAccountApi | null
+  const paired = await phoneApi(api).pair(code, web?.csrfToken?.() ?? null)
   saveRemote(api, paired.token)
   history.replaceState(null, '', location.pathname + location.search + '#/')
 }
@@ -324,6 +371,10 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
     ...(params.get('tips') === 'empty' ? { tips: 'empty' as const } : {}),
     ...(params.get('relay') === '0' ? { relay: false } : {}),
+    // `?account=signed_in|disabled`: the Ferrocast account on this PC (signed out by default).
+    ...(params.get('account') === 'signed_in' || params.get('account') === 'disabled'
+      ? { account: params.get('account') as 'signed_in' | 'disabled' }
+      : {}),
     // `?history=empty`: Pro stream history with no streams yet.
     ...(params.get('history') === 'empty' ? { history: 'empty' as const } : {}),
     // `?remote=owner|mod&pc=off`: this dashboard as a paired phone, the PC on or off;

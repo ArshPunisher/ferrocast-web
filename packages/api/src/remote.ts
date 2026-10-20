@@ -146,10 +146,16 @@ async function relayJson<T>(f: FetchLike, url: string, init: RequestInit): Promi
 export function phoneApi(api: string, f: FetchLike = (i, init) => fetch(i, init)) {
   const base = api.replace(/\/+$/, '')
   return {
-    pair: (code: string) =>
+    /** `csrf`: the signed-in account's token (ACCOUNTS.md §1), needed once accounts are on. */
+    pair: (code: string, csrf?: string | null) =>
       relayJson<RemotePaired>(f, `${base}/v1/pair`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+        },
         body: JSON.stringify({ code }),
       }),
     me: (token: string) =>
