@@ -1,5 +1,11 @@
 # Status
 
+## 20 Oct 2026 (site SEO pass)
+- Structured data: the home page's SoftwareApplication now lists the free app plus Pro monthly (₹199) and yearly (₹1,999) in INR with the pricing page, `sameAs` the GitHub repo, and always has `downloadUrl`; `softwareVersion` still comes from the newest stable release at build time (1.0.1 until 1.1.0 is published, then the next build picks it up).
+- Sitemap: every URL has `lastmod`, the last commit to the page file or the data it renders (build time when git can't say).
+- Footer: a ClearCraft Labs column (the studio, Fuselane, Hookline, TransformX), so the studio's sites link each other. clearcraftlabs.com got a Ferrocast page at /ferrocast/ the same day.
+- Checked: titles, descriptions, canonicals, OG/Twitter, h1s and robots were already right (seo/links/mobile/a11y e2e pass). CodeRabbit: one finding (lastmod should follow data files), fixed.
+
 ## 20 Oct 2026 (updates you can see)
 - Why the owner's 1.0.0 never showed an update: the engine found it, but the dashboard only read `/updates` once when Settings opened and said "is the latest" before the first check or after a failed one (engine STATUS has the full root cause).
 - `packages/api`: `UpdateInfo` now matches API.md's `UpdateView` (new fields optional for older engines), `UpdateProblem`, `UpdateInstall`, the `update` live frame (shape checked in `live.ts`), `checkUpdates`, `restartForUpdate`, `/updates/*` denied to phones; the demo engine checks, "downloads" with progress, becomes ready and "restarts" (never while live).
