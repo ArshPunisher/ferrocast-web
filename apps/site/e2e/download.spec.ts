@@ -25,8 +25,8 @@ test.describe('download page', () => {
       await expect(card.locator('a[data-beta-download], .soon').first()).toBeVisible()
     }
     if ((await main.locator('.os[data-os="mac"] a[data-beta-download]').count()) > 0) {
-      await expect(main.getByText('right-click Ferrocast')).toBeVisible()
-      await expect(main.getByText('Run anyway')).toBeVisible()
+      await expect(main.locator('.os').getByText('right-click Ferrocast')).toBeVisible()
+      await expect(main.locator('.os').getByText('Run anyway')).toBeVisible()
     }
     const downloads = main.locator('a[data-beta-download]')
     const tag = stable ? String.raw`v\d+\.\d+\.\d+/` : String.raw`v\d+\.\d+\.\d+-`

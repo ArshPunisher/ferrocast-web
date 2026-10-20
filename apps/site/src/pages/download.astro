@@ -67,6 +67,22 @@ const short = (url: string) => {
   return 'file'
 }
 const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
+const fileName = (url: string) => decodeURIComponent(url.split('/').pop() ?? '')
+type Kind = 'mac' | 'windows' | 'appimage' | 'deb' | 'rpm'
+const kindOf = (url: string): Kind | null => {
+  const f = fileName(url)
+  if (f.endsWith('.dmg')) return 'mac'
+  if (f.endsWith('-setup.exe')) return 'windows'
+  if (f.endsWith('.AppImage')) return 'appimage'
+  if (f.endsWith('.deb')) return 'deb'
+  if (f.endsWith('.rpm')) return 'rpm'
+  return null
+}
+// The thank-you panel's install steps, one list per file on the page, with its real name.
+const installs = (beta?.assets ?? []).flatMap((a) => {
+  const kind = kindOf(a.url)
+  return kind ? [{ kind, file: fileName(a.url) }] : []
+})
 ---
 
 <Base
@@ -99,7 +115,12 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
     </div>
   </section>
 
-  <section class="container" id={isStable ? 'get' : 'beta'} aria-labelledby="get-title">
+  <section
+    class="container"
+    id={isStable ? 'get' : 'beta'}
+    aria-labelledby="get-title"
+    data-dl-section
+  >
     <h2 id="get-title" class="sr-only">
       {isStable ? 'Download Ferrocast' : 'Download the beta'}
     </h2>
@@ -159,14 +180,22 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
                 <p class="plan">{p.tip}</p>
                 <div class="get">
                   <a
-                    class="btn btn-secondary"
+                    class="btn btn-secondary dl"
                     href={main.url}
                     rel="noopener"
                     data-beta-download
                     data-bot-excite
+                    data-dl-os={p.name}
+                    data-dl-kind={kindOf(main.url)}
                   >
-                    <Icon name="download-simple" size={18} />
-                    {isStable ? 'Download' : 'Download beta'}
+                    <span class="dl-idle">
+                      <Icon name="download-simple" size={18} />
+                      {isStable ? 'Download' : 'Download beta'}
+                    </span>
+                    <span class="dl-busy">
+                      <Icon name="circle-notch" size={18} weight="bold" class="dl-spin" />
+                      Starting download…
+                    </span>
                     <span class="sr-only">
                       for {p.name} ({short(main.url)})
                     </span>
@@ -181,8 +210,20 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
                     {more.map((a, i) => (
                       <>
                         {i > 0 && ' or '}
-                        <a href={a.url} rel="noopener" data-beta-download>
-                          {short(a.url)}
+                        <a
+                          class="dl dl-text"
+                          href={a.url}
+                          rel="noopener"
+                          data-beta-download
+                          data-dl-os={p.name}
+                          data-dl-kind={kindOf(a.url)}
+                        >
+                          <span class="dl-idle">{short(a.url)}</span>
+                          <span class="dl-busy">
+                            <Icon name="circle-notch" size={14} weight="bold" class="dl-spin" />
+                            Starting…
+                          </span>
+                          <span class="sr-only">for {p.name}</span>
                         </a>
                       </>
                     ))}
@@ -200,6 +241,110 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
         )
       })}
     </ul>
+    <p class="sr-only" role="status" data-dl-status></p>
+    {installs.length > 0 && (
+      <div class="thanks" data-dl-thanks hidden>
+        <div class="thanks-bot">
+          <Bot id="bot-thanks" />
+        </div>
+        <div class="thanks-body">
+          <h2 id="thanks-title" class="display-3" tabindex="-1">
+            Thanks for downloading Ferrocast
+          </h2>
+          <p class="thanks-lede" data-dl-lede>
+            Your download is on its way. Here’s how to install it.
+          </p>
+          {installs.map(({ kind, file }) => (
+            <ol class="steps" data-dl-steps={kind} hidden>
+              {kind === 'mac' && (
+                <>
+                  <li>
+                    Open <code>{file}</code> from your Downloads folder.
+                  </li>
+                  <li>Drag Ferrocast into your Applications folder.</li>
+                  <li>
+                    The first time, right-click Ferrocast in Applications and choose{' '}
+                    <strong>Open</strong>, then <strong>Open</strong> again. It isn’t signed yet, so
+                    macOS asks this once.
+                  </li>
+                </>
+              )}
+              {kind === 'windows' && (
+                <>
+                  <li>
+                    Run <code>{file}</code> from your Downloads folder. It installs for your
+                    account, so no admin rights are needed.
+                  </li>
+                  <li>
+                    If SmartScreen says “Windows protected your PC”, choose{' '}
+                    <strong>More info</strong>, then <strong>Run anyway</strong>.
+                  </li>
+                  <li>Open Ferrocast from the Start menu.</li>
+                </>
+              )}
+              {kind === 'appimage' && (
+                <>
+                  <li>
+                    Make it executable (or tick “Allow executing file as program” in its
+                    properties):
+                    <code class="cmd">chmod +x {file}</code>
+                  </li>
+                  <li>
+                    Run it: <code class="cmd">./{file}</code>
+                  </li>
+                </>
+              )}
+              {kind === 'deb' && (
+                <>
+                  <li>
+                    Install it: <code class="cmd">sudo apt install ./{file}</code>
+                  </li>
+                  <li>Open Ferrocast from your app menu.</li>
+                </>
+              )}
+              {kind === 'rpm' && (
+                <>
+                  <li>
+                    Install it (on openSUSE, use <code>zypper install</code> instead):
+                    <code class="cmd">sudo dnf install ./{file}</code>
+                  </li>
+                  <li>Open Ferrocast from your app menu.</li>
+                </>
+              )}
+              <li>
+                The dashboard opens in its own window. Connect Twitch, YouTube or Kick and you’re
+                ready.
+              </li>
+            </ol>
+          ))}
+          <div class="thanks-actions">
+            <a class="btn btn-primary" href="/docs/getting-started/#connect">
+              <Icon name="book-open-text" size={18} />
+              Read the setup guide
+            </a>
+            <button type="button" class="btn btn-secondary" data-dl-back>
+              <Icon name="arrow-left" size={18} />
+              All downloads
+            </button>
+          </div>
+          <p class="thanks-help">
+            <span>
+              Download didn’t start?{' '}
+              <a class="dl dl-text" href="" data-dl-retry>
+                <span class="dl-idle">Try again</span>
+                <span class="dl-busy">
+                  <Icon name="circle-notch" size={14} weight="bold" class="dl-spin" />
+                  Starting…
+                </span>
+              </a>
+            </span>
+            <span>
+              Stuck on a step? <a href="/contact/">Ask us</a>
+            </span>
+          </p>
+        </div>
+      </div>
+    )}
     {isStable ? (
       <p class="after">
         Ferrocast updates itself to new stable releases, and never while you’re live.
@@ -313,6 +458,116 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
     card?.querySelector<HTMLElement>('.yours')?.removeAttribute('hidden')
     // The visitor's download is the page's main button.
     card?.querySelector('.get .btn')?.classList.replace('btn-secondary', 'btn-primary')
+  }
+</script>
+
+<script>
+  // Download feedback. The links stay real links (no JS, middle-click and "save link as" all
+  // work); a plain click also shows "Starting download…" in the button, then swaps the
+  // system cards for a thank-you panel with that file's install steps. No route change: a
+  // pushState here could cancel the download's own navigation in some browsers.
+  const section = document.querySelector<HTMLElement>('[data-dl-section]')
+  const thanks = section?.querySelector<HTMLElement>('[data-dl-thanks]')
+  if (section && thanks) {
+    const cards = section.querySelector<HTMLElement>('.oses')
+    const after = section.querySelector<HTMLElement>('.after')
+    const status = section.querySelector<HTMLElement>('[data-dl-status]')
+    const heading = thanks.querySelector<HTMLElement>('#thanks-title')
+    const lede = thanks.querySelector<HTMLElement>('[data-dl-lede]')
+    const retry = thanks.querySelector<HTMLAnchorElement>('[data-dl-retry]')
+    const thanksBot = thanks.querySelector<HTMLElement>('[data-bot]')
+    const headGrid = document.querySelector<HTMLElement>('.head-grid')
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)')
+    let last: HTMLAnchorElement | null = null
+    let timer = 0
+
+    const plainClick = (e: MouseEvent) =>
+      !e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey
+    const say = (text: string) => {
+      if (status) status.textContent = text
+    }
+    const busy = (a: HTMLAnchorElement, on: boolean) => {
+      if (on) a.dataset.state = 'starting'
+      else delete a.dataset.state
+    }
+
+    const showThanks = (a: HTMLAnchorElement) => {
+      const kind = a.dataset.dlKind ?? ''
+      const os = a.dataset.dlOs ?? ''
+      thanks.querySelectorAll<HTMLElement>('[data-dl-steps]').forEach((ol) => {
+        ol.hidden = ol.dataset.dlSteps !== kind
+      })
+      if (lede) lede.textContent = `Your ${os} download is on its way. Here’s how to install it.`
+      if (retry) retry.href = a.href
+      busy(a, false)
+      if (cards) cards.hidden = true
+      if (after) after.hidden = true
+      thanks.hidden = false
+      headGrid?.classList.add('bot-away')
+      // Bring the panel into view if the click was further down, then hand focus to it.
+      const top = thanks.getBoundingClientRect().top
+      if (top < 0 || top > innerHeight * 0.6)
+        thanks.scrollIntoView({ block: 'start', behavior: reduce.matches ? 'auto' : 'smooth' })
+      heading?.focus({ preventScroll: true })
+      say('Download started.')
+      thanksBot?.dispatchEvent(new CustomEvent('bot:cheer'))
+    }
+
+    const showCards = () => {
+      thanks.hidden = true
+      if (cards) cards.hidden = false
+      if (after) after.hidden = false
+      headGrid?.classList.remove('bot-away')
+      say('')
+      const back = last?.isConnected
+        ? last
+        : section.querySelector<HTMLElement>('a[data-beta-download]')
+      back?.focus()
+    }
+
+    section.addEventListener('click', (e) => {
+      const a = (e.target as Element).closest<HTMLAnchorElement>('a[data-beta-download]')
+      if (!a || !plainClick(e)) return
+      // A second click while it starts would only fetch the same file twice.
+      if (a.dataset.state === 'starting') {
+        e.preventDefault()
+        return
+      }
+      section
+        .querySelectorAll<HTMLAnchorElement>('a[data-state="starting"]')
+        .forEach((x) => busy(x, false))
+      clearTimeout(timer)
+      last = a
+      busy(a, true)
+      say(`Starting your ${a.dataset.dlOs ?? ''} download…`)
+      // Long enough to read the button, short enough to feel like a response.
+      timer = window.setTimeout(() => showThanks(a), reduce.matches ? 600 : 1100)
+    })
+
+    retry?.addEventListener('click', (e) => {
+      if (!plainClick(e) || !retry.href) return
+      if (retry.dataset.state === 'starting') {
+        e.preventDefault()
+        return
+      }
+      busy(retry, true)
+      say('Starting the download again…')
+      window.setTimeout(() => {
+        busy(retry, false)
+        say('Download started.')
+      }, 1500)
+    })
+
+    thanks.querySelector('[data-dl-back]')?.addEventListener('click', showCards)
+
+    // Coming back through the back/forward cache: no button should still say "Starting".
+    addEventListener('pageshow', (e) => {
+      if (!e.persisted) return
+      clearTimeout(timer)
+      section
+        .querySelectorAll<HTMLAnchorElement>('[data-state="starting"]')
+        .forEach((x) => busy(x, false))
+    })
   }
 </script>
 
@@ -528,6 +783,232 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
     .build-grid {
       grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
       gap: 48px;
+    }
+  }
+  /* Download feedback: the button says it heard the click. */
+  .dl-busy {
+    display: none;
+    align-items: center;
+    gap: inherit;
+  }
+  .dl-idle {
+    display: inline-flex;
+    align-items: center;
+    gap: inherit;
+  }
+  .dl[data-state='starting'] .dl-idle {
+    display: none;
+  }
+  .dl[data-state='starting'] .dl-busy {
+    display: inline-flex;
+  }
+  .dl[data-state='starting'] {
+    cursor: progress;
+  }
+  .dl-text .dl-busy {
+    gap: 4px;
+  }
+  .dl-text :global(.dl-spin) {
+    vertical-align: -2px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .dl-busy {
+      animation: dl-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .dl :global(.dl-spin) {
+      animation: dl-spin 700ms linear infinite;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dl :global(.dl-spin) {
+      animation: dl-pulse 1s ease-in-out infinite alternate;
+    }
+  }
+  @keyframes dl-in {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+  }
+  @keyframes dl-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes dl-pulse {
+    to {
+      opacity: 0.4;
+    }
+  }
+  .oses[hidden],
+  .after[hidden],
+  .thanks[hidden],
+  .steps[hidden] {
+    display: none;
+  }
+
+  /* Sparky steps down from the header into the thank-you panel. */
+  .head-grid :global(.fc-bot) {
+    transition:
+      opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+      visibility 200ms;
+  }
+  .head-grid.bot-away :global(.fc-bot) {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .thanks {
+    display: grid;
+    gap: 8px 32px;
+    padding: 28px 24px;
+    scroll-margin-top: 88px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-accent-line);
+    background:
+      radial-gradient(70% 80% at 0% 0%, var(--fc-accent-soft), transparent 70%), var(--fc-surface-1);
+  }
+  .thanks-bot {
+    justify-self: start;
+  }
+  .thanks-bot :global(.fc-bot .bot) {
+    width: clamp(104px, 28vw, 180px);
+  }
+  .thanks-body {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+    min-width: 0;
+  }
+  #thanks-title {
+    outline-offset: 6px;
+  }
+  #thanks-title:focus:not(:focus-visible) {
+    outline: none;
+  }
+  .thanks-lede {
+    color: var(--fc-text-2);
+    font-size: 1.0625rem;
+    max-width: 60ch;
+  }
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    margin: 4px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+    max-width: 64ch;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 44px;
+    min-height: 28px;
+    padding-top: 3px;
+    color: var(--fc-text);
+  }
+  /* White numerals on the deep orange fill, as on every orange surface. */
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: var(--fc-btn-primary);
+    color: var(--fc-on-btn-primary);
+    font: 700 0.875rem/1 var(--fc-font-mono);
+  }
+  .steps code {
+    font-family: var(--fc-font-mono);
+    font-size: 0.875em;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
+    overflow-wrap: anywhere;
+  }
+  /* A command sits on its own line, so a long file name wraps inside its own box. */
+  .steps code.cmd {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+  }
+  .thanks-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .thanks-help {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .thanks-help a {
+    font-weight: 600;
+  }
+  @media (min-width: 768px) {
+    .thanks {
+      grid-template-columns: auto minmax(0, 1fr);
+      padding: 40px 48px;
+    }
+    .thanks-bot {
+      align-self: start;
+    }
+  }
+  @media (max-width: 480px) {
+    .thanks-actions .btn {
+      width: 100%;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .thanks:not([hidden]) {
+      transition:
+        opacity 320ms cubic-bezier(0.23, 1, 0.32, 1),
+        transform 320ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    @starting-style {
+      .thanks:not([hidden]) {
+        opacity: 0;
+        transform: translateY(8px) scale(0.99);
+      }
+    }
+    .steps:not([hidden]) li {
+      animation: dl-step 360ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    }
+    .steps li:nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .steps li:nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .steps li:nth-child(4) {
+      animation-delay: 180ms;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thanks:not([hidden]) {
+      transition: opacity 200ms ease;
+    }
+    @starting-style {
+      .thanks:not([hidden]) {
+        opacity: 0;
+      }
+    }
+  }
+  @keyframes dl-step {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
     }
   }
 </style>

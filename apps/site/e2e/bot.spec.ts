@@ -6,7 +6,7 @@ const pupil = (page: import('@playwright/test').Page) =>
 
 test('Sparky is decorative and his eyes follow the cursor', async ({ page }) => {
   await page.goto('/download/')
-  const svg = page.locator('[data-bot] svg')
+  const svg = page.locator('.head [data-bot] svg')
   await expect(svg).toHaveAttribute('aria-hidden', 'true')
   const box = (await svg.boundingBox())!
   await page.mouse.move(box.x - 300, box.y + box.height * 0.4)
@@ -22,7 +22,7 @@ test('Sparky is decorative and his eyes follow the cursor', async ({ page }) => 
 
 test('Sparky gets excited over a download, and giggles when clicked', async ({ page }) => {
   await page.goto('/download/')
-  const svg = page.locator('[data-bot] svg')
+  const svg = page.locator('.head [data-bot] svg')
   // The first download on the page (the beta section, near the top, so Sparky stays in view).
   await page.locator('[data-bot-excite]').first().hover()
   await expect(svg).toHaveAttribute('data-mood', 'excited')
