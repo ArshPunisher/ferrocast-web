@@ -116,12 +116,20 @@ const promises = [
         <h2>
           Pro <span class="chip">On sale now</span>
         </h2>
+        <p class="sale-note" data-live-sale hidden></p>
         <p class="price">
-          <span class="amount">{inr(PRO.monthlyInr)}</span>
+          <s class="was" data-live-was="monthly" hidden></s>
+          <span class="amount" data-live-price="monthly">
+            {inr(PRO.monthlyInr)}
+          </span>
           <span class="per">a month</span>
         </p>
         <p class="muted">
-          {`or ${inr(PRO.yearlyInr)} a year. Approx. ${usd(PRO.monthlyUsdApprox)} a month or ${usd(PRO.yearlyUsdApprox)} a year.`}
+          or <s class="was-inline" data-live-was="yearly" hidden></s>
+          <span data-live-price="yearly">{inr(PRO.yearlyInr)}</span> a year.
+          <span
+            data-live-usd
+          >{`Approx. ${usd(PRO.monthlyUsdApprox)} a month or ${usd(PRO.yearlyUsdApprox)} a year.`}</span>
           Billed in INR through Razorpay. {taxNote()} Renews automatically until you cancel.
         </p>
       </header>
@@ -204,6 +212,68 @@ const promises = [
 </Base>
 
 <script>
+  // Live prices from the relay (a sale, or a changed price). The static prices above stay
+  // when the relay is slow, down, or older than this page (no /v1/pro/prices yet).
+  const RELAY = 'https://ferrocast-relay.clearcraftlabs.com'
+  type Live = {
+    prices?: { monthly?: number; yearly?: number }
+    list_prices?: { monthly?: number; yearly?: number }
+    sale?: {
+      headline?: string
+      ends_at?: number | null
+      was?: { monthly?: number; yearly?: number }
+    } | null
+  }
+  const rupees = (paise: number) =>
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: paise % 100 === 0 ? 0 : 2,
+    }).format(paise / 100)
+  const isPaise = (n: unknown): n is number =>
+    typeof n === 'number' && Number.isFinite(n) && n >= 100
+  const live = async () => {
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 4000)
+    try {
+      const r = await fetch(`${RELAY}/v1/pro/prices`, { signal: ctl.signal })
+      if (!r.ok) return
+      const v = (await r.json()) as Live
+      let changed = false
+      for (const k of ['monthly', 'yearly'] as const) {
+        const now = v.prices?.[k]
+        const el = document.querySelector<HTMLElement>(`[data-live-price="${k}"]`)
+        if (!isPaise(now) || !el) continue
+        const text = rupees(now)
+        if (el.textContent?.trim() !== text) changed = true
+        el.textContent = text
+        const was = v.sale?.was?.[k]
+        const wasEl = document.querySelector<HTMLElement>(`[data-live-was="${k}"]`)
+        if (wasEl && isPaise(was) && was > now) {
+          wasEl.textContent = rupees(was)
+          wasEl.setAttribute('aria-label', `was ${rupees(was)}`)
+          wasEl.hidden = false
+        }
+      }
+      // The dollar estimates are for the usual prices only.
+      const usd = document.querySelector<HTMLElement>('[data-live-usd]')
+      if (changed && usd) usd.hidden = true
+      const note = document.querySelector<HTMLElement>('[data-live-sale]')
+      if (note && v.sale?.headline) {
+        const ends = v.sale.ends_at
+          ? ` Ends ${new Date(v.sale.ends_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}.`
+          : ''
+        note.textContent = `${v.sale.headline}.${ends}`
+        note.hidden = false
+      }
+    } catch {
+      // Keep the static prices.
+    } finally {
+      clearTimeout(t)
+    }
+  }
+  void live()
+
   // Pricing station: plan cards tilt a few degrees toward the pointer (fine pointers only).
   const ok = matchMedia(
     '(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)',
@@ -303,6 +373,20 @@ const promises = [
   .plan h2 .chip {
     font-family: var(--fc-font-sans);
     letter-spacing: 0;
+  }
+  .sale-note {
+    margin: 0 0 6px;
+    font-weight: 600;
+    color: var(--fc-molten-text, currentColor);
+  }
+  .was {
+    margin-right: 10px;
+    font-size: 1.375rem;
+    font-weight: 600;
+    opacity: 0.65;
+  }
+  .was-inline {
+    opacity: 0.7;
   }
   .price {
     display: flex;
