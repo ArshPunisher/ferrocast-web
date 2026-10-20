@@ -22,6 +22,7 @@ import {
 } from '@phosphor-icons/react'
 import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
 import {
+  accountIsPro,
   describeError,
   proPanelState,
   remoteScreenAllowed,
@@ -37,6 +38,8 @@ import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
 import { RemoteStrip } from './remote'
 import { UpdateDialogHost, UpdateNavItem } from './update'
+import { AccountAvatar, SidebarAccount } from './account/parts'
+import { useAccount } from '../lib/account-status'
 import { useUpdateWatch } from '../lib/update'
 
 type NavItem = {
@@ -93,11 +96,12 @@ export const THEME_EVENT = 'fc-theme-change'
  * Desktop window only: makes a one-time link and opens the dashboard in the default browser,
  * already linked. The desktop sends any pair link to the browser instead of loading it here.
  */
-function OpenInBrowser() {
+/** Opens the dashboard in the default browser, already linked (desktop window only). */
+function useOpenInBrowser(): { open: (() => void) | null; busy: boolean } {
   const client = useClient()
   const [busy, setBusy] = useState(false)
   // The desktop window only (a phone's injected config has no session token).
-  if (!window.__FERROCAST__?.token) return null
+  if (!window.__FERROCAST__?.token) return { open: null, busy }
   const open = () => {
     setBusy(true)
     client
@@ -115,6 +119,16 @@ function OpenInBrowser() {
       })
       .finally(() => setBusy(false))
   }
+  return { open, busy }
+}
+
+/**
+ * Desktop window only: makes a one-time link and opens the dashboard in the default browser,
+ * already linked. The desktop sends any pair link to the browser instead of loading it here.
+ */
+function OpenInBrowser() {
+  const { open, busy } = useOpenInBrowser()
+  if (!open) return null
   return (
     <button
       type="button"
@@ -311,7 +325,13 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const isActive = (i: NavItem) => i.match.includes(route.name)
   // Pro entries show only when their panel would (no nagging): a failed check hides them.
   const proView = useProStatus()
-  const isPro = !remote && !!proView?.active
+  const account = useAccount()
+  const browser = useOpenInBrowser()
+  // Pro on this PC, or (on the web dashboard) on the signed-in account.
+  const isPro = (!remote && !!proView?.active) || accountIsPro(account)
+  // The account bar: the app always (signing in is optional), the web host once it has
+  // accounts. A mod's phone never shows it.
+  const showAccount = !!account && account.state !== 'off' && (!remote || remote.role === 'owner')
   const seamDraw = useSeamDraw()
   // The PC is off and the cloud bot stands in: chat, bans and history only (M10).
   const limited = isLimited(remote)
@@ -375,18 +395,29 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           ))}
         </nav>
         <div className="mt-auto flex flex-col gap-2 px-1">
-          {isPro && proView && <AccountChip pro={proView} />}
           {demo && <DemoNote />}
           <UpdateNavItem />
-          <OpenInBrowser />
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-          >
-            <ThemeIcon size={17} />
-            {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-          </button>
+          {showAccount && account ? (
+            <SidebarAccount
+              view={account}
+              pro={isPro}
+              planLine={proView?.active ? proPlanLine(proView) : null}
+              utils={{ openInBrowser: browser.open, theme, toggleTheme }}
+            />
+          ) : (
+            <>
+              {isPro && proView && <AccountChip pro={proView} />}
+              <OpenInBrowser />
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              >
+                <ThemeIcon size={17} />
+                {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -425,6 +456,16 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
             >
               <ThemeIcon size={18} />
             </button>
+            {showAccount && account?.state === 'signed_in' && (
+              <a
+                href={href({ name: 'account' })}
+                aria-label="Account"
+                data-testid="account-avatar-link"
+                className="fc-press shrink-0 rounded-full focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none lg:hidden"
+              >
+                <AccountAvatar view={account} pro={isPro} size={32} />
+              </a>
+            )}
             {!limited && <PanicButton />}
           </div>
         </header>

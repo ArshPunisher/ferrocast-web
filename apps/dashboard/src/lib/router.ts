@@ -21,6 +21,10 @@ export type Route =
   | { name: 'studio'; section?: StudioSection }
   /** Pro stream history (`#/history`). */
   | { name: 'history' }
+  /** Ferrocast Pro's plans (`#/plans`), opened from Get Pro. */
+  | { name: 'plans' }
+  /** The Ferrocast account (`#/account`). */
+  | { name: 'account' }
 
 /** Gallery tabs; themes is the default (`#/designs`). */
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
@@ -63,6 +67,10 @@ export function parseRoute(hash: string): Route {
         : { name: 'studio' }
     case 'history':
       return { name: 'history' }
+    case 'plans':
+      return { name: 'plans' }
+    case 'account':
+      return { name: 'account' }
     case 'import':
       return b === 'streamelements' || b === 'streamlabs'
         ? { name: 'import', source: b }

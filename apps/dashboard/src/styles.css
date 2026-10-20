@@ -149,3 +149,52 @@ input[type='range'] {
     height: 14px;
   }
 }
+
+/* Accounts (1.3). The shard's two halves again: Molten above the cut, Arc below it. */
+.fc-ring {
+  background: linear-gradient(163deg, var(--fc-brand-molten) 0 50%, var(--fc-brand-arc) 50% 100%);
+}
+/* The Pro account bar: a faint split tint with a two-tone top edge. */
+.fc-seam-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      163deg,
+      color-mix(in srgb, var(--fc-brand-molten) 10%, transparent) 0 50%,
+      color-mix(in srgb, var(--fc-brand-arc) 12%, transparent) 50% 100%
+    ),
+    var(--fc-surface-1);
+}
+.fc-seam-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--fc-brand-molten) 0 50%, var(--fc-brand-arc) 50% 100%);
+}
+/* The account header's brushed metal plate (dark in the dark theme, light in the light one). */
+.fc-plate {
+  --fc-plate-text: #eef0f4;
+  --fc-plate-text-2: #a9b0bc;
+  --fc-plate-gap: #1b1f25;
+  color: var(--fc-plate-text);
+  background: linear-gradient(160deg, #2a3039 0%, #171a20 46%, #0f1115 100%);
+  border-color: rgb(255 255 255 / 0.1);
+}
+:root[data-theme='light'] .fc-plate {
+  --fc-plate-text: #0e1014;
+  --fc-plate-text-2: #424854;
+  --fc-plate-gap: #eceff3;
+  background: linear-gradient(160deg, #ffffff 0%, #e4e8ee 52%, #d3d8e0 100%);
+  border-color: rgb(16 24 40 / 0.12);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) .fc-plate {
+    --fc-plate-text: #0e1014;
+    --fc-plate-text-2: #424854;
+    --fc-plate-gap: #eceff3;
+    background: linear-gradient(160deg, #ffffff 0%, #e4e8ee 52%, #d3d8e0 100%);
+    border-color: rgb(16 24 40 / 0.12);
+  }
+}

@@ -42,7 +42,7 @@ import { externalLink, openExternal } from '../lib/external'
 import { href } from '../lib/router'
 import { isTestGrant, publishPro } from '../lib/pro-status'
 
-function day(ms: number | null): string {
+export function day(ms: number | null): string {
   if (!ms) return ''
   return new Date(ms).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -180,7 +180,7 @@ export function emailProblem(v: string): string | null {
     : 'That email looks incomplete. Check the @ and the part after it.'
 }
 
-const FEATURES: { icon: Icon; title: string; text: string }[] = [
+export const FEATURES: { icon: Icon; title: string; text: string }[] = [
   { icon: Robot, title: '24/7 cloud bot', text: 'Commands and timers answer when your PC is off.' },
   {
     icon: DeviceMobile,
@@ -820,7 +820,7 @@ function Waiting({
 }
 
 /** A discount code the relay accepted, waiting for checkout. */
-type Discount = Extract<ProRedeem, { kind: 'discount' }>
+export type Discount = Extract<ProRedeem, { kind: 'discount' }>
 
 /** What the plan cards show: today's prices, the old ones struck through, and why. */
 interface Offer {

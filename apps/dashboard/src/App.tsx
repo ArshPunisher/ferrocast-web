@@ -58,6 +58,8 @@ const Import = lazy(() => import('./screens/Import').then((m) => ({ default: m.I
 const Studio = lazy(() => import('./screens/Studio').then((m) => ({ default: m.Studio })))
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })))
 const History = lazy(() => import('./screens/History').then((m) => ({ default: m.History })))
+const Plans = lazy(() => import('./screens/Plans').then((m) => ({ default: m.Plans })))
+const Account = lazy(() => import('./screens/Account').then((m) => ({ default: m.Account })))
 const Onboarding = lazy(() =>
   import('./screens/Onboarding').then((m) => ({ default: m.Onboarding })),
 )
@@ -355,6 +357,12 @@ export function App() {
       break
     case 'history':
       screen = <History />
+      break
+    case 'plans':
+      screen = <Plans />
+      break
+    case 'account':
+      screen = <Account />
       break
     default:
       screen = <Home />
