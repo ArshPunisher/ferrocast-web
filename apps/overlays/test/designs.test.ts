@@ -491,6 +491,13 @@ describe('library alerts', () => {
 })
 
 describe('frames and layouts a design wasn’t drawn for', () => {
+  it('a built-in look’s CSS only applies on its own frame', () => {
+    const sakura = alertDesigns.find((d) => d.id === 'builtin.sakura-petal')!
+    const look = sakura.content.events.tip!.variations[0]!.look
+    expect(look.css).toContain(':where(.f-plate) .fa-emblem')
+    expect(look.css).not.toMatch(/(^|[},])\.fa-emblem/)
+  })
+
   it('Text over keeps the picture under the words, whatever a design or frame says', async () => {
     const { readFileSync } = await import('node:fs')
     const css = readFileSync(`${process.cwd()}/src/styles/design-alert.css`, 'utf8')

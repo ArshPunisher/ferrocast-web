@@ -191,7 +191,9 @@ describe('safe for streaming', () => {
       expect(loops, `${d.id}/${s.key} loops`).toBeLessThanOrEqual(8)
     }
     for (const d of BUILTINS) expect(JSON.stringify(d).length, d.id).toBeLessThanOrEqual(64 * 1024)
-    expect(JSON.stringify(catalog()).length).toBeLessThanOrEqual(1_500_000)
+    // Only the engine reads the catalogue (never an OBS page). 1.6 MB since each look's CSS
+    // is tied to its own frame (kit.ts scopeCss), about 60 KB more.
+    expect(JSON.stringify(catalog()).length).toBeLessThanOrEqual(1_600_000)
   })
 
   it('every live scene keeps the middle of the screen clear for the game', () => {

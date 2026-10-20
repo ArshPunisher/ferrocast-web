@@ -83,7 +83,7 @@ export function alertDesign(
         name: `Every ${EVENT_LABEL[key].toLowerCase()}`,
         condition: null,
         priority: 0,
-        look: own,
+        look: scopedLook(own),
       },
     ]
     for (const x of extras.filter((e) => e.event === key))
@@ -92,11 +92,84 @@ export function alertDesign(
         name: x.name,
         condition: x.condition,
         priority: x.priority ?? 10,
-        look: { ...structuredClone(own), ...x.look },
+        look: scopedLook({ ...structuredClone(own), ...x.look }),
       })
     events[key] = { variations }
   }
   return { ...base(meta), kind: 'alert', content: { events } }
+}
+
+/** The look with its CSS tied to its own frame (see `scopeCss`). */
+function scopedLook(l: AlertLook): AlertLook {
+  return { ...l, css: scopeCss(l.css, l.frame) }
+}
+
+/** Splits a selector list on its top-level commas (not the ones inside `:is(…)`). */
+function selectors(list: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i]
+    if (c === '(') depth++
+    else if (c === ')') depth--
+    else if (c === ',' && depth === 0) {
+      out.push(list.slice(start, i))
+      start = i + 1
+    }
+  }
+  out.push(list.slice(start))
+  return out.map((x) => x.trim()).filter(Boolean)
+}
+
+function scopeSelector(sel: string, scope: string): string {
+  // The stage's own decorations (petals, sparks around the card) suit every frame.
+  if (sel.startsWith('.fa-stage') || sel.startsWith(':host')) return sel
+  // The card itself: `.fa`, `.fa.lay-over`, `.fa::before`…
+  if (/^\.fa(?![\w-])/.test(sel)) return `.fa${scope}${sel.slice(3)}`
+  // A class the card carries (`.f-plate .fa-text`, `.plate .fa-text`, `.up .fa-title`).
+  const own = /^\.(?:f-[a-z]+|lay-[a-z]+|plate|up|it)(?![\w-])/.exec(sel)
+  if (own) return `${own[0]}${scope}${sel.slice(own[0].length)}`
+  // Anything inside the card.
+  return `${scope} ${sel}`
+}
+
+/**
+ * Ties a built-in look's CSS to the frame it was drawn for. The CSS fine-tunes one frame (a
+ * negative margin, a star-shaped art, art that sits over the card's edge); on another frame
+ * it drew broken alerts (Sakura petal on Pixel arcade). Scoped, another frame shows its own
+ * clean look with the design's colours, font, motion and sound. The layout isn't part of
+ * the scope: designs without a frame draw their card in CSS and must keep it on every
+ * layout, and the layouts' base rules win where it matters (Text over keeps the art under
+ * the words). `:where()` adds no specificity, so on its own frame the design looks exactly
+ * as before. The stage's decorations and `@keyframes` stay as they are.
+ */
+export function scopeCss(src: string, frame: string): string {
+  const scope = `:where(.f-${frame})`
+  let out = ''
+  let i = 0
+  while (i < src.length) {
+    const open = src.indexOf('{', i)
+    if (open < 0) {
+      out += src.slice(i)
+      break
+    }
+    let depth = 0
+    let end = open
+    for (; end < src.length; end++) {
+      if (src[end] === '{') depth++
+      else if (src[end] === '}' && --depth === 0) break
+    }
+    const prelude = src.slice(i, open).trim()
+    const block = src.slice(open, end + 1)
+    out += prelude.startsWith('@')
+      ? `${prelude}${block}`
+      : `${selectors(prelude)
+          .map((s) => scopeSelector(s, scope))
+          .join(',')}${block}`
+    i = end + 1
+  }
+  return out
 }
 
 export type Box = readonly [x: number, y: number, w: number, h: number]
