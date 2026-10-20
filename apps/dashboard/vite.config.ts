@@ -43,5 +43,7 @@ export default defineConfig({
     target: ['safari15', 'chrome103', 'firefox115'],
     sourcemap: false,
     chunkSizeWarningLimit: 900,
+    // Sounds stay files: the engine's CSP (connect-src 'self') refuses fetching a data: URL.
+    assetsInlineLimit: (file: string) => (file.endsWith('.mp3') ? false : undefined),
   },
 })

@@ -5,11 +5,12 @@
 // only that alert and can't reach chat or the rest of the page. Classes they can target:
 //   .al  .al-inner  .al-media  .al-text  .al-title  .al-body  .al-spikes
 
+import { ruleBuiltinSound } from '@ferrocast/api/alert'
 import { ackFrame } from '@ferrocast/api/overlay-protocol'
 import type { AlertsConfig, RenderedAlert, Widget } from '@ferrocast/api/types'
 import alertCss from '../styles/alert.css?inline'
 import { buildDesignAlert, type DesignAlert } from '../design/alert'
-import { playBuiltin } from '../design/sounds'
+import { builtinSoundUrl } from '../design/sounds'
 import { sparkSvg } from '../design/spark'
 import { el, mediaRef, safeText, speakText, themeOf, warnOnce } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
@@ -295,7 +296,9 @@ export class AlertsWidget implements WidgetView {
 
   private playSound(p: Playing): void {
     if (!this.ctx.audio) return
-    const sound = mediaRef(p.alert.sound)
+    // A rule's sound is a library file, or a built-in one (`builtin:glint`, new installs).
+    const ruleBuiltin = ruleBuiltinSound(p.alert.sound)
+    const sound = ruleBuiltin ? builtinSoundUrl(ruleBuiltin) : mediaRef(p.alert.sound)
     // tts_audio is a WAV the engine rendered with the computer's voices; while it isn't
     // ready (or can't be made) the overlay speaks tts_text itself (API.md §3).
     const tts = mediaRef(p.alert.tts_audio)
@@ -306,7 +309,7 @@ export class AlertsWidget implements WidgetView {
     const vol = Number.isFinite(p.alert.volume)
       ? Math.min(Math.max(p.alert.volume, 0), 100) / 100
       : 0.7
-    const play = (url: string, next?: () => void) => {
+    const play = (url: string, next?: () => void, volume = vol) => {
       // 'ended', 'error' and a rejected play() can all fire: run the follow-up once.
       let done = false
       const after = next
@@ -323,7 +326,7 @@ export class AlertsWidget implements WidgetView {
         after?.()
         return
       }
-      a.volume = vol
+      a.volume = volume
       p.audio.push(a)
       if (after) {
         a.addEventListener('ended', after, { once: true })
@@ -338,13 +341,15 @@ export class AlertsWidget implements WidgetView {
     }
     const look = p.alert.design?.look
     if (sound) play(sound, tts || ttsText ? playTts : undefined)
-    else if (look && look.sound?.builtin && look.sound.builtin !== 'none') {
-      // A built-in sound from the design, then the message read aloud after it.
-      const len = playBuiltin(
-        look.sound.builtin,
-        Number.isFinite(look.sound.volume) ? look.sound.volume : 70,
+    else if (look?.sound?.builtin && builtinSoundUrl(look.sound.builtin)) {
+      // A built-in sound from the design (a file, like an uploaded one: it pauses with the
+      // alert when OBS hides the source), then the message read aloud after it.
+      const v = Number.isFinite(look.sound.volume) ? look.sound.volume : 70
+      play(
+        builtinSoundUrl(look.sound.builtin) as string,
+        tts || ttsText ? playTts : undefined,
+        Math.min(Math.max(v, 0), 100) / 100,
       )
-      if (tts || ttsText) p.timers.push(setTimeout(playTts, len + 150))
     } else playTts()
   }
 

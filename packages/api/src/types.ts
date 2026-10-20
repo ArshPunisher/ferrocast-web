@@ -619,7 +619,31 @@ export type AnimOut =
   | 'flip'
   | 'wipe'
 export type TextAnim = 'none' | 'wave' | 'wiggle' | 'bounce' | 'pop' | 'type' | 'glow'
-export type BuiltinSound = 'none' | 'chime' | 'coin' | 'whoosh' | 'boing' | 'bass' | 'sparkle'
+/** A built-in sound that ships as a file (API.md §4 Designs, `Sound.builtin`). */
+export type PlayableSound =
+  // Crystal: bright and glassy
+  | 'sparkle'
+  | 'glint'
+  | 'cascade'
+  | 'bloom'
+  | 'lift'
+  | 'tally'
+  | 'halo'
+  | 'droplet'
+  // Felt: warm and soft
+  | 'kalimba'
+  | 'marimba'
+  | 'glow'
+  | 'ember'
+  | 'pebble'
+  | 'feather'
+  | 'hearth'
+  | 'wink'
+  // The pre-1.1 Sparkle, note for note
+  | 'sparkle_classic'
+/** Sounds saved before 1.1; each plays the new sound closest to it (`resolveSound`). */
+export type LegacySound = 'chime' | 'coin' | 'whoosh' | 'boing' | 'bass'
+export type BuiltinSound = 'none' | PlayableSound | LegacySound
 export type BrandSpot = 'corner' | 'divider' | 'watermark' | 'notch' | 'badge' | 'edge'
 export type ShadowKind = 'none' | 'soft' | 'hard' | 'glow'
 export type SceneKey =

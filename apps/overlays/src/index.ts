@@ -14,7 +14,14 @@ export {
 } from './connection'
 export { THEME_IDS } from './dom'
 export { buildDesignAlert, type DesignAlert, type DesignAlertOptions } from './design/alert'
-export { playBuiltin, unlockAudio } from './design/sounds'
+export {
+  builtinSoundMs,
+  builtinSoundUrl,
+  playBuiltin,
+  preloadBuiltins,
+  stopBuiltin,
+  unlockAudio,
+} from './design/sounds'
 export { fontStack, DESIGN_FONTS, GOOGLE_FONTS, SYSTEM_FONTS } from './design/fonts'
 export { registerDesignFonts } from './design/font-files'
 export { IN as ANIM_IN_FRAMES, OUT as ANIM_OUT_FRAMES, textAnimation } from './design/motion'

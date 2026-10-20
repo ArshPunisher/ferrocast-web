@@ -536,7 +536,9 @@ export class DemoEngine {
     this.media = [
       { id: 'm-chime', kind: 'sound', name: 'Ferro chime.wav', bytes: 8844, url: chimeDataUrl() },
     ]
-    for (const r of this.rules) for (const v of r.variations) v.sound = 'm-chime'
+    // Rules keep a new install's built-in sounds; one uses a file of the streamer's own.
+    for (const r of this.rules)
+      if (r.id === 'redeem') for (const v of r.variations) v.sound = 'm-chime'
     this.stats = {
       live: true,
       started_at: now - 2 * 3_600_000 - 14 * 60_000,

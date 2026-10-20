@@ -8,12 +8,15 @@ import { exponent } from './format'
 import { anySample, sample } from './samples'
 import { Template, eventVars, withPlurals } from './template'
 import type {
+  AlertContent,
   AlertDesignView,
   AlertLook,
   AnimIn,
   AnimOut,
   BrandSpot,
   BuiltinSound,
+  LegacySound,
+  PlayableSound,
   Condition,
   Design,
   DesignKind,
@@ -110,15 +113,44 @@ export const TEXT_ANIMS: readonly TextAnim[] = [
   'type',
   'glow',
 ]
+/** The sound groups the picker shows, in order (Crystal, Felt, then Sparkle classic). */
+export const SOUND_GROUPS: readonly { label: string; sounds: readonly PlayableSound[] }[] = [
+  {
+    label: 'Crystal',
+    sounds: ['sparkle', 'glint', 'cascade', 'bloom', 'lift', 'tally', 'halo', 'droplet'],
+  },
+  {
+    label: 'Felt',
+    sounds: ['kalimba', 'marimba', 'glow', 'ember', 'pebble', 'feather', 'hearth', 'wink'],
+  },
+  { label: 'Classic', sounds: ['sparkle_classic'] },
+]
+/** Every sound a design can pick (old ids still load, see `LEGACY_SOUND`). */
 export const BUILTIN_SOUNDS: readonly BuiltinSound[] = [
   'none',
-  'chime',
-  'coin',
-  'whoosh',
-  'boing',
-  'bass',
-  'sparkle',
+  ...SOUND_GROUPS.flatMap((g) => g.sounds),
 ]
+/**
+ * Chime, Coin, Whoosh, Boing and Bass hit retired in 1.1. A design that still names one plays
+ * the closest new sound, so saved alerts never go quiet: Chime's two-note ping → Glint,
+ * Coin's B-to-E → Tally (the same interval on glass), Whoosh → Lift (air rising into a
+ * chord), Boing → Droplet (the playful one), Bass hit → Ember (weight without the boom).
+ */
+export const LEGACY_SOUND: Record<LegacySound, PlayableSound> = {
+  chime: 'glint',
+  coin: 'tally',
+  whoosh: 'lift',
+  boing: 'droplet',
+  bass: 'ember',
+}
+/** The sound that actually plays for a saved id. */
+export function resolveSound(s: BuiltinSound): PlayableSound | 'none' {
+  return s in LEGACY_SOUND ? LEGACY_SOUND[s as LegacySound] : (s as PlayableSound | 'none')
+}
+/** Any id a saved design may carry (current or retired). */
+export function isBuiltinSound(v: unknown): v is BuiltinSound {
+  return typeof v === 'string' && (BUILTIN_SOUNDS.includes(v as BuiltinSound) || v in LEGACY_SOUND)
+}
 export const BRAND_SPOTS: readonly BrandSpot[] = [
   'corner',
   'divider',
@@ -325,14 +357,102 @@ export const TEXT_ANIM_LABEL: Record<TextAnim, string> = {
   type: 'Typewriter',
   glow: 'Glow pulse',
 }
-export const SOUND_LABEL: Record<BuiltinSound, string> = {
+const PLAYABLE_LABEL: Record<PlayableSound | 'none', string> = {
   none: 'No sound',
-  chime: 'Chime',
-  coin: 'Coin',
-  whoosh: 'Whoosh',
-  boing: 'Boing',
-  bass: 'Bass hit',
   sparkle: 'Sparkle',
+  glint: 'Glint',
+  cascade: 'Cascade',
+  bloom: 'Bloom',
+  lift: 'Lift',
+  tally: 'Tally',
+  halo: 'Halo',
+  droplet: 'Droplet',
+  kalimba: 'Kalimba',
+  marimba: 'Marimba',
+  glow: 'Glow',
+  ember: 'Ember',
+  pebble: 'Pebble',
+  feather: 'Feather',
+  hearth: 'Hearth',
+  wink: 'Wink',
+  sparkle_classic: 'Sparkle classic',
+}
+/** A sound's name; a retired id is named by the sound it plays now. */
+export const SOUND_LABEL: Record<BuiltinSound, string> = {
+  ...PLAYABLE_LABEL,
+  ...(Object.fromEntries(
+    Object.entries(LEGACY_SOUND).map(([k, v]) => [k, PLAYABLE_LABEL[v]]),
+  ) as Record<LegacySound, string>),
+}
+/** What each sound suits, as the picker's second line. */
+export const SOUND_USE: Record<PlayableSound, string> = {
+  sparkle: 'Any alert',
+  glint: 'Follow',
+  cascade: 'Sub, membership',
+  bloom: 'Big tip, gift bomb',
+  lift: 'Raid, host',
+  tally: 'Tip, Bits, Super Chat',
+  halo: 'Milestone, hype train',
+  droplet: 'Playful alerts, redeems',
+  kalimba: 'Follow',
+  marimba: 'Sub, membership',
+  glow: 'Tip, Super Chat',
+  ember: 'Big tip',
+  pebble: 'Chat highlight, redeem',
+  feather: 'Before a message is read',
+  hearth: 'Raid, gift bomb',
+  wink: 'Frequent events',
+  sparkle_classic: 'Sparkle before 1.1',
+}
+/**
+ * The pre-matched sound for each event (the sound board's option C). Offered as one click,
+ * "Use suggested sounds"; it never changes what a new design starts with.
+ */
+export const SUGGESTED_SOUND: Record<EventKey, PlayableSound> = {
+  follow: 'glint',
+  sub: 'cascade',
+  resub: 'cascade',
+  member: 'cascade',
+  gift: 'bloom',
+  bits: 'tally',
+  kicks: 'tally',
+  tip: 'tally',
+  superchat: 'tally',
+  raid: 'lift',
+  redeem: 'pebble',
+}
+/** A variation for big amounts (an amount condition on a paid event) gets Bloom. */
+export function suggestedSound(
+  key: EventKey,
+  v: Pick<DesignVariation, 'condition'>,
+): PlayableSound {
+  const paid = key === 'tip' || key === 'superchat' || key === 'bits' || key === 'kicks'
+  return paid && v.condition?.type === 'amount_at_least' ? 'bloom' : SUGGESTED_SOUND[key]
+}
+/**
+ * The design with every event's suggested sound. Events without their own look get one (a
+ * copy of the look they used), so each can sound different. Own sound files stay; volume,
+ * and everything else, stays.
+ */
+export function withSuggestedSounds<D extends Design>(d: D): D {
+  if (d.kind !== 'alert') return d
+  const events: AlertContent['events'] = { ...d.content.events }
+  for (const key of EVENT_KEYS) {
+    const own = d.content.events[key]?.variations
+    const vs = own ?? structuredClone(looksFor(d, key)).map((v, i) => ({ ...v, id: `${key}-${i}` }))
+    if (vs.length === 0) continue
+    events[key] = {
+      variations: vs.map((v) =>
+        v.look.sound.ref
+          ? v
+          : {
+              ...v,
+              look: { ...v.look, sound: { ...v.look.sound, builtin: suggestedSound(key, v) } },
+            },
+      ),
+    }
+  }
+  return { ...d, content: { ...d.content, events } } as D
 }
 export const STYLE_LABEL: Record<StyleTag, string> = {
   minimal: 'Minimal',
@@ -1281,8 +1401,9 @@ export function eventsFrom(
   return events
 }
 
+/** A new design from scratch; each event starts with its suggested sound (owner, 20 Oct). */
 export function newAlertDesign(name: string, base: AlertLook = baseLook()): Design {
-  return {
+  return withSuggestedSounds({
     schema: 1,
     id: 'new',
     kind: 'alert',
@@ -1296,7 +1417,7 @@ export function newAlertDesign(name: string, base: AlertLook = baseLook()): Desi
     content: { events: eventsFrom(base) },
     created_at: 0,
     updated_at: 0,
-  }
+  })
 }
 
 // ---------------------------------------------------------------------- previews

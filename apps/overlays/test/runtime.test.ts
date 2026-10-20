@@ -793,7 +793,28 @@ describe('review fixes', () => {
     loud.apply(frame('tts', { id: 'w2', text: 'fallback', audio: 'javascript:alert(1)' }))
     expect(urls).not.toContain('javascript:alert(1)')
     expect(spoken).toContain('fallback')
+    // A new install's rule names a built-in sound: the overlay plays its own file, then reads.
     loud.destroy()
+    const fresh = createOverlay(document.createElement('div'), { audio: true })
+    fresh.apply(snapshot())
+    fresh.apply(
+      frame(
+        'alert',
+        alert('id2', { sound: 'builtin:glint', volume: 40, tts_audio: null, tts_text: 'Hi!' }),
+      ),
+    )
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    expect(urls.some((u) => /glint.*\.mp3$/.test(u))).toBe(true)
+    fresh.destroy()
+    // An unknown built-in id plays nothing (never a request for "builtin:…").
+    const other = createOverlay(document.createElement('div'), { audio: true })
+    other.apply(snapshot())
+    other.apply(
+      frame('alert', alert('id3', { sound: 'builtin:airhorn', tts_audio: null, tts_text: null })),
+    )
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    expect(urls.some((u) => u.includes('airhorn'))).toBe(false)
+    other.destroy()
     globalThis.Audio = OrigAudio
     ;[g.speechSynthesis, g.SpeechSynthesisUtterance] = prev
   })

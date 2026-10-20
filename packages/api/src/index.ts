@@ -21,7 +21,10 @@ export * from './autoreplies'
 export {
   amountOf,
   appliesTo,
+  BUILTIN_SOUND_PREFIX,
+  DEFAULT_KIND_SOUND,
   defaultRules,
+  ruleBuiltinSound,
   matches,
   mayAlert,
   newVariation,

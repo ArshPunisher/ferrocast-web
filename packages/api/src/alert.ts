@@ -6,8 +6,10 @@ import { Template, eventVars, withPlurals } from './template'
 import {
   ALERT_KINDS,
   type AlertRule,
+  type BuiltinSound,
   type Condition,
   type FerroEvent,
+  type PlayableSound,
   type RenderedAlert,
   type Variation,
 } from './types'
@@ -221,6 +223,32 @@ export function newVariation(id: string, title: string): Variation {
   }
 }
 
+/**
+ * A rule's sound can be a built-in sound instead of a library file: `builtin:<id>`
+ * (core::alert::BUILTIN_SOUND_PREFIX). The overlay plays the built-in file.
+ */
+export const BUILTIN_SOUND_PREFIX = 'builtin:'
+/** The built-in sound a rule's `sound` names, or null for a library file or none. */
+export function ruleBuiltinSound(sound: string | null | undefined): BuiltinSound | null {
+  if (!sound?.startsWith(BUILTIN_SOUND_PREFIX)) return null
+  const id = sound.slice(BUILTIN_SOUND_PREFIX.length)
+  return /^[a-z_]{1,32}$/.test(id) ? (id as BuiltinSound) : null
+}
+/**
+ * What each alert kind starts with on a new install (the sound board's pre-matched sounds,
+ * core::alert::default_sound). Saved rules never change.
+ */
+export const DEFAULT_KIND_SOUND: Record<string, PlayableSound> = {
+  follow: 'glint',
+  subscription: 'cascade',
+  gift_batch: 'bloom',
+  platform_gift: 'tally',
+  paid_message: 'tally',
+  tip: 'tally',
+  raid: 'lift',
+  reward_redemption: 'pebble',
+}
+
 /** core::alert::default_rules */
 export function defaultRules(): AlertRule[] {
   const rule = (id: string, name: string, kind: string, title: string): AlertRule => ({
@@ -229,7 +257,14 @@ export function defaultRules(): AlertRule[] {
     enabled: true,
     kinds: [kind],
     platforms: [],
-    variations: [newVariation(`${id}-default`, title)],
+    variations: [
+      {
+        ...newVariation(`${id}-default`, title),
+        sound: DEFAULT_KIND_SOUND[kind]
+          ? `${BUILTIN_SOUND_PREFIX}${DEFAULT_KIND_SOUND[kind]}`
+          : null,
+      },
+    ],
   })
   return [
     rule('follow', 'Follows', 'follow', '{name} followed!'),
