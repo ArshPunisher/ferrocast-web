@@ -28,12 +28,15 @@ import {
   checkTemplate,
   eventVars,
   newVariation,
+  pickLook,
   platformsFor,
   renderAlert,
+  renderOnto,
   sample,
   validateRule,
   type AlertRule,
   type Condition,
+  type Design,
   type FerroEvent,
   type Media,
   type Platform,
@@ -681,13 +684,22 @@ function RuleEditor({
   const pickedPlatform =
     previewPlatform && kindPlatforms.includes(previewPlatform) ? previewPlatform : null
   const event = useMemo(() => sampleFor(draft, pickedPlatform), [draft, pickedPlatform])
+  // The alert design in use dresses every alert on stream (its look, words, picture and
+  // sound), so the preview plays it too; without one, the rule's own look.
+  const activeDesign = useResource(async (c) => {
+    const { design_id } = await c.activeAlertDesign()
+    return design_id ? c.design(design_id) : null
+  })
+  const design: Design | null = activeDesign.data?.kind === 'alert' ? activeDesign.data : null
   const preview = useMemo(() => {
     if (!v || !event) return null
-    const a = renderAlert('preview', draft, v, event)
+    let a = renderAlert('preview', draft, v, event)
+    const look = design ? pickLook(design, event) : null
+    if (design && look) a = renderOnto(a, design, look.key, look.variation, event)
     const url = (id: string | null) =>
       id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
     return { ...a, sound: url(a.sound), image: url(a.image) }
-  }, [draft, v, event, media, client])
+  }, [draft, v, event, media, client, design])
   if (!v) return null
   const setV = (nv: Variation) =>
     setDraft({ ...draft, variations: draft.variations.map((x, i) => (i === vi ? nv : x)) })
@@ -917,6 +929,18 @@ function RuleEditor({
             Test on stream
           </Button>
         </div>
+        {design && (
+          <p className="text-[13.5px] leading-snug text-text-2">
+            Alerts play with your alert design,{' '}
+            <a
+              href={href({ name: 'designer', id: design.id })}
+              className="font-semibold text-accent-text hover:underline"
+            >
+              {design.name}
+            </a>
+            . Its look, words and sound replace the ones set here.
+          </p>
+        )}
         {kindPlatforms.length > 1 && (
           <div className="flex items-center gap-2.5">
             <span className="fc-label">Preview as</span>
