@@ -1,5 +1,13 @@
 # Status
 
+## 20 Oct 2026 (1.0.0 bug fixes from the owner's Mac test)
+- Web links: every link to the web goes through `lib/external.ts` (`openExternal`, `externalLink`): in the desktop window it navigates (the app's handler opens the default browser and keeps the dashboard), elsewhere a new tab; http(s) only. The app side (`on_new_window`) is ferrocast 7963096.
+- Designer/Alerts previews load library files through `client.mediaUrl` (`lib/media-url.ts`): `Media.url` alone answers 401 on the real engine, so an uploaded picture never showed.
+- Alerts page preview renders through the active alert design (pickLook + renderOnto) with a line naming it; design alerts are sized by layout size (`offsetWidth`), not the transformed box.
+- Sound: previews show a sound toggle only when the alert makes a sound (`alertHasSound`); onboarding says alerts start silent. The designer replays after every change (`autoplay`), plays at once when unmuted, stops on mute; toggles call `unlockAudio()` in the click (WebKit).
+- Designs: built-in look CSS is scoped to its own frame (`scopeCss`, `:where(.f-<frame>)`); Text over pins the art under the text and keeps the text plate; Glass gets a light pane for light plates (`plate-light`). Checked in Chromium for all 47 alert designs × 8 frames × 5 layouts (headline never covered, nothing outside the canvas). Known: dark-text designs on Text only (no plate) stay hard to read on dark games; existing copies made before this keep their unscoped CSS.
+- Tests: vitest `external`, `media-url`, `scope` and three overlay design tests; `tools/check.sh` green (829 dashboard e2e).
+
 ## 19 Oct 2026 (Pro M12 review fixes)
 - Bot page, YouTube row: "Check now" (with "While you’re offline, Ferrocast looks less often. Going live on Twitch or Kick wakes it.") while the cloud is on duty there and it isn't live; uses `connect {retry: true}`. The split duty line lists three platforms as "Twitch, Kick and YouTube" (`platformList`).
 - Tests: vitest `platformList`; Playwright "YouTube on duty and offline offers Check now" and a 375 px case with light/dark screenshots; cloud-bot + remote-offline green on chromium + mobile.
