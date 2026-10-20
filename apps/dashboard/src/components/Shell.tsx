@@ -36,6 +36,8 @@ import { ProUnlock } from './pro/ProUnlock'
 import { StatusStrip } from './StatusStrip'
 import { PanicButton } from './PanicButton'
 import { RemoteStrip } from './remote'
+import { UpdateDialogHost, UpdateNavItem } from './update'
+import { useUpdateWatch } from '../lib/update'
 
 type NavItem = {
   route: Route
@@ -292,6 +294,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const remote = useLive((s) => s.remote)
   const dismiss = useLive((s) => s.dismissNotice)
   const reduce = useReducedMotion()
+  useUpdateWatch()
 
   const firstRoute = useRef(true)
   useEffect(() => {
@@ -374,6 +377,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         <div className="mt-auto flex flex-col gap-2 px-1">
           {isPro && proView && <AccountChip pro={proView} />}
           {demo && <DemoNote />}
+          <UpdateNavItem />
           <OpenInBrowser />
           <button
             type="button"
@@ -534,6 +538,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       </nav>
 
       {!remote && <ProUnlock pro={proView} />}
+      <UpdateDialogHost />
 
       <Dialog open={more} onClose={() => setMore(false)} title="More" size="sm">
         <nav aria-label="More" className="flex flex-col gap-1 pb-2">
@@ -552,6 +557,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               <AccountChip pro={proView} />
             </div>
           )}
+          <UpdateNavItem roomy onOpen={() => setMore(false)} />
           <OpenInBrowser />
           <button
             type="button"

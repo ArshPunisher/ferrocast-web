@@ -16,6 +16,7 @@ import {
   type PanicConfig,
   type PollView,
   type GiveawayView,
+  type UpdateInfo,
   type ChatterMark,
   type Platform,
   type Queue,
@@ -95,6 +96,15 @@ interface LiveStore {
   chatters: Map<string, ChatterMark>
   /** The latest `giveaway` frame; `undefined` until one arrives. */
   giveaway: GiveawayView | null | undefined
+  /** App updates (`GET /updates` and the live `update` frame); `null` until loaded. */
+  update: UpdateInfo | null
+  /** `update` frames so far: a GET that started before the latest frame is older than it. */
+  updateFrames: number
+  /** Why the last `GET /updates` failed (Settings shows it with a retry). */
+  updateLoadError: unknown
+  /** A GET's answer; ignored when an `update` frame arrived after `framesAtStart`. */
+  setUpdate: (u: UpdateInfo, framesAtStart?: number) => void
+  setUpdateLoadError: (e: unknown) => void
   /** Studio: the "Don't miss" lane, OBS health, the show, counters (studio-live.ts). */
   studio: StudioLive
   setConn: (c: Connection) => void
@@ -191,6 +201,14 @@ export const useLive = create<LiveStore>((set, get) => ({
   resyncs: 0,
   poll: undefined,
   giveaway: undefined,
+  update: null,
+  updateFrames: 0,
+  updateLoadError: null,
+  setUpdate: (update, framesAtStart) => {
+    if (framesAtStart !== undefined && get().updateFrames !== framesAtStart) return
+    set({ update, updateLoadError: null })
+  },
+  setUpdateLoadError: (updateLoadError) => set({ updateLoadError }),
   chatters: new Map(),
   studio: EMPTY_STUDIO,
   setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
@@ -235,6 +253,8 @@ export const useLive = create<LiveStore>((set, get) => ({
     let resyncs = s.resyncs
     let poll = s.poll
     let giveaway = s.giveaway
+    let update = s.update
+    let updateFrames = s.updateFrames
     let chatters = s.chatters
     let studio = s.studio
     let remote = s.remote
@@ -331,6 +351,10 @@ export const useLive = create<LiveStore>((set, get) => ({
         case 'giveaway':
           giveaway = f.data.giveaway
           break
+        case 'update':
+          update = f.data
+          updateFrames += 1
+          break
         case 'chatter': {
           const { event_id, ...mark } = f.data
           if (chatters === s.chatters) chatters = new Map(chatters)
@@ -384,6 +408,8 @@ export const useLive = create<LiveStore>((set, get) => ({
       resyncs,
       poll,
       giveaway,
+      update,
+      updateFrames,
       chatters,
       studio,
       remote,
