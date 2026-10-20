@@ -343,7 +343,13 @@ test.describe('tips and settings', () => {
 
   test('never update while live', async ({ page }) => {
     await open(page, 'settings/updates')
-    await expect(page.getByRole('button', { name: 'After stream' })).toBeDisabled()
+    await expect(page.locator('#s-updates')).toContainText(
+      'You’re live, so it waits until your stream ends.',
+    )
+    await page.getByRole('button', { name: 'See what’s new' }).click()
+    await expect(
+      page.getByRole('dialog').getByRole('button', { name: 'Update now' }),
+    ).toBeDisabled()
   })
 
   test('the main currency is saved and the TTS minimum uses it', async ({ page }) => {

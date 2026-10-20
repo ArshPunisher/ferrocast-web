@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowSquareIn, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
+import { ArrowClockwise, ArrowSquareIn, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
   describeError,
@@ -29,8 +29,11 @@ import { LoadError, PageHeader, Panel } from '../components/Panel'
 import { AccountRow, useConnect } from '../components/accounts'
 import { stateCopy } from '../components/StatusStrip'
 import { THEME_EVENT } from '../components/Shell'
-import { done, useAction, useClient, useResource } from '../lib/hooks'
+import { done, useAction, useClient, useNow, useResource } from '../lib/hooks'
+import { DOWNLOAD_PAGE, checkedLine, refreshUpdate, summarize } from '../lib/update'
+import { openUpdateDialog } from '../components/update'
 import { href } from '../lib/router'
+import { externalLink } from '../lib/external'
 import { DiscordSettingsForm } from '../components/discord'
 import { DiscordPro } from '../components/discord-pro'
 import { ObsAutoDetect } from '../components/obs-detect'
@@ -718,12 +721,26 @@ function Data() {
 }
 
 function Updates({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
-  const info = useResource((c) => c.updates())
-  const u = info.data
+  const u = useLive((s) => s.update)
+  const loadError = useLive((s) => s.updateLoadError)
+  const setUpdate = useLive((s) => s.setUpdate)
   const client = useClient()
   const { run, busy } = useAction()
-  // A phone can't install an update on the PC (the same rule the relay checks).
-  const canInstall = client.may('POST', '/api/v1/updates/install')
+  const now = useNow(30_000)
+  const s = summarize(u)
+  // A phone can't check or install on the PC (the same rule the relay checks).
+  const mayCheck = client.may('POST', '/api/v1/updates/check')
+  const newer = !!u?.latest && u.latest !== u.current
+  const check = () =>
+    void run('check', () => client.checkUpdates(), {
+      success: (r) => {
+        setUpdate(r)
+        if (r.error || r.checking) return null
+        return r.latest && r.latest !== r.current
+          ? `Version ${r.latest} is out.`
+          : 'You’re on the newest version.'
+      },
+    })
   return (
     <Section
       id="updates"
@@ -732,50 +749,98 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
     >
       <div className="flex flex-col gap-4">
         {u ? (
-          <div className="flex flex-col gap-2 rounded-[12px] border border-line bg-surface-2 p-3.5 sm:flex-row sm:items-center">
-            <p className="min-w-0 flex-1 text-sm text-text-2">
-              {u.latest && u.latest !== u.current ? (
-                <>
-                  Version <span className="font-mono text-text">{u.latest}</span> is ready (you have{' '}
-                  <span className="font-mono text-text">{u.current}</span>).
-                </>
-              ) : (
-                <>
-                  Version <span className="font-mono text-text">{u.current}</span> is the latest.
-                </>
-              )}
-              {u.blocked_while_live && (
-                <span className="mt-1 block text-[13.5px] font-medium text-warn">
-                  You’re live, so it will wait until your stream ends.
-                </span>
-              )}
-            </p>
-            {u.latest && u.latest !== u.current && !canInstall && (
-              <span className="text-[14px] font-semibold text-text-2">Update on the PC</span>
-            )}
-            {u.latest && u.latest !== u.current && canInstall && (
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={u.blocked_while_live || busy === 'update'}
-                title={u.blocked_while_live ? 'Available after your stream' : undefined}
-                onClick={() =>
-                  void run('update', () => client.installUpdate(), {
-                    success: (r) =>
-                      `Installing v${r.installing}. Ferrocast restarts by itself in a moment.`,
-                  })
-                }
+          <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-3.5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1 text-sm text-text-2">
+                <p data-testid="update-status" aria-live="polite">
+                  {newer || s.phase !== 'idle' ? (
+                    <>
+                      Version <span className="font-mono text-text">{s.version}</span>{' '}
+                      {s.phase === 'ready' ? 'is ready' : 'is out'} (you have{' '}
+                      <span className="font-mono text-text">{u.current}</span>).
+                    </>
+                  ) : u.checked_at && !u.error ? (
+                    <>
+                      You’re on the newest version,{' '}
+                      <span className="font-mono text-text">{u.current}</span>.
+                    </>
+                  ) : (
+                    <>
+                      You have <span className="font-mono text-text">{u.current}</span>.
+                    </>
+                  )}
+                </p>
+                <p
+                  className="mt-0.5 text-[13px] text-text-3"
+                  title={u.checked_at ? new Date(u.checked_at).toLocaleString() : undefined}
+                >
+                  {u.checking ? 'Checking now…' : checkedLine(u.checked_at, now)}
+                </p>
+                {s.blocked && (newer || s.phase === 'ready') && (
+                  <p className="mt-1 text-[13.5px] font-medium text-warn">
+                    You’re live, so it waits until your stream ends.
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {(newer || s.phase !== 'idle') && (
+                  <Button size="sm" variant="primary" onClick={openUpdateDialog}>
+                    {s.phase === 'ready' && mayCheck ? 'Restart to finish' : 'See what’s new'}
+                  </Button>
+                )}
+                {/* An engine before 1.1 has no check route (no `checking` field either). */}
+                {mayCheck && u.can_install !== false && u.checking !== undefined && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<ArrowClockwise size={15} />}
+                    busy={busy === 'check' || !!u.checking}
+                    onClick={check}
+                  >
+                    Check for updates
+                  </Button>
+                )}
+              </div>
+            </div>
+            {u.error && (
+              <div
+                role="alert"
+                className="rounded-[10px] border border-warn/30 bg-warn-soft p-3 text-sm"
               >
-                {u.blocked_while_live ? 'After stream' : 'Update'}
-              </Button>
+                <p className="font-semibold text-text">{u.error.message}</p>
+                <p className="mt-0.5 text-text-2">{u.error.hint}</p>
+              </div>
+            )}
+            {u.can_install === false && (
+              <p className="text-[13.5px] text-text-2">
+                This copy of Ferrocast doesn’t update itself. Get new versions from{' '}
+                <a
+                  {...externalLink(DOWNLOAD_PAGE)}
+                  className="font-semibold text-accent-text hover:underline"
+                >
+                  the download page
+                </a>
+                .
+              </p>
+            )}
+            {!mayCheck && (
+              <p className="text-[13.5px] text-text-2">
+                Updates are installed on the streaming PC.
+              </p>
             )}
           </div>
+        ) : loadError ? (
+          <LoadError error={loadError} onRetry={() => void refreshUpdate(client)} />
         ) : (
           <Skeleton className="h-16" />
         )}
         <Switch
           checked={settings.never_update_while_live}
-          onChange={(v) => save({ ...settings, never_update_while_live: v })}
+          onChange={(v) => {
+            save({ ...settings, never_update_while_live: v })
+            // Whether it's blocked follows the saved setting: read it again after the save.
+            window.setTimeout(() => void refreshUpdate(client), 600)
+          }}
           label="Never update while I’m live"
         />
         {u && (
