@@ -1,7 +1,8 @@
 ---
 // Sparky, the Ferrocast bot: a soft desk robot with the Spark bolt for an antenna and big
 // teddy-bear eyes that follow the cursor. It changes face with what the visitor does (see
-// scripts/bot.ts) and gets excited over anything marked data-bot-excite. Decorative only.
+// scripts/bot.ts) and gets excited over anything marked data-bot-excite. A `bot:cheer` event on the host
+// makes him cheer (wave, hop, spark burst). Decorative only.
 
 const L = [90, 104] as const
 const R = [130, 104] as const
@@ -10,21 +11,33 @@ const M = [110, 133] as const
 const sparkle = (x: number, y: number, s: number) =>
   `M${x} ${y - s}Q${x + s * 0.18} ${y - s * 0.18} ${x + s} ${y}Q${x + s * 0.18} ${y + s * 0.18} ${x} ${y + s}Q${x - s * 0.18} ${y + s * 0.18} ${x - s} ${y}Q${x - s * 0.18} ${y - s * 0.18} ${x} ${y - s}Z`
 const eyes = [L, R]
+// A page can show Sparky twice (the Download page's thank-you panel); each needs its own ids.
+const { id = 'bot' } = Astro.props as { id?: string }
+const shell = `${id}-shell`
+// The spark burst when he cheers: small sparkles flung out from around his head.
+const burst = [
+  [32, 70, 7, -26, -22, '#ffa424'],
+  [20, 120, 5, -30, 6, '#33d4ff'],
+  [62, 28, 6, -14, -26, '#33d4ff'],
+  [158, 22, 7, 14, -26, '#ffa424'],
+  [196, 78, 6, 28, -16, '#33d4ff'],
+  [200, 132, 5, 30, 10, '#ffa424'],
+] as const
 ---
 
 <div class="fc-bot" data-bot>
   <svg viewBox="0 0 220 240" class="bot" aria-hidden="true" focusable="false">
     <defs>
-      <linearGradient id="bot-shell" x1="0" y1="0" x2="0" y2="1">
+      <linearGradient id={shell} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#ffffff"></stop>
         <stop offset="1" stop-color="#d5dbe4"></stop>
       </linearGradient>
     </defs>
     <ellipse class="shadow" cx="110" cy="226" rx="46" ry="7"></ellipse>
     <g class="body">
-      <ellipse cx="74" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
-      <ellipse cx="146" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
-      <rect x="80" y="160" width="60" height="56" rx="24" fill="url(#bot-shell)"></rect>
+      <ellipse class="arm arm-l" cx="74" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
+      <ellipse class="arm arm-r" cx="146" cy="186" rx="9" ry="14" fill="#cfd5de"></ellipse>
+      <rect x="80" y="160" width="60" height="56" rx="24" fill={`url(#${shell})`}></rect>
       <path d="M115 174L104 188L110 188L106 198L118 184L112 184Z" fill="#ffa424"></path>
     </g>
     <g class="head">
@@ -48,7 +61,7 @@ const eyes = [L, R]
       </g>
       <circle cx="47" cy="106" r="12" fill="#ffa424"></circle>
       <circle cx="173" cy="106" r="12" fill="#ffa424"></circle>
-      <rect x="48" y="52" width="124" height="110" rx="42" fill="url(#bot-shell)"></rect>
+      <rect x="48" y="52" width="124" height="110" rx="42" fill={`url(#${shell})`}></rect>
       <rect x="60" y="68" width="100" height="80" rx="30" fill="#12161c"></rect>
       <g class="face">
         <g class="eyes-open">
@@ -138,6 +151,11 @@ const eyes = [L, R]
       <path class="sp s1" d={sparkle(48, 58, 8)} fill="#ffa424"></path>
       <path class="sp s2" d={sparkle(174, 46, 6)} fill="#33d4ff"></path>
       <path class="sp s3" d={sparkle(164, 98, 5)} fill="#ffa424"></path>
+      <g class="burst">
+        {burst.map(([x, y, size, dx, dy, fill]) => (
+          <path d={sparkle(x, y, size)} fill={fill} style={`--dx:${dx}px;--dy:${dy}px`} />
+        ))}
+      </g>
       <text class="zz" x="158" y="52">
         z
         <tspan dx="2" dy="-8" font-size="13">
@@ -218,6 +236,8 @@ const eyes = [L, R]
   .bot[data-mood='sleepy'] .m-idle,
   .bot[data-mood='giggle'] .m-idle,
   .bot[data-mood='excited'] .m-idle,
+  .bot[data-mood='cheer'] .m-idle,
+  .bot[data-mood='cheer'] .eyes-open,
   .bot[data-mood='sleepy'] .eyes-open,
   .bot[data-mood='giggle'] .eyes-open,
   .bot[data-mood='excited'] .eyes-open {
@@ -232,13 +252,25 @@ const eyes = [L, R]
   .bot[data-mood='giggle'] .m-open,
   .bot[data-mood='excited'] .eyes-star,
   .bot[data-mood='excited'] .m-open,
-  .bot[data-mood='excited'] .sp {
+  .bot[data-mood='excited'] .sp,
+  .bot[data-mood='cheer'] .eyes-happy,
+  .bot[data-mood='cheer'] .m-open,
+  .bot[data-mood='cheer'] .sp,
+  .bot[data-mood='cheer'] .burst {
     opacity: 1;
   }
   .bot[data-mood='happy'] .blush,
   .bot[data-mood='giggle'] .blush,
-  .bot[data-mood='excited'] .blush {
+  .bot[data-mood='excited'] .blush,
+  .bot[data-mood='cheer'] .blush {
     opacity: 0.6;
+  }
+  /* The burst's sparkles sit hidden behind his head until he cheers. */
+  .burst path {
+    opacity: 0;
+  }
+  .bot[data-mood='cheer'] .burst path {
+    opacity: 1;
   }
   .bot[data-mood='surprised'] .eyes-open .eye {
     transform: scale(1.14);
@@ -278,6 +310,67 @@ const eyes = [L, R]
     }
     .bot[data-mood='sleepy'] .zz {
       animation: bot-zz 2.4s ease-in-out infinite;
+    }
+    /* Cheer: one hop, a wave, and sparks flung out once. */
+    .bot[data-mood='cheer'] .head,
+    .bot[data-mood='cheer'] .body {
+      animation: bot-hop 0.42s cubic-bezier(0.3, 0, 0.3, 1) 2;
+    }
+    .arm-r {
+      transform-box: view-box;
+      transform-origin: 146px 176px;
+    }
+    .bot[data-mood='cheer'] .arm-r {
+      animation: bot-wave 1.8s ease-in-out;
+    }
+    .bot[data-mood='cheer'] .sp {
+      animation: bot-twinkle 0.9s ease-in-out infinite;
+    }
+    .burst path {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .bot[data-mood='cheer'] .burst path {
+      animation: bot-burst 0.9s cubic-bezier(0.23, 1, 0.32, 1) both;
+    }
+    .bot[data-mood='cheer'] .burst path:nth-child(2n) {
+      animation-delay: 60ms;
+    }
+    .bot[data-mood='cheer'] .burst path:nth-child(3n) {
+      animation-delay: 120ms;
+    }
+  }
+  @keyframes bot-wave {
+    0% {
+      rotate: 0deg;
+    }
+    25% {
+      rotate: -130deg;
+    }
+    45% {
+      rotate: -105deg;
+    }
+    65% {
+      rotate: -135deg;
+    }
+    80% {
+      rotate: -110deg;
+    }
+    100% {
+      rotate: 0deg;
+    }
+  }
+  @keyframes bot-burst {
+    0% {
+      opacity: 0;
+      transform: translate(calc(var(--dx) * -0.6), calc(var(--dy) * -0.6)) scale(0.4);
+    }
+    35% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(0, 0) scale(1) rotate(45deg);
     }
   }
   @keyframes bot-sway {

@@ -1,6 +1,7 @@
 // Sparky's brain. The pupils follow the cursor all the way to the edge of each eye (smoothed,
 // so they stick to it), the face shifts and the head leans toward it, and the face shows a
 // mood, by priority:
+//   cheer      a `bot:cheer` event on the host (2.4 s): the Download page's thank-you
 //   excited    a download link or button is hovered or focused (anything [data-bot-excite])
 //   giggle     the bot was clicked or tapped (1.1 s)
 //   surprised  the cursor flicked past fast (0.7 s)
@@ -10,7 +11,7 @@
 // Under reduced motion the eyes still follow, but nothing hops, sways or tilts. The loop
 // stops while the bot is off screen or the tab is hidden.
 
-type Mood = 'neutral' | 'happy' | 'surprised' | 'sleepy' | 'giggle' | 'excited'
+type Mood = 'neutral' | 'happy' | 'surprised' | 'sleepy' | 'giggle' | 'excited' | 'cheer'
 
 export function mountBot(host: HTMLElement) {
   const svg = host.querySelector<SVGSVGElement>('svg.bot')
@@ -46,6 +47,14 @@ export function mountBot(host: HTMLElement) {
     { passive: true },
   )
   addEventListener('scroll', () => ((ptr.moved = performance.now()), kick()), { passive: true })
+  host.addEventListener('bot:cheer', () => {
+    timed = 'cheer'
+    until = performance.now() + 2400
+    // Restart the burst if he was already cheering.
+    mood = 'neutral'
+    svg.dataset.mood = mood
+    kick()
+  })
   svg.addEventListener('click', () => {
     timed = 'giggle'
     until = performance.now() + 1100
@@ -105,7 +114,8 @@ export function mountBot(host: HTMLElement) {
     let next: Mood = 'neutral'
     const flick = ptr.speed > 2.6 && now - ptr.t < 80
     ptr.speed *= 0.9
-    if (excited > 0) next = 'excited'
+    if (timed === 'cheer' && now < until) next = 'cheer'
+    else if (excited > 0) next = 'excited'
     else if (timed && now < until) next = timed
     else if (flick) {
       timed = 'surprised'
