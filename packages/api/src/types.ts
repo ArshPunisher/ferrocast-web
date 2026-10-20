@@ -618,7 +618,67 @@ export type AnimOut =
   | 'shrink'
   | 'flip'
   | 'wipe'
-export type TextAnim = 'none' | 'wave' | 'wiggle' | 'bounce' | 'pop' | 'type' | 'glow'
+export type TextAnim =
+  | 'none'
+  | 'wave'
+  | 'wiggle'
+  | 'bounce'
+  | 'pop'
+  | 'type'
+  | 'glow'
+  | 'cascade'
+  | 'pop_wave'
+  | 'decode'
+  | 'shine'
+  | 'neon'
+  | 'rgb'
+  | 'stretch'
+  | 'spin'
+/** The motion designer's entrances (1.1); scene layers take only `AnimIn`. */
+export type MotionIn =
+  | 'slam'
+  | 'elastic'
+  | 'bolt'
+  | 'glitch'
+  | 'portal'
+  | 'shatter'
+  | 'pour'
+  | 'flip_shine'
+  | 'confetti_pop'
+  | 'dash'
+  | 'neon'
+export type MotionOut =
+  'dissolve' | 'black_hole' | 'zip' | 'fold' | 'shatter' | 'tv_off' | 'fall' | 'iris' | 'glitch'
+export type AlertIn = AnimIn | MotionIn
+export type AlertOut = AnimOut | MotionOut
+export type MotionIdle = 'none' | 'breathe' | 'float' | 'shimmer' | 'glow' | 'jelly' | 'heartbeat'
+export type MotionParticles =
+  'auto' | 'none' | 'confetti' | 'sparks' | 'petals' | 'coins' | 'embers' | 'stars'
+export type ParticleColors = 'brand' | 'rainbow' | 'gold' | 'white' | 'custom'
+export type MotionSpot = 'tl' | 'tc' | 'tr' | 'ml' | 'mc' | 'mr' | 'bl' | 'bc' | 'br'
+export type MotionDirection = 'auto' | 'top' | 'left' | 'right' | 'bottom'
+export type MotionRecipe = 'heavy' | 'arcade' | 'cyber' | 'molten' | 'storm' | 'party' | 'clean'
+/** core::design::Motion (API.md §4 Designs). Missing on looks saved before 1.1. */
+export interface Motion {
+  idle: MotionIdle
+  particles: MotionParticles
+  colors: ParticleColors
+  custom_color: string
+  bounce: number
+  speed: number
+  stagger: number
+  shake: boolean
+  flash: boolean
+  vignette: boolean
+  zoom_punch: boolean
+  by_amount: boolean
+  position: MotionSpot
+  direction: MotionDirection
+  impact_sounds: boolean
+  beat: boolean
+  bpm: number
+  recipe: MotionRecipe | null
+}
 /** A built-in sound that ships as a file (API.md §4 Designs, `Sound.builtin`). */
 export type PlayableSound =
   // Crystal: bright and glassy
@@ -671,13 +731,15 @@ export interface AlertLook {
   shadow: ShadowKind
   outline: number
   anim: {
-    in: AnimIn
-    out: AnimOut
+    in: AlertIn
+    out: AlertOut
     text: TextAnim
     in_ms: number
     out_ms: number
     text_delay_ms: number
   }
+  /** 1.1; read it through `motionOf`, which fills in what an older look lacks. */
+  motion?: Motion
   sound: { ref: string | null; builtin: BuiltinSound; volume: number }
   duration_ms: number
   tts: { enabled: boolean; min_amount: number }
@@ -755,6 +817,8 @@ export interface AlertDesignView {
   look: AlertLook
   title_parts: TextPart[]
   body_parts: TextPart[]
+  /** 1.1: how hard the alert lands (0.6–2, `intensityOf`); missing reads as 1. */
+  intensity?: number
 }
 
 export interface UseDesignRequest {

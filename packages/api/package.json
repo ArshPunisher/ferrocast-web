@@ -13,7 +13,8 @@
     "./alert": "./src/alert.ts",
     "./samples": "./src/samples.ts",
     "./demo": "./src/demo/index.ts",
-    "./design": "./src/design.ts"
+    "./design": "./src/design.ts",
+    "./motion": "./src/motion.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

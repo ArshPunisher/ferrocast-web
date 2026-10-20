@@ -5,6 +5,17 @@
 
 import { amountOf, defaultRules, matches, render, select } from './alert'
 import { exponent } from './format'
+import {
+  DIRECTIONS,
+  IDLES,
+  MOTION_BOUNDS,
+  PARTICLES,
+  PARTICLE_COLORS,
+  RECIPE_IDS,
+  SPOTS,
+  intensityOf,
+  motionOf,
+} from './motion'
 import { anySample, sample } from './samples'
 import { Template, eventVars, withPlurals } from './template'
 import type {
@@ -356,6 +367,14 @@ export const TEXT_ANIM_LABEL: Record<TextAnim, string> = {
   pop: 'Pop letters',
   type: 'Typewriter',
   glow: 'Glow pulse',
+  cascade: 'Cascade',
+  pop_wave: 'Pop wave',
+  decode: 'Decode',
+  shine: 'Shine sweep',
+  neon: 'Neon letters',
+  rgb: 'RGB glitch',
+  stretch: 'Rubber stretch',
+  spin: 'Spin in',
 }
 const PLAYABLE_LABEL: Record<PlayableSound | 'none', string> = {
   none: 'No sound',
@@ -699,6 +718,7 @@ export function renderOnto(
     look: structuredClone(look),
     title_parts,
     body_parts,
+    intensity: intensityOf(e),
   }
   return {
     ...alert,
@@ -1204,6 +1224,7 @@ export function validateLook(path: string, l: AlertLook): string | null {
     within(`${path}.anim.in_ms`, l.anim.in_ms, 0, 3000, ' ms'),
     within(`${path}.anim.out_ms`, l.anim.out_ms, 0, 3000, ' ms'),
     within(`${path}.anim.text_delay_ms`, l.anim.text_delay_ms, 0, 10_000, ' ms'),
+    validateMotion(`${path}.motion`, l),
     l.sound.ref !== null && !isMediaRef(l.sound.ref)
       ? `${path}.sound.ref: "${clip(l.sound.ref)}" isn't a file from your media library.`
       : null,
@@ -1220,6 +1241,37 @@ export function validateLook(path: string, l: AlertLook): string | null {
     checkCss(`${path}.css`, l.css),
   )
   return e
+}
+
+/** core::design::Motion::validate (a look without motion reads as the defaults). */
+function validateMotion(path: string, l: AlertLook): string | null {
+  if (l.motion === undefined) return null
+  if (l.motion === null || typeof l.motion !== 'object' || Array.isArray(l.motion))
+    return `${path}: must be an object of motion settings.`
+  const m = motionOf(l)
+  const b = MOTION_BOUNDS
+  const pick = (k: string, v: unknown, ok: readonly unknown[]) =>
+    ok.includes(v) ? null : `${path}.${k}: "${clip(String(v))}" isn't one of ${ok.join(', ')}.`
+  const bool = (k: keyof typeof m) =>
+    typeof m[k] === 'boolean' ? null : `${path}.${k}: must be true or false.`
+  return first(
+    pick('idle', m.idle, IDLES),
+    pick('particles', m.particles, PARTICLES),
+    pick('colors', m.colors, PARTICLE_COLORS),
+    pick('position', m.position, SPOTS),
+    pick('direction', m.direction, DIRECTIONS),
+    m.recipe === null ? null : pick('recipe', m.recipe, RECIPE_IDS),
+    ...(
+      ['shake', 'flash', 'vignette', 'zoom_punch', 'by_amount', 'impact_sounds', 'beat'] as const
+    ).map(bool),
+    isColor(m.custom_color)
+      ? null
+      : `${path}.custom_color: "${clip(String(m.custom_color))}" isn't a colour; use #rrggbb.`,
+    within(`${path}.bounce`, m.bounce, 0, b.bounce),
+    within(`${path}.speed`, m.speed, b.speed[0], b.speed[1], '%'),
+    within(`${path}.stagger`, m.stagger, 0, b.stagger, ' ms'),
+    within(`${path}.bpm`, m.bpm, b.bpm[0], b.bpm[1], ' BPM'),
+  )
 }
 
 function validateScene(path: string, s: Scene): string | null {
