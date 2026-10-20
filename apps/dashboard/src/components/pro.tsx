@@ -8,6 +8,7 @@ import { proApi, rupeesFromPaise, type ProPlan, type ProView } from '@ferrocast/
 import { Badge, Button, Field, Input, Segmented, Skeleton } from '@ferrocast/ui'
 import { LoadError } from './Panel'
 import { useAction, useClient, useResource } from '../lib/hooks'
+import { externalLink } from '../lib/external'
 
 function day(ms: number | null): string {
   if (!ms) return ''
@@ -79,9 +80,7 @@ export function proSummary(p: ProView): {
 function ExternalLink({ href, children }: { href: string; children: string }) {
   return (
     <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...externalLink(href)}
       className="fc-press inline-flex h-10 items-center gap-1.5 self-start rounded-control border border-line-strong bg-surface-3 px-3.5 text-[13.5px] font-semibold text-text"
     >
       {children} <ArrowSquareOut size={15} aria-hidden />

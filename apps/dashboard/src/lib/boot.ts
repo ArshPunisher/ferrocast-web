@@ -24,7 +24,7 @@ import type { RemoteState } from './store'
 
 declare global {
   interface Window {
-    __FERROCAST__?: { api: string; token?: string; remote?: boolean }
+    __FERROCAST__?: { api: string; token?: string; remote?: boolean; desktop?: boolean }
     /** Demo engine handle for tests (Playwright) and the "simulate" menu. */
     __ferrocastDemo?: import('@ferrocast/api/demo').DemoEngine
   }

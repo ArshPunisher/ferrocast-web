@@ -22,6 +22,7 @@ import {
 } from '@ferrocast/api'
 import { Badge, Button, Dialog, Field, Input, copyText, cx, toast, useFlash } from '@ferrocast/ui'
 import { useClient, useNow } from '../../lib/hooks'
+import { externalLink } from '../../lib/external'
 
 type Problem = { message: string; hint?: string | null }
 
@@ -385,9 +386,7 @@ function Live({ domain }: { domain: TipDomain }) {
         <div className="flex gap-2">
           <CopyButton text={domain.page_url} what="Link" />
           <a
-            href={domain.page_url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalLink(domain.page_url)}
             className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             Open <ArrowSquareOut size={14} aria-hidden="true" />

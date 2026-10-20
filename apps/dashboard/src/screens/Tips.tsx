@@ -64,6 +64,7 @@ import { OwnAddress } from '../components/tips/OwnAddress'
 import { TipPreview } from '../components/tips/TipPreview'
 import { useClient, useResource } from '../lib/hooks'
 import { useUnsavedWarning } from '../lib/unsaved'
+import { externalLink } from '../lib/external'
 
 // How tips work: the streamer makes their own payment page with each provider, pastes its
 // link here, points the provider's webhook at the address Ferrocast shows, and pastes that
@@ -749,7 +750,7 @@ function PageLink({ url }: { url: string }) {
         </code>
         <div className="flex gap-2">
           <CopyButton text={url} label="Copy tip page link" what="Link" />
-          <a href={url} target="_blank" rel="noopener noreferrer" className={linkButton}>
+          <a {...externalLink(url)} className={linkButton}>
             Open <ArrowSquareOut size={14} aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
@@ -1034,9 +1035,7 @@ function ProviderSetup({
             )}
           </Field>
           <a
-            href={g.createUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalLink(g.createUrl)}
             className="mt-2 inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent-text hover:underline"
           >
             No page yet? {g.createLabel} <ArrowSquareOut size={13} aria-hidden="true" />
@@ -1067,12 +1066,7 @@ function ProviderSetup({
             </code>
             <div className="flex flex-wrap gap-2">
               <CopyButton text={webhook} label={`Copy ${name} webhook address`} what="Address" />
-              <a
-                href={g.webhookUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={linkButton}
-              >
+              <a {...externalLink(g.webhookUrl)} className={linkButton}>
                 {g.webhookLabel} <ArrowSquareOut size={14} aria-hidden="true" />
                 <span className="sr-only">(opens in a new tab)</span>
               </a>

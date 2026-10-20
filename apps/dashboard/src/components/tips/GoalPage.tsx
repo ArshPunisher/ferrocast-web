@@ -16,6 +16,7 @@ import {
 } from '@ferrocast/api'
 import { Button, Dialog, Field, Input, Select, copyText, toast, useFlash } from '@ferrocast/ui'
 import { useClient } from '../../lib/hooks'
+import { externalLink } from '../../lib/external'
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'] as const
 
@@ -266,9 +267,7 @@ function Progress({ goal }: { goal: TipGoal }) {
               <Copy text={goal.overlay_url} label="Copy for OBS" what="OBS link" />
             )}
             <a
-              href={goal.page_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...externalLink(goal.page_url)}
               className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
             >
               Open <ArrowSquareOut size={14} aria-hidden="true" />

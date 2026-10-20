@@ -21,6 +21,7 @@ import {
 import { useClient } from '../lib/hooks'
 import { useLive } from '../lib/store'
 import { stateCopy } from './StatusStrip'
+import { externalLink } from '../lib/external'
 
 const BLURB: Record<ChatPlatform, string> = {
   twitch: 'Chat, follows, subs, Bits, raids and channel points.',
@@ -111,9 +112,7 @@ export function useConnect(): {
               {copied ? 'Copied' : 'Copy code'}
             </Button>
             <a
-              href={flow.flow.verification_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...externalLink(flow.flow.verification_url)}
               className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13px] font-semibold text-text"
             >
               Open twitch.tv/activate <ArrowSquareOut size={14} />
@@ -125,9 +124,7 @@ export function useConnect(): {
         <p className="pb-1 text-center text-[13.5px] text-text-2">
           Nothing opened?{' '}
           <a
-            href={flow.flow.url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalLink(flow.flow.url)}
             className="font-semibold text-accent-text hover:underline"
           >
             Open the sign-in page

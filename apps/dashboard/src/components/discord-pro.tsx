@@ -55,6 +55,7 @@ import {
 import { LoadError } from './Panel'
 import { ProPanel } from './pro/ProPanel'
 import { useAction, useClient, useResource } from '../lib/hooks'
+import { externalLink } from '../lib/external'
 
 /** Sent on window when the bot's go-live changes, so the free form can say who posts. */
 export const DISCORD_PRO_CHANGED = 'ferrocast:discord-pro'
@@ -136,9 +137,7 @@ function NotConnected({ reload, pcCode }: { reload: () => void; pcCode: string }
         <div className="flex flex-col gap-3" data-testid="discord-invite">
           <div className="flex flex-wrap gap-2">
             <a
-              href={invite.invite_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...externalLink(invite.invite_url)}
               className="fc-press inline-flex h-12 items-center gap-2 rounded-control bg-btn-primary px-5 text-[15px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
             >
               <DiscordLogo size={20} weight="fill" aria-hidden /> Open Discord

@@ -42,6 +42,7 @@ import { ProChip } from '../pro/ProChip'
 import { ProPanel } from '../pro/ProPanel'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
+import { externalLink } from '../../lib/external'
 
 const TITLE = 'Keep the bot on when this PC is off'
 /** Who answers can change any minute (the PC goes quiet): look again this often while seen. */
@@ -606,9 +607,7 @@ function PlatformRow({
         >
           {/* Opened by the streamer's own click: a tab opened after a request is blocked. */}
           <a
-            href={link.auth_url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalLink(link.auth_url)}
             className="fc-press inline-flex h-10 items-center gap-2 rounded-control bg-btn-primary px-4 text-[14px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
           >
             Open {label} <ArrowSquareOut size={16} aria-hidden />
