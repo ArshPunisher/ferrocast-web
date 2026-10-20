@@ -250,7 +250,11 @@ export class AlertsWidget implements WidgetView {
     try {
       if (alert.design) {
         try {
-          design = buildDesignAlert(alert, { lowMotion: this.ctx.lowMotion() })
+          design = buildDesignAlert(alert, {
+            lowMotion: this.ctx.lowMotion(),
+            // Impact hits ride with the alert's own sound: only where it may play.
+            impactSound: this.ctx.audio,
+          })
         } catch (e) {
           // A design this page can't draw still shows, in the classic look.
           warnOnce('could not draw an alert design, showing the classic look', e)

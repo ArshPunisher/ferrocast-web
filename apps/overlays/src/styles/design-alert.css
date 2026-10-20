@@ -528,3 +528,167 @@
     animation: none !important;
   }
 }
+
+/* ---------------------------------------------------------------- motion (1.1)
+   Layers for the motion designer: zoom punch, shake, placement and the idle loop, outside in,
+   so each moves on its own and none fights the card's entrance. In the middle spot the card
+   sits exactly where it always did. */
+.fa-punch,
+.fa-shk {
+  position: absolute;
+  inset: 0;
+}
+.fa-pos {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.fa-pos:not([data-spot='mc']) {
+  inset: 7% 8%;
+}
+.fa-pos[data-spot='tl'] {
+  place-items: start start;
+}
+.fa-pos[data-spot='tc'] {
+  place-items: start center;
+}
+.fa-pos[data-spot='tr'] {
+  place-items: start end;
+}
+.fa-pos[data-spot='ml'] {
+  place-items: center start;
+}
+.fa-pos[data-spot='mr'] {
+  place-items: center end;
+}
+.fa-pos[data-spot='bl'] {
+  place-items: end start;
+}
+.fa-pos[data-spot='bc'] {
+  place-items: end center;
+}
+.fa-pos[data-spot='br'] {
+  place-items: end end;
+}
+.fa-wrap {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+/* :where() keeps this at a plain .fa's strength, so a design's own CSS that moves the card
+   (left, top, translate) still wins, as it did in 1.0. */
+:where(.fa-wrap) > .fa {
+  position: relative;
+  left: auto;
+  top: auto;
+  translate: none;
+}
+.fa-pos:not([data-spot='mc']) .fa-wrap > .fa {
+  max-width: 672px;
+}
+.fa-fx {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 800px;
+  height: 450px;
+  pointer-events: none;
+}
+.fa-flash,
+.fa-vig {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.fa-flash {
+  background: #fff;
+  mix-blend-mode: screen;
+}
+.fa-vig {
+  background:
+    radial-gradient(75% 75% at 50% 50%, transparent 45%, rgb(0 0 0 / 0.75) 100%),
+    radial-gradient(90% 90% at 50% 50%, transparent 60%, rgb(255 120 20 / 0.28) 100%);
+}
+/* Temporary layers some effects make (ghosts, shards, the ring, the pour). */
+.fa-tmp {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fa.fa-tmp {
+  margin: 0;
+  translate: none;
+}
+.fa-ghost {
+  mix-blend-mode: screen;
+}
+.fa-ghost,
+.fa-ghost * {
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  color: var(--gc) !important;
+  border-color: var(--gc) !important;
+  -webkit-text-stroke-color: var(--gc) !important;
+  fill: var(--gc) !important;
+}
+.fa-ghost img,
+.fa-ghost video {
+  opacity: 0;
+}
+.fa-ring {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--ring, #33d4ff) 55%, #fff);
+  box-shadow:
+    0 0 24px var(--ring, #33d4ff),
+    inset 0 0 18px var(--ring, #33d4ff);
+}
+.fa-pour {
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff1c2 0%, #ffc04d 18%, #ff9a1a 55%, #d95f00 100%);
+  box-shadow: 0 0 30px rgb(255 150 30 / 0.6);
+}
+.fa-sheen-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fa-sheen {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(255 255 255 / 0.55) 45%,
+    rgb(255 255 255 / 0.85) 50%,
+    rgb(255 255 255 / 0.55) 55%,
+    transparent
+  );
+  transform: translateX(-130%) skewX(-18deg);
+  opacity: 0;
+  mix-blend-mode: overlay;
+}
+.fa-caret {
+  display: inline-block;
+  width: 0.09em;
+  height: 0.95em;
+  margin-left: 0.06em;
+  vertical-align: -0.1em;
+  background: var(--hl);
+  animation: fa-blink 0.9s steps(1) infinite;
+}
+@keyframes fa-blink {
+  50% {
+    opacity: 0;
+  }
+}
