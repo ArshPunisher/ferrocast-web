@@ -87,6 +87,7 @@ import { go, href, leaveTo } from '../lib/router'
 import { galleryTab } from '../components/design/gallery'
 import { useLeaveGuard } from '../lib/unsaved'
 import { previewMediaUrl } from '../lib/media-url'
+import { unlockAudio } from '@ferrocast/overlays'
 
 export type DesignerView = 'stage' | 'guided'
 const VIEW_KEY = 'fc.designer.view'
@@ -372,7 +373,11 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           size="sm"
           variant="secondary"
           label={sound ? 'Mute preview' : 'Play preview sound'}
-          onClick={() => setSound((v) => !v)}
+          aria-pressed={sound}
+          onClick={() => {
+            unlockAudio()
+            setSound((v) => !v)
+          }}
         >
           {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
         </IconButton>
@@ -439,6 +444,8 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
       alert={alert}
       scene={scene}
       sound={sound}
+      // Every change replays the alert, so the effect of a setting is seen (and heard).
+      autoplay
       loop={view === 'guided'}
       handle={stage}
       onTick={setTick}

@@ -19,6 +19,15 @@ function audio(): AudioContext | null {
   }
 }
 
+/**
+ * Makes (or wakes) the shared audio context. Call it from a click: WebKit (the Mac app's
+ * window) only lets a context start inside the user's gesture, and a preview that plays a
+ * moment later would otherwise stay silent.
+ */
+export function unlockAudio(): void {
+  audio()
+}
+
 /** Plays a built-in sound at `volume` (0–100). Returns its length in ms (0 when silent). */
 export function playBuiltin(name: BuiltinSound, volume: number): number {
   if (name === 'none') return 0

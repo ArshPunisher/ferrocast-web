@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowCounterClockwise, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react'
-import { createOverlay, playAlertPreview, type OverlayRuntime } from '@ferrocast/overlays'
+import {
+  createOverlay,
+  playAlertPreview,
+  unlockAudio,
+  type OverlayRuntime,
+} from '@ferrocast/overlays'
 import overlayCss from '@ferrocast/overlays/styles.css?inline'
 import type { Overlay, OverlayState, RenderedAlert } from '@ferrocast/api'
 import { IconButton, cx } from '@ferrocast/ui'
@@ -134,7 +139,11 @@ export function AlertStage({
               size="sm"
               variant="secondary"
               label={sound ? 'Mute preview' : 'Play preview sound'}
-              onClick={() => setSound((s) => !s)}
+              aria-pressed={sound}
+              onClick={() => {
+                unlockAudio()
+                setSound((s) => !s)
+              }}
             >
               {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
             </IconButton>

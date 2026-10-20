@@ -66,6 +66,7 @@ import { href } from '../lib/router'
 import { useUnsavedWarning } from '../lib/unsaved'
 import { useLive } from '../lib/store'
 import { previewMediaUrl } from '../lib/media-url'
+import { unlockAudio } from '@ferrocast/overlays'
 
 type CondType = Exclude<Condition['type'], 'all' | 'any'>
 
@@ -909,7 +910,10 @@ function RuleEditor({
               aria-pressed={!sound}
               title={sound ? 'Mute the preview' : 'Play the preview with sound'}
               icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-              onClick={() => setSound((s) => !s)}
+              onClick={() => {
+                unlockAudio()
+                setSound((s) => !s)
+              }}
             >
               Mute
             </Button>

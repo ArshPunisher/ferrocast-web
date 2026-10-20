@@ -44,7 +44,8 @@ function Backdrop({ scene }: { scene: Scene }) {
 
 /**
  * The real overlay renderer drawing one alert design (what OBS will show), 16:9, scaled to
- * fit. Static until `play`; `loop` replays it; `onTick` drives a timeline playhead.
+ * fit. Static until `play`; `autoplay` plays it again a moment after each change, `loop`
+ * replays it; `onTick` drives a timeline playhead. Turning `sound` on plays it with sound.
  */
 export function DesignStage({
   alert,
@@ -85,12 +86,15 @@ export function DesignStage({
   const current = useRef<DesignAlert | null>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const raf = useRef(0)
+  const sounding = useRef<HTMLAudioElement | null>(null)
   const latest = useRef({ alert, loop, sound, onTick, onPart, mediaUrl })
   latest.current = { alert, loop, sound, onTick, onPart, mediaUrl }
   const reduce = useReducedMotion() ?? false
   const [playing, setPlaying] = useState(false)
 
   const clear = useCallback(() => {
+    sounding.current?.pause()
+    sounding.current = null
     for (const t of timers.current) clearTimeout(t)
     timers.current = []
     cancelAnimationFrame(raf.current)
@@ -151,6 +155,7 @@ export function DesignStage({
         try {
           const au = new Audio(url)
           au.volume = Math.min(1, Math.max(0, look.sound.volume / 100))
+          sounding.current = au
           void au.play().catch(() => undefined)
         } catch {
           /* no sound in this browser */
@@ -196,6 +201,17 @@ export function DesignStage({
     return () => clearTimeout(t)
   }, [key, autoplay, loop, mount, play, reduce])
   useEffect(() => clear, [clear])
+  // Sound switched on: play it now, so the click is heard. Off: stop what's playing.
+  const wasSound = useRef(sound)
+  useEffect(() => {
+    if (sound === wasSound.current) return
+    wasSound.current = sound
+    if (sound) play()
+    else {
+      sounding.current?.pause()
+      sounding.current = null
+    }
+  }, [sound, play])
 
   return (
     <figure
