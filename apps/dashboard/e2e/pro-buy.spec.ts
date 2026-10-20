@@ -205,6 +205,7 @@ test.describe('settings: buying Pro in three steps', () => {
       const r = await new AxeBuilder({ page }).include('#settings-pro').analyze()
       expect(r.violations).toEqual([])
     }
+    await expect(pro.getByRole('heading', { name: /Pro adds the always-on parts/ })).toBeVisible()
     await axe()
     await toReview(page)
     await axe()
