@@ -49,6 +49,19 @@ const num = (v: unknown, lo: number, hi: number, d: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, lo), hi) : d
 const color = (v: unknown, d: string) => (isColor(v) ? (v as string) : d)
 
+/** True for a light colour (`#rgb`, `#rrggbb`, `#rrggbbaa`): relative luminance over 0.5. */
+export function isLightColor(c: string): boolean {
+  const h = c.replace('#', '')
+  const full =
+    h.length === 3 || h.length === 4 ? [...h.slice(0, 3)].map((x) => x + x).join('') : h.slice(0, 6)
+  if (!/^[0-9a-f]{6}$/i.test(full)) return false
+  const lin = (i: number) => {
+    const v = parseInt(full.slice(i, i + 2), 16) / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4) > 0.5
+}
+
 /** Splits the headline into words (no break inside) and letters (for text animation). */
 function titleNode(parts: TextPart[]): HTMLElement {
   const h = el('div', 'fa-title')
@@ -183,6 +196,9 @@ export function buildDesignAlert(a: RenderedAlert, opts: DesignAlertOptions): De
   st.setProperty('--sh', SHADOW[look.shadow] ?? 'none')
   st.setProperty('--ms', `${layout === 'over' ? 0 : num(look.media_size, 24, 480, 150)}px`)
   st.setProperty('--ink', LIGHT_PLATES.has(frame) || /^#f/i.test(plate) ? '#0e1014' : '#eef0f4')
+  // Frosted glass is mostly see-through: a light plate (a cream card's dark words) gets a
+  // light pane, or the words vanish on a dark game.
+  if (isLightColor(plate)) card.classList.add('plate-light')
   const off = look.offsets ?? { text_x: 0, text_y: 0, media_x: 0, media_y: 0 }
   st.setProperty('--tx', `${num(off.text_x, -400, 400, 0)}px`)
   st.setProperty('--ty', `${num(off.text_y, -400, 400, 0)}px`)

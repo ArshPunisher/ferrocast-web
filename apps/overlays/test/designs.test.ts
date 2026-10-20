@@ -15,6 +15,7 @@ import {
 import { BUILTINS } from '@ferrocast/designs'
 import { createOverlay, type OverlayRuntime } from '../src/runtime'
 import { buildAlert } from '../src/widgets/alerts'
+import { buildDesignAlert, isLightColor } from '../src/design/alert'
 import { XSS, alert, deepAll, deepText, frame, overlay, snapshot } from './helpers'
 
 let root: HTMLElement
@@ -504,5 +505,32 @@ describe('frames and layouts a design wasn’t drawn for', () => {
     const rule = (sel: string) => css.slice(css.indexOf(`${sel} {`)).split('}')[0]!
     expect(rule('.fa.lay-over .fa-media')).toContain('z-index: 0')
     expect(rule('.fa.lay-over .fa-text')).toContain('z-index: 1')
+  })
+
+  it('a light plate gets a light glass pane', () => {
+    expect(isLightColor('#fff7f2')).toBe(true)
+    expect(isLightColor('#fff')).toBe(true)
+    expect(isLightColor('#101216')).toBe(false)
+    expect(isLightColor('#d6457a')).toBe(false)
+    expect(isLightColor('red')).toBe(false)
+    const a = previewAlert(
+      {
+        ...alertDesigns[0]!,
+        content: {
+          events: {
+            tip: {
+              variations: alertDesigns[0]!.content.events.tip!.variations.map((v) => ({
+                ...v,
+                look: { ...v.look, frame: 'glass', colors: { ...v.look.colors, plate: '#fff7f2' } },
+              })),
+            },
+          },
+        },
+      } as Design,
+      'tip',
+    )!
+    const card = buildDesignAlert(a, { lowMotion: true }).host.shadowRoot!.querySelector('.fa')!
+    expect(card.classList.contains('f-glass')).toBe(true)
+    expect(card.classList.contains('plate-light')).toBe(true)
   })
 })
