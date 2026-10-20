@@ -221,8 +221,11 @@ export function buildDesignAlert(a: RenderedAlert, opts: DesignAlertOptions): De
   }
 
   // Scale the 800×450 alert canvas into the widget box.
+  // Layout size, not the on-screen box: a preview that scales its whole stage down (the
+  // Alerts page at phone width) would otherwise shrink the alert twice and push it into a
+  // corner.
   const fit = () => {
-    const r = host.getBoundingClientRect()
+    const r = { width: host.offsetWidth, height: host.offsetHeight }
     if (!r.width || !r.height) return
     const k = Math.min(r.width / CANVAS_W, r.height / CANVAS_H)
     stage.style.transform = `translate(${(r.width - CANVAS_W * k) / 2}px, ${(r.height - CANVAS_H * k) / 2}px) scale(${k})`
