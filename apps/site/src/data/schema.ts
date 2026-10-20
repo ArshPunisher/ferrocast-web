@@ -1,6 +1,6 @@
 // JSON-LD builders shared by pages. Company facts the owner has not confirmed yet are
 // left out: search engines keep what they read, so only final values go in.
-import { COMPANY, SITE, confirmed } from './company'
+import { COMPANY, PRO, SITE, confirmed } from './company'
 
 const a = COMPANY.address
 
@@ -46,7 +46,26 @@ export const softwareApplication = {
   license: 'https://www.gnu.org/licenses/gpl-3.0.html',
   isAccessibleForFree: true,
   image: `${SITE.url}/og/home.png`,
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  downloadUrl: `${SITE.url}/download/`,
+  // The app is free; Pro adds the optional server-side extras, billed in rupees.
+  offers: [
+    { '@type': 'Offer', name: 'Ferrocast', price: '0', priceCurrency: 'INR' },
+    {
+      '@type': 'Offer',
+      name: 'Ferrocast Pro, monthly',
+      price: String(PRO.monthlyInr),
+      priceCurrency: 'INR',
+      url: `${SITE.url}/pricing/`,
+    },
+    {
+      '@type': 'Offer',
+      name: 'Ferrocast Pro, yearly',
+      price: String(PRO.yearlyInr),
+      priceCurrency: 'INR',
+      url: `${SITE.url}/pricing/`,
+    },
+  ],
+  sameAs: [COMPANY.github],
   publisher: {
     '@type': 'Organization',
     '@id': `${COMPANY.url}/#org`,

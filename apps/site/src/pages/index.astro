@@ -10,20 +10,13 @@ import { PAGES } from '../data/pages'
 import { COMPANY } from '../data/company'
 import { organization, softwareApplication } from '../data/schema'
 import { latestStable } from '../data/releases'
-import { SITE } from '../data/company'
 const stable = await latestStable()
 ---
 
 <Base
   page={PAGES.home}
   schema={[
-    stable
-      ? {
-          ...softwareApplication,
-          softwareVersion: stable.version,
-          downloadUrl: `${SITE.url}/download/`,
-        }
-      : softwareApplication,
+    stable ? { ...softwareApplication, softwareVersion: stable.version } : softwareApplication,
     organization,
   ]}
 >
