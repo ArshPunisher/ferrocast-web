@@ -22,6 +22,16 @@ const cols = [
     ],
   },
   {
+    // Ferrocast is one of ClearCraft Labs' apps: link the studio and its other apps.
+    title: 'ClearCraft Labs',
+    links: [
+      { href: 'https://clearcraftlabs.com/', label: 'The studio' },
+      { href: 'https://fuselane.app/', label: 'Fuselane' },
+      { href: 'https://clearcraftlabs.com/hookline/', label: 'Hookline' },
+      { href: 'https://transformx.site/', label: 'TransformX' },
+    ],
+  },
+  {
     title: 'Legal',
     links: [
       { href: '/terms/', label: 'Terms of service' },
@@ -155,7 +165,7 @@ const cols = [
   }
   @media (min-width: 768px) {
     .grid {
-      grid-template-columns: 2fr 1fr 1fr 1fr;
+      grid-template-columns: 2fr repeat(4, 1fr);
     }
     .about {
       grid-column: auto;
