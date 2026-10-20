@@ -59,7 +59,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
 import { TestAlertMenu } from '../components/alerts-live'
-import { AlertStage } from '../components/AlertStage'
+import { AlertStage, alertHasSound } from '../components/AlertStage'
 import { Menu } from '../components/Menu'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
@@ -902,16 +902,22 @@ function RuleEditor({
           >
             Replay
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-pressed={!sound}
-            title={sound ? 'Mute the preview' : 'Play the preview with sound'}
-            icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-            onClick={() => setSound((s) => !s)}
-          >
-            Mute
-          </Button>
+          {alertHasSound(preview) ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={!sound}
+              title={sound ? 'Mute the preview' : 'Play the preview with sound'}
+              icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
+              onClick={() => setSound((s) => !s)}
+            >
+              Mute
+            </Button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[13px] text-text-3">
+              <SpeakerSlash size={15} aria-hidden="true" /> No sound
+            </span>
+          )}
           <Button
             size="sm"
             variant="primary"

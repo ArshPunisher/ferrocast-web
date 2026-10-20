@@ -51,6 +51,13 @@ export function stageScale(width: number): number {
   return width > 0 ? Math.min(1, width / STAGE_MIN_W) : 1
 }
 
+/** True when playing the alert makes a sound (its file, a design's built-in sound or TTS). */
+export function alertHasSound(a: RenderedAlert | null): boolean {
+  if (!a) return false
+  const builtin = a.design?.look?.sound?.builtin
+  return !!(a.sound || a.tts_audio || a.tts_text?.trim() || (builtin && builtin !== 'none'))
+}
+
 /**
  * The real overlay renderer playing one alert, at 16:9, scaled to fit. What you see is
  * exactly what OBS will show.
@@ -121,14 +128,17 @@ export function AlertStage({
       </div>
       {controls && (
         <figcaption className="absolute top-2 right-2 flex gap-1">
-          <IconButton
-            size="sm"
-            variant="secondary"
-            label={sound ? 'Mute preview' : 'Play preview sound'}
-            onClick={() => setSound((s) => !s)}
-          >
-            {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-          </IconButton>
+          {/* No button for a silent alert: toggling it would do nothing (onboarding, 1.0.0). */}
+          {alertHasSound(alert) && (
+            <IconButton
+              size="sm"
+              variant="secondary"
+              label={sound ? 'Mute preview' : 'Play preview sound'}
+              onClick={() => setSound((s) => !s)}
+            >
+              {sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
+            </IconButton>
+          )}
           <IconButton
             size="sm"
             variant="secondary"
