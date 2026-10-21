@@ -39,6 +39,7 @@ import { DiscordPro } from '../components/discord-pro'
 import { ObsAutoDetect } from '../components/obs-detect'
 import { ProSettings } from '../components/pro'
 import { CloudBackups } from '../components/cloud-backups'
+import { CloudSyncSettings } from '../components/cloud-sync'
 import { TtsVoicePicker } from '../components/tts-voices'
 import { RemoteDevices } from '../components/remote'
 import { useLive } from '../lib/store'
@@ -47,6 +48,7 @@ import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 const SECTIONS = [
   ['accounts', 'Accounts'],
   ['obs', 'OBS'],
+  ['cloud', 'Cloud mode'],
   ['tts', 'Text-to-speech'],
   ['discord', 'Discord'],
   ['appearance', 'Appearance'],
@@ -991,7 +993,7 @@ export function Settings({ section }: { section?: string | undefined }) {
           aria-label="Settings sections"
           className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
         >
-          {SECTIONS.filter(([id]) => show(id)).map(([id, label]) => (
+          {SECTIONS.filter(([id]) => show(id) && (id !== 'cloud' || !remote)).map(([id, label]) => (
             <a
               key={id}
               href={href({ name: 'settings', section: id })}
@@ -1019,6 +1021,8 @@ export function Settings({ section }: { section?: string | undefined }) {
         <div className="flex min-w-0 flex-col gap-5">
           {show('accounts') && <Accounts />}
           {show('obs') && <Obs />}
+          {/* A phone never changes the PC's sync (it's under /pro). */}
+          {!remote && <CloudSyncSettings />}
           <Tts currency={res.data?.currency} />
           {show('discord') && (
             <Section
