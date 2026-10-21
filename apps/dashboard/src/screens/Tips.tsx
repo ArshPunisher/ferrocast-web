@@ -64,6 +64,8 @@ import { OwnAddress } from '../components/tips/OwnAddress'
 import { TipPreview } from '../components/tips/TipPreview'
 import { useClient, useResource } from '../lib/hooks'
 import { useUnsavedWarning } from '../lib/unsaved'
+import { isCloud } from '../lib/boot'
+import { useLive } from '../lib/store'
 import { externalLink } from '../lib/external'
 
 // How tips work: the streamer makes their own payment page with each provider, pastes its
@@ -270,8 +272,10 @@ export function Tips() {
   const handleRef = useRef<HTMLInputElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
+  // Cloud mode (no PC): the page and its providers only. Pro's extras stay with a PC's Pro.
+  const cloud = isCloud(useLive((s) => s.conn))
   // Pro: branding and the goal page (shown only when the relay has them and Pro is open).
-  const pro = useResource((c) => proApi(c).status())
+  const pro = useResource((c) => (cloud ? Promise.resolve(null) : proApi(c).status()))
   const proOpen = proPanelState(pro.error ? null : pro.data, 'tip_brand') === 'open'
   const [brand, setBrand] = useState<TipBrand | null>(null)
   const [draft, setDraft] = useState<TipColours | null>(null)
@@ -607,55 +611,59 @@ export function Tips() {
             </ul>
           </Panel>
 
-          <ProPanelView
-            pro={pro.error ? null : pro.data}
-            feature="tip_brand"
-            id="tip-brand"
-            title="Branding"
-          >
-            {brand ? (
-              <Branding
-                brand={brand}
-                draft={draft}
-                onDraft={setDraft}
-                onSaved={(b) => setBrand(b)}
-              />
-            ) : brandError ? (
-              <LoadError error={brandError} onRetry={() => setBrandTry((n) => n + 1)} />
-            ) : (
-              <Skeleton className="h-48" />
-            )}
-          </ProPanelView>
+          {!cloud && (
+            <>
+              <ProPanelView
+                pro={pro.error ? null : pro.data}
+                feature="tip_brand"
+                id="tip-brand"
+                title="Branding"
+              >
+                {brand ? (
+                  <Branding
+                    brand={brand}
+                    draft={draft}
+                    onDraft={setDraft}
+                    onSaved={(b) => setBrand(b)}
+                  />
+                ) : brandError ? (
+                  <LoadError error={brandError} onRetry={() => setBrandTry((n) => n + 1)} />
+                ) : (
+                  <Skeleton className="h-48" />
+                )}
+              </ProPanelView>
 
-          <ProPanelView
-            pro={pro.error ? null : pro.data}
-            feature="tip_brand"
-            id="tip-goal"
-            title="Goal page"
-          >
-            {goalLoaded ? (
-              <GoalPage goal={goal} hasPage={live} defaultCurrency="INR" onSaved={setGoal} />
-            ) : goalError ? (
-              <LoadError error={goalError} onRetry={() => setBrandTry((n) => n + 1)} />
-            ) : (
-              <Skeleton className="h-40" />
-            )}
-          </ProPanelView>
+              <ProPanelView
+                pro={pro.error ? null : pro.data}
+                feature="tip_brand"
+                id="tip-goal"
+                title="Goal page"
+              >
+                {goalLoaded ? (
+                  <GoalPage goal={goal} hasPage={live} defaultCurrency="INR" onSaved={setGoal} />
+                ) : goalError ? (
+                  <LoadError error={goalError} onRetry={() => setBrandTry((n) => n + 1)} />
+                ) : (
+                  <Skeleton className="h-40" />
+                )}
+              </ProPanelView>
 
-          <ProPanelView
-            pro={pro.error ? null : pro.data}
-            feature="tip_domain"
-            id="tip-domain"
-            title="Your own address"
-          >
-            {domainLoaded ? (
-              <OwnAddress domain={domain} hasPage={live} onChange={setDomain} />
-            ) : domainError ? (
-              <LoadError error={domainError} onRetry={() => setDomainTry((n) => n + 1)} />
-            ) : (
-              <Skeleton className="h-40" />
-            )}
-          </ProPanelView>
+              <ProPanelView
+                pro={pro.error ? null : pro.data}
+                feature="tip_domain"
+                id="tip-domain"
+                title="Your own address"
+              >
+                {domainLoaded ? (
+                  <OwnAddress domain={domain} hasPage={live} onChange={setDomain} />
+                ) : domainError ? (
+                  <LoadError error={domainError} onRetry={() => setDomainTry((n) => n + 1)} />
+                ) : (
+                  <Skeleton className="h-40" />
+                )}
+              </ProPanelView>
+            </>
+          )}
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
