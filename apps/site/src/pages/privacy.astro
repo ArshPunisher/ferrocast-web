@@ -63,7 +63,11 @@ import { COMPANY } from '../data/company'
   <h2>YouTube</h2>
   <!-- prettier-ignore -->
   <p>
-    Ferrocast uses YouTube API Services. When you connect YouTube, the app reads your live chat and stream events and carries out the moderation actions you choose, all from your computer. By connecting YouTube you also agree to the <a href="https://policies.google.com/privacy" rel="noopener">Google Privacy Policy</a>. You can disconnect in Settings → Accounts, or revoke Ferrocast’s access at any time on your <a href="https://myaccount.google.com/permissions" rel="noopener">Google account permissions page</a>.
+    Ferrocast uses YouTube API Services. When you connect YouTube, the app reads your live chat and stream events and carries out the moderation actions you choose, all from your computer. By connecting YouTube you also agree to the <a href="https://policies.google.com/privacy" rel="noopener">Google Privacy Policy</a>. You can disconnect in Settings → Accounts, or revoke Ferrocast’s access at any time on your <a href="https://myaccount.google.com/permissions" rel="noopener">Google account permissions page</a>. By using these features you also agree to the <a href="https://www.youtube.com/t/terms" rel="noopener">YouTube Terms of Service</a>.
+  </p>
+  <!-- prettier-ignore -->
+  <p>
+    With Pro, YouTube can also run from our servers (YouTube from the cloud, below). It reads your live chat only while you are live, posts the bot’s replies and timed messages, and carries out the moderation you or your mods choose. Chat is processed in memory and never stored. Ferrocast’s use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.
   </p>
 
   <h2>The Ferrocast relay</h2>
@@ -305,6 +309,45 @@ import { COMPANY } from '../data/company'
     </li>
   </ul>
 
+  <h3>YouTube from the cloud (Pro)</h3>
+  <ul>
+    <li>
+      <strong>What:</strong> your channel’s id and name, whether you allowed moderation, when it
+      connected and when it was last live, and the last error. Counters of the YouTube quota used
+      each day.
+    </li>
+    <li>
+      <strong>Sealed:</strong> the sign-in token for your channel.
+    </li>
+    <li>
+      <strong>Why:</strong> so the cloud bot can read and answer your YouTube live chat when your PC
+      is off or when you have no PC.
+    </li>
+    <li>
+      <strong>How long:</strong> until you disconnect, when the token is also revoked at Google, or
+      30 days after Pro ends. Chat is never stored.
+    </li>
+  </ul>
+
+  <h3>Smart moderation, smart replies and recaps (Pro)</h3>
+  <ul>
+    <li>
+      <strong>What is sent:</strong> for smart moderation, chat messages that passed your own
+      filters but look doubtful (with the sender’s display name); for smart replies, a viewer’s
+      question with the facts you approved; for a recap, your stream’s totals and the names you
+      would thank. These pass through the relay to the model provider below and the answer comes
+      back.
+    </li>
+    <li>
+      <strong>What is kept:</strong> only how many checks, replies and recaps each subscription used
+      each day. Never the messages, questions, facts or answers.
+    </li>
+    <li>
+      <strong>Why:</strong> to suggest moderation, answer questions and write the recap you asked
+      for. Nothing is done in your chat unless you set it up.
+    </li>
+  </ul>
+
   <h3>Stream history and weekly email</h3>
   <ul>
     <li>
@@ -323,9 +366,12 @@ import { COMPANY } from '../data/company'
       <strong>Why:</strong> to show your stream history and send the weekly report you asked for.
     </li>
     <li>
-      <strong>How long:</strong> history while you have Pro, up to 400 days, then 30 days after Pro
-      ends. Your email address goes as soon as you stop the emails or unsubscribe, a week after an
-      unconfirmed link expires, or 30 days after Pro ends.
+      <strong>Who:</strong> with a free Ferrocast account signed in on your PC, or with Pro.
+    </li>
+    <li>
+      <strong>How long:</strong> the last 30 days with a free account; with Pro, the last year, and
+      everything is deleted 30 days after Pro ends. Your email address goes as soon as you stop the
+      emails or unsubscribe, a week after an unconfirmed link expires, or 30 days after Pro ends.
     </li>
   </ul>
 
@@ -375,7 +421,12 @@ import { COMPANY } from '../data/company'
       <strong>Brevo</strong>: sends the weekly email and its confirmation email.
     </li>
     <li>
-      <strong>Cloudflare</strong>: carries the connection to your phone dashboard.
+      <strong>Cloudflare</strong>: carries the connection to your phone dashboard, and runs the
+      model for smart moderation, smart replies and recaps (Workers AI).
+    </li>
+    <li>
+      <strong>Google</strong>: YouTube from the cloud (YouTube API Services). Only if we switch
+      smart features to Google’s Gemini instead of Cloudflare, the text those features send.
     </li>
     <li>
       <strong>Discord</strong>: go-live posts and roles in your server.

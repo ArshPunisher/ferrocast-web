@@ -82,7 +82,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'What is in Ferrocast Pro?',
-        a: 'Eight things that run on our servers. A 24/7 cloud bot for Twitch and Kick. Your dashboard on your phone, for you and your mods, with an offline mode: with the cloud bot on, chat, bans and history still work when your PC is off. Ferrocast voices for text-to-speech. A Discord bot that posts when you go live and gives roles to supporters. Cloud backups of your setup. Stream history. An optional weekly email. And tip branding: your own colours and a tip goal. A YouTube cloud bot and your own tip address are coming later.',
+        a: 'Things that run on our servers. YouTube from the cloud: your YouTube chat and bot keep running with your PC off, or with no PC. Smart moderation, a second look at doubtful chat in English, Hindi and Hinglish, where you decide and can undo. Smart replies from facts you approve, and a written recap after each stream. A year of stream insights (free accounts keep 30 days). A 24/7 cloud bot, your dashboard on your phone for you and your mods, Ferrocast voices, a Discord bot, cloud backups, an optional weekly email, and tip branding with a goal.',
       },
       {
         q: 'Can I buy Pro now?',

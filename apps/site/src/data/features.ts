@@ -277,7 +277,7 @@ export const FEATURES: Feature[] = [
       },
     ],
     notes: [
-      'Ferrocast Pro adds a 24/7 cloud bot. When your PC is off, it answers your commands, runs your timers and sends your auto-replies on Twitch and Kick, with YouTube coming later. It runs on our servers, so it costs money.',
+      'Ferrocast Pro adds a 24/7 cloud bot. When your PC is off, it answers your commands, runs your timers and sends your auto-replies on Twitch, Kick and YouTube. It runs on our servers, so it costs money.',
       'Loyalty points, giveaways and song requests are planned for a later version.',
     ],
   },
