@@ -118,6 +118,16 @@ export interface CloudBotView {
    */
   pro_available?: boolean
   sync: CloudBotSync
+  /**
+   * Cloud mode's Bot page only (CLOUD.md §11): YouTube is bound to the account's Pro
+   * subscription. `follows_this_page`: no PC is linked, so YouTube's bot uses this page.
+   */
+  youtube?: {
+    channel: { id: string; title: string } | null
+    bot_on: boolean
+    pro: boolean
+    follows_this_page: boolean
+  }
 }
 
 /** `POST /api/v1/pro/bot/{platform}/connect` → 201: open `auth_url` in the browser (10 minutes). */

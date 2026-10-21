@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { cloudBytes, cloudChannelLine, cloudFetch, cloudScreenAllowed } from '../src/cloud'
+import {
+  cloudBytes,
+  cloudChannelLine,
+  cloudFetch,
+  cloudScreenAllowed,
+  cloudYoutubeState,
+} from '../src/cloud'
 
 describe('cloud mode', () => {
   it('sends the cookie, the CSRF token on writes, and never a bearer token', async () => {
@@ -33,10 +39,26 @@ describe('cloud mode', () => {
       'designs',
       'designer',
       'bot',
+      'tips',
+      'community',
     ])
       expect(cloudScreenAllowed(s)).toBe(true)
-    for (const s of ['home', 'studio', 'moderation', 'tips', 'settings', 'community'])
+    for (const s of ['home', 'studio', 'moderation', 'settings', 'history'])
       expect(cloudScreenAllowed(s)).toBe(false)
+  })
+
+  it('says what YouTube needs in cloud mode', () => {
+    const base = { features: { twitch: true, kick: true, youtube: true } }
+    expect(cloudYoutubeState({ ...base, features: { ...base.features, youtube: false } })).toBe(
+      'unavailable',
+    )
+    expect(cloudYoutubeState(base)).toBe('unavailable')
+    const yt = { available: true, pro: false, bot_on: false, channel: null }
+    expect(cloudYoutubeState({ ...base, youtube: yt })).toBe('pro_needed')
+    expect(cloudYoutubeState({ ...base, youtube: { ...yt, pro: true } })).toBe('ready')
+    expect(cloudYoutubeState({ ...base, youtube: { ...yt, available: false, pro: true } })).toBe(
+      'unavailable',
+    )
   })
 
   it('says sizes and channel states plainly', () => {

@@ -2,7 +2,7 @@
 // signed-in account, free, with no PC. The web dashboard talks to `https://<web host>/c` with
 // the engine's own paths (`/c/api/v1/*`), the account's cookie and its CSRF token, so its
 // screens work unchanged. Only some screens exist in the cloud (alerts, designs, overlays,
-// chat to read, the bot); the rest need the app on a PC.
+// chat to read, the bot, tips, goals, polls and giveaways); the rest need the app on a PC.
 
 import type { FetchLike } from './client'
 import type { FerroClient } from './client'
@@ -31,6 +31,8 @@ export interface CloudUsage {
   overlays: number
   rules: number
   designs: number
+  /** Missing on servers from before cloud goals. */
+  goals?: number
 }
 
 export interface CloudLimits {
@@ -39,8 +41,18 @@ export interface CloudLimits {
   overlays: number
   rules: number
   designs: number
+  goals?: number
   history_days: number
   sleep_after_days: number
+}
+
+/** YouTube in cloud mode (Pro, CLOUD.md §11): bound to the account's Pro subscription. */
+export interface CloudYoutube {
+  /** The servers have the YouTube cloud client (false until it's set up). */
+  available: boolean
+  pro: boolean
+  bot_on: boolean
+  channel: { id: string; title: string; error: CloudProblem | null; live: boolean } | null
 }
 
 /** `GET /c/v1/cloud` (CLOUD.md §9.1). */
@@ -56,6 +68,16 @@ export interface CloudSummary {
   channels: CloudChannel[]
   /** Which platforms the servers can connect (YouTube in the cloud is Pro). */
   features: Record<CloudPlatform, boolean>
+  /** Missing on servers from before YouTube in cloud mode. */
+  youtube?: CloudYoutube
+}
+
+/** What the Cloud page says about YouTube: set up on the servers, Pro, then the channel. */
+export function cloudYoutubeState(
+  s: Pick<CloudSummary, 'features' | 'youtube'>,
+): 'unavailable' | 'pro_needed' | 'ready' {
+  if (!s.features.youtube || !s.youtube?.available) return 'unavailable'
+  return s.youtube.pro ? 'ready' : 'pro_needed'
 }
 
 /** Screens a cloud mode dashboard shows; anything else opens the Cloud page. */
@@ -68,6 +90,8 @@ export const CLOUD_SCREENS = [
   'designs',
   'designer',
   'bot',
+  'community',
+  'tips',
   'account',
 ] as const
 
@@ -118,6 +142,8 @@ export function cloudChannelLine(ch: CloudChannel | undefined, platform: CloudPl
   const label = platform === 'twitch' ? 'Twitch' : platform === 'kick' ? 'Kick' : 'YouTube'
   if (!ch) return `${label} isn’t connected.`
   if (ch.error) return ch.error.message
+  if (platform === 'youtube')
+    return `Chat, Super Chats and memberships from ${ch.name ?? ch.login} come in here while you’re live.`
   return `Alerts and chat from ${ch.name ?? ch.login} come in here.`
 }
 

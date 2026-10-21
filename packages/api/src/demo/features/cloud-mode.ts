@@ -75,7 +75,9 @@ export class DemoCloud {
         sleep_after_days: 30,
       },
       channels: clone(this.channels),
-      features: { twitch: true, kick: true, youtube: false },
+      features: { twitch: true, kick: true, youtube: true },
+      // YouTube in cloud mode is Pro; the demo account is free.
+      youtube: { available: true, pro: false, bot_on: false, channel: null },
     }
   }
 
