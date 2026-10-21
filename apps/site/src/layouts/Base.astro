@@ -58,6 +58,7 @@ const ld = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c')
       name="robots"
       content={noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}
     />
+    <slot name="head" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0b0d" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f6" />

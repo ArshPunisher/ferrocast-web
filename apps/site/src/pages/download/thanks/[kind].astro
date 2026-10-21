@@ -1,0 +1,387 @@
+---
+// The thank-you page a download button leads to. It starts the file's download itself (a
+// script, or a meta refresh when scripts are off), says thanks with the file's name, and
+// shows how to install it. Not indexed and not in the sitemap: it's a step, not a page.
+import Base from '../../../layouts/Base.astro'
+import Bot from '../../../components/Bot.astro'
+import Icon from '../../../components/Icon.astro'
+import { betaAhead, latestStable, type BetaAsset } from '../../../data/releases'
+import { KIND_NAME, OS_NAME, fileName, kindOf, type Kind } from '../../../data/downloads'
+import type { PageMeta } from '../../../data/pages'
+
+export async function getStaticPaths() {
+  const release = (await latestStable()) ?? (await betaAhead())
+  if (!release) return []
+  const seen = new Set<Kind>()
+  return release.assets.flatMap((asset) => {
+    const kind = kindOf(asset.url)
+    if (!kind || seen.has(kind)) return []
+    seen.add(kind)
+    return [{ params: { kind }, props: { asset, version: release.version } }]
+  })
+}
+
+interface Props {
+  asset: BetaAsset
+  version: string
+}
+const { asset, version } = Astro.props
+const kind = Astro.params.kind as Kind
+const os = OS_NAME[asset.os]
+const file = fileName(asset.url)
+const mb = asset.size > 0 ? `${Math.round(asset.size / 1_000_000)}\u00a0MB` : ''
+const what = kind === 'mac' || kind === 'windows' ? os : `Linux ${KIND_NAME[kind]}`
+const page: PageMeta = {
+  path: `/download/thanks/${kind}/`,
+  title: `Thanks for downloading Ferrocast for ${what}`,
+  description: `Your Ferrocast ${version} download for ${what} is starting. How to install ${file}, then connect Twitch, YouTube or Kick and go live.`,
+  ogTitle: 'Thanks for downloading',
+  ogKicker: 'Download',
+  crumb: 'Thanks',
+  parent: '/download/',
+}
+---
+
+<Base page={page} noindex>
+  <noscript slot="head">
+    <meta http-equiv="refresh" content={`1; url=${asset.url}`} />
+  </noscript>
+  <section class="head">
+    <div class="container thanks" data-thanks data-file={asset.url}>
+      <div class="thanks-body">
+        <h1 id="thanks-title" class="display-2" tabindex="-1">
+          Thanks for downloading Ferrocast
+        </h1>
+        <p class="lede">
+          Your {os} download should start in a moment:{' '}
+          <code class="file" translate="no">
+            {file}
+          </code>
+          {mb && <span class="size">({mb})</span>}
+        </p>
+        <p class="again">
+          <Icon name="arrow-clockwise" size={16} />
+          <span>
+            Didn’t start?{' '}
+            <a href={asset.url} data-dl-again>
+              Download again
+            </a>
+          </span>
+        </p>
+        <p class="sr-only" role="status" data-dl-status></p>
+      </div>
+      <div class="thanks-bot">
+        <Bot />
+      </div>
+    </div>
+  </section>
+
+  <section class="container next" aria-labelledby="install-title">
+    <div class="card">
+      <h2 id="install-title" class="display-3">
+        Install it
+      </h2>
+      <ol class="steps">
+        {kind === 'mac' && (
+          <>
+            <li>
+              Open the disk image from your Downloads folder:
+              <code class="cmd" translate="no">
+                {file}
+              </code>
+            </li>
+            <li>Drag Ferrocast into your Applications folder.</li>
+            <li>
+              Open Ferrocast. It isn’t notarized by Apple yet, so the first time macOS says it can’t
+              check the app. Close that message, open <strong>System Settings</strong>, then{' '}
+              <strong>Privacy & Security</strong>, scroll down and choose{' '}
+              <strong>Open Anyway</strong>. You only do this once.
+            </li>
+          </>
+        )}
+        {kind === 'windows' && (
+          <>
+            <li>
+              Run the installer from your Downloads folder. It installs for your account, so no
+              admin rights are needed.
+              <code class="cmd" translate="no">
+                {file}
+              </code>
+            </li>
+            <li>
+              The installer isn’t signed yet. If SmartScreen says “Windows protected your PC”,
+              choose <strong>More info</strong>, then <strong>Run anyway</strong>.
+            </li>
+            <li>Open Ferrocast from the Start menu.</li>
+          </>
+        )}
+        {kind === 'appimage' && (
+          <>
+            <li>
+              Make it executable (or tick “Allow executing file as program” in its properties):
+              <code class="cmd" translate="no">
+                chmod +x {file}
+              </code>
+            </li>
+            <li>
+              Run it:{' '}
+              <code class="cmd" translate="no">
+                ./{file}
+              </code>
+            </li>
+          </>
+        )}
+        {kind === 'deb' && (
+          <>
+            <li>
+              Install it from your Downloads folder:
+              <code class="cmd" translate="no">
+                sudo apt install ./{file}
+              </code>
+            </li>
+            <li>Open Ferrocast from your app menu.</li>
+          </>
+        )}
+        {kind === 'rpm' && (
+          <>
+            <li>
+              Install it from your Downloads folder (on openSUSE, use <code>zypper install</code>{' '}
+              instead):
+              <code class="cmd" translate="no">
+                sudo dnf install ./{file}
+              </code>
+            </li>
+            <li>Open Ferrocast from your app menu.</li>
+          </>
+        )}
+        <li>
+          The dashboard opens in its own window. Connect Twitch, YouTube or Kick: each is one click,
+          and you sign in on the platform’s own site.
+        </li>
+      </ol>
+      <div class="actions">
+        <a class="btn btn-primary" href="/docs/getting-started/#connect">
+          <Icon name="book-open-text" size={18} />
+          Read the setup guide
+        </a>
+        <a class="btn btn-secondary" href="/download/">
+          <Icon name="arrow-left" size={18} />
+          All downloads
+        </a>
+      </div>
+      <p class="help">
+        Stuck on a step? <a href="/faq/">Read the FAQ</a> or <a href="/contact/">ask us</a>.
+      </p>
+    </div>
+  </section>
+</Base>
+
+<script>
+  // Start the download from here, once. A reload or a trip back through history doesn't
+  // fetch the file again; "Download again" is there for that.
+  const host = document.querySelector<HTMLElement>('[data-thanks]')
+  const file = host?.dataset.file
+  const status = document.querySelector<HTMLElement>('[data-dl-status]')
+  const heading = document.querySelector<HTMLElement>('#thanks-title')
+  const say = (text: string) => {
+    if (status) status.textContent = text
+  }
+  const nav = performance.getEntriesByType('navigation')[0] as
+    PerformanceNavigationTiming | undefined
+  const fresh = !nav || nav.type === 'navigate'
+  heading?.focus({ preventScroll: true })
+  if (file && file.startsWith('https://github.com/') && fresh) {
+    // A beat for the page to paint first, so the browser's download prompt lands on it.
+    window.setTimeout(() => {
+      location.assign(file)
+      say('Your download has started.')
+      host?.querySelector<HTMLElement>('[data-bot]')?.dispatchEvent(new CustomEvent('bot:cheer'))
+    }, 400)
+  }
+  document.querySelector('[data-dl-again]')?.addEventListener('click', () => {
+    say('Starting the download again.')
+  })
+  // Back here from the next page: nothing to start, nothing stale to announce.
+  addEventListener('pageshow', (e) => {
+    if (e.persisted) say('')
+  })
+</script>
+
+<style>
+  .head {
+    padding-block: 40px 24px;
+  }
+  .thanks {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px 40px;
+    align-items: center;
+  }
+  .thanks-body {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+  }
+  /* Focus lands here on arrival so screen readers start at the thanks; it isn't a control,
+     so it gets no focus ring. */
+  #thanks-title {
+    text-wrap: balance;
+  }
+  #thanks-title:focus {
+    outline: none;
+  }
+  .lede {
+    max-width: 60ch;
+  }
+  .file {
+    font-family: var(--fc-font-mono);
+    font-size: 0.875em;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
+    color: var(--fc-text);
+    overflow-wrap: anywhere;
+  }
+  .size {
+    color: var(--fc-text-3);
+    white-space: nowrap;
+  }
+  .again {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fc-text-2);
+  }
+  .again :global(svg) {
+    color: var(--fc-accent-text);
+    flex: none;
+  }
+  .again a {
+    font-weight: 600;
+  }
+  .thanks-bot {
+    justify-self: start;
+    order: -1;
+  }
+  .thanks-bot :global(.fc-bot .bot) {
+    width: clamp(96px, 26vw, 200px);
+  }
+  @media (min-width: 768px) {
+    .thanks {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .thanks-bot {
+      order: 0;
+    }
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 40px;
+    }
+  }
+  .next {
+    padding-bottom: 96px;
+  }
+  .card {
+    display: grid;
+    gap: 20px;
+    padding: 28px 24px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-accent-line);
+    background:
+      radial-gradient(70% 80% at 0% 0%, var(--fc-accent-soft), transparent 70%), var(--fc-surface-1);
+  }
+  @media (min-width: 768px) {
+    .card {
+      padding: 40px 48px;
+    }
+  }
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 16px;
+    max-width: 64ch;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 44px;
+    min-height: 28px;
+    padding-top: 3px;
+    color: var(--fc-text);
+  }
+  /* White numerals on the deep orange fill, as on every orange surface. */
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: var(--fc-btn-primary);
+    color: var(--fc-on-btn-primary);
+    font: 700 0.875rem/1 var(--fc-font-mono);
+  }
+  .steps code {
+    font-family: var(--fc-font-mono);
+    font-size: 0.875em;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
+    overflow-wrap: anywhere;
+  }
+  /* A command sits on its own line, so a long file name wraps inside its own box. */
+  .steps code.cmd {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  @media (max-width: 480px) {
+    .actions .btn {
+      width: 100%;
+    }
+  }
+  .help {
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .help a {
+    font-weight: 600;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .thanks-body > *,
+    .card {
+      animation: rise 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    }
+    .thanks-body > :nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .thanks-body > :nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .card {
+      animation-delay: 180ms;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+</style>
