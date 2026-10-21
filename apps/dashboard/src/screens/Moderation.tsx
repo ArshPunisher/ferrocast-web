@@ -25,6 +25,7 @@ import {
   cx,
 } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { SmartModerationPanel } from '../components/smart'
 import { HeldPanel } from '../components/held'
 import { usePanic } from '../components/PanicButton'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
@@ -557,6 +558,7 @@ export function Moderation() {
       <div className="flex flex-col gap-5">
         <PanicCard />
         <HeldPanel />
+        {!mod && <SmartModerationPanel />}
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           <BanList />
           {!mod && <FiltersPanel />}

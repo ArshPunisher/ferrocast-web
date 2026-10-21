@@ -10,6 +10,7 @@ import {
 } from '@ferrocast/api'
 import { Badge, Button, EmptyState, PlatformMark, Skeleton, copyText, toast } from '@ferrocast/ui'
 import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { RecapWriter } from '../components/smart'
 import { useResource } from '../lib/hooks'
 import { MarkersPanel } from '../components/studio/moments'
 import { href } from '../lib/router'
@@ -261,6 +262,9 @@ export function Recap() {
       ) : (
         <>
           <RecapBody r={recap.data} />
+          <div className="mt-5">
+            <RecapWriter startedAt={recap.data.started_at} />
+          </div>
           <div className="mt-5">
             <MarkersPanel since={recap.data.started_at} title="Moments to clip" />
           </div>

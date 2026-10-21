@@ -2,21 +2,21 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { open } from './helpers'
 
-// The Pro panel pieces (ProChip, ProPanel) on their first real user, Stream history
-// (`#/history`). The demo starts like a relay with Pro off sale and no Pro; `?pro=` and
-// `?pro_features=on` switch it.
+// The Pro panel pieces (ProChip, ProPanel) on smart moderation (`#/moderation`; Insights is
+// free with an account since 1.4). The demo starts like a relay with Pro off sale and no
+// Pro; `?pro=` and `?pro_features=on` switch it.
 const history = (page: Page, pro = '') =>
-  open(page, 'history', `autoplay=0&latency=0${pro ? `&${pro}` : ''}`)
-const panel = (page: Page) => page.locator('#history')
+  open(page, 'moderation', `autoplay=0&latency=0${pro ? `&${pro}` : ''}`)
+const panel = (page: Page) => page.locator('#smart-moderation')
 
 test.describe('Pro panels', () => {
   test('hidden while Pro is off sale and this install has none', async ({ page }) => {
     await history(page)
-    await expect(page.getByRole('heading', { name: 'Stream history' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Moderation', exact: true })).toBeVisible()
     await expect(panel(page)).toHaveCount(0)
-    await expect(page.getByRole('heading', { name: 'Not available here yet' })).toBeVisible()
     await expect(page.getByRole('img', { name: 'Part of Ferrocast Pro' })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'History' })).toHaveCount(0)
+    // Insights needs only the relay to keep history; this one doesn't.
+    await expect(page.getByRole('link', { name: 'Insights' })).toHaveCount(0)
   })
 
   test('on sale: one calm line and a link to Settings › Pro, never the feature', async ({
@@ -28,7 +28,7 @@ test.describe('Pro panels', () => {
       'Runs on Ferrocast’s servers, part of Pro. Settings › Pro',
     )
     await expect(p.getByRole('img', { name: 'Part of Ferrocast Pro' })).toBeVisible()
-    await expect(p.getByTestId('history-tiles')).toHaveCount(0)
+    await expect(p.getByTestId('smart-suggestion')).toHaveCount(0)
     await p.getByRole('link', { name: 'Settings › Pro' }).click()
     await expect(page).toHaveURL(/#\/settings\/pro$/)
     await expect(
@@ -39,14 +39,14 @@ test.describe('Pro panels', () => {
   test('a feature the relay lacks stays hidden, on sale or Pro', async ({ page }) => {
     for (const pro of ['pro=open', 'pro=active']) {
       await history(page, pro)
-      await expect(page.getByRole('heading', { name: 'Not available here yet' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Moderation', exact: true })).toBeVisible()
       await expect(panel(page)).toHaveCount(0)
     }
   })
 
   test('Pro: the feature itself', async ({ page }) => {
     await history(page, 'pro=active&pro_features=on')
-    await expect(panel(page).getByTestId('history-tiles')).toBeVisible()
+    await expect(panel(page).getByTestId('smart-suggestion').first()).toBeVisible()
     await expect(panel(page).getByTestId('pro-line')).toHaveCount(0)
     await expect(panel(page).getByRole('img', { name: 'Part of Ferrocast Pro' })).toBeVisible()
   })
@@ -55,7 +55,7 @@ test.describe('Pro panels', () => {
     test.skip(browserName !== 'chromium')
     await history(page, 'pro=open&pro_features=on')
     await expect(panel(page).getByTestId('pro-line')).toBeVisible()
-    const r = await new AxeBuilder({ page }).include('#history').analyze()
+    const r = await new AxeBuilder({ page }).include('#smart-moderation').analyze()
     expect(r.violations).toEqual([])
   })
 })
