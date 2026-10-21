@@ -20,9 +20,12 @@ import {
   CheckCircle,
   CloudArrowUp,
   DeviceMobile,
+  ChatCircleText,
   DiscordLogo,
   Robot,
+  ShieldCheck,
   Waveform,
+  YoutubeLogo,
   type Icon,
 } from '@phosphor-icons/react'
 import {
@@ -180,7 +183,28 @@ export function emailProblem(v: string): string | null {
     : 'That email looks incomplete. Check the @ and the part after it.'
 }
 
+/** What Pro adds, newest first (1.4: YouTube from the cloud, smart features, a year of insights). */
 export const FEATURES: { icon: Icon; title: string; text: string }[] = [
+  {
+    icon: YoutubeLogo,
+    title: 'YouTube from the cloud',
+    text: 'Chat and your bot keep running on YouTube with your PC off, or with no PC.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Smart moderation',
+    text: 'A second look at doubtful chat, Hinglish too. You decide, with one-click undo.',
+  },
+  {
+    icon: ChatCircleText,
+    title: 'Smart replies and a written recap',
+    text: 'Answers questions from facts you approve, and sums up each stream.',
+  },
+  {
+    icon: ChartLineUp,
+    title: 'A year of insights',
+    text: 'Charts per stream, best times, top supporters, CSV. Free accounts keep 30 days.',
+  },
   { icon: Robot, title: '24/7 cloud bot', text: 'Commands and timers answer when your PC is off.' },
   {
     icon: DeviceMobile,
@@ -200,8 +224,8 @@ export const FEATURES: { icon: Icon; title: string; text: string }[] = [
   { icon: DiscordLogo, title: 'Discord bot', text: 'Go-live posts and roles for supporters.' },
   {
     icon: ChartLineUp,
-    title: 'Stream history, weekly email, tip branding',
-    text: 'And a tip goal.',
+    title: 'Weekly email and tip page extras',
+    text: 'Your week in one email, tip branding, a goal and your own address.',
   },
 ]
 
@@ -473,8 +497,8 @@ function Checkout({
                 Pro adds the always-on parts <Badge>Free plan</Badge>
               </h4>
               <p className="mt-1 max-w-[52ch] text-[14.5px] text-text-2">
-                Everything you use today stays free. Pro keeps your bot and dashboard running when
-                your PC is off.
+                Everything you use today stays free. Pro adds YouTube from the cloud, smart
+                moderation and replies, and a year of insights.
               </p>
             </div>
             {note && (

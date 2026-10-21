@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudArrowUp, DeviceMobile, Robot, Waveform, type Icon } from '@phosphor-icons/react'
+import { ChartLineUp, Robot, ShieldCheck, YoutubeLogo, type Icon } from '@phosphor-icons/react'
 import type { ProView } from '@ferrocast/api'
 import { Button, SparkMark } from '@ferrocast/ui'
 import { playBuiltin } from '@ferrocast/overlays'
@@ -13,10 +13,10 @@ import { href } from '../../lib/router'
 import { PRO_UNLOCKED_EVENT, markUnlockShown, unlockShown } from '../../lib/pro-status'
 
 const ON: { icon: Icon; text: string }[] = [
-  { icon: Robot, text: '24/7 cloud bot' },
-  { icon: DeviceMobile, text: 'Dashboard from anywhere' },
-  { icon: Waveform, text: 'Ferrocast voices' },
-  { icon: CloudArrowUp, text: 'Cloud backups, Discord bot and more' },
+  { icon: YoutubeLogo, text: 'YouTube from the cloud' },
+  { icon: ShieldCheck, text: 'Smart moderation and replies' },
+  { icon: ChartLineUp, text: 'A year of insights' },
+  { icon: Robot, text: 'The 24/7 cloud bot, voices, backups and more' },
 ]
 
 /** Whether the unlock should play for this status now. */

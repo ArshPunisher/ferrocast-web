@@ -30,12 +30,16 @@ test.describe('settings: buying Pro in three steps', () => {
     await expect(yearly).toContainText('About ₹167 a month')
     await expect(pro.getByRole('radio', { name: /Monthly/ })).toContainText('₹199')
     for (const f of [
+      'YouTube from the cloud',
+      'Smart moderation',
+      'Smart replies and a written recap',
+      'A year of insights',
       '24/7 cloud bot',
       'Dashboard from anywhere',
       'Ferrocast voices',
       'Cloud backups',
       'Discord bot',
-      'Stream history, weekly email, tip branding',
+      'Weekly email and tip page extras',
     ])
       await expect(pro.getByText(f, { exact: true })).toBeVisible()
     // Arrow keys move the choice.
