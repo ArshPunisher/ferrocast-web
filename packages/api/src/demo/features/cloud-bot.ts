@@ -67,7 +67,11 @@ export class DemoCloudBot implements DemoFeature {
     moderation: boolean
   } | null = null
 
-  constructor(private readonly pro: () => ProView) {
+  /** `free`: cloud mode (`?web=cloud`), where the bot is part of the free cloud (CLOUD.md §6). */
+  constructor(
+    private readonly pro: () => ProView,
+    private readonly free: () => boolean = () => false,
+  ) {
     this.channels = [this.twitchReady()]
   }
 
@@ -161,6 +165,7 @@ export class DemoCloudBot implements DemoFeature {
   }
 
   private on(): boolean {
+    if (this.free()) return true
     const p = this.pro()
     return p.active && p.features.cloud_bot
   }

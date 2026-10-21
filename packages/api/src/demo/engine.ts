@@ -67,6 +67,7 @@ import { Roles, WIDGET_KINDS } from '../types'
 import { chimeDataUrl } from './chime'
 import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
+import { DemoCloud, type DemoCloudSetup } from './features/cloud-mode'
 import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
@@ -157,6 +158,8 @@ export interface DemoOptions {
   history?: 'demo' | 'empty'
   /** Pro cloud backups: a few from this PC (default), none yet, or a new PC's view. */
   cloudBackups?: DemoCloudMode
+  /** Cloud mode (`?web=cloud`): the web dashboard of an account with no PC (CLOUD.md). */
+  cloudMode?: DemoCloudSetup
   /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
   remote?: {
     role: RemoteRole
@@ -394,9 +397,12 @@ export class DemoEngine {
   /** The 24/7 cloud bot (Pro): Twitch and Kick while the PC is off. */
   private readonly cloudBot = new DemoCloudBot(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
+    () => this.cloud !== null,
   )
   private readonly history: DemoHistory
   private readonly cloudBackups: DemoCloudBackups
+  /** Cloud mode (`?web=cloud`), or `null` for a PC's dashboard. */
+  readonly cloud: DemoCloud | null
   /** Pro tip page branding and goal (on with Pro and its feature). */
   private readonly tipBrand = new DemoTipBrand(
     () => {
@@ -474,6 +480,13 @@ export class DemoEngine {
       () => this.pro.route('GET', ['pro'], null) as ProView,
       opts.history === 'empty',
     )
+    this.cloud = opts.cloudMode
+      ? new DemoCloud(opts.cloudMode, () => ({
+          overlays: this.overlays.length,
+          rules: this.rules.length,
+          designs: 0,
+        }))
+      : null
     this.cloudBackups = new DemoCloudBackups(
       () => this.pro.route('GET', ['pro'], null) as ProView,
       (label) => this.takeBackup(label),
@@ -870,6 +883,14 @@ export class DemoEngine {
         ),
       )
     try {
+      if (this.cloud && url.pathname.startsWith('/v1/cloud')) {
+        const r = this.cloud.routeCloud(method, url.pathname)
+        if (r === NOT_MINE) throw new HttpError(404, 'not_found', 'That page doesn’t exist.')
+        return new Response(JSON.stringify(r), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       if (url.pathname.startsWith('/api/v1/') && url.pathname !== '/api/v1/session/pair') {
         const auth = headerOf(init?.headers, 'authorization')
         if (auth !== `Bearer ${this.token}`)
@@ -1623,6 +1644,7 @@ export class DemoEngine {
 
   private features(): DemoFeature[] {
     return [
+      ...(this.cloud ? [this.cloud as DemoFeature] : []),
       this.account,
       this.loyalty,
       this.polls,
@@ -1719,6 +1741,7 @@ export class DemoEngine {
       },
       connectors: clone(this.connectors),
       setup_done: this.setupDone,
+      ...(this.cloud ? { cloud: true } : {}),
     }
   }
 

@@ -265,6 +265,8 @@ export interface Status {
   live: Record<ChatPlatform, boolean>
   connectors: Connectors
   setup_done: boolean
+  /** Cloud mode (ferrocast docs/CLOUD.md): Ferrocast's servers answer, not a PC. */
+  cloud?: boolean
 }
 
 export interface Account {
