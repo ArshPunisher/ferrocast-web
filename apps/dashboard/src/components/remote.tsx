@@ -379,7 +379,10 @@ export function RemoteGate({
           )}
           {problem === 'choose_pc' && <PcChoice onDone={onRetry} />}
           {onUseCloud &&
-            (problem === 'no_pcs' || problem === 'choose_pc' || problem === 'pc_offline') && (
+            (problem === 'no_pcs' ||
+              problem === 'choose_pc' ||
+              problem === 'pc_offline' ||
+              problem === 'pro_paused') && (
               <div className="flex w-full flex-col items-start gap-2 rounded-panel border border-line bg-surface-1 p-4">
                 <p className="text-[15px] leading-snug text-text-2">
                   No PC needed: alerts, overlays, chat and the bot can run from Ferrocast’s servers.
