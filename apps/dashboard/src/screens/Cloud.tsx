@@ -15,6 +15,7 @@ import {
   cloudApi,
   cloudBytes,
   cloudChannelLine,
+  cloudYoutubeState,
   describeError,
   type CloudChannel,
   type CloudPlatform,
@@ -30,7 +31,7 @@ const LABEL: Record<CloudPlatform, string> = { twitch: 'Twitch', kick: 'Kick', y
 
 const STAYS_IN_APP = [
   'OBS control and Add to OBS',
-  'Loyalty points, polls, giveaways and quotes',
+  'Loyalty points, quotes and new faces',
   'Chat filters, panic mode and sending chat',
   'Studio, the recap and importers',
   'Local and Ferrocast voices for TTS',
@@ -44,7 +45,7 @@ export function Cloud({ connected }: { connected?: string | undefined }) {
 
   // Back from Twitch or Kick: say so once and tidy the address.
   useEffect(() => {
-    if (connected !== 'twitch' && connected !== 'kick') return
+    if (connected !== 'twitch' && connected !== 'kick' && connected !== 'youtube') return
     toast({ key: `cloud:${connected}`, tone: 'ok', message: `${LABEL[connected]} is connected.` })
     history.replaceState(null, '', `${location.pathname}${location.search}#/cloud`)
     summary.reload()
@@ -72,7 +73,7 @@ export function Cloud({ connected }: { connected?: string | undefined }) {
   const connect = async (p: CloudPlatform) => {
     setBusy(p)
     try {
-      const flow = await client.connect(p as 'twitch' | 'kick')
+      const flow = await client.connect(p)
       if (flow.flow === 'browser') {
         // The platform's page, then back here (the relay sends the browser to /app/#/cloud).
         if (flow.url.startsWith('#')) {
@@ -92,7 +93,7 @@ export function Cloud({ connected }: { connected?: string | undefined }) {
   const disconnect = async (ch: CloudChannel) => {
     setBusy(`off:${ch.platform}`)
     try {
-      await client.disconnect(ch.platform as 'twitch' | 'kick')
+      await client.disconnect(ch.platform)
       setLeaving(null)
       summary.reload()
       toast({ tone: 'ok', message: `${LABEL[ch.platform]} is disconnected from cloud mode.` })
@@ -113,7 +114,7 @@ export function Cloud({ connected }: { connected?: string | undefined }) {
     <div>
       <PageHeader
         title="Cloud mode"
-        description="Alerts, overlays, chat and the bot run on Ferrocast’s servers. No PC needed, and it’s free."
+        description="Alerts, overlays, chat, tips, goals and the bot run on Ferrocast’s servers. No PC needed, and it’s free."
         actions={
           <Button variant="ghost" icon={<Desktop size={17} />} onClick={usePc}>
             Use my PC instead
@@ -237,7 +238,8 @@ function On({
                   key={p}
                   platform={p}
                   channel={ch(p)}
-                  available={s.features[p]}
+                  available={p === 'youtube' ? cloudYoutubeState(s) === 'ready' : s.features[p]}
+                  youtube={p === 'youtube' ? cloudYoutubeState(s) : undefined}
                   busy={busy}
                   onConnect={() => onConnect(p)}
                   onDisconnect={(c) => onDisconnect(c)}
@@ -247,7 +249,7 @@ function On({
           </Panel>
           <Panel title="Get it on stream">
             <ol className="flex flex-col gap-3">
-              <Step done={anyConnected} n={1} title="Connect Twitch or Kick">
+              <Step done={anyConnected} n={1} title="Connect your channel">
                 Alerts follow your channel from the moment it’s connected.
               </Step>
               <Step
@@ -276,6 +278,7 @@ function ChannelRow({
   platform,
   channel,
   available,
+  youtube,
   busy,
   onConnect,
   onDisconnect,
@@ -283,11 +286,21 @@ function ChannelRow({
   platform: CloudPlatform
   channel: CloudChannel | undefined
   available: boolean
+  /** YouTube only: set up on the servers, Pro needed, or ready to connect. */
+  youtube?: 'unavailable' | 'pro_needed' | 'ready' | undefined
   busy: string | null
   onConnect: () => void
   onDisconnect: (c: CloudChannel) => void
 }) {
   const pro = platform === 'youtube'
+  const line =
+    youtube === 'unavailable' && !channel
+      ? 'YouTube from the cloud isn’t set up on Ferrocast’s servers yet. It keeps working in the app on your PC.'
+      : youtube === 'pro_needed' && !channel
+        ? 'YouTube in cloud mode is part of Pro. It keeps working in the app on your PC.'
+        : !available && !channel
+          ? `${LABEL[platform]} isn’t set up on Ferrocast’s servers yet.`
+          : cloudChannelLine(channel, platform)
   return (
     <li
       className="flex flex-col gap-3 rounded-control px-1 py-3 sm:flex-row sm:items-center"
@@ -304,44 +317,44 @@ function ChannelRow({
             {channel && !channel.error && <Badge tone="ok">Connected</Badge>}
             {channel?.error && <Badge tone="warn">Needs you</Badge>}
           </p>
-          <p className="mt-0.5 text-[13.5px] break-words text-text-2">
-            {pro
-              ? 'YouTube in cloud mode is part of Pro. It keeps working in the app on your PC.'
-              : !available
-                ? `${LABEL[platform]} isn’t set up on Ferrocast’s servers yet.`
-                : cloudChannelLine(channel, platform)}
-          </p>
+          <p className="mt-0.5 text-[13.5px] break-words text-text-2">{line}</p>
           {channel?.error?.hint && (
             <p className="mt-0.5 text-[13px] text-text-3">{channel.error.hint}</p>
           )}
         </div>
       </div>
-      {!pro && available && (
-        <div className="flex shrink-0 gap-2 pl-12 sm:pl-0">
-          {channel ? (
-            <>
-              {channel.error && (
-                <Button size="sm" variant="primary" busy={busy === platform} onClick={onConnect}>
-                  Connect again
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" onClick={() => onDisconnect(channel)}>
-                Disconnect
+      <div className="flex shrink-0 gap-2 pl-12 sm:pl-0">
+        {youtube === 'pro_needed' && !channel ? (
+          <a
+            href={href({ name: 'plans' })}
+            className="fc-press inline-flex h-8 items-center gap-1 rounded-control px-2 text-[13px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          >
+            See Pro
+            <ArrowRight size={14} weight="bold" aria-hidden="true" />
+          </a>
+        ) : channel ? (
+          <>
+            {channel.error && available && (
+              <Button size="sm" variant="primary" busy={busy === platform} onClick={onConnect}>
+                Connect again
               </Button>
-            </>
-          ) : (
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<PlugsConnected size={15} />}
-              busy={busy === platform}
-              onClick={onConnect}
-            >
-              Connect
+            )}
+            <Button size="sm" variant="ghost" onClick={() => onDisconnect(channel)}>
+              Disconnect
             </Button>
-          )}
-        </div>
-      )}
+          </>
+        ) : available ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<PlugsConnected size={15} />}
+            busy={busy === platform}
+            onClick={onConnect}
+          >
+            Connect
+          </Button>
+        ) : null}
+      </div>
     </li>
   )
 }

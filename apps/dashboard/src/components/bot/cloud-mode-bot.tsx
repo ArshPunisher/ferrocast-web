@@ -27,7 +27,16 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
     }
   }
   const v: CloudBotView | null = view.data
-  const ready = v?.channels.filter((c) => c.state === 'ready') ?? []
+  // YouTube (Pro) is bound to the account's subscription; its bot follows this page only
+  // when no PC is linked (CLOUD.md §11).
+  const yt = v?.youtube
+  const ready = [
+    ...(v?.channels.filter((c) => c.state === 'ready') ?? []).map((c) => ({
+      key: c.platform,
+      name: c.channel?.login ?? c.platform,
+    })),
+    ...(yt?.channel && yt.follows_this_page ? [{ key: 'youtube', name: yt.channel.title }] : []),
+  ]
   return (
     <Panel
       {...(className ? { className } : {})}
@@ -50,7 +59,7 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
             <p className="min-w-0 flex-1 text-[14px] text-text-2">
               {ready.length === 0 ? (
                 <>
-                  Connect Twitch or Kick on the{' '}
+                  Connect a channel on the{' '}
                   <a
                     className="font-semibold text-accent-text underline-offset-2 hover:underline"
                     href={href({ name: 'cloud' })}
@@ -63,11 +72,9 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
                 <>
                   In{' '}
                   {ready.map((c, i) => (
-                    <span key={c.platform}>
+                    <span key={c.key}>
                       {i > 0 ? ' and ' : ''}
-                      <span className="font-semibold text-text">
-                        {c.channel?.login ?? c.platform}
-                      </span>
+                      <span className="font-semibold text-text">{c.name}</span>
                     </span>
                   ))}
                   ’s chat.
@@ -83,6 +90,12 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
               onChange={(on) => void toggle(on)}
             />
           </div>
+          {yt?.channel && !yt.follows_this_page && (
+            <p className="text-[13px] text-text-2" data-testid="cloud-bot-youtube-pc">
+              On YouTube the bot uses the commands from the Ferrocast app on your PC. Change them
+              there.
+            </p>
+          )}
           <p className="text-[12.5px] text-text-3">
             If the Ferrocast app on your PC is signed in to this account with its bot on, the cloud
             waits, so the two never answer twice.
