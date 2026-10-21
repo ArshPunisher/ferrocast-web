@@ -28,7 +28,7 @@ export const COMPANY = {
   phone: '+91 70877 95553',
   /** Registered business address (contact, terms, privacy, refunds). */
   address: {
-    street: '150, Malliana Colony, Sarai Road, Jandiala Guru',
+    street: 'Jandiala Guru',
     city: 'Amritsar',
     region: 'Punjab',
     postalCode: '143115',
