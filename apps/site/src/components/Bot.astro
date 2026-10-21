@@ -11,7 +11,7 @@ const M = [110, 133] as const
 const sparkle = (x: number, y: number, s: number) =>
   `M${x} ${y - s}Q${x + s * 0.18} ${y - s * 0.18} ${x + s} ${y}Q${x + s * 0.18} ${y + s * 0.18} ${x} ${y + s}Q${x - s * 0.18} ${y + s * 0.18} ${x - s} ${y}Q${x - s * 0.18} ${y - s * 0.18} ${x} ${y - s}Z`
 const eyes = [L, R]
-// A page can show Sparky twice (the Download page's thank-you panel); each needs its own ids.
+// Each Sparky on a page needs its own ids, should a page ever show two.
 const { id = 'bot' } = Astro.props as { id?: string }
 const shell = `${id}-shell`
 // The spark burst when he cheers: small sparkles flung out from around his head.

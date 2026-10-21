@@ -25,16 +25,18 @@ test.describe('download page', () => {
       await expect(card.locator('a[data-beta-download], .soon').first()).toBeVisible()
     }
     if ((await main.locator('.os[data-os="mac"] a[data-beta-download]').count()) > 0) {
-      await expect(main.locator('.os').getByText('right-click Ferrocast')).toBeVisible()
+      await expect(main.locator('.os').getByText('Open Anyway')).toBeVisible()
       await expect(main.locator('.os').getByText('Run anyway')).toBeVisible()
     }
     const downloads = main.locator('a[data-beta-download]')
     const tag = stable ? String.raw`v\d+\.\d+\.\d+/` : String.raw`v\d+\.\d+\.\d+-`
     if ((await downloads.count()) > 0) {
-      for (const href of await downloads.evaluateAll((as) =>
-        as.map((a) => a.getAttribute('href')),
+      // Each button leads to its file's thank-you page, which starts that file's download.
+      for (const [href, file] of await downloads.evaluateAll((as) =>
+        as.map((a) => [a.getAttribute('href'), a.getAttribute('data-file')]),
       )) {
-        expect(href).toMatch(new RegExp(`^${GH}/releases/download/${tag}`))
+        expect(file).toMatch(new RegExp(`^${GH}/releases/download/${tag}`))
+        expect(href).toMatch(/^\/download\/thanks\/(mac|windows|appimage|deb|rpm)\/$/)
       }
     } else {
       await expect(main.getByText('The first beta isn’t out yet.')).toBeVisible()

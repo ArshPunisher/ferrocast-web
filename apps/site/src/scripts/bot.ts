@@ -1,7 +1,7 @@
 // Sparky's brain. The pupils follow the cursor all the way to the edge of each eye (smoothed,
 // so they stick to it), the face shifts and the head leans toward it, and the face shows a
 // mood, by priority:
-//   cheer      a `bot:cheer` event on the host (2.4 s): the Download page's thank-you
+//   cheer      a `bot:cheer` event on the host (2.4 s): the download thank-you
 //   excited    a download link or button is hovered or focused (anything [data-bot-excite])
 //   giggle     the bot was clicked or tapped (1.1 s)
 //   surprised  the cursor flicked past fast (0.7 s)

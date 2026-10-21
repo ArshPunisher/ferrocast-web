@@ -1,9 +1,9 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
-// Clicking a download: the button says "Starting download…", the file still downloads from
-// the link's own href, then a thank-you panel shows that file's install steps. The real
-// release files are never fetched: GitHub's download URLs answer with a tiny attachment.
+// Clicking a download leads to that file's thank-you page, which starts the real file's
+// download itself and shows how to install it. The real release files are never fetched:
+// GitHub's download URLs answer with a tiny attachment.
 
 const fakeDownloads = (page: Page) =>
   page.context().route('https://github.com/**/releases/download/**', (route) =>
@@ -20,110 +20,142 @@ const fakeDownloads = (page: Page) =>
 const cases = [
   {
     name: 'macOS',
+    kind: 'mac',
     link: '.os[data-os="mac"] .get a',
-    step: /Drag Ferrocast into your Applications/,
+    step: /Open Anyway/,
   },
-  { name: 'Windows', link: '.os[data-os="windows"] .get a', step: /More info, then Run anyway/ },
-  { name: 'Linux AppImage', link: '.os[data-os="linux"] .get a', step: /chmod \+x \S+\.AppImage/ },
+  {
+    name: 'Windows',
+    kind: 'windows',
+    link: '.os[data-os="windows"] .get a',
+    step: /More info, then Run anyway/,
+  },
+  {
+    name: 'Linux AppImage',
+    kind: 'appimage',
+    link: '.os[data-os="linux"] .get a',
+    step: /chmod \+x \S+\.AppImage/,
+  },
   {
     name: 'Linux .deb',
+    kind: 'deb',
     link: '.os[data-os="linux"] .more a[data-dl-kind="deb"]',
     step: /sudo apt install \.\/\S+\.deb/,
   },
   {
     name: 'Linux .rpm',
+    kind: 'rpm',
     link: '.os[data-os="linux"] .more a[data-dl-kind="rpm"]',
     step: /sudo dnf install \.\/\S+\.rpm/,
   },
 ]
 
-test.describe('download feedback', () => {
+const heading = (page: Page) =>
+  page.getByRole('heading', { level: 1, name: 'Thanks for downloading Ferrocast' })
+
+test.describe('download thank-you page', () => {
   for (const c of cases) {
-    test(`${c.name}: loader, the real download, then thanks`, async ({ page }) => {
+    test(`${c.name}: the button opens thanks and the right file downloads`, async ({ page }) => {
       await fakeDownloads(page)
       await page.goto('/download/')
       const link = page.locator(c.link)
       test.skip((await link.count()) === 0, `no ${c.name} file in the published release`)
-      const href = await link.getAttribute('href')
-      expect(href).toMatch(/^https:\/\/github\.com\/.+\/releases\/download\//)
+      const file = await link.getAttribute('data-file')
+      expect(file).toMatch(/^https:\/\/github\.com\/.+\/releases\/download\//)
+      await expect(link).toHaveAttribute('href', `/download/thanks/${c.kind}/`)
 
       const download = page.waitForEvent('download')
       await link.click()
-      // The click is heard at once, inside the button.
-      await expect(link).toHaveAttribute('data-state', 'starting')
-      await expect(link.locator('.dl-busy')).toBeVisible()
-      await expect(link).toHaveAccessibleName(/^Starting/)
-      await expect(page.getByRole('status')).toContainText(/Starting your .+ download/)
-      // The browser still downloads from the link's own URL.
-      expect((await download).url()).toBe(href)
+      await expect(page).toHaveURL(new RegExp(`/download/thanks/${c.kind}/$`))
+      // The thank-you page starts the very file the button stood for.
+      expect((await download).url()).toBe(file)
 
-      const heading = page.getByRole('heading', { name: 'Thanks for downloading Ferrocast' })
-      await expect(heading).toBeVisible()
-      await expect(heading).toBeFocused()
-      await expect(page.locator('.oses')).toBeHidden()
-      await expect(page.getByRole('status')).toHaveText('Download started.')
-      const steps = page.locator('[data-dl-steps]:visible')
-      await expect(steps).toHaveCount(1)
-      await expect(steps).toContainText(c.step)
-      await expect(steps.locator('li').first()).toBeVisible()
-      await expect(page.locator('[data-dl-thanks] [data-bot] svg')).toHaveAttribute(
-        'data-mood',
-        'cheer',
+      await expect(heading(page)).toBeVisible()
+      await expect(heading(page)).toBeFocused()
+      const name = decodeURIComponent(file!.split('/').pop()!)
+      await expect(page.locator('.lede')).toContainText(name)
+      await expect(page.getByRole('status')).toHaveText('Your download has started.')
+      await expect(page.locator('.steps')).toContainText(c.step)
+      await expect(page.locator('.steps')).toContainText(/Connect Twitch, YouTube or Kick/)
+      await expect(page.getByRole('link', { name: 'Download again' })).toHaveAttribute(
+        'href',
+        file!,
       )
-      await expect(page.getByRole('link', { name: 'Try again' })).toHaveAttribute('href', href!)
       await expect(page.getByRole('link', { name: 'Read the setup guide' })).toHaveAttribute(
         'href',
         '/docs/getting-started/#connect',
       )
+      await expect(page.getByRole('link', { name: 'ask us' })).toHaveAttribute('href', '/contact/')
+      await expect(page.locator('[data-bot] svg')).toHaveAttribute('data-mood', 'cheer')
 
-      // Back to the cards, with focus on the download that was used.
-      await page.getByRole('button', { name: 'All downloads' }).click()
-      await expect(heading).toBeHidden()
-      await expect(page.locator('.oses')).toBeVisible()
-      await expect(link).toBeFocused()
-      await expect(link).not.toHaveAttribute('data-state', 'starting')
+      // Back to every download.
+      await page.getByRole('link', { name: 'All downloads' }).click()
+      await expect(page).toHaveURL(/\/download\/$/)
     })
   }
 
-  test('Try again downloads the same file again', async ({ page }) => {
+  test('a reload does not download the file a second time', async ({ page }) => {
     await fakeDownloads(page)
     await page.goto('/download/')
     const link = page.locator('.os .get a[data-beta-download]').first()
     test.skip((await link.count()) === 0, 'no release files published')
+    const file = await link.getAttribute('data-file')
+    const first = page.waitForEvent('download')
     await link.click()
-    const retry = page.locator('[data-dl-retry]')
-    await expect(retry).toHaveAccessibleName('Try again')
-    const again = page.waitForEvent('download')
-    await retry.click()
-    await expect(retry).toHaveAttribute('data-state', 'starting')
-    await expect(retry).toHaveAccessibleName('Starting…')
-    expect((await again).url()).toBe(await link.getAttribute('href'))
+    await first
+    let again = 0
+    page.on('download', () => again++)
+    await page.reload()
+    await expect(heading(page)).toBeVisible()
+    await page.waitForTimeout(1200)
+    expect(again).toBe(0)
+    // "Download again" still does.
+    const retry = page.waitForEvent('download')
+    await page.getByRole('link', { name: 'Download again' }).click()
+    expect((await retry).url()).toBe(file)
   })
 
-  test('a modified click is left to the browser: no loader, no panel', async ({ page }) => {
+  test('without JavaScript the page still thanks and starts the download', async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false })
+    const page = await context.newPage()
     await fakeDownloads(page)
     await page.goto('/download/')
     const link = page.locator('.os .get a[data-beta-download]').first()
     test.skip((await link.count()) === 0, 'no release files published')
-    await link.click({ modifiers: ['ControlOrMeta'] })
-    await link.click({ button: 'middle' })
-    await page.waitForTimeout(1400)
-    await expect(link).not.toHaveAttribute('data-state', 'starting')
-    await expect(page.locator('[data-dl-thanks]')).toBeHidden()
+    const file = await link.getAttribute('data-file')
+    const download = page.waitForEvent('download')
+    await link.click()
+    await expect(heading(page)).toBeVisible()
+    expect((await download).url()).toBe(file)
+    await context.close()
   })
 
-  test('reduced motion: the same flow, and no axe problems on the panel', async ({ page }) => {
+  test('is kept out of search: noindex, no canonical, not in the sitemap', async ({
+    page,
+    request,
+  }) => {
+    await fakeDownloads(page)
+    await page.goto('/download/')
+    const href = await page.locator('.os .get a[data-beta-download]').first().getAttribute('href')
+    test.skip(!href, 'no release files published')
+    await page.goto(href!)
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
+    await expect(page.locator('link[rel="canonical"]')).toHaveCount(0)
+    const map = await (await request.get('/sitemap-0.xml')).text()
+    expect(map).not.toContain('/download/thanks/')
+  })
+
+  test('no axe problems, light and dark, with reduced motion', async ({ page }) => {
+    await fakeDownloads(page)
+    await page.goto('/download/')
+    const href = await page.locator('.os .get a[data-beta-download]').first().getAttribute('href')
+    test.skip(!href, 'no release files published')
     for (const scheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: scheme })
-      await fakeDownloads(page)
-      await page.goto('/download/')
-      const link = page.locator('.os .get a[data-beta-download]').first()
-      test.skip((await link.count()) === 0, 'no release files published')
-      await link.click()
-      const heading = page.getByRole('heading', { name: 'Thanks for downloading Ferrocast' })
-      await expect(heading).toBeFocused()
+      await page.goto(href!)
+      await expect(heading(page)).toBeFocused()
       const r = await new AxeBuilder({ page })
-        .include('[data-dl-thanks]')
+        .include('main')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
         .analyze()
       expect(
@@ -134,16 +166,15 @@ test.describe('download feedback', () => {
     }
   })
 
-  test('the thank-you panel fits a 375 px phone', async ({ page }) => {
+  test('fits a 375 px phone', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await fakeDownloads(page)
     await page.goto('/download/')
     const link = page.locator('.os[data-os="linux"] .more a[data-dl-kind="rpm"]')
     test.skip((await link.count()) === 0, 'no .rpm file published')
     await link.click()
-    await expect(
-      page.getByRole('heading', { name: 'Thanks for downloading Ferrocast' }),
-    ).toBeInViewport()
+    await expect(heading(page)).toBeInViewport()
+    await expect(page.getByRole('link', { name: 'Download again' })).toBeInViewport()
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     )
