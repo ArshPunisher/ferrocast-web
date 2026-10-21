@@ -68,6 +68,7 @@ import { chimeDataUrl } from './chime'
 import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
 import { DemoCloud, type DemoCloudSetup } from './features/cloud-mode'
+import { DemoCloudSync } from './features/cloud-sync'
 import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
@@ -406,6 +407,11 @@ export class DemoEngine {
   private readonly cloudBackups: DemoCloudBackups
   /** Cloud mode (`?web=cloud`), or `null` for a PC's dashboard. */
   readonly cloud: DemoCloud | null
+  /** The app's cloud sync and "Use cloud overlays" (`/pro/cloud`). */
+  readonly cloudSync = new DemoCloudSync(
+    () => this.account.view().state === 'signed_in',
+    () => ({ docs: this.overlays.length + this.rules.length + 1, overlays: this.overlays.length }),
+  )
   /** Pro tip page branding and goal (on with Pro and its feature). */
   private readonly tipBrand = new DemoTipBrand(
     () => {
@@ -1653,6 +1659,7 @@ export class DemoEngine {
   private features(): DemoFeature[] {
     return [
       ...(this.cloud ? [this.cloud as DemoFeature] : []),
+      this.cloudSync,
       this.account,
       this.loyalty,
       this.polls,

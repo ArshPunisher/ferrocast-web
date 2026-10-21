@@ -120,3 +120,26 @@ export function cloudChannelLine(ch: CloudChannel | undefined, platform: CloudPl
   if (ch.error) return ch.error.message
   return `Alerts and chat from ${ch.name ?? ch.login} come in here.`
 }
+
+/** The app's cloud sync and "Use cloud overlays" (API.md "Cloud sync", CLOUD.md §1.1). */
+export interface CloudSyncView {
+  signed_in: boolean
+  sync: boolean
+  use_cloud_overlays: boolean
+  last_sync_at: number | null
+  error: CloudProblem | null
+  /** What the cloud replaced on this PC, newest first. */
+  notes: string[]
+  synced: number
+  cloud_overlays: number
+  running: boolean
+}
+
+export function cloudSyncApi(client: FerroClient) {
+  return {
+    get: () => client.request<CloudSyncView>('GET', '/api/v1/pro/cloud'),
+    set: (v: { sync?: boolean; use_cloud_overlays?: boolean }) =>
+      client.request<CloudSyncView>('PUT', '/api/v1/pro/cloud', v),
+    syncNow: () => client.request<CloudSyncView>('POST', '/api/v1/pro/cloud/sync', {}),
+  }
+}
