@@ -25,6 +25,8 @@ export type Route =
   | { name: 'plans' }
   /** The Ferrocast account (`#/account`). */
   | { name: 'account' }
+  /** Cloud mode (`#/cloud`, `?connected=twitch` after a connect on the web). */
+  | { name: 'cloud'; connected?: string }
 
 /** Gallery tabs; themes is the default (`#/designs`). */
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
@@ -34,9 +36,14 @@ export type StudioSection = 'show' | 'info' | 'obs' | 'moments'
 const STUDIO_SECTIONS: StudioSection[] = ['show', 'info', 'obs', 'moments']
 
 export function parseRoute(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent)
+  const [path = '', query = ''] = hash.replace(/^#\/?/, '').split('?')
+  const parts = path.split('/').filter(Boolean).map(decodeURIComponent)
   const [a, b] = parts
   switch (a) {
+    case 'cloud': {
+      const connected = new URLSearchParams(query).get('connected')
+      return connected ? { name: 'cloud', connected } : { name: 'cloud' }
+    }
     case 'chat':
       return { name: 'chat' }
     case 'alerts':

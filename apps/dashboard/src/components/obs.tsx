@@ -3,6 +3,8 @@ import { Check, CopySimple, Eye, EyeSlash } from '@phosphor-icons/react'
 import { ApiError, describeError, type Overlay } from '@ferrocast/api'
 import { BrandIcon, Button, Dialog, IconButton, copyText, cx, toast, useFlash } from '@ferrocast/ui'
 import { useClient } from '../lib/hooks'
+import { useLive } from '../lib/store'
+import { isCloud } from '../lib/boot'
 
 /** An overlay URL, blurred until asked (R-44): anyone with it can show your alerts. */
 export function SecretUrl({ url, className }: { url: string; className?: string }) {
@@ -134,7 +136,13 @@ export function useAddToObs(): {
   const client = useClient()
   const [busy, setBusy] = useState<string | null>(null)
   const [fallback, setFallback] = useState<{ overlay: Overlay; reason: string | null } | null>(null)
+  const cloud = isCloud(useLive((s) => s.conn))
   const add = async (o: Overlay) => {
+    // Cloud mode can't reach OBS on your computer: the guide shows how to paste the URL.
+    if (cloud) {
+      setFallback({ overlay: o, reason: null })
+      return false
+    }
     setBusy(o.id)
     try {
       const r = await client.addToObs(o.id)

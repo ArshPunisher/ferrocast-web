@@ -12,14 +12,18 @@ import {
 import {
   ApiError,
   cloudBotApi,
+  cloudScreenAllowed,
   describeError,
   remoteHome,
   remoteScreenAllowed,
 } from '@ferrocast/api'
 import { Button, SparkMark, Skeleton, Toaster, Wordmark } from '@ferrocast/ui'
 import {
+  chooseWeb,
+  cloudOffered,
   clearRemote,
   clearSession,
+  isCloud,
   connect,
   demo,
   pair,
@@ -60,6 +64,7 @@ const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default:
 const History = lazy(() => import('./screens/History').then((m) => ({ default: m.History })))
 const Plans = lazy(() => import('./screens/Plans').then((m) => ({ default: m.Plans })))
 const Account = lazy(() => import('./screens/Account').then((m) => ({ default: m.Account })))
+const Cloud = lazy(() => import('./screens/Cloud').then((m) => ({ default: m.Cloud })))
 const Onboarding = lazy(() =>
   import('./screens/Onboarding').then((m) => ({ default: m.Onboarding })),
 )
@@ -107,7 +112,8 @@ export function App() {
       const done = await hydrate(c)
       if (id !== bootId.current) return
       // A phone never runs first-time setup: that's on the PC (accounts, OBS).
-      setSetupDone(done || c.mode === 'remote' || c.remote !== undefined)
+      // Cloud mode is set up on its Cloud page, never the PC's first run.
+      setSetupDone(done || c.mode === 'remote' || c.remote !== undefined || isCloud(c))
       setPhase({ kind: 'ready' })
     } catch (e) {
       if (id !== bootId.current) return
@@ -280,8 +286,21 @@ export function App() {
   }
 
   if (phase.kind === 'booting' || (phase.kind === 'ready' && !conn)) return <Splash />
+  // The web dashboard with no PC to open: cloud mode runs without one (CLOUD.md).
+  const useCloud = () => {
+    chooseWeb('cloud')
+    history.replaceState(null, '', `${location.pathname}${location.search}#/cloud`)
+    void boot()
+  }
   if (phase.kind === 'remote')
-    return <RemoteGate problem={phase.problem} onRetry={() => void boot()} onCloudOn={cloudOn} />
+    return (
+      <RemoteGate
+        problem={phase.problem}
+        onRetry={() => void boot()}
+        onCloudOn={cloudOn}
+        {...(cloudOffered ? { onUseCloud: useCloud } : {})}
+      />
+    )
   if (phase.kind === 'pairing')
     return <Pairing phase={phase} onRetry={() => void boot()} onDemo={() => void tryDemo()} />
   if (phase.kind === 'failed')
@@ -310,7 +329,10 @@ export function App() {
   const shown =
     remoteRole && (!remoteScreenAllowed(remoteRole, route.name, limited) || phoneHistoryOff)
       ? parseRoute(`#/${remoteHome(remoteRole, limited)}`)
-      : route
+      : // Cloud mode: only what runs in the cloud; the rest opens the Cloud page.
+        isCloud(conn) && !cloudScreenAllowed(route.name)
+        ? parseRoute('#/cloud')
+        : route
   let screen
   switch (shown.name) {
     case 'chat':
@@ -364,6 +386,10 @@ export function App() {
     case 'account':
       screen = <Account />
       break
+    case 'cloud':
+      // A PC's own dashboard has no Cloud page yet (that's the app's sync, M6).
+      screen = isCloud(conn) ? <Cloud connected={shown.connected} /> : <Home />
+      break
     default:
       screen = <Home />
   }
@@ -414,7 +440,7 @@ class ScreenBoundary extends Component<{ children: ReactNode }, { failed: boolea
 
 function ScreenLoading() {
   return (
-    <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading">
+    <div role="status" className="flex flex-col gap-4" aria-busy="true" aria-label="Loading">
       <Skeleton className="h-9 w-56" />
       <Skeleton className="h-64" />
     </div>

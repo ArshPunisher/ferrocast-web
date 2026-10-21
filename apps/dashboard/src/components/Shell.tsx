@@ -6,6 +6,7 @@ import {
   ChartLine,
   Broadcast,
   ChatsCircle,
+  CloudArrowUp,
   Command,
   DotsThreeOutline,
   GearSix,
@@ -24,6 +25,7 @@ import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
 import {
   accountIsPro,
   describeError,
+  cloudScreenAllowed,
   proPanelState,
   remoteScreenAllowed,
   type ProFeature,
@@ -31,6 +33,7 @@ import {
 } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import { isLimited, useLive } from '../lib/store'
+import { isCloud } from '../lib/boot'
 import { useClient } from '../lib/hooks'
 import { PRO_UNLOCKED_EVENT, accountInitials, proPlanLine, useProStatus } from '../lib/pro-status'
 import { ProUnlock } from './pro/ProUnlock'
@@ -52,6 +55,8 @@ type NavItem = {
 }
 
 export const NAV: NavItem[] = [
+  // Cloud mode's own page: listed only in cloud mode (Home isn't, it needs a PC).
+  { route: { name: 'cloud' }, label: 'Cloud', icon: CloudArrowUp, match: ['cloud'] },
   { route: { name: 'home' }, label: 'Home', icon: House, match: ['home', 'recap'] },
   { route: { name: 'studio' }, label: 'Studio', icon: Broadcast, match: ['studio'] },
   { route: { name: 'chat' }, label: 'Chat', icon: ChatsCircle, match: ['chat'] },
@@ -88,6 +93,7 @@ export const NAV: NavItem[] = [
 ]
 
 const MOBILE_MAIN = ['home', 'chat', 'alerts', 'moderation']
+const CLOUD_MAIN = ['cloud', 'chat', 'alerts', 'overlays']
 
 /** Fired after the sidebar changes the theme, so an open Settings screen can follow. */
 export const THEME_EVENT = 'fc-theme-change'
@@ -306,6 +312,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const [more, setMore] = useState(false)
   const notices = useLive((s) => s.notices)
   const remote = useLive((s) => s.remote)
+  const conn = useLive((s) => s.conn)
   const dismiss = useLive((s) => s.dismissNotice)
   const reduce = useReducedMotion()
   useUpdateWatch()
@@ -335,8 +342,11 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const seamDraw = useSeamDraw()
   // The PC is off and the cloud bot stands in: chat, bans and history only (M10).
   const limited = isLimited(remote)
+  const cloud = isCloud(conn)
   const nav = NAV.filter(
     (i) =>
+      // Cloud mode: only what runs in the cloud; a PC's dashboard never lists Cloud.
+      (cloud ? cloudScreenAllowed(i.route.name) : i.route.name !== 'cloud') &&
       // A phone can't read Pro's status (it stays on the PC): the relay says whether an
       // owner's phone gets history (`history` on /r/v1/me and the `remote` frame).
       (remote
@@ -346,7 +356,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       // A phone through Ferrocast's servers: only its role's screens (hidden, not greyed).
       (!remote || remoteScreenAllowed(remote.role, i.route.name, limited)),
   )
-  const main = limited ? [...MOBILE_MAIN, 'history'] : MOBILE_MAIN
+  const main = cloud ? CLOUD_MAIN : limited ? [...MOBILE_MAIN, 'history'] : MOBILE_MAIN
   const headerRef = useHeaderHeight()
   const tabs = nav.filter((i) => main.includes(i.route.name))
   const ThemeIcon = theme === 'dark' ? Sun : Moon
@@ -466,7 +476,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                 <AccountAvatar view={account} pro={isPro} size={32} />
               </a>
             )}
-            {!limited && <PanicButton />}
+            {!limited && !cloud && <PanicButton />}
           </div>
         </header>
 

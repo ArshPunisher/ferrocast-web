@@ -56,6 +56,8 @@ import {
 } from '../components/design/gallery'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { go, href, type GalleryTab } from '../lib/router'
+import { isCloud } from '../lib/boot'
+import { useLive } from '../lib/store'
 
 const inTab = (t: GalleryTab, d: Design) => t === 'mine' || galleryTab(d) === t
 const KIND_NAME: Record<DesignKind, string> = {
@@ -107,6 +109,7 @@ function Tile({
   const stage = useRef<StageHandle>(null)
   const [hover, setHover] = useState(false)
   const { exportDesign } = useExport()
+  const cloud = isCloud(useLive((s) => s.conn))
   const alert = useMemo(
     () =>
       design.kind === 'alert' ? previewAlert(design, ev, { id: `tile-${design.id}-${ev}` }) : null,
@@ -204,12 +207,17 @@ function Tile({
                 </IconButton>
               )}
               items={[
-                {
-                  key: 'export',
-                  label: 'Export or share',
-                  icon: <DownloadSimple size={15} />,
-                  onSelect: () => exportDesign(design),
-                },
+                // Design files are made by the app on a PC (cloud mode has no export).
+                ...(cloud
+                  ? []
+                  : [
+                      {
+                        key: 'export',
+                        label: 'Export or share',
+                        icon: <DownloadSimple size={15} />,
+                        onSelect: () => exportDesign(design),
+                      },
+                    ]),
                 { key: 'dup', label: 'Duplicate', icon: <Copy size={15} />, onSelect: onDuplicate },
                 {
                   key: 'del',
@@ -255,6 +263,7 @@ const IMPORTS = [
 ] as const
 
 export function Designs({ tab }: { tab: GalleryTab }) {
+  const cloud = isCloud(useLive((s) => s.conn))
   const client = useClient()
   const { run } = useAction()
   const list = useResource((c) => c.designs())
@@ -342,25 +351,27 @@ export function Designs({ tab }: { tab: GalleryTab }) {
         description="Themes, alerts and widgets that play the real thing. Use one as it is, or duplicate it to make it yours without Ferrocast branding."
         actions={
           <>
-            <Menu
-              label="Import"
-              align="end"
-              trigger={(p) => (
-                <Button {...p} variant="secondary" icon={<DownloadSimple size={15} />}>
-                  Import
-                </Button>
-              )}
-              items={IMPORTS.map((x) => ({
-                key: x.key,
-                label: x.title,
-                description: x.text,
-                icon: <x.icon size={16} />,
-                onSelect: () =>
-                  x.key === 'se'
-                    ? go({ name: 'import', source: 'streamelements' })
-                    : setDialog(x.key),
-              }))}
-            />
+            {!cloud && (
+              <Menu
+                label="Import"
+                align="end"
+                trigger={(p) => (
+                  <Button {...p} variant="secondary" icon={<DownloadSimple size={15} />}>
+                    Import
+                  </Button>
+                )}
+                items={IMPORTS.map((x) => ({
+                  key: x.key,
+                  label: x.title,
+                  description: x.text,
+                  icon: <x.icon size={16} />,
+                  onSelect: () =>
+                    x.key === 'se'
+                      ? go({ name: 'import', source: 'streamelements' })
+                      : setDialog(x.key),
+                }))}
+              />
+            )}
             <Button variant="secondary" icon={<Plus size={15} />} onClick={startScratch}>
               Start from scratch
             </Button>

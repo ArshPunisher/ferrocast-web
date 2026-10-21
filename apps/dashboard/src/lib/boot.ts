@@ -23,7 +23,13 @@ import {
 import type { RemoteState } from './store'
 import { markUnlockShown } from './pro-status'
 import { accountApi, publishAccount } from './account-status'
-import type { AccountPc, WebAccountApi } from '@ferrocast/api'
+import {
+  cloudApi,
+  cloudFetch,
+  type AccountPc,
+  type CloudSummary,
+  type WebAccountApi,
+} from '@ferrocast/api'
 
 declare global {
   interface Window {
@@ -33,7 +39,7 @@ declare global {
   }
 }
 
-export type Mode = 'desktop' | 'browser' | 'demo' | 'remote'
+export type Mode = 'desktop' | 'browser' | 'demo' | 'remote' | 'cloud'
 
 export interface Connection {
   mode: Mode
@@ -41,7 +47,61 @@ export interface Connection {
   socket: SocketFactory
   /** Set when this dashboard reaches the PC through Ferrocast's servers (or the demo acts so). */
   remote?: RemoteState
+  /**
+   * Cloud mode (1.4, ferrocast docs/CLOUD.md): Ferrocast's servers run it for the signed-in
+   * account, no PC needed (`mode: 'cloud'`, or the demo with `?web=cloud`).
+   */
+  cloud?: true
 }
+
+/** Whether this dashboard runs cloud mode (only its screens show). */
+export function isCloud(conn: Connection | null | undefined): boolean {
+  return !!conn && (conn.mode === 'cloud' || conn.cloud === true)
+}
+
+/** The web dashboard remembers whether the streamer picked cloud mode or their PC. */
+const WEB_CHOICE_KEY = 'fc-web-choice'
+
+export function chooseWeb(choice: 'cloud' | 'pc'): void {
+  try {
+    localStorage.setItem(WEB_CHOICE_KEY, choice)
+  } catch {
+    // private mode: asked again next time
+  }
+}
+
+function webChoice(): 'cloud' | 'pc' | null {
+  try {
+    const v = localStorage.getItem(WEB_CHOICE_KEY)
+    return v === 'cloud' || v === 'pc' ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** The cloud mode client: `<web host>/c`, the account's cookie, its CSRF token on writes. */
+function cloudClient(api: string, web: WebAccountApi): FerroClient {
+  return new FerroClient({
+    base: `${webOrigin(api)}/c`,
+    token: null,
+    fetch: cloudFetch(() => web.csrfToken?.() ?? null),
+  })
+}
+
+/**
+ * Cloud mode on this web host, if the servers have it: `null` when they don't (404) or can't
+ * be asked right now (the PC route stays as it was).
+ */
+async function cloudHere(api: string, web: WebAccountApi): Promise<CloudSummary | null> {
+  try {
+    return await cloudApi(cloudClient(api, web)).summary()
+  } catch {
+    return null
+  }
+}
+
+/** Whether the web dashboard can offer cloud mode (the gate's "Use cloud mode" button). */
+export let cloudOffered = false
 
 const REMOTE_KEY = 'fc-remote'
 
@@ -169,6 +229,22 @@ async function remoteConnect(
   const code = pairCodeFromHash()
   if (code) return { remotePairing: { api, code } }
   let token = readRemote(api)
+  // Cloud mode (1.4): picked before, asked for (`#/cloud`), or the account has no PC to open.
+  const cloud = web && account?.state === 'signed_in' ? await cloudHere(api, web) : null
+  cloudOffered = cloud !== null
+  if (cloud && web) {
+    const choice = webChoice()
+    const asked = /^#\/cloud/.test(location.hash)
+    let noPc = false
+    if (!asked && choice === null && !token) {
+      const pcs = await web.pcs().catch(() => [] as AccountPc[])
+      accountPcs = pcs
+      noPc = pcs.length === 0
+    }
+    if (asked || choice === 'cloud' || noPc) {
+      return { mode: 'cloud', client: cloudClient(api, web), socket: wsFactory, cloud: true }
+    }
+  }
   if (!token && web && account?.state === 'signed_in') {
     // No device token yet: open the account's PC (one online PC opens by itself).
     const pcs = await web.pcs().catch(() => [] as AccountPc[])
@@ -357,6 +433,16 @@ export async function connect(): Promise<ConnectResult> {
 }
 
 export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connection> {
+  // `?web=cloud|cloud-off|cloud-sleeping`: the web dashboard in cloud mode (CLOUD.md).
+  const web = new URLSearchParams(location.search).get('web')
+  const cloudMode =
+    web === 'cloud'
+      ? 'on'
+      : web === 'cloud-off'
+        ? 'off'
+        : web === 'cloud-sleeping'
+          ? 'sleeping'
+          : null
   const [{ DemoEngine, DEMO_TOKEN, DEMO_PRO_SUBSCRIPTION }, { BUILTINS }] = await Promise.all([
     import('@ferrocast/api/demo'),
     import('@ferrocast/designs'),
@@ -375,6 +461,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     ...(params.get('account') === 'signed_in' || params.get('account') === 'disabled'
       ? { account: params.get('account') as 'signed_in' | 'disabled' }
       : {}),
+    ...(cloudMode ? { cloudMode: cloudMode as 'on' | 'off' | 'sleeping' } : {}),
     // `?history=empty`: Pro stream history with no streams yet.
     ...(params.get('history') === 'empty' ? { history: 'empty' as const } : {}),
     // `?remote=owner|mod&pc=off`: this dashboard as a paired phone, the PC on or off;
@@ -437,6 +524,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     }),
     socket: engine.socket,
     ...(remote ? { remote } : {}),
+    ...(cloudMode ? { cloud: true as const } : {}),
   }
 }
 

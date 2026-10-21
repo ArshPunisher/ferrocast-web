@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowClockwise,
   CloudCheck,
+  CloudArrowUp,
   CloudSlash,
   Copy,
   DeviceMobile,
@@ -279,6 +280,7 @@ export function RemoteGate({
   problem,
   onRetry,
   onCloudOn,
+  onUseCloud,
   check = checkRemote,
   every = 10_000,
 }: {
@@ -286,6 +288,8 @@ export function RemoteGate({
   onRetry: () => void
   /** The owner switched the cloud bot back on (`cloud_paused`): opens chat and bans. */
   onCloudOn?: () => Promise<void>
+  /** The web dashboard on a relay with cloud mode: run it without the PC (CLOUD.md). */
+  onUseCloud?: () => void
   /** Injected in tests. */
   check?: () => Promise<RemoteProblem | 'online' | null>
   every?: number
@@ -374,6 +378,22 @@ export function RemoteGate({
             </Button>
           )}
           {problem === 'choose_pc' && <PcChoice onDone={onRetry} />}
+          {onUseCloud &&
+            (problem === 'no_pcs' || problem === 'choose_pc' || problem === 'pc_offline') && (
+              <div className="flex w-full flex-col items-start gap-2 rounded-panel border border-line bg-surface-1 p-4">
+                <p className="text-[15px] leading-snug text-text-2">
+                  No PC needed: alerts, overlays, chat and the bot can run from Ferrocast’s servers.
+                  It’s free.
+                </p>
+                <Button
+                  variant="secondary"
+                  icon={<CloudArrowUp size={18} weight="bold" />}
+                  onClick={onUseCloud}
+                >
+                  Use cloud mode
+                </Button>
+              </div>
+            )}
           {switchError && (
             <p role="alert" className="text-[15px] font-semibold text-danger">
               {switchError.message}

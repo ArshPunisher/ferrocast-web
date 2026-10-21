@@ -12,6 +12,7 @@ import {
 import { EventRow } from '../components/EventRow'
 import { NeedsPc } from '../components/remote'
 import { isLimited, useLive } from '../lib/store'
+import { isCloud } from '../lib/boot'
 import { useMediaQuery, useNow } from '../lib/hooks'
 import { useHeldItems, useHeldSync } from '../lib/held'
 
@@ -39,6 +40,8 @@ export function Chat() {
   const mod = remote?.role === 'mod'
   // The PC is off, the cloud bot stands in (M10): its chat, bans; no sending, no events.
   const limited = isLimited(remote)
+  // Cloud mode (CLOUD.md): chat to read; sending and moderating need the app on a PC.
+  const cloud = isCloud(useLive((s) => s.conn))
 
   const lines = useMemo(() => {
     // "Held" lists every held message, also ones from before the chat on screen.
@@ -92,7 +95,7 @@ export function Chat() {
               })),
           ]}
         />
-        {!limited && (
+        {!limited && !cloud && (
           <button
             type="button"
             aria-pressed={onlyHeld}
@@ -145,15 +148,19 @@ export function Chat() {
                 now={now}
                 deleted={deleted.has(e.source_id ?? '')}
                 held={held.get(e.id)}
-                actions={actions}
+                actions={cloud ? null : actions}
               />
             ))}
           </ul>
         )}
       </ChatScroller>
-      {limited && !mod ? (
+      {(limited && !mod) || cloud ? (
         <div className="border-t border-line px-4 py-3">
-          <NeedsPc>Sending messages needs your PC.</NeedsPc>
+          <NeedsPc>
+            {cloud
+              ? 'Sending messages and moderating need the Ferrocast app on your PC.'
+              : 'Sending messages needs your PC.'}
+          </NeedsPc>
         </div>
       ) : (
         !mod && (

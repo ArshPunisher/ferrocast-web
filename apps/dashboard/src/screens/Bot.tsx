@@ -20,6 +20,9 @@ import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { CountersPanel, ModulesPanel, QuotesPanel } from '../components/studio/chatbot'
 import { AutoRepliesPanel } from '../components/bot/autoreplies'
 import { CloudBotPanel } from '../components/bot/cloud-bot'
+import { CloudModeBotPanel } from '../components/bot/cloud-mode-bot'
+import { isCloud } from '../lib/boot'
+import { useLive } from '../lib/store'
 import { missingStarters } from '../lib/starters'
 
 const ROLE_LABEL: Record<Command['roles'], string> = {
@@ -342,6 +345,7 @@ export function Bot() {
   const client = useClient()
   const commands = useResource((c) => c.commands())
   const timers = useResource((c) => c.timers())
+  const cloud = isCloud(useLive((s) => s.conn))
   const { run } = useAction()
   const [editCmd, setEditCmd] = useState<Command | Omit<Command, 'id'> | null>(null)
   const [editTimer, setEditTimer] = useState<Timer | Omit<Timer, 'id'> | null>(null)
@@ -574,17 +578,24 @@ export function Bot() {
           )}
         </Panel>
       </div>
-      <div className="mt-5">
-        <AutoRepliesPanel />
-      </div>
-      <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-5">
-          <CountersPanel />
-          <QuotesPanel />
-        </div>
-        <ModulesPanel />
-      </div>
-      <CloudBotPanel className="mt-5" />
+      {cloud ? (
+        // Cloud mode runs commands and timers; the rest needs the PC's viewer database.
+        <CloudModeBotPanel className="mt-5" />
+      ) : (
+        <>
+          <div className="mt-5">
+            <AutoRepliesPanel />
+          </div>
+          <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div className="flex flex-col gap-5">
+              <CountersPanel />
+              <QuotesPanel />
+            </div>
+            <ModulesPanel />
+          </div>
+          <CloudBotPanel className="mt-5" />
+        </>
+      )}
       <CommandDialog
         value={editCmd}
         onClose={() => setEditCmd(null)}
