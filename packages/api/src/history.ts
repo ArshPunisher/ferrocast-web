@@ -52,6 +52,25 @@ export interface HistoryView {
   truncated: boolean
   /** Every week in the range, empty ones too, oldest first. */
   weekly: HistoryWeek[]
+  /** 1.4: what this PC's plan keeps. Missing from older relays (then Pro, a year). */
+  plan?: 'free' | 'pro'
+  keep_days?: number
+  /** The oldest start this plan shows (ms). */
+  earliest?: number
+  /** The asked range went past what the plan keeps (a calm Pro note, never a nag). */
+  limited?: boolean
+}
+
+/** One stream's viewer count every five minutes. */
+export interface HistorySample {
+  at: number
+  viewers: number
+}
+
+export interface HistorySamples {
+  platform: HistoryPlatform
+  key: string
+  samples: HistorySample[]
 }
 
 export interface HistoryQuery {
@@ -90,6 +109,12 @@ function query(q: HistoryQuery): string {
 export function historyApi(c: FerroClient) {
   return {
     list: (q: HistoryQuery = {}) => c.request<HistoryView>('GET', `/api/v1/pro/history${query(q)}`),
+    /** One stream's viewer samples (the per-stream chart). */
+    samples: (platform: HistoryPlatform, key: string) =>
+      c.request<HistorySamples>(
+        'GET',
+        `/api/v1/pro/history/samples?platform=${platform}&key=${encodeURIComponent(key)}`,
+      ),
     /** The CSV to save (`ferrocast-history.csv`). */
     exportCsv: (q: HistoryQuery = {}) =>
       c.downloadFile(`/api/v1/pro/history/export.csv${query(q)}`),

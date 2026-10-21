@@ -17,6 +17,8 @@ export interface ProFeatures {
   weekly_email: boolean
   /** The tip page on the streamer's own subdomain (Cloudflare for SaaS on the relay). */
   tip_domain: boolean
+  /** Smart moderation, smart replies and the written recap (a free-tier model is set up). */
+  smart: boolean
 }
 export type ProFeature = keyof ProFeatures
 
@@ -30,6 +32,7 @@ export const NO_PRO_FEATURES: ProFeatures = {
   history: false,
   weekly_email: false,
   tip_domain: false,
+  smart: false,
 }
 
 /** One of the subscription's usage counters (API.md §9). */

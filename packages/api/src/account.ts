@@ -127,6 +127,40 @@ export interface WebAccountApi extends AccountApi {
   ): Promise<{ token: string; device_id: string; role: 'owner'; name: string; expires_at: number }>
   /** The CSRF token from the last `status()`, for the relay's other writes (`/r/v1/pair`). */
   csrfToken(): string | null
+  /** `GET /r/v1/pro/youtube`: YouTube from the cloud for this account (Pro, API.md §9.7). */
+  youtube(): Promise<YoutubeCloudView>
+  /** `POST /r/v1/pro/youtube/connect`: Google's consent page to open in this tab. */
+  youtubeConnect(moderation?: boolean): Promise<{ flow: 'browser'; url: string }>
+  /** `PUT /r/v1/pro/youtube/bot {enabled}`: the cloud bot's switch. */
+  youtubeBot(enabled: boolean): Promise<YoutubeCloudView>
+  /** `DELETE /r/v1/pro/youtube`: unbound and revoked at Google. */
+  youtubeDisconnect(): Promise<YoutubeCloudView>
+}
+
+/** YouTube from the cloud (no PC) for the signed-in account. */
+export interface YoutubeCloudView {
+  /** The relay has the YouTube client and the vault set up. */
+  available: boolean
+  pro: boolean
+  bot_on: boolean
+  channel: {
+    id: string | null
+    title: string | null
+    moderation: boolean
+    error: { code: string; message: string; hint?: string } | null
+    live: boolean
+    from_web: boolean
+    connected_at: number
+  } | null
+  /** Today's YouTube units (Pacific day), cut to a fair share on busy days. */
+  quota: {
+    used: number
+    limit: number
+    reset_at: number
+    exhausted: boolean
+    fair_share?: boolean
+    sharing_today?: number
+  } | null
 }
 
 export interface AccountPc {
@@ -199,6 +233,11 @@ export function webAccountApi(
     pcs: () => call<{ pcs: AccountPc[] }>('GET', '/r/v1/pcs').then((r) => r.pcs ?? []),
     connectPc: (id) => call('POST', `/r/v1/pcs/${encodeURIComponent(id)}/connect`, {}),
     csrfToken: () => csrf,
+    youtube: () => call<YoutubeCloudView>('GET', '/r/v1/pro/youtube'),
+    youtubeConnect: (moderation = false) =>
+      call<{ flow: 'browser'; url: string }>('POST', '/r/v1/pro/youtube/connect', { moderation }),
+    youtubeBot: (enabled) => call<YoutubeCloudView>('PUT', '/r/v1/pro/youtube/bot', { enabled }),
+    youtubeDisconnect: () => call<YoutubeCloudView>('DELETE', '/r/v1/pro/youtube'),
     prices: () =>
       call<{ prices?: { currency: 'INR'; monthly: number; yearly: number } }>(
         'GET',

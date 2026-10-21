@@ -72,7 +72,7 @@ import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
-import { DemoRecap } from './features/recap'
+import { DemoRecap, buildRecap } from './features/recap'
 import { DemoDiscord } from './features/discord'
 import { DemoDiscordPro } from './features/discord-pro'
 import { DemoCloudBot, type DemoCloudBotState } from './features/cloud-bot'
@@ -83,6 +83,7 @@ import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
 import { DemoHistory } from './features/history'
+import { DemoSmart } from './features/smart'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
 import type { ProView } from '../pro'
 import { DemoTipBrand } from './features/tip-brand'
@@ -400,6 +401,8 @@ export class DemoEngine {
     () => this.cloud !== null,
   )
   private readonly history: DemoHistory
+  /** Pro smart features: moderation suggestions, smart replies, the written recap; Insights' supporters. */
+  private readonly smart: DemoSmart
   private readonly cloudBackups: DemoCloudBackups
   /** Cloud mode (`?web=cloud`), or `null` for a PC's dashboard. */
   readonly cloud: DemoCloud | null
@@ -479,6 +482,7 @@ export class DemoEngine {
     this.history = new DemoHistory(
       () => this.pro.route('GET', ['pro'], null) as ProView,
       opts.history === 'empty',
+      () => this.account.view().state === 'signed_in',
     )
     this.cloud = opts.cloudMode
       ? new DemoCloud(opts.cloudMode, () => ({
@@ -661,6 +665,10 @@ export class DemoEngine {
       stats: this.stats,
       live: this.isLive(),
     }))
+    this.smart = new DemoSmart(
+      () => this.pro.route('GET', ['pro'], null) as ProView,
+      () => buildRecap(this.events, this.stats, this.isLive(), null),
+    )
     this.seedHistory(now)
     this.welcome.arm(this.events)
     if (opts.autoplay ?? true) this.startAutoplay()
@@ -1659,6 +1667,7 @@ export class DemoEngine {
       this.importers,
       this.pro,
       this.history,
+      this.smart,
       this.cloudBackups,
       this.designs,
       this.studio,
