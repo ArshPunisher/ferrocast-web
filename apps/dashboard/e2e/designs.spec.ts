@@ -117,7 +117,10 @@ test.describe('gallery', () => {
       'true',
     )
     await expect.poll(() => deepCount(page, '.fa')).toBeGreaterThan(0)
-    await sheet.getByRole('button', { name: 'Use theme' }).click()
+    // The rain and the looping alert keep CI's Linux WebKit from ever reporting the footer as
+    // "stable" (it doesn't move: the stage has a fixed aspect ratio), so the click skips that
+    // wait. The next line still proves the button works.
+    await sheet.getByRole('button', { name: 'Use theme' }).click({ force: true })
     await expect(page.getByRole('dialog', { name: 'Use Chai & rain' })).toBeVisible()
   })
 
