@@ -84,7 +84,7 @@ export const NAV: NavItem[] = [
   { route: { name: 'tips' }, label: 'Tips', icon: HandCoins, match: ['tips'] },
   {
     route: { name: 'history' },
-    label: 'History',
+    label: 'Insights',
     icon: ChartLine,
     match: ['history'],
     pro: 'history',
@@ -352,7 +352,11 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       (remote
         ? !i.pro ||
           (i.route.name === 'history' && remote.role === 'owner' && remote.history === true)
-        : !i.pro || proPanelState(proView, i.pro) !== 'hidden') &&
+        : !i.pro ||
+          // Insights is free with an account (30 days): listed whenever the relay keeps history.
+          (i.pro === 'history'
+            ? !!proView?.features.history
+            : proPanelState(proView, i.pro) !== 'hidden')) &&
       // A phone through Ferrocast's servers: only its role's screens (hidden, not greyed).
       (!remote || remoteScreenAllowed(remote.role, i.route.name, limited)),
   )

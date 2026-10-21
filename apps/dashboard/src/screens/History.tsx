@@ -1,25 +1,32 @@
-// `#/history`: Pro stream history (API.md §9.1). The relay keeps it; this screen reads the
-// range picked with the chips and shows the numbers big, then the charts, then every stream.
-// Without Pro it is ProPanel's one calm line; hidden when Pro isn't on sale and this relay
-// lacks it (R-05, no nagging).
+// `#/history`: Insights (API.md §9.1, 1.4). The relay keeps stream history: a free account
+// the last 30 days, Pro a year. This screen reads the range picked with the chips and shows
+// the numbers big, then the charts per stream, the best times to stream, top supporters
+// (from this PC's own log) and every stream. A range past what the plan keeps gets one calm
+// Pro line, never a lock screen; without an account, one line on how to keep history.
+// Hidden when this relay has no history at all.
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { DownloadSimple } from '@phosphor-icons/react'
 import {
+  ApiError,
   HISTORY_RANGES,
   formatCount,
   historyApi,
   historyRange,
   historySummary,
+  insightsApi,
   proApi,
-  proPanelState,
   type HistoryRange,
+  type HistoryStream,
   type HistoryView,
 } from '@ferrocast/api'
 import { Button, EmptyState, Segmented, Skeleton } from '@ferrocast/ui'
-import { LoadError, PageHeader } from '../components/Panel'
-import { ProPanelView } from '../components/pro/ProPanel'
+import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { ProChip } from '../components/pro/ProChip'
 import { PlatformSplit, ViewersChart, WeeklyBars } from '../components/history/charts'
+import { BestTimes, PerStream, StreamDetail, TopSupporters } from '../components/history/insights'
+import { href } from '../lib/router'
+import { startSignIn } from '../components/account/parts'
 import { StreamTable } from '../components/history/StreamTable'
 import { WeeklyEmail } from '../components/history/WeeklyEmail'
 import { saveBlob } from '../components/studio/common'
@@ -97,15 +104,61 @@ function Loading() {
   )
 }
 
+/** The calm line for a range past what a free account keeps (never shown to viewers). */
+function KeptNote({ v }: { v: HistoryView }) {
+  if (!v.limited || v.plan !== 'free') return null
+  return (
+    <p className="text-[13.5px] text-text-2" data-testid="history-limited">
+      Showing the last {v.keep_days ?? 30} days, what a free account keeps. Pro keeps a year of
+      insights.{' '}
+      <a
+        href={href({ name: 'plans' })}
+        className="font-semibold text-accent-text underline-offset-2 hover:underline"
+      >
+        See Pro
+      </a>
+    </p>
+  )
+}
+
+/** No Pro and no account on this PC: how to keep history (free). */
+function NeedsAccount() {
+  return (
+    <div
+      className="flex flex-col items-start gap-2 rounded-panel border border-line bg-surface-2 p-4"
+      data-testid="history-account"
+    >
+      <p className="text-[15px] font-semibold text-text">Sign in to keep your stream history</p>
+      <p className="text-[13.5px] text-text-2">
+        A free Ferrocast account keeps the last 30 days of streams, with charts, best times and a
+        CSV. Pro keeps a year.
+      </p>
+      <Button size="sm" onClick={() => void startSignIn()}>
+        Sign in
+      </Button>
+    </div>
+  )
+}
+
 function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
   const client = useClient()
   const [range, setRange] = useState<HistoryRange>('4w')
   // The range is fixed when picked, so a reload asks for the same window.
   const span = useMemo(() => historyRange(range, Date.now()), [range])
   const res = useResource((c) => historyApi(c).list(span), [span.from])
+  // Top supporters come from this PC's own log, for the range the history shows.
+  const sup = useResource(
+    (c) =>
+      phone
+        ? Promise.resolve(null)
+        : insightsApi(c).supporters({ from: res.data?.from ?? span.from, to: span.to }),
+    [res.data?.from ?? span.from, phone],
+  )
+  const [picked, setPicked] = useState<HistoryStream | null>(null)
   const { busy, run } = useAction()
   const v = res.data
   const now = span.to
+  const needsAccount = res.error instanceof ApiError && res.error.code === 'account_required'
 
   const exportCsv = () =>
     void run(
@@ -140,7 +193,9 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
           </Button>
         )}
       </div>
-      {res.error && !v ? (
+      {needsAccount ? (
+        <NeedsAccount />
+      ) : res.error && !v ? (
         <LoadError error={res.error} onRetry={res.reload} />
       ) : !v ? (
         <Loading />
@@ -157,9 +212,26 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
           }
         >
           {res.error ? <LoadError error={res.error} onRetry={res.reload} /> : null}
+          <KeptNote v={v} />
           <Tiles v={v} now={now} />
           <Section title="Viewers">
             <ViewersChart streams={v.streams} from={v.from} to={v.to} />
+          </Section>
+          <Section title="Stream by stream">
+            <PerStream
+              streams={v.streams}
+              selected={picked ? `${picked.platform}:${picked.key}` : null}
+              onSelect={setPicked}
+            />
+            {picked &&
+            v.streams.some((s) => s.key === picked.key && s.platform === picked.platform) ? (
+              <div className="rounded-panel border border-line bg-surface-2 p-4">
+                <StreamDetail stream={picked} />
+              </div>
+            ) : null}
+          </Section>
+          <Section title="Best times to stream">
+            <BestTimes streams={v.streams} now={now} />
           </Section>
           <div className="grid gap-x-8 gap-y-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
@@ -171,6 +243,15 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
               <PlatformSplit counts={historySummary(v.streams, now).by_platform} />
             </Section>
           </div>
+          {!phone && (
+            <Section title="Top supporters">
+              {sup.error ? (
+                <LoadError error={sup.error} onRetry={sup.reload} />
+              ) : (
+                <TopSupporters data={sup.data ?? null} />
+              )}
+            </Section>
+          )}
           <Section
             title="Every stream"
             aside={
@@ -179,7 +260,12 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
               </span>
             }
           >
-            <StreamTable streams={v.streams} now={now} />
+            <StreamTable
+              streams={v.streams}
+              now={now}
+              selected={picked ? `${picked.platform}:${picked.key}` : null}
+              onSelect={setPicked}
+            />
             {v.truncated && (
               <p className="text-[13px] text-text-3">
                 {phone
@@ -202,7 +288,7 @@ export function History() {
   if (phone)
     return (
       <div className="flex flex-col gap-4">
-        <PageHeader title="Stream history" />
+        <PageHeader title="Insights" />
         <Body email={false} phone />
       </div>
     )
@@ -212,18 +298,20 @@ export function History() {
 function DesktopHistory() {
   const pro = useResource((c) => proApi(c).status())
   const view = pro.error ? null : pro.data
-  const state = proPanelState(view, 'history')
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Stream history" />
+      <PageHeader
+        title="Insights"
+        description="Your streams over time, the best times to stream and the people who support you."
+      />
       {pro.loading && !pro.data ? (
         <Loading />
-      ) : state === 'hidden' ? (
+      ) : !view?.features.history ? (
         <EmptyState title="Not available here yet" />
       ) : (
-        <ProPanelView pro={view} feature="history" id="history" title="Your streams">
-          <Body email={!!view?.features.weekly_email} />
-        </ProPanelView>
+        <Panel id="history" title="Your streams" actions={view.active ? <ProChip /> : undefined}>
+          <Body email={!!view.features.weekly_email && view.active} />
+        </Panel>
       )}
     </div>
   )

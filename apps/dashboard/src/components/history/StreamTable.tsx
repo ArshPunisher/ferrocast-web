@@ -29,7 +29,18 @@ function when(ms: number): string {
   })
 }
 
-export function StreamTable({ streams, now }: { streams: HistoryStream[]; now: number }) {
+export function StreamTable({
+  streams,
+  now,
+  selected,
+  onSelect,
+}: {
+  streams: HistoryStream[]
+  now: number
+  /** `platform:key` of the stream shown in detail. */
+  selected?: string | null
+  onSelect?: (s: HistoryStream) => void
+}) {
   const [all, setAll] = useState(false)
   const rows = all ? streams : streams.slice(0, FIRST)
   const num = 'px-3 py-2.5 text-right font-mono tabular-nums'
@@ -72,7 +83,14 @@ export function StreamTable({ streams, now }: { streams: HistoryStream[]; now: n
           </thead>
           <tbody>
             {rows.map((s) => (
-              <tr key={`${s.platform}:${s.key}`} className="border-b border-line/60 last:border-0">
+              <tr
+                key={`${s.platform}:${s.key}`}
+                className={
+                  selected === `${s.platform}:${s.key}`
+                    ? 'border-b border-line/60 bg-accent-soft last:border-0'
+                    : 'border-b border-line/60 last:border-0'
+                }
+              >
                 <th
                   scope="row"
                   className="sticky left-0 z-[1] max-w-[190px] bg-surface-1 px-3 py-2.5 text-left font-normal sm:max-w-[300px]"
@@ -80,13 +98,26 @@ export function StreamTable({ streams, now }: { streams: HistoryStream[]; now: n
                   <span className="flex items-center gap-2.5">
                     <PlatformMark platform={s.platform} size={15} />
                     <span className="min-w-0">
-                      <span
-                        dir="auto"
-                        className="block truncate font-semibold text-text"
-                        title={s.title ?? undefined}
-                      >
-                        {s.title ? tameText(s.title) : PLATFORM_LABEL[s.platform]}
-                      </span>
+                      {onSelect ? (
+                        <button
+                          type="button"
+                          dir="auto"
+                          onClick={() => onSelect(s)}
+                          aria-pressed={selected === `${s.platform}:${s.key}`}
+                          className="block max-w-full truncate rounded-[4px] text-left font-semibold text-text underline-offset-2 hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                          title={s.title ?? undefined}
+                        >
+                          {s.title ? tameText(s.title) : PLATFORM_LABEL[s.platform]}
+                        </button>
+                      ) : (
+                        <span
+                          dir="auto"
+                          className="block truncate font-semibold text-text"
+                          title={s.title ?? undefined}
+                        >
+                          {s.title ? tameText(s.title) : PLATFORM_LABEL[s.platform]}
+                        </span>
+                      )}
                       <span className="block truncate text-[12.5px] text-text-3">
                         {when(s.started_at)}
                         {s.category ? ` · ${tameText(s.category)}` : ''}

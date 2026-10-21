@@ -2,7 +2,8 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { fault, open } from './helpers'
 
-// Pro stream history (`#/history`) on the demo's year of streams.
+// Insights (`#/history`): stream history on the demo's year of streams. Pro keeps a year,
+// a free account 30 days.
 const PRO = 'autoplay=0&latency=0&pro=active&pro_features=on'
 const panel = (page: Page) => page.locator('#history')
 const tile = (page: Page, name: string) =>
@@ -75,7 +76,7 @@ test.describe('Stream history', () => {
     await page.evaluate(() => window.__ferrocastDemo?.setOffline(true))
     await page.evaluate(() => (location.hash = '#/history'))
     // Pro's own check fails offline too: nothing Pro shows (R-01), never a crash.
-    await expect(page.getByRole('heading', { name: 'Stream history' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Insights' })).toBeVisible()
     await page.evaluate(() => window.__ferrocastDemo?.setOffline(false))
     await page.reload()
     await expect(panel(page).getByTestId('history-tiles')).toBeVisible()
@@ -84,14 +85,55 @@ test.describe('Stream history', () => {
   test('is in the menu for Pro', async ({ page, isMobile }) => {
     await open(page, 'home', PRO)
     if (isMobile) await page.getByRole('button', { name: 'More' }).click()
-    await page.getByRole('link', { name: 'History' }).click()
+    await page.getByRole('link', { name: 'Insights' }).click()
     await expect(page).toHaveURL(/#\/history$/)
-    await expect(page.getByRole('heading', { name: 'Stream history' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Insights' })).toBeVisible()
     if (!isMobile)
-      await expect(page.getByRole('link', { name: 'History' })).toHaveAttribute(
+      await expect(page.getByRole('link', { name: 'Insights' })).toHaveAttribute(
         'aria-current',
         'page',
       )
+  })
+
+  test('per stream: a number per stream, and one stream in detail', async ({ page }) => {
+    await open(page, 'history', PRO)
+    const p = panel(page)
+    await expect(p.getByRole('img', { name: /^Average viewers per stream$/ })).toBeVisible()
+    await p.getByRole('radio', { name: 'Follows' }).check({ force: true })
+    await expect(p.getByRole('img', { name: /^Follows per stream$/ })).toBeVisible()
+    await p.getByTestId('history-table').locator('tbody tr').first().getByRole('button').click()
+    const d = p.getByTestId('stream-detail')
+    await expect(d.getByRole('img', { name: /Viewers during this stream/ })).toBeVisible()
+    await expect(d.getByText('Peak', { exact: true })).toBeVisible()
+  })
+
+  test('best times and top supporters', async ({ page }) => {
+    await open(page, 'history', PRO)
+    const p = panel(page)
+    await expect(p.getByTestId('best-slot')).toContainText('average')
+    await expect(p.getByRole('img', { name: /Average viewers by weekday/ })).toBeVisible()
+    const sup = p.getByTestId('top-supporters')
+    await expect(sup.getByText('meera_plays').first()).toBeVisible()
+    await expect(sup.getByRole('heading', { name: 'Tips and Bits' })).toBeVisible()
+  })
+
+  test('a free account keeps 30 days and says so calmly', async ({ page }) => {
+    await open(page, 'history', 'autoplay=0&latency=0&pro_features=on&account=signed_in')
+    const p = panel(page)
+    await expect(p.getByTestId('history-tiles')).toBeVisible()
+    await expect(p.getByTestId('history-limited')).toHaveCount(0)
+    await p.getByRole('radio', { name: '1 year' }).check({ force: true })
+    await expect(p.getByTestId('history-limited')).toContainText('what a free account keeps')
+    await expect(
+      p.getByTestId('history-limited').getByRole('link', { name: 'See Pro' }),
+    ).toBeVisible()
+  })
+
+  test('without an account or Pro: how to keep it', async ({ page }) => {
+    await open(page, 'history', 'autoplay=0&latency=0&pro_features=on')
+    const card = panel(page).getByTestId('history-account')
+    await expect(card).toContainText('Sign in to keep your stream history')
+    await expect(card.getByRole('button', { name: 'Sign in' })).toBeVisible()
   })
 
   test('has no accessibility violations', async ({ page, browserName }) => {
