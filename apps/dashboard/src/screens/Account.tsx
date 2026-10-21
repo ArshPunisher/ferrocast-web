@@ -34,6 +34,7 @@ import { href } from '../lib/router'
 import { openExternal } from '../lib/external'
 import { day } from '../components/pro'
 import { CodeInline } from '../components/account/CodeInline'
+import { YoutubeCloud } from '../components/account/youtube-cloud'
 import {
   AccountAvatar,
   ProChrome,
@@ -187,6 +188,8 @@ function SignedIn({ view }: { view: AccountView }) {
       )}
 
       <Devices />
+
+      <YoutubeCloud />
 
       {!web && (
         <section aria-label="Redeem a code" className="max-w-[520px]">
