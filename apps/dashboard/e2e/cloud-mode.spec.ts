@@ -100,3 +100,32 @@ test.describe('Cloud mode', () => {
     expect(overflow).toBe(false)
   })
 })
+
+test.describe('Cloud sync on the PC', () => {
+  test('off by default and needs the account', async ({ page }) => {
+    await open(page, 'settings/cloud', 'autoplay=0&latency=0')
+    const panel = page.locator('#s-cloud')
+    await expect(panel.getByText('Sign in to your Ferrocast account')).toBeVisible()
+    await expect(panel.getByRole('switch', { name: 'Sync with cloud mode' })).toBeDisabled()
+    await expect(panel.getByRole('switch', { name: 'Use cloud overlays' })).toBeDisabled()
+  })
+
+  test('signed in: sync on, then cloud overlays', async ({ page }) => {
+    await open(page, 'settings/cloud', 'autoplay=0&latency=0&account=signed_in')
+    const panel = page.locator('#s-cloud')
+    const sync = panel.getByRole('switch', { name: 'Sync with cloud mode' })
+    const use = panel.getByRole('switch', { name: 'Use cloud overlays' })
+    await expect(sync).toHaveAttribute('aria-checked', 'false')
+    await expect(use).toBeDisabled()
+    await sync.click()
+    await expect(sync).toHaveAttribute('aria-checked', 'true')
+    await expect(panel.getByText(/Last synced/)).toBeVisible()
+    await use.click()
+    await expect(use).toHaveAttribute('aria-checked', 'true')
+    // Sync off turns cloud overlays off too.
+    await sync.click()
+    await expect(use).toHaveAttribute('aria-checked', 'false')
+    const r = await new AxeBuilder({ page }).include('#s-cloud').analyze()
+    expect(r.violations.map((v) => v.id)).toEqual([])
+  })
+})
