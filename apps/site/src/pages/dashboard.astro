@@ -81,6 +81,14 @@ const steps = [
         2 minutes, so make a new one if it has expired.
       </p>
     </div>
+    <div>
+      <h2 class="display-3">No PC running Ferrocast?</h2>
+      <p>
+        Cloud mode has its own dashboard on the web. Sign in at the
+        <a href="https://remote.clearcraftlabs.com/app/">web dashboard</a> with a free account and
+        your alerts, overlays, chat and bot run on our servers for Twitch and Kick.
+      </p>
+    </div>
   </section>
 </Base>
 
@@ -141,8 +149,11 @@ const steps = [
   }
   @media (min-width: 900px) {
     .more {
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+  }
+  .more a {
+    color: var(--fc-accent-text);
   }
   .more p {
     margin-top: 10px;

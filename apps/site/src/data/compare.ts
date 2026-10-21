@@ -1,7 +1,7 @@
 // Ferrocast vs StreamElements vs Streamlabs, as of October 2026. Facts come from the
 // owner's research notes (research/01-streamlabs.md, 02-streamelements-and-alternatives.md)
 // and the public pages linked in SOURCES. Neutral wording only: what each one does, no
-// verdicts. Ferrocast's column describes version 1, which is still being built.
+// verdicts. Ferrocast's column describes the current release (1.4: accounts, cloud mode, Pro).
 
 /** `unknown`: not in the vendor's public docs, which is not the same as no. */
 export type Mark = 'yes' | 'partial' | 'no' | 'unknown' | 'info'
@@ -28,7 +28,10 @@ export const COMPARE: Group[] = [
     rows: [
       {
         topic: 'Where your alerts and overlays run',
-        ferrocast: c('yes', 'In the app on your computer, served to OBS locally'),
+        ferrocast: c(
+          'yes',
+          'In the app on your computer, served to OBS locally; or free cloud mode on our servers',
+        ),
         streamelements: c('info', 'Cloud: configured on the web, served from StreamElements'),
         streamlabs: c(
           'info',
@@ -39,7 +42,7 @@ export const COMPARE: Group[] = [
         topic: 'If the vendor’s servers go down',
         ferrocast: c(
           'yes',
-          'Twitch and YouTube keep working; Kick events wait in the relay and replay',
+          'The app keeps Twitch and YouTube working; Kick events wait in the relay and replay. Cloud mode needs our servers',
         ),
         streamelements: c('info', 'Widgets depend on StreamElements’ servers'),
         streamlabs: c('info', 'Widgets and Cloudbot depend on Streamlabs’ servers'),
@@ -72,7 +75,7 @@ export const COMPARE: Group[] = [
       },
       {
         topic: 'Paid plan',
-        ferrocast: c('info', 'Pro (planned): ₹199 a month, cloud extras only'),
+        ferrocast: c('info', 'Pro: ₹199 a month, cloud extras only'),
         streamelements: c('info', 'None; future fees not announced'),
         streamlabs: c('info', 'Ultra: US$27 a month or US$189 a year'),
       },
@@ -89,7 +92,7 @@ export const COMPARE: Group[] = [
       },
       {
         topic: 'Desktop systems',
-        ferrocast: c('yes', 'macOS, Windows and Linux'),
+        ferrocast: c('yes', 'macOS, Windows and Linux; web dashboard with a free account'),
         streamelements: c('partial', 'Web dashboard; SE.Live plugin is Windows only'),
         streamlabs: c('partial', 'Web dashboard; Streamlabs Desktop for Windows and macOS'),
       },
@@ -143,7 +146,7 @@ export const COMPARE: Group[] = [
         topic: 'Chatbot',
         ferrocast: c(
           'yes',
-          'Runs on your PC; Pro (planned) adds a 24/7 cloud bot for Twitch and Kick',
+          'Runs on your PC, or in free cloud mode for Twitch and Kick; Pro adds YouTube from the cloud',
         ),
         streamelements: c('yes', 'Cloud bot with many modules'),
         streamlabs: c('yes', 'Cloudbot, runs 24/7'),

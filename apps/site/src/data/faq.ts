@@ -61,7 +61,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'Is my data uploaded anywhere?',
-        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens are stored privately on your computer, never in exports or logs. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept. If you use Pro, the relay also keeps what each Pro feature needs to run, and never your chat. The privacy policy lists every item.',
+        a: 'Your overlays, alerts, commands and history stay on your computer, and sign-in tokens are stored privately on your computer, never in exports or logs. Our relay does three jobs: it receives Kick events, handles Kick sign-in (your Kick tokens pass through it but are not stored) and hosts tip pages. Kick events, including chat, and tip notices wait on the relay only while your app is offline, for up to 7 days, and are then deleted. Apart from short technical logs that never contain chat, nothing else is kept. If you sign in and use cloud mode, the relay keeps your cloud setup (overlays, alert rules, designs, bot settings and the media you upload) so it runs without your PC, and keeps no chat history. If you use Pro, the relay also keeps what each Pro feature needs to run, and no chat history. The privacy policy lists every item.',
       },
       {
         q: 'How do tips work, and will tippers see my legal name?',
@@ -73,7 +73,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Does Ferrocast use AI?',
-        a: 'No. Filters follow the rules you set. The only outside model is in Pro: Ferrocast voices are spoken by Google Cloud Text-to-Speech. Ferrocast never posts in your chat on its own and never talks to your audience.',
+        a: 'The free app doesn’t: filters follow the rules you set. Pro’s smart features (smart moderation, smart replies and recaps) ask a language model on Cloudflare Workers AI, with Google Gemini as a backup, and only suggest: you decide what happens. Ferrocast voices are spoken by Google Cloud Text-to-Speech. Ferrocast never posts in your chat on its own and never talks to your audience.',
       },
     ],
   },
@@ -82,7 +82,7 @@ export const FAQ: FaqGroup[] = [
     items: [
       {
         q: 'What is in Ferrocast Pro?',
-        a: 'Things that run on our servers. YouTube from the cloud: your YouTube chat and bot keep running with your PC off, or with no PC. Smart moderation, a second look at doubtful chat in English, Hindi and Hinglish, where you decide and can undo. Smart replies from facts you approve, and a written recap after each stream. A year of stream insights (free accounts keep 30 days). A 24/7 cloud bot, your dashboard on your phone for you and your mods, Ferrocast voices, a Discord bot, cloud backups, an optional weekly email, and tip branding with a goal.',
+        a: 'Things that run on our servers. YouTube from the cloud: your YouTube chat and bot keep running with your PC off, or with no PC. Smart moderation, a second look at doubtful chat in English, Hindi and Hinglish, where you decide and can undo. Smart replies from facts you approve, and a written recap after each stream. A year of stream insights (free accounts keep 30 days). A 24/7 cloud bot for the setup in your desktop app (cloud mode’s own bot for Twitch and Kick is free), your dashboard on your phone for you and your mods, Ferrocast voices, a Discord bot, cloud backups, an optional weekly email, and tip branding with a goal.',
       },
       {
         q: 'Can I buy Pro now?',

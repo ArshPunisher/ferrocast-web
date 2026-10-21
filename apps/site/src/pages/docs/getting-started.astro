@@ -90,7 +90,7 @@ const stable = await latestStable()
         <span>
           {stable ? (
             <>
-              Ferrocast {stable.version} is out. Get it from the{' '}
+              Ferrocast is out for macOS, Windows and Linux. Get the latest version from the{' '}
               <a href="/download/">download page</a>.
             </>
           ) : (
@@ -105,8 +105,14 @@ const stable = await latestStable()
       <h2 id="install">Install Ferrocast</h2>
       <p>
         Download the installer for your system from the <a href="/download/">download page</a> and
-        open it. On Windows the installer needs no admin rights. On Linux, Flatpak is the easiest
-        option.
+        open it. On Windows the installer needs no admin rights. On Linux, pick the AppImage, the
+        .deb or the .rpm.
+      </p>
+      <p>
+        No computer to run it on? Sign in to the{' '}
+        <a href="https://remote.clearcraftlabs.com/app/">web dashboard</a> with a free account and
+        turn on cloud mode: alerts, overlays, chat and the bot run on our servers for Twitch and
+        Kick.
       </p>
       <p>
         Ferrocast starts a small engine in the background and opens the dashboard. Closing the
@@ -180,11 +186,11 @@ const stable = await latestStable()
 
       <h2 id="panic">Learn the panic mode hotkey</h2>
       <p>
-        If a hate raid starts, press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (<kbd>Cmd</kbd>+
-        <kbd>Shift</kbd>+<kbd>P</kbd> on Mac) or the big button on Home. Ferrocast turns on
-        followers-only and slow mode, holds messages from new accounts and pauses alerts and
-        text-to-speech on every platform. Press it again to go back to normal. You can change what
-        panic mode does in Moderation.
+        If a hate raid starts, press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>(
+        <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Mac) or the big button
+        on Home. Ferrocast turns on followers-only and slow mode, holds messages from new accounts
+        and pauses alerts and text-to-speech on every platform. Press it again to go back to normal.
+        You can change what panic mode does in Moderation.
       </p>
 
       <h2>Next</h2>
