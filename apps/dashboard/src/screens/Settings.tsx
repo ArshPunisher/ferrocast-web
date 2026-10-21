@@ -981,6 +981,7 @@ export function Settings({ section }: { section?: string | undefined }) {
   }, [reload])
   // On a phone through Ferrocast's servers, the sections that need the PC itself are hidden.
   const remote = useLive((s) => s.remote)
+  const current = useLive((s) => s.update?.current)
   const show = (id: string) => !remote || !OWNER_HIDDEN_SETTINGS.includes(id)
   return (
     <div>
@@ -1005,6 +1006,15 @@ export function Settings({ section }: { section?: string | undefined }) {
               {label}
             </a>
           ))}
+          {current && (
+            <a
+              href={href({ name: 'settings', section: 'updates' })}
+              data-testid="app-version"
+              className="mt-3 hidden rounded-control px-3 py-1 text-[12.5px] text-text-3 hover:text-text lg:block"
+            >
+              Version <span className="font-mono tabular-nums">{current}</span>
+            </a>
+          )}
         </nav>
         <div className="flex min-w-0 flex-col gap-5">
           {show('accounts') && <Accounts />}
