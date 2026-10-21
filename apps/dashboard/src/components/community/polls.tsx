@@ -23,6 +23,7 @@ import {
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
+import { isCloud } from '../../lib/boot'
 
 const DURATIONS = [
   { value: '30', label: '30 s' },
@@ -43,6 +44,7 @@ function clock(ms: number): string {
 
 function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: PollSpec | null }) {
   const client = useClient()
+  const cloud = isCloud(useLive((s) => s.conn))
   const [question, setQuestion] = useState(last?.question ?? '')
   const [options, setOptions] = useState<string[]>(last?.options ?? ['', ''])
   const [duration, setDuration] = useState<string>(String(last?.duration_s ?? 60))
@@ -58,7 +60,12 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
         duration_s: Number(duration),
       })
       onStarted(p)
-      toast({ tone: 'ok', message: 'Poll started and posted to chat.' })
+      toast({
+        tone: 'ok',
+        message: cloud
+          ? 'Poll started. The cloud bot posts it in chat while it’s on.'
+          : 'Poll started and posted to chat.',
+      })
     } catch (e) {
       setErr(fieldError(e))
     } finally {

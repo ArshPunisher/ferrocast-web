@@ -25,9 +25,12 @@ import {
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
+import { isCloud } from '../../lib/boot'
 
 function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
   const client = useClient()
+  // Cloud mode has no points (they live in the app's viewer database): entry is free.
+  const cloud = isCloud(useLive((s) => s.conn))
   const [prize, setPrize] = useState('')
   const [keyword, setKeyword] = useState('!join')
   const [cost, setCost] = useState('0')
@@ -47,7 +50,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
       const g = await client.startGiveaway({
         prize,
         keyword,
-        cost: n,
+        cost: cloud ? 0 : n,
         subscriber_bonus: subs,
       })
       onStarted(g)
@@ -78,7 +81,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
           />
         )}
       </Field>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={cloud ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-2 gap-4'}>
         <Field label="Keyword" error={errFor('keyword')}>
           {(p) => (
             <Input
@@ -91,18 +94,20 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
             />
           )}
         </Field>
-        <Field label="Cost in points" hint="0 makes it free." error={errFor('cost')}>
-          {(p) => (
-            <Input
-              {...p}
-              inputMode="numeric"
-              className="font-mono tabular-nums"
-              value={cost}
-              maxLength={13}
-              onChange={(e) => setCost(e.target.value)}
-            />
-          )}
-        </Field>
+        {!cloud && (
+          <Field label="Cost in points" hint="0 makes it free." error={errFor('cost')}>
+            {(p) => (
+              <Input
+                {...p}
+                inputMode="numeric"
+                className="font-mono tabular-nums"
+                value={cost}
+                maxLength={13}
+                onChange={(e) => setCost(e.target.value)}
+              />
+            )}
+          </Field>
+        )}
       </div>
       <Switch
         label="Subscribers get 2 entries"

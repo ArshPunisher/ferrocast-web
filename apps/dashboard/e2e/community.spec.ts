@@ -439,3 +439,24 @@ test.describe('overlay editor: poll and giveaway widgets', () => {
     await expect(page.getByText(/Unsaved layout/)).toBeHidden()
   })
 })
+
+test('goals: nudge one by hand, make one, delete one', async ({ page }) => {
+  await open(page, 'community')
+  const goals = page.locator('#community-goals')
+  const subs = goals.getByTestId('goal-row').filter({ hasText: 'Sub goal: new mic' })
+  await expect(subs).toContainText('38')
+  await subs.getByRole('button', { name: 'Add 1 to Sub goal: new mic' }).click()
+  await expect(subs).toContainText('39')
+  await expect(subs.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '78')
+
+  await goals.getByRole('button', { name: 'New goal' }).click()
+  await goals.getByLabel('Title').fill('100 followers')
+  await goals.getByLabel('Target').fill('100')
+  await goals.getByRole('button', { name: 'Create goal' }).click()
+  const made = goals.getByTestId('goal-row').filter({ hasText: '100 followers' })
+  await expect(made).toBeVisible()
+
+  await made.getByRole('button', { name: 'Delete 100 followers' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete goal' }).click()
+  await expect(made).toHaveCount(0)
+})
