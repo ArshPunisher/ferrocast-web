@@ -14,9 +14,18 @@ test.describe('Cloud mode', () => {
     // The sidebar is the desktop's; a phone gets the same list in its tab bar and More sheet.
     test.skip(test.info().project.name === 'mobile', 'sidebar list checked on desktop')
     const nav = page.getByRole('navigation', { name: 'Main' })
-    for (const name of ['Cloud', 'Chat', 'Alerts', 'Overlays', 'Designs', 'Bot'])
+    for (const name of [
+      'Cloud',
+      'Chat',
+      'Alerts',
+      'Overlays',
+      'Designs',
+      'Bot',
+      'Community',
+      'Tips',
+    ])
       await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
-    for (const name of ['Home', 'Studio', 'Moderation', 'Community', 'Tips', 'Settings'])
+    for (const name of ['Home', 'Studio', 'Moderation', 'Settings'])
       await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0)
     await page.evaluate(() => (location.hash = '#/moderation'))
     await expect(page.getByRole('heading', { name: 'Cloud mode', level: 1 })).toBeVisible()
@@ -45,6 +54,32 @@ test.describe('Cloud mode', () => {
       '19',
     )
     await expect(page.getByText('37.4 MB of 200 MB')).toBeVisible()
+  })
+
+  test('YouTube is Pro: the row explains and links to Pro', async ({ page }) => {
+    await open(page, 'cloud', CLOUD)
+    const yt = page.getByTestId('cloud-channel-youtube')
+    await expect(yt).toContainText('part of Pro')
+    await expect(yt.getByRole('link', { name: 'See Pro' })).toBeVisible()
+    await expect(yt.getByRole('button', { name: 'Connect' })).toHaveCount(0)
+  })
+
+  test('tips: the page and providers, without the PC-only Pro extras', async ({ page }) => {
+    await open(page, 'tips', CLOUD)
+    await expect(page.getByRole('heading', { name: 'Cloud mode', level: 1 })).toHaveCount(0)
+    await expect(page.locator('#tip-brand')).toHaveCount(0)
+    await expect(page.locator('#tip-goal')).toHaveCount(0)
+    await expect(page.locator('#tip-domain')).toHaveCount(0)
+  })
+
+  test('community: polls, giveaways (free to enter) and goals, no points', async ({ page }) => {
+    await open(page, 'community', CLOUD)
+    await expect(page.getByRole('heading', { name: 'Community', level: 1 })).toBeVisible()
+    await expect(page.locator('#community-points')).toHaveCount(0)
+    await expect(page.locator('#community-welcome')).toHaveCount(0)
+    await expect(page.getByLabel('Cost in points')).toHaveCount(0)
+    const goals = page.locator('#community-goals')
+    await expect(goals.getByRole('heading', { name: 'Goals' })).toBeVisible()
   })
 
   test('turns on from off', async ({ page }) => {
