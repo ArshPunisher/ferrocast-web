@@ -21,7 +21,7 @@ import {
 import { useClient } from '../lib/hooks'
 import { useLive } from '../lib/store'
 import { stateCopy } from './StatusStrip'
-import { externalLink } from '../lib/external'
+import { browserDidntOpen, externalLink, openExternal } from '../lib/external'
 
 const BLURB: Record<ChatPlatform, string> = {
   twitch: 'Chat, follows, subs, Bits, raids and channel points.',
@@ -37,9 +37,16 @@ export function useConnect(): {
 } {
   const client = useClient()
   const [busy, setBusy] = useState<ChatPlatform | null>(null)
-  const [flow, setFlow] = useState<{ platform: ChatPlatform; flow: ConnectFlow } | null>(null)
+  const [flow, setFlow] = useState<{
+    platform: ChatPlatform
+    flow: ConnectFlow
+    at: number
+  } | null>(null)
   const connectors = useLive((s) => s.connectors)
+  // The desktop app says so when the browser didn't open; only a notice since this dialog opened counts.
+  const browserFailed = useLive((s) => (flow ? browserDidntOpen(s.notices, flow.at) : false))
   const [copied, flash] = useFlash()
+  const [linkCopied, flashLink] = useFlash()
   const done = flow ? connectors?.[flow.platform].state === 'connected' : false
   useEffect(() => {
     if (flow && done) {
@@ -56,7 +63,9 @@ export function useConnect(): {
     setBusy(p)
     try {
       const f = await client.connect(p)
-      setFlow({ platform: p, flow: f })
+      setFlow({ platform: p, flow: f, at: Date.now() })
+      // Nothing else opens the sign-in page: the engine only hands back its URL.
+      if (f.flow === 'browser') openExternal(f.url)
     } catch (e) {
       const d = describeError(e)
       toast({
@@ -121,15 +130,33 @@ export function useConnect(): {
         </div>
       )}
       {flow.flow.flow === 'browser' && !done && (
-        <p className="pb-1 text-center text-[13.5px] text-text-2">
-          Nothing opened?{' '}
-          <a
-            {...externalLink(flow.flow.url)}
-            className="font-semibold text-accent-text hover:underline"
+        <div className="flex flex-col items-center gap-2 pb-1 text-center">
+          {browserFailed && (
+            <p role="alert" className="text-[13.5px] font-medium text-warn">
+              Your browser didn’t open. Copy the link and paste it into your browser.
+            </p>
+          )}
+          <p className="text-[13.5px] text-text-2">
+            {browserFailed ? 'Or try again: ' : 'Nothing opened? '}
+            <a
+              {...externalLink(flow.flow.url)}
+              className="font-semibold text-accent-text hover:underline"
+            >
+              Open the sign-in page
+            </a>
+          </p>
+          <Button
+            size="sm"
+            variant={browserFailed ? 'secondary' : 'ghost'}
+            icon={linkCopied ? <Check size={15} /> : <CopySimple size={15} />}
+            onClick={() =>
+              flow.flow.flow === 'browser' &&
+              void copyText(flow.flow.url).then((ok) => ok && flashLink())
+            }
           >
-            Open the sign-in page
-          </a>
-        </p>
+            {linkCopied ? 'Link copied' : 'Copy link'}
+          </Button>
+        </div>
       )}
       <div role="status" className="flex items-center justify-center gap-3 py-3">
         {done ? (

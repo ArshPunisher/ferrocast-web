@@ -61,3 +61,14 @@ export function externalLink(href: string) {
     },
   } as const
 }
+
+/** The desktop app's notice when it couldn't hand a page to the browser (the engine's `BROWSER_NOTICE`). */
+export const BROWSER_NOTICE = 'browser'
+
+/** True when the desktop app said the browser didn't open at or after `since` (ms). */
+export function browserDidntOpen(
+  notices: readonly { key?: string; at: number }[],
+  since: number,
+): boolean {
+  return notices.some((n) => n.key === BROWSER_NOTICE && n.at >= since)
+}
