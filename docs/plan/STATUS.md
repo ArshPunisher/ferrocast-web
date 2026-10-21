@@ -1,5 +1,11 @@
 # Status
 
+## 21 Oct 2026 (Pro 1.4: Insights, smart features, YouTube from the cloud)
+- `packages/api`: `insights.ts` (supporters client, per-stream metrics, weekday × four-hour slots in the viewer's clock, the best slot, one currency for tips), `smart.ts` (smart moderation, replies, recap types and client), `history.ts` (`plan`, `keep_days`, `earliest`, `limited`, one stream's samples), `pro.ts` (`features.smart`), `account.ts` (YouTube from the cloud on the web host). Demo: free accounts keep 30 days, 403 `account_required` with neither, believable samples; `features/smart.ts` with seeded suggestions, approval, actions, recap and supporters.
+- Dashboard: History is now **Insights** (free with an account, 30 days; Pro a year): stream by stream bars (viewers, follows, subs, chat, tips) with one stream's viewer curve, best times to stream (heat map), top supporters from the PC's own log, a calm Pro line only when a range goes past 30 days, a Sign in card without an account. Smart moderation panel (Moderation), smart replies (Bot, approve the facts first), written recap (Recap), YouTube from the cloud on the web Account page (connect, bot switch, quota, confirm before disconnect). Plans, Settings › Pro and the unlock list Pro's 1.4 features first. Never "AI" in the copy.
+- Site: pricing lists Pro's 1.4 features and the free 30 days of insights; FAQ, terms and privacy (YouTube from the cloud, smart features and their processor, Limited Use, history retention) updated.
+- Tests: `packages/api/test/insights.test.ts`, `e2e/smart.spec.ts`, more in `e2e/history.spec.ts`; `pro-foundation.spec.ts` now tests the Pro panel on smart moderation. Full dashboard and site e2e pass. Checked in Chromium at 1440 and 375 px, light and dark.
+
 ## 20 Oct 2026 (site SEO pass)
 - Structured data: the home page's SoftwareApplication now lists the free app plus Pro monthly (₹199) and yearly (₹1,999) in INR with the pricing page, `sameAs` the GitHub repo, and always has `downloadUrl`; `softwareVersion` still comes from the newest stable release at build time (1.0.1 until 1.1.0 is published, then the next build picks it up).
 - Sitemap: every URL has `lastmod`, the last commit to the page file or the data it renders (build time when git can't say).
