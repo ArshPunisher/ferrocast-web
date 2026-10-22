@@ -32,8 +32,8 @@ export type Route =
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
 const GALLERY_TABS: GalleryTab[] = ['themes', 'alerts', 'widgets', 'mine']
 
-export type StudioSection = 'show' | 'info' | 'obs' | 'moments'
-const STUDIO_SECTIONS: StudioSection[] = ['show', 'info', 'obs', 'moments']
+export type StudioSection = 'golive' | 'show' | 'info' | 'obs' | 'moments'
+const STUDIO_SECTIONS: StudioSection[] = ['golive', 'show', 'info', 'obs', 'moments']
 
 export function parseRoute(hash: string): Route {
   const [path = '', query = ''] = hash.replace(/^#\/?/, '').split('?')

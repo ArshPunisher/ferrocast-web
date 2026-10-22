@@ -48,6 +48,8 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
   const connectors = useLive((s) => s.connectors)
   const socket = useLive((s) => s.socket)
   const viewers = useLive((s) => s.viewers)
+  // Go live everywhere: a platform whose copy of the stream is reconnecting shows it here too.
+  const golive = useLive((s) => s.studio.golive)
   // Cloud mode has no OBS or relay link (its channels are set up on the Cloud page).
   const cloud = isCloud(useLive((s) => s.conn))
   if (!connectors) return null
@@ -66,9 +68,17 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
           c.state === 'connected' &&
           connectors.relay !== undefined &&
           connectors.relay.state !== 'connected'
+        const dest = golive?.live
+          ? golive.destinations.find((d) => d.kind === name && d.enabled)
+          : undefined
+        const streamIssue = dest?.blocked
+          ? 'stream can’t start'
+          : dest?.health?.state === 'reconnecting'
+            ? 'stream reconnecting'
+            : null
         const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
         const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
-        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}`
+        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
         return (
           <li key={name} className="shrink-0">
             <a
@@ -107,6 +117,12 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
                   title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
                 >
                   delayed
+                </span>
+              )}
+              {streamIssue && (
+                <span className="flex items-center gap-1.5 text-warn" aria-hidden="true">
+                  <span className="size-1.5 rounded-full bg-warn" />
+                  {!compact && streamIssue}
                 </span>
               )}
               {!compact && v !== undefined && (
