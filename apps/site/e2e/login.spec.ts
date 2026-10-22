@@ -90,3 +90,49 @@ test('the sign-in page has no accessibility violations', async ({ page }) => {
   const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
   expect(r.violations).toEqual([])
 })
+
+test('a used link opened again while signed in opens the dashboard', async ({ page }) => {
+  await mock(page, { signedIn: true })
+  await page.route(`${API_ORIGIN}/v1/login/link`, (r) =>
+    r.fulfill({
+      status: 403,
+      json: {
+        error: { code: 'other_browser', message: 'Open it where you asked.', hint: null },
+      },
+    }),
+  )
+  await page.route('**/app/**', (r) => r.fulfill({ body: 'dashboard', contentType: 'text/html' }))
+  await page.goto('/login/link/#t=used-token')
+  await expect(page).toHaveURL(/\/app\/$/)
+})
+
+test('a busy server still says so while signed in', async ({ page }) => {
+  await mock(page, { signedIn: true })
+  await page.route(`${API_ORIGIN}/v1/login/link`, (r) =>
+    r.fulfill({
+      status: 429,
+      json: {
+        error: { code: 'rate_limited', message: 'Too many tries.', hint: 'Wait a minute.' },
+      },
+    }),
+  )
+  await page.goto('/login/link/#t=some-token')
+  await expect(page.getByRole('alert')).toHaveText('Too many tries. Wait a minute.')
+  await expect(page).toHaveURL(/\/login\/link\/$/)
+})
+
+test('a bad link says why and offers to start again', async ({ page }) => {
+  await mock(page)
+  await page.route(`${API_ORIGIN}/v1/login/link`, (r) =>
+    r.fulfill({
+      status: 410,
+      json: {
+        error: { code: 'link_expired', message: 'This link expired.', hint: 'Ask for a new one.' },
+      },
+    }),
+  )
+  await page.goto('/login/link/#t=old-token')
+  await expect(page.getByRole('alert')).toHaveText('This link expired. Ask for a new one.')
+  await expect(page.getByRole('link', { name: 'Start again' })).toBeVisible()
+  await expect(page).toHaveURL(/\/login\/link\/$/)
+})

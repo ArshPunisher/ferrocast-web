@@ -43,6 +43,7 @@ const page: PageMeta = {
   // Keep the token out of the address bar and history once it's been read.
   history.replaceState(null, '', '/login/link/')
   const api = loginApi(root.dataset.api!)
+  const LINK_SPENT = new Set(['link_expired', 'other_browser', 'cookies_needed'])
 
   async function go() {
     if (!t)
@@ -52,8 +53,17 @@ const page: PageMeta = {
         'bad_link',
         400,
       )
-    await api.start(null, null)
-    location.replace(afterSignIn(await api.link(t)))
+    const s = await api.start(null, null)
+    try {
+      location.replace(afterSignIn(await api.link(t)))
+    } catch (e) {
+      // A link opened again after it signed this browser in: just open the dashboard. Signing
+      // in drops the login cookie, so the server says other_browser (or link_expired, or
+      // cookies_needed); any other reason, like a busy server, still shows.
+      if (s.signed_in && e instanceof LoginError && LINK_SPENT.has(e.code))
+        location.replace('/app/')
+      else throw e
+    }
   }
   go().catch((e: unknown) => {
     const err = e instanceof LoginError ? e : null
