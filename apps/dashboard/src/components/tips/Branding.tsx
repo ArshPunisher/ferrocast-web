@@ -4,7 +4,14 @@
 // relay.
 
 import { useId, useRef, useState } from 'react'
-import { ArrowCounterClockwise, Check, Info, UploadSimple, Warning } from '@phosphor-icons/react'
+import {
+  ArrowCounterClockwise,
+  Check,
+  Info,
+  UploadSimple,
+  User,
+  Warning,
+} from '@phosphor-icons/react'
 import {
   DEFAULT_TIP_COLOURS,
   TIP_IMAGE_TYPES,
@@ -185,7 +192,8 @@ export function Branding({
 
       <div className="border-t border-line pt-5">
         <h3 className="text-[15px] font-bold text-text">Pictures</h3>
-        <div className="mt-3 flex flex-col gap-4">
+        <HeaderPreview brand={brand} colours={current} />
+        <div className="grid gap-3 sm:grid-cols-2">
           <ImageSlot kind="avatar" url={brand.avatar_url} onSaved={onSaved} brand={brand} />
           <ImageSlot kind="banner" url={brand.banner_url} onSaved={onSaved} brand={brand} />
         </div>
@@ -246,6 +254,47 @@ function ColourField({
   )
 }
 
+/**
+ * The banner with the avatar over its corner, the way tippers see the top of the page
+ * (design board 2026-10-22-polish, option 2B). Empty pictures show the page colours.
+ */
+function HeaderPreview({ brand, colours }: { brand: TipBrand; colours: TipColours }) {
+  return (
+    <figure className="relative mt-3 mb-10 sm:mb-12" aria-label="How tippers see your pictures">
+      <div
+        className="aspect-[3/1] w-full overflow-hidden rounded-panel border border-line"
+        style={{ background: colours.background }}
+      >
+        {brand.banner_url ? (
+          <img src={brand.banner_url} alt="Your banner" className="size-full object-cover" />
+        ) : (
+          <span
+            className="grid size-full place-items-center text-[13px] font-medium"
+            style={{ color: colours.text, opacity: 0.7 }}
+          >
+            No banner yet
+          </span>
+        )}
+      </div>
+      <div
+        className="absolute bottom-[-30px] left-4 size-[60px] overflow-hidden rounded-full border-[3px] border-surface-1 sm:bottom-[-40px] sm:left-5 sm:size-20"
+        style={{ background: colours.accent }}
+      >
+        {brand.avatar_url ? (
+          <img src={brand.avatar_url} alt="Your avatar" className="size-full object-cover" />
+        ) : (
+          <span className="grid size-full place-items-center" style={{ color: colours.background }}>
+            <User className="size-1/2" weight="bold" aria-hidden="true" />
+          </span>
+        )}
+      </div>
+      <figcaption className="absolute top-2.5 right-2.5 rounded-full bg-[rgb(10_11_13/0.62)] px-2 py-1 font-mono text-[11px] leading-none font-semibold text-[#eef0f4]">
+        How tippers see it
+      </figcaption>
+    </figure>
+  )
+}
+
 function ImageSlot({
   kind,
   url,
@@ -296,25 +345,16 @@ function ImageSlot({
   }
 
   return (
-    <div className="flex min-w-0 items-start gap-4" data-testid={`slot-${kind}`}>
-      <div
-        className={cx(
-          'shrink-0 overflow-hidden border border-line-strong bg-inset',
-          kind === 'avatar'
-            ? 'size-16 rounded-full'
-            : 'aspect-[3/1] h-16 rounded-[10px] max-sm:h-12',
-        )}
-      >
-        {url && (
-          <img src={url} alt={`Your ${label.toLowerCase()}`} className="size-full object-cover" />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
+    <div
+      className="min-w-0 rounded-panel border border-line bg-surface-2 p-3"
+      data-testid={`slot-${kind}`}
+    >
+      <div className="min-w-0">
         <p className="text-[14px] font-semibold text-text">{label}</p>
         <p className="text-[13px] text-text-3">
           {kind === 'avatar' ? 'Square, up to 1 MB.' : '3:1, up to 3 MB.'} PNG, JPEG or WebP.
         </p>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-2">
           <Button
             size="sm"
             icon={<UploadSimple size={15} aria-hidden="true" />}
