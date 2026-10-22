@@ -19,7 +19,8 @@ export function builtHtmlFiles(dir = dist): string[] {
   const out: string[] = []
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...builtHtmlFiles(p))
+    // dist/app is the web dashboard (plan §9), tested by its own suite.
+    if (e.isDirectory() && !(dir === dist && e.name === 'app')) out.push(...builtHtmlFiles(p))
     else if (e.name.endsWith('.html')) out.push(p)
   }
   return out

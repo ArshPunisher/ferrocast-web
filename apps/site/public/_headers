@@ -9,3 +9,10 @@
 # Hashed build output never changes under the same name.
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The web dashboard (plan §9): its data and live connection come from the API host.
+/app/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://api.clearcraftlabs.com; font-src 'self' data:; connect-src 'self' https://api.clearcraftlabs.com wss://api.clearcraftlabs.com; frame-src 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'
+
+/app/assets/*
+  Cache-Control: public, max-age=31536000, immutable
