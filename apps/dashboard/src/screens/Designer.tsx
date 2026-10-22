@@ -172,7 +172,24 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
   // A screenshot of the streamer's own scene to preview over (an object URL, never uploaded).
   const [shot, setShot] = useState<string | null>(null)
   useEffect(() => () => void (shot && URL.revokeObjectURL(shot)), [shot])
-  const [sound, setSound] = useState(false)
+  // On unless the streamer muted it last time (the preview used to start muted every time).
+  const [sound, setSoundState] = useState(() => {
+    try {
+      return localStorage.getItem('fc.previewSound') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const setSound = (f: (v: boolean) => boolean) =>
+    setSoundState((v) => {
+      const next = f(v)
+      try {
+        localStorage.setItem('fc.previewSound', next ? '1' : '0')
+      } catch {
+        // ignore
+      }
+      return next
+    })
   const [tick, setTick] = useState<StageTick | null>(null)
   const media = useResource((c) => c.media())
   const stage = useRef<StageHandle>(null)
