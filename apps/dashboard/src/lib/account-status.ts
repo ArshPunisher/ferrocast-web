@@ -57,6 +57,11 @@ function subscribe(f: () => void) {
 
 let api: AccountApi | null = null
 
+/** The relay's origin for the web dashboard: the config script's `api` without `/r`. */
+function serverOrigin(): string {
+  return (window.__FERROCAST__?.api ?? window.location.origin).replace(/\/r\/?$/, '')
+}
+
 /** The web dashboard (served by the relay): `window.__FERROCAST__.remote` on a real host. */
 export function onWebHost(): boolean {
   return window.__FERROCAST__?.remote === true
@@ -66,7 +71,9 @@ export function onWebHost(): boolean {
 export function accountApi(): AccountApi | null {
   if (api) return api
   const conn = useLive.getState().conn
-  if (onWebHost()) api = webAccountApi(window.location.origin)
+  // The server's address comes from the config script (`<api host>/r`), so the dashboard
+  // can live on the website's address while sign-in and data stay on the API host.
+  if (onWebHost()) api = webAccountApi(serverOrigin(), undefined, window.location.origin)
   // A phone in the demo acts as a paired phone: its account lives on the web host.
   else if (conn && !conn.remote) api = appAccountApi(conn.client)
   return api

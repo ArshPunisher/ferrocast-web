@@ -148,7 +148,7 @@ export async function signOut(everywhere = false): Promise<boolean> {
     await api.signOut(everywhere)
     if (api.where === 'web') {
       // The web dashboard needs an account: back to the sign-in page.
-      window.location.assign(`${window.location.origin}/login?next=${encodeURIComponent('/app/')}`)
+      window.location.assign(`${window.location.origin}/login/?next=${encodeURIComponent('/app/')}`)
       return true
     }
     publishAccount({ state: 'signed_out' })

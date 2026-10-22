@@ -69,7 +69,7 @@ describe('webAccountApi', () => {
     expect(out?.url).toBe('https://remote.example/v1/account/logout')
     expect((out?.init?.headers as Record<string, string>)['X-CSRF-Token']).toBe('tok')
     expect(out?.init?.body).toBe('{"everywhere":true}')
-    expect(out?.init?.credentials).toBe('same-origin')
+    expect(out?.init?.credentials).toBe('include')
   })
 
   it('maps 401, a disabled account and a relay without accounts', async () => {
@@ -87,7 +87,7 @@ describe('webAccountApi', () => {
 
   it('sends people to the relay’s sign-in page, back to /app/', async () => {
     const api = webAccountApi('https://remote.example/', async () => json(200, {}))
-    expect((await api.signIn()).url).toBe('https://remote.example/login?next=%2Fapp%2F')
+    expect((await api.signIn()).url).toBe('https://remote.example/login/?next=%2Fapp%2F')
   })
 })
 

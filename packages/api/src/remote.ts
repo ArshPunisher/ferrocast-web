@@ -150,7 +150,7 @@ export function phoneApi(api: string, f: FetchLike = (i, init) => fetch(i, init)
     pair: (code: string, csrf?: string | null) =>
       relayJson<RemotePaired>(f, `${base}/v1/pair`, {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',

@@ -26,7 +26,7 @@ describe('cloud mode', () => {
     expect(seen[0]?.headers.get('x-csrf-token')).toBeNull()
     expect(seen[1]?.headers.get('x-csrf-token')).toBe('csrf-1')
     expect(seen.every((s) => s.headers.get('authorization') === null)).toBe(true)
-    expect(seen.every((s) => s.credentials === 'same-origin')).toBe(true)
+    expect(seen.every((s) => s.credentials === 'include')).toBe(true)
   })
 
   it('lists only the cloud screens', () => {

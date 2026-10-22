@@ -178,6 +178,8 @@ export interface AccountPc {
 export function webAccountApi(
   origin: string,
   f: FetchLike = (i, init) => fetch(i, init),
+  /** Where the sign-in pages are: the website when the dashboard lives there, else `origin`. */
+  pages: string = origin,
 ): WebAccountApi {
   const base = origin.replace(/\/+$/, '')
   let csrf: string | null = null
@@ -190,7 +192,7 @@ export function webAccountApi(
     }
     let res: Response
     try {
-      const init: RequestInit = { method, headers, credentials: 'same-origin' }
+      const init: RequestInit = { method, headers, credentials: 'include' }
       if (method !== 'GET') init.body = JSON.stringify(body ?? {})
       res = await f(`${base}${path}`, init)
     } catch {
@@ -220,7 +222,9 @@ export function webAccountApi(
         throw e
       }
     },
-    signIn: async () => ({ url: `${base}/login?next=${encodeURIComponent('/app/')}` }),
+    signIn: async () => ({
+      url: `${pages.replace(/\/+$/, '')}/login/?next=${encodeURIComponent('/app/')}`,
+    }),
     cancelSignIn: async () => undefined,
     signOut: (everywhere = false) => call<void>('POST', '/v1/account/logout', { everywhere }),
     sessions: () =>

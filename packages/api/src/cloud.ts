@@ -126,7 +126,7 @@ export function cloudFetch(
     headers.delete('Authorization')
     const token = csrf()
     if (method !== 'GET' && method !== 'HEAD' && token) headers.set('X-CSRF-Token', token)
-    return inner(input, { ...init, headers, credentials: 'same-origin' })
+    return inner(input, { ...init, headers, credentials: 'include' })
   }
 }
 

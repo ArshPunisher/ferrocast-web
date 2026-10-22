@@ -222,7 +222,8 @@ async function remoteConnect(
   const account = web ? await web.status().catch(() => null) : null
   if (account) publishAccount(account)
   if (account?.state === 'signed_out') {
-    window.location.assign(`${webOrigin(api)}/login?next=${encodeURIComponent('/app/')}`)
+    // The sign-in page lives with the dashboard (the website, or this relay's own pages).
+    window.location.assign(`${window.location.origin}/login/?next=${encodeURIComponent('/app/')}`)
     return { remoteProblem: 'signing_in', api }
   }
   if (account?.state === 'disabled') return { remoteProblem: 'account_disabled', api }
