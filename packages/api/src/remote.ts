@@ -143,8 +143,11 @@ async function relayJson<T>(f: FetchLike, url: string, init: RequestInit): Promi
 }
 
 /** `api` is the injected base (`<origin>/r`). */
-export function phoneApi(api: string, f: FetchLike = (i, init) => fetch(i, init)) {
+export function phoneApi(api: string, raw: FetchLike = (i, init) => fetch(i, init)) {
   const base = api.replace(/\/+$/, '')
+  // The relay also wants the account's cookie with the device token, and the dashboard may
+  // live on the website (another address on the same site), so every call sends it.
+  const f: FetchLike = (i, init) => raw(i, { ...init, credentials: 'include' })
   return {
     /** `csrf`: the signed-in account's token (ACCOUNTS.md §1), needed once accounts are on. */
     pair: (code: string, csrf?: string | null) =>

@@ -196,6 +196,8 @@ export function remoteClient(api: string, token: string, role: 'owner' | 'mod'):
   return new FerroClient({
     base: api,
     token,
+    // The relay checks the account's cookie too; the dashboard may be on the website.
+    fetch: (i, init) => fetch(i, { ...init, credentials: 'include' }),
     allow: (method, path) => remoteAllowed(role, method, path),
     guard: phoneGuard,
     ticket: (kind) => phone.ticket(token, kind),
