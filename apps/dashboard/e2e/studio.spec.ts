@@ -121,7 +121,9 @@ test.describe('studio', () => {
     await open(page, 'studio/info')
     await page.getByLabel('Description').fill('Ranked all night')
     await page.getByRole('button', { name: 'Update everywhere' }).click()
-    await expect(page.getByText('Skipped description: Twitch has no stream description')).toBeVisible()
+    await expect(
+      page.getByText('Skipped description: Twitch has no stream description'),
+    ).toBeVisible()
     await expect(page.getByText(/YouTube updated .*description/)).toBeVisible()
     // A GIF isn't a YouTube thumbnail.
     await page.locator('input[type=file][accept*="image/png"]').setInputFiles({
