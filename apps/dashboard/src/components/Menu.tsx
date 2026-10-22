@@ -21,6 +21,8 @@ export interface MenuItem {
  * closes and returns focus, clicking outside closes. It renders in a portal with fixed
  * coordinates, so a card with `overflow: hidden` can't cut it off, and opens upward when
  * there's no room below. Scrolling or resizing closes it rather than leaving it behind.
+ * Inside a dialog it stays in the dialog (a native dialog sits above, and makes inert,
+ * everything outside it), placed under its trigger.
  */
 export function Menu({
   trigger,
@@ -45,6 +47,8 @@ export function Menu({
   const wrap = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const reduce = useReducedMotion()
+  // Set when it opens: inside a <dialog>, the list renders in place instead of in a portal.
+  const [inDialog, setInDialog] = useState(false)
   // Where the open list sits on screen (fixed), and whether it opened upward.
   const [pos, setPos] = useState<{
     top: number
@@ -54,7 +58,7 @@ export function Menu({
   } | null>(null)
 
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || inDialog) {
       setPos(null)
       return
     }
@@ -76,10 +80,10 @@ export function Menu({
     const maxHeight = Math.max(120, up ? above : below)
     const height = Math.min(el.scrollHeight, maxHeight)
     setPos({ top: up ? Math.max(gap, b.top - 6 - height) : b.bottom + 6, left, up, maxHeight })
-  }, [open, align])
+  }, [open, align, inDialog])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || inDialog) return
     // Closing for a scroll or resize gives focus back to the trigger if it was in the list.
     const shut = () => {
       if (list.current?.contains(document.activeElement)) close()
@@ -95,7 +99,7 @@ export function Menu({
       window.removeEventListener('resize', shut)
       window.removeEventListener('scroll', onScroll, true)
     }
-  }, [open])
+  }, [open, inDialog])
 
   useEffect(() => {
     if (!open) return
@@ -145,83 +149,99 @@ export function Menu({
       onKeyDown={open ? onKey : undefined}
     >
       {trigger({
-        onClick: () => setOpen((o) => !o),
+        onClick: () => {
+          setInDialog(Boolean(wrap.current?.closest('dialog')))
+          setOpen((o) => !o)
+        },
         'aria-expanded': open,
         'aria-haspopup': 'menu',
         'aria-controls': id,
       })}
-      {createPortal(
-        <AnimatePresence>
-          {open && (
-            <motion.ul
-              ref={list}
-              id={id}
-              role="menu"
-              aria-label={label}
-              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={
-                reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, transition: { duration: 0.1 } }
-              }
-              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-              style={{
-                transformOrigin: `${pos?.up ? 'bottom' : 'top'} ${align === 'end' ? 'right' : 'left'}`,
-                top: pos?.top ?? 0,
-                left: pos?.left ?? 0,
-                maxHeight: pos?.maxHeight,
-                visibility: pos ? undefined : 'hidden',
-              }}
-              className={cx(
-                'fixed z-[70] overflow-y-auto overscroll-contain rounded-[12px] border border-line-strong bg-surface-1 p-1 shadow-pop',
-                items.some((it) => it.description) ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-52',
-              )}
-            >
-              {items.map((it) => (
-                <li key={it.key} role="none">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={it.disabled}
-                    onClick={() => {
-                      setOpen(false)
-                      // Give focus back to the trigger first, so a dialog the item opens
-                      // returns focus there when it closes.
-                      wrap.current?.querySelector<HTMLElement>('[aria-haspopup="menu"]')?.focus()
-                      it.onSelect()
-                    }}
-                    className={cx(
-                      'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] font-semibold',
-                      it.description ? 'items-start py-2.5' : 'items-center py-2',
-                      'focus-visible:bg-surface-3 focus-visible:outline-none disabled:opacity-40',
-                      it.danger
-                        ? 'text-danger hover:bg-danger-soft focus-visible:bg-danger-soft'
-                        : 'text-text hover:bg-surface-3',
-                    )}
-                  >
-                    {it.icon && (
-                      <span
-                        className={cx('shrink-0 text-text-3', it.description ? 'mt-0.5' : null)}
-                      >
-                        {it.icon}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block">{it.label}</span>
-                      {it.description && (
-                        <span className="mt-0.5 block text-[12.5px] font-normal leading-snug text-text-3">
-                          {it.description}
+      {(() => {
+        const menu = (
+          <AnimatePresence>
+            {open && (
+              <motion.ul
+                ref={list}
+                id={id}
+                role="menu"
+                aria-label={label}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={
+                  reduce
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.97, transition: { duration: 0.1 } }
+                }
+                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                style={
+                  inDialog
+                    ? { transformOrigin: align === 'end' ? 'top right' : 'top left' }
+                    : {
+                        transformOrigin: `${pos?.up ? 'bottom' : 'top'} ${align === 'end' ? 'right' : 'left'}`,
+                        top: pos?.top ?? 0,
+                        left: pos?.left ?? 0,
+                        maxHeight: pos?.maxHeight,
+                        visibility: pos ? undefined : 'hidden',
+                      }
+                }
+                className={cx(
+                  'overflow-y-auto overscroll-contain rounded-[12px] border border-line-strong bg-surface-1 p-1 shadow-pop',
+                  inDialog
+                    ? cx('absolute top-full z-40 mt-1.5', align === 'end' ? 'right-0' : 'left-0')
+                    : 'fixed z-[70]',
+                  items.some((it) => it.description) ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-52',
+                )}
+              >
+                {items.map((it) => (
+                  <li key={it.key} role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={it.disabled}
+                      onClick={() => {
+                        setOpen(false)
+                        // Give focus back to the trigger first, so a dialog the item opens
+                        // returns focus there when it closes.
+                        wrap.current?.querySelector<HTMLElement>('[aria-haspopup="menu"]')?.focus()
+                        it.onSelect()
+                      }}
+                      className={cx(
+                        'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] font-semibold',
+                        it.description ? 'items-start py-2.5' : 'items-center py-2',
+                        'focus-visible:bg-surface-3 focus-visible:outline-none disabled:opacity-40',
+                        it.danger
+                          ? 'text-danger hover:bg-danger-soft focus-visible:bg-danger-soft'
+                          : 'text-text hover:bg-surface-3',
+                      )}
+                    >
+                      {it.icon && (
+                        <span
+                          className={cx('shrink-0 text-text-3', it.description ? 'mt-0.5' : null)}
+                        >
+                          {it.icon}
                         </span>
                       )}
-                    </span>
-                    {it.hint && <span className="shrink-0 text-[12px] text-text-3">{it.hint}</span>}
-                  </button>
-                </li>
-              ))}
-            </motion.ul>
-          )}
-        </AnimatePresence>,
-        document.body,
-      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block">{it.label}</span>
+                        {it.description && (
+                          <span className="mt-0.5 block text-[12.5px] font-normal leading-snug text-text-3">
+                            {it.description}
+                          </span>
+                        )}
+                      </span>
+                      {it.hint && (
+                        <span className="shrink-0 text-[12px] text-text-3">{it.hint}</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        )
+        return inDialog ? menu : createPortal(menu, document.body)
+      })()}
     </div>
   )
 }
