@@ -2,7 +2,7 @@
 // Start dialog Home opens (two clicks to go live), and the checklist settings.
 
 import { useEffect, useState } from 'react'
-import { ArrowsClockwise, Play, Stop, Timer as TimerIcon } from '@phosphor-icons/react'
+import { ArrowsClockwise, Broadcast, Play, Stop, Timer as TimerIcon } from '@phosphor-icons/react'
 import {
   describeError,
   fieldError,
@@ -28,6 +28,88 @@ import { LoadError, Panel } from '../Panel'
 import { useAction, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { StatusIcon, clock, useStudio } from './common'
+import { useObsHealth } from './obs'
+
+const STOP_DELAYS = [0, 10, 30, 60, 120, 300]
+
+/**
+ * OBS's Start / Stop Streaming from here. The watcher's 5-second reading keeps it current;
+ * stopping asks first, because it ends the stream for everyone watching.
+ */
+export function StreamControl() {
+  const studio = useStudio()
+  const health = useObsHealth()
+  const first = useResource(() => studio.obsStream(), [studio])
+  const [mine, setMine] = useState<{ streaming: boolean; at: number } | null>(null)
+  const [confirm, setConfirm] = useState(false)
+  const { run, busy } = useAction()
+  // The newest of: what the last button press said, and the watcher's reading.
+  const streaming =
+    mine && (!health || mine.at >= health.at)
+      ? mine.streaming
+      : (health?.streaming ?? first.data?.streaming)
+  const press = (on: boolean) =>
+    void run('stream', () => studio.setObsStream(on), {
+      success: (r) => (r.streaming ? 'OBS is streaming. You’re live.' : 'OBS stopped streaming.'),
+    }).then((r) => {
+      if (r) setMine({ streaming: r.streaming, at: Date.now() })
+      setConfirm(false)
+    })
+  if (first.error && !health)
+    return (
+      <p className="flex items-center gap-2 text-[13.5px] text-text-2">
+        <Broadcast size={16} className="shrink-0 text-text-3" aria-hidden="true" />
+        Open OBS to start or stop streaming from here.
+      </p>
+    )
+  if (streaming === undefined) return <Skeleton className="h-10" />
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
+      <span className="flex min-w-0 flex-1 items-center gap-2.5 text-sm font-medium text-text">
+        <span
+          aria-hidden="true"
+          className={`size-2.5 shrink-0 rounded-full ${streaming ? 'bg-danger motion-safe:animate-pulse' : 'bg-text-3'}`}
+        />
+        <span role="status">{streaming ? 'OBS is streaming' : 'OBS isn’t streaming'}</span>
+      </span>
+      {streaming ? (
+        <Button
+          size="sm"
+          variant="danger-ghost"
+          icon={<Stop size={14} weight="fill" />}
+          onClick={() => setConfirm(true)}
+        >
+          Stop streaming
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          icon={<Broadcast size={15} />}
+          busy={busy === 'stream'}
+          onClick={() => press(true)}
+        >
+          Start streaming
+        </Button>
+      )}
+      <Dialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        title="Stop streaming?"
+        description="OBS stops sending video, so the stream ends for everyone watching."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirm(false)}>
+              Keep streaming
+            </Button>
+            <Button variant="danger" busy={busy === 'stream'} onClick={() => press(false)}>
+              Stop streaming
+            </Button>
+          </>
+        }
+      />
+    </div>
+  )
+}
 
 const PHASE: Record<
   ShowRun['phase'],
@@ -212,6 +294,7 @@ export function ShowPanel() {
         <Skeleton className="h-28" />
       ) : (
         <div className="flex flex-col gap-4">
+          <StreamControl />
           {show?.phase === 'countdown' && left !== null && (
             <p
               className="flex items-center gap-2 font-mono text-3xl font-semibold tabular-nums text-text"
@@ -499,6 +582,46 @@ export function ShowSettings({
             checked={c.replay_buffer}
             onChange={(v) => set({ replay_buffer: v })}
           />
+          <Switch
+            label="Start streaming in OBS"
+            description="Presses Start Streaming after the starting scene, so viewers see it during the countdown."
+            checked={c.start_stream}
+            onChange={(v) => set({ start_stream: v })}
+          />
+          <Switch
+            label="End show: stop streaming in OBS"
+            description="After the ending scene and the thank-you, so viewers see them first."
+            checked={c.stop_stream}
+            onChange={(v) => set({ stop_stream: v })}
+          />
+          {c.stop_stream && (
+            <Field
+              label="Stop after"
+              className="sm:max-w-[16rem]"
+              error={err?.field === 'stop_delay_s' ? err.message : null}
+            >
+              {(p) => (
+                <Select
+                  {...p}
+                  value={c.stop_delay_s}
+                  onChange={(e) => set({ stop_delay_s: Number(e.target.value) })}
+                >
+                  {(STOP_DELAYS.includes(c.stop_delay_s)
+                    ? STOP_DELAYS
+                    : [...STOP_DELAYS, c.stop_delay_s].sort((a, b) => a - b)
+                  ).map((s) => (
+                    <option key={s} value={s}>
+                      {s === 0
+                        ? 'Right away'
+                        : s < 60
+                          ? `${s} seconds`
+                          : `${s / 60} minute${s === 60 ? '' : 's'}`}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          )}
         </div>
         {audio.length > 0 && (
           <fieldset>
