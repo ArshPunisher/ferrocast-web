@@ -53,7 +53,10 @@ const DEFAULT_SHOW: ShowConfig = {
   discord: true,
   bot_on: true,
   replay_buffer: true,
+  start_stream: false,
   ending_scene: 'Ending',
+  stop_stream: false,
+  stop_delay_s: 30,
   recap_message: 'Thanks for hanging out! Big love to {thanks}. See you next stream.',
   mic_sources: ['Mic'],
   cam_sources: ['Webcam'],
@@ -106,6 +109,8 @@ interface DemoObs {
   muted: Record<string, boolean>
   replay: boolean
   saves: number
+  /** OBS's Start / Stop Streaming. */
+  streaming: boolean
 }
 
 const BUILT_IN = new Set([
@@ -184,6 +189,7 @@ export class DemoStudio {
     muted: { Mic: false, 'Desktop Audio': false },
     replay: false,
     saves: 0,
+    streaming: true,
   }
   health: ObsHealth | null = null
   private brbFrom: string | null = null
@@ -362,7 +368,7 @@ export class DemoStudio {
       })
     return {
       at: Date.now(),
-      streaming: this.host.isLive(),
+      streaming: this.obs.streaming && this.host.isLive(),
       cpu: Math.round((14 + r * 9) * 10) / 10,
       memory_mb: 612,
       disk_gb: 182.4,
@@ -398,7 +404,14 @@ export class DemoStudio {
           : old
             ? `Reconnect ${label(p)} in Settings, Accounts so Ferrocast can change your stream info.`
             : null,
-        supports: { title: true, category: true, tags: true, language: p !== 'kick' },
+        supports: {
+          title: true,
+          category: true,
+          tags: true,
+          language: p !== 'kick',
+          description: p === 'youtube',
+          thumbnail: p === 'youtube',
+        },
       }
     })
   }
@@ -408,6 +421,10 @@ export class DemoStudio {
     if (info.language && p === 'kick') skipped.push('language: Kick has no stream language setting')
     if (info.category && p === 'youtube')
       skipped.push('category: YouTube only takes a video category (a game becomes Gaming)')
+    if (info.description !== undefined && p !== 'youtube')
+      skipped.push(`description: ${label(p)} has no stream description`)
+    if (info.thumbnail !== undefined && p !== 'youtube')
+      skipped.push(`thumbnail: ${label(p)} makes its own from your stream`)
     const connected = this.host.connectedChat().includes(p)
     if (!connected)
       return {
@@ -433,8 +450,13 @@ export class DemoStudio {
           hint: 'Reconnect it in Settings, Accounts, then try again.',
         },
       }
-    const applied = (['title', 'category', 'tags', 'language'] as const).filter(
-      (f) => info[f] !== undefined && !(f === 'language' && p === 'kick'),
+    const applied = (
+      ['title', 'category', 'tags', 'language', 'description', 'thumbnail'] as const
+    ).filter(
+      (f) =>
+        info[f] !== undefined &&
+        !(f === 'language' && p === 'kick') &&
+        !((f === 'description' || f === 'thumbnail') && p !== 'youtube'),
     )
     return { platform: p, ok: true, applied: [...applied], skipped, error: null }
   }
@@ -647,6 +669,15 @@ export class DemoStudio {
         label: 'Starting scene',
         status: 'done',
         detail: `OBS is on "${c.starting_scene}".`,
+      })
+    }
+    if (c.start_stream) {
+      this.obs.streaming = true
+      steps.push({
+        id: 'stream',
+        label: 'Go live in OBS',
+        status: 'done',
+        detail: 'OBS is streaming.',
       })
     }
     if (c.alerts_on) steps.push({ id: 'alerts', label: 'Alerts', status: 'done', detail: 'On.' })
@@ -1208,6 +1239,8 @@ export class DemoStudio {
           'invalid',
           'live_scene: pick the scene to switch to when the countdown ends.',
         )
+      if (!Number.isInteger(next.stop_delay_s) || next.stop_delay_s < 0 || next.stop_delay_s > 600)
+        throw new HttpError(400, 'invalid', 'stop_delay_s: 0 to 600 seconds.')
       if (next.preset_id && !this.presets.some((p) => p.id === next.preset_id))
         throw new HttpError(400, 'invalid', 'preset_id: that preset doesn’t exist any more.')
       this.showCfg = next
@@ -1279,6 +1312,39 @@ export class DemoStudio {
         steps.push({ id: 'recap', label: 'Thank-you message', status: 'done', detail: text })
       }
       this.addMarker('manual', 'Show ended', null)
+      const showId = this.run?.id
+      if (this.showCfg.stop_stream) {
+        const delay = this.showCfg.stop_delay_s
+        if (delay === 0) {
+          this.obs.streaming = false
+          steps.push({
+            id: 'stop_stream',
+            label: 'Stop streaming',
+            status: 'done',
+            detail: 'OBS stopped streaming.',
+          })
+        } else {
+          steps.push({
+            id: 'stop_stream',
+            label: 'Stop streaming',
+            status: 'waiting',
+            detail: `OBS stops streaming in ${delay} seconds.`,
+          })
+          this.host.later(() => {
+            const r = this.run
+            if (!r || r.id !== showId || r.phase !== 'ended') return
+            this.obs.streaming = false
+            this.setRun({
+              ...r,
+              steps: r.steps.map((x) =>
+                x.id === 'stop_stream'
+                  ? { ...x, status: 'done' as const, detail: 'OBS stopped streaming.' }
+                  : x,
+              ),
+            })
+          }, delay * 1000)
+        }
+      }
       const run: ShowRun = {
         ...(this.run ?? {
           id: `show-${Date.now()}`,
@@ -1350,6 +1416,13 @@ export class DemoStudio {
         path: `C:/Users/nova/Videos/Replay ${this.obs.saves}.mkv`,
         marker,
       } satisfies ClipResult
+    }
+    if (is('GET', 'obs', 'stream')) return { streaming: this.obs.streaming }
+    if (is('POST', 'obs', 'stream')) {
+      const on = requireObj(body).on
+      if (typeof on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+      this.obs.streaming = on
+      return { streaming: on }
     }
     if (is('POST', 'obs', 'brb')) {
       const on = Boolean(requireObj(body).on)

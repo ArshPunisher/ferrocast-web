@@ -121,6 +121,10 @@ export interface StreamInfo {
   tags?: string[]
   /** ISO 639-1 like `en`. */
   language?: string
+  /** YouTube only. `""` clears it. */
+  description?: string
+  /** A media library id (JPEG or PNG, up to 2 MB). YouTube only. */
+  thumbnail?: string
 }
 
 export type StreamInfoErrorCode =
@@ -165,7 +169,14 @@ export interface PlatformAccess {
   connected: boolean
   can_edit: boolean
   needs: string | null
-  supports: { title: boolean; category: boolean; tags: boolean; language: boolean }
+  supports: {
+    title: boolean
+    category: boolean
+    tags: boolean
+    language: boolean
+    description: boolean
+    thumbnail: boolean
+  }
 }
 
 export interface StreamInfoView {
@@ -183,6 +194,7 @@ export interface CategoryHit {
 
 export const MAX_STREAM_TITLE = 140
 export const MAX_STREAM_TAGS = 10
+export const MAX_STREAM_DESCRIPTION = 5000
 
 /** Same rules as the engine (`core::stream_info`), so the form can say so before sending. */
 export function checkStreamInfo(info: StreamInfo): string | null {
@@ -202,13 +214,21 @@ export function checkStreamInfo(info: StreamInfo): string | null {
   }
   if (info.language !== undefined && !/^[a-z]{2}$/.test(info.language))
     return 'language: a two-letter code like en, hi or es.'
+  if (info.description !== undefined) {
+    if ([...info.description.trim()].length > MAX_STREAM_DESCRIPTION)
+      return `description: ${MAX_STREAM_DESCRIPTION} characters at most (YouTube’s limit).`
+    if (/[<>]/.test(info.description))
+      return 'description: YouTube doesn’t allow < or > in a description.'
+  }
   if (
     info.title === undefined &&
     info.category === undefined &&
     info.tags === undefined &&
-    info.language === undefined
+    info.language === undefined &&
+    info.description === undefined &&
+    info.thumbnail === undefined
   )
-    return 'Fill in at least one of title, category, tags or language.'
+    return 'Fill in at least one of title, category, tags, language, description or thumbnail.'
   return null
 }
 
@@ -223,7 +243,13 @@ export interface ShowConfig {
   discord: boolean
   bot_on: boolean
   replay_buffer: boolean
+  /** Press OBS's Start Streaming as the show starts. */
+  start_stream: boolean
   ending_scene: string | null
+  /** Press OBS's Stop Streaming `stop_delay_s` after the ending scene. */
+  stop_stream: boolean
+  /** 0–600. */
+  stop_delay_s: number
   recap_message: string | null
   mic_sources: string[]
   cam_sources: string[]
@@ -458,6 +484,8 @@ export function studioApi(c: FerroClient) {
     setMuted: (input: string, muted: boolean) => post<void>('/obs/input/mute', { input, muted }),
     clip: (label?: string) => post<ClipResult>('/obs/replay/save', label ? { label } : {}),
     brb: (on: boolean) => post<{ on: boolean; scene: string }>('/obs/brb', { on }),
+    obsStream: () => get<{ streaming: boolean }>('/obs/stream'),
+    setObsStream: (on: boolean) => post<{ streaming: boolean }>('/obs/stream', { on }),
     health: () => get<{ health: ObsHealth | null }>('/obs/health'),
     checkHealth: () => post<{ health: ObsHealth }>('/obs/health'),
     switcher: () => get<ScenesConfig>('/obs/switcher'),
