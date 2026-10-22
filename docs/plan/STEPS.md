@@ -48,7 +48,25 @@ Order: repo and tooling → brand and design system → overlays → dashboard (
 - [x] web-design-guidelines review, break-ui pass, screenshots
 - [x] CodeRabbit (or manual) review of every batch
 
-## 9. Later (not started)
+## 9. After 1.4.2 (owner asked, 22 Oct 2026)
+One Cloudflare Pages project and one address for the website and the web dashboard
+(site at `/`, dashboard at `/app`), from this same repo. `remote.clearcraftlabs.com` is then
+**deleted, not forwarded**: one link only.
+- [ ] Design board first, owner approves before building
+- [ ] The browser talks to the relay's API address directly (no Cloudflare Worker in between: its free plan stops at ~100k requests a day). Same site (`*.clearcraftlabs.com`), so the session cookie still works with CORS on the relay
+- [ ] Move every service that uses `remote.clearcraftlabs.com` (checked 22 Oct):
+  - [ ] Relay config `RELAY_REMOTE_URL` (deploy-relay.sh, relay.env.example, deploy/README): it sets the web origin for accounts, phones and Origin checks
+  - [ ] Sign-in pages `/login`, `/login/link` (the email sign-in link), `/login/google/callback`: new address in the relay and in **Google Cloud's OAuth redirect URIs** (owner click)
+  - [ ] Emails: the sign-in link and the weekly report's Open History use the web origin; send a test of each after the move
+  - [ ] Phone pairing links and QR codes (`/app/#pair=…`, packages/api remote.ts, demo)
+  - [ ] Phone API `/r/…`
+  - [ ] Cloudflare Tunnel public hostname and its DNS record: delete only after everything above is live (owner click)
+  - [ ] Website links: `dashboard.astro`, `docs/getting-started.astro`
+  - [ ] Docs: ACCOUNTS.md, API.md, GOOGLE-VERIFICATION.md, plan/PRO.md, STATUS.md
+  - [ ] Google verification: the submitted demo shows `remote.clearcraftlabs.com/app`; don't break it while the review is open, and tell Google the new address if asked
+- [ ] Before the switch, the small step: an "Open dashboard" button in the site header
+
+## 10. Later (not started)
 - [ ] In-app unsaved-changes guard for the alert and layout editors (today: a browser `beforeunload` warning only)
 - [ ] Goals screen of its own (today: created from the goal widget in the layout editor)
 - [ ] Release or drop held messages once the engine has R16

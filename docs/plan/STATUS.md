@@ -1,5 +1,12 @@
 # Status
 
+## 22 Oct 2026 (1.4.2)
+- Sidebar foot signed out: Light / Dark / Auto, then Open in browser, then Sign in (polish board 1B); Open in browser ignores repeat clicks.
+- Tip pictures as the tippers' header (2B). Menus float above cards in a portal and flip up; inside a dialog they stay in place. Designer preview sound on by default.
+- Studio: Stream in OBS (Start / Stop streaming, Stop asks first) on the Show panel; checklist switches to start and stop OBS streaming with a delay; YouTube description and thumbnail on the stream-info form.
+- Tests: full dashboard e2e green on a fresh build (956), new Studio e2e. CodeRabbit: menu focus and height, blank description; fixed.
+- Plan: §9 one Cloudflare Pages project for site + dashboard, `remote.clearcraftlabs.com` deleted (services listed). Streaming roadmap in ferrocast `docs/plan/LIVE-STUDIO.md`.
+
 ## 21 Oct 2026 (cloud mode, 1.4)
 - Cloud mode on the web dashboard (ferrocast docs/CLOUD.md M4): an account with no PC, or one that picks it, runs the dashboard against `<web host>/c` with the account's cookie and CSRF token (`packages/api/src/cloud.ts`, `cloudFetch`). Only the cloud's screens are listed (Cloud, Chat, Alerts, Overlays, Designs, Bot); others open the new Cloud page: turn it on, connect Twitch and Kick through the browser, disconnect, free limits, a sleeping account, what stays in the app, "Use my PC instead". Chat is read-only, Add to OBS opens the paste-the-URL guide, design files and the PC's bot panels are hidden, the bot has one cloud switch. The no-PC, which-PC and PC-off gates offer "Use cloud mode". The status strip copes with no OBS or relay connector.
 - Settings › Cloud mode on the PC (M6): "Sync with cloud mode" and "Use cloud overlays", both off by default, last sync, Sync now, errors and what the web replaced.
