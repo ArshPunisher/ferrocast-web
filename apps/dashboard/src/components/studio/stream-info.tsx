@@ -1,24 +1,43 @@
 // One stream-info form for Twitch, YouTube and Kick, with presets and history. Each
 // platform answers for itself; a platform that needs reconnecting says so with a link.
 
-import { useEffect, useId, useState } from 'react'
-import { FloppyDisk, PaperPlaneTilt, Trash } from '@phosphor-icons/react'
+import { useEffect, useId, useRef, useState } from 'react'
+import {
+  FloppyDisk,
+  ImageSquare,
+  PaperPlaneTilt,
+  Trash,
+  UploadSimple,
+  X,
+} from '@phosphor-icons/react'
 import {
   ApiError,
   checkStreamInfo,
   describeError,
   relativeTime,
+  MAX_STREAM_DESCRIPTION,
   type CategoryHit,
   type CategoryIds,
   type ChatPlatform,
+  type Media,
   type PlatformResult,
   type StreamInfo,
   type StreamInfoView,
   type StreamPreset,
 } from '@ferrocast/api'
-import { Badge, Button, Field, IconButton, Input, Select, Skeleton, toast } from '@ferrocast/ui'
+import {
+  Badge,
+  Button,
+  Field,
+  IconButton,
+  Input,
+  Select,
+  Skeleton,
+  Textarea,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
-import { useAction, useNow, type Resource } from '../../lib/hooks'
+import { useAction, useClient, useNow, useResource, type Resource } from '../../lib/hooks'
 import { PLATFORM_LABEL, StatusIcon, useStudio } from './common'
 
 const LANGUAGES: [string, string][] = [
@@ -43,9 +62,26 @@ interface Form {
   categoryIds: CategoryIds
   tags: string
   language: string
+  /** YouTube only. `null` leaves it as it is. */
+  description: string | null
+  /** A media library id; YouTube only. */
+  thumbnail: string | null
 }
 
-const EMPTY: Form = { title: '', category: '', categoryIds: {}, tags: '', language: '' }
+const EMPTY: Form = {
+  title: '',
+  category: '',
+  categoryIds: {},
+  tags: '',
+  language: '',
+  description: null,
+  thumbnail: null,
+}
+
+/** YouTube's own thumbnail limits. */
+const THUMB_TYPES = ['image/png', 'image/jpeg']
+const THUMB_MAX = 2 * 1024 * 1024
+const isThumbName = (n: string) => /\.(png|jpe?g)$/i.test(n)
 
 function toForm(i: StreamInfo): Form {
   return {
@@ -54,6 +90,8 @@ function toForm(i: StreamInfo): Form {
     categoryIds: i.category?.ids ?? {},
     tags: (i.tags ?? []).join(', '),
     language: i.language ?? '',
+    description: i.description ?? null,
+    thumbnail: i.thumbnail ?? null,
   }
 }
 
@@ -67,7 +105,117 @@ function toInfo(f: Form): StreamInfo {
       .map((t) => t.trim().replace(/^#/, ''))
       .filter(Boolean)
   if (f.language) info.language = f.language
+  // Blank (or only spaces) keeps YouTube's description, as the hint says.
+  if (f.description?.trim()) info.description = f.description.trim()
+  if (f.thumbnail) info.thumbnail = f.thumbnail
   return info
+}
+
+/**
+ * The YouTube thumbnail: a JPEG or PNG from the media library (or a new upload), with a
+ * 16:9 preview. Twitch and Kick make their own from the stream.
+ */
+function ThumbnailPicker({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (id: string | null) => void
+}) {
+  const client = useClient()
+  const media = useResource((c) => c.media())
+  const file = useRef<HTMLInputElement>(null)
+  const { run, busy } = useAction()
+  const list = (media.data ?? []).filter((m) => m.kind === 'image' && isThumbName(m.name))
+  const picked = list.find((m) => m.id === value)
+  const upload = (f: File) => {
+    if (!THUMB_TYPES.includes(f.type) && !isThumbName(f.name)) {
+      toast({
+        tone: 'error',
+        message: 'YouTube thumbnails must be a JPEG or PNG picture.',
+        hint: 'Save it as .jpg or .png, then try again.',
+      })
+      return
+    }
+    if (f.size > THUMB_MAX) {
+      toast({
+        tone: 'error',
+        message: `That picture is ${(f.size / 1024 / 1024).toFixed(1)} MB. YouTube takes up to 2 MB.`,
+        hint: 'Save it smaller (1280 × 720 JPEG is plenty), then try again.',
+      })
+      return
+    }
+    void run('upload', () => client.upload(f, f.name), {
+      success: (m: Media) => `${m.name} uploaded.`,
+    }).then((m) => {
+      if (!m) return
+      media.set([...(media.data ?? []), m])
+      onChange(m.id)
+    })
+  }
+  return (
+    <Field
+      label="Thumbnail"
+      optional
+      hint="YouTube only. JPEG or PNG up to 2 MB, 1280 × 720 is best. Needs a verified channel."
+    >
+      {(p) => (
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
+          <div className="grid aspect-video w-full max-w-60 shrink-0 place-items-center overflow-hidden rounded-control border border-line bg-surface-2 sm:w-44">
+            {picked ? (
+              <img src={picked.url} alt="" className="size-full object-cover" />
+            ) : (
+              <ImageSquare size={26} className="text-text-3" aria-hidden="true" />
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Select {...p} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+              <option value="">Keep YouTube’s thumbnail</option>
+              {value && !picked && <option value={value}>Picture no longer in the library</option>}
+              {list.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                icon={<UploadSimple size={15} />}
+                busy={busy === 'upload'}
+                onClick={() => file.current?.click()}
+              >
+                Upload a picture
+              </Button>
+              {value && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<X size={14} />}
+                  onClick={() => onChange(null)}
+                >
+                  Don’t change it
+                </Button>
+              )}
+            </div>
+            <input
+              ref={file}
+              type="file"
+              accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (f) upload(f)
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </Field>
+  )
 }
 
 function Results({ results }: { results: PlatformResult[] }) {
@@ -286,6 +434,31 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
               )}
             </Field>
           </div>
+          <Field
+            label="Description"
+            optional
+            hint={
+              form.description === null
+                ? 'YouTube only. Empty keeps YouTube’s description.'
+                : `YouTube only. ${[...form.description].length} of ${MAX_STREAM_DESCRIPTION}.`
+            }
+          >
+            {(p) => (
+              <Textarea
+                {...p}
+                rows={4}
+                maxLength={MAX_STREAM_DESCRIPTION}
+                value={form.description ?? ''}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value === '' ? null : e.target.value })
+                }
+              />
+            )}
+          </Field>
+          <ThumbnailPicker
+            value={form.thumbnail}
+            onChange={(thumbnail) => setForm({ ...form, thumbnail })}
+          />
           <fieldset>
             <legend className="text-[13.5px] font-medium text-text-2">Send to</legend>
             <ul className="mt-2 flex flex-col gap-2">
@@ -443,7 +616,11 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     onClick={() => setForm(toForm(h.info))}
                   >
                     <span className="block truncate text-sm text-text">
-                      {h.info.title ?? h.info.category?.name ?? 'Tags and language'}
+                      {h.info.title ??
+                        h.info.category?.name ??
+                        (h.info.description !== undefined || h.info.thumbnail
+                          ? 'YouTube description or thumbnail'
+                          : 'Tags and language')}
                     </span>
                     <span className="block text-[13.5px] text-text-3">
                       {relativeTime(h.at, now)} · {h.results.filter((r) => r.ok).length} of{' '}

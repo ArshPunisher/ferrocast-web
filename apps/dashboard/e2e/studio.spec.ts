@@ -98,6 +98,40 @@ test.describe('studio', () => {
     await expect(panel(page, 'Stream info').getByRole('alert')).toHaveText('Couldn’t reach Twitch.')
   })
 
+  test('stop and start OBS streaming from the Show panel, with a confirm', async ({ page }) => {
+    await open(page, 'studio/show')
+    const show = panel(page, 'Show')
+    await expect(show.getByText('OBS is streaming')).toBeVisible()
+    await show.getByRole('button', { name: 'Stop streaming' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Stop streaming?' })
+    await dialog.getByRole('button', { name: 'Keep streaming' }).click()
+    await expect(show.getByText('OBS is streaming')).toBeVisible()
+    await show.getByRole('button', { name: 'Stop streaming' }).click()
+    await dialog.getByRole('button', { name: 'Stop streaming' }).click()
+    await expect(show.getByText('OBS isn’t streaming')).toBeVisible()
+    await show.getByRole('button', { name: 'Start streaming' }).click()
+    await expect(show.getByText('OBS is streaming')).toBeVisible()
+    // The checklist can press them too, with a delay before stopping.
+    const cfg = panel(page, 'Go-live checklist')
+    await cfg.getByRole('switch', { name: 'End show: stop streaming in OBS' }).click()
+    await expect(cfg.getByLabel('Stop after')).toHaveValue('30')
+  })
+
+  test('description and thumbnail go to YouTube only, the others say why', async ({ page }) => {
+    await open(page, 'studio/info')
+    await page.getByLabel('Description').fill('Ranked all night')
+    await page.getByRole('button', { name: 'Update everywhere' }).click()
+    await expect(page.getByText('Skipped description: Twitch has no stream description')).toBeVisible()
+    await expect(page.getByText(/YouTube updated .*description/)).toBeVisible()
+    // A GIF isn't a YouTube thumbnail.
+    await page.locator('input[type=file][accept*="image/png"]').setInputFiles({
+      name: 'party.gif',
+      mimeType: 'image/gif',
+      buffer: Buffer.from('GIF89a'),
+    })
+    await expect(page.getByText('YouTube thumbnails must be a JPEG or PNG picture.')).toBeVisible()
+  })
+
   test('presets: save the form, fill it back, delete it', async ({ page }) => {
     await open(page, 'studio/info')
     const form = panel(page, 'Stream info')
