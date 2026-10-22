@@ -386,7 +386,7 @@ export class DemoGoLive {
         ? 'twitch'
         : 'cloudflare',
       rows,
-      verdict: verdict(this.uploadKbps, needs),
+      verdict: unreachable(verdict(this.uploadKbps, needs), rows, this.uploadKbps),
     }
     return clone(this.upload)
   }
@@ -438,4 +438,24 @@ function verdict(upload: number, needs: number[]) {
         : ` Lower the bitrate in OBS to about ${mb(usable)} for one platform.`
   }
   return { upload_kbps: upload, need_kbps: need, fits, fit_count: fit, message }
+}
+
+/** As the engine: servers that couldn't be reached are named and not counted. */
+function unreachable(
+  v: ReturnType<typeof verdict>,
+  rows: { name: string; problem?: string }[],
+  upload: number,
+): ReturnType<typeof verdict> {
+  const names = rows.filter((r) => r.problem).map((r) => r.name)
+  if (names.length === 0) return v
+  const list = names.join(', ')
+  const counted = rows.length > names.length
+  const m = upload / 1000
+  const mb = m < 10 ? `${m.toFixed(1)} Mbps` : `${Math.round(m)} Mbps`
+  return {
+    ...v,
+    message: counted
+      ? `${v.message} ${list} couldn’t be reached and isn’t counted.`
+      : `Your upload is ${mb}. Ferrocast couldn’t reach ${list}, so nothing was counted yet.`,
+  }
 }
