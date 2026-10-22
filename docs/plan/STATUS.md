@@ -1,5 +1,11 @@
 # Status
 
+## 22 Oct 2026 (one address, plan §9)
+- Live on `ferrocast.clearcraftlabs.com`: `/app/` (the dashboard, Cloudflare Pages), `/login/`, `/login/link/`, `/login/done/`; the relay on `api.clearcraftlabs.com` through its existing tunnel (no open ports). Header shows Sign in or the avatar and Open dashboard.
+- Checked live: Google sign-in, email-link sign-in, desktop-app sign-in through the website, phone pairing from `/app/#pair=`, sign-out. Still to check: cloud mode, Pro checkout, the weekly email's History button (needs Pro on the owner's account again).
+- Fixed after the live run: a sign-in link reopened while signed in now opens the dashboard instead of "Open it where you asked"; two site pages linked the old address; demo pairing links. CodeRabbit: narrowed that redirect to "link spent" errors only.
+- `remote.clearcraftlabs.com` stays until Google's verification review ends, then its tunnel hostname, DNS record, `RELAY_REMOTE_ALIASES` and the old Google redirect URI go.
+
 ## 22 Oct 2026 (1.4.2)
 - Sidebar foot signed out: Light / Dark / Auto, then Open in browser, then Sign in (polish board 1B); Open in browser ignores repeat clicks.
 - Tip pictures as the tippers' header (2B). Menus float above cards in a portal and flip up; inside a dialog they stay in place. Designer preview sound on by default.

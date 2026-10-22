@@ -53,25 +53,26 @@ One Cloudflare Pages project and one address for the website and the web dashboa
 (site at `/`, dashboard at `/app`), from this same repo. `remote.clearcraftlabs.com` is then
 **deleted, not forwarded**: one link only.
 - [x] Design board (`design/2026-10-22-one-address`), owner picks 22 Oct: **B** (the dashboard talks to a hidden `api.clearcraftlabs.com`; Cloudflare's path routing is Enterprise-only), header **A** (Sign in / avatar + Open dashboard), sign-in page **A** (part of the website, "your account" list beside the form)
-- [ ] No new open ports: `api.clearcraftlabs.com` arrives through the relay's existing Cloudflare Tunnel (the server listens only on SSH)
+- [x] No new open ports: `api.clearcraftlabs.com` arrives through the relay's existing Cloudflare Tunnel (the server listens only on SSH)
 - Build, in order:
-  - [ ] **P1 relay:** a web origin setting (`https://ferrocast.clearcraftlabs.com`) beside the API host; CORS for that origin with credentials; Origin/CSRF and live-socket checks accept it; after sign-in, go to the web origin's `/app`; email sign-in links and pairing QR codes use the web origin; keeps `remote.clearcraftlabs.com` working until the cutover
-  - [ ] **P2 dashboard + packages/api:** the server address comes from the config script (`window.__FERROCAST__`), not `location.origin`; account, cloud and phone calls use `credentials: 'include'`; sign-in goes to the website's `/login`
-  - [ ] **P3 site:** the dashboard build served at `/app` from the same Pages project, with its config script and security headers; `/login` page (design A) that signs in through the API host; header A (signed-in check through the API); `/dashboard/` page renamed `/web-dashboard/`
-  - [ ] **P4 owner clicks:** tunnel public hostname `api.clearcraftlabs.com`; Google OAuth redirect URI on the API host; nothing else in Cloudflare
+  - [x] **P1 relay:** a web origin setting (`https://ferrocast.clearcraftlabs.com`) beside the API host; CORS for that origin with credentials; Origin/CSRF and live-socket checks accept it; after sign-in, go to the web origin's `/app`; email sign-in links and pairing QR codes use the web origin; keeps `remote.clearcraftlabs.com` working until the cutover
+  - [x] **P2 dashboard + packages/api:** the server address comes from the config script (`window.__FERROCAST__`), not `location.origin`; account, cloud and phone calls use `credentials: 'include'`; sign-in goes to the website's `/login`
+  - [x] **P3 site:** the dashboard build served at `/app` from the same Pages project, with its config script and security headers; `/login` page (design A) that signs in through the API host; header A (signed-in check through the API); `/dashboard/` page renamed `/web-dashboard/`
+  - [x] **P4 owner clicks:** tunnel public hostname `api.clearcraftlabs.com`; Google OAuth redirect URI on the API host; nothing else in Cloudflare
   - [ ] **P5 cutover and checks:** sign in with Google and with an email link, phone pairing, cloud mode, Pro checkout, the weekly email's History button; e2e on the site and dashboard; then point everything at the new address
+    - Done 22 Oct, live: Google sign-in, email-link sign-in (through Brevo's click tracking), desktop-app sign-in through the website, phone pairing from a `/app/#pair=` link, sign-out, header state; e2e green. Still to check: cloud mode, Pro checkout, the weekly email's History button (the owner's comp Pro grant ran out at 18:09 IST, so these need Pro again)
 - [ ] After Google's verification review: delete `remote.clearcraftlabs.com` (tunnel hostname and DNS record)
 - [ ] Move every service that uses `remote.clearcraftlabs.com` (checked 22 Oct):
-  - [ ] Relay config `RELAY_REMOTE_URL` (deploy-relay.sh, relay.env.example, deploy/README): it sets the web origin for accounts, phones and Origin checks
-  - [ ] Sign-in pages `/login`, `/login/link` (the email sign-in link), `/login/google/callback`: new address in the relay and in **Google Cloud's OAuth redirect URIs** (owner click)
-  - [ ] Emails: the sign-in link and the weekly report's Open History use the web origin; send a test of each after the move
-  - [ ] Phone pairing links and QR codes (`/app/#pair=…`, packages/api remote.ts, demo)
-  - [ ] Phone API `/r/…`
+  - [x] Relay config `RELAY_REMOTE_URL` (deploy-relay.sh, relay.env.example, deploy/README): it sets the web origin for accounts, phones and Origin checks
+  - [x] Sign-in pages `/login`, `/login/link` (the email sign-in link), `/login/google/callback`: new address in the relay and in **Google Cloud's OAuth redirect URIs** (owner click)
+  - [ ] Emails (sign-in link checked live 22 Oct; weekly report still to send): the sign-in link and the weekly report's Open History use the web origin; send a test of each after the move
+  - [x] Phone pairing links and QR codes (`/app/#pair=…`, packages/api remote.ts, demo)
+  - [x] Phone API `/r/…`
   - [ ] Cloudflare Tunnel public hostname and its DNS record: delete only after everything above is live (owner click)
-  - [ ] Website links: `dashboard.astro`, `docs/getting-started.astro`
-  - [ ] Docs: ACCOUNTS.md, API.md, GOOGLE-VERIFICATION.md, plan/PRO.md, STATUS.md
+  - [x] Website links: `dashboard.astro`, `docs/getting-started.astro`
+  - [x] Docs: ACCOUNTS.md, API.md, GOOGLE-VERIFICATION.md, plan/PRO.md, STATUS.md
   - [ ] Google verification: the submitted demo shows `remote.clearcraftlabs.com/app`; don't break it while the review is open, and tell Google the new address if asked
-- [ ] Before the switch, the small step: an "Open dashboard" button in the site header
+- [x] Before the switch, the small step: an "Open dashboard" button in the site header
 
 ## 10. Later (not started)
 - [ ] In-app unsaved-changes guard for the alert and layout editors (today: a browser `beforeunload` warning only)
