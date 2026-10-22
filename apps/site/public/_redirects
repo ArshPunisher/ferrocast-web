@@ -1,1 +1,3 @@
 /app /app/ 301
+/dashboard/ /web-dashboard/ 301
+/dashboard /web-dashboard/ 301

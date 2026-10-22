@@ -124,7 +124,7 @@ export const PAGES = {
     crumb: 'Compare',
   }),
   dashboard: p({
-    path: '/dashboard/',
+    path: '/web-dashboard/',
     title: 'Open your Ferrocast dashboard in a browser',
     description:
       'Your Ferrocast dashboard runs on your own PC. Open it in any browser in one click from the app, with no account or password, and on your phone over Wi-Fi.',

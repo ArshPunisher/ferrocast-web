@@ -3,6 +3,7 @@ import Logo from './Logo.astro'
 import Icon from './Icon.astro'
 import BrandMark from './BrandMark.astro'
 import { COMPANY } from '../data/company'
+import { API_ORIGIN } from '../data/api'
 
 const links = [
   { href: '/features/', label: 'Features' },
@@ -10,7 +11,7 @@ const links = [
   { href: '/compare/', label: 'Compare' },
   { href: '/docs/getting-started/', label: 'Docs' },
   { href: '/faq/', label: 'FAQ' },
-  { href: '/dashboard/', label: 'Dashboard' },
+  { href: '/web-dashboard/', label: 'Web dashboard' },
 ]
 const here = Astro.url.pathname
 const isCurrent = (href: string) => here === href || (href !== '/' && here.startsWith(href))
@@ -52,6 +53,11 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       <a href={COMPANY.github} class="icon-btn gh" aria-label="Ferrocast on GitHub" rel="noopener">
         <BrandMark name="github" size={18} />
       </a>
+      <!-- Signed out: Sign in. Signed in (checked with the server): the avatar and Open dashboard. -->
+      <a href="/login/" class="acct" data-acct data-api={API_ORIGIN}>
+        <span class="acct-av" data-acct-av hidden></span>
+        <span data-acct-label>Sign in</span>
+      </a>
       <a href="/download/" class="btn btn-primary btn-sm cta" data-bot-excite>
         Download
       </a>
@@ -91,6 +97,9 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
           </a>
         </li>
       </ul>
+      <a href="/login/" class="btn btn-secondary mobile-cta" data-acct-mobile>
+        Sign in
+      </a>
       <a href="/download/" class="btn btn-primary mobile-cta">
         Download Ferrocast
       </a>
@@ -99,6 +108,52 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
 </header>
 
 <script>
+  // Who's signed in, from the server (the API host shares this site's cookie scope). Any
+  // failure leaves "Sign in", which is always a working link.
+  const acct = document.querySelector<HTMLAnchorElement>('[data-acct]')
+  const acctMobile = document.querySelector<HTMLAnchorElement>('[data-acct-mobile]')
+  if (acct?.dataset.api) {
+    fetch(`${acct.dataset.api}/v1/account`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          v: {
+            account?: { name?: string | null; email?: string; avatar_url?: string | null } | null
+          } | null,
+        ) => {
+          // Signed in: a 200 with the account (signed out is a 401).
+          if (!v?.account) return
+          const name = v.account?.name?.trim() || (v.account?.email ?? '').split('@')[0] || 'You'
+          const av = acct.querySelector<HTMLElement>('[data-acct-av]')!
+          const url = v.account?.avatar_url
+          if (url && url.startsWith('https://')) {
+            const img = document.createElement('img')
+            img.src = url
+            img.alt = ''
+            img.referrerPolicy = 'no-referrer'
+            img.width = 24
+            img.height = 24
+            av.append(img)
+          } else {
+            av.textContent = name.slice(0, 1).toUpperCase()
+          }
+          av.hidden = false
+          acct.querySelector('[data-acct-label]')!.textContent = 'Open dashboard'
+          acct.href = '/app/'
+          acct.classList.add('in')
+          acct.setAttribute('aria-label', `Open dashboard, signed in as ${name}`)
+          if (acctMobile) {
+            acctMobile.textContent = 'Open dashboard'
+            acctMobile.href = '/app/'
+          }
+        },
+      )
+      .catch(() => {})
+  }
+
   const btn = document.querySelector<HTMLButtonElement>('[data-menu-toggle]')
   const menu = document.getElementById('mobile-menu')
   const setOpen = (open: boolean) => {
@@ -279,8 +334,53 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     display: inline-flex;
   }
   .gh,
-  .cta {
+  .cta,
+  .acct {
     display: none;
+  }
+  .acct {
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding-inline: 10px;
+    border-radius: 999px;
+    color: var(--fc-text-2);
+    font-size: 0.875rem;
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .acct.in {
+    padding-left: 4px;
+    border: 1px solid var(--fc-line-strong);
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+  }
+  .acct-av {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--fc-surface-3);
+    font-family: var(--fc-font-display);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .acct-av[hidden] {
+    display: none;
+  }
+  .acct-av :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .acct:hover {
+      color: var(--fc-text);
+      background: var(--fc-surface-2);
+    }
   }
   .mobile-menu {
     border-top: 1px solid var(--fc-line);
@@ -314,6 +414,12 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     width: 100%;
     margin: 16px 0 calc(24px + env(safe-area-inset-bottom, 0px));
   }
+  .mobile-cta + .mobile-cta {
+    margin-top: 0;
+  }
+  .mobile-cta:has(+ .mobile-cta) {
+    margin-bottom: 10px;
+  }
   @media (min-width: 560px) {
     .cta {
       display: inline-flex;
@@ -323,7 +429,8 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     .desktop-nav {
       display: block;
     }
-    .gh {
+    .gh,
+    .acct {
       display: inline-flex;
     }
     .menu-btn,
