@@ -106,9 +106,13 @@ export const THEME_EVENT = 'fc-theme-change'
 function useOpenInBrowser(): { open: (() => void) | null; busy: boolean } {
   const client = useClient()
   const [busy, setBusy] = useState(false)
+  // A second click while the link is being made would make (and open) a second one.
+  const opening = useRef(false)
   // The desktop window only (a phone's injected config has no session token).
   if (!window.__FERROCAST__?.token) return { open: null, busy }
   const open = () => {
+    if (opening.current) return
+    opening.current = true
     setBusy(true)
     client
       .pairCode()
@@ -123,7 +127,10 @@ function useOpenInBrowser(): { open: (() => void) | null; busy: boolean } {
         const d = describeError(e)
         toast({ tone: 'error', message: d.message, hint: d.hint })
       })
-      .finally(() => setBusy(false))
+      .finally(() => {
+        opening.current = false
+        setBusy(false)
+      })
   }
   return { open, busy }
 }
@@ -148,41 +155,60 @@ function OpenInBrowser() {
   )
 }
 
-function useTheme(): ['dark' | 'light', () => void] {
+type ThemePref = 'system' | 'dark' | 'light'
+
+function useTheme(): {
+  theme: 'dark' | 'light'
+  pref: ThemePref
+  setPref: (p: ThemePref) => void
+  toggle: () => void
+} {
   const client = useClient()
-  const read = (): 'dark' | 'light' => {
+  const readPref = (): ThemePref => {
     const t = document.documentElement.dataset.theme
-    if (t === 'dark' || t === 'light') return t
-    return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+    return t === 'dark' || t === 'light' ? t : 'system'
   }
-  const [theme, setTheme] = useState(read)
+  const resolve = (p: ThemePref): 'dark' | 'light' =>
+    p !== 'system' ? p : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  const [pref, setPrefState] = useState(readPref)
+  const [theme, setTheme] = useState(() => resolve(readPref()))
   useEffect(() => {
     const mq = matchMedia('(prefers-color-scheme: light)')
-    const on = () => setTheme(read())
+    const on = () => setTheme(resolve(readPref()))
+    // Settings › Appearance changes it too.
+    const onSet = () => {
+      setPrefState(readPref())
+      on()
+    }
     mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
+    window.addEventListener(THEME_EVENT, onSet)
+    return () => {
+      mq.removeEventListener('change', on)
+      window.removeEventListener(THEME_EVENT, onSet)
+    }
   }, [])
-  return [
-    theme,
-    () => {
-      const next = theme === 'dark' ? 'light' : 'dark'
-      document.documentElement.dataset.theme = next
-      try {
-        localStorage.setItem('fc-theme', next)
-      } catch {
-        // ignore
-      }
-      setTheme(next)
-      // Same place Settings › Appearance keeps it, so the two never disagree.
-      void client
-        .settings()
-        .then((s) => client.saveSettings({ ...s, theme: next }))
-        .then(() => window.dispatchEvent(new Event(THEME_EVENT)))
-        .catch(() => {
-          // The local choice above still applies; the engine copy catches up next time.
-        })
-    },
-  ]
+  const setPref = (next: ThemePref) => {
+    const root = document.documentElement
+    if (next === 'system') delete root.dataset.theme
+    else root.dataset.theme = next
+    try {
+      if (next === 'system') localStorage.removeItem('fc-theme')
+      else localStorage.setItem('fc-theme', next)
+    } catch {
+      // ignore
+    }
+    setPrefState(next)
+    setTheme(resolve(next))
+    // Same place Settings › Appearance keeps it, so the two never disagree.
+    void client
+      .settings()
+      .then((s) => client.saveSettings({ ...s, theme: next }))
+      .then(() => window.dispatchEvent(new Event(THEME_EVENT)))
+      .catch(() => {
+        // The local choice above still applies; the engine copy catches up next time.
+      })
+  }
+  return { theme, pref, setPref, toggle: () => setPref(theme === 'dark' ? 'light' : 'dark') }
 }
 
 function NavLink({
@@ -308,7 +334,7 @@ function useHeaderHeight() {
 
 export function Shell({ children, demo }: { children: ReactNode; demo: boolean }) {
   const route = useRoute()
-  const [theme, toggleTheme] = useTheme()
+  const { theme, pref: themePref, setPref: setThemePref, toggle: toggleTheme } = useTheme()
   const [more, setMore] = useState(false)
   const notices = useLive((s) => s.notices)
   const remote = useLive((s) => s.remote)
@@ -416,7 +442,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               view={account}
               pro={isPro}
               planLine={proView?.active ? proPlanLine(proView) : null}
-              utils={{ openInBrowser: browser.open, theme, toggleTheme }}
+              utils={{ openInBrowser: browser.open, theme, toggleTheme, themePref, setThemePref }}
             />
           ) : (
             <>

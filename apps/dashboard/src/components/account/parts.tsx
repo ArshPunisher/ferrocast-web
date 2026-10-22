@@ -1,10 +1,12 @@
 // The account's pieces shared by the sidebar, the plans page and the Account page
 // (design board 2026-10-21-accounts: sidebar and Get Pro from option B).
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowSquareOut,
+  ArrowUpRight,
   CaretUpDown,
+  Desktop,
   Moon,
   SignIn,
   SignOut,
@@ -178,31 +180,62 @@ export interface Utils {
   openInBrowser: (() => void) | null
   theme: 'dark' | 'light'
   toggleTheme: () => void
+  /** What the person picked: Auto follows the system. */
+  themePref: 'system' | 'dark' | 'light'
+  setThemePref: (p: 'system' | 'dark' | 'light') => void
 }
 
-/** Open in browser and the theme switch as a small row (signed out, when there's no menu). */
-function UtilRow({ utils }: { utils: Utils }) {
-  const ThemeIcon = utils.theme === 'dark' ? Sun : Moon
+const THEMES = [
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'dark', label: 'Dark', Icon: Moon },
+  { value: 'system', label: 'Auto', Icon: Desktop },
+] as const
+
+/**
+ * Signed out, when there's no menu: the theme (Light / Dark / Auto), then Open in browser,
+ * stacked above the sign-in bar (design board 2026-10-22-polish, option 1B).
+ */
+function UtilStack({ utils }: { utils: Utils }) {
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex flex-col gap-1">
+      <div
+        role="group"
+        aria-label="Theme"
+        className="grid grid-cols-3 gap-0.5 rounded-control border border-line bg-surface-2 p-[3px]"
+      >
+        {THEMES.map(({ value, label, Icon }) => {
+          const on = utils.themePref === value
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={on}
+              title={value === 'system' ? 'Match your system' : undefined}
+              onClick={() => utils.setThemePref(value)}
+              className={`fc-press flex h-[30px] items-center justify-center gap-1.5 rounded-[7px] text-[12.5px] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none ${
+                on
+                  ? 'bg-surface-1 font-semibold text-text shadow-[0_1px_2px_rgb(0_0_0/0.16),0_0_0_1px_var(--fc-line)]'
+                  : 'font-medium text-text-3 hover:text-text'
+              }`}
+            >
+              <Icon size={15} aria-hidden />
+              {label}
+            </button>
+          )
+        })}
+      </div>
       {utils.openInBrowser && (
         <button
           type="button"
           onClick={utils.openInBrowser}
-          className="fc-press flex h-8 items-center gap-2 rounded-control px-2 text-[13px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          className="fc-press flex h-10 items-center gap-2.5 rounded-control px-2.5 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
-          <ArrowSquareOut size={16} aria-hidden />
-          Open in browser
+          <ArrowSquareOut size={17} className="text-text-3" aria-hidden />
+          <span className="flex-1 text-left">Open in browser</span>
+          <ArrowUpRight size={14} className="text-text-3" aria-hidden />
         </button>
       )}
-      <button
-        type="button"
-        onClick={utils.toggleTheme}
-        aria-label={utils.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        className="fc-press grid size-8 place-items-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-      >
-        <ThemeIcon size={16} aria-hidden />
-      </button>
+      <hr className="mx-1 my-0.5 border-line" />
     </div>
   )
 }
@@ -345,14 +378,16 @@ export function SidebarAccount({
   const [open, setOpen] = useState(false)
   const barRef = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
-  const close = (focusBar: boolean) => {
+  // Stable, so the open menu's effect doesn't re-run (and refocus its first item) each render.
+  const close = useCallback((focusBar: boolean) => {
     setOpen(false)
     if (focusBar) barRef.current?.focus()
-  }
+  }, [])
 
   if (view.state === 'pending')
     return (
       <div className="flex flex-col gap-2" data-testid="account-bar" data-state="pending">
+        <UtilStack utils={utils} />
         <div role="status" className={`${barBase} cursor-default`}>
           <span className="grid size-8 shrink-0 place-items-center rounded-full border border-dashed border-line-strong text-accent-text">
             <SpinnerGap size={16} className="motion-safe:animate-spin" aria-hidden />
@@ -369,13 +404,13 @@ export function SidebarAccount({
             Cancel
           </button>
         </div>
-        <UtilRow utils={utils} />
       </div>
     )
 
   if (view.state !== 'signed_in')
     return (
       <div className="flex flex-col gap-2" data-testid="account-bar" data-state={view.state}>
+        <UtilStack utils={utils} />
         {!pro && view.state !== 'disabled' && <GetProButton />}
         {view.state === 'disabled' ? (
           <div role="status" className={`${barBase} cursor-default`}>
@@ -404,7 +439,6 @@ export function SidebarAccount({
             <SignIn size={16} className="shrink-0 text-text-3" aria-hidden />
           </button>
         )}
-        <UtilRow utils={utils} />
       </div>
     )
 
