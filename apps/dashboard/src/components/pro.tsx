@@ -246,6 +246,7 @@ export function ProSettings() {
   const res = useResource(() => pro.status())
   const [email, setEmail] = useState('')
   const [discount, setDiscount] = useState<Discount | null>(null)
+  const [waiting, setWaiting] = useState(false)
 
   // Every fresh answer reaches the rest of the app (the sidebar, Home, the unlock).
   useEffect(() => {
@@ -259,7 +260,9 @@ export function ProSettings() {
 
   return (
     <div className="flex flex-col gap-5" data-testid="pro-card">
-      {(!buy || p.status !== 'none' || p.stale || p.warning) && (
+      {/* Shown even on the free app, so Check again can pick up Pro granted or bought
+          elsewhere; only the checkout's own waiting screen (with its Check again) hides it. */}
+      {!(waiting && p.status === 'none' && !p.stale && !p.warning) && (
         <StatusCard p={p} onView={res.set} email={email} />
       )}
       {buy && p.prices && (
@@ -268,6 +271,7 @@ export function ProSettings() {
           email={email}
           setEmail={setEmail}
           onView={(v) => res.set(v)}
+          onWaiting={setWaiting}
         />
       )}
       {!p.active && (
@@ -382,10 +386,13 @@ function Checkout({
   email,
   setEmail,
   onView,
+  onWaiting,
 }: Offer & {
   email: string
   setEmail: (v: string) => void
   onView: (v: ProView) => void
+  /** Whether the "Finish paying in your browser" screen is up. */
+  onWaiting: (waiting: boolean) => void
 }) {
   const pro = proApi(useClient())
   const reduce = useReducedMotion()
@@ -396,6 +403,11 @@ function Checkout({
   const [checkout, setCheckout] = useState<ProCheckout | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
+
+  useEffect(() => {
+    onWaiting(!!checkout)
+    return () => onWaiting(false)
+  }, [checkout, onWaiting])
 
   // Focus lands on each new step's heading (not on first load).
   useEffect(() => {

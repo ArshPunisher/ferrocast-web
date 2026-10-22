@@ -200,6 +200,15 @@ test.describe('settings: buying Pro in three steps', () => {
     await expect(pro.getByText('Already have Pro? Move it to this PC')).toBeVisible()
   })
 
+  test('on the free app, Check again picks up Pro given elsewhere', async ({ page }) => {
+    await open(page, 'settings/pro', ON_SALE)
+    const pro = panel(page)
+    await expect(pro.getByTestId('pro-summary')).toContainText('You’re on the free app')
+    await demo(page, "(d) => d.setPro({ testGrant: 'active' })")
+    await pro.getByRole('button', { name: 'Check again' }).click()
+    await expect(pro.getByTestId('pro-summary')).toContainText('Test Pro is on until')
+  })
+
   test('has no accessibility violations on each step', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium')
     await open(page, 'settings/pro', ON_SALE)
