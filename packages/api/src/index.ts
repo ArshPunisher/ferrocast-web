@@ -19,6 +19,7 @@ export * from './tip-domain'
 export * from './cloud-backups'
 export * from './tts-voices'
 export * from './studio'
+export * from './golive'
 export * from './autoreplies'
 export {
   amountOf,

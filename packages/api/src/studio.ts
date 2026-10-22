@@ -409,6 +409,7 @@ export type StudioFrame =
   | { v: 1; type: 'show'; data: { show: ShowRun | null } }
   | { v: 1; type: 'obs_health'; data: ObsHealth }
   | { v: 1; type: 'brb'; data: { on: boolean; scene: string } }
+  | { v: 1; type: 'golive'; data: import('./golive').GoLiveFrame }
 
 export const STUDIO_FRAME_TYPES = [
   'lane',
@@ -417,6 +418,7 @@ export const STUDIO_FRAME_TYPES = [
   'show',
   'obs_health',
   'brb',
+  'golive',
 ] as const
 
 /** "01:02:03" from milliseconds into the stream. */

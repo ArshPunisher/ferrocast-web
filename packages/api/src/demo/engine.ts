@@ -83,6 +83,7 @@ import { DemoImporters } from './features/importers'
 import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
+import { DemoGoLive, type DemoGoLiveSetup } from './features/golive'
 import { DemoHistory } from './features/history'
 import { DemoSmart } from './features/smart'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
@@ -443,6 +444,7 @@ export class DemoEngine {
   private remote: DemoRemoteSession | null = null
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
+  readonly golive: DemoGoLive
   readonly autoReplies: DemoAutoReplies
   private readonly starter = new DemoStarter(() => this.commands)
   private readonly importers = new DemoImporters(
@@ -610,6 +612,12 @@ export class DemoEngine {
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.welcome = new DemoWelcome(this.host)
     this.studio = new DemoStudio(this.host, () => this.commands)
+    this.golive = new DemoGoLive(
+      this.host,
+      () => this.accounts,
+      () => this.studio.obs.streaming,
+      () => this.obs.state === 'connected',
+    )
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>
         (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
@@ -690,6 +698,11 @@ export class DemoEngine {
   /** Pro on sale, active or with its features on (tests of Pro panels). */
   setPro(s: DemoProSetup): void {
     this.pro.setup(s)
+  }
+
+  /** Go live everywhere: upload speed, OBS already set up, what the stream breaks (tests). */
+  setGoLive(s: DemoGoLiveSetup): void {
+    this.golive.setup(s)
   }
 
   /** The Ferrocast account: signed out, signed in or disabled (tests). */
@@ -1678,6 +1691,7 @@ export class DemoEngine {
       this.cloudBackups,
       this.designs,
       this.studio,
+      this.golive,
       this.tipBrand,
       this.autoReplies,
       this.ttsVoices,

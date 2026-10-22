@@ -249,6 +249,10 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/tips/brand/*'],
   ['*', '/updates/*'],
   ['*', '/live'],
+  // Go live: the local stream key, and adding or removing a server with its key.
+  ['*', '/golive/ingest'],
+  ['POST', '/golive/destinations'],
+  ['*', '/golive/destinations/*'],
 ]
 
 const SEGMENT_CHARS = /^[A-Za-z0-9\-_.~:@!$&'()*+,;=%]+$/

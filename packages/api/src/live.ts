@@ -35,6 +35,8 @@ const LIVE_TYPES = new Set([
   'show',
   'obs_health',
   'brb',
+  // Go live everywhere (golive.ts)
+  'golive',
 ])
 
 const UPDATE_PHASES = new Set(['idle', 'downloading', 'installing', 'ready', 'failed'])
@@ -101,6 +103,8 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
   if (f.type === 'obs_health' && !Array.isArray(d.warnings)) return null
   if (f.type === 'show' && d.show !== null && typeof d.show !== 'object') return null
   if (f.type === 'counter' && (typeof d.name !== 'string' || typeof d.value !== 'number'))
+    return null
+  if (f.type === 'golive' && (typeof d.live !== 'boolean' || !Array.isArray(d.destinations)))
     return null
   return f as LiveFrame
 }
