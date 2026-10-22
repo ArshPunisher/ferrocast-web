@@ -253,7 +253,9 @@ function Billing({
         <dl className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3.5">
           <div>
             <dt className="text-[12.5px] text-text-3">Plan</dt>
-            <dd className="text-[14.5px] font-semibold text-text">Pro, {planName.toLowerCase()}</dd>
+            <dd className="text-[14.5px] font-semibold text-text">
+              {planName === 'Pro' ? 'Pro' : `Pro, ${planName.toLowerCase()}`}
+            </dd>
           </div>
           <div>
             <dt className="text-[12.5px] text-text-3">{renews ? 'Renews' : 'Ends'}</dt>
