@@ -1,0 +1,89 @@
+---
+// Where the sign-in email's link lands (plan §9). The token is in the address; the page posts
+// it to the server with this browser's login cookie (the link only works in the browser that
+// asked), then opens the dashboard, or says to go back to the app.
+import Base from '../../layouts/Base.astro'
+import type { PageMeta } from '../../data/pages'
+import { API_ORIGIN } from '../../data/api'
+
+const page: PageMeta = {
+  path: '/login/link/',
+  title: 'Signing you in to Ferrocast',
+  description: 'Finishing your Ferrocast sign-in.',
+  ogTitle: 'Signing in',
+  ogKicker: 'Account',
+  crumb: 'Sign in',
+}
+---
+
+<Base page={page} noindex>
+  <section class="container box" data-link data-api={API_ORIGIN}>
+    <h1 class="title" tabindex="-1">
+      Signing you in
+    </h1>
+    <p class="lede" role="status" data-say>
+      One moment…
+    </p>
+    <noscript>
+      <p class="lede">Signing in needs JavaScript. Turn it on for this site, then reload.</p>
+    </noscript>
+    <a class="btn btn-secondary" href="/login/" data-again hidden>
+      Start again
+    </a>
+  </section>
+</Base>
+
+<script>
+  import { LoginError, afterSignIn, loginApi } from '../../scripts/login'
+
+  const root = document.querySelector<HTMLElement>('[data-link]')!
+  const say = root.querySelector<HTMLElement>('[data-say]')!
+  const again = root.querySelector<HTMLElement>('[data-again]')!
+  const t = new URLSearchParams(location.hash.slice(1) || location.search).get('t')
+  // Keep the token out of the address bar and history once it's been read.
+  history.replaceState(null, '', '/login/link/')
+  const api = loginApi(root.dataset.api!)
+
+  async function go() {
+    if (!t)
+      throw new LoginError(
+        'This link is missing its code.',
+        'Open the link from the email again, or start again.',
+        'bad_link',
+        400,
+      )
+    await api.start(null, null)
+    location.replace(afterSignIn(await api.link(t)))
+  }
+  go().catch((e: unknown) => {
+    const err = e instanceof LoginError ? e : null
+    say.textContent = err
+      ? `${err.message}${err.hint ? ` ${err.hint}` : ''}`
+      : 'This sign-in didn’t work. Start again.'
+    say.setAttribute('role', 'alert')
+    again.hidden = false
+  })
+</script>
+
+<style>
+  .box {
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+    max-width: 560px;
+    padding-block: 72px 120px;
+  }
+  .title {
+    margin: 0;
+    font-family: var(--fc-font-display);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    letter-spacing: -0.02em;
+  }
+  .title:focus {
+    outline: none;
+  }
+  .lede {
+    margin: 0;
+    color: var(--fc-text-2);
+  }
+</style>

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { builtHtmlFiles, sitemapPaths } from './pages'
+import { API_ORIGIN } from '../src/data/api'
 
 test('every internal link and asset resolves', async ({ request }) => {
   const targets = new Set<string>()
@@ -49,7 +50,8 @@ test('no third-party requests: everything is self-hosted', async ({ page }) => {
   const external: string[] = []
   page.on('request', (r) => {
     const u = new URL(r.url())
-    if (u.hostname !== 'localhost') external.push(r.url())
+    // Ferrocast's own server (the header asks who's signed in) is first-party.
+    if (u.hostname !== 'localhost' && u.origin !== API_ORIGIN) external.push(r.url())
   })
   for (const p of sitemapPaths().slice(0, 6)) await page.goto(p, { waitUntil: 'networkidle' })
   expect(external).toEqual([])

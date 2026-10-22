@@ -1,0 +1,475 @@
+---
+// Sign in to Ferrocast on the website (plan §9, design board 2026-10-22-one-address, 3A):
+// the form beside "your account", Google or an emailed link and code. The server does the
+// signing in (src/scripts/login.ts); without scripts, a plain message says they're needed.
+import Base from '../../layouts/Base.astro'
+import Icon from '../../components/Icon.astro'
+import type { PageMeta } from '../../data/pages'
+import { API_ORIGIN } from '../../data/api'
+
+const page: PageMeta = {
+  path: '/login/',
+  title: 'Sign in to Ferrocast',
+  description:
+    'Sign in to Ferrocast with Google or an emailed link. Free, and the same account your app uses.',
+  ogTitle: 'Sign in',
+  ogKicker: 'Account',
+  crumb: 'Sign in',
+}
+---
+
+<Base page={page} noindex>
+  <section class="login container" data-login data-api={API_ORIGIN}>
+    <div class="form-side">
+      <h1 class="title" id="login-title" tabindex="-1">
+        Sign in to Ferrocast
+      </h1>
+      <p class="lede" data-lead>
+        Free, and the same account your app uses.
+      </p>
+
+      <noscript>
+        <p class="note warn">Signing in needs JavaScript. Turn it on for this site, then reload.</p>
+      </noscript>
+
+      <div class="state" data-state="loading" aria-hidden="true">
+        <span class="sk"></span>
+        <span class="sk"></span>
+        <span class="sk short"></span>
+      </div>
+
+      <div class="state" data-state="form" hidden>
+        <button type="button" class="btn btn-secondary wide" data-google hidden>
+          <Icon name="google-logo" size={18} />
+          Continue with Google
+        </button>
+        <div class="or" data-or hidden>
+          or
+        </div>
+        <form data-email-form novalidate>
+          <label for="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            inputmode="email"
+            spellcheck="false"
+            maxlength="254"
+            required
+            placeholder="you@example.com"
+            aria-describedby="email-hint email-error"
+          />
+          <p class="hint" id="email-hint">
+            We email you a link and a code. No password to remember.
+          </p>
+          <p class="err" id="email-error" role="alert" data-email-error hidden></p>
+          <button class="btn btn-primary wide" type="submit" data-email-send>
+            <Icon name="envelope-simple" size={18} />
+            Email me a link
+          </button>
+        </form>
+      </div>
+
+      <div class="state" data-state="code" hidden>
+        <p class="sent" role="status" data-sent></p>
+        <form data-code-form novalidate>
+          <label for="code">Or type the code from the email</label>
+          <input
+            id="code"
+            name="code"
+            autocomplete="one-time-code"
+            inputmode="text"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="9"
+            required
+            placeholder="ABCD-EFGH"
+            class="code"
+            aria-describedby="code-error"
+          />
+          <p class="err" id="code-error" role="alert" data-code-error hidden></p>
+          <button class="btn btn-primary wide" type="submit" data-code-send>
+            Sign in
+          </button>
+        </form>
+        <button type="button" class="link" data-restart>
+          Use a different email
+        </button>
+      </div>
+
+      <div class="state" data-state="error" hidden>
+        <p class="note warn" role="alert" data-problem></p>
+        <button type="button" class="btn btn-secondary" data-retry>
+          Try again
+        </button>
+      </div>
+
+      <p class="fine">
+        The link and code work once, for 15 minutes, in this browser. By continuing you confirm
+        you’re 18 or older, or have a parent’s or guardian’s consent.
+        <a href="/terms/">Terms</a> · <a href="/privacy/">Privacy</a>
+      </p>
+    </div>
+
+    <aside class="side" aria-labelledby="account-title">
+      <h2 id="account-title">Your account</h2>
+      <ul>
+        <li>
+          <Icon name="browser" size={20} />
+          <span>The dashboard in any browser or on your phone</span>
+        </li>
+        <li>
+          <Icon name="cloud-arrow-up" size={20} />
+          <span>Cloud mode: alerts and the bot with your PC off</span>
+        </li>
+        <li>
+          <Icon name="chart-line-up" size={20} />
+          <span>Insights: 30 days free, a year with Pro</span>
+        </li>
+        <li>
+          <Icon name="desktop" size={20} />
+          <span>Pro on every PC you sign in on</span>
+        </li>
+      </ul>
+    </aside>
+  </section>
+</Base>
+
+<script>
+  import {
+    LoginError,
+    afterSignIn,
+    loginApi,
+    normalCode,
+    safeNext,
+    type Done,
+  } from '../../scripts/login'
+
+  const root = document.querySelector<HTMLElement>('[data-login]')!
+  const api = loginApi(root.dataset.api!)
+  const q = new URLSearchParams(location.search)
+  const flow = q.get('flow')
+  const next = safeNext(q.get('next'))
+  const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!
+  let magic = ''
+
+  function show(state: 'loading' | 'form' | 'code' | 'error') {
+    for (const el of root.querySelectorAll<HTMLElement>('[data-state]'))
+      el.hidden = el.dataset.state !== state
+    root.setAttribute('aria-busy', String(state === 'loading'))
+  }
+  function fail(e: unknown) {
+    const err = e instanceof LoginError ? e : null
+    $('[data-problem]').textContent = err
+      ? `${err.message}${err.hint ? ` ${err.hint}` : ''}`
+      : 'Signing in didn’t work. Try again in a moment.'
+    show('error')
+  }
+  function fieldError(sel: string, e: unknown) {
+    const el = $(sel)
+    const err = e instanceof LoginError ? e : null
+    el.textContent = err
+      ? `${err.message}${err.hint ? ` ${err.hint}` : ''}`
+      : 'That didn’t work. Try again.'
+    el.hidden = false
+  }
+  function busy(btn: HTMLButtonElement, on: boolean) {
+    btn.disabled = on
+    btn.setAttribute('aria-busy', String(on))
+  }
+  function finish(d: Done) {
+    location.replace(afterSignIn(d))
+  }
+
+  async function begin() {
+    show('loading')
+    try {
+      const s = await api.start(flow, next)
+      if (s.signed_in && !s.app) return location.replace(safeNext(s.next))
+      if (s.app)
+        $('[data-lead]').textContent =
+          'Sign in to link this Ferrocast app to your account. The app keeps working without one.'
+      $('[data-google]').hidden = !s.google
+      $('[data-or]').hidden = !s.google
+      show('form')
+      const problem = q.get('error')
+      if (problem) fieldError('[data-email-error]', new LoginError(problem, null, 'google', 0))
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  $('[data-google]').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget as HTMLButtonElement
+    busy(btn, true)
+    try {
+      location.assign((await api.google(flow, next)).url)
+    } catch (e) {
+      busy(btn, false)
+      fieldError('[data-email-error]', e)
+    }
+  })
+
+  $('[data-email-form]').addEventListener('submit', async (ev) => {
+    ev.preventDefault()
+    const input = $<HTMLInputElement>('#email')
+    const btn = $<HTMLButtonElement>('[data-email-send]')
+    const err = $('[data-email-error]')
+    err.hidden = true
+    const email = input.value.trim()
+    if (!input.checkValidity() || !email) {
+      err.textContent = 'Type your email address, like you@example.com.'
+      err.hidden = false
+      input.focus()
+      return
+    }
+    busy(btn, true)
+    try {
+      magic = (await api.email(email, flow, next)).magic_id
+      $('[data-sent]').textContent =
+        `We sent a link to ${email}. Open it in this browser, or type the code below.`
+      show('code')
+      $<HTMLInputElement>('#code').focus()
+    } catch (e) {
+      fieldError('[data-email-error]', e)
+    } finally {
+      busy(btn, false)
+    }
+  })
+
+  $('[data-code-form]').addEventListener('submit', async (ev) => {
+    ev.preventDefault()
+    const input = $<HTMLInputElement>('#code')
+    const btn = $<HTMLButtonElement>('[data-code-send]')
+    const err = $('[data-code-error]')
+    err.hidden = true
+    const code = normalCode(input.value)
+    if (code.length !== 8) {
+      err.textContent = 'The code has 8 letters and numbers, like ABCD-EFGH.'
+      err.hidden = false
+      input.focus()
+      return
+    }
+    busy(btn, true)
+    try {
+      finish(await api.code(magic, code))
+    } catch (e) {
+      fieldError('[data-code-error]', e)
+      busy(btn, false)
+    }
+  })
+
+  $('[data-restart]').addEventListener('click', () => {
+    magic = ''
+    show('form')
+    $<HTMLInputElement>('#email').focus()
+  })
+  $('[data-retry]').addEventListener('click', () => void begin())
+
+  void begin()
+</script>
+
+<style>
+  .login {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding-block: 40px 72px;
+  }
+  @media (min-width: 900px) {
+    .login {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+      gap: 0;
+      padding-block: 64px 96px;
+      align-items: stretch;
+    }
+  }
+  .form-side {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+    max-width: 440px;
+  }
+  @media (min-width: 900px) {
+    .form-side {
+      padding-right: 48px;
+    }
+  }
+  .title {
+    font-family: var(--fc-font-display);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .title:focus {
+    outline: none;
+  }
+  .lede {
+    margin: 0;
+    color: var(--fc-text-2);
+  }
+  .state {
+    display: grid;
+    gap: 12px;
+  }
+  .state[hidden] {
+    display: none;
+  }
+  .sk {
+    height: 48px;
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-surface-3);
+  }
+  .sk.short {
+    width: 60%;
+    height: 16px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .sk {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.55;
+    }
+  }
+  .wide {
+    width: 100%;
+  }
+  .or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--fc-text-3);
+    font-size: 0.8125rem;
+  }
+  .or::before,
+  .or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--fc-line);
+  }
+  form {
+    display: grid;
+    gap: 8px;
+  }
+  label {
+    font-size: 0.875rem;
+    font-weight: 650;
+  }
+  input {
+    height: 48px;
+    width: 100%;
+    padding-inline: 14px;
+    border-radius: var(--fc-radius-control);
+    border: 1px solid var(--fc-line-strong);
+    background: var(--fc-surface-2);
+    color: var(--fc-text);
+    font: inherit;
+    font-size: 1rem;
+  }
+  input:focus-visible {
+    outline: 2px solid var(--fc-accent-text);
+    outline-offset: 2px;
+  }
+  input.code {
+    font-family: var(--fc-font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 1.125rem;
+  }
+  .hint,
+  .fine {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--fc-text-3);
+  }
+  .fine {
+    margin-top: 6px;
+  }
+  .fine a {
+    color: var(--fc-accent-text);
+  }
+  .err {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fc-danger);
+  }
+  .sent {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-accent-soft);
+    color: var(--fc-text);
+    font-size: 0.9375rem;
+  }
+  .note {
+    margin: 0;
+    font-size: 0.9375rem;
+  }
+  .warn {
+    color: var(--fc-text);
+    padding: 12px 14px;
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-warn-soft);
+  }
+  .link {
+    justify-self: start;
+    border: 0;
+    background: none;
+    padding: 4px 0;
+    color: var(--fc-accent-text);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  button[aria-busy='true'] {
+    opacity: 0.7;
+    cursor: progress;
+  }
+  .side {
+    display: grid;
+    gap: 16px;
+    align-content: center;
+    padding: 28px 24px;
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
+  }
+  @media (min-width: 900px) {
+    .side {
+      padding: 40px;
+    }
+  }
+  .side h2 {
+    margin: 0;
+    font-family: var(--fc-font-display);
+    font-size: 1.375rem;
+    letter-spacing: -0.015em;
+  }
+  .side ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 12px;
+    color: var(--fc-text-2);
+  }
+  .side li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .side li :global(svg) {
+    flex: none;
+    margin-top: 2px;
+    color: var(--fc-accent-text);
+  }
+</style>

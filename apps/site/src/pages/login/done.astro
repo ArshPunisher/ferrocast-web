@@ -1,0 +1,52 @@
+---
+// After signing in for the desktop app (its own sign-in flow): the app picks the account up
+// by itself, so this page only says to go back to it.
+import Base from '../../layouts/Base.astro'
+import Icon from '../../components/Icon.astro'
+import type { PageMeta } from '../../data/pages'
+
+const page: PageMeta = {
+  path: '/login/done/',
+  title: 'Signed in: go back to Ferrocast',
+  description: 'You’re signed in. Go back to the Ferrocast app.',
+  ogTitle: 'Signed in',
+  ogKicker: 'Account',
+  crumb: 'Signed in',
+}
+---
+
+<Base page={page} noindex>
+  <section class="container box">
+    <span class="ok">
+      <Icon name="check-circle" weight="fill" size={40} />
+    </span>
+    <h1 class="title">You’re signed in</h1>
+    <p class="lede">
+      Go back to the Ferrocast app: it’s linked to your account now. You can close this tab.
+    </p>
+  </section>
+</Base>
+
+<style>
+  .box {
+    display: grid;
+    gap: 12px;
+    justify-items: start;
+    max-width: 560px;
+    padding-block: 72px 120px;
+  }
+  .ok {
+    color: var(--fc-ok);
+    display: grid;
+  }
+  .title {
+    margin: 0;
+    font-family: var(--fc-font-display);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    margin: 0;
+    color: var(--fc-text-2);
+  }
+</style>

@@ -71,9 +71,12 @@ export default defineConfig({
   integrations: [
     unconfirmedWarning,
     sitemap({
-      // Thank-you pages are a step after a download, not pages to find.
+      // Thank-you and sign-in pages are steps, not pages to find.
       filter: (page) =>
-        !page.includes('/og/') && !page.endsWith('/404/') && !page.includes('/download/thanks/'),
+        !page.includes('/og/') &&
+        !page.endsWith('/404/') &&
+        !page.includes('/download/thanks/') &&
+        !page.includes('/login/'),
       serialize: (item) => ({ ...item, lastmod: lastmod(item.url) }),
     }),
   ],
