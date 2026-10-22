@@ -1,5 +1,9 @@
 # Status
 
+## 22 Oct 2026 (Go live everywhere, 2.0 Track A)
+- Go live tab, first in Studio, from the owner's board picks (1A 2A 3A 4B 5A 7): platforms in pause order with drag and arrow keys, three setup steps that shrink to one line, the upload table and verdict, health lines while live, a server of your own (removing asks first). Platform pills show a platform's stream reconnecting on every page.
+- `packages/api/src/golive.ts` (client, words, frame), demo `features/golive.ts` (`setGoLive` for tests), phone rules updated. Tests: `packages/api/test/golive.test.ts`, `e2e/golive.spec.ts` (Chromium, WebKit, phone; axe light and dark). Full dashboard e2e: 976 passed. CodeRabbit: no findings.
+
 ## 22 Oct 2026 (one address, plan §9)
 - Live on `ferrocast.clearcraftlabs.com`: `/app/` (the dashboard, Cloudflare Pages), `/login/`, `/login/link/`, `/login/done/`; the relay on `api.clearcraftlabs.com` through its existing tunnel (no open ports). Header shows Sign in or the avatar and Open dashboard.
 - Checked live: Google sign-in, email-link sign-in, desktop-app sign-in through the website, phone pairing from `/app/#pair=`, sign-out. Still to check: cloud mode, Pro checkout, the weekly email's History button (needs Pro on the owner's account again).
