@@ -52,8 +52,15 @@ Order: repo and tooling → brand and design system → overlays → dashboard (
 One Cloudflare Pages project and one address for the website and the web dashboard
 (site at `/`, dashboard at `/app`), from this same repo. `remote.clearcraftlabs.com` is then
 **deleted, not forwarded**: one link only.
-- [ ] Design board first, owner approves before building
-- [ ] The browser talks to the relay's API address directly (no Cloudflare Worker in between: its free plan stops at ~100k requests a day). Same site (`*.clearcraftlabs.com`), so the session cookie still works with CORS on the relay
+- [x] Design board (`design/2026-10-22-one-address`), owner picks 22 Oct: **B** (the dashboard talks to a hidden `api.clearcraftlabs.com`; Cloudflare's path routing is Enterprise-only), header **A** (Sign in / avatar + Open dashboard), sign-in page **A** (part of the website, "your account" list beside the form)
+- [ ] No new open ports: `api.clearcraftlabs.com` arrives through the relay's existing Cloudflare Tunnel (the server listens only on SSH)
+- Build, in order:
+  - [ ] **P1 relay:** a web origin setting (`https://ferrocast.clearcraftlabs.com`) beside the API host; CORS for that origin with credentials; Origin/CSRF and live-socket checks accept it; after sign-in, go to the web origin's `/app`; email sign-in links and pairing QR codes use the web origin; keeps `remote.clearcraftlabs.com` working until the cutover
+  - [ ] **P2 dashboard + packages/api:** the server address comes from the config script (`window.__FERROCAST__`), not `location.origin`; account, cloud and phone calls use `credentials: 'include'`; sign-in goes to the website's `/login`
+  - [ ] **P3 site:** the dashboard build served at `/app` from the same Pages project, with its config script and security headers; `/login` page (design A) that signs in through the API host; header A (signed-in check through the API); `/dashboard/` page renamed `/web-dashboard/`
+  - [ ] **P4 owner clicks:** tunnel public hostname `api.clearcraftlabs.com`; Google OAuth redirect URI on the API host; nothing else in Cloudflare
+  - [ ] **P5 cutover and checks:** sign in with Google and with an email link, phone pairing, cloud mode, Pro checkout, the weekly email's History button; e2e on the site and dashboard; then point everything at the new address
+- [ ] After Google's verification review: delete `remote.clearcraftlabs.com` (tunnel hostname and DNS record)
 - [ ] Move every service that uses `remote.clearcraftlabs.com` (checked 22 Oct):
   - [ ] Relay config `RELAY_REMOTE_URL` (deploy-relay.sh, relay.env.example, deploy/README): it sets the web origin for accounts, phones and Origin checks
   - [ ] Sign-in pages `/login`, `/login/link` (the email sign-in link), `/login/google/callback`: new address in the relay and in **Google Cloud's OAuth redirect URIs** (owner click)
