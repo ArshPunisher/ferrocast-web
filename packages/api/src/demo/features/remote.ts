@@ -17,7 +17,7 @@ import { HttpError } from '../http-error'
 import { NOT_MINE, clone, requireObj, type DemoFeature, type Routed } from './host'
 
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
-export const DEMO_REMOTE_URL = 'https://remote.clearcraftlabs.com'
+export const DEMO_REMOTE_URL = 'https://ferrocast.clearcraftlabs.com'
 
 function minutesAgo(n: number): number {
   return Date.now() - n * 60_000

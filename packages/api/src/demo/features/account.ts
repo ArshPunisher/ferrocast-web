@@ -127,7 +127,7 @@ export class DemoAccount {
         if (this.state === 'pending') this.setup('signed_in')
       }, BROWSER_MS)
       return {
-        url: 'https://remote.clearcraftlabs.com/login?flow=af_demo',
+        url: 'https://ferrocast.clearcraftlabs.com/login/?flow=af_demo',
         expires_at: Date.now() + 600_000,
       }
     }

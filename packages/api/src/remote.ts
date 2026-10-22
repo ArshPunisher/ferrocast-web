@@ -50,7 +50,7 @@ export interface RemoteView {
 /** `POST /api/v1/pro/remote/codes` → a one-time link (10 minutes). */
 export interface RemoteLink {
   code: string
-  /** `https://remote.clearcraftlabs.com/app/#pair=<code>` */
+  /** `https://ferrocast.clearcraftlabs.com/app/#pair=<code>` */
   url: string
   expires_at: number
   /** Seconds left when the relay answered: count down from then, not from `expires_at`. */

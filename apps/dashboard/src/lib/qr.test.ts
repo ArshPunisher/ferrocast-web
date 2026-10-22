@@ -22,7 +22,7 @@ describe('QR encoder', () => {
   })
 
   it('draws a square with the three finder patterns and timing lines', () => {
-    const q = qrEncode('https://remote.clearcraftlabs.com/app/#pair=K7M2QXABCD')
+    const q = qrEncode('https://ferrocast.clearcraftlabs.com/app/#pair=K7M2QXABCD')
     expect(q.version).toBe(4)
     expect(q.size).toBe(33)
     expect(q.modules).toHaveLength(33)

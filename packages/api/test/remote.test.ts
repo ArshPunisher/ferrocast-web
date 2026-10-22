@@ -188,7 +188,7 @@ describe('demo: Settings › Dashboard anywhere', () => {
     engine.setPro({ active: true, features: true })
     expect((await api.view()).available).toBe(true)
     const link = await api.link('mod', 'Meera')
-    expect(link.url).toMatch(/^https:\/\/remote\.clearcraftlabs\.com\/app\/#pair=[2-9A-Z]{10}$/)
+    expect(link.url).toMatch(/^https:\/\/ferrocast\.clearcraftlabs\.com\/app\/#pair=[2-9A-Z]{10}$/)
     expect(link.role).toBe('mod')
     expect(link.expires_at - Date.now()).toBeGreaterThan(9 * 60_000)
     expect(await code(api.link('boss' as 'mod'))).toBe('400 invalid')

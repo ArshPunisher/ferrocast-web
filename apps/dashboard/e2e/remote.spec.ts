@@ -53,7 +53,7 @@ test.describe('Dashboard anywhere on the PC', () => {
     await expect(dialog.getByTestId('remote-qr')).toBeVisible()
     const link = dialog.getByRole('textbox', { name: 'Pairing link' })
     await expect(link).toHaveValue(
-      /^https:\/\/remote\.clearcraftlabs\.com\/app\/#pair=[2-9A-Z]{10}$/,
+      /^https:\/\/ferrocast\.clearcraftlabs\.com\/app\/#pair=[2-9A-Z]{10}$/,
     )
     await expect(dialog).toContainText(/Works once, for (10:00|9:5\d) more\./)
     // The phone opens the link: the dialog sees the new device and closes.
