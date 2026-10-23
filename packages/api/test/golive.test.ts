@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { goliveApi, goingTo, healthText, mbps } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
@@ -9,7 +9,7 @@ import { ApiError } from '../src/errors'
 function demo() {
   const engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
   const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
-  return { engine, api: goliveApi(client), studio: studioApi(client) }
+  return { engine, client, api: goliveApi(client), studio: studioApi(client) }
 }
 
 async function refusal(p: Promise<unknown>): Promise<ApiError> {
@@ -102,6 +102,48 @@ describe('demo: Go live everywhere', () => {
   })
 })
 
+describe('demo: upload protection', () => {
+  it('pauses the bottom platform on a weak upload, and Resume now brings it back', async () => {
+    vi.useFakeTimers()
+    try {
+      const { engine, client, api } = demo()
+      engine.setGoLive({ points_here: true, upload_kbps: 9000 })
+      const first = await api.view()
+      expect(first.protect).toBe(true)
+      expect(first.destinations.filter((d) => d.health?.state === 'live')).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(10_000)
+      const v = await api.view()
+      const yt = v.destinations.find((d) => d.id === 'youtube')
+      expect(yt?.health).toMatchObject({ state: 'paused' })
+      expect(healthText(yt?.health ?? null, null)).toMatchObject({
+        tone: 'paused',
+        label: 'Paused',
+        detail:
+          'Your upload dipped, so this paused to keep Twitch smooth. It comes back by itself.',
+      })
+      // Twitch, the top one, keeps going; the last one live never pauses.
+      expect(v.destinations.find((d) => d.id === 'twitch')?.health?.state).toBe('live')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect((await api.view()).destinations[0]?.health?.state).toBe('live')
+
+      await api.resume('youtube')
+      expect((await api.view()).destinations[1]?.health?.state).toBe('live')
+      expect((await refusal(api.resume('youtube'))).code).toBe('golive_not_paused')
+
+      // Switched off: nothing pauses, and the setting shows.
+      expect((await api.setProtect(false)).protect).toBe(false)
+      await vi.advanceTimersByTimeAsync(15_000)
+      const off = await api.view()
+      expect(off.protect).toBe(false)
+      expect(off.destinations.some((d) => d.health?.state === 'paused')).toBe(false)
+      const bad = await refusal(client.request('PUT', '/api/v1/golive/protection', { on: 'yes' }))
+      expect(bad.status).toBe(400)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('Go live words', () => {
   it('health lines', () => {
     expect(healthText(null, null)).toMatchObject({ tone: 'off', label: 'Waiting for OBS' })
@@ -150,6 +192,8 @@ describe('Go live words', () => {
     expect(remoteAllowed('owner', 'GET', '/golive/ingest')).toBe(false)
     expect(remoteAllowed('owner', 'POST', '/golive/destinations')).toBe(false)
     expect(remoteAllowed('owner', 'DELETE', '/golive/destinations/c_1')).toBe(false)
+    expect(remoteAllowed('owner', 'POST', '/golive/resume/kick')).toBe(true)
+    expect(remoteAllowed('owner', 'PUT', '/golive/protection')).toBe(true)
     expect(remoteAllowed('mod', 'GET', '/golive')).toBe(false)
   })
 })

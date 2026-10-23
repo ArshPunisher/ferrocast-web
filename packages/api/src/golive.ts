@@ -17,6 +17,8 @@ export interface DestinationConfig {
 export type PushState =
   | { state: 'waiting' | 'connecting' | 'live' | 'stopped' }
   | { state: 'reconnecting'; attempt: number; retry_in_ms: number; reason: string }
+  /** Upload protection paused it; it comes back by itself, no earlier than `until_ms`. */
+  | { state: 'paused'; until_ms: number; reason: string }
 
 export type PushHealth = PushState & { kbps: number; dropped: number; since_ms: number }
 
@@ -86,6 +88,8 @@ export interface GoLiveView {
   stats: StreamStats
   destinations: DestinationView[]
   upload: UploadCheck | null
+  /** Upload protection: the bottom platform pauses when the upload can't carry them all. */
+  protect: boolean
 }
 
 /** The `golive` live frame: every second while OBS streams to Ferrocast, and on changes. */
@@ -113,6 +117,14 @@ export function goliveApi(c: FerroClient) {
     pointObs: () => post<ObsSetup>('/golive/obs/setup'),
     restoreObs: () => post<ObsSetup>('/golive/obs/restore'),
     uploadCheck: () => post<UploadCheck>('/golive/upload-check'),
+    setProtect: (on: boolean) =>
+      c.request<{ destinations: DestinationConfig[]; protect: boolean }>(
+        'PUT',
+        '/api/v1/golive/protection',
+        { on },
+      ),
+    /** "Resume now" on a platform upload protection paused. */
+    resume: (id: string) => post<void>(`/golive/resume/${encodeURIComponent(id)}`),
   }
 }
 
@@ -134,7 +146,7 @@ export function healthText(
   h: PushHealth | null,
   blocked: string | null,
 ): {
-  tone: 'ok' | 'warn' | 'off' | 'bad'
+  tone: 'ok' | 'warn' | 'off' | 'bad' | 'paused'
   label: string
   detail: string | null
 } {
@@ -159,5 +171,7 @@ export function healthText(
       return { tone: 'off', label: 'Waiting for OBS', detail: null }
     case 'stopped':
       return { tone: 'off', label: 'Stopped', detail: null }
+    case 'paused':
+      return { tone: 'paused', label: 'Paused', detail: h.reason }
   }
 }

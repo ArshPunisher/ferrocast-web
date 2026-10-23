@@ -34,6 +34,12 @@ const SERVERS: Record<Exclude<Service, 'custom'>, string> = {
   youtube: 'a.rtmps.youtube.com',
   kick: 'fa723fc1b171.global-contribute.live-video.net',
 }
+/** As the engine's `protect.rs`: 4 trouble seconds pause the bottom one, 10 calm ones bring it
+ * back no earlier than its pause (60 s, doubling to 10 min). */
+const STRUGGLE_TICKS = 4
+const CALM_TICKS = 10
+const FIRST_PAUSE_MS = 60_000
+const MAX_PAUSE_MS = 600_000
 const DELAYS: Record<Service, number> = { twitch: 18, youtube: 24, kick: 140, custom: 35 }
 const LABELS: Record<Exclude<Service, 'custom'>, string> = {
   twitch: 'Twitch',
@@ -55,6 +61,12 @@ export class DemoGoLive {
   private keyint = 2000
   /** When each destination started sending this stream. */
   private started = new Map<string, number>()
+  private protect = true
+  /** Paused by upload protection: until when, and since when. */
+  private paused = new Map<string, { until: number; since: number; reason: string }>()
+  private struggle = 0
+  private calm = 0
+  private nextPause = FIRST_PAUSE_MS
   private watching = false
   private wasLive = false
   private seq = 0
@@ -107,6 +119,16 @@ export class DemoGoLive {
 
   private health(d: DestinationConfig, now: number): PushHealth | null {
     if (!this.live() || !d.enabled || this.blocked(d)) return null
+    const p = this.paused.get(d.id)
+    if (p)
+      return {
+        state: 'paused',
+        until_ms: p.until,
+        reason: p.reason,
+        kbps: 0,
+        dropped: 0,
+        since_ms: p.since,
+      }
     let since = this.started.get(d.id)
     if (since === undefined) {
       since = now
@@ -189,6 +211,7 @@ export class DemoGoLive {
       stats: this.stats(),
       destinations: this.destinations(),
       upload: clone(this.upload),
+      protect: this.protect,
     }
   }
 
@@ -199,7 +222,10 @@ export class DemoGoLive {
   /** Sends the health lines while live, and once when live changes. */
   private tick(): void {
     const live = this.live()
-    if (!live) this.started.clear()
+    if (!live) {
+      this.started.clear()
+      this.resetProtect()
+    }
     if (live || live !== this.wasLive) {
       this.wasLive = live
       this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
@@ -211,6 +237,7 @@ export class DemoGoLive {
     if (this.watching) return
     this.watching = true
     const loop = () => {
+      this.protectTick(Date.now())
       this.tick()
       this.host.later(loop, 1000)
     }
@@ -233,6 +260,9 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'upload-check') return this.check()
+    if (method === 'PUT' && path === 'protection') return this.setProtect(body)
+    if (method === 'POST' && seg[1] === 'resume' && seg.length === 3)
+      return this.resume(seg[2] ?? '')
     return NOT_MINE
   }
 
@@ -259,7 +289,11 @@ export class DemoGoLive {
       next.push({ ...d, enabled: item.enabled })
     }
     this.cfg = next
-    for (const d of next) if (!d.enabled) this.started.delete(d.id)
+    for (const d of next)
+      if (!d.enabled) {
+        this.started.delete(d.id)
+        this.paused.delete(d.id)
+      }
     this.tick()
     return { destinations: clone(this.cfg) }
   }
@@ -304,6 +338,69 @@ export class DemoGoLive {
       )
     this.cfg = this.cfg.filter((x) => x.id !== id)
     this.started.delete(id)
+    this.tick()
+    return undefined
+  }
+
+  /** One second of upload protection: the demo's line carries what its upload speed allows. */
+  private protectTick(now: number): void {
+    if (!this.protect || !this.live()) return
+    const sending = this.destinations().filter((d) => d.health?.state === 'live')
+    const judged = sending.filter((d) => now - (d.health?.since_ms ?? now) >= 3000)
+    const trouble = judged.length > 0 && sending.length * 6100 > this.uploadKbps
+    if (trouble) {
+      this.struggle++
+      this.calm = 0
+    } else {
+      this.calm++
+      this.struggle = 0
+    }
+    const order = this.cfg.filter((d) => d.enabled).map((d) => d.id)
+    if (this.struggle >= STRUGGLE_TICKS && sending.length >= 2) {
+      const victim = [...order].reverse().find((id) => sending.some((d) => d.id === id))
+      if (!victim) return
+      const top = sending.find((d) => d.id !== victim)?.name ?? ''
+      this.struggle = 0
+      this.paused.set(victim, {
+        until: now + this.nextPause,
+        since: now,
+        reason: `Your upload dipped, so this paused to keep ${top} smooth. It comes back by itself.`,
+      })
+      this.started.delete(victim)
+      this.nextPause = Math.min(this.nextPause * 2, MAX_PAUSE_MS)
+    } else if (this.calm >= CALM_TICKS) {
+      const ready = order.find((id) => (this.paused.get(id)?.until ?? Infinity) <= now)
+      if (!ready) return
+      this.paused.delete(ready)
+      this.calm = 0
+    }
+  }
+
+  private resetProtect(): void {
+    this.paused.clear()
+    this.struggle = 0
+    this.calm = 0
+    this.nextPause = FIRST_PAUSE_MS
+  }
+
+  private setProtect(body: unknown): { destinations: DestinationConfig[]; protect: boolean } {
+    const b = requireObj(body)
+    if (typeof b.on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+    this.protect = b.on
+    if (!b.on) this.resetProtect()
+    this.tick()
+    return { destinations: clone(this.cfg), protect: this.protect }
+  }
+
+  private resume(id: string): undefined {
+    if (!this.paused.has(id))
+      throw new HttpError(
+        422,
+        'golive_not_paused',
+        'That platform isn’t paused.',
+        'Nothing to resume.',
+      )
+    this.paused.delete(id)
     this.tick()
     return undefined
   }
