@@ -346,3 +346,18 @@ describe('make it yours', () => {
     expect(back.url).toBe(o.url)
   })
 })
+
+describe('demo: mic on break screens', () => {
+  it('adds the mic to Starting, BRB and Ending only when asked', async () => {
+    const { engine, api } = demo()
+    const plan = (await api.plan('builtin.forge')).plan
+    expect(plan.mic_on_breaks).toBe(false)
+    await api.apply('builtin.forge', { ...plan, mic_on_breaks: true })
+    const has = (name: string) =>
+      engine.studio.obs.scenes.find((s) => s.name === name)!.items.some((i) => i.source === 'Mic')
+    expect(has('Forge · Starting soon') && has('Forge · BRB') && has('Forge · Ending')).toBe(true)
+    expect(has('Forge · In game')).toBe(false)
+    await api.apply('builtin.forge', { ...plan, mic_on_breaks: false })
+    expect(has('Forge · BRB')).toBe(false)
+  })
+})

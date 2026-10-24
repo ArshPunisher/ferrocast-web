@@ -503,6 +503,12 @@ function Table({
           )}
         </Field>
         <Switch
+          label="Mic on break screens"
+          description="Starting, BRB and Ending get your mic. Off keeps them quiet."
+          checked={plan.mic_on_breaks === true}
+          onChange={(v) => setPlan({ ...plan, mic_on_breaks: v })}
+        />
+        <Switch
           label="Switch OBS to Starting when done"
           checked={plan.switch_to_starting !== false}
           onChange={(v) => setPlan({ ...plan, switch_to_starting: v })}

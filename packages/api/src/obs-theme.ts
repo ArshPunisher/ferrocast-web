@@ -31,6 +31,8 @@ export interface ThemePlan {
   /** Old widgets (source names) to hide, not delete. */
   hide_old?: string[]
   alert_style?: boolean
+  /** Your mic on the Starting, BRB and Ending screens (off by default). */
+  mic_on_breaks?: boolean
 }
 
 export interface OldWidget {
@@ -88,6 +90,14 @@ export const CAPTURE_KINDS = [
   'xcomposite_input',
   'pipewire-screen-capture-source',
   'pipewire-window-capture-source',
+]
+
+/** Input kinds for a microphone. */
+export const MIC_KINDS = [
+  'wasapi_input_capture',
+  'coreaudio_input_capture',
+  'pulse_input_capture',
+  'alsa_input_capture',
 ]
 
 /** Input kinds for a camera. */
@@ -196,6 +206,7 @@ export function guessThemePlan(
     switch_to_starting: true,
     hide_old: old.map((w) => w.source),
     alert_style: true,
+    mic_on_breaks: false,
   }
 }
 

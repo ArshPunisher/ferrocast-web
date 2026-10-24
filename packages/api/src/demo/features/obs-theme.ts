@@ -57,6 +57,8 @@ interface Record {
   alert_changed: boolean
   alert_before: string | null
   scene_before: string | null
+  /** Mics Ferrocast added for "Mic on break screens". */
+  mic_items: [string, string][]
 }
 
 /** Old widgets in the demo's OBS: none at first; `seedOldWidget` adds one for tests and demos. */
@@ -124,6 +126,12 @@ export class DemoObsTheme {
         .filter((s) => s.items.some((i) => i.source === w.source))
         .map((s) => s.name),
     }))
+  }
+
+  /** Start show's mic check list, else the demo's mic. */
+  private mics(): string[] {
+    const listed = this.host.studio.showCfg.mic_sources ?? []
+    return listed.length ? listed : ['Mic']
   }
 
   private sources(): string[] {
@@ -216,6 +224,16 @@ export class DemoObsTheme {
       alert_changed: false,
       alert_before: null,
       scene_before: obs.current,
+      mic_items: [],
+    }
+    // Turned off: the mics Ferrocast added come out again.
+    if (!plan.mic_on_breaks && rec.mic_items.length) {
+      for (const [scene, m] of rec.mic_items) {
+        const sc = obs.scenes.find((x) => x.name === scene)
+        if (sc) sc.items = sc.items.filter((it) => it.source !== m)
+        rec.added_items = rec.added_items.filter(([x, n]) => !(x === scene && n === m))
+      }
+      rec.mic_items = []
     }
     rec.at = this.host.now()
     rec.design_id = t.id
@@ -316,6 +334,28 @@ export class DemoObsTheme {
         underAdded = true
         if (!mine) rec.added_items.push([scene, p.under])
       }
+      const breakScreen =
+        ['starting', 'brb', 'ending'].includes(p.role ?? '') ||
+        ['starting_soon', 'brb', 'ending'].includes(p.key)
+      let micAdded = false
+      // A scene under it that has the mic already brings it: no second copy.
+      const underHas = (m: string) =>
+        !!p.under &&
+        (p.under === m ||
+          obs.scenes.some((x) => x.name === p.under && x.items.some((i) => i.source === m)))
+      if (plan.mic_on_breaks && breakScreen)
+        for (const m of this.mics().filter((m) => !underHas(m)))
+          if (!target.items.some((i) => i.source === m)) {
+            target.items.unshift({
+              id: nextId(target.items),
+              source: m,
+              enabled: true,
+              kind: 'wasapi_input_capture',
+            })
+            micAdded = true
+            rec.mic_items.push([scene, m])
+            if (!mine) rec.added_items.push([scene, m])
+          }
       rec.screens = rec.screens.filter((s) => s.key !== p.key)
       rec.screens.push({
         key: p.key,
@@ -327,6 +367,7 @@ export class DemoObsTheme {
       let detail =
         p.place.kind === 'new' && mine ? `In the scene "${scene}"` : `On top of "${scene}"`
       if (p.under) detail += `, with "${p.under}" under it${underAdded ? '' : ' (already there)'}`
+      if (micAdded) detail += ', with your mic'
       if (hid) detail += `, ${hid} old source${hid === 1 ? '' : 's'} hidden`
       steps.push({ id: sid, label: screen.name, status: 'done', detail: `${detail}.` })
       if (p.role) roles[p.role] = scene
@@ -506,7 +547,14 @@ function readPlan(body: unknown): ThemePlan {
   const bad = (m: string) => new HttpError(400, 'invalid', `A field is missing or wrong: ${m}`)
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw bad('the plan.')
   const o = body as { [k: string]: unknown }
-  const allowed = ['prefix', 'screens', 'switch_to_starting', 'hide_old', 'alert_style']
+  const allowed = [
+    'prefix',
+    'screens',
+    'switch_to_starting',
+    'hide_old',
+    'alert_style',
+    'mic_on_breaks',
+  ]
   const extra = Object.keys(o).find((k) => !allowed.includes(k))
   if (extra) throw bad(`unknown field \`${extra}\`.`)
   if (typeof o.prefix !== 'string') throw bad('prefix.')
