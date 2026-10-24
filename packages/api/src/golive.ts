@@ -79,6 +79,15 @@ export interface ObsSetup {
   streaming: boolean
   /** What "Put OBS back" restores ("Twitch", "a custom server"). */
   before: string | null
+  /** Aitum Multistream's outputs, when OBS has that plugin. */
+  aitum: AitumOutput[] | null
+}
+
+/** One Aitum Multistream output: where it goes (when known) and whether it's sending now. */
+export interface AitumOutput {
+  name: string
+  platform: Exclude<Service, 'custom'> | null
+  live: boolean
 }
 
 export interface GoLiveView {
@@ -90,6 +99,8 @@ export interface GoLiveView {
   upload: UploadCheck | null
   /** Upload protection: the bottom platform pauses when the upload can't carry them all. */
   protect: boolean
+  /** The streamer said they run Aitum Multistream on purpose (hides the setup note). */
+  aitum_ok: boolean
 }
 
 /** The `golive` live frame: every second while OBS streams to Ferrocast, and on changes. */
@@ -122,6 +133,13 @@ export function goliveApi(c: FerroClient) {
         'PUT',
         '/api/v1/golive/protection',
         { on },
+      ),
+    /** "I use Aitum Multistream on purpose": hides the setup note. */
+    setAitumOk: (ok: boolean) =>
+      c.request<{ destinations: DestinationConfig[]; aitum_ok: boolean }>(
+        'PUT',
+        '/api/v1/golive/aitum',
+        { ok },
       ),
     /** "Resume now" on a platform upload protection paused. */
     resume: (id: string) => post<void>(`/golive/resume/${encodeURIComponent(id)}`),
@@ -174,4 +192,30 @@ export function healthText(
     case 'paused':
       return { tone: 'paused', label: 'Paused', detail: h.reason }
   }
+}
+
+/**
+ * Destinations ticked in Go live that an Aitum Multistream output also streams to (with
+ * `live`, only outputs sending now): those platforms would get the stream twice.
+ */
+export function aitumClashes(
+  outputs: AitumOutput[] | null,
+  destinations: Pick<DestinationView, 'id' | 'kind' | 'name' | 'enabled'>[],
+  live = false,
+): { id: string; name: string; outputs: string[] }[] {
+  if (!outputs) return []
+  return destinations
+    .filter((d) => d.enabled && d.kind !== 'custom')
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      outputs: outputs.filter((o) => o.platform === d.kind && (!live || o.live)).map((o) => o.name),
+    }))
+    .filter((c) => c.outputs.length > 0)
+}
+
+/** "Twitch", "Twitch and YouTube", "Twitch, YouTube and Kick". */
+export function andList(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }

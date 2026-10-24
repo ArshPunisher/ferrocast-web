@@ -4,6 +4,7 @@
 // §4 "Go live everywhere".
 
 import type {
+  AitumOutput,
   DestinationConfig,
   DestinationView,
   GoLiveFrame,
@@ -25,6 +26,8 @@ export interface DemoGoLiveSetup {
   points_here?: boolean
   codec?: VideoCodec
   keyframe_interval_ms?: number
+  /** Aitum Multistream's outputs in the pretend OBS (`null`: not installed). */
+  aitum?: AitumOutput[] | null
 }
 
 const INGEST = 'rtmp://127.0.0.1:1935/live'
@@ -62,6 +65,8 @@ export class DemoGoLive {
   /** When each destination started sending this stream. */
   private started = new Map<string, number>()
   private protect = true
+  private aitum: AitumOutput[] | null = null
+  private aitumOk = false
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
   private struggle = 0
@@ -86,6 +91,7 @@ export class DemoGoLive {
     }
     if (s.codec) this.codec = s.codec
     if (s.keyframe_interval_ms !== undefined) this.keyint = s.keyframe_interval_ms
+    if (s.aitum !== undefined) this.aitum = s.aitum
     this.tick()
   }
 
@@ -200,6 +206,7 @@ export class DemoGoLive {
       points_here: this.pointsHere,
       streaming: this.obsStreaming(),
       before: this.before,
+      aitum: this.obsConnected() ? clone(this.aitum) : null,
     }
   }
 
@@ -212,6 +219,7 @@ export class DemoGoLive {
       destinations: this.destinations(),
       upload: clone(this.upload),
       protect: this.protect,
+      aitum_ok: this.aitumOk,
     }
   }
 
@@ -261,6 +269,12 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'upload-check') return this.check()
     if (method === 'PUT' && path === 'protection') return this.setProtect(body)
+    if (method === 'PUT' && path === 'aitum') {
+      const b = requireObj(body)
+      if (typeof b.ok !== 'boolean') throw new HttpError(400, 'invalid', 'ok: true or false.')
+      this.aitumOk = b.ok
+      return { destinations: clone(this.cfg), aitum_ok: this.aitumOk }
+    }
     if (method === 'POST' && seg[1] === 'resume' && seg.length === 3)
       return this.resume(seg[2] ?? '')
     return NOT_MINE

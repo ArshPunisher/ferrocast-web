@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { goliveApi, goingTo, healthText, mbps } from '../src/golive'
+import { aitumClashes, andList, goliveApi, goingTo, healthText, mbps } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
@@ -144,6 +144,41 @@ describe('demo: upload protection', () => {
   })
 })
 
+describe('Aitum Multistream', () => {
+  const dests = [
+    { id: 'twitch', kind: 'twitch' as const, name: 'Twitch', enabled: true },
+    { id: 'youtube', kind: 'youtube' as const, name: 'YouTube', enabled: true },
+    { id: 'kick', kind: 'kick' as const, name: 'Kick', enabled: false },
+  ]
+  const outs = [
+    { name: 'Twitch Output', platform: 'twitch' as const, live: true },
+    { name: 'Kick', platform: 'kick' as const, live: true },
+    { name: 'Backup', platform: null, live: true },
+    { name: 'YT', platform: 'youtube' as const, live: false },
+  ]
+
+  it('only ticked platforms clash; live ones while live', () => {
+    expect(aitumClashes(null, dests)).toEqual([])
+    expect(aitumClashes(outs, dests).map((c) => c.name)).toEqual(['Twitch', 'YouTube'])
+    expect(aitumClashes(outs, dests, true)).toEqual([
+      { id: 'twitch', name: 'Twitch', outputs: ['Twitch Output'] },
+    ])
+    expect(andList(['Twitch'])).toBe('Twitch')
+    expect(andList(['Twitch', 'YouTube', 'Kick'])).toBe('Twitch, YouTube and Kick')
+  })
+
+  it('the demo reports outputs and saves "on purpose"', async () => {
+    const { engine, api } = demo()
+    expect((await api.view()).obs.aitum).toBeNull()
+    engine.setGoLive({ aitum: outs })
+    const v = await api.view()
+    expect(v.obs.aitum).toHaveLength(4)
+    expect(v.aitum_ok).toBe(false)
+    expect((await api.setAitumOk(true)).aitum_ok).toBe(true)
+    expect((await api.view()).aitum_ok).toBe(true)
+  })
+})
+
 describe('Go live words', () => {
   it('health lines', () => {
     expect(healthText(null, null)).toMatchObject({ tone: 'off', label: 'Waiting for OBS' })
@@ -194,6 +229,7 @@ describe('Go live words', () => {
     expect(remoteAllowed('owner', 'DELETE', '/golive/destinations/c_1')).toBe(false)
     expect(remoteAllowed('owner', 'POST', '/golive/resume/kick')).toBe(true)
     expect(remoteAllowed('owner', 'PUT', '/golive/protection')).toBe(true)
+    expect(remoteAllowed('owner', 'PUT', '/golive/aitum')).toBe(true)
     expect(remoteAllowed('mod', 'GET', '/golive')).toBe(false)
   })
 })
