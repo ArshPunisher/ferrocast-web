@@ -116,6 +116,33 @@ test.describe('go live everywhere', () => {
     await expect(live.getByText(/Kick:/)).toHaveCount(0)
   })
 
+  test('a weak upload pauses the bottom platform; Resume now and the switch', async ({ page }) => {
+    test.slow()
+    await open(page, 'studio/golive')
+    await demo(
+      page,
+      '(d) => { d.setGoLive({ points_here: true, upload_kbps: 9000 }); d.studio.obs.streaming = true }',
+    )
+    const live = page.locator('#golive-live')
+    await expect(live.getByText('YouTube: Paused')).toBeVisible({ timeout: 20_000 })
+    await expect(
+      live.getByText('Your upload dipped, so this paused to keep Twitch smooth.', { exact: false }),
+    ).toBeVisible()
+    await expect(live.getByText(/Back in \d+ s at the earliest\./)).toBeVisible()
+    await expect(live.getByText(/1 of 2 live · 1 paused/)).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /YouTube:.*stream paused to save upload/ }),
+    ).toBeVisible()
+    await live.getByRole('button', { name: 'Resume now' }).click()
+    await expect(page.getByText('YouTube is coming back.')).toBeVisible()
+    await expect(live.getByText('YouTube: Live')).toBeVisible()
+    const toggle = panel(page, 'Your platforms').getByRole('switch', { name: 'Upload protection' })
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await toggle.click()
+    await expect(page.getByText('Upload protection is off.')).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  })
+
   test('the platform list reorders from the keyboard', async ({ page }) => {
     await open(page, 'studio/golive')
     const p = panel(page, 'Your platforms')

@@ -14,6 +14,7 @@ import {
   Gauge,
   Info,
   LockSimple,
+  Pause,
   Plus,
   Plug,
   Trash,
@@ -104,7 +105,7 @@ export function GoLiveTab() {
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-5">
         {view.live && <LiveCard view={view} onSaved={res.reload} />}
-        <Platforms view={view} onSaved={res.reload} />
+        <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
       </div>
       <div className="flex min-w-0 flex-col gap-5">
         <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
@@ -122,6 +123,7 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
   const { run, busy } = useAction()
   const on = view.destinations.filter((d) => d.enabled)
   const live = on.filter((d) => d.health?.state === 'live')
+  const paused = on.filter((d) => d.health?.state === 'paused').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
   const since = Math.min(...on.map((d) => d.health?.since_ms ?? Infinity))
   const stopTrying = (id: string) =>
@@ -130,6 +132,10 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
         view.destinations.map((d) => ({ id: d.id, enabled: d.enabled && d.id !== id })),
       ),
     ).then((r) => r && onSaved())
+  const resume = (d: DestinationView) =>
+    void run(`resume:${d.id}`, () => api.resume(d.id).then(() => true), {
+      success: `${d.name} is coming back.`,
+    }).then((r) => r && onSaved())
   return (
     <Panel id="golive-live">
       <div className="flex flex-col gap-3">
@@ -143,7 +149,8 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
             <b className="font-display text-[17px] tabular-nums">{elapsed(now - since)}</b>
           )}
           <span className="text-[13px] text-text-3">
-            {live.length} of {on.length} live · {mbps(out)} going out
+            {live.length} of {on.length} live{paused > 0 ? ` · ${paused} paused` : ''} · {mbps(out)}{' '}
+            going out
           </span>
         </div>
         <ul
@@ -156,7 +163,7 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
               <li
                 key={d.id}
                 className={cx(
-                  'grid grid-cols-[30px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-3.5 py-3 last:border-b-0',
+                  'grid grid-cols-[30px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b border-line px-3.5 py-3 last:border-b-0 sm:grid-cols-[30px_minmax(0,1fr)_auto]',
                   h.tone === 'warn' ? 'bg-warn-soft' : 'bg-surface-1',
                 )}
               >
@@ -168,11 +175,13 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
                       h.tone === 'ok' && 'text-ok',
                       h.tone === 'warn' && 'text-warn',
                       h.tone === 'bad' && 'text-danger',
-                      h.tone === 'off' && 'text-text-3',
+                      (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
                     )}
                   >
                     {h.tone === 'warn' ? (
                       <ArrowsClockwise size={14} aria-hidden />
+                    ) : h.tone === 'paused' ? (
+                      <Pause size={14} weight="fill" aria-hidden />
                     ) : (
                       <span className="size-[7px] rounded-full bg-current" aria-hidden />
                     )}
@@ -181,13 +190,32 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
                     </span>
                   </span>
                   {h.detail && <p className="m-0 text-[12.5px] text-text-3">{h.detail}</p>}
+                  {d.health?.state === 'paused' && d.health.until_ms > now && (
+                    <p className="m-0 text-[12.5px] text-text-3 tabular-nums">
+                      Back in {waitText(d.health.until_ms - now)} at the earliest.
+                    </p>
+                  )}
                 </div>
-                {h.tone === 'warn' || h.tone === 'bad' ? (
-                  <Button size="sm" busy={busy === `stop:${d.id}`} onClick={() => stopTrying(d.id)}>
+                {h.tone === 'paused' ? (
+                  <Button
+                    size="sm"
+                    className="col-start-2 justify-self-start sm:col-start-auto"
+                    busy={busy === `resume:${d.id}`}
+                    onClick={() => resume(d)}
+                  >
+                    Resume now
+                  </Button>
+                ) : h.tone === 'warn' || h.tone === 'bad' ? (
+                  <Button
+                    size="sm"
+                    className="col-start-2 justify-self-start sm:col-start-auto"
+                    busy={busy === `stop:${d.id}`}
+                    onClick={() => stopTrying(d.id)}
+                  >
                     Stop trying
                   </Button>
                 ) : (
-                  <span />
+                  <span className="hidden sm:block" />
                 )}
               </li>
             )
@@ -201,6 +229,12 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
   )
 }
 
+/** `45 s`, then whole minutes rounded up: `2 min`. */
+function waitText(ms: number): string {
+  const s = Math.max(1, Math.ceil(ms / 1000))
+  return s < 60 ? `${s} s` : `${Math.ceil(s / 60)} min`
+}
+
 function elapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
   const p = (n: number) => String(n).padStart(2, '0')
@@ -209,7 +243,15 @@ function elapsed(ms: number): string {
 
 // ---------------------------------------------------------------- 2A: the platforms
 
-function Platforms({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) {
+function Platforms({
+  view,
+  onSaved,
+  onProtect,
+}: {
+  view: GoLiveView
+  onSaved: () => void
+  onProtect: (on: boolean) => void
+}) {
   const api = useGoLive()
   const { run, busy } = useAction()
   const [rows, setRows] = useState(view.destinations)
@@ -262,6 +304,10 @@ function Platforms({ view, onSaved }: { view: GoLiveView; onSaved: () => void })
       setRemoving(null)
       if (r) onSaved()
     })
+  const protect = (on: boolean) =>
+    void run('protect', () => api.setProtect(on), {
+      success: on ? 'Upload protection is on.' : 'Upload protection is off.',
+    }).then((r) => r && onProtect(r.protect))
 
   const ticked = merged.filter((d) => d.enabled)
   const need = ticked.reduce((a, d) => a + (d.health?.kbps || view.stats.kbps || 6160), 0)
@@ -309,7 +355,11 @@ function Platforms({ view, onSaved }: { view: GoLiveView; onSaved: () => void })
               <RowText d={d} />
               <div className="flex items-center gap-3">
                 <span className="hidden text-right font-mono text-[12px] leading-tight text-text-2 sm:block">
-                  {d.enabled ? mbps(d.health?.kbps || view.stats.kbps || 6160) : ''}
+                  {!d.enabled
+                    ? ''
+                    : d.health?.state === 'paused'
+                      ? 'Paused'
+                      : mbps(d.health?.kbps || view.stats.kbps || 6160)}
                 </span>
                 {d.kind === 'custom' && (
                   <IconButton
@@ -335,6 +385,15 @@ function Platforms({ view, onSaved }: { view: GoLiveView; onSaved: () => void })
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
           <b className="font-semibold">{goingTo(merged)}.</b>
           {ticked.length > 0 && <span className="text-text-3">Needs {mbps(need)} upload.</span>}
+        </div>
+        <div className="border-t border-line pt-3">
+          <Switch
+            label="Upload protection"
+            description="If your upload can’t carry every platform, the bottom one pauses for a while so the ones above stay smooth."
+            checked={view.protect}
+            disabled={busy === 'protect'}
+            onChange={protect}
+          />
         </div>
         {twitchShared && (
           <Note>

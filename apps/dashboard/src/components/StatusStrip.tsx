@@ -75,7 +75,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
           ? 'stream can’t start'
           : dest?.health?.state === 'reconnecting'
             ? 'stream reconnecting'
-            : null
+            : dest?.health?.state === 'paused'
+              ? 'stream paused to save upload'
+              : null
         const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
         const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
         const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
