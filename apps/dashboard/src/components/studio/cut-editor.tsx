@@ -12,9 +12,10 @@ import {
   type CutLayout,
   type CutView,
 } from '@ferrocast/api'
-import { Button, Skeleton, cx } from '@ferrocast/ui'
+import { Button, Input, Select, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useResource } from '../../lib/hooks'
+import { useMode } from '../../lib/mode'
 import { useGoLive } from './golive'
 
 const LAYOUTS: { value: CutLayout; label: string }[] = [
@@ -48,6 +49,7 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
     setDraft(cut.config)
   }
   const dirty = JSON.stringify(draft) !== saved
+  const [mode] = useMode('studio')
   const problem = checkCut(draft)
   const save = () =>
     void run('save', () => api.setVerticalCut(draft), { success: 'Layout saved.' }).then(
@@ -126,6 +128,14 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
             <span className="text-[12px] text-text-3">What phones see</span>
           </div>
         </div>
+        {mode === 'advanced' && picture.data && (
+          <Numbers
+            cut={draft}
+            width={picture.data.width}
+            height={picture.data.height}
+            onChange={setDraft}
+          />
+        )}
         {problem && (
           <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
             {problem.replace(/^\w+:\s*/, '')}
@@ -406,5 +416,122 @@ function Thumb({ layout, on }: { layout: CutLayout; on: boolean }) {
         </span>
       )}
     </span>
+  )
+}
+
+/** Advanced mode (board item 6): the boxes in the stream's own pixels, and the output. */
+function Numbers({
+  cut,
+  width,
+  height,
+  onChange,
+}: {
+  cut: CutConfig
+  width: number
+  height: number
+  onChange: (c: CutConfig) => void
+}) {
+  const px = (part: Part, k: keyof CutBox) => {
+    const v = cut[part][k] * (k === 'x' || k === 'w' ? width : height)
+    return Math.round(v)
+  }
+  const setPx = (part: Part, k: keyof CutBox, v: number) =>
+    onChange({
+      ...cut,
+      [part]: { ...cut[part], [k]: v / (k === 'x' || k === 'w' ? width : height) },
+    })
+  const num = (label: string, value: number, set: (n: number) => void, unit: string) => (
+    <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+      {label}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block w-24">
+          <Input
+            aria-label={label}
+            inputMode="numeric"
+            className="h-8 text-right tabular-nums"
+            value={Number.isFinite(value) ? String(value) : ''}
+            onChange={(e) => set(e.target.value === '' ? Number.NaN : Number(e.target.value))}
+          />
+        </span>
+        <span className="w-7 text-text-3">{unit}</span>
+      </span>
+    </label>
+  )
+  const parts: Part[] = cut.layout === 'game_only' ? ['game'] : ['camera', 'game']
+  return (
+    <div className="grid grid-cols-1 gap-4 border-t border-line pt-4 sm:grid-cols-2">
+      {parts.map((part) => (
+        <fieldset key={part} className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className={cx('mb-1 text-[13px] font-bold', 'text-text')}>
+            {PART_LABEL[part]} box ({width} × {height} picture)
+          </legend>
+          {num(`${PART_LABEL[part]} left`, px(part, 'x'), (n) => setPx(part, 'x', n), 'px')}
+          {num(`${PART_LABEL[part]} top`, px(part, 'y'), (n) => setPx(part, 'y', n), 'px')}
+          {num(`${PART_LABEL[part]} width`, px(part, 'w'), (n) => setPx(part, 'w', n), 'px')}
+          {num(`${PART_LABEL[part]} height`, px(part, 'h'), (n) => setPx(part, 'h', n), 'px')}
+        </fieldset>
+      ))}
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-1 text-[13px] font-bold text-text">Output</legend>
+        {cut.layout === 'camera_top' &&
+          num(
+            'Camera’s share of the height',
+            cut.camera_share,
+            (n) => onChange({ ...cut, camera_share: n }),
+            '%',
+          )}
+        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+          Size
+          <span className="inline-block w-56">
+            <Select
+              className="h-8"
+              value={`${cut.width}x${cut.height}`}
+              onChange={(e) =>
+                onChange(
+                  e.target.value === '720x1280'
+                    ? { ...cut, width: 720, height: 1280 }
+                    : { ...cut, width: 1080, height: 1920 },
+                )
+              }
+            >
+              <option value="1080x1920">1080 × 1920</option>
+              <option value="720x1280">720 × 1280</option>
+            </Select>
+          </span>
+        </label>
+        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+          Frame rate
+          <span className="inline-block w-56">
+            <Select
+              className="h-8"
+              value={String(cut.fps)}
+              onChange={(e) => onChange({ ...cut, fps: e.target.value === '60' ? 60 : 30 })}
+            >
+              <option value="30">30 fps</option>
+              <option value="60">60 fps</option>
+            </Select>
+          </span>
+        </label>
+        {num('Bitrate', cut.kbps, (n) => onChange({ ...cut, kbps: n }), 'kbps')}
+        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+          Encoder
+          <span className="inline-block w-56">
+            <Select
+              className="h-8"
+              value={cut.encoder ?? 'auto'}
+              onChange={(e) =>
+                onChange({ ...cut, encoder: e.target.value === 'processor' ? 'processor' : 'auto' })
+              }
+            >
+              <option value="auto">Graphics card (automatic)</option>
+              <option value="processor">Processor (x264)</option>
+            </Select>
+          </span>
+        </label>
+        <p className="m-0 text-[12.5px] text-text-3">
+          A keyframe every 2 s, as the platforms want.
+        </p>
+      </fieldset>
+    </div>
   )
 }

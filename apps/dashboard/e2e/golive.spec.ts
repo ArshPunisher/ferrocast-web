@@ -255,6 +255,51 @@ test.describe('go live everywhere', () => {
     })
   })
 
+  test('Advanced mode: the switch is remembered and adds the rule, the settings card and the numbers', async ({
+    page,
+  }) => {
+    await open(page, 'studio/golive')
+    await expect(page.locator('#golive-advanced')).toHaveCount(0)
+    await page.getByRole('radiogroup', { name: 'Simple or Advanced' }).getByText('Advanced').click()
+    const card = panel(page, 'Advanced settings')
+    await expect(card).toBeVisible()
+    // The rule as a sentence: a bad number says so, a good one saves.
+    const platforms = panel(page, 'Your platforms')
+    await platforms.getByLabel('Slow share').fill('99')
+    await expect(platforms.getByRole('alert')).toHaveText('50 to 95 percent.')
+    await platforms.getByLabel('Slow share').fill('60')
+    await platforms.getByRole('button', { name: 'Save rule' }).click()
+    await expect(page.getByText('Upload protection’s rule saved.')).toBeVisible()
+    // Per platform: a server of its own and retry timing.
+    await card.getByRole('tab', { name: 'Twitch' }).click()
+    await card.getByLabel('Server').fill('https://nope')
+    await expect(card.getByRole('alert')).toContainText('rtmp:// or rtmps://')
+    await card.getByLabel('Server').fill('rtmps://live-fra.twitch.tv/app')
+    await card.getByLabel('First retry').fill('2')
+    await card.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Advanced settings saved.')).toBeVisible()
+    // The local server: a new key asks first.
+    await card.getByRole('tab', { name: 'Local server' }).click()
+    await card.getByRole('button', { name: 'Make a new key' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Make a new stream key?' })
+    await dialog.getByRole('button', { name: 'Make a new key' }).click()
+    await expect(page.getByText('New key made. OBS was pointed at it again.')).toBeVisible()
+    // Remembered for this screen; the vertical editor shows its numbers.
+    await page.reload()
+    await expect(page.locator('#golive-advanced')).toBeVisible()
+    const section = page.getByRole('radiogroup', { name: 'Studio section' })
+    await section.getByText('Vertical', { exact: true }).click()
+    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    const editor = panel(page, 'Vertical layout')
+    await expect(editor.getByLabel('Camera width')).toHaveValue('461')
+    await editor.getByLabel('Bitrate').fill('6000')
+    await editor.getByRole('button', { name: 'Save layout' }).click()
+    await expect(page.getByText('Layout saved.')).toBeVisible()
+    // Back to Simple: the extras go.
+    await page.getByRole('radiogroup', { name: 'Simple or Advanced' }).getByText('Simple').click()
+    await expect(editor.getByLabel('Bitrate')).toHaveCount(0)
+  })
+
   test('the platform list reorders from the keyboard', async ({ page }) => {
     await open(page, 'studio/golive')
     const p = panel(page, 'Your platforms')

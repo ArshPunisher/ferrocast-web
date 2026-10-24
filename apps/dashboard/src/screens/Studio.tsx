@@ -2,6 +2,7 @@
 // "Studio" and "Go live everywhere").
 
 import { Segmented } from '@ferrocast/ui'
+import { ModeSwitch } from '../components/ModeSwitch'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
@@ -32,6 +33,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
       <PageHeader
         title="Studio"
         description="Go live, set your title everywhere, run OBS, keep the big moments."
+        actions={<ModeSwitch screen="studio" />}
       />
       <Segmented
         label="Studio section"

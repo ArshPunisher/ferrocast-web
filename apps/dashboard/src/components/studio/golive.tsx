@@ -52,6 +52,8 @@ import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
+import { useMode } from '../../lib/mode'
+import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useObsHealth } from './obs'
 
 export function useGoLive() {
@@ -109,6 +111,7 @@ export function GoLiveTab() {
   const api = useGoLive()
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
+  const [mode] = useMode('studio')
   const live = !!view?.live
   const reload = res.reload
   // While live, OBS's side (Aitum Multistream's outputs) is read again every 15 s.
@@ -132,6 +135,7 @@ export function GoLiveTab() {
       <div className="flex min-w-0 flex-col gap-5">
         {view.live && <LiveCard view={view} onSaved={res.reload} />}
         <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
+        {mode === 'advanced' && <AdvancedCard view={view} onSaved={res.reload} />}
       </div>
       <div className="flex min-w-0 flex-col gap-5">
         {!view.live && !view.aitum_ok && clashes.length > 0 && (
@@ -381,6 +385,7 @@ export function Platforms({
 
   const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
+  const [mode] = useMode('studio')
   // Before anything streamed: what the engine plans (1080p60, or 1080x1920 for vertical).
   const plan = vertical ? view.vertical_stats.kbps || 4660 : view.stats.kbps || 6160
   const need = ticked.reduce((a, d) => a + (d.health?.kbps || plan), 0)
@@ -477,6 +482,11 @@ export function Platforms({
               disabled={busy === 'protect'}
               onChange={protect}
             />
+            {mode === 'advanced' && view.protect && (
+              <div className="mt-3">
+                <ProtectionRule view={view} onSaved={onSaved} />
+              </div>
+            )}
           </div>
         )}
         {twitchShared && (
