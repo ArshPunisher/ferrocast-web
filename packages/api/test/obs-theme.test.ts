@@ -307,6 +307,43 @@ describe('make it yours', () => {
     expect([timer!.font, timer!.color]).toEqual(['JetBrains Mono', '#2bb673'])
     expect(logo).toEqual({ type: 'image', media: 'm123', fit: 'contain' })
     expect(r.branded).toBe(false)
+    // Shades of the old colour (a title gradient's ends) move to the new colour's hue.
+    const grad = restyleTheme(
+      {
+        ...t,
+        content: {
+          ...t.content,
+          scenes: [
+            {
+              ...t.content.scenes[0]!,
+              layers: [
+                ...t.content.scenes[0]!.layers,
+                {
+                  id: 'title',
+                  kind: 'layer',
+                  x: 0,
+                  y: 0,
+                  w: 900,
+                  h: 140,
+                  config: {
+                    type: 'text',
+                    text: 'Starting soon',
+                    color: '#ffe0a8',
+                    color2: '#cf7400',
+                  },
+                },
+              ] as never,
+            },
+          ],
+        },
+      },
+      { accent: '#ff4fa3' },
+    )
+    if (grad.kind !== 'theme') throw new Error('theme')
+    const title = grad.content.scenes[0]!.layers.at(-1)!.config as unknown as Record<string, string>
+    expect(title.color).not.toBe('#ffe0a8')
+    expect(title.color2).not.toBe('#cf7400')
+    expect(themeAccent(grad)).toBe('#ff4fa3')
     // Without a logo the mark just goes; a second restyle finds the new colour.
     const plain = restyleTheme(r, { accent: '#ff4fa3' })
     if (plain.kind !== 'theme') throw new Error('theme')

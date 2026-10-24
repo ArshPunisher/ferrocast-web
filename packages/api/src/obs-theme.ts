@@ -328,6 +328,51 @@ function walk(v: unknown, f: (s: string) => string): unknown {
   return v
 }
 
+function hsl(hex: string): { h: number; s: number; l: number } {
+  const n = parseInt(hex.slice(1, 7), 16)
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255) as [
+    number,
+    number,
+    number,
+  ]
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (d === 0) return { h: 0, s: 0, l }
+  const s = d / (1 - Math.abs(2 * l - 1))
+  const h =
+    max === r
+      ? 60 * (((g - b) / d) % 6)
+      : max === g
+        ? 60 * ((b - r) / d + 2)
+        : 60 * ((r - g) / d + 4)
+  return { h: (h + 360) % 360, s, l }
+}
+
+function toHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x]
+  const to = (v: number) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
 /** The theme's main colour: the most used strong colour in its layers. */
 export function themeAccent(d: ThemeDesign): string | null {
   const count = new Map<string, number>()
@@ -356,11 +401,23 @@ export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
   const to = r.accent && HEX.test(r.accent) ? r.accent.slice(0, 7).toLowerCase() : null
   const handle = (r.handle ?? '').trim().replace(/^@/, '')
   const font = r.font && r.font !== 'theme' ? THEME_FONTS[r.font] : null
+  const fromHsl = from ? hsl(from) : null
+  const toHsl = to ? hsl(to) : null
   const paint = (s: string) => {
     let out = s
-    if (from && to) {
-      const m = HEX.exec(out)
-      if (m && `#${m[1]!.toLowerCase()}` === from) out = to + (m[2] ?? '')
+    const m = HEX.exec(out)
+    if (m && from && to && fromHsl && toHsl) {
+      const hex = `#${m[1]!.toLowerCase()}`
+      if (hex === from) out = to + (m[2] ?? '')
+      else {
+        // Shades of the old colour (a gradient's light and dark ends) move with it.
+        const c = hsl(hex)
+        const near = Math.min(Math.abs(c.h - fromHsl.h), 360 - Math.abs(c.h - fromHsl.h)) < 30
+        if (c.s > 0.3 && near)
+          out =
+            toHex(toHsl.h, Math.min(1, c.s * (toHsl.s / Math.max(fromHsl.s, 0.01))), c.l) +
+            (m[2] ?? '')
+      }
     }
     if (handle) out = out.replace(/yourname/gi, handle)
     return out
