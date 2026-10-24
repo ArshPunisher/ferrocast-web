@@ -30,6 +30,29 @@ const PART_LABEL: Record<Part, string> = { camera: 'Camera', game: 'Game' }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
+/**
+ * The part of a box that ends up on phones: ffmpeg scales the box to cover its slot and trims
+ * the overflow evenly from both sides. In fractions of the box; `ratio` is the picture's shape.
+ */
+function kept(box: CutBox, slotAspect: number, ratio: number) {
+  const boxAspect = (box.w / Math.max(box.h, 0.001)) * ratio
+  if (boxAspect > slotAspect) {
+    const w = slotAspect / boxAspect
+    return { x: (1 - w) / 2, y: 0, w, h: 1 }
+  }
+  const h = boxAspect / slotAspect
+  return { x: 0, y: (1 - h) / 2, w: 1, h }
+}
+
+/** Each box's slot shape (width over height) on the 9:16 phone picture; null keeps its own shape. */
+function slotAspects(cut: CutConfig): Partial<Record<Part, number | null>> {
+  const out: Partial<Record<Part, number | null>> = {}
+  for (const s of cutSlots(cut))
+    out[s.part] =
+      s.part === 'camera' && cut.layout === 'small_camera' ? null : ((s.w / s.h) * 9) / 16
+  return out
+}
+
 /** Keeps a box inside the picture and not tiny. */
 function fit(b: CutBox): CutBox {
   const w = clamp(b.w, 0.05, 1)
@@ -85,7 +108,11 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
               <Frame
                 image={picture.data.image}
                 ratio={picture.data.width / Math.max(1, picture.data.height)}
-                boxes={parts.map((p) => ({ part: p, box: draft[p] }))}
+                boxes={parts.map((p) => ({
+                  part: p,
+                  box: draft[p],
+                  slot: slotAspects(draft)[p] ?? null,
+                }))}
                 onChange={(part, box) => setDraft({ ...draft, [part]: box })}
               />
             )}
@@ -235,7 +262,7 @@ function Frame({
 }: {
   image: string
   ratio: number
-  boxes: { part: Part; box: CutBox }[]
+  boxes: { part: Part; box: CutBox; slot: number | null }[]
   onChange: (part: Part, box: CutBox) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -302,7 +329,7 @@ function Frame({
         className="absolute inset-0 size-full"
         draggable={false}
       />
-      {boxes.map(({ part, box }) => (
+      {boxes.map(({ part, box, slot }) => (
         <div
           key={part}
           role="group"
@@ -321,6 +348,7 @@ function Frame({
             height: `${box.h * 100}%`,
           }}
         >
+          {slot !== null && <Trimmed k={kept(box, slot, ratio)} />}
           <span
             className={cx(
               'absolute top-0 left-0 rounded-br-[5px] px-1.5 py-0.5 text-[11px] font-bold text-white',
@@ -343,6 +371,39 @@ function Frame({
   )
 }
 
+/** Dims the sides of a box that get trimmed, so the box shows what phones see. */
+function Trimmed({ k }: { k: { x: number; y: number; w: number; h: number } }) {
+  if (k.w > 0.995 && k.h > 0.995) return null
+  const shade = 'pointer-events-none absolute bg-black/55'
+  return k.w < 1 ? (
+    <>
+      <span
+        aria-hidden
+        className={cx(shade, 'inset-y-0 left-0')}
+        style={{ width: `${k.x * 100}%` }}
+      />
+      <span
+        aria-hidden
+        className={cx(shade, 'inset-y-0 right-0')}
+        style={{ width: `${k.x * 100}%` }}
+      />
+    </>
+  ) : (
+    <>
+      <span
+        aria-hidden
+        className={cx(shade, 'inset-x-0 top-0')}
+        style={{ height: `${k.y * 100}%` }}
+      />
+      <span
+        aria-hidden
+        className={cx(shade, 'inset-x-0 bottom-0')}
+        style={{ height: `${k.y * 100}%` }}
+      />
+    </>
+  )
+}
+
 /** The upright picture, drawn from OBS's picture the way ffmpeg will cut it. */
 function Preview({ cut, image, ratio }: { cut: CutConfig; image: string; ratio: number }) {
   const W = 120
@@ -358,12 +419,14 @@ function Preview({ cut, image, ratio }: { cut: CutConfig; image: string; ratio: 
         const box = cut[s.part]
         const sw = s.w * W
         const sh = s.h * H
-        // The source picture in preview pixels; the box is scaled to cover its slot.
-        const srcW = 1000
-        const srcH = srcW / ratio
-        const scale = Math.max(sw / (box.w * srcW), sh / (box.h * srcH))
-        const bx = box.x * srcW * scale - (box.w * srcW * scale - sw) / 2
-        const by = box.y * srcH * scale - (box.h * srcH * scale - sh) / 2
+        // The kept part of the box fills the slot exactly (as ffmpeg's cover-and-trim does).
+        const k =
+          s.part === 'camera' && cut.layout === 'small_camera'
+            ? { x: 0, y: 0, w: 1, h: 1 }
+            : kept(box, ((s.w / s.h) * 9) / 16, ratio)
+        const scale = sw / (box.w * k.w)
+        const bx = (box.x + box.w * k.x) * scale
+        const by = ((box.y + box.h * k.y) * scale) / ratio
         return (
           <div
             key={s.part + s.y}
@@ -377,7 +440,7 @@ function Preview({ cut, image, ratio }: { cut: CutConfig; image: string; ratio: 
               width: sw,
               height: sh,
               backgroundImage: `url("${image}")`,
-              backgroundSize: `${srcW * scale}px ${srcH * scale}px`,
+              backgroundSize: `${scale}px ${scale / ratio}px`,
               backgroundPosition: `${-bx}px ${-by}px`,
             }}
           />
