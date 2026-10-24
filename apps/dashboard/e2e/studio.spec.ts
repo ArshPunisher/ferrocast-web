@@ -75,11 +75,37 @@ test.describe('studio', () => {
     await expect(panel(page, 'Last sent').getByText('Late night ranked')).toBeVisible()
   })
 
+  test('a platform can have its own title; Everywhere shows it and it can be reset', async ({
+    page,
+  }) => {
+    await open(page, 'studio/info')
+    const form = panel(page, 'Stream info')
+    await form.getByLabel('Title').fill('Day 41: Immortal or bust')
+    await form.getByRole('tab', { name: 'Twitch' }).click()
+    await expect(form.getByLabel('Title')).toHaveAttribute(
+      'placeholder',
+      'Same as everywhere: Day 41: Immortal or bust',
+    )
+    await form.getByLabel('Title').fill('Ranked grind | !socials')
+    await expect(form.getByRole('tab', { name: 'Twitch (has its own)' })).toBeVisible()
+    await form.getByRole('tab', { name: 'Everywhere' }).click()
+    await expect(form.getByText('Twitch uses its own:')).toBeVisible()
+    await form.getByRole('button', { name: 'Update everywhere' }).click()
+    await expect(page.getByText('Updated on 2 of 3.')).toBeVisible()
+    await expect(panel(page, 'Last sent').getByText('Day 41: Immortal or bust')).toBeVisible()
+    // Arrow keys move between tabs; "Use the everywhere title" clears Twitch's own.
+    await form.getByRole('tab', { name: 'Everywhere' }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(form.getByRole('tab', { name: /Twitch/ })).toHaveAttribute('aria-selected', 'true')
+    await form.getByRole('button', { name: 'Use the everywhere title' }).click()
+    await expect(form.getByRole('tab', { name: 'Twitch', exact: true })).toBeVisible()
+  })
+
   test('only Kick ticked: nobody took it, and the reason is shown', async ({ page }) => {
     await open(page, 'studio/info')
     const form = panel(page, 'Stream info')
-    await form.getByLabel('Twitch').uncheck()
-    await form.getByLabel('YouTube').uncheck()
+    await form.getByRole('checkbox', { name: 'Twitch' }).uncheck()
+    await form.getByRole('checkbox', { name: 'YouTube' }).uncheck()
     await form.getByRole('button', { name: 'Update everywhere' }).click()
     await expect(form.getByRole('alert')).toHaveText('No platform took the change.')
     await expect(form.getByText(/Kick needs a permission/)).toBeVisible()

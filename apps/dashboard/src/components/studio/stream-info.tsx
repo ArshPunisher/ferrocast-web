@@ -1,7 +1,9 @@
 // One stream-info form for Twitch, YouTube and Kick, with presets and history. Each
 // platform answers for itself; a platform that needs reconnecting says so with a link.
+// Owner's pick 6 (24 Oct board, item 8): tabs Everywhere / Twitch / YouTube / Kick. A platform
+// tab holds only what's different there (a dot marks it), and Everywhere lists those changes.
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import {
   FloppyDisk,
   ImageSquare,
@@ -16,6 +18,7 @@ import {
   describeError,
   relativeTime,
   MAX_STREAM_DESCRIPTION,
+  STREAM_INFO_PLATFORMS,
   type CategoryHit,
   type CategoryIds,
   type ChatPlatform,
@@ -31,9 +34,11 @@ import {
   Field,
   IconButton,
   Input,
+  PlatformMark,
   Select,
   Skeleton,
   Textarea,
+  cx,
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
@@ -56,6 +61,19 @@ const LANGUAGES: [string, string][] = [
   ['other', 'Other'],
 ]
 
+/** A platform's own fields; empty means "same as everywhere". */
+interface Own {
+  title: string
+  category: string
+  categoryIds: CategoryIds
+  tags: string
+  language: string
+}
+
+const NO_OWN: Own = { title: '', category: '', categoryIds: {}, tags: '', language: '' }
+
+type Tab = 'all' | ChatPlatform
+
 interface Form {
   title: string
   category: string
@@ -66,6 +84,7 @@ interface Form {
   description: string | null
   /** A media library id; YouTube only. */
   thumbnail: string | null
+  own: Partial<Record<ChatPlatform, Own>>
 }
 
 const EMPTY: Form = {
@@ -76,6 +95,7 @@ const EMPTY: Form = {
   language: '',
   description: null,
   thumbnail: null,
+  own: {},
 }
 
 /** YouTube's own thumbnail limits. */
@@ -83,32 +103,206 @@ const THUMB_TYPES = ['image/png', 'image/jpeg']
 const THUMB_MAX = 2 * 1024 * 1024
 const isThumbName = (n: string) => /\.(png|jpe?g)$/i.test(n)
 
-function toForm(i: StreamInfo): Form {
+function toOwn(i: StreamInfo): Own {
   return {
     title: i.title ?? '',
     category: i.category?.name ?? '',
     categoryIds: i.category?.ids ?? {},
     tags: (i.tags ?? []).join(', '),
     language: i.language ?? '',
-    description: i.description ?? null,
-    thumbnail: i.thumbnail ?? null,
   }
 }
 
-function toInfo(f: Form): StreamInfo {
+function toForm(i: StreamInfo): Form {
+  const own: Form['own'] = {}
+  for (const p of STREAM_INFO_PLATFORMS) {
+    const o = i.per?.[p]
+    if (o) own[p] = toOwn(o)
+  }
+  return {
+    ...toOwn(i),
+    description: i.description ?? null,
+    thumbnail: i.thumbnail ?? null,
+    own,
+  }
+}
+
+/** The fields in `o` that are filled in. */
+function ownInfo(o: Own): StreamInfo {
   const info: StreamInfo = {}
-  if (f.title.trim()) info.title = f.title.trim()
-  if (f.category.trim()) info.category = { name: f.category.trim(), ids: f.categoryIds ?? {} }
-  if (f.tags.trim())
-    info.tags = f.tags
+  if (o.title.trim()) info.title = o.title.trim()
+  if (o.category.trim()) info.category = { name: o.category.trim(), ids: o.categoryIds ?? {} }
+  if (o.tags.trim())
+    info.tags = o.tags
       .split(',')
       .map((t) => t.trim().replace(/^#/, ''))
       .filter(Boolean)
-  if (f.language) info.language = f.language
+  if (o.language) info.language = o.language
+  return info
+}
+
+const hasOwn = (o: Own | undefined): o is Own => !!o && Object.keys(ownInfo(o)).length > 0
+
+function toInfo(f: Form): StreamInfo {
+  const info = ownInfo(f)
   // Blank (or only spaces) keeps YouTube's description, as the hint says.
   if (f.description?.trim()) info.description = f.description.trim()
   if (f.thumbnail) info.thumbnail = f.thumbnail
+  const per: NonNullable<StreamInfo['per']> = {}
+  for (const p of STREAM_INFO_PLATFORMS) {
+    const o = f.own[p]
+    if (hasOwn(o)) per[p] = ownInfo(o)
+  }
+  if (Object.keys(per).length > 0) info.per = per
   return info
+}
+
+/** One line for a preset or history entry. */
+function summary(i: StreamInfo): string {
+  const own = STREAM_INFO_PLATFORMS.find((p) => i.per?.[p]?.title)
+  return (
+    i.title ??
+    (own ? `${PLATFORM_LABEL[own]}: ${i.per?.[own]?.title}` : undefined) ??
+    i.category?.name ??
+    (i.description !== undefined || i.thumbnail
+      ? 'YouTube description or thumbnail'
+      : 'Tags and language')
+  )
+}
+
+/** Everywhere / Twitch / YouTube / Kick, as tabs (arrow keys move between them). */
+function InfoTabs({
+  tab,
+  onTab,
+  changed,
+  panelId,
+}: {
+  tab: Tab
+  onTab: (t: Tab) => void
+  changed: (p: ChatPlatform) => boolean
+  panelId: string
+}) {
+  const tabs: Tab[] = ['all', ...STREAM_INFO_PLATFORMS]
+  const onKey = (e: KeyboardEvent) => {
+    const i = tabs.indexOf(tab)
+    const next =
+      e.key === 'ArrowRight'
+        ? tabs[(i + 1) % tabs.length]
+        : e.key === 'ArrowLeft'
+          ? tabs[(i + tabs.length - 1) % tabs.length]
+          : undefined
+    if (!next) return
+    e.preventDefault()
+    onTab(next)
+    document.getElementById(`${panelId}-tab-${next}`)?.focus()
+  }
+  return (
+    <div
+      role="tablist"
+      aria-label="Which platform"
+      className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1"
+      onKeyDown={onKey}
+    >
+      {tabs.map((t) => {
+        const on = t === tab
+        return (
+          <button
+            key={t}
+            id={`${panelId}-tab-${t}`}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            aria-controls={panelId}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onTab(t)}
+            className={cx(
+              '-mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 px-2.5 text-[13.5px] font-semibold whitespace-nowrap transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              on ? 'border-accent text-text' : 'border-transparent text-text-3 hover:text-text-2',
+            )}
+          >
+            {t !== 'all' && (
+              <span aria-hidden="true" className="inline-flex">
+                <PlatformMark platform={t} size={14} />
+              </span>
+            )}
+            {t === 'all' ? 'Everywhere' : PLATFORM_LABEL[t]}
+            {t !== 'all' && changed(t) && (
+              <>
+                <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
+                <span className="sr-only">(has its own)</span>
+              </>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Under an Everywhere field: which platforms use their own value instead. */
+function OwnLines({
+  own,
+  field,
+  onEdit,
+}: {
+  own: Form['own']
+  field: 'title' | 'category' | 'tags' | 'language'
+  onEdit: (p: ChatPlatform) => void
+}) {
+  const lines = STREAM_INFO_PLATFORMS.flatMap((p) => {
+    const v = own[p]?.[field].trim()
+    return v
+      ? [{ p, v: field === 'language' ? (LANGUAGES.find(([c]) => c === v)?.[1] ?? v) : v }]
+      : []
+  })
+  if (lines.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-1 border-l-2 border-line pl-3">
+      {lines.map(({ p, v }) => (
+        <li key={p} className="flex min-w-0 items-center gap-2 text-[13px] text-text-3">
+          <span aria-hidden="true" className="inline-flex shrink-0">
+            <PlatformMark platform={p} size={13} />
+          </span>
+          <span className="min-w-0 truncate">
+            {PLATFORM_LABEL[p]} uses its own: <span className="text-text-2">“{v}”</span>
+          </span>
+          <button
+            type="button"
+            className="shrink-0 font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            onClick={() => onEdit(p)}
+          >
+            Edit
+            <span className="sr-only">
+              {' '}
+              {PLATFORM_LABEL[p]}’s {field}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** "Use the everywhere title" beside a platform's own value. */
+function UseEverywhere({
+  show,
+  label,
+  onClick,
+}: {
+  show: boolean
+  label: string
+  onClick: () => void
+}) {
+  if (!show) return null
+  return (
+    <button
+      type="button"
+      className="self-start text-[13px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      onClick={onClick}
+    >
+      Use the everywhere {label}
+    </button>
+  )
 }
 
 /**
@@ -258,6 +452,150 @@ function Results({ results }: { results: PlatformResult[] }) {
   )
 }
 
+/** A platform tab: only what's different there. Empty fields use the Everywhere tab. */
+function PlatformFields({
+  platform,
+  own,
+  everywhere,
+  supports,
+  hits,
+  searchOn,
+  listId,
+  onChange,
+}: {
+  platform: ChatPlatform
+  own: Own
+  everywhere: Form
+  supports: StreamInfoView['platforms'][number]['supports'] | undefined
+  hits: CategoryHit[]
+  searchOn: ChatPlatform | undefined
+  listId: string
+  onChange: (o: Own) => void
+}) {
+  const name = PLATFORM_LABEL[platform]
+  const max = platform === 'youtube' ? 100 : 140
+  const same = (v: string) => (v.trim() ? `Same as everywhere: ${v.trim()}` : 'Same as everywhere')
+  const everywhereLanguage = LANGUAGES.find(([c]) => c === everywhere.language)?.[1] ?? ''
+  return (
+    <>
+      <p className="text-[13.5px] text-text-3">
+        Only what’s different on {name}. Empty fields use the Everywhere tab.
+      </p>
+      <Field
+        label="Title"
+        optional
+        hint={own.title ? `${[...own.title].length} of ${max}` : `${name} takes up to ${max}.`}
+      >
+        {(p) => (
+          <div className="flex flex-col gap-1.5">
+            <Input
+              {...p}
+              maxLength={140}
+              placeholder={same(everywhere.title)}
+              value={own.title}
+              onChange={(e) => onChange({ ...own, title: e.target.value })}
+            />
+            <UseEverywhere
+              show={!!own.title}
+              label="title"
+              onClick={() => onChange({ ...own, title: '' })}
+            />
+          </div>
+        )}
+      </Field>
+      {supports?.category !== false && (
+        <Field
+          label={platform === 'youtube' ? 'Video category' : 'Category'}
+          optional
+          hint={
+            platform === 'youtube'
+              ? 'YouTube takes a video category; a game becomes Gaming.'
+              : searchOn
+                ? `Suggestions from ${PLATFORM_LABEL[searchOn]}.`
+                : 'Connect a platform to search.'
+          }
+        >
+          {(p) => (
+            <div className="flex flex-col gap-1.5">
+              <Input
+                {...p}
+                list={listId}
+                placeholder={same(everywhere.category)}
+                value={own.category}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const hit = hits.find((h) => h.name === v)
+                  onChange({
+                    ...own,
+                    category: v,
+                    categoryIds: hit && searchOn ? { [searchOn]: hit.id } : {},
+                  })
+                }}
+              />
+              <datalist id={listId}>
+                {hits.map((h) => (
+                  <option key={h.id} value={h.name} />
+                ))}
+              </datalist>
+              <UseEverywhere
+                show={!!own.category}
+                label="category"
+                onClick={() => onChange({ ...own, category: '', categoryIds: {} })}
+              />
+            </div>
+          )}
+        </Field>
+      )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {supports?.tags !== false && (
+          <Field label="Tags" optional hint="Comma separated, up to 10.">
+            {(p) => (
+              <div className="flex flex-col gap-1.5">
+                <Input
+                  {...p}
+                  placeholder={same(everywhere.tags)}
+                  value={own.tags}
+                  onChange={(e) => onChange({ ...own, tags: e.target.value })}
+                />
+                <UseEverywhere
+                  show={!!own.tags}
+                  label="tags"
+                  onClick={() => onChange({ ...own, tags: '' })}
+                />
+              </div>
+            )}
+          </Field>
+        )}
+        {supports?.language !== false && (
+          <Field label="Language" optional>
+            {(p) => (
+              <Select
+                {...p}
+                value={own.language}
+                onChange={(e) => onChange({ ...own, language: e.target.value })}
+              >
+                <option value="">
+                  {same(everywhereLanguage === 'Keep as it is' ? '' : everywhereLanguage)}
+                </option>
+                {LANGUAGES.filter(([c]) => c).map(([code, l]) => (
+                  <option key={code} value={code}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+      </div>
+      {platform === 'youtube' && (
+        <p className="text-[13.5px] text-text-3">
+          The description and thumbnail are on the Everywhere tab; only YouTube takes them.
+        </p>
+      )}
+    </>
+  )
+}
+
 export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
   const studio = useStudio()
   const now = useNow(30_000)
@@ -267,8 +605,10 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
   const [err, setErr] = useState<string | null>(null)
   const [hits, setHits] = useState<CategoryHit[]>([])
   const [naming, setNaming] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('all')
   const { run, busy } = useAction()
   const listId = useId()
+  const panelId = useId()
   const v = view.data
   // Start from what was sent last, once.
   const [seeded, setSeeded] = useState(false)
@@ -278,25 +618,29 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
   }
   const connected = v?.platforms.filter((p) => p.connected).map((p) => p.platform) ?? []
   const targets = picked ?? connected
-  const searchOn = (
+  const anySearch = (
     v?.platforms.find((p) => p.connected && p.platform !== 'youtube') ??
     v?.platforms.find((p) => p.connected)
   )?.platform
+  // A platform tab searches that platform's own categories when it's connected.
+  const searchOn =
+    tab !== 'all' && v?.platforms.some((p) => p.platform === tab && p.connected) ? tab : anySearch
+  const own = tab === 'all' ? null : (form.own[tab] ?? NO_OWN)
+  const query = (own ? own.category : form.category).trim()
 
   useEffect(() => {
-    const q = form.category.trim()
-    if (!searchOn || q.length < 2) {
+    if (!searchOn || query.length < 2) {
       setHits([])
       return
     }
     const t = setTimeout(() => {
       studio
-        .categories(searchOn, q)
+        .categories(searchOn, query)
         .then((r) => setHits(r.items))
         .catch(() => setHits([]))
     }, 250)
     return () => clearTimeout(t)
-  }, [form.category, searchOn, studio])
+  }, [query, searchOn, studio])
 
   if (view.error) return <LoadError error={view.error} onRetry={view.reload} />
   if (!v) return <Skeleton className="h-80" />
@@ -365,100 +709,144 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             send()
           }}
         >
-          <Field label="Title" hint={`${titleLen} of 140 (YouTube takes 100)`}>
-            {(p) => (
-              <Input
-                {...p}
-                maxLength={140}
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            label="Category"
-            optional
-            hint={
-              searchOn
-                ? `Suggestions from ${PLATFORM_LABEL[searchOn]}.`
-                : 'Connect a platform to search.'
-            }
-          >
-            {(p) => (
-              <>
-                <Input
-                  {...p}
-                  list={listId}
-                  value={form.category}
-                  onChange={(e) => {
-                    const name = e.target.value
-                    const hit = hits.find((h) => h.name === name)
-                    setForm({
-                      ...form,
-                      category: name,
-                      categoryIds: hit && searchOn ? { [searchOn]: hit.id } : {},
-                    })
-                  }}
-                />
-                <datalist id={listId}>
-                  {hits.map((h) => (
-                    <option key={h.id} value={h.name} />
-                  ))}
-                </datalist>
-              </>
-            )}
-          </Field>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Tags" optional hint="Comma separated, up to 10, letters and numbers.">
-              {(p) => (
-                <Input
-                  {...p}
-                  value={form.tags}
-                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                />
-              )}
-            </Field>
-            <Field label="Language" optional>
-              {(p) => (
-                <Select
-                  {...p}
-                  value={form.language}
-                  onChange={(e) => setForm({ ...form, language: e.target.value })}
-                >
-                  {LANGUAGES.map(([code, l]) => (
-                    <option key={code} value={code}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
-          <Field
-            label="Description"
-            optional
-            hint={
-              form.description === null
-                ? 'YouTube only. Empty keeps YouTube’s description.'
-                : `YouTube only. ${[...form.description].length} of ${MAX_STREAM_DESCRIPTION}.`
-            }
-          >
-            {(p) => (
-              <Textarea
-                {...p}
-                rows={4}
-                maxLength={MAX_STREAM_DESCRIPTION}
-                value={form.description ?? ''}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value === '' ? null : e.target.value })
-                }
-              />
-            )}
-          </Field>
-          <ThumbnailPicker
-            value={form.thumbnail}
-            onChange={(thumbnail) => setForm({ ...form, thumbnail })}
+          <InfoTabs
+            tab={tab}
+            onTab={(t) => {
+              setTab(t)
+              setHits([])
+            }}
+            changed={(p) => hasOwn(form.own[p])}
+            panelId={panelId}
           />
+          <div
+            id={panelId}
+            role="tabpanel"
+            aria-labelledby={`${panelId}-tab-${tab}`}
+            className="flex flex-col gap-4"
+          >
+            {tab === 'all' ? (
+              <>
+                <Field label="Title" hint={`${titleLen} of 140 (YouTube takes 100)`}>
+                  {(p) => (
+                    <Input
+                      {...p}
+                      maxLength={140}
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    />
+                  )}
+                </Field>
+                <OwnLines own={form.own} field="title" onEdit={setTab} />
+                <Field
+                  label="Category"
+                  optional
+                  hint={
+                    searchOn
+                      ? `Suggestions from ${PLATFORM_LABEL[searchOn]}.`
+                      : 'Connect a platform to search.'
+                  }
+                >
+                  {(p) => (
+                    <>
+                      <Input
+                        {...p}
+                        list={listId}
+                        value={form.category}
+                        onChange={(e) => {
+                          const name = e.target.value
+                          const hit = hits.find((h) => h.name === name)
+                          setForm({
+                            ...form,
+                            category: name,
+                            categoryIds: hit && searchOn ? { [searchOn]: hit.id } : {},
+                          })
+                        }}
+                      />
+                      <datalist id={listId}>
+                        {hits.map((h) => (
+                          <option key={h.id} value={h.name} />
+                        ))}
+                      </datalist>
+                    </>
+                  )}
+                </Field>
+                <OwnLines own={form.own} field="category" onEdit={setTab} />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Tags"
+                    optional
+                    hint="Comma separated, up to 10, letters and numbers."
+                  >
+                    {(p) => (
+                      <Input
+                        {...p}
+                        value={form.tags}
+                        onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Language" optional>
+                    {(p) => (
+                      <Select
+                        {...p}
+                        value={form.language}
+                        onChange={(e) => setForm({ ...form, language: e.target.value })}
+                      >
+                        {LANGUAGES.map(([code, l]) => (
+                          <option key={code} value={code}>
+                            {l}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                </div>
+                <OwnLines own={form.own} field="tags" onEdit={setTab} />
+                <OwnLines own={form.own} field="language" onEdit={setTab} />
+                <Field
+                  label="Description"
+                  optional
+                  hint={
+                    form.description === null
+                      ? 'YouTube only. Empty keeps YouTube’s description.'
+                      : `YouTube only. ${[...form.description].length} of ${MAX_STREAM_DESCRIPTION}.`
+                  }
+                >
+                  {(p) => (
+                    <Textarea
+                      {...p}
+                      rows={4}
+                      maxLength={MAX_STREAM_DESCRIPTION}
+                      value={form.description ?? ''}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          description: e.target.value === '' ? null : e.target.value,
+                        })
+                      }
+                    />
+                  )}
+                </Field>
+                <ThumbnailPicker
+                  value={form.thumbnail}
+                  onChange={(thumbnail) => setForm({ ...form, thumbnail })}
+                />
+              </>
+            ) : (
+              own && (
+                <PlatformFields
+                  platform={tab}
+                  own={own}
+                  everywhere={form}
+                  supports={v.platforms.find((p) => p.platform === tab)?.supports}
+                  hits={hits}
+                  searchOn={searchOn}
+                  listId={listId}
+                  onChange={(o) => setForm({ ...form, own: { ...form.own, [tab]: o } })}
+                />
+              )
+            )}
+          </div>
           <fieldset>
             <legend className="text-[13.5px] font-medium text-text-2">Send to</legend>
             <ul className="mt-2 flex flex-col gap-2">
@@ -577,7 +965,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                   >
                     <span className="block truncate text-sm font-semibold text-text">{p.name}</span>
                     <span className="block truncate text-[13.5px] text-text-3">
-                      {p.info.title ?? p.info.category?.name}
+                      {summary(p.info)}
                     </span>
                   </button>
                   <IconButton
@@ -615,13 +1003,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     className="w-full rounded-control px-2 py-2 text-left hover:bg-surface-2"
                     onClick={() => setForm(toForm(h.info))}
                   >
-                    <span className="block truncate text-sm text-text">
-                      {h.info.title ??
-                        h.info.category?.name ??
-                        (h.info.description !== undefined || h.info.thumbnail
-                          ? 'YouTube description or thumbnail'
-                          : 'Tags and language')}
-                    </span>
+                    <span className="block truncate text-sm text-text">{summary(h.info)}</span>
                     <span className="block text-[13.5px] text-text-3">
                       {relativeTime(h.at, now)} · {h.results.filter((r) => r.ok).length} of{' '}
                       {h.results.length} platforms
