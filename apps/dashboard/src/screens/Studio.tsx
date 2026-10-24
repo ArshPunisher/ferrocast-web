@@ -13,6 +13,7 @@ import { PreflightPanel, ShowPanel, ShowSettings } from '../components/studio/sh
 import { StreamInfoEditor } from '../components/studio/stream-info'
 import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
+import { ThemeInObsCard } from '../components/design/theme-obs'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -61,7 +62,10 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
             <HealthPanel />
             <ScenesPanel scenes={scenes} cfg={switcher.data} />
           </div>
-          <SwitcherSettings scenes={scenes.data} cfg={switcher} />
+          <div className="flex flex-col gap-5">
+            <ThemeInObsCard />
+            <SwitcherSettings scenes={scenes.data} cfg={switcher} />
+          </div>
         </div>
       )}
       {section === 'moments' && (

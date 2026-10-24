@@ -7,6 +7,7 @@ import { SCENE_LABEL, describeError, type Design, type DesignImportReport } from
 import { Button, Dialog, Field, Select, Switch, toast } from '@ferrocast/ui'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { go, href } from '../../lib/router'
+import { ThemeUseDialog } from './theme-obs'
 
 /** Saves a blob through a temporary link (the desktop window and browsers both handle it). */
 export function downloadBlob(blob: Blob, name: string): void {
@@ -26,6 +27,14 @@ export function fileName(d: Design): string {
 
 /** "Use" for designs that need a target: a theme, a scene, or a widget design. */
 export function UseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
+  const [classic, setClassic] = useState(false)
+  // A theme can go into OBS as well (24 Oct pick 1A); "Next" without OBS is today's dialog.
+  if (design?.kind === 'theme' && !classic)
+    return <ThemeUseDialog design={design} onClose={onClose} onClassic={() => setClassic(true)} />
+  return <ClassicUseDialog design={design} onClose={onClose} />
+}
+
+function ClassicUseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
   const client = useClient()
   const { run, busy } = useAction()
   const overlays = useResource((c) => c.overlays(), [design?.id])

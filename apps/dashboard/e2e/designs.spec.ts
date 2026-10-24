@@ -157,6 +157,9 @@ test.describe('gallery', () => {
     await open(page, 'designs')
     await tile(page, 'Forge').getByRole('button', { name: 'Use theme' }).click()
     const dialog = page.getByRole('dialog', { name: 'Use Forge' })
+    // Without OBS: today's Use, one overlay per scene.
+    await dialog.getByRole('switch', { name: 'Set it up in OBS too' }).click()
+    await dialog.getByRole('button', { name: 'Next' }).click()
     await expect(dialog.getByRole('switch', { name: 'Also use its alert style' })).toBeVisible()
     await dialog.getByRole('button', { name: 'Make 5 overlays' }).click()
     await expect(page.getByText(/Made 5 overlays from Forge/)).toBeVisible()
@@ -402,10 +405,10 @@ test.describe('layout editor layers', () => {
   test('an overlay from a built-in keeps its mark layer', async ({ page }) => {
     await open(page, 'designs')
     await tile(page, 'Arcade night').getByRole('button', { name: 'Use' }).click()
-    await page
-      .getByRole('dialog', { name: 'Use Arcade night' })
-      .getByRole('button', { name: 'Make 5 overlays' })
-      .click()
+    const use = page.getByRole('dialog', { name: 'Use Arcade night' })
+    await use.getByRole('switch', { name: 'Set it up in OBS too' }).click()
+    await use.getByRole('button', { name: 'Next' }).click()
+    await use.getByRole('button', { name: 'Make 5 overlays' }).click()
     await page.getByRole('link', { name: 'Edit In game (Arcade night)' }).click()
     await expect(page.getByText(/keeps a small Ferrocast mark/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Hide Ferrocast mark' })).toHaveCount(0)
