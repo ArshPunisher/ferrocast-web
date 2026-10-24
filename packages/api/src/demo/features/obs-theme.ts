@@ -423,8 +423,23 @@ export class DemoObsTheme {
       }
     }
     if (plan.switch_to_starting !== false && starting) {
-      obs.current = starting
-      steps.push({ id: 'switch', label: 'OBS', status: 'done', detail: `OBS is on "${starting}".` })
+      // Like the engine: live, viewers keep seeing what's on air.
+      if (obs.streaming)
+        steps.push({
+          id: 'switch',
+          label: 'OBS',
+          status: 'skipped',
+          detail: 'You’re live, so OBS stays on the scene it’s on.',
+        })
+      else {
+        obs.current = starting
+        steps.push({
+          id: 'switch',
+          label: 'OBS',
+          status: 'done',
+          detail: `OBS is on "${starting}".`,
+        })
+      }
     }
     this.rec = rec
     return { steps, applied: this.view(rec) }
@@ -440,6 +455,13 @@ export class DemoObsTheme {
         'Put a theme into OBS from Designs first.',
       )
     const obs = this.obs()
+    if (obs.streaming && rec.made_scenes.includes(obs.current))
+      throw new HttpError(
+        409,
+        'theme_on_air',
+        `You’re live on "${obs.current}", one of the theme’s scenes.`,
+        'Switch OBS to one of your own scenes first, or take it out after the stream.',
+      )
     for (const [scene, id] of rec.hidden) {
       const it = obs.scenes.find((s) => s.name === scene)?.items.find((i) => i.id === id)
       if (it) it.enabled = true

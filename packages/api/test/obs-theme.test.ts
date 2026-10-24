@@ -151,6 +151,7 @@ describe('demo: a theme into OBS', () => {
   it('puts every screen in OBS and Undo takes only that away', async () => {
     const { engine, client, api } = demo()
     engine.obsTheme.seedOldWidget('Gameplay', 'Alert box', 'StreamElements')
+    engine.studio.obs.streaming = false // the demo streams by default
     const before = structuredClone(engine.studio.obs)
     const roles = [engine.studio.showCfg.starting_scene, engine.studio.scenesCfg.brb_scene]
     const plan = await api.plan('builtin.forge')
@@ -396,5 +397,20 @@ describe('demo: mic on break screens', () => {
     expect(has('Forge · In game')).toBe(false)
     await api.apply('builtin.forge', { ...plan, mic_on_breaks: false })
     expect(has('Forge · BRB')).toBe(false)
+  })
+})
+
+describe('demo: live', () => {
+  it('never switches what viewers see, and waits to take a scene on air out', async () => {
+    const { engine, api } = demo()
+    engine.studio.obs.current = 'Gameplay'
+    const r = await api.apply('builtin.forge')
+    expect(r.steps.find((s) => s.id === 'switch')!.status).toBe('skipped')
+    expect(engine.studio.obs.current).toBe('Gameplay')
+    engine.studio.obs.current = 'Forge · In game'
+    const e = await refusal(api.takeOut())
+    expect([e.status, e.code]).toEqual([409, 'theme_on_air'])
+    engine.studio.obs.current = 'Gameplay'
+    expect((await api.takeOut()).applied).toBeNull()
   })
 })
