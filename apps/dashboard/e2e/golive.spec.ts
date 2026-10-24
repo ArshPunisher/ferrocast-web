@@ -143,6 +143,41 @@ test.describe('go live everywhere', () => {
     await expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 
+  test('Aitum Multistream: a note before going live, a warning while both send', async ({
+    page,
+  }) => {
+    test.slow()
+    await open(page, 'studio/golive')
+    await demo(
+      page,
+      `(d) => d.setGoLive({ aitum: [
+        { name: 'Twitch Output', platform: 'twitch', live: true },
+        { name: 'Kick', platform: 'kick', live: false } ] })`,
+    )
+    // Not live yet: Kick is unticked, so only Twitch clashes.
+    await obsStopped(page)
+    // Switching tabs reads Go live again (with the plugin now in the pretend OBS).
+    const section = page.getByRole('radiogroup', { name: 'Studio section' })
+    await section.getByText('Show', { exact: true }).click()
+    await section.getByText('Go live', { exact: true }).click()
+    const note = page.getByRole('region', { name: 'Aitum Multistream' })
+    await expect(note.getByText('Aitum Multistream is also set up to send to Twitch.')).toBeVisible()
+    await note.getByRole('button', { name: 'Show me where in OBS' }).click()
+    await expect(note.getByText(/Docks menu, Aitum Multistream/)).toBeVisible()
+    await note.getByRole('button', { name: 'I use it on purpose' }).click()
+    await expect(note).toHaveCount(0)
+    // Live, with Aitum's Twitch output sending too: a warning, and Ferrocast's copy can stop.
+    await demo(page, '(d) => { d.setGoLive({ points_here: true }); d.studio.obs.streaming = true }')
+    const live = page.locator('#golive-live')
+    await expect(live.getByText('Twitch is getting your stream twice')).toBeVisible({
+      timeout: 20_000,
+    })
+    await live.getByRole('button', { name: 'Stop Ferrocast’s copy' }).click()
+    await expect(
+      panel(page, 'Your platforms').getByRole('switch', { name: 'Stream to Twitch' }),
+    ).toHaveAttribute('aria-checked', 'false')
+  })
+
   test('the platform list reorders from the keyboard', async ({ page }) => {
     await open(page, 'studio/golive')
     const p = panel(page, 'Your platforms')

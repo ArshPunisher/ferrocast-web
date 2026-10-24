@@ -3,7 +3,7 @@
 // the upload check as a table (4B), a health line per platform while live (5A), and a dialog
 // for a server of your own (7). API.md §4 "Go live everywhere".
 
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
@@ -21,6 +21,8 @@ import {
   Warning,
 } from '@phosphor-icons/react'
 import {
+  aitumClashes,
+  andList,
   describeError,
   goliveApi,
   goingTo,
@@ -92,6 +94,14 @@ export function GoLiveTab() {
   const api = useGoLive()
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
+  const live = !!view?.live
+  const reload = res.reload
+  // While live, OBS's side (Aitum Multistream's outputs) is read again every 15 s.
+  useEffect(() => {
+    if (!live) return
+    const t = setInterval(reload, 15_000)
+    return () => clearInterval(t)
+  }, [live, reload])
   if (res.error && !view) return <LoadError error={res.error} onRetry={res.reload} />
   if (!view)
     return (
@@ -101,6 +111,7 @@ export function GoLiveTab() {
       </div>
     )
   const set = (patch: Partial<GoLiveView>) => res.set((v) => ({ ...(v ?? view), ...patch }))
+  const clashes = aitumClashes(view.obs.aitum, view.destinations)
   return (
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-5">
@@ -108,6 +119,9 @@ export function GoLiveTab() {
         <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
       </div>
       <div className="flex min-w-0 flex-col gap-5">
+        {!view.live && !view.aitum_ok && clashes.length > 0 && (
+          <AitumNote names={clashes.map((c) => c.name)} onOk={() => set({ aitum_ok: true })} />
+        )}
         <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
         {view.upload && <Upload view={view} onUpload={(upload) => set({ upload })} />}
       </div>
@@ -221,6 +235,31 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
             )
           })}
         </ul>
+        {aitumClashes(view.obs.aitum, on, true).map((c) => {
+          const d = view.destinations.find((x) => x.id === c.id)
+          if (d?.health?.state !== 'live') return null
+          return (
+            <div
+              key={c.id}
+              role="status"
+              className="grid grid-cols-[16px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-[10px] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[13px] text-text-2 sm:grid-cols-[16px_minmax(0,1fr)_auto]"
+            >
+              <Warning size={16} weight="fill" className="shrink-0 text-warn" aria-hidden />
+              <span className="min-w-0">
+                <b className="text-text">{c.name} is getting your stream twice</b> (from Ferrocast
+                and from Aitum Multistream). Stop one to free about {mbps(d.health.kbps)} of upload.
+              </span>
+              <Button
+                size="sm"
+                className="col-start-2 justify-self-start sm:col-start-auto"
+                busy={busy === `stop:${c.id}`}
+                onClick={() => stopTrying(c.id)}
+              >
+                Stop Ferrocast’s copy
+              </Button>
+            </div>
+          )
+        })}
         <p className="m-0 text-[12.5px] text-text-3">
           Adding or removing a platform below doesn’t end the stream.
         </p>
@@ -625,6 +664,52 @@ function AddDestination({
 }
 
 // ---------------------------------------------------------------- 3A: set up once
+
+/**
+ * Aitum Multistream also streams to platforms ticked here: each would get the stream twice.
+ * Board item 7 (24 Oct): say so once, show where in OBS, or "I use it on purpose".
+ */
+function AitumNote({ names, onOk }: { names: string[]; onOk: () => void }) {
+  const api = useGoLive()
+  const { run, busy } = useAction()
+  const [how, setHow] = useState(false)
+  const list = andList(names)
+  const ok = () =>
+    void run('aitum', () => api.setAitumOk(true), {
+      success: 'Got it. Ferrocast warns you only if a platform gets the stream twice while live.',
+    }).then((r) => r && onOk())
+  return (
+    <section
+      aria-label="Aitum Multistream"
+      className="flex flex-col gap-3 rounded-[14px] border border-warn/30 bg-warn-soft p-4 text-[13.5px] text-text-2"
+    >
+      <p className="m-0 flex gap-2.5">
+        <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-warn" aria-hidden />
+        <span>
+          <b className="text-text">Aitum Multistream is also set up to send to {list}.</b> With
+          Ferrocast sending too, {names.length === 1 ? 'it would' : 'they’d each'} get your stream
+          twice. Turn off {names.length === 1 ? 'that output' : 'those outputs'} in OBS, or untick{' '}
+          {names.length === 1 ? 'it' : 'them'} here.
+        </span>
+      </p>
+      {how && (
+        <p className="m-0 pl-7">
+          In OBS, open the Aitum Multistream dock (Docks menu, Aitum Multistream). Each output has
+          its own stream button; switch off {names.length === 1 ? 'the one' : 'the ones'} for {list}
+          , or remove {names.length === 1 ? 'it' : 'them'}.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 pl-7">
+        <Button size="sm" aria-expanded={how} onClick={() => setHow(!how)}>
+          {how ? 'Hide the steps' : 'Show me where in OBS'}
+        </Button>
+        <Button size="sm" variant="ghost" busy={busy === 'aitum'} onClick={ok}>
+          I use it on purpose
+        </Button>
+      </div>
+    </section>
+  )
+}
 
 function Setup({
   view,
