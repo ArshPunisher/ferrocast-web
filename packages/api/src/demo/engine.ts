@@ -7,6 +7,7 @@ import { render, select } from '../alert'
 import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
+import { DemoMusic } from './features/music'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
@@ -361,6 +362,7 @@ export class DemoEngine {
   /** Designs: the catalogue, your own, Use, the alert design in use, share files. */
   readonly designs: DemoDesigns
   readonly obsTheme: DemoObsTheme
+  readonly music: DemoMusic
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -676,6 +678,12 @@ export class DemoEngine {
       },
       opts.designs ?? [],
     )
+    this.music = new DemoMusic({
+      pushMusic: (now) => {
+        for (const s of this.overlaySubs) if (this.wantsMusic(s)) this.sendOverlay(s, 'music', now)
+      },
+      now: () => Date.now(),
+    })
     this.obsTheme = new DemoObsTheme({
       studio: this.studio,
       designs: this.designs,
@@ -891,6 +899,7 @@ export class DemoEngine {
   /** Stops every timer and closes sockets (tests, page unload). */
   dispose(): void {
     this.autoplayOn = false
+    this.music.dispose()
     for (const t of this.timers) clearTimeout(t)
     this.timers.clear()
     if (this.queueTimer) clearTimeout(this.queueTimer)
@@ -1701,6 +1710,7 @@ export class DemoEngine {
       this.smart,
       this.cloudBackups,
       this.obsTheme,
+      this.music,
       this.designs,
       this.studio,
       this.golive,
@@ -2668,6 +2678,14 @@ export class DemoEngine {
     this.broadcastLive({ v: 1, type: 'status', data: { connectors: clone(this.connectors) } })
   }
 
+  /** core::overlay::Overlay::wants_music */
+  private wantsMusic(s: OverlaySub): boolean {
+    const o = this.overlays.find((x) => x.id === s.overlayId)
+    return !!o?.widgets.some(
+      (w) => w.kind === 'layer' && ['fx', 'music', 'sound'].includes(String(w.config?.type)),
+    )
+  }
+
   private overlayWants(s: OverlaySub, e: FerroEvent): boolean {
     const o = this.overlays.find((x) => x.id === s.overlayId)
     if (!o) return false
@@ -2700,6 +2718,7 @@ export class DemoEngine {
       chat: clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50)),
       poll: this.polls.view(),
       giveaway: this.giveaways.card(),
+      music: this.music.now(),
     }
     s.seq += 1
     s.sock.deliver({ v: 1, seq: s.seq, type: 'snapshot', data: { overlay: clone(o), state } })

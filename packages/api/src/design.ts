@@ -26,6 +26,8 @@ import type {
   AnimOut,
   BrandSpot,
   BuiltinSound,
+  CountdownLook,
+  FxPreset,
   LegacySound,
   PlayableSound,
   Condition,
@@ -43,6 +45,8 @@ import type {
   Scene,
   ShapeClip,
   ShapePattern,
+  SoundLoop,
+  Stinger,
   StyleTag,
   TextAnim,
   TextEffect,
@@ -77,7 +81,25 @@ export const EVENT_KEYS: readonly EventKey[] = [
   'raid',
   'redeem',
 ]
-export const SCENE_KEYS = ['in_game', 'just_chatting', 'starting_soon', 'brb', 'ending'] as const
+export const SCENE_KEYS = [
+  'in_game',
+  'just_chatting',
+  'starting_soon',
+  'getting_ready',
+  'brb',
+  'paused',
+  'offline',
+  'ending',
+] as const
+/** core::design::BREAK_KEYS: screens shown while away from the game. */
+export const BREAK_KEYS: readonly string[] = [
+  'starting_soon',
+  'getting_ready',
+  'brb',
+  'paused',
+  'offline',
+  'ending',
+]
 export const FRAMES: readonly Frame[] = [
   'plate',
   'neon',
@@ -180,7 +202,76 @@ export const STYLE_TAGS: readonly StyleTag[] = [
 ]
 export const MOTION_TAGS: readonly MotionTag[] = ['still', 'smooth', 'lively', 'bouncy']
 export const DESIGN_KINDS: readonly DesignKind[] = ['alert', 'theme', 'scene', 'widget']
-export const LAYER_TYPES = ['image', 'text', 'shape', 'frame', 'webcam', 'brand'] as const
+export const LAYER_TYPES = [
+  'image',
+  'text',
+  'shape',
+  'frame',
+  'webcam',
+  'brand',
+  'fx',
+  'music',
+  'sound',
+] as const
+/** core::layer::FX_PRESETS: the motion backgrounds an `fx` layer draws. */
+export const FX_PRESETS: readonly FxPreset[] = [
+  'hex',
+  'nightdrive',
+  'wasteland',
+  'circuit',
+  'tunnel',
+  'dunes',
+  'forge',
+  'arena',
+  'coderain',
+  'orbit',
+  'sonar',
+]
+export const FX_LABEL: Record<FxPreset, string> = {
+  hex: 'Hex pulse',
+  nightdrive: 'Night drive',
+  wasteland: 'Wasteland',
+  circuit: 'Circuit',
+  tunnel: 'Neon tunnel',
+  dunes: 'Night dunes',
+  forge: 'Lava forge',
+  arena: 'Arena lights',
+  coderain: 'Code rain city',
+  orbit: 'Orbit',
+  sonar: 'Deep sonar',
+}
+/** core::layer::STINGERS and SOUND_LOOPS: sounds the overlay page makes itself. */
+export const STINGERS: readonly Stinger[] = ['whoosh', 'riser', 'impact', 'tick', 'chime', 'glitch']
+export const SOUND_LOOPS: readonly SoundLoop[] = ['rain', 'wind', 'pad', 'hum']
+export const SCREEN_SOUND_LABEL: Record<Stinger | SoundLoop, string> = {
+  whoosh: 'Whoosh',
+  riser: 'Riser',
+  impact: 'Impact',
+  tick: 'Tick',
+  chime: 'Chime',
+  glitch: 'Glitch',
+  rain: 'Rain',
+  wind: 'Wind',
+  pad: 'Synth pad',
+  hum: 'City hum',
+}
+/** core::layer::COUNTDOWN_LOOKS */
+export const COUNTDOWN_LOOKS: readonly CountdownLook[] = [
+  'digital',
+  'thin',
+  'ring',
+  'bar',
+  'flip',
+  'words',
+]
+export const COUNTDOWN_LOOK_LABEL: Record<CountdownLook, string> = {
+  digital: 'Digital',
+  thin: 'Thin',
+  ring: 'Ring',
+  bar: 'Bar',
+  flip: 'Flip',
+  words: 'Words',
+}
 const SHADOWS = ['none', 'soft', 'hard', 'glow'] as const
 const LOOPS = ['none', 'float', 'pulse', 'shimmer'] as const
 /** Richer layer options (API-REQUESTS R20). The engine passes them through untouched. */
@@ -588,7 +679,10 @@ export const SCENE_LABEL: Record<string, string> = {
   in_game: 'In game',
   just_chatting: 'Just chatting',
   starting_soon: 'Starting soon',
+  getting_ready: 'Getting ready',
   brb: 'Be right back',
+  paused: 'Paused',
+  offline: 'Offline',
   ending: 'Ending',
 }
 
@@ -1021,6 +1115,53 @@ export function validateLayer(config: unknown): string | null {
         optBool(config, path, 'countdown_restart'),
         optBool(config, path, 'countdown_show'),
         optBool(config, path, 'countdown_up'),
+        oneOf(config, path, 'countdown_look', COUNTDOWN_LOOKS),
+      )
+      break
+    }
+    case 'fx': {
+      const p = optStr(config, path, 'preset')
+      if (p === null) return 'config.preset: pick a motion background.'
+      if (typeof p !== 'string') return p.err
+      e = first(
+        oneOf(config, path, 'preset', FX_PRESETS),
+        ...['color', 'color2', 'background'].map((c) => optColor(config, path, c)),
+        numIn(config, path, 'speed', 0.25, 3),
+        numIn(config, path, 'density', 0.5, 2),
+        optBool(config, path, 'reactive'),
+      )
+      break
+    }
+    case 'music': {
+      const f = optStr(config, path, 'font')
+      if (f !== null && typeof f !== 'string') return f.err
+      if (typeof f === 'string' && !isFontFamily(f))
+        return `config.font: "${clip(f)}" isn't a font name (letters, digits, spaces and hyphens).`
+      e = first(
+        oneOf(config, path, 'look', ['wave', 'pulse']),
+        ...['color', 'color2', 'text_color'].map((c) => optColor(config, path, c)),
+        numIn(config, path, 'title_size', 8, 160),
+        optBool(config, path, 'show_title'),
+        optBool(config, path, 'only_playing'),
+      )
+      break
+    }
+    case 'sound': {
+      e = first(
+        oneOf(config, path, 'on_show', STINGERS),
+        oneOf(config, path, 'at_zero', STINGERS),
+        oneOf(config, path, 'loop', SOUND_LOOPS),
+        ...['on_show_media', 'loop_media'].map((k) => {
+          const m = optStr(config, path, k)
+          if (m === null) return null
+          if (typeof m !== 'string') return m.err
+          return isMediaRef(m)
+            ? null
+            : `config.${k}: "${clip(m)}" isn't a file from your media library.`
+        }),
+        optBool(config, path, 'last_ticks'),
+        optBool(config, path, 'duck'),
+        numIn(config, path, 'volume', 0, 1),
       )
       break
     }

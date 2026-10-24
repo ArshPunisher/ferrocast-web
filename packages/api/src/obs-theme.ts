@@ -449,7 +449,7 @@ export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
       if (
         font &&
         l.kind === 'layer' &&
-        c.type === 'text' &&
+        (c.type === 'text' || c.type === 'music') &&
         (font === THEME_FONTS.mono || c.font !== THEME_FONTS.mono)
       )
         c.font = font

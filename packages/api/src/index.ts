@@ -22,6 +22,7 @@ export * from './studio'
 export * from './golive'
 export * from './autoreplies'
 export * from './obs-theme'
+export * from './music'
 export {
   amountOf,
   appliesTo,

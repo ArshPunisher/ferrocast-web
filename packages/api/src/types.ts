@@ -470,6 +470,24 @@ export type TextEffect =
   | 'long_shadow'
   | 'stamp'
 export type LayerShadow = 'none' | 'soft' | 'hard' | 'glow'
+/** A motion background an `fx` layer draws (25 Oct board). */
+export type FxPreset =
+  | 'hex'
+  | 'nightdrive'
+  | 'wasteland'
+  | 'circuit'
+  | 'tunnel'
+  | 'dunes'
+  | 'forge'
+  | 'arena'
+  | 'coderain'
+  | 'orbit'
+  | 'sonar'
+/** A short sound a `sound` layer plays once. */
+export type Stinger = 'whoosh' | 'riser' | 'impact' | 'tick' | 'chime' | 'glitch'
+/** A sound a `sound` layer loops behind the screen. */
+export type SoundLoop = 'rain' | 'wind' | 'pad' | 'hum'
+export type CountdownLook = 'digital' | 'thin' | 'ring' | 'bar' | 'flip' | 'words'
 export type LayerConfig =
   | (LayerBase & {
       type: 'image'
@@ -508,6 +526,53 @@ export type LayerConfig =
       countdown_show?: boolean
       /** After zero, counts up how late it is ("+01:23") instead of the done text. */
       countdown_up?: boolean
+      /** How the countdown is drawn (default digital: the text itself). */
+      countdown_look?: CountdownLook
+    })
+  | (LayerBase & {
+      type: 'fx'
+      preset: FxPreset
+      /** The main glow, a second colour and the ground (the preset's own when unset). */
+      color?: string
+      color2?: string
+      background?: string
+      /** 0.25 to 3 (default 1). */
+      speed?: number
+      /** 0.5 to 2 (default 1). */
+      density?: number
+      /** Moves with the music OBS hears (else a slow pulse of its own). */
+      reactive?: boolean
+    })
+  | (LayerBase & {
+      type: 'music'
+      /** The wave player or the heartbeat line. */
+      look?: 'wave' | 'pulse'
+      color?: string
+      color2?: string
+      text_color?: string
+      font?: string
+      title_size?: number
+      /** Song and artist beside it (default true). */
+      show_title?: boolean
+      /** Shows only while music plays (default true). */
+      only_playing?: boolean
+    })
+  | (LayerBase & {
+      type: 'sound'
+      /** Played once when the screen comes on air (or `on_show_media`, your own file). */
+      on_show?: Stinger | null
+      on_show_media?: string | null
+      /** Looped behind the screen while it's on air (or `loop_media`). */
+      loop?: SoundLoop | null
+      loop_media?: string | null
+      /** A tick each second in the last 10 seconds of a timer on this screen. */
+      last_ticks?: boolean
+      /** Played when a timer on this screen reaches zero. */
+      at_zero?: Stinger | null
+      /** 0 to 1 (default 0.7). */
+      volume?: number
+      /** Quieter while music plays. */
+      duck?: boolean
     })
   | (LayerBase & {
       type: 'shape'
@@ -717,7 +782,15 @@ export type BuiltinSound = 'none' | PlayableSound | LegacySound
 export type BrandSpot = 'corner' | 'divider' | 'watermark' | 'notch' | 'badge' | 'edge'
 export type ShadowKind = 'none' | 'soft' | 'hard' | 'glow'
 export type SceneKey =
-  'in_game' | 'just_chatting' | 'starting_soon' | 'brb' | 'ending' | `custom_${number}`
+  | 'in_game'
+  | 'just_chatting'
+  | 'starting_soon'
+  | 'getting_ready'
+  | 'brb'
+  | 'paused'
+  | 'offline'
+  | 'ending'
+  | `custom_${number}`
 
 export interface AlertLook {
   frame: Frame
@@ -1437,6 +1510,16 @@ export interface OverlayState {
   giveaway?: GiveawayCard | null
   /** Start show: when its countdown ends (ms), so timers on screen reach zero with it. */
   show?: { countdown_ends_at: number | null }
+  /** The music OBS hears (overlays with a music, motion or sound layer). */
+  music?: MusicNow
+}
+
+/** What's playing (API.md §6 `music`): loudness 0 to 1 and the song, when known. */
+export interface MusicNow {
+  playing: boolean
+  level: number
+  title: string | null
+  artist: string | null
 }
 
 export interface GiveawayEntrant {
@@ -1524,9 +1607,13 @@ export type OverlayServerFrame =
       v: 1
       seq: number
       type: 'state'
-      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll' | 'giveaway' | 'show'>>
+      data: Partial<
+        Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll' | 'giveaway' | 'show'>
+      >
     }
   | { v: 1; seq: number; type: 'config'; data: Overlay }
+  /** Many a second while music plays; not kept for replay (seq 0). */
+  | { v: 1; seq: number; type: 'music'; data: MusicNow }
   | { v: 1; seq: number; type: 'delete_message'; data: { platform: Platform; message_id: string } }
   | { v: 1; seq: number; type: 'delete_user'; data: { platform: Platform; user_id: string } }
   | { v: 1; seq: number; type: 'clear_chat'; data: { platform: Platform | null } }
