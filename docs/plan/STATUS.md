@@ -1,5 +1,11 @@
 # Status
 
+## 24 Oct 2026 (2.0: upload protection, per-platform stream info, Aitum Multistream)
+- Upload protection: paused line with the reason and "Resume now", the status pill, "Paused" in the platform list, an Upload protection switch. Demo mirrors the engine's timings.
+- Stream info tabs Everywhere / Twitch / YouTube / Kick (owner's pick 6): a platform tab holds only what's different, "Use the everywhere title" resets; Everywhere lists the changes.
+- Aitum Multistream note before going live and "getting your stream twice" while live (board item 7).
+- Tests: vitest (golive, studio), e2e golive + studio 72 passed in Chromium and WebKit; checked at 1440 and 375 px, light and dark. CodeRabbit: no findings on the first two; the third batch was reviewed by hand (free limit), two wording fixes.
+
 ## 22 Oct 2026 (Go live everywhere, 2.0 Track A)
 - Go live tab, first in Studio, from the owner's board picks (1A 2A 3A 4B 5A 7): platforms in pause order with drag and arrow keys, three setup steps that shrink to one line, the upload table and verdict, health lines while live, a server of your own (removing asks first). Platform pills show a platform's stream reconnecting on every page.
 - `packages/api/src/golive.ts` (client, words, frame), demo `features/golive.ts` (`setGoLive` for tests), phone rules updated. Tests: `packages/api/test/golive.test.ts`, `e2e/golive.spec.ts` (Chromium, WebKit, phone; axe light and dark). Full dashboard e2e: 976 passed. CodeRabbit: no findings.
