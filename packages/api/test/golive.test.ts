@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   aitumClashes,
   andList,
+  checkAdvanced,
   checkCut,
   goliveApi,
   goingTo,
@@ -184,6 +185,41 @@ describe('cut layout checks', () => {
       (await refusal(client.request('PUT', '/api/v1/golive/vertical/source', { source: 'x' })))
         .status,
     ).toBe(400)
+  })
+})
+
+describe('advanced settings', () => {
+  it('are checked like the engine and saved by the demo', async () => {
+    const { api, client } = demo()
+    const v = await api.view()
+    const ids = v.destinations.map((d) => d.id)
+    const a = v.advanced
+    expect(checkAdvanced(a, ids)).toBeNull()
+    expect(checkAdvanced({ ...a, rules: { ...a.rules, slow_pct: 99 } }, ids)).toMatch(
+      /^rules\.slow_pct:/,
+    )
+    expect(checkAdvanced({ ...a, rules: { ...a.rules, max_pause_s: 30 } }, ids)).toMatch(
+      /^rules\.max_pause_s:/,
+    )
+    expect(checkAdvanced({ ...a, rules: { ...a.rules, first_to_pause: 'nope' } }, ids)).toMatch(
+      /first_to_pause/,
+    )
+    expect(checkAdvanced({ ...a, port: 80 }, ids)).toMatch(/^port:/)
+    const per = (d: Partial<(typeof a.per)[string]>) => ({
+      ...a,
+      per: { twitch: { server: null, first_retry_s: 1, max_retry_s: 30, ...d } },
+    })
+    expect(checkAdvanced(per({ server: 'https://x' }), ids)).toMatch(/^per\.twitch\.server:/)
+    expect(checkAdvanced(per({ first_retry_s: 0 }), ids)).toMatch(/first_retry_s/)
+    expect(checkAdvanced(per({ server: 'rtmps://live-fra.twitch.tv/app' }), ids)).toBeNull()
+    expect(checkAdvanced(null as never, ids)).toMatch(/^rules:/)
+    const saved = await api.setAdvanced({ ...per({ first_retry_s: 2 }), keep_free_pct: 30 })
+    expect(saved.advanced.keep_free_pct).toBe(30)
+    expect((await api.view()).advanced.per.twitch?.first_retry_s).toBe(2)
+    expect(
+      (await refusal(client.request('PUT', '/api/v1/golive/advanced', { rules: 1 }))).status,
+    ).toBe(400)
+    await api.newKey()
   })
 })
 

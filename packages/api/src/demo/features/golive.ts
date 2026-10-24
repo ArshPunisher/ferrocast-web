@@ -3,8 +3,9 @@
 // lines while the pretend OBS streams. Same routes, shapes, error codes and messages as API.md
 // §4 "Go live everywhere".
 
-import { checkCut } from '../../golive'
+import { checkAdvanced, checkCut } from '../../golive'
 import type {
+  Advanced,
   AitumOutput,
   Canvas,
   CutConfig,
@@ -93,6 +94,20 @@ export class DemoGoLive {
     height: 1920,
     fps: 30,
     kbps: 4500,
+    encoder: 'auto',
+  }
+  private advanced: Advanced = {
+    rules: {
+      slow_pct: 70,
+      trouble_s: 4,
+      calm_s: 10,
+      first_pause_s: 60,
+      max_pause_s: 600,
+      first_to_pause: null,
+    },
+    keep_free_pct: 20,
+    port: 1935,
+    per: {},
   }
   private aitumOk = false
   /** Paused by upload protection: until when, and since when. */
@@ -333,6 +348,7 @@ export class DemoGoLive {
       upload: clone(this.upload),
       protect: this.protect,
       aitum_ok: this.aitumOk,
+      advanced: clone(this.advanced),
       cut: {
         source: this.source,
         config: clone(this.cutConfig),
@@ -397,6 +413,25 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()
     if (method === 'POST' && path === 'ffmpeg') return this.getFfmpeg()
+    if (method === 'PUT' && path === 'advanced') {
+      const err = checkAdvanced(
+        requireObj(body) as unknown as Advanced,
+        this.cfg.map((d) => d.id),
+      )
+      if (err) throw new HttpError(400, 'invalid', err)
+      this.advanced = clone(body as Advanced)
+      return { destinations: clone(this.cfg), advanced: clone(this.advanced) }
+    }
+    if (method === 'POST' && path === 'new-key') {
+      if (this.live() || this.verticalLive())
+        throw new HttpError(
+          422,
+          'golive_streaming',
+          'A stream is coming in right now.',
+          'Stop streaming in OBS first; the key changes between streams.',
+        )
+      return undefined
+    }
     if (method === 'GET' && path === 'picture') {
       if (!this.obsConnected())
         throw new HttpError(

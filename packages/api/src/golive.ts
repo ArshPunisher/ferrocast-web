@@ -125,6 +125,72 @@ export interface GoLiveView {
   aitum_ok: boolean
   /** Where the vertical picture comes from, and the cut-from-stream layout. */
   cut: CutView
+  /** Advanced mode's settings (A2.5). */
+  advanced: Advanced
+}
+
+/** Upload protection's rule, as Advanced mode writes it. */
+export interface ProtectRules {
+  /** 50 to 95: a destination under this share of its stream is slow. */
+  slow_pct: number
+  trouble_s: number
+  calm_s: number
+  first_pause_s: number
+  max_pause_s: number
+  /** A destination that always pauses first, when it's live. */
+  first_to_pause: string | null
+}
+
+export interface DestAdvanced {
+  /** A platform's own address instead (another region; rtmp or rtmps). */
+  server: string | null
+  first_retry_s: number
+  max_retry_s: number
+}
+
+export interface Advanced {
+  rules: ProtectRules
+  /** The upload check's reserve for the game and chat, 0 to 50 percent. */
+  keep_free_pct: number
+  /** The local server's port (from the next start). */
+  port: number
+  per: Record<string, DestAdvanced>
+}
+
+export const DEST_ADVANCED_DEFAULT: DestAdvanced = {
+  server: null,
+  first_retry_s: 1,
+  max_retry_s: 30,
+}
+
+/** Same rules as the engine, so Advanced mode can say what's wrong before saving. */
+export function checkAdvanced(a: Advanced, ids: string[]): string | null {
+  if (typeof a !== 'object' || a === null || typeof a.rules !== 'object' || a.rules === null)
+    return 'rules: send the protection rule as an object.'
+  if (typeof a.per !== 'object' || a.per === null)
+    return 'per: send the per-destination settings as an object.'
+  const r = a.rules
+  const int = (v: unknown, lo: number, hi: number) =>
+    typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi
+  if (!int(r.slow_pct, 50, 95)) return 'rules.slow_pct: 50 to 95 percent.'
+  if (!int(r.trouble_s, 2, 30)) return 'rules.trouble_s: 2 to 30 seconds.'
+  if (!int(r.calm_s, 5, 120)) return 'rules.calm_s: 5 to 120 seconds.'
+  if (!int(r.first_pause_s, 10, 3600)) return 'rules.first_pause_s: 10 seconds to an hour.'
+  if (!int(r.max_pause_s, r.first_pause_s, 7200))
+    return 'rules.max_pause_s: at least the first pause, at most two hours.'
+  if (r.first_to_pause && !ids.includes(r.first_to_pause))
+    return 'rules.first_to_pause: no such destination.'
+  if (!int(a.keep_free_pct, 0, 50)) return 'keep_free_pct: 0 to 50 percent.'
+  if (!int(a.port, 1024, 65535)) return 'port: 1024 to 65535.'
+  for (const [id, d] of Object.entries(a.per)) {
+    if (!ids.includes(id)) return `per.${id}: no such destination.`
+    if (d.server && !/^rtmps?:\/\/[^/\s]+\/\S+/i.test(d.server))
+      return `per.${id}.server: the address must start with rtmp:// or rtmps:// and have a path.`
+    if (!int(d.first_retry_s, 1, 30)) return `per.${id}.first_retry_s: 1 to 30 seconds.`
+    if (!int(d.max_retry_s, d.first_retry_s, 600))
+      return `per.${id}.max_retry_s: at least the first wait, at most 600 seconds.`
+  }
+  return null
 }
 
 /** A box on the normal picture, as fractions (0 to 1) of its width and height. */
@@ -147,6 +213,8 @@ export interface CutConfig {
   height: 1920 | 1280
   fps: 30 | 60
   kbps: number
+  /** The graphics card when there is one (auto), or always the processor. */
+  encoder: 'auto' | 'processor'
 }
 
 export type CutState =
@@ -207,6 +275,9 @@ export function checkCut(value: unknown): string | null {
     (c.fps !== 30 && c.fps !== 60 ? 'fps: 30 or 60.' : null) ??
     (typeof c.kbps !== 'number' || c.kbps < 1000 || c.kbps > 12000
       ? 'kbps: 1,000 to 12,000.'
+      : null) ??
+    (c.encoder !== undefined && c.encoder !== 'auto' && c.encoder !== 'processor'
+      ? 'encoder: auto or processor.'
       : null)
   )
 }
@@ -286,6 +357,11 @@ export function goliveApi(c: FerroClient) {
     /** Saves the cut-from-stream layout; a running cut restarts with it. */
     setVerticalCut: (cut: CutConfig) =>
       c.request<{ cut: CutConfig }>('PUT', '/api/v1/golive/vertical/cut', cut),
+    /** Go live's Advanced settings (A2.5). */
+    setAdvanced: (advanced: Advanced) =>
+      c.request<{ advanced: Advanced }>('PUT', '/api/v1/golive/advanced', advanced),
+    /** A new local stream key; OBS and Aitum Vertical follow it. */
+    newKey: () => post<void>('/golive/new-key'),
     /** Fetches ffmpeg (again, after a failure); progress shows in `cut.ffmpeg`. */
     getFfmpeg: () => post<FfmpegState>('/golive/ffmpeg'),
     /** What's on air in OBS, to mark the camera and game on. */
