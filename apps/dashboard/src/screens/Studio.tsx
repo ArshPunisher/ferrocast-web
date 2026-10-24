@@ -5,6 +5,7 @@ import { Segmented } from '@ferrocast/ui'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
+import { VerticalTab } from '../components/studio/vertical'
 import { MarkersPanel, MomentsSettings } from '../components/studio/moments'
 import { HealthPanel, ScenesPanel, SwitcherSettings } from '../components/studio/obs'
 import { PreflightPanel, ShowPanel, ShowSettings } from '../components/studio/show'
@@ -14,6 +15,7 @@ import { go, type StudioSection } from '../lib/router'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
+  { value: 'vertical', label: 'Vertical' },
   { value: 'show', label: 'Show' },
   { value: 'info', label: 'Stream info' },
   { value: 'obs', label: 'OBS' },
@@ -39,6 +41,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         onChange={(s) => go({ name: 'studio', section: s })}
       />
       {section === 'golive' && <GoLiveTab />}
+      {section === 'vertical' && <VerticalTab />}
       {section === 'show' && (
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-5">

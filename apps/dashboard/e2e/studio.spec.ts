@@ -11,6 +11,7 @@ const panel = (page: Page, name: string) =>
 test.describe('studio', () => {
   test('every Studio tab and Home loads', { tag: '@smoke' }, async ({ page }) => {
     for (const [route, heading] of [
+      ['studio/vertical', 'Where it goes'],
       ['studio/show', 'Go-live checklist'],
       ['studio/info', 'Stream info'],
       ['studio/obs', 'Scenes'],

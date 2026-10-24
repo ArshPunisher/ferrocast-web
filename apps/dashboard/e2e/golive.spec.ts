@@ -161,7 +161,9 @@ test.describe('go live everywhere', () => {
     await section.getByText('Show', { exact: true }).click()
     await section.getByText('Go live', { exact: true }).click()
     const note = page.getByRole('region', { name: 'Aitum Multistream' })
-    await expect(note.getByText('Aitum Multistream is also set up to send to Twitch.')).toBeVisible()
+    await expect(
+      note.getByText('Aitum Multistream is also set up to send to Twitch.'),
+    ).toBeVisible()
     await note.getByRole('button', { name: 'Show me where in OBS' }).click()
     await expect(note.getByText(/Docks menu, Aitum Multistream/)).toBeVisible()
     await note.getByRole('button', { name: 'I use it on purpose' }).click()
@@ -176,6 +178,35 @@ test.describe('go live everywhere', () => {
     await expect(
       panel(page, 'Your platforms').getByRole('switch', { name: 'Stream to Twitch' }),
     ).toHaveAttribute('aria-checked', 'false')
+  })
+
+  test('vertical: point Aitum Vertical here, tick Shorts live, and it goes live on its own', async ({
+    page,
+  }) => {
+    await open(page, 'studio/vertical')
+    const source = panel(page, 'Vertical stream')
+    await expect(source.getByText('Aitum Vertical found')).toBeVisible()
+    await source.getByRole('button', { name: 'Point Aitum Vertical at Ferrocast' }).click()
+    await expect(page.getByText('Aitum Vertical now streams to Ferrocast.')).toBeVisible()
+    await expect(source.getByText('Aitum Vertical sends to Ferrocast')).toBeVisible()
+    const where = panel(page, 'Where it goes')
+    await where.getByRole('switch', { name: 'Stream to YouTube Shorts live' }).click()
+    await expect(where.getByText('Going to 1 place.')).toBeVisible()
+    // The normal list doesn't show it; the Go live tab is for the normal stream.
+    await demo(page, '(d) => d.setGoLive({ vertical: { streaming: true } })')
+    await expect(page.locator('#vertical-live').getByText('YouTube Shorts live: Live')).toBeVisible(
+      {
+        timeout: 8000,
+      },
+    )
+    await expect(source.getByText(/1080 × 1920 at 30 fps coming in from OBS/)).toBeVisible()
+    await page
+      .getByRole('radiogroup', { name: 'Studio section' })
+      .getByText('Go live', { exact: true })
+      .click()
+    await expect(
+      panel(page, 'Your platforms').getByRole('switch', { name: 'Stream to YouTube Shorts live' }),
+    ).toHaveCount(0)
   })
 
   test('the platform list reorders from the keyboard', async ({ page }) => {
@@ -216,6 +247,24 @@ test.describe('go live everywhere', () => {
               .slice(0, 3)
               .join(', ')}`,
         ),
+      ).toEqual([])
+    })
+
+  for (const scheme of ['dark', 'light'] as const)
+    test(`the Vertical tab has no serious accessibility problems (${scheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
+      await open(page, 'studio/vertical')
+      await demo(page, `(d) => d.setGoLive({ vertical: { points_here: true, streaming: true } })`)
+      await panel(page, 'Where it goes')
+        .getByRole('switch', { name: 'Stream to YouTube Shorts live' })
+        .click()
+      await expect(page.getByText('YouTube Shorts live: Live')).toBeVisible({ timeout: 8000 })
+      const r = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze()
+      const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+      expect(
+        bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
       ).toEqual([])
     })
 })

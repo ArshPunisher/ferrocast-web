@@ -69,7 +69,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
           connectors.relay !== undefined &&
           connectors.relay.state !== 'connected'
         const dest = golive?.live
-          ? golive.destinations.find((d) => d.kind === name && d.enabled)
+          ? golive.destinations.find(
+              (d) => d.kind === name && d.enabled && (d.canvas ?? 'main') === 'main',
+            )
           : undefined
         const streamIssue = dest?.blocked
           ? 'stream can’t start'

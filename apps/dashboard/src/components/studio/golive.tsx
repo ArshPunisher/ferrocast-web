@@ -28,6 +28,8 @@ import {
   goingTo,
   healthText,
   mbps,
+  onCanvas,
+  type Canvas,
   type DestinationView,
   type GoLiveView,
   type Service,
@@ -63,7 +65,7 @@ const NAMES: Record<Exclude<Service, 'custom'>, string> = {
   kick: 'Kick',
 }
 
-function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
+export function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
   return (
     <span
       className="grid shrink-0 place-items-center rounded-[8px] bg-surface-3"
@@ -81,13 +83,21 @@ function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
 
 /** The view with newer readings on top: the live frame's destinations and numbers, and
  *  whether OBS is streaming from the OBS health reading (OBS starts and stops on its own). */
-function useMerged(view: GoLiveView | null): GoLiveView | null {
+export function useMerged(view: GoLiveView | null): GoLiveView | null {
   const frame = useLive((s) => s.studio.golive)
   const health = useObsHealth()
   if (!view) return null
   const obs = health ? { ...view.obs, streaming: health.streaming } : view.obs
   if (!frame) return { ...view, obs }
-  return { ...view, obs, live: frame.live, stats: frame.stats, destinations: frame.destinations }
+  return {
+    ...view,
+    obs,
+    live: frame.live,
+    stats: frame.stats,
+    vertical_live: frame.vertical_live ?? view.vertical_live,
+    vertical_stats: frame.vertical_stats ?? view.vertical_stats,
+    destinations: frame.destinations,
+  }
 }
 
 export function GoLiveTab() {
@@ -111,7 +121,7 @@ export function GoLiveTab() {
       </div>
     )
   const set = (patch: Partial<GoLiveView>) => res.set((v) => ({ ...(v ?? view), ...patch }))
-  const clashes = aitumClashes(view.obs.aitum, view.destinations)
+  const clashes = aitumClashes(view.obs.aitum, onCanvas(view.destinations, 'main'))
   return (
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-5">
@@ -131,11 +141,19 @@ export function GoLiveTab() {
 
 // ---------------------------------------------------------------- 5A: while live
 
-function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) {
+export function LiveCard({
+  view,
+  onSaved,
+  canvas = 'main',
+}: {
+  view: GoLiveView
+  onSaved: () => void
+  canvas?: Canvas
+}) {
   const now = useNow(1000)
   const api = useGoLive()
   const { run, busy } = useAction()
-  const on = view.destinations.filter((d) => d.enabled)
+  const on = onCanvas(view.destinations, canvas).filter((d) => d.enabled)
   const live = on.filter((d) => d.health?.state === 'live')
   const paused = on.filter((d) => d.health?.state === 'paused').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
@@ -151,9 +169,11 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
       success: `${d.name} is coming back.`,
     }).then((r) => r && onSaved())
   return (
-    <Panel id="golive-live">
+    <Panel id={canvas === 'main' ? 'golive-live' : 'vertical-live'}>
       <div className="flex flex-col gap-3">
-        <h2 className="sr-only">Live on your platforms</h2>
+        <h2 className="sr-only">
+          {canvas === 'main' ? 'Live on your platforms' : 'Vertical stream live'}
+        </h2>
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex h-7 items-center gap-2 rounded-full bg-[#c42339] px-3 font-mono text-[12px] font-extrabold tracking-[0.06em] text-white">
             <span className="size-[7px] rounded-full bg-white" aria-hidden />
@@ -235,7 +255,7 @@ function LiveCard({ view, onSaved }: { view: GoLiveView; onSaved: () => void }) 
             )
           })}
         </ul>
-        {aitumClashes(view.obs.aitum, on, true).map((c) => {
+        {(canvas === 'main' ? aitumClashes(view.obs.aitum, on, true) : []).map((c) => {
           const d = view.destinations.find((x) => x.id === c.id)
           if (d?.health?.state !== 'live') return null
           return (
@@ -282,37 +302,43 @@ function elapsed(ms: number): string {
 
 // ---------------------------------------------------------------- 2A: the platforms
 
-function Platforms({
+export function Platforms({
   view,
   onSaved,
   onProtect,
+  canvas = 'main',
 }: {
   view: GoLiveView
   onSaved: () => void
-  onProtect: (on: boolean) => void
+  onProtect?: (on: boolean) => void
+  canvas?: Canvas
 }) {
   const api = useGoLive()
   const { run, busy } = useAction()
-  const [rows, setRows] = useState(view.destinations)
+  const mine = onCanvas(view.destinations, canvas)
+  const others = view.destinations.filter((d) => !mine.includes(d))
+  const [rows, setRows] = useState(mine)
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<DestinationView | null>(null)
   const dragged = useRef<number | null>(null)
   // A fresh view (a frame, a save) wins over local edits once it arrives.
-  const key = view.destinations.map((d) => `${d.id}:${d.enabled}`).join(',')
+  const key = mine.map((d) => `${d.id}:${d.enabled}`).join(',')
   const [seen, setSeen] = useState(key)
   if (seen !== key) {
     setSeen(key)
-    setRows(view.destinations)
+    setRows(mine)
   }
-  const merged = rows.map((r) => view.destinations.find((d) => d.id === r.id) ?? r)
+  const merged = rows.map((r) => mine.find((d) => d.id === r.id) ?? r)
 
+  // The other picture's destinations go along unchanged (the engine wants every one).
   const save = (next: DestinationView[], label: string) => {
     setRows(next)
-    void run('order', () => api.saveOrder(next.map((d) => ({ id: d.id, enabled: d.enabled }))), {
+    const all = canvas === 'main' ? [...next, ...others] : [...others, ...next]
+    void run('order', () => api.saveOrder(all.map((d) => ({ id: d.id, enabled: d.enabled }))), {
       success: label,
     }).then((r) => {
       if (r) onSaved()
-      else setRows(view.destinations)
+      else setRows(mine)
     })
   }
   const move = (from: number, to: number) => {
@@ -346,16 +372,23 @@ function Platforms({
   const protect = (on: boolean) =>
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
-    }).then((r) => r && onProtect(r.protect))
+    }).then((r) => r && onProtect?.(r.protect))
 
   const ticked = merged.filter((d) => d.enabled)
-  const need = ticked.reduce((a, d) => a + (d.health?.kbps || view.stats.kbps || 6160), 0)
-  const twitchShared = ticked.some((d) => d.kind === 'twitch') && ticked.length > 1
+  const vertical = canvas === 'vertical'
+  // Before anything streamed: what the engine plans (1080p60, or 1080x1920 for vertical).
+  const plan = vertical ? view.vertical_stats.kbps || 4660 : view.stats.kbps || 6160
+  const need = ticked.reduce((a, d) => a + (d.health?.kbps || plan), 0)
+  const twitchShared = !vertical && ticked.some((d) => d.kind === 'twitch') && ticked.length > 1
   return (
     <Panel
       id="golive-platforms"
-      title="Your platforms"
-      description="Drag to set what pauses first if your upload struggles: the bottom one."
+      title={vertical ? 'Where it goes' : 'Your platforms'}
+      description={
+        vertical
+          ? 'YouTube Shorts live, or a server of your own. Twitch and Kick take one live per channel.'
+          : 'Drag to set what pauses first if your upload struggles: the bottom one.'
+      }
       actions={
         <Button size="sm" icon={<Plus size={15} />} onClick={() => setAdding(true)}>
           Add a destination
@@ -398,7 +431,7 @@ function Platforms({
                     ? ''
                     : d.health?.state === 'paused'
                       ? 'Paused'
-                      : mbps(d.health?.kbps || view.stats.kbps || 6160)}
+                      : mbps(d.health?.kbps || plan)}
                 </span>
                 {d.kind === 'custom' && (
                   <IconButton
@@ -425,15 +458,22 @@ function Platforms({
           <b className="font-semibold">{goingTo(merged)}.</b>
           {ticked.length > 0 && <span className="text-text-3">Needs {mbps(need)} upload.</span>}
         </div>
-        <div className="border-t border-line pt-3">
-          <Switch
-            label="Upload protection"
-            description="If your upload can’t carry every platform, the bottom one pauses for a while so the ones above stay smooth."
-            checked={view.protect}
-            disabled={busy === 'protect'}
-            onChange={protect}
-          />
-        </div>
+        {vertical ? (
+          <p className="m-0 text-[13px] text-text-3">
+            Upload protection counts the vertical stream too: it pauses before the platforms on the
+            Go live tab.
+          </p>
+        ) : (
+          <div className="border-t border-line pt-3">
+            <Switch
+              label="Upload protection"
+              description="If your upload can’t carry every platform, the bottom one pauses for a while so the ones above stay smooth."
+              checked={view.protect}
+              disabled={busy === 'protect'}
+              onChange={protect}
+            />
+          </div>
+        )}
         {twitchShared && (
           <Note>
             <b>Twitch asks that every platform gets the same quality</b> as Twitch, or lower.
@@ -441,7 +481,12 @@ function Platforms({
           </Note>
         )}
       </div>
-      <AddDestination open={adding} onClose={() => setAdding(false)} onAdded={onSaved} />
+      <AddDestination
+        open={adding}
+        onClose={() => setAdding(false)}
+        onAdded={onSaved}
+        canvas={canvas}
+      />
       <Dialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
@@ -475,7 +520,8 @@ function RowText({ d }: { d: DestinationView }) {
           <>{d.account ?? 'Your own server'} · video only</>
         ) : d.connected ? (
           <span className="inline-flex items-center gap-1">
-            {d.account ?? platform} · key from {platform}
+            {d.account ?? platform} ·{' '}
+            {d.canvas === 'vertical' ? 'Ferrocast makes its stream' : `key from ${platform}`}
             <LockSimple size={12} aria-label="kept safe" />
           </span>
         ) : (
@@ -531,10 +577,12 @@ function AddDestination({
   open,
   onClose,
   onAdded,
+  canvas = 'main',
 }: {
   open: boolean
   onClose: () => void
   onAdded: () => void
+  canvas?: Canvas
 }) {
   const api = useGoLive()
   const { run, busy } = useAction()
@@ -548,7 +596,7 @@ function AddDestination({
     void run(
       'add',
       () =>
-        api.addCustom(name, url, key).catch((e: unknown) => {
+        api.addCustom(name, url, key, canvas).catch((e: unknown) => {
           const m = describeError(e).message
           const field = /^(name|url|key):/.exec(m)?.[1] ?? 'form'
           setErr({ field, message: m.replace(/^(name|url|key):\s*/, '') })
@@ -857,9 +905,13 @@ function Step({
 }
 
 /** OBS's Settings, Stream by hand: the server and key, for OBS on another way or a check. */
-function ByHand() {
+export function ByHand({ vertical = false }: { vertical?: boolean }) {
   const api = useGoLive()
-  const [ingest, setIngest] = useState<{ server: string; key: string } | null>(null)
+  const [ingest, setIngest] = useState<{
+    server: string
+    key: string
+    vertical_key: string
+  } | null>(null)
   const { run, busy } = useAction()
   const copy = (text: string, what: string) =>
     void navigator.clipboard.writeText(text).then(
@@ -880,10 +932,14 @@ function ByHand() {
       }}
     >
       <summary className="cursor-pointer font-semibold text-text-2 hover:text-text">
-        Set OBS up by hand
+        {vertical ? 'Set it up by hand' : 'Set OBS up by hand'}
       </summary>
       <div className="mt-2 flex flex-col gap-2">
-        <p className="m-0">In OBS open Settings, Stream, pick Custom, and paste these two.</p>
+        <p className="m-0">
+          {vertical
+            ? 'Anything that sends a vertical stream can use these two (in Aitum Vertical: its settings, a stream output).'
+            : 'In OBS open Settings, Stream, pick Custom, and paste these two.'}
+        </p>
         {busy === 'ingest' && <Skeleton className="h-16" />}
         {ingest && (
           <>
@@ -895,7 +951,7 @@ function ByHand() {
             <CopyRow
               label="Stream key"
               value={'•'.repeat(16)}
-              onCopy={() => copy(ingest.key, 'Stream key')}
+              onCopy={() => copy(vertical ? ingest.vertical_key : ingest.key, 'Stream key')}
             />
           </>
         )}
@@ -1017,7 +1073,8 @@ export function GoingToLine() {
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
   if (!view) return null
-  const n = view.destinations.filter((d) => d.enabled).length
+  const main = onCanvas(view.destinations, 'main')
+  const n = main.filter((d) => d.enabled).length
   return (
     <a
       href={href({ name: 'studio', section: 'golive' })}
@@ -1026,7 +1083,7 @@ export function GoingToLine() {
       <Broadcast size={15} aria-hidden />
       {n === 0
         ? 'Go live everywhere: pick your platforms'
-        : `${goingTo(view.destinations)} with Go live everywhere`}
+        : `${goingTo(main)} with Go live everywhere`}
       {view.live && <Badge tone="ok">Live</Badge>}
     </a>
   )
