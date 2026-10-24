@@ -161,9 +161,14 @@ export interface CutView {
   config: CutConfig
   /** `null` while not needed (another source, or no vertical destination ticked). */
   state: CutState | null
-  /** ffmpeg is on this computer (cutting needs it). */
-  ffmpeg: boolean
+  /** Whether ffmpeg is here or being fetched (cutting needs it). */
+  ffmpeg: FfmpegState
 }
+
+export type FfmpegState =
+  | { state: 'ready' | 'missing' | 'unsupported' }
+  | { state: 'downloading'; percent: number }
+  | { state: 'failed'; reason: string }
 
 const CUT_LAYOUTS: CutLayout[] = ['camera_top', 'small_camera', 'half_half', 'game_only']
 
@@ -242,6 +247,8 @@ export interface GoLiveFrame {
   destinations: DestinationView[]
   /** What the cutter is doing (A2.4), every second. */
   cut_state?: CutState | null
+  /** Fetching ffmpeg: progress. */
+  ffmpeg?: FfmpegState
 }
 
 export function goliveApi(c: FerroClient) {
@@ -279,6 +286,8 @@ export function goliveApi(c: FerroClient) {
     /** Saves the cut-from-stream layout; a running cut restarts with it. */
     setVerticalCut: (cut: CutConfig) =>
       c.request<{ cut: CutConfig }>('PUT', '/api/v1/golive/vertical/cut', cut),
+    /** Fetches ffmpeg (again, after a failure); progress shows in `cut.ffmpeg`. */
+    getFfmpeg: () => post<FfmpegState>('/golive/ffmpeg'),
     /** What's on air in OBS, to mark the camera and game on. */
     picture: () => get<{ image: string; width: number; height: number }>('/golive/picture'),
     /** "I use Aitum Multistream on purpose": hides the setup note. */

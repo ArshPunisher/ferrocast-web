@@ -9,6 +9,7 @@ import type {
   Canvas,
   CutConfig,
   CutState,
+  FfmpegState,
   VerticalSource,
   DestinationConfig,
   DestinationView,
@@ -36,6 +37,8 @@ export interface DemoGoLiveSetup {
   aitum?: AitumOutput[] | null
   /** Aitum Vertical in the pretend OBS: installed, pointed here, its canvas streaming. */
   vertical?: { installed?: boolean; points_here?: boolean; streaming?: boolean }
+  /** Pretend ffmpeg isn't on this computer yet (cutting fetches it). */
+  ffmpeg_missing?: boolean
 }
 
 const INGEST = 'rtmp://127.0.0.1:1935/live'
@@ -80,6 +83,7 @@ export class DemoGoLive {
   private verticalBefore: string | null = null
   private verticalStreaming = false
   private source: VerticalSource = 'canvas'
+  private ffmpeg: FfmpegState = { state: 'ready' }
   private cutConfig: CutConfig = {
     layout: 'camera_top',
     camera: { x: 0.74, y: 0.04, w: 0.24, h: 0.31 },
@@ -116,6 +120,8 @@ export class DemoGoLive {
     if (s.codec) this.codec = s.codec
     if (s.keyframe_interval_ms !== undefined) this.keyint = s.keyframe_interval_ms
     if (s.aitum !== undefined) this.aitum = s.aitum
+    if (s.ffmpeg_missing !== undefined)
+      this.ffmpeg = s.ffmpeg_missing ? { state: 'missing' } : { state: 'ready' }
     if (s.vertical?.installed !== undefined) this.verticalInstalled = s.vertical.installed
     if (s.vertical?.points_here !== undefined) {
       this.verticalHere = s.vertical.points_here
@@ -136,8 +142,22 @@ export class DemoGoLive {
     )
   }
 
+  /** As the engine: a pretend download of about two seconds, then the cut can start. */
+  private getFfmpeg(): FfmpegState {
+    if (this.ffmpeg.state === 'ready' || this.ffmpeg.state === 'downloading')
+      return clone(this.ffmpeg)
+    this.ffmpeg = { state: 'downloading', percent: 0 }
+    const step = (p: number) => {
+      this.ffmpeg = p >= 100 ? { state: 'ready' } : { state: 'downloading', percent: p }
+      this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
+      if (p < 100) this.host.later(() => step(p + 25), 500)
+    }
+    this.host.later(() => step(25), 500)
+    return clone(this.ffmpeg)
+  }
+
   private cutState(): CutState | null {
-    if (!this.cutWanted()) return null
+    if (!this.cutWanted() || this.ffmpeg.state !== 'ready') return null
     return this.live()
       ? { state: 'running', encoder: 'h264_videotoolbox', on: 'your graphics card' }
       : { state: 'waiting' }
@@ -317,7 +337,7 @@ export class DemoGoLive {
         source: this.source,
         config: clone(this.cutConfig),
         state: this.cutState(),
-        ffmpeg: true,
+        ffmpeg: clone(this.ffmpeg),
       },
     }
   }
@@ -330,6 +350,7 @@ export class DemoGoLive {
       vertical_stats: this.verticalStats(),
       destinations: this.destinations(),
       cut_state: this.cutState(),
+      ffmpeg: clone(this.ffmpeg),
     }
   }
 
@@ -375,6 +396,7 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()
+    if (method === 'POST' && path === 'ffmpeg') return this.getFfmpeg()
     if (method === 'GET' && path === 'picture') {
       if (!this.obsConnected())
         throw new HttpError(
@@ -390,6 +412,7 @@ export class DemoGoLive {
       if (b.source !== 'canvas' && b.source !== 'cut')
         throw new HttpError(400, 'invalid', 'source: canvas or cut.')
       this.source = b.source
+      if (b.source === 'cut') this.getFfmpeg()
       this.tick()
       return { destinations: clone(this.cfg) }
     }
