@@ -199,9 +199,7 @@ export function Field({
           {label}
           {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
         </label>
-        {hint && !hintVisible && (
-          <InfoTip id={hintId}>{hint}</InfoTip>
-        )}
+        {hint && !hintVisible && <InfoTip id={hintId}>{hint}</InfoTip>}
       </div>
       {children(props)}
       {hint && hintVisible && !error && (
