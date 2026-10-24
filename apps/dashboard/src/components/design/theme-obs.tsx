@@ -682,7 +682,7 @@ export function MakeItYoursDialog({
   const upload = (f: File) =>
     void run('logo', () => client.upload(f, f.name)).then((m) => {
       if (!m) return
-      setR({ ...r, logo: m.id })
+      setR((cur) => ({ ...cur, logo: m.id }))
       setLogoName(f.name)
     })
   const save = () =>
@@ -746,7 +746,7 @@ export function MakeItYoursDialog({
                   type="button"
                   aria-label={`Colour ${c}`}
                   aria-pressed={r.accent === c}
-                  onClick={() => setR({ ...r, accent: c })}
+                  onClick={() => setR((cur) => ({ ...cur, accent: c }))}
                   className={cx(
                     'size-8 rounded-full border-2 shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                     r.accent === c ? 'border-text' : 'border-transparent',
@@ -760,7 +760,7 @@ export function MakeItYoursDialog({
                   type="color"
                   className="absolute inset-0 cursor-pointer opacity-0"
                   value={r.accent ?? '#ffa424'}
-                  onChange={(e) => setR({ ...r, accent: e.target.value })}
+                  onChange={(e) => setR((cur) => ({ ...cur, accent: e.target.value }))}
                 />
               </label>
             </div>
@@ -774,7 +774,7 @@ export function MakeItYoursDialog({
                 value: f,
                 label: FONT_LABEL[f],
               }))}
-              onChange={(f) => setR({ ...r, font: f })}
+              onChange={(f) => setR((cur) => ({ ...cur, font: f }))}
             />
           </div>
           <Field
@@ -789,7 +789,7 @@ export function MakeItYoursDialog({
                 spellCheck={false}
                 value={r.handle ?? ''}
                 maxLength={40}
-                onChange={(e) => setR({ ...r, handle: e.target.value })}
+                onChange={(e) => setR((cur) => ({ ...cur, handle: e.target.value }))}
               />
             )}
           </Field>
@@ -810,7 +810,11 @@ export function MakeItYoursDialog({
               {r.logo && (
                 <>
                   <span className="max-w-40 truncate text-[12.5px] text-text-3">{logoName}</span>
-                  <Button size="sm" variant="ghost" onClick={() => setR({ ...r, logo: null })}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setR((cur) => ({ ...cur, logo: null }))}
+                  >
                     Remove
                   </Button>
                 </>
