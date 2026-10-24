@@ -157,6 +157,15 @@ export function screenTarget(plan: ThemePlan, screen: { name: string }, p: Scree
   }
 }
 
+/** The scene-name prefix a theme gets: "Forge (mine)" and "Forge copy" name scenes like Forge. */
+export function defaultPrefix(themeName: string): string {
+  const base = themeName.trim().replace(/ (\(mine\)|copy)$/, '')
+  return `${[...base]
+    .slice(0, MAX_PREFIX - 3)
+    .join('')
+    .trimEnd()} · `
+}
+
 /** Ferrocast's guesses, as the engine makes them. */
 export function guessThemePlan(
   themeName: string,
@@ -165,12 +174,7 @@ export function guessThemePlan(
   old: OldWidget[],
   skip: string[] = [],
 ): ThemePlan {
-  // "Forge (mine)" and "Forge copy" name their scenes like Forge (as the engine does).
-  const base = themeName.trim().replace(/ (\(mine\)|copy)$/, '')
-  const prefix = `${[...base]
-    .slice(0, MAX_PREFIX - 3)
-    .join('')
-    .trimEnd()} · `
+  const prefix = defaultPrefix(themeName)
   const own = obs.scenes.filter((s) => !s.name.startsWith(prefix) && !skip.includes(s.name))
   const captures = (s: (typeof own)[number], on: boolean) =>
     s.items.some((i) => (i.enabled || !on) && !!i.kind && CAPTURE_KINDS.includes(i.kind))
@@ -258,18 +262,24 @@ export function planCounts(
   plan: ThemePlan,
   obsScenes: string[],
   screens: { key: string; name: string }[],
+  /** The theme in OBS now: its unticked screens come out. */
+  applied: ObsTheme | null = null,
 ) {
   let added = 0
   let changed = 0
+  let removed = 0
   for (const p of plan.screens) {
     const s = screens.find((x) => x.key === p.key)
     if (!s) continue
     const target = screenTarget(plan, s, p)
-    if (target === null) continue
+    if (target === null) {
+      if (applied?.screens.some((x) => x.key === p.key)) removed += 1
+      continue
+    }
     if (p.place.kind === 'new' && !obsScenes.includes(target)) added += 1
     else changed += 1
   }
-  return { added, changed }
+  return { added, changed, removed }
 }
 
 export function obsThemeApi(c: FerroClient) {

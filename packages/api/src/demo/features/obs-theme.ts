@@ -4,6 +4,8 @@
 
 import {
   CAMERA_KINDS,
+  MIC_KINDS,
+  defaultPrefix,
   checkThemePlan,
   guessThemePlan,
   screenTarget,
@@ -59,6 +61,8 @@ interface Record {
   scene_before: string | null
   /** Mics Ferrocast added for "Mic on break screens". */
   mic_items: [string, string][]
+  /** The last plan, so another theme keeps every choice. */
+  plan?: ThemePlan
 }
 
 /** Old widgets in the demo's OBS: none at first; `seedOldWidget` adds one for tests and demos. */
@@ -128,10 +132,51 @@ export class DemoObsTheme {
     }))
   }
 
-  /** Start show's mic check list, else the demo's mic. */
-  private mics(): string[] {
-    const listed = this.host.studio.showCfg.mic_sources ?? []
-    return listed.length ? listed : ['Mic']
+  /**
+   * With a theme in OBS, a fresh guess becomes last time's choices, as the engine does; scene
+   * names follow the new theme unless they were the streamer's own.
+   */
+  private carry(plan: ThemePlan): ThemePlan {
+    const prev = this.rec
+    if (!prev) return plan
+    const last = prev.plan
+    plan.screens = plan.screens.map((p) => {
+      const was = last?.screens.find((s) => s.key === p.key)
+      if (was) return structuredClone(was)
+      return prev.screens.some((s) => s.key === p.key)
+        ? p
+        : { key: p.key, place: { kind: 'skip' }, under: null, role: null }
+    })
+    if (last) {
+      if (last.prefix !== defaultPrefix(prev.design_name)) plan.prefix = last.prefix
+      plan.mic_on_breaks = last.mic_on_breaks === true
+      plan.switch_to_starting = last.switch_to_starting !== false
+      plan.alert_style = last.alert_style !== false
+      plan.hide_old = [...(last.hide_old ?? [])]
+    }
+    return plan
+  }
+
+  /** Start show's mic check list, else the game scene's mics, never OBS's global devices. */
+  private mics(plan: ThemePlan): string[] {
+    const global = ['Mic/Aux', 'Desktop Audio']
+    const obs = this.host.studio.obs
+    const isMic = (n: string) =>
+      !global.includes(n) &&
+      obs.scenes.some((s) => s.items.some((i) => i.source === n && MIC_KINDS.includes(i.kind)))
+    const listed = (this.host.studio.showCfg.mic_sources ?? []).filter((m) => !global.includes(m))
+    if (listed.length) return listed
+    const live = plan.screens.find((p) => p.role === 'live')
+    const game =
+      live?.under ??
+      (live && (live.place.kind === 'on_top' || live.place.kind === 'replace')
+        ? live.place.scene
+        : undefined)
+    const inGame = obs.scenes
+      .find((s) => s.name === game)
+      ?.items.map((i) => i.source)
+      .filter(isMic)
+    return inGame?.length ? inGame : ['Mic']
   }
 
   private sources(): string[] {
@@ -146,12 +191,8 @@ export class DemoObsTheme {
       scenes: obs.scenes.map((s) => ({ ...s, items: s.items })),
     }
     return {
-      plan: guessThemePlan(
-        t.name,
-        t.screens,
-        scenes,
-        this.oldWidgets(),
-        this.rec?.made_scenes ?? [],
+      plan: this.carry(
+        guessThemePlan(t.name, t.screens, scenes, this.oldWidgets(), this.rec?.made_scenes ?? []),
       ),
       screens: t.screens.map((s) => ({ key: s.key, name: s.name })),
       obs_scenes: obs.scenes.map((s) => s.name),
@@ -195,14 +236,6 @@ export class DemoObsTheme {
     const empty =
       body === undefined || body === null || (typeof body === 'object' && !Object.keys(body).length)
     const plan: ThemePlan = empty ? this.plan(id).plan : readPlan(body)
-    // No plan with a theme in OBS (Make it yours, again): the same screens as now.
-    const prev = this.rec
-    if (empty && prev)
-      plan.screens = plan.screens.map((p) =>
-        prev.screens.some((s) => s.key === p.key)
-          ? p
-          : { key: p.key, place: { kind: 'skip' }, under: null, role: null },
-      )
     const problem = checkThemePlan(
       plan,
       t.screens,
@@ -254,7 +287,14 @@ export class DemoObsTheme {
       const scene = screenTarget(plan, screen, p)
       const sid = `screen.${p.key}`
       if (scene === null) {
-        steps.push({ id: sid, label: screen.name, status: 'skipped', detail: 'Left out.' })
+        // In OBS from last time and unticked now: it comes out.
+        const out = this.takeScreenOut(p.key, rec, roles)
+        steps.push({
+          id: sid,
+          label: screen.name,
+          status: out ? 'done' : 'skipped',
+          detail: out ? 'Taken out.' : 'Left out.',
+        })
         continue
       }
       const before = rec.screens.find((s) => s.key === p.key)?.overlay_id
@@ -344,7 +384,7 @@ export class DemoObsTheme {
         (p.under === m ||
           obs.scenes.some((x) => x.name === p.under && x.items.some((i) => i.source === m)))
       if (plan.mic_on_breaks && breakScreen)
-        for (const m of this.mics().filter((m) => !underHas(m)))
+        for (const m of this.mics(plan).filter((m) => !underHas(m)))
           if (!target.items.some((i) => i.source === m)) {
             target.items.unshift({
               id: nextId(target.items),
@@ -441,8 +481,49 @@ export class DemoObsTheme {
         })
       }
     }
+    rec.plan = structuredClone(plan)
     this.rec = rec
     return { steps, applied: this.view(rec) }
+  }
+
+  private takeScreenOut(key: string, rec: Record, roles: Roles): boolean {
+    const was = rec.screens.find((s) => s.key === key)
+    if (!was) return false
+    const obs = this.host.studio.obs
+    const source = `Ferrocast: ${this.host.overlays().find((o) => o.id === was.overlay_id)?.name ?? ''}`
+    if (rec.made_scenes.includes(was.scene)) {
+      if (obs.current === was.scene)
+        throw new HttpError(
+          409,
+          'screen_on_air',
+          `"${was.scene}" is on air.`,
+          'Switch OBS to another scene first.',
+        )
+      obs.scenes = obs.scenes.filter((s) => s.name !== was.scene)
+      rec.made_scenes = rec.made_scenes.filter((s) => s !== was.scene)
+    } else {
+      const sc = obs.scenes.find((s) => s.name === was.scene)
+      if (sc) {
+        const mics = rec.mic_items.filter(([s]) => s === was.scene).map(([, m]) => m)
+        sc.items = sc.items.filter((i) => i.source !== source && !mics.includes(i.source))
+        for (const [s, id] of rec.hidden)
+          if (s === was.scene) {
+            const it = sc.items.find((i) => i.id === id)
+            if (it) it.enabled = true
+          }
+      }
+      rec.hidden = rec.hidden.filter(([s]) => s !== was.scene)
+    }
+    if (rec.made_inputs.includes(source)) {
+      for (const sc of obs.scenes) sc.items = sc.items.filter((i) => i.source !== source)
+      rec.made_inputs = rec.made_inputs.filter((n) => n !== source)
+    }
+    rec.added_items = rec.added_items.filter(([s]) => s !== was.scene)
+    rec.mic_items = rec.mic_items.filter(([s]) => s !== was.scene)
+    rec.screens = rec.screens.filter((s) => s.key !== key)
+    for (const k of ['starting', 'live', 'brb', 'ending'] as const)
+      if (roles[k] === was.scene) roles[k] = rec.roles_before[k]
+    return true
   }
 
   private undo(): ThemeObsResult {

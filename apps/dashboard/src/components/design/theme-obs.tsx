@@ -3,7 +3,7 @@
 // (Advanced); then a checklist of what happened. "Make it yours" restyles a theme's colour,
 // font, name and logo on every screen; "Your theme in OBS" sits on Studio's OBS tab.
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowCounterClockwise,
   ImageSquare,
@@ -267,7 +267,7 @@ function PlanForm({
     ...sources,
     ...data.obs_scenes,
   ])
-  const counts = planCounts(plan, data.obs_scenes, data.screens)
+  const counts = planCounts(plan, data.obs_scenes, data.screens, data.applied)
   const picked = plan.screens.filter((s) => s.place.kind !== 'skip').map((s) => s.key)
   const setScreen = (key: string, patch: Partial<ScreenPlan>) =>
     setPlan({
@@ -286,14 +286,18 @@ function PlanForm({
     )
   }
   const switching = data.applied && data.applied.design_id !== design.id
-  const label =
-    counts.added + counts.changed === 0
-      ? 'Nothing to add'
-      : switching
-        ? `Switch to ${design.name}`
+  const same = data.applied?.design_id === design.id
+  const out = counts.removed ? `, take out ${counts.removed}` : ''
+  const nothing = counts.added + counts.changed + counts.removed === 0
+  const label = nothing
+    ? 'Nothing to add'
+    : switching
+      ? `Switch to ${design.name}${out}`
+      : same
+        ? `Update OBS${out}`
         : counts.changed
-          ? `Add ${counts.added} scene${counts.added === 1 ? '' : 's'}, change ${counts.changed}`
-          : `Add ${counts.added} scene${counts.added === 1 ? '' : 's'} to OBS`
+          ? `Add ${counts.added} scene${counts.added === 1 ? '' : 's'}, change ${counts.changed}${out}`
+          : `Add ${counts.added} scene${counts.added === 1 ? '' : 's'} to OBS${out}`
   const submit = () =>
     void run('apply', () => api.apply(design.id, plan)).then((r) => r && onDone(r))
   return (
@@ -339,7 +343,7 @@ function PlanForm({
           variant="primary"
           icon={<MonitorPlay size={16} />}
           busy={busy === 'apply'}
-          disabled={!!problem || counts.added + counts.changed === 0}
+          disabled={!!problem || nothing}
           onClick={submit}
         >
           {label}
@@ -863,6 +867,19 @@ export function MakeItYoursDialog({
 export function ThemeInObsCard() {
   const api = useThemeObs()
   const current = useResource(() => api.current(), [api])
+  // Changed from elsewhere (another tab, the phone): look again when this window comes back.
+  const reload = current.reload
+  useEffect(() => {
+    const again = () => document.visibilityState === 'visible' && reload()
+    window.addEventListener('focus', again)
+    document.addEventListener('visibilitychange', again)
+    const every = window.setInterval(again, 30_000)
+    return () => {
+      window.removeEventListener('focus', again)
+      document.removeEventListener('visibilitychange', again)
+      window.clearInterval(every)
+    }
+  }, [reload])
   const design = useResource(
     (c) => (current.data ? c.design(current.data.design_id) : Promise.resolve(null)),
     [current.data?.design_id],

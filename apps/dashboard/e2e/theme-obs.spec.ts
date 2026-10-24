@@ -85,6 +85,8 @@ test.describe('theme in OBS', () => {
 
   for (const scheme of ['dark', 'light'] as const)
     test(`the dialogs have no serious accessibility problems (${scheme})`, async ({ page }) => {
+      // Two scans over live previews: slow in WebKit when other tests run alongside.
+      test.setTimeout(90_000)
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
       const dialog = await useFirstTheme(page)
       await expect(dialog.getByRole('button', { name: /Add 5 scenes/ })).toBeVisible()

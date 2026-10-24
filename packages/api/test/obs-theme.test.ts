@@ -125,7 +125,7 @@ describe('guesses, as the engine makes them', () => {
         obs.scenes.map((s) => s.name),
         screens,
       ),
-    ).toEqual({ added: 5, changed: 0 })
+    ).toEqual({ added: 5, changed: 0, removed: 0 })
   })
 
   it('refuses plans that cannot work, naming the field', () => {
@@ -412,5 +412,40 @@ describe('demo: live', () => {
     expect([e.status, e.code]).toEqual([409, 'theme_on_air'])
     engine.studio.obs.current = 'Gameplay'
     expect((await api.takeOut()).applied).toBeNull()
+  })
+})
+
+describe('demo: switching keeps every choice', () => {
+  it('keeps where each screen goes and the mic', async () => {
+    const { engine, api } = demo()
+    engine.studio.obs.streaming = false
+    const p = (await api.plan('builtin.forge')).plan
+    p.mic_on_breaks = true
+    p.screens[3]!.place = { kind: 'replace', scene: 'BRB' }
+    await api.apply('builtin.forge', p)
+    await api.apply('builtin.prism')
+    const names = engine.studio.obs.scenes.map((s) => s.name)
+    expect(names.some((n) => n.includes('·') && n.endsWith('BRB'))).toBe(false)
+    const brb = engine.studio.obs.scenes.find((s) => s.name === 'BRB')!.items.map((i) => i.source)
+    expect(brb.some((x) => x.startsWith('Ferrocast: BRB (Prism)'))).toBe(true)
+    expect(brb).toContain('Mic')
+    expect(brb).not.toContain('Mic/Aux')
+  })
+})
+
+describe('demo: unticking later', () => {
+  it('takes that screen out, and the dialog starts from last time', async () => {
+    const { engine, api } = demo()
+    engine.studio.obs.streaming = false
+    const p = (await api.plan('builtin.forge')).plan
+    p.mic_on_breaks = true
+    await api.apply('builtin.forge', p)
+    const again = (await api.plan('builtin.forge')).plan
+    expect(again.mic_on_breaks).toBe(true)
+    again.screens[4] = { key: 'ending', place: { kind: 'skip' }, under: null, role: null }
+    const r = await api.apply('builtin.forge', again)
+    expect(r.steps.find((s) => s.id === 'screen.ending')!.detail).toBe('Taken out.')
+    expect(engine.studio.obs.scenes.map((s) => s.name)).not.toContain('Forge · Ending')
+    expect(engine.studio.showCfg.ending_scene).toBe('Ending')
   })
 })
