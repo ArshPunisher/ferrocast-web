@@ -43,12 +43,14 @@ import { CloudBackups } from '../components/cloud-backups'
 import { CloudSyncSettings } from '../components/cloud-sync'
 import { TtsVoicePicker } from '../components/tts-voices'
 import { RemoteDevices } from '../components/remote'
+import { MusicSettings } from '../components/music-settings'
 import { useLive } from '../lib/store'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
 const SECTIONS = [
   ['accounts', 'Accounts'],
   ['obs', 'OBS'],
+  ['music', 'Music'],
   ['cloud', 'Cloud mode'],
   ['tts', 'Text-to-speech'],
   ['discord', 'Discord'],
@@ -1030,6 +1032,15 @@ export function Settings({ section }: { section?: string | undefined }) {
         <div className="flex min-w-0 flex-col gap-5">
           {show('accounts') && <Accounts />}
           {show('obs') && <Obs />}
+          {show('music') && (
+            <Section
+              id="music"
+              title="Music"
+              description="Where the beat and the song come from, for music pieces and motion backgrounds on your screens."
+            >
+              <MusicSettings />
+            </Section>
+          )}
           {/* A phone never changes the PC's sync (it's under /pro). */}
           {!remote && <CloudSyncSettings />}
           <Tts currency={res.data?.currency} />

@@ -31,12 +31,21 @@ import {
   Play,
   Pause,
   Shapes,
+  Sparkle,
+  SpeakerHigh,
   TextT,
   Trash,
   VideoCamera,
+  Waveform,
 } from '@phosphor-icons/react'
 import {
   CLIP_LABEL,
+  COUNTDOWN_LOOK_LABEL,
+  FX_LABEL,
+  FX_PRESETS,
+  SCREEN_SOUND_LABEL,
+  SOUND_LOOPS,
+  STINGERS,
   FRAME_VARIANT_LABEL,
   PATTERN_LABEL,
   TEXT_EFFECT_LABEL,
@@ -50,7 +59,15 @@ import {
   type Theme,
   type Widget,
 } from '@ferrocast/api'
-import { DESIGN_FONTS, GOOGLE_FONTS, SYSTEM_FONTS, sparkSvg } from '@ferrocast/overlays'
+import {
+  DESIGN_FONTS,
+  FX_PALETTE,
+  GOOGLE_FONTS,
+  SYSTEM_FONTS,
+  playScreenSound,
+  sparkSvg,
+  unlockScreenAudio,
+} from '@ferrocast/overlays'
 import {
   Button,
   Field,
@@ -95,6 +112,9 @@ const LAYER_LABEL: Record<LayerKind, string> = {
   frame: 'Frame',
   webcam: 'Webcam frame',
   brand: 'Ferrocast mark',
+  fx: 'Motion background',
+  music: 'Music',
+  sound: 'Sound',
 }
 const LAYER_ICON: Record<LayerKind, typeof TextT> = {
   image: ImageSquare,
@@ -103,6 +123,9 @@ const LAYER_ICON: Record<LayerKind, typeof TextT> = {
   frame: FrameCorners,
   webcam: VideoCamera,
   brand: Lock,
+  fx: Sparkle,
+  music: Waveform,
+  sound: SpeakerHigh,
 }
 
 /** A short, human name for a layer or widget (layers panel, canvas labels). */
@@ -119,6 +142,7 @@ export function layerName(w: Widget): string {
     if (c.pattern) return 'Pattern'
     return SHAPE_LABEL[c.shape ?? 'rect']
   }
+  if (c.type === 'fx') return FX_LABEL[c.preset] ?? 'Motion background'
   return LAYER_LABEL[c.type] ?? 'Layer'
 }
 
@@ -205,6 +229,34 @@ function newLayer(
           radius: 14,
           label: 'LIVE',
         },
+      }
+    case 'fx':
+      // The whole screen, at the bottom of the list (it's a background).
+      return {
+        id,
+        kind: 'layer',
+        x: 0,
+        y: 0,
+        w: o.width,
+        h: o.height,
+        config: { type: 'fx', preset: 'hex', reactive: true },
+      }
+    case 'music':
+      return {
+        id,
+        kind: 'layer',
+        ...box(900, 160),
+        config: { type: 'music', look: 'wave', color: '#ffffff', show_title: true },
+      }
+    case 'sound':
+      return {
+        id,
+        kind: 'layer',
+        x: 0,
+        y: 0,
+        w: 8,
+        h: 8,
+        config: { type: 'sound', on_show: 'whoosh', volume: 0.6, duck: true },
       }
   }
 }
@@ -565,6 +617,77 @@ function LayersPanel({
   )
 }
 
+/** The font list every text-like layer offers. */
+function FontOptions() {
+  return (
+    <>
+      <optgroup label="Comes with Ferrocast">
+        {['Bricolage Grotesque', 'Hanken Grotesk', 'JetBrains Mono', ...DESIGN_FONTS].map((f) => (
+          <option key={f}>{f}</option>
+        ))}
+      </optgroup>
+      <optgroup label="Google Fonts (if installed)">
+        {Object.keys(GOOGLE_FONTS)
+          .filter((f) => !DESIGN_FONTS.includes(f))
+          .map((f) => (
+            <option key={f}>{f}</option>
+          ))}
+      </optgroup>
+      <optgroup label="On this computer">
+        {Object.keys(SYSTEM_FONTS).map((f) => (
+          <option key={f}>{f}</option>
+        ))}
+      </optgroup>
+    </>
+  )
+}
+
+/** A sound picker with a button to hear it (the dashboard plays it here, OBS on stream). */
+function SoundPick<T extends string>({
+  label,
+  value,
+  options,
+  volume,
+  onChange,
+}: {
+  label: string
+  value: T | null | undefined
+  options: readonly T[]
+  volume: number
+  onChange: (v: T | '') => void
+}) {
+  return (
+    <div className="flex items-end gap-2">
+      <Field label={label} className="min-w-0 flex-1">
+        {(p) => (
+          <Select {...p} value={value ?? ''} onChange={(e) => onChange(e.target.value as T | '')}>
+            <option value="">None</option>
+            {options.map((o) => (
+              <option key={o} value={o}>
+                {SCREEN_SOUND_LABEL[o as keyof typeof SCREEN_SOUND_LABEL]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <IconButton
+        label={`Hear ${label.toLowerCase()}`}
+        variant="secondary"
+        disabled={!value}
+        onClick={() => {
+          if (!value) return
+          unlockScreenAudio()
+          const p = playScreenSound(value as Parameters<typeof playScreenSound>[0], volume)
+          // A loop is a taste: three seconds.
+          if (SOUND_LOOPS.includes(value as never)) setTimeout(() => p?.stop(), 3000)
+        }}
+      >
+        <Play size={15} weight="fill" />
+      </IconButton>
+    </div>
+  )
+}
+
 function LayerSettings({
   w,
   onChange,
@@ -605,25 +728,7 @@ function LayerSettings({
               value={c.font ?? 'Bricolage Grotesque'}
               onChange={(e) => set({ font: e.target.value })}
             >
-              <optgroup label="Comes with Ferrocast">
-                {['Bricolage Grotesque', 'Hanken Grotesk', 'JetBrains Mono', ...DESIGN_FONTS].map(
-                  (f) => (
-                    <option key={f}>{f}</option>
-                  ),
-                )}
-              </optgroup>
-              <optgroup label="Google Fonts (if installed)">
-                {Object.keys(GOOGLE_FONTS)
-                  .filter((f) => !DESIGN_FONTS.includes(f))
-                  .map((f) => (
-                    <option key={f}>{f}</option>
-                  ))}
-              </optgroup>
-              <optgroup label="On this computer">
-                {Object.keys(SYSTEM_FONTS).map((f) => (
-                  <option key={f}>{f}</option>
-                ))}
-              </optgroup>
+              <FontOptions />
             </Select>
           )}
         </Field>
@@ -742,6 +847,23 @@ function LayerSettings({
         </Field>
         {c.countdown ? (
           <>
+            <Field label="Timer look">
+              {(p) => (
+                <Select
+                  {...p}
+                  value={c.countdown_look ?? 'digital'}
+                  onChange={(e) =>
+                    opt('countdown_look', e.target.value === 'digital' ? '' : e.target.value)
+                  }
+                >
+                  {Object.entries(COUNTDOWN_LOOK_LABEL).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
             <Field label="At zero, show" optional>
               {(p) => (
                 <Input
@@ -774,6 +896,201 @@ function LayerSettings({
         ) : null}
       </div>
     )
+  if (c.type === 'fx') {
+    const d = FX_PALETTE[c.preset] ?? FX_PALETTE.hex
+    return (
+      <div className="flex flex-col gap-3">
+        <Field label="World">
+          {(p) => (
+            <Select
+              {...p}
+              value={c.preset}
+              onChange={(e) => set({ preset: e.target.value as typeof c.preset })}
+            >
+              {FX_PRESETS.map((f) => (
+                <option key={f} value={f}>
+                  {FX_LABEL[f]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <ColorField label="Glow" value={c.color ?? d.a} onChange={(v) => set({ color: v }, true)} />
+        <ColorField
+          label="Second colour"
+          value={c.color2 ?? d.b}
+          onChange={(v) => set({ color2: v }, true)}
+        />
+        <ColorField
+          label="Ground"
+          value={c.background ?? d.bg}
+          onChange={(v) => set({ background: v }, true)}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Range
+            label="Speed"
+            value={c.speed ?? 1}
+            min={0.25}
+            max={3}
+            step={0.25}
+            format={(v) => `${v}×`}
+            onChange={(v, m) => set({ speed: v }, m)}
+          />
+          <Range
+            label="Detail"
+            value={c.density ?? 1}
+            min={0.5}
+            max={2}
+            step={0.25}
+            format={(v) => `${v}×`}
+            onChange={(v, m) => set({ density: v }, m)}
+          />
+        </div>
+        <Switch
+          label="Moves with the music"
+          description="Uses the beat from Settings, Music."
+          checked={c.reactive === true}
+          onChange={(reactive) => set({ reactive })}
+        />
+      </div>
+    )
+  }
+  if (c.type === 'music')
+    return (
+      <div className="flex flex-col gap-3">
+        <Segmented
+          label="Look"
+          size="sm"
+          value={c.look ?? 'wave'}
+          options={[
+            { value: 'wave', label: 'Wave' },
+            { value: 'pulse', label: 'Heartbeat' },
+          ]}
+          onChange={(look) => set({ look })}
+        />
+        <ColorField
+          label="Line"
+          value={c.color ?? (c.look === 'pulse' ? '#3dffb4' : '#ffffff')}
+          onChange={(v) => set({ color: v }, true)}
+        />
+        <ColorField
+          label="Second colour"
+          value={c.color2 ?? c.color ?? '#ffffff'}
+          onChange={(v) => set({ color2: v }, true)}
+        />
+        <Switch
+          label="Show the song"
+          checked={c.show_title !== false}
+          onChange={(v) => opt('show_title', v ? '' : false)}
+        />
+        {c.show_title !== false && (
+          <>
+            <Field label="Font">
+              {(p) => (
+                <Select
+                  {...p}
+                  value={c.font ?? 'Hanken Grotesk'}
+                  onChange={(e) => set({ font: e.target.value })}
+                >
+                  <FontOptions />
+                </Select>
+              )}
+            </Field>
+            <ColorField
+              label="Song colour"
+              value={c.text_color ?? c.color ?? '#ffffff'}
+              onChange={(v) => set({ text_color: v }, true)}
+            />
+            <Range
+              label="Song size"
+              value={c.title_size ?? 26}
+              min={10}
+              max={120}
+              unit="px"
+              onChange={(v, m) => set({ title_size: v }, m)}
+            />
+          </>
+        )}
+        <Switch
+          label="Only while music plays"
+          description="Hidden when it's quiet. The song and beat come from Settings, Music."
+          checked={c.only_playing !== false}
+          onChange={(v) => opt('only_playing', v ? '' : false)}
+        />
+        <a
+          href="#/settings/music"
+          className="text-[13px] font-semibold text-accent-text underline-offset-2 hover:underline"
+        >
+          Music settings
+        </a>
+      </div>
+    )
+  if (c.type === 'sound') {
+    const vol = c.volume ?? 0.7
+    const own = media.filter((m) => m.kind === 'sound')
+    return (
+      <div className="flex flex-col gap-3">
+        <SoundPick
+          label="When the screen shows"
+          value={c.on_show}
+          options={STINGERS}
+          volume={vol}
+          onChange={(v) => opt('on_show', v)}
+        />
+        {own.length > 0 && (
+          <Field label="Or your own sound" optional>
+            {(p) => (
+              <Select
+                {...p}
+                value={c.on_show_media ?? ''}
+                onChange={(e) => opt('on_show_media', e.target.value)}
+              >
+                <option value="">None</option>
+                {own.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+        <SoundPick
+          label="Loop behind it"
+          value={c.loop}
+          options={SOUND_LOOPS}
+          volume={vol}
+          onChange={(v) => opt('loop', v)}
+        />
+        <Switch
+          label="Tick in the last 10 seconds"
+          description="Of a timer on this screen."
+          checked={c.last_ticks === true}
+          onChange={(v) => opt('last_ticks', v || '')}
+        />
+        <SoundPick
+          label="At zero"
+          value={c.at_zero}
+          options={STINGERS}
+          volume={vol}
+          onChange={(v) => opt('at_zero', v)}
+        />
+        <Range
+          label="Volume"
+          value={Math.round(vol * 100)}
+          min={0}
+          max={100}
+          unit="%"
+          onChange={(v, m) => set({ volume: v / 100 }, m)}
+        />
+        <Switch
+          label="Quieter while music plays"
+          checked={c.duck === true}
+          onChange={(v) => opt('duck', v || '')}
+        />
+      </div>
+    )
+  }
   if (c.type === 'image')
     return (
       <div className="flex flex-col gap-3">
@@ -1029,7 +1346,8 @@ export function LayoutEditor({
       layout.widgets.map((x) => (x.id === w.id ? clampWidget(w, layout) : x)),
       opts,
     )
-  const add = (w: Widget) => {
+  /** Adds a layer on top, or under everything (`bottom`: a background). */
+  const add = (w: Widget, opts: { bottom?: boolean } = {}) => {
     if (layout.widgets.length >= 40) {
       toast({
         tone: 'warn',
@@ -1038,7 +1356,7 @@ export function LayoutEditor({
       })
       return
     }
-    onWidgets([...layout.widgets, w])
+    onWidgets(opts.bottom ? [w, ...layout.widgets] : [...layout.widgets, w])
     setSelected(w.id)
   }
   const remove = (id: string) => {
@@ -1066,6 +1384,8 @@ export function LayoutEditor({
     update({ ...sel, x, y })
   }
   const lockedSel = !!sel && (readOnly || (isBrandLayer(sel) && brandLocked))
+  /** A sound element is heard, not seen: no aligning, turning or fading it. */
+  const unseen = sel?.kind === 'layer' && sel.config.type === 'sound'
   const addMenu = [
     ...KINDS.filter((k) => !QUICK_KINDS.includes(k.kind)).map((k) => ({
       key: k.kind,
@@ -1090,6 +1410,24 @@ export function LayoutEditor({
       label: 'Webcam frame',
       icon: <VideoCamera size={15} />,
       onSelect: () => add(newLayer('webcam', layout)),
+    },
+    {
+      key: 'fx',
+      label: 'Motion background',
+      icon: <Sparkle size={15} />,
+      onSelect: () => add(newLayer('fx', layout), { bottom: true }),
+    },
+    {
+      key: 'music',
+      label: 'Music',
+      icon: <Waveform size={15} />,
+      onSelect: () => add(newLayer('music', layout)),
+    },
+    {
+      key: 'sound',
+      label: 'Sound',
+      icon: <SpeakerHigh size={15} />,
+      onSelect: () => add(newLayer('sound', layout)),
     },
   ]
   const addPicture = () => {
@@ -1259,7 +1597,7 @@ export function LayoutEditor({
                 </>
               )}
             </div>
-            {!lockedSel && (
+            {!lockedSel && !unseen && (
               <div
                 className="flex flex-wrap items-center gap-0.5 rounded-control bg-surface-2 p-0.5"
                 role="group"
@@ -1308,7 +1646,7 @@ export function LayoutEditor({
                 />
               )
             )}
-            {!lockedSel && (
+            {!lockedSel && !unseen && (
               <div className="grid grid-cols-2 gap-3">
                 <Range
                   label="Rotation"

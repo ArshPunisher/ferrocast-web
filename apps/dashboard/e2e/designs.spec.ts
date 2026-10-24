@@ -66,8 +66,10 @@ test.describe('gallery', () => {
     const grid = page.locator('[aria-live="polite"] > article')
     // Themes first: a featured row of full bundles, then every theme.
     await expect(page.getByRole('heading', { name: 'Featured' })).toBeVisible()
-    await expect(grid).toHaveCount(28)
+    await expect(grid).toHaveCount(39)
     await expect(tile(page, 'Floodlight')).toContainText('5 scenes + alerts')
+    // The 25 Oct motion themes carry the three extra break screens.
+    await expect(tile(page, 'Night Drive')).toContainText('8 scenes + alerts')
     await page.getByRole('link', { name: /^Widgets \d+/ }).click()
     await expect(page).toHaveURL(/#\/designs\/widgets$/)
     // Widget designs, plus the small scene designs (rotators, countdowns, now playing).
