@@ -8,6 +8,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { cx } from '../cx'
+import { InfoTip } from './infotip'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost'
 type Size = 'sm' | 'md' | 'lg'
@@ -125,13 +126,11 @@ export function Switch({
   return (
     <div className="flex items-start justify-between gap-4">
       {!hideLabel && (
-        <div className="min-w-0">
-          <label htmlFor={sid} className="block text-sm font-medium text-text">
+        <div className="flex min-w-0 items-center gap-1">
+          <label htmlFor={sid} className="text-sm font-medium text-text">
             {label}
           </label>
-          {description && (
-            <p className="mt-0.5 text-[13px] leading-snug text-text-3">{description}</p>
-          )}
+          {description && <InfoTip>{description}</InfoTip>}
         </div>
       )}
       <button
@@ -171,10 +170,20 @@ export interface FieldProps {
   }) => ReactNode
   className?: string
   optional?: boolean
+  /** Keep the hint under the field (a live count) instead of behind the (i). */
+  hintVisible?: boolean
 }
 
 /** Label above, hint below the control, error below that. Never placeholder-as-label. */
-export function Field({ label, hint, error, children, className, optional }: FieldProps) {
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+  className,
+  optional,
+  hintVisible,
+}: FieldProps) {
   const id = useId()
   const hintId = `${id}-hint`
   const errId = `${id}-err`
@@ -185,12 +194,17 @@ export function Field({ label, hint, error, children, className, optional }: Fie
   if (error) props['aria-invalid'] = true
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-[13.5px] font-semibold text-text">
-        {label}
-        {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
-      </label>
+      <div className="flex min-h-6 items-center gap-1">
+        <label htmlFor={id} className="text-[13.5px] font-semibold text-text">
+          {label}
+          {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
+        </label>
+        {hint && !hintVisible && (
+          <InfoTip id={hintId}>{hint}</InfoTip>
+        )}
+      </div>
       {children(props)}
-      {hint && !error && (
+      {hint && hintVisible && !error && (
         <p id={hintId} className="text-[13px] leading-snug text-text-3">
           {hint}
         </p>

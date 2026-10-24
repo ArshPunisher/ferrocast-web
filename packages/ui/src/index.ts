@@ -1,5 +1,6 @@
 export { cx } from './cx'
 export * from './components/controls'
+export { InfoTip } from './components/infotip'
 export * from './components/overlays'
 export * from './components/brand'
 export { ICON_PATHS, iconSvg, type IconName } from './platform-icons'

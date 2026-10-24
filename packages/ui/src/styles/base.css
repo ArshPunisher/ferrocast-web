@@ -78,6 +78,13 @@ summary {
     animation: fc-fade 0.2s ease-out;
   }
 }
+@keyframes fc-tip {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
 @keyframes fc-fade {
   from {
     opacity: 0;
