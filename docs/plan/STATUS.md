@@ -4,6 +4,7 @@
 - Upload protection: paused line with the reason and "Resume now", the status pill, "Paused" in the platform list, an Upload protection switch. Demo mirrors the engine's timings.
 - Stream info tabs Everywhere / Twitch / YouTube / Kick (owner's pick 6): a platform tab holds only what's different, "Use the everywhere title" resets; Everywhere lists the changes.
 - Aitum Multistream note before going live and "getting your stream twice" while live (board item 7).
+- Studio's Vertical tab (pick 4B): source (OBS's vertical canvas; cut-from-stream marked next), Aitum Vertical setup and put back, YouTube Shorts live and vertical servers, live health. Go live tab, pills and the Show line count only the normal stream. axe clean in light and dark.
 - Tests: vitest (golive, studio), e2e golive + studio 72 passed in Chromium and WebKit; checked at 1440 and 375 px, light and dark. CodeRabbit: no findings on the first two; the third batch was reviewed by hand (free limit), two wording fixes.
 
 ## 22 Oct 2026 (Go live everywhere, 2.0 Track A)
