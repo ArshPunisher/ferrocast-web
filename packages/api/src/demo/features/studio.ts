@@ -26,7 +26,13 @@ import type {
   StreamInfo,
   StreamPreset,
 } from '../../studio'
-import { checkStreamInfo } from '../../studio'
+import {
+  checkStreamInfo,
+  STREAM_INFO_PLATFORMS,
+  streamFields,
+  streamInfoFor,
+  type PerPlatform,
+} from '../../studio'
 import type { ChatPlatform, Command, FerroEvent, Platform } from '../../types'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, isWhole, requireObj, type DemoHost, type Routed } from './host'
@@ -464,14 +470,26 @@ export class DemoStudio {
   private apply(info: StreamInfo, platforms?: ChatPlatform[]): ApplyResult {
     const err = checkStreamInfo(info)
     if (err) throw new HttpError(400, 'invalid', err)
-    const clean: StreamInfo = { ...info }
-    if (clean.title !== undefined) clean.title = clean.title.trim()
-    if (clean.tags) {
-      const seen = new Set<string>()
-      clean.tags = clean.tags
-        .map((t) => t.trim().replace(/^#/, ''))
-        .filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+    const tidy = (i: StreamInfo): StreamInfo => {
+      const out: StreamInfo = { ...i }
+      delete out.per
+      if (out.title !== undefined) out.title = out.title.trim()
+      if (out.tags) {
+        const seen = new Set<string>()
+        out.tags = out.tags
+          .map((t) => t.trim().replace(/^#/, ''))
+          .filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+      }
+      return out
     }
+    const clean = tidy(info)
+    // As the engine: a platform with nothing of its own is dropped.
+    const per: PerPlatform = {}
+    for (const p of STREAM_INFO_PLATFORMS) {
+      const own = info.per?.[p]
+      if (own && streamFields(own).length > 0) per[p] = tidy(own)
+    }
+    if (Object.keys(per).length > 0) clean.per = per
     const targets = platforms?.length ? platforms : this.host.connectedChat()
     if (!targets.length)
       throw new HttpError(
@@ -480,7 +498,7 @@ export class DemoStudio {
         'No platform is connected, so there’s nowhere to send this.',
         'Connect Twitch, YouTube or Kick in Settings, Accounts.',
       )
-    const results = targets.map((p) => this.result(p, clean))
+    const results = targets.map((p) => this.result(p, streamInfoFor(clean, p)))
     const ok = results.filter((r) => r.ok).length
     this.history.unshift({ info: clean, at: Date.now(), results: clone(results) })
     this.history = this.history.slice(0, 20)

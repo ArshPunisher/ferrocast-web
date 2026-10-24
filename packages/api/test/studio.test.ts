@@ -3,7 +3,7 @@ import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
 import { parseLiveFrame } from '../src/live'
-import { checkStreamInfo, studioApi, timecode } from '../src/studio'
+import { checkStreamInfo, streamInfoFor, studioApi, timecode } from '../src/studio'
 import { markersCsv, markersTxt } from '../src/demo/features/studio'
 
 let engine: DemoEngine
@@ -36,6 +36,26 @@ describe('studio helpers (mirror core::stream_info)', () => {
     )
     expect(checkStreamInfo({ language: 'eng' })).toMatch(/^language:/)
     expect(checkStreamInfo({ tags: [] })).toBeNull()
+  })
+
+  it('per-platform fields: checked with their place, merged on top of everywhere', () => {
+    expect(checkStreamInfo({ per: { twitch: { title: 'Twitch only' } } })).toBeNull()
+    expect(checkStreamInfo({ title: 'x', per: { youtube: { title: ' ' } } })).toMatch(
+      /^per\.youtube\.title:/,
+    )
+    expect(checkStreamInfo({ per: { kick: {} } })).toMatch(/at least one/)
+    expect(checkStreamInfo({ title: 'x', per: { tiktok: { title: 'y' } } as never })).toMatch(
+      /^per:/,
+    )
+    expect(
+      checkStreamInfo({
+        title: 'x',
+        per: { twitch: { title: 'y', per: { kick: { title: 'z' } } } },
+      }),
+    ).toMatch(/^per\.twitch:/)
+    const info = { title: 'Day 41', tags: ['valorant'], per: { twitch: { title: 'Ranked grind' } } }
+    expect(streamInfoFor(info, 'twitch')).toEqual({ title: 'Ranked grind', tags: ['valorant'] })
+    expect(streamInfoFor(info, 'youtube')).toEqual({ title: 'Day 41', tags: ['valorant'] })
   })
 
   it('timecodes and exports match the engine', () => {
@@ -104,6 +124,17 @@ describe('demo studio (same contract as API.md §4 Studio)', () => {
     expect(e?.code).toBe('stream_info_failed')
     expect((await studio.streamInfo()).history[0]?.results[0]?.platform).toBe('kick')
     expect((await fail(studio.applyStreamInfo({})))?.status).toBe(400)
+  })
+
+  it('stream info per platform: each platform reports its own fields, history keeps per', async () => {
+    const r = await studio.applyStreamInfo(
+      { tags: ['valorant'], per: { twitch: { title: 'Ranked grind' }, youtube: {} } },
+      ['twitch', 'youtube'],
+    )
+    expect(r.results.find((x) => x.platform === 'twitch')?.applied).toEqual(['title', 'tags'])
+    expect(r.results.find((x) => x.platform === 'youtube')?.applied).toEqual(['tags'])
+    const last = (await studio.streamInfo()).history[0]
+    expect(last?.info.per).toEqual({ twitch: { title: 'Ranked grind' } })
   })
 
   it('show: preflight, start, countdown, end', async () => {

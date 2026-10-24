@@ -125,6 +125,29 @@ export interface StreamInfo {
   description?: string
   /** A media library id (JPEG or PNG, up to 2 MB). YouTube only. */
   thumbnail?: string
+  /** A platform's own fields, sent there instead of the everywhere ones (no nested `per`). */
+  per?: PerPlatform
+}
+
+export type PerPlatform = Partial<Record<ChatPlatform, StreamInfo>>
+
+export const STREAM_INFO_PLATFORMS: ChatPlatform[] = ['twitch', 'youtube', 'kick']
+
+const STREAM_FIELDS = ['title', 'category', 'tags', 'language', 'description', 'thumbnail'] as const
+
+/** The fields set (not `per`). */
+export function streamFields(info: StreamInfo): (typeof STREAM_FIELDS)[number][] {
+  return STREAM_FIELDS.filter((f) => info[f] !== undefined)
+}
+
+/** What platform `p` gets: the everywhere fields with its own on top (as the engine). */
+export function streamInfoFor(info: StreamInfo, p: ChatPlatform): StreamInfo {
+  const { per, ...base } = info
+  const own = per?.[p]
+  if (!own) return base
+  const out: StreamInfo = { ...base }
+  for (const f of STREAM_FIELDS) if (own[f] !== undefined) Object.assign(out, { [f]: own[f] })
+  return out
 }
 
 export type StreamInfoErrorCode =
@@ -198,6 +221,26 @@ export const MAX_STREAM_DESCRIPTION = 5000
 
 /** Same rules as the engine (`core::stream_info`), so the form can say so before sending. */
 export function checkStreamInfo(info: StreamInfo): string | null {
+  let ownFields = false
+  for (const [key, own] of Object.entries(info.per ?? {})) {
+    if (!STREAM_INFO_PLATFORMS.includes(key as ChatPlatform))
+      return 'per: only Twitch, YouTube and Kick can have their own fields.'
+    if (!own) continue
+    if (own.per && Object.keys(own.per).length > 0)
+      return `per.${key}: a platform's own fields can't have their own per-platform fields.`
+    if (streamFields(own).length === 0) continue
+    const problem = checkFields(own)
+    if (problem) return `per.${key}.${problem}`
+    ownFields = true
+  }
+  const problem = checkFields(info)
+  if (problem) return problem
+  if (streamFields(info).length === 0 && !ownFields)
+    return 'Fill in at least one of title, category, tags, language, description or thumbnail.'
+  return null
+}
+
+function checkFields(info: StreamInfo): string | null {
   if (info.title !== undefined) {
     const t = info.title.trim()
     if (!t) return 'title: write a title, or leave it out to keep the current one.'
@@ -220,15 +263,6 @@ export function checkStreamInfo(info: StreamInfo): string | null {
     if (/[<>]/.test(info.description))
       return 'description: YouTube doesn’t allow < or > in a description.'
   }
-  if (
-    info.title === undefined &&
-    info.category === undefined &&
-    info.tags === undefined &&
-    info.language === undefined &&
-    info.description === undefined &&
-    info.thumbnail === undefined
-  )
-    return 'Fill in at least one of title, category, tags, language, description or thumbnail.'
   return null
 }
 
