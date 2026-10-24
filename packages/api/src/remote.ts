@@ -338,6 +338,8 @@ const ACTIONS: Record<string, string> = {
   'POST /queue/resume': 'Resumed alerts',
   'POST /queue/skip': 'Skipped an alert',
   'POST /obs/scene': 'Switched the OBS scene',
+  'POST /designs/{id}/obs': 'Put a theme into OBS',
+  'DELETE /obs/theme': 'Took the theme out of OBS',
   'POST /stream-info/apply': 'Changed the stream title',
   'PUT /pro/bot/enabled': 'Switched the cloud bot',
 }
