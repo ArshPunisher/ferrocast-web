@@ -132,6 +132,7 @@ export function GoalPage({
         <Field
           label="Goal"
           error={show('title')}
+          hintVisible
           hint={`${Array.from(d.title).length}/${TIP_BRAND_LIMITS.goalTitleMax}`}
         >
           {(p) => (

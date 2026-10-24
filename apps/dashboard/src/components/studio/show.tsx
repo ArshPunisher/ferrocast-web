@@ -288,6 +288,7 @@ export function ShowPanel() {
   return (
     <Panel
       title="Show"
+      description="Start show sets your stream info, shows Starting Soon, counts down, then goes live."
       actions={show ? <Badge tone={PHASE[show.phase].tone}>{PHASE[show.phase].label}</Badge> : null}
     >
       {show === undefined ? (
@@ -303,11 +304,6 @@ export function ShowPanel() {
               <TimerIcon size={26} className="text-accent-text" aria-hidden="true" />
               {clock(left)}
               <span className="sr-only">until the live scene</span>
-            </p>
-          )}
-          {!show && (
-            <p className="text-sm text-text-2">
-              Sets your stream info, shows Starting Soon, counts down, then goes live.
             </p>
           )}
           {show && show.steps.length > 0 && (

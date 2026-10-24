@@ -28,7 +28,8 @@ test.describe('tips: first-time setup', () => {
     await open(page, 'tips', EMPTY)
     await expect(page.getByRole('heading', { name: 'Create your tip page' })).toBeVisible()
     // No webhook addresses before the first save: the providers are locked.
-    await expect(providers(page).getByRole('button')).toHaveCount(0)
+    // Only the (i) explanations are buttons here.
+    await expect(providers(page).locator('button:not([aria-label="More info"])')).toHaveCount(0)
     await expect(providers(page)).toContainText('Create your tip page first')
 
     await page.getByLabel('Page name').fill('  NoVa ')
@@ -353,7 +354,7 @@ test.describe('tips: the rest', () => {
     await open(page, 'tips', EMPTY)
     await tabTo(page, page.getByLabel('Page name'))
     await page.keyboard.type('nova')
-    await page.keyboard.press('Tab')
+    await tabTo(page, page.getByLabel('Name viewers see'))
     await expect(page.getByLabel('Name viewers see')).toBeFocused()
     await page.keyboard.type('Nova')
     await page.keyboard.press('Enter')

@@ -41,6 +41,7 @@ import {
   Dialog,
   Field,
   IconButton,
+  InfoTip,
   Input,
   PlatformMark,
   Skeleton,
@@ -467,13 +468,15 @@ export function Platforms({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
           <b className="font-semibold">{goingTo(merged)}.</b>
           {ticked.length > 0 && <span className="text-text-3">Needs {mbps(need)} upload.</span>}
+          {(vertical || twitchShared) && (
+            <InfoTip>
+              {vertical
+                ? 'Upload protection counts the vertical stream too: it pauses before the platforms on the Go live tab.'
+                : 'Twitch asks that every platform gets the same quality as Twitch, or lower. Ferrocast sends the same stream to all, so you’re fine.'}
+            </InfoTip>
+          )}
         </div>
-        {vertical ? (
-          <p className="m-0 text-[13px] text-text-3">
-            Upload protection counts the vertical stream too: it pauses before the platforms on the
-            Go live tab.
-          </p>
-        ) : (
+        {vertical ? null : (
           <div className="border-t border-line pt-3">
             <Switch
               label="Upload protection"
@@ -488,12 +491,6 @@ export function Platforms({
               </div>
             )}
           </div>
-        )}
-        {twitchShared && (
-          <Note>
-            <b>Twitch asks that every platform gets the same quality</b> as Twitch, or lower.
-            Ferrocast sends the same stream to all, so you’re fine.
-          </Note>
         )}
       </div>
       <AddDestination
@@ -823,12 +820,14 @@ function Setup({
   return (
     <Panel title="Set up once" id="golive-setup">
       <ol className="m-0 flex list-none flex-col p-0">
-        <Step n={1} done={obs.connected} title={obs.connected ? 'OBS is connected' : 'Connect OBS'}>
+        <Step
+          n={1}
+          done={obs.connected}
+          title={obs.connected ? 'OBS is connected' : 'Connect OBS'}
+          info="Open OBS on this computer. Ferrocast finds it by itself, or check Settings, OBS."
+        >
           {obs.connected ? null : (
             <>
-              <p>
-                Open OBS on this computer. Ferrocast finds it by itself, or check Settings, OBS.
-              </p>
               <a
                 className="text-[13.5px] font-semibold text-accent-text hover:underline"
                 href={href({ name: 'settings', section: 'obs' })}
@@ -838,18 +837,15 @@ function Setup({
             </>
           )}
         </Step>
-        <Step n={2} done={obs.points_here} title="Send OBS’s stream to Ferrocast">
+        <Step
+          n={2}
+          done={obs.points_here}
+          title="Send OBS’s stream to Ferrocast"
+          info="OBS streams to Ferrocast on this PC instead of straight to your platform. Your scenes and quality stay the same, and you can put it back any time."
+        >
           {obs.points_here ? null : (
             <>
-              <p>
-                OBS will stream to Ferrocast on this PC instead of straight to your platform. Your
-                OBS scenes and quality stay the same.
-              </p>
-              {obs.streaming && (
-                <p className="text-warn">
-                  Stop the stream in OBS first; this changes between streams.
-                </p>
-              )}
+              {obs.streaming && <p className="text-warn">Stop streaming in OBS first.</p>}
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="primary"
@@ -860,15 +856,18 @@ function Setup({
                 >
                   Point OBS at Ferrocast
                 </Button>
-                <span className="text-[12.5px] text-text-3">You can put it back any time.</span>
               </div>
             </>
           )}
         </Step>
-        <Step n={3} done={!!upload} title="Test your upload">
+        <Step
+          n={3}
+          done={!!upload}
+          title="Test your upload"
+          info="Sends a few seconds of test data to Twitch’s test server. Nobody sees it."
+        >
           {upload ? null : (
             <>
-              <p>Sends a few seconds of test data to Twitch’s test server. Nobody sees it.</p>
               <Button
                 className="self-start"
                 icon={<Gauge size={16} />}
@@ -890,11 +889,14 @@ function Step({
   n,
   done,
   title,
+  info,
   children,
 }: {
   n: number
   done: boolean
   title: string
+  /** The step's explanation, behind the (i). */
+  info?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -909,10 +911,13 @@ function Step({
         {done ? <CheckCircle size={16} weight="bold" /> : n}
       </span>
       <div className="flex min-w-0 flex-col gap-2 text-[13px] text-text-2 [&_p]:m-0">
-        <b className="text-[14px] text-text">
-          {title}
-          <span className="sr-only">{done ? ' (done)' : ''}</span>
-        </b>
+        <span className="flex items-center gap-1">
+          <b className="text-[14px] text-text">
+            {title}
+            <span className="sr-only">{done ? ' (done)' : ''}</span>
+          </b>
+          {info && !done && <InfoTip>{info}</InfoTip>}
+        </span>
         {children}
       </div>
     </li>

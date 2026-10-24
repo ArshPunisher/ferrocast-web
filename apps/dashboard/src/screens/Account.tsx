@@ -80,7 +80,7 @@ function NotSignedIn({ view }: { view: AccountView }) {
       <p className="max-w-[58ch] text-[14.5px] text-text-2">
         {view.state === 'disabled'
           ? (view.error?.hint ?? 'Write to support@clearcraftlabs.com and we’ll sort it out.')
-          : 'Optional. Signing in keeps Pro with you on every PC, and lets you open your dashboard on the web. Everything free works without it.'}
+          : 'Optional. Keeps Pro on every PC and opens your dashboard on the web.'}
       </p>
       {view.error && view.state !== 'disabled' && (
         <p role="alert" className="text-[13.5px] text-danger">

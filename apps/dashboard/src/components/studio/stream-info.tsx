@@ -485,6 +485,7 @@ function PlatformFields({
       <Field
         label="Title"
         optional
+        hintVisible
         hint={own.title ? `${[...own.title].length} of ${max}` : `${name} takes up to ${max}.`}
       >
         {(p) => (
@@ -733,7 +734,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
           >
             {tab === 'all' ? (
               <>
-                <Field label="Title" hint={`${titleLen} of 140 (YouTube takes 100)`}>
+                <Field label="Title" hintVisible hint={`${titleLen} of 140 (YouTube takes 100)`}>
                   {(p) => (
                     <Input
                       {...p}

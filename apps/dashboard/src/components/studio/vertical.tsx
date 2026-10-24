@@ -6,7 +6,7 @@
 import { useEffect } from 'react'
 import { ArrowCounterClockwise, CheckCircle, DeviceMobile, Info, Plug } from '@phosphor-icons/react'
 import type { GoLiveView, VerticalObs, VerticalSource } from '@ferrocast/api'
-import { Button, Skeleton, cx } from '@ferrocast/ui'
+import { Button, InfoTip, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
@@ -87,14 +87,16 @@ function Source({
         <legend className="sr-only">Where the vertical picture comes from</legend>
         <Option
           title="Cut it from your stream"
-          text="Works with any OBS: mark your camera and game once, Ferrocast stacks them upright."
+          text="Any OBS"
+          info="Mark your camera and game once; Ferrocast stacks them upright. A small camera looks softer when made big."
           checked={source === 'cut'}
           busy={busy === 'source:cut'}
           onPick={() => pick('cut')}
         />
         <Option
           title="OBS’s vertical canvas"
-          text="Best quality. OBS sends a second, upright stream (Aitum Vertical, or OBS 32’s second canvas)."
+          text="Best quality"
+          info="OBS sends a second, upright stream (Aitum Vertical, or OBS 32’s second canvas)."
           checked={source === 'canvas'}
           busy={busy === 'source:canvas'}
           onPick={() => pick('canvas')}
@@ -102,12 +104,7 @@ function Source({
         />
       </fieldset>
       <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[13.5px] text-text-2">
-        {source === 'cut' ? (
-          <p className="m-0">
-            The layout is on the left. Your camera from the normal stream is made bigger, so a small
-            camera looks softer; OBS’s vertical canvas looks sharper.
-          </p>
-        ) : !obs.connected ? (
+        {source === 'cut' ? null : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
             <a
@@ -145,15 +142,7 @@ function Source({
           </div>
         ) : (
           <>
-            <p className="m-0">
-              Aitum Vertical’s first stream output will go to Ferrocast instead, which sends it on
-              to the places on the left. Its canvas and quality stay the same.
-            </p>
-            {v.streaming && (
-              <p className="m-0 text-warn">
-                Stop the vertical stream in OBS first; this changes between streams.
-              </p>
-            )}
+            {v.streaming && <p className="m-0 text-warn">Stop the vertical stream in OBS first.</p>}
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 variant="primary"
@@ -164,7 +153,10 @@ function Source({
               >
                 Point Aitum Vertical at Ferrocast
               </Button>
-              <span className="text-[12.5px] text-text-3">You can put it back any time.</span>
+              <InfoTip>
+                Aitum Vertical’s first stream output goes to Ferrocast, which sends it on. Its
+                canvas and quality stay the same, and you can put it back any time.
+              </InfoTip>
             </div>
           </>
         )}
@@ -184,6 +176,7 @@ function Source({
 function Option({
   title,
   text,
+  info,
   checked,
   busy,
   onPick,
@@ -191,46 +184,51 @@ function Option({
 }: {
   title: string
   text: string
+  info: string
   checked: boolean
   busy?: boolean
   onPick: () => void
   found?: string | null
 }) {
   return (
-    <label
-      className={cx(
-        'flex cursor-pointer flex-col gap-1 rounded-[12px] border p-3 has-[:focus-visible]:shadow-[var(--fc-focus)]',
-        checked
-          ? 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]'
-          : 'border-line hover:border-line-strong',
-        busy && 'opacity-80',
-      )}
-    >
-      <input
-        type="radio"
-        name="vertical-source"
-        className="sr-only"
-        checked={checked}
-        disabled={busy}
-        onChange={onPick}
-      />
-      <span className="flex items-center gap-2 text-[14px] font-bold text-text">
-        <span
-          aria-hidden
-          className={cx(
-            'size-4 shrink-0 rounded-full border',
-            checked ? 'border-[5px] border-arc' : 'border-line-strong',
-          )}
+    <div className="relative">
+      <label
+        className={cx(
+          'flex cursor-pointer flex-col gap-1 rounded-[12px] border p-3 pr-10 has-[:focus-visible]:shadow-[var(--fc-focus)]',
+          checked
+            ? 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]'
+            : 'border-line hover:border-line-strong',
+          busy && 'opacity-80',
+        )}
+      >
+        <input
+          type="radio"
+          name="vertical-source"
+          className="sr-only"
+          checked={checked}
+          disabled={busy}
+          onChange={onPick}
         />
-        {title}
-      </span>
-      <span className="pl-6 text-[12.5px] text-text-2">{text}</span>
-      {found && (
-        <span className="inline-flex items-center gap-1.5 pl-6 text-[12px] font-semibold text-ok">
-          <CheckCircle size={13} weight="fill" aria-hidden />
-          {found}
+        <span className="flex items-center gap-2 text-[14px] font-bold text-text">
+          <span
+            aria-hidden
+            className={cx(
+              'size-4 shrink-0 rounded-full border',
+              checked ? 'border-[5px] border-arc' : 'border-line-strong',
+            )}
+          />
+          {title}
         </span>
-      )}
-    </label>
+        <span className="pl-6 text-[12.5px] text-text-2">{text}</span>
+        {found && (
+          <span className="inline-flex items-center gap-1.5 pl-6 text-[12px] font-semibold text-ok">
+            <CheckCircle size={13} weight="fill" aria-hidden />
+            {found}
+          </span>
+        )}
+      </label>
+      {/* Outside the label, so the option's name stays just its title. */}
+      <InfoTip className="absolute top-2.5 right-2.5">{info}</InfoTip>
+    </div>
   )
 }

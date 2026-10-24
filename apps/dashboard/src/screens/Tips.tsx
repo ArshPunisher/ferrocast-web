@@ -549,6 +549,7 @@ export function Tips() {
                 label="Message on your page"
                 optional
                 error={fieldError('message')}
+                hintVisible
                 hint={`${tipTextLength(page.message)}/${TIP_LIMITS.messageMax}`}
               >
                 {(p) => (

@@ -105,8 +105,8 @@ test.describe('studio', () => {
   test('only Kick ticked: nobody took it, and the reason is shown', async ({ page }) => {
     await open(page, 'studio/info')
     const form = panel(page, 'Stream info')
-    await form.getByRole('checkbox', { name: 'Twitch' }).uncheck()
-    await form.getByRole('checkbox', { name: 'YouTube' }).uncheck()
+    await form.getByRole('switch', { name: 'Twitch' }).click()
+    await form.getByRole('switch', { name: 'YouTube' }).click()
     await form.getByRole('button', { name: 'Update everywhere' }).click()
     await expect(form.getByRole('alert')).toHaveText('No platform took the change.')
     await expect(form.getByText(/Kick needs a permission/)).toBeVisible()

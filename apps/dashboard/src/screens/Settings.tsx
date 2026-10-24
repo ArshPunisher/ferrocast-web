@@ -15,6 +15,7 @@ import {
   Badge,
   Button,
   Dialog,
+  InfoTip,
   Field,
   Input,
   Segmented,
@@ -200,7 +201,17 @@ function Obs() {
   const auto = obs.data?.auto === true
   const saved = obs.data?.has_password === true
   return (
-    <Section id="obs" title="OBS" description="Lets “Add to OBS” drop overlays into your scene.">
+    <Section
+      id="obs"
+      title="OBS"
+      description={
+        <>
+          Lets Ferrocast put overlays and themes into OBS. In OBS: Tools, WebSocket Server Settings,
+          tick “Enable WebSocket server”. OBS on another PC? Copy its “Show Connect Info” address
+          and password here.
+        </>
+      }
+    >
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium text-text-2">Status</span>
         {conn && (
@@ -224,10 +235,6 @@ function Obs() {
           obsToast(o)
         }}
       />
-      <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13.5px] text-text-2">
-        <li>In OBS: Tools → WebSocket Server Settings → tick “Enable WebSocket server”.</li>
-        <li>OBS on another PC? Copy its “Show Connect Info” address and password here.</li>
-      </ol>
       <form
         className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]"
         onSubmit={(e) => {
@@ -537,8 +544,10 @@ function Data() {
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-text">Export everything</h3>
-          <p className="text-[13.5px] text-text-2">One file with your {EXPORT_CONTENTS}.</p>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold text-text">Export everything</h3>
+            <InfoTip>One file with your {EXPORT_CONTENTS}.</InfoTip>
+          </div>
           <Button
             className="mt-1 self-start"
             icon={<DownloadSimple size={16} />}
@@ -549,10 +558,10 @@ function Data() {
           </Button>
         </div>
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-text">Bring your setup</h3>
-          <p className="text-[13.5px] text-text-2">
-            Commands, timers, points and tips. You review it first.
-          </p>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold text-text">Bring your setup</h3>
+            <InfoTip>Commands, timers, points and tips. You review it first.</InfoTip>
+          </div>
           <div className="mt-1 flex flex-wrap gap-2">
             <a
               href={href({ name: 'import' })}
@@ -592,13 +601,13 @@ function Data() {
       <div className="mt-6 border-t border-line pt-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-text">Backups</h3>
-            <p
-              className="mt-0.5 text-[13.5px] text-text-2"
-              title="Keeps the last 7 daily backups and the last 10 others."
-            >
-              Daily, and before every update or import.
-            </p>
+            <div className="flex items-center gap-1">
+              <h3 className="text-sm font-semibold text-text">Backups</h3>
+              <InfoTip>
+                Daily, and before every update or import. Keeps the last 7 daily backups and the
+                last 10 others.
+              </InfoTip>
+            </div>
           </div>
           <Button
             size="sm"
@@ -920,7 +929,7 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
         </div>
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-semibold text-text">Open in another browser</p>
-          <p className="text-[13.5px] text-text-2">A one-time link, good for 2 minutes.</p>
+          <p className="text-[13.5px] text-text-3">One-time link, 2 minutes.</p>
           {link ? (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">

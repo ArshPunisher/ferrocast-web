@@ -16,6 +16,7 @@ import {
   Button,
   EmptyState,
   Field,
+  InfoTip,
   Kbd,
   PlatformMark,
   Select,
@@ -96,12 +97,15 @@ function PanicCard() {
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 id="panic-title" className="font-display text-lg font-semibold tracking-tight">
-            Panic mode {on && <Badge tone="danger">On</Badge>}
-          </h2>
-          <p className="mt-1 max-w-[56ch] text-sm leading-relaxed text-text-2">
-            For hate raids and bot floods. One press locks chat on every platform and pauses alerts.
-          </p>
+          <div className="flex items-center gap-1">
+            <h2 id="panic-title" className="font-display text-lg font-semibold tracking-tight">
+              Panic mode {on && <Badge tone="danger">On</Badge>}
+            </h2>
+            <InfoTip>
+              For hate raids and bot floods. One press locks chat on every platform and pauses
+              alerts.
+            </InfoTip>
+          </div>
           <p
             className="mt-2 flex flex-wrap items-center gap-1.5 text-[13.5px] font-medium text-text-2"
             title="Works in this window and anywhere on the computer running Ferrocast."
