@@ -37,6 +37,7 @@ import {
   PlatformMark,
   Select,
   Skeleton,
+  Switch,
   Textarea,
   cx,
   toast,
@@ -592,6 +593,12 @@ function PlatformFields({
           The description and thumbnail are on the Everywhere tab; only YouTube takes them.
         </p>
       )}
+      {platform !== 'youtube' && (
+        <p className="text-[13.5px] text-text-3">
+          No thumbnail here: {PLATFORM_LABEL[platform]} doesn’t let apps set one. It takes a picture
+          from your stream by itself.
+        </p>
+      )}
     </>
   )
 }
@@ -849,39 +856,37 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
           </div>
           <fieldset>
             <legend className="text-[13.5px] font-medium text-text-2">Send to</legend>
-            <ul className="mt-2 flex flex-col gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
               {v.platforms.map((p) => (
-                <li key={p.platform} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <label className="inline-flex items-center gap-2 text-sm text-text">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-[var(--fc-arc)]"
-                      disabled={!p.connected}
-                      checked={p.connected && targets.includes(p.platform)}
-                      onChange={() =>
-                        setPicked(
-                          targets.includes(p.platform)
-                            ? targets.filter((x) => x !== p.platform)
-                            : [...targets, p.platform],
-                        )
-                      }
-                    />
-                    {PLATFORM_LABEL[p.platform]}
-                  </label>
-                  {p.needs && (
-                    <span className="text-[13.5px] text-text-3">
-                      {p.connected ? <Badge tone="warn">Reconnect needed</Badge> : 'Not connected.'}{' '}
-                      <a
-                        href="#/settings/accounts"
-                        className="font-semibold text-accent-text hover:underline"
-                      >
-                        {p.connected ? 'Reconnect' : 'Connect'}
-                      </a>
-                    </span>
-                  )}
-                </li>
+                <Switch
+                  key={p.platform}
+                  label={PLATFORM_LABEL[p.platform] ?? p.platform}
+                  disabled={!p.connected}
+                  checked={p.connected && targets.includes(p.platform)}
+                  onChange={() =>
+                    setPicked(
+                      targets.includes(p.platform)
+                        ? targets.filter((x) => x !== p.platform)
+                        : [...targets, p.platform],
+                    )
+                  }
+                />
               ))}
-            </ul>
+            </div>
+            {v.platforms
+              .filter((p) => p.needs)
+              .map((p) => (
+                <p key={p.platform} className="mt-2 text-[13.5px] text-text-3">
+                  {PLATFORM_LABEL[p.platform]}:{' '}
+                  {p.connected ? <Badge tone="warn">Reconnect needed</Badge> : 'Not connected.'}{' '}
+                  <a
+                    href="#/settings/accounts"
+                    className="font-semibold text-accent-text hover:underline"
+                  >
+                    {p.connected ? 'Reconnect' : 'Connect'}
+                  </a>
+                </p>
+              ))}
           </fieldset>
           {err && (
             <p role="alert" className="text-[13.5px] font-medium text-danger">
