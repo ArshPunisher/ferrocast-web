@@ -502,6 +502,12 @@ export type LayerConfig =
       /** Counts down from this many seconds once shown; `{time}` in the text is replaced. */
       countdown?: number
       countdown_done?: string
+      /** Starts again from `countdown` each time the scene comes on air (default true). */
+      countdown_restart?: boolean
+      /** Follows Start show's countdown while one runs (default true). */
+      countdown_show?: boolean
+      /** After zero, counts up how late it is ("+01:23") instead of the done text. */
+      countdown_up?: boolean
     })
   | (LayerBase & {
       type: 'shape'
@@ -1429,6 +1435,8 @@ export interface OverlayState {
   poll?: PollView | null
   /** The running (or last) giveaway, small; overlays with a giveaway widget get updates. */
   giveaway?: GiveawayCard | null
+  /** Start show: when its countdown ends (ms), so timers on screen reach zero with it. */
+  show?: { countdown_ends_at: number | null }
 }
 
 export interface GiveawayEntrant {
@@ -1516,7 +1524,7 @@ export type OverlayServerFrame =
       v: 1
       seq: number
       type: 'state'
-      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll' | 'giveaway'>>
+      data: Partial<Pick<OverlayState, 'goals' | 'labels' | 'viewers' | 'poll' | 'giveaway' | 'show'>>
     }
   | { v: 1; seq: number; type: 'config'; data: Overlay }
   | { v: 1; seq: number; type: 'delete_message'; data: { platform: Platform; message_id: string } }

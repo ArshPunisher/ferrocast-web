@@ -740,6 +740,38 @@ function LayerSettings({
             />
           )}
         </Field>
+        {c.countdown ? (
+          <>
+            <Field label="At zero, show" optional>
+              {(p) => (
+                <Input
+                  {...p}
+                  placeholder="00:00"
+                  maxLength={80}
+                  value={c.countdown_done ?? ''}
+                  onChange={(e) => opt('countdown_done', e.target.value, true)}
+                />
+              )}
+            </Field>
+            <Switch
+              label="Count up when late"
+              description="Shows +01:23 after zero instead."
+              checked={c.countdown_up === true}
+              onChange={(v) => opt('countdown_up', v || '')}
+            />
+            <Switch
+              label="Start again each time it’s on air"
+              checked={c.countdown_restart !== false}
+              onChange={(v) => opt('countdown_restart', v ? '' : false)}
+            />
+            <Switch
+              label="Follow Start show’s countdown"
+              description="While Start show counts down, this shows the same time."
+              checked={c.countdown_show !== false}
+              onChange={(v) => opt('countdown_show', v ? '' : false)}
+            />
+          </>
+        ) : null}
       </div>
     )
   if (c.type === 'image')

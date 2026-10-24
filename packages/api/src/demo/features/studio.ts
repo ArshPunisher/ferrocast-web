@@ -27,6 +27,7 @@ import type {
   StreamPreset,
 } from '../../studio'
 import {
+  AT_ZERO_DEFAULT,
   checkStreamInfo,
   STREAM_INFO_PLATFORMS,
   streamFields,
@@ -68,6 +69,7 @@ const DEFAULT_SHOW: ShowConfig = {
   cam_sources: ['Webcam'],
   min_disk_gb: 10,
   platforms: [],
+  at_zero: { ...AT_ZERO_DEFAULT },
 }
 
 const DEFAULT_SCENES: ScenesConfig = {
@@ -359,6 +361,8 @@ export class DemoStudio {
   private setRun(run: ShowRun | null) {
     this.run = run
     this.host.broadcastLive({ v: 1, type: 'show', data: { show: clone(run) } })
+    // Like the engine: timers on screen follow Start show's countdown.
+    this.host.pushOverlayState({ show: { countdown_ends_at: run?.countdown_ends_at ?? null } })
   }
 
   private reading(spike: boolean): ObsHealth {
@@ -709,14 +713,15 @@ export class DemoStudio {
       })
     let phase: ShowRun['phase'] = 'starting'
     let ends: number | null = null
-    if (c.live_scene && c.countdown_s > 0) {
+    const sw = c.at_zero?.switch !== false
+    if (c.countdown_s > 0 && (c.live_scene || !sw)) {
       phase = 'countdown'
       ends = Date.now() + c.countdown_s * 1000
       steps.push({
         id: 'countdown',
         label: 'Countdown',
         status: 'waiting',
-        detail: `${c.countdown_s} seconds, then the live scene.`,
+        detail: sw ? `${c.countdown_s} seconds, then the live scene.` : `${c.countdown_s} seconds.`,
       })
       const id = `show-${Date.now()}`
       this.host.later(() => {
@@ -765,8 +770,11 @@ export class DemoStudio {
         'There’s no countdown running.',
         'Start the show first.',
       )
-    const steps = run.steps.filter((s) => s.id !== 'countdown' && s.id !== 'live_scene')
-    if (run.live_scene) {
+    const steps = run.steps.filter(
+      (s) => s.id !== 'countdown' && s.id !== 'live_scene' && !s.id.startsWith('zero_'),
+    )
+    const z = { ...AT_ZERO_DEFAULT, ...this.showCfg.at_zero }
+    if (z.switch && run.live_scene) {
       this.switchTo(run.live_scene)
       steps.push({
         id: 'live_scene',
@@ -774,6 +782,40 @@ export class DemoStudio {
         status: 'done',
         detail: `OBS is on "${run.live_scene}".`,
       })
+    }
+    if (z.unmute) {
+      for (const m of this.showCfg.mic_sources) this.obs.muted[m] = false
+      steps.push({ id: 'zero_unmute', label: 'Mic', status: 'done', detail: 'On.' })
+    }
+    if (z.start_stream)
+      steps.push(
+        this.obs.streaming
+          ? {
+              id: 'zero_stream',
+              label: 'Go live in OBS',
+              status: 'skipped',
+              detail: 'OBS is streaming already.',
+            }
+          : (() => {
+              this.obs.streaming = true
+              return {
+                id: 'zero_stream',
+                label: 'Go live in OBS',
+                status: 'done' as const,
+                detail: 'OBS is streaming.',
+              }
+            })(),
+      )
+    if (z.record)
+      steps.push({
+        id: 'zero_record',
+        label: 'Recording',
+        status: 'done',
+        detail: 'OBS is recording.',
+      })
+    if (z.chat) {
+      this.host.say(z.chat)
+      steps.push({ id: 'zero_chat', label: 'Chat', status: 'done', detail: z.chat })
     }
     this.setRun({ ...run, phase: 'live', countdown_ends_at: null, steps })
     return clone(this.run as ShowRun)
@@ -1251,7 +1293,18 @@ export class DemoStudio {
           'invalid',
           'countdown_s: 10 seconds to 1 hour, or 0 for no countdown.',
         )
-      if (next.countdown_s > 0 && !next.live_scene)
+      const chat = next.at_zero?.chat
+      if (
+        chat !== undefined &&
+        chat !== null &&
+        (!chat.trim() || chat.length > 400 || /\p{Cc}/u.test(chat))
+      )
+        throw new HttpError(
+          400,
+          'invalid',
+          'at_zero.chat: 1 to 400 characters on one line, or turn it off.',
+        )
+      if (next.countdown_s > 0 && next.at_zero?.switch !== false && !next.live_scene)
         throw new HttpError(
           400,
           'invalid',

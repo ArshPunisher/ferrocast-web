@@ -1018,6 +1018,9 @@ export function validateLayer(config: unknown): string | null {
         numIn(config, path, 'rotate_s', 2, 60),
         numIn(config, path, 'countdown', 1, 86_400),
         textLen(config, path, 'countdown_done', MAX_ROTATE_TEXT),
+        optBool(config, path, 'countdown_restart'),
+        optBool(config, path, 'countdown_show'),
+        optBool(config, path, 'countdown_up'),
       )
       break
     }

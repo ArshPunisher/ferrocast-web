@@ -41,6 +41,13 @@ export interface OverlayOptions {
 
 const MAX_WIDGETS = 50
 
+/** Start show's countdown end (ms), or null; anything else is ignored. */
+const showEnds = (v: unknown): number | null => {
+  if (!v || typeof v !== 'object') return null
+  const n = (v as { countdown_ends_at?: unknown }).countdown_ends_at
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null
+}
+
 const obj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
@@ -220,6 +227,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         chat: Array.isArray(s?.chat) ? s.chat : [],
         poll: obj(s?.poll) ? (s.poll as PollView) : null,
         giveaway: obj(s?.giveaway) ? (s.giveaway as GiveawayCard) : null,
+        show: { countdown_ends_at: showEnds(s?.show) },
       }
       layout(frame.data.overlay, true)
       each((v) => v.onSnapshot?.())
@@ -260,6 +268,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
           state.viewers = { ...state.viewers, ...(d.viewers as OverlayState['viewers']) }
         if ('poll' in d) state.poll = obj(d.poll) ? (d.poll as PollView) : null
         if ('giveaway' in d) state.giveaway = obj(d.giveaway) ? (d.giveaway as GiveawayCard) : null
+        if ('show' in d) state.show = { countdown_ends_at: showEnds(d.show) }
         each((v) => v.onState?.())
         break
       }

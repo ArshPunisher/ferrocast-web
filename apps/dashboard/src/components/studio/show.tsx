@@ -4,8 +4,10 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, Broadcast, Play, Stop, Timer as TimerIcon } from '@phosphor-icons/react'
 import {
+  AT_ZERO_DEFAULT,
   describeError,
   fieldError,
+  type AtZero,
   type ObsScenes,
   type Preflight,
   type PreflightCheck,
@@ -18,6 +20,7 @@ import {
   Button,
   Dialog,
   Field,
+  Input,
   Select,
   Skeleton,
   Switch,
@@ -555,6 +558,7 @@ export function ShowSettings({
         {!scenes && (
           <p className="text-[13.5px] text-text-2">Open OBS to pick scenes from a list.</p>
         )}
+        {c.countdown_s > 0 && <AtZeroSettings c={c} set={set} err={err} />}
         <div className="flex flex-col gap-3">
           <Switch
             label="Turn alerts on"
@@ -690,5 +694,60 @@ export function ShowSettings({
         )}
       </div>
     </Panel>
+  )
+}
+
+/** When the countdown reaches zero (owner, 24 Oct): each action on or off. */
+function AtZeroSettings({
+  c,
+  set,
+  err,
+}: {
+  c: ShowConfig
+  set: (patch: Partial<ShowConfig>) => void
+  err: { field: string | null; message: string } | null
+}) {
+  const z = { ...AT_ZERO_DEFAULT, ...c.at_zero }
+  const put = (patch: Partial<AtZero>) => set({ at_zero: { ...z, ...patch } })
+  return (
+    <fieldset className="m-0 flex flex-col gap-3 rounded-[12px] border border-line p-3">
+      <legend className="px-1 text-[13.5px] font-semibold text-text">At zero</legend>
+      <Switch
+        label={c.live_scene ? `Switch OBS to ${c.live_scene}` : 'Switch OBS to the live scene'}
+        checked={z.switch}
+        onChange={(v) => put({ switch: v })}
+      />
+      <Switch
+        label="Unmute the mic"
+        description="The mics picked in the pre-flight."
+        checked={z.unmute}
+        onChange={(v) => put({ unmute: v })}
+      />
+      <Switch
+        label="Start streaming in OBS"
+        description="Only if OBS isn’t streaming yet."
+        checked={z.start_stream}
+        onChange={(v) => put({ start_stream: v })}
+      />
+      <Switch label="Start recording" checked={z.record} onChange={(v) => put({ record: v })} />
+      <Switch label="Add a marker" checked={z.marker} onChange={(v) => put({ marker: v })} />
+      <Switch
+        label="Say in chat"
+        checked={z.chat !== null}
+        onChange={(v) => put({ chat: v ? 'We’re live!' : null })}
+      />
+      {z.chat !== null && (
+        <Field label="Message" error={err?.field === 'at_zero.chat' ? err.message : null}>
+          {(p) => (
+            <Input
+              {...p}
+              value={z.chat ?? ''}
+              maxLength={400}
+              onChange={(e) => put({ chat: e.target.value })}
+            />
+          )}
+        </Field>
+      )}
+    </fieldset>
   )
 }

@@ -336,17 +336,28 @@ export class LayerWidget implements WidgetView {
   private countdownText(left: number): string {
     const c = this.config()
     if (!c || c.type !== 'text') return clockText(left)
+    // Late: "+01:23" counting up, when asked.
+    if (left <= 0 && c.countdown_up) return `+${clockText(Math.floor(-left))}`
     if (left <= 0 && typeof c.countdown_done === 'string' && c.countdown_done.trim())
       return safeText(c.countdown_done, 80)
     const src = safeText(c.text, 500)
     return src.includes('{time}') ? src.split('{time}').join(clockText(left)) : clockText(left)
   }
 
+  /** Start show's countdown end, when this timer follows it and one is running. */
+  private showEnds(): number | null {
+    const c = this.config()
+    if (!c || c.type !== 'text' || c.countdown_show === false) return null
+    return this.ctx.state.show?.countdown_ends_at ?? null
+  }
+
   private tick(): void {
     if (this.countFrom > 0) {
-      const left = (this.endsAt - Date.now()) / 1000
+      const c = this.config()
+      const ends = this.showEnds() ?? this.endsAt
+      const left = (ends - Date.now()) / 1000
       this.setText(this.countdownText(left))
-      if (left <= 0) this.stopTicking()
+      if (left <= 0 && !(c?.type === 'text' && c.countdown_up)) this.stopTicking()
       return
     }
     if (this.items.length < 2 || !this.textEl) return
@@ -398,7 +409,8 @@ export class LayerWidget implements WidgetView {
     if (this.countFrom > 0) {
       if (!this.endsAt) this.endsAt = Date.now() + this.countFrom * 1000
       this.tick()
-      if (this.endsAt > Date.now()) this.timer = setInterval(() => this.tick(), 1000)
+      if (this.endsAt > Date.now() || c.countdown_up || this.showEnds())
+        this.timer = setInterval(() => this.tick(), 1000)
     } else if (this.items.length > 1) {
       const every = num(c.rotate_s, 2, 60, 5) * 1000
       this.timer = setInterval(() => this.tick(), every)
@@ -451,11 +463,21 @@ export class LayerWidget implements WidgetView {
   }
 
   onVisibility(visible: boolean): void {
+    const back = visible && !this.visible
     this.visible = visible
     this.el.classList.toggle('is-paused', !visible)
     if (!this.shown) return
+    // On air again: the timer starts from the top (unless the streamer turned that off).
+    const c = this.config()
+    if (back && this.countFrom > 0 && !(c?.type === 'text' && c.countdown_restart === false))
+      this.endsAt = 0
     if (visible) this.startTicking()
     else this.stopTicking()
+  }
+
+  /** Start show's countdown started, ended or was cancelled. */
+  onState(): void {
+    if (this.shown && this.countFrom > 0 && this.visible) this.startTicking()
   }
 
   destroy(): void {

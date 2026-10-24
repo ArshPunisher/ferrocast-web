@@ -388,6 +388,55 @@ describe('library layers', () => {
     expect(t()).toBe('Live now')
   })
 
+  it('a countdown starts again each time it comes on air, unless told not to', () => {
+    scenePage([layer('cd', { type: 'text', text: '{time}', countdown: 120 })])
+    const t = () => (deepAll(root, '.fc-lt')[0] as HTMLElement).textContent
+    vi.advanceTimersByTime(30_000)
+    expect(t()).toBe('01:30')
+    rt.setVisible(false)
+    vi.advanceTimersByTime(60_000)
+    rt.setVisible(true)
+    expect(t()).toBe('02:00')
+    rt.apply(
+      frame(
+        'config',
+        overlay([
+          layer('cd', { type: 'text', text: '{time}', countdown: 120, countdown_restart: false }),
+        ]),
+      ),
+    )
+    vi.advanceTimersByTime(10_000)
+    rt.setVisible(false)
+    vi.advanceTimersByTime(20_000)
+    rt.setVisible(true)
+    expect(t()).toBe('01:30')
+  })
+
+  it('a countdown follows Start show, and can count up when late', () => {
+    scenePage([layer('cd', { type: 'text', text: '{time}', countdown: 300, countdown_up: true })])
+    const t = () => (deepAll(root, '.fc-lt')[0] as HTMLElement).textContent
+    expect(t()).toBe('05:00')
+    rt.apply(frame('state', { show: { countdown_ends_at: Date.now() + 90_000 } }))
+    expect(t()).toBe('01:30')
+    vi.advanceTimersByTime(95_000)
+    expect(t()).toBe('+00:05')
+    // A timer told not to follow the show keeps its own.
+    rt.apply(
+      frame(
+        'config',
+        overlay([
+          layer('cd', { type: 'text', text: '{time}', countdown: 300, countdown_show: false }),
+        ]),
+      ),
+    )
+    rt.setVisible(false)
+    rt.setVisible(true)
+    expect(t()).toBe('05:00')
+    // Bad show values are ignored.
+    rt.apply(frame('state', { show: { countdown_ends_at: 'soon' as unknown as number } }))
+    expect(t()).toBe('05:00')
+  })
+
   it('draws silhouettes, patterns, frame variants and text effects; bad values are ignored', () => {
     scenePage([
       layer('clip', { type: 'shape', shape: 'rect', fill: '#ff0000', clip: 'star' }),

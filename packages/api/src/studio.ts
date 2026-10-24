@@ -289,6 +289,30 @@ export interface ShowConfig {
   cam_sources: string[]
   min_disk_gb: number
   platforms: ChatPlatform[]
+  /** When the countdown reaches zero: each action on or off. */
+  at_zero?: AtZero
+}
+
+export interface AtZero {
+  /** Switch OBS to the live scene. */
+  switch: boolean
+  /** Unmute the pre-flight mics. */
+  unmute: boolean
+  /** Press OBS's Start Streaming, when it isn't streaming yet. */
+  start_stream: boolean
+  record: boolean
+  /** Say this in chat; null is off. */
+  chat: string | null
+  marker: boolean
+}
+
+export const AT_ZERO_DEFAULT: AtZero = {
+  switch: true,
+  unmute: false,
+  start_stream: false,
+  record: false,
+  chat: null,
+  marker: true,
 }
 
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
