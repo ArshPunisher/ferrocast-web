@@ -209,6 +209,41 @@ test.describe('go live everywhere', () => {
     ).toHaveCount(0)
   })
 
+  test('vertical cut from the stream: mark the boxes, pick a layout, save, and it runs', async ({
+    page,
+  }) => {
+    await open(page, 'studio/vertical')
+    const source = panel(page, 'Vertical stream')
+    await source.getByText('Cut it from your stream').click()
+    await expect(
+      page.getByText('Ferrocast cuts the vertical picture from your stream.'),
+    ).toBeVisible()
+    const editor = panel(page, 'Vertical layout')
+    await expect(editor.getByRole('img', { name: 'What’s on air in OBS' })).toBeVisible()
+    const camera = editor.getByRole('group', { name: /Camera box/ })
+    const before = await camera.evaluate((el) => (el as HTMLElement).style.left)
+    await camera.focus()
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    expect(await camera.evaluate((el) => (el as HTMLElement).style.left)).not.toBe(before)
+    await editor.getByText('Game only').click()
+    await expect(editor.getByRole('group', { name: /Camera box/ })).toHaveCount(0)
+    await editor.getByText('Camera on top').click()
+    await editor.getByRole('button', { name: 'Save layout' }).click()
+    await expect(page.getByText('Layout saved.')).toBeVisible()
+    await expect(editor.getByText('Tick a place on the left for it to start.')).toBeVisible()
+    await panel(page, 'Where it goes')
+      .getByRole('switch', { name: 'Stream to YouTube Shorts live' })
+      .click()
+    await demo(page, '(d) => { d.setGoLive({ points_here: true }); d.studio.obs.streaming = true }')
+    await expect(
+      editor.getByText('Making the vertical picture on your graphics card.'),
+    ).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText('YouTube Shorts live: Live')).toBeVisible({ timeout: 8000 })
+  })
+
   test('the platform list reorders from the keyboard', async ({ page }) => {
     await open(page, 'studio/golive')
     const p = panel(page, 'Your platforms')
@@ -259,6 +294,11 @@ test.describe('go live everywhere', () => {
         .getByRole('switch', { name: 'Stream to YouTube Shorts live' })
         .click()
       await expect(page.getByText('YouTube Shorts live: Live')).toBeVisible({ timeout: 8000 })
+      // With the cut editor open too.
+      await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+      await expect(
+        panel(page, 'Vertical layout').getByRole('group', { name: /Game box/ }),
+      ).toBeVisible()
       const r = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze()

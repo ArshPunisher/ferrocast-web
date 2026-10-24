@@ -97,6 +97,7 @@ export function useMerged(view: GoLiveView | null): GoLiveView | null {
     vertical_live: frame.vertical_live ?? view.vertical_live,
     vertical_stats: frame.vertical_stats ?? view.vertical_stats,
     destinations: frame.destinations,
+    cut: frame.cut_state === undefined ? view.cut : { ...view.cut, state: frame.cut_state },
   }
 }
 

@@ -1,14 +1,16 @@
-// Vertical (2.0, A2.3): Studio's second tab. Owner's pick 4B (24 Oct board): its own tab with
-// where the upright picture comes from (OBS's vertical canvas now; cut from the normal stream
-// next) and where it goes (YouTube Shorts live, servers of your own). API.md §4 "Vertical".
+// Vertical (2.0, A2.3 and A2.4): Studio's second tab. Owner's pick 4B (24 Oct board): its own
+// tab with where the upright picture comes from (OBS's vertical canvas, or cut from the normal
+// stream with the 5A editor) and where it goes (YouTube Shorts live, servers of your own).
+// API.md §4 "Vertical" and "Cut from the stream".
 
 import { useEffect } from 'react'
 import { ArrowCounterClockwise, CheckCircle, DeviceMobile, Info, Plug } from '@phosphor-icons/react'
-import type { GoLiveView, VerticalObs } from '@ferrocast/api'
-import { Badge, Button, Skeleton, cx } from '@ferrocast/ui'
+import type { GoLiveView, VerticalObs, VerticalSource } from '@ferrocast/api'
+import { Button, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
+import { CutEditor } from './cut-editor'
 import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
 
 export function VerticalTab() {
@@ -39,9 +41,10 @@ export function VerticalTab() {
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-5">
         {view.vertical_live && <LiveCard view={view} onSaved={res.reload} canvas="vertical" />}
+        {view.cut.source === 'cut' && <CutEditor cut={view.cut} onSaved={res.reload} />}
         <Platforms view={view} onSaved={res.reload} canvas="vertical" />
       </div>
-      <Source view={view} onVertical={setVertical} />
+      <Source view={view} onVertical={setVertical} onSource={res.reload} />
     </div>
   )
 }
@@ -50,9 +53,11 @@ export function VerticalTab() {
 function Source({
   view,
   onVertical,
+  onSource,
 }: {
   view: GoLiveView
   onVertical: (v: VerticalObs | null) => void
+  onSource: () => void
 }) {
   const api = useGoLive()
   const { run, busy } = useAction()
@@ -67,28 +72,42 @@ function Source({
     void run('restore', () => api.restoreVertical(), {
       success: `Aitum Vertical streams to ${before ?? 'its old setting'} again.`,
     }).then((r) => r !== undefined && onVertical(r))
+  const source = view.cut.source
+  const pick = (s: VerticalSource) =>
+    s !== source &&
+    void run(`source:${s}`, () => api.setVerticalSource(s), {
+      success:
+        s === 'cut'
+          ? 'Ferrocast cuts the vertical picture from your stream.'
+          : 'The vertical picture comes from OBS’s vertical canvas.',
+    }).then((r) => r && onSource())
   return (
     <Panel title="Vertical stream" description="Camera on top, game below, for people on phones.">
-      <ul
-        className="m-0 flex list-none flex-col gap-3 p-0"
-        aria-label="Where the vertical picture comes from"
-      >
+      <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+        <legend className="sr-only">Where the vertical picture comes from</legend>
         <Option
           title="Cut it from your stream"
           text="Works with any OBS: mark your camera and game once, Ferrocast stacks them upright."
-          checked={false}
-          disabled
-          badge="Next update"
+          checked={source === 'cut'}
+          busy={busy === 'source:cut'}
+          onPick={() => pick('cut')}
         />
         <Option
           title="OBS’s vertical canvas"
           text="Best quality. OBS sends a second, upright stream (Aitum Vertical, or OBS 32’s second canvas)."
-          checked
+          checked={source === 'canvas'}
+          busy={busy === 'source:canvas'}
+          onPick={() => pick('canvas')}
           found={v ? 'Aitum Vertical found' : null}
         />
-      </ul>
+      </fieldset>
       <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[13.5px] text-text-2">
-        {!obs.connected ? (
+        {source === 'cut' ? (
+          <p className="m-0">
+            The layout is on the left. Your camera from the normal stream is made bigger, so a small
+            camera looks softer; OBS’s vertical canvas looks sharper.
+          </p>
+        ) : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
             <a
@@ -156,7 +175,7 @@ function Source({
             {view.vertical_stats.fps ? ` at ${view.vertical_stats.fps} fps` : ''} coming in from OBS
           </p>
         )}
-        <ByHand vertical />
+        {source === 'canvas' && <ByHand vertical />}
       </div>
     </Panel>
   )
@@ -166,25 +185,35 @@ function Option({
   title,
   text,
   checked,
-  disabled,
-  badge,
+  busy,
+  onPick,
   found,
 }: {
   title: string
   text: string
   checked: boolean
-  disabled?: boolean
-  badge?: string
+  busy?: boolean
+  onPick: () => void
   found?: string | null
 }) {
   return (
-    <li
+    <label
       className={cx(
-        'flex flex-col gap-1 rounded-[12px] border p-3',
-        checked ? 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]' : 'border-line',
-        disabled && 'border-dashed bg-surface-2',
+        'flex cursor-pointer flex-col gap-1 rounded-[12px] border p-3 has-[:focus-visible]:shadow-[var(--fc-focus)]',
+        checked
+          ? 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]'
+          : 'border-line hover:border-line-strong',
+        busy && 'opacity-80',
       )}
     >
+      <input
+        type="radio"
+        name="vertical-source"
+        className="sr-only"
+        checked={checked}
+        disabled={busy}
+        onChange={onPick}
+      />
       <span className="flex items-center gap-2 text-[14px] font-bold text-text">
         <span
           aria-hidden
@@ -194,8 +223,6 @@ function Option({
           )}
         />
         {title}
-        {checked && <span className="sr-only">(in use)</span>}
-        {badge && <Badge>{badge}</Badge>}
       </span>
       <span className="pl-6 text-[12.5px] text-text-2">{text}</span>
       {found && (
@@ -204,6 +231,6 @@ function Option({
           {found}
         </span>
       )}
-    </li>
+    </label>
   )
 }
