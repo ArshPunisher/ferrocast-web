@@ -6,6 +6,7 @@
 import { render, select } from '../alert'
 import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
+import { DemoObsTheme } from './features/obs-theme'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
@@ -359,6 +360,7 @@ export class DemoEngine {
   private mediaBlobs = new Map<string, Blob>()
   /** Designs: the catalogue, your own, Use, the alert design in use, share files. */
   readonly designs: DemoDesigns
+  readonly obsTheme: DemoObsTheme
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -674,6 +676,13 @@ export class DemoEngine {
       },
       opts.designs ?? [],
     )
+    this.obsTheme = new DemoObsTheme({
+      studio: this.studio,
+      designs: this.designs,
+      overlays: () => this.overlays,
+      obsConnected: () => this.connectors.obs.state === 'connected',
+      now: () => Date.now(),
+    })
     this.recap = new DemoRecap(() => ({
       events: this.events,
       stats: this.stats,
@@ -1689,6 +1698,7 @@ export class DemoEngine {
       this.history,
       this.smart,
       this.cloudBackups,
+      this.obsTheme,
       this.designs,
       this.studio,
       this.golive,

@@ -435,6 +435,33 @@ export class DemoDesigns {
     return { alert_design: alert, overlays }
   }
 
+  /** One theme screen on a new overlay, or on `overlayId` (its URL stays): Theme in OBS. */
+  placeScreen(designId: string, key: string, overlayId: string | null): Overlay {
+    const d = this.find(designId)
+    if (d.kind !== 'theme')
+      throw new HttpError(400, 'invalid', 'design: only a theme can go into OBS.')
+    const s = d.content.scenes.find((x) => x.key === key)
+    if (!s) throw new HttpError(400, 'invalid', `screens: this theme has no screen "${key}".`)
+    const layers = d.branded ? clone(s.layers) : s.layers.filter((l) => !isBrandLayer(l))
+    const link: DesignRef = { id: d.id, scene: s.key, branded: d.branded }
+    if (overlayId) {
+      const o = clone(this.host.findOverlay(overlayId))
+      return this.host.putOverlay({
+        ...o,
+        width: s.width,
+        height: s.height,
+        widgets: layers,
+        design: link,
+      })
+    }
+    return this.host.newOverlay(short(`${s.name} (${d.name})`, 60), s, link, layers)
+  }
+
+  /** Sets the alert design in use (Theme in OBS's alert look, and its undo). */
+  setActiveAlert(id: string | null): string | null {
+    return this.setActive(id)
+  }
+
   /** Checks a scene's layers the way the engine checks an overlay. */
   static checkLayout(name: string, width: number, height: number, widgets: Widget[]): void {
     const e = validateLayout(name, width, height, widgets)
