@@ -128,6 +128,18 @@ import chalkMenu from './alerts/chalk-menu'
 import cafeCorner from './themes/cafe-corner'
 import labelKraft from './widgets/label-kraft'
 import eventsQuestLog from './widgets/events-quest-log'
+// 25 Oct: the motion themes (a live world, music that moves, a sound element; eight screens)
+import hexPulse from './themes/hex-pulse'
+import nightDrive from './themes/night-drive'
+import wasteland from './themes/wasteland'
+import circuit from './themes/circuit'
+import neonTunnel from './themes/neon-tunnel'
+import nightDunes from './themes/night-dunes'
+import lavaForge from './themes/lava-forge'
+import arenaLights from './themes/arena-lights'
+import codeRainCity from './themes/code-rain-city'
+import orbit from './themes/orbit'
+import deepSonar from './themes/deep-sonar'
 
 export const BUILTINS: readonly Design[] = [
   moltenPlate,
@@ -255,4 +267,15 @@ export const BUILTINS: readonly Design[] = [
   cafeCorner,
   labelKraft,
   eventsQuestLog,
+  hexPulse,
+  nightDrive,
+  wasteland,
+  circuit,
+  neonTunnel,
+  nightDunes,
+  lavaForge,
+  arenaLights,
+  codeRainCity,
+  orbit,
+  deepSonar,
 ]

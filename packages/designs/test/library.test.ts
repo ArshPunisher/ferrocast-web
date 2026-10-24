@@ -174,7 +174,9 @@ describe('safe for streaming', () => {
             c !== null &&
             ((c.type === 'shape' && (c.fill || c.pattern)) ||
               c.type === 'image' ||
-              c.type === 'text')
+              c.type === 'text' ||
+              c.type === 'fx' ||
+              c.type === 'music')
           if (covers && cx > l.x && cx < l.x + l.w && cy > l.y && cy < l.y + l.h)
             expect.fail(`${d.id}/${s.key}: '${l.id}' covers the camera`)
         }
@@ -192,8 +194,9 @@ describe('safe for streaming', () => {
     }
     for (const d of BUILTINS) expect(JSON.stringify(d).length, d.id).toBeLessThanOrEqual(64 * 1024)
     // Only the engine reads the catalogue (never an OBS page). 1.6 MB since each look's CSS
-    // is tied to its own frame (kit.ts scopeCss), about 60 KB more.
-    expect(JSON.stringify(catalog()).length).toBeLessThanOrEqual(1_600_000)
+    // is tied to its own frame (kit.ts scopeCss), about 60 KB more; 1.8 MB with the eleven
+    // motion themes of 25 Oct (eight screens each).
+    expect(JSON.stringify(catalog()).length).toBeLessThanOrEqual(1_800_000)
   })
 
   it('every live scene keeps the middle of the screen clear for the game', () => {

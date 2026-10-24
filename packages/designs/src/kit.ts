@@ -496,3 +496,21 @@ export const mat = (id: string, hole: Box, color: string, width: number, radius 
     radius,
   })
 }
+
+// ---------------------------------------------------------------- motion, music and sound (25 Oct)
+
+type FxCfg = Omit<Extract<LayerConfig, { type: 'fx' }>, 'type'>
+type MusicCfg = Omit<Extract<LayerConfig, { type: 'music' }>, 'type'>
+type SoundCfg = Omit<Extract<LayerConfig, { type: 'sound' }>, 'type'>
+
+/** A motion background: a game world or motion loop drawn live (moves with the music when reactive). */
+export const fx = (id: string, b: Box, cfg: FxCfg, extra: Partial<Widget> = {}) =>
+  layer(id, b, { type: 'fx', ...cfg }, extra)
+
+/** The wave player or the heartbeat line with the song; shown only while music plays. */
+export const musicPiece = (id: string, b: Box, cfg: MusicCfg) =>
+  layer(id, b, { type: 'music', ...cfg })
+
+/** The sound element: heard, not seen, so it sits in a corner at its smallest. */
+export const sound = (id: string, cfg: SoundCfg) =>
+  layer(id, [0, 0, 8, 8], { type: 'sound', ...cfg })

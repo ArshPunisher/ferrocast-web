@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BRAND_SPOTS, EVENT_KEYS, isBrandLayer, validateDesign, type Design } from '@ferrocast/api'
+import {
+  BRAND_SPOTS,
+  EVENT_KEYS,
+  SCENE_KEYS,
+  isBrandLayer,
+  validateDesign,
+  type Design,
+} from '@ferrocast/api'
 import { BUILTINS, catalog } from '../src'
 
 const of = <K extends Design['kind']>(k: K) =>
@@ -47,13 +54,15 @@ describe('built-in catalogue', () => {
     const themes = of('theme')
     expect(themes.length).toBeGreaterThanOrEqual(12)
     for (const t of themes) {
-      expect(t.content.scenes.map((s) => s.key).sort()).toEqual([
-        'brb',
-        'ending',
-        'in_game',
-        'just_chatting',
-        'starting_soon',
-      ])
+      const keys = t.content.scenes.map((s) => s.key)
+      for (const k of ['brb', 'ending', 'in_game', 'just_chatting', 'starting_soon'])
+        expect(keys, t.id).toContain(k)
+      // The 25 Oct break screens come as a set, and nothing else (custom keys are the streamer's).
+      expect(
+        keys.every((k) => (SCENE_KEYS as readonly string[]).includes(k)),
+        t.id,
+      ).toBe(true)
+      expect(new Set(keys).size, `${t.id} lists a screen twice`).toBe(keys.length)
       for (const s of t.content.scenes) {
         expect(s.layers.filter(isBrandLayer), `${t.id}/${s.key}`).toHaveLength(1)
         expect(
