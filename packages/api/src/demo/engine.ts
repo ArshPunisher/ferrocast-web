@@ -680,6 +680,7 @@ export class DemoEngine {
       studio: this.studio,
       designs: this.designs,
       overlays: () => this.overlays,
+      renameOverlay: (id, name) => this.putOverlay({ ...this.findOverlay(id), name }),
       obsConnected: () => this.connectors.obs.state === 'connected',
       now: () => Date.now(),
     })
@@ -1278,6 +1279,7 @@ export class DemoEngine {
       return undefined
     }
     if (is('POST', 'overlays', null, 'regenerate-url')) return this.regenerate(b ?? '')
+    if (is('POST', 'overlays', null, 'follow-design')) return this.designs.followDesign(b ?? '')
     if (is('POST', 'overlays', null, 'add-to-obs')) {
       const o = this.findOverlay(b ?? '')
       if (this.connectors.obs.state !== 'connected')
@@ -1936,12 +1938,18 @@ export class DemoEngine {
     DemoDesigns.checkLayout(name, width, height, widgets)
     this.designs.checkBranding(cur, widgets)
     // `design` can't be changed here (API.md §4 Overlays): it stays what "Use" set.
+    // Like the engine: a changed layout stops the overlay following its design.
+    const handEdited =
+      JSON.stringify(widgets) !== JSON.stringify(cur.widgets) ||
+      width !== cur.width ||
+      height !== cur.height
     return this.putOverlay({
       ...cur,
       name,
       width,
       height,
       widgets: clone(widgets),
+      design: cur.design ? { ...cur.design, follows: !!cur.design.follows && !handEdited } : null,
       updated_at: Date.now(),
     })
   }

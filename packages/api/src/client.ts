@@ -278,6 +278,8 @@ export class FerroClient {
   regenerateUrl = (id: string) => this.post<Overlay>(`/api/v1/overlays/${enc(id)}/regenerate-url`)
   addToObs = (id: string) =>
     this.post<{ scene: string; source: string }>(`/api/v1/overlays/${enc(id)}/add-to-obs`)
+  /** The overlay takes its design's layout again and follows it. */
+  followDesign = (id: string) => this.post<Overlay>(`/api/v1/overlays/${enc(id)}/follow-design`)
   themes = () => this.get<Theme[]>('/api/v1/themes')
 
   // Alerts

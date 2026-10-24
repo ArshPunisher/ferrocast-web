@@ -297,6 +297,7 @@ export class DemoDesigns {
     } as Design
     this.check(saved)
     this.mine[i] = saved
+    this.refreshFollowing(saved)
     return clone(saved)
   }
 
@@ -406,7 +407,7 @@ export class DemoDesigns {
       )
     for (const s of list) {
       const layers = d.branded ? clone(s.layers) : s.layers.filter((l) => !isBrandLayer(l))
-      const link: DesignRef = { id: d.id, scene: s.key, branded: d.branded }
+      const link: DesignRef = { id: d.id, scene: s.key, branded: d.branded, follows: true }
       if (overlayId) {
         const o = clone(this.host.findOverlay(overlayId))
         overlays.push(
@@ -443,7 +444,7 @@ export class DemoDesigns {
     const s = d.content.scenes.find((x) => x.key === key)
     if (!s) throw new HttpError(400, 'invalid', `screens: this theme has no screen "${key}".`)
     const layers = d.branded ? clone(s.layers) : s.layers.filter((l) => !isBrandLayer(l))
-    const link: DesignRef = { id: d.id, scene: s.key, branded: d.branded }
+    const link: DesignRef = { id: d.id, scene: s.key, branded: d.branded, follows: true }
     if (overlayId) {
       const o = clone(this.host.findOverlay(overlayId))
       return this.host.putOverlay({
@@ -455,6 +456,41 @@ export class DemoDesigns {
       })
     }
     return this.host.newOverlay(short(`${s.name} (${d.name})`, 60), s, link, layers)
+  }
+
+  /** Overlays made from `d` that still follow it take its new layout (pick 6A). */
+  private refreshFollowing(d: Design) {
+    const scenes = d.kind === 'theme' ? d.content.scenes : d.kind === 'scene' ? [d.content] : []
+    for (const o of this.host.overlays()) {
+      if (!o.design?.follows || o.design.id !== d.id) continue
+      const s = scenes.find((x) => x.key === o.design?.scene)
+      if (!s) continue
+      const layers = d.branded ? clone(s.layers) : s.layers.filter((l) => !isBrandLayer(l))
+      this.host.putOverlay({ ...clone(o), width: s.width, height: s.height, widgets: layers })
+    }
+  }
+
+  /** "Follow the theme again". */
+  followDesign(overlayId: string): Overlay {
+    const o = this.host.findOverlay(overlayId)
+    if (!o.design)
+      throw new HttpError(400, 'invalid', 'design: this overlay wasn’t made from a design.')
+    const d = this.find(o.design.id)
+    const s =
+      d.kind === 'theme'
+        ? d.content.scenes.find((x) => x.key === o.design?.scene)
+        : d.kind === 'scene'
+          ? d.content
+          : undefined
+    if (!s) throw new HttpError(400, 'invalid', 'design: that screen isn’t in the design any more.')
+    const layers = d.branded ? clone(s.layers) : s.layers.filter((l) => !isBrandLayer(l))
+    return this.host.putOverlay({
+      ...clone(o),
+      width: s.width,
+      height: s.height,
+      widgets: layers,
+      design: { id: d.id, scene: s.key, branded: d.branded, follows: true },
+    })
   }
 
   /** Sets the alert design in use (Theme in OBS's alert look, and its undo). */

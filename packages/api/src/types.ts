@@ -562,6 +562,8 @@ export interface DesignRef {
   id: string
   scene: string
   branded: boolean
+  /** Changes when its design does; false once the layout is edited by hand (pick 6A). */
+  follows?: boolean
 }
 
 export interface Overlay {

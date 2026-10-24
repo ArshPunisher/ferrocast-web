@@ -413,6 +413,7 @@ describe('demo engine: design routes', () => {
       id: 'builtin.forge',
       scene: 'in_game',
       branded: true,
+      follows: true,
     })
     // The mark of a built-in can't be edited away.
     const o = used.overlays[0]!

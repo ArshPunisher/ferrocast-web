@@ -3,7 +3,8 @@
 
 import type { FerroClient } from './client'
 import type { ObsScenes, ShowStep } from './studio'
-import type { Scene } from './types'
+import { isBrandLayer } from './design'
+import type { Scene, ThemeDesign, Widget } from './types'
 
 export type ThemeRole = 'starting' | 'live' | 'brb' | 'ending'
 
@@ -154,7 +155,9 @@ export function guessThemePlan(
   old: OldWidget[],
   skip: string[] = [],
 ): ThemePlan {
-  const prefix = `${[...themeName.trim()]
+  // "Forge (mine)" and "Forge copy" name their scenes like Forge (as the engine does).
+  const base = themeName.trim().replace(/ (\(mine\)|copy)$/, '')
+  const prefix = `${[...base]
     .slice(0, MAX_PREFIX - 3)
     .join('')
     .trimEnd()} · `
@@ -270,4 +273,111 @@ export function obsThemeApi(c: FerroClient) {
     /** Takes it out again: only what Ferrocast added. */
     takeOut: () => c.request<ThemeObsResult>('DELETE', '/api/v1/obs/theme'),
   }
+}
+
+// ---------------------------------------------------------------- Make it yours (pick 5A)
+
+export type ThemeFont = 'theme' | 'bold' | 'clean' | 'mono'
+
+export const THEME_FONTS: Record<Exclude<ThemeFont, 'theme'>, string> = {
+  bold: 'Bricolage Grotesque',
+  clean: 'Hanken Grotesk',
+  mono: 'JetBrains Mono',
+}
+
+export interface Restyle {
+  /** The new main colour (#rrggbb). */
+  accent?: string | null
+  font?: ThemeFont
+  /** Your name on the platforms ("arxpunisher"): fills the theme's "yourname". */
+  handle?: string
+  /** A library image for your logo, where the theme had its mark. */
+  logo?: string | null
+}
+
+const HEX = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i
+
+function saturation(hex: string): number {
+  const n = parseInt(hex.slice(1, 7), 16)
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255) as [
+    number,
+    number,
+    number,
+  ]
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  return max === 0 ? 0 : (max - min) / max
+}
+
+function walk(v: unknown, f: (s: string) => string): unknown {
+  if (typeof v === 'string') return f(v)
+  if (Array.isArray(v)) return v.map((x) => walk(x, f))
+  if (v && typeof v === 'object')
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x, f)]))
+  return v
+}
+
+/** The theme's main colour: the most used strong colour in its layers. */
+export function themeAccent(d: ThemeDesign): string | null {
+  const count = new Map<string, number>()
+  walk(
+    d.content.scenes.map((s) => s.layers.map((l) => l.config)),
+    (s) => {
+      const m = HEX.exec(s)
+      if (m && saturation(s) > 0.45) {
+        const k = `#${m[1]!.toLowerCase()}`
+        count.set(k, (count.get(k) ?? 0) + 1)
+      }
+      return s
+    },
+  )
+  let best: string | null = null
+  for (const [k, n] of count) if (!best || n > (count.get(best) ?? 0)) best = k
+  return best
+}
+
+/**
+ * The theme with your colour, font, name and logo, on every screen. Brand marks become your
+ * logo (or go, without one): the result is always unbranded, ready to save as your own.
+ */
+export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
+  const from = themeAccent(d)
+  const to = r.accent && HEX.test(r.accent) ? r.accent.slice(0, 7).toLowerCase() : null
+  const handle = (r.handle ?? '').trim().replace(/^@/, '')
+  const font = r.font && r.font !== 'theme' ? THEME_FONTS[r.font] : null
+  const paint = (s: string) => {
+    let out = s
+    if (from && to) {
+      const m = HEX.exec(out)
+      if (m && `#${m[1]!.toLowerCase()}` === from) out = to + (m[2] ?? '')
+    }
+    if (handle) out = out.replace(/yourname/gi, handle)
+    return out
+  }
+  const scenes = d.content.scenes.map((s) => {
+    const layers: Widget[] = []
+    for (const l of s.layers) {
+      if (isBrandLayer(l) || (l.kind === 'layer' && l.id.startsWith('logo'))) {
+        if (r.logo)
+          layers.push({
+            ...l,
+            id: l.id.startsWith('logo') ? l.id : `logo-${l.id}`,
+            config: { type: 'image', media: r.logo, fit: 'contain' },
+          } as Widget)
+        continue
+      }
+      const config = walk(l.config, paint) as Widget['config']
+      const c = config as { type?: string; font?: string }
+      if (
+        font &&
+        l.kind === 'layer' &&
+        c.type === 'text' &&
+        (font === THEME_FONTS.mono || c.font !== THEME_FONTS.mono)
+      )
+        c.font = font
+      layers.push({ ...l, config } as Widget)
+    }
+    return { ...s, layers }
+  })
+  return { ...d, branded: false, content: { ...d.content, scenes } }
 }

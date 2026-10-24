@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { checkThemePlan, guessThemePlan, obsThemeApi, planCounts } from '../src/obs-theme'
+import {
+  checkThemePlan,
+  guessThemePlan,
+  obsThemeApi,
+  planCounts,
+  restyleTheme,
+  themeAccent,
+} from '../src/obs-theme'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
@@ -142,7 +149,7 @@ describe('guesses, as the engine makes them', () => {
 
 describe('demo: a theme into OBS', () => {
   it('puts every screen in OBS and Undo takes only that away', async () => {
-    const { engine, api } = demo()
+    const { engine, client, api } = demo()
     engine.obsTheme.seedOldWidget('Gameplay', 'Alert box', 'StreamElements')
     const before = structuredClone(engine.studio.obs)
     const roles = [engine.studio.showCfg.starting_scene, engine.studio.scenesCfg.brb_scene]
@@ -179,9 +186,19 @@ describe('demo: a theme into OBS', () => {
       2,
     )
 
-    // Another theme waits until this one is out.
-    const clash = await refusal(api.apply('builtin.prism'))
-    expect([clash.status, clash.code]).toEqual([409, 'theme_in_obs'])
+    // Another theme takes its place in the same scenes and overlays.
+    const urls = (await client.overlays()).map((o) => o.url)
+    const sw = await api.apply('builtin.prism')
+    expect(sw.steps[0]!.id).toBe('switch_theme')
+    expect(engine.studio.obs.scenes.length).toBe(count)
+    expect(engine.studio.obs.scenes.map((s) => s.name)).toContain('Prism · In game')
+    expect((await client.overlays()).map((o) => o.url)).toEqual(urls)
+    const themed = (await client.overlays()).filter((o) => o.design)
+    expect(themed).toHaveLength(5)
+    expect(
+      themed.every((o) => o.name.endsWith('(Prism)') && o.design!.id === 'builtin.prism'),
+    ).toBe(true)
+    expect(engine.studio.showCfg.live_scene).toBe('Prism · In game')
 
     const u = await api.takeOut()
     expect(u.applied).toBeNull()
@@ -219,5 +236,113 @@ describe('demo: a missing alert design', () => {
     expect((await api.current())!.design_name).toBe('Ghost')
     await api.takeOut()
     expect(engine.studio.obs).toEqual(before)
+  })
+})
+
+describe('make it yours', () => {
+  it('changes the colour, font, name and mark on every screen', () => {
+    const t = theme('builtin.forge', 'Forge')
+    if (t.kind !== 'theme') throw new Error('theme')
+    for (const s of t.content.scenes)
+      s.layers = [
+        {
+          id: 'bar',
+          kind: 'layer',
+          x: 0,
+          y: 0,
+          w: 100,
+          h: 20,
+          config: { type: 'shape', shape: 'rect', fill: '#ffa424', fill2: '#ffa42400' },
+        },
+        {
+          id: 'sub',
+          kind: 'layer',
+          x: 0,
+          y: 40,
+          w: 400,
+          h: 40,
+          config: {
+            type: 'text',
+            text: 'twitch.tv/yourname',
+            font: 'Hanken Grotesk',
+            color: '#eef0f4',
+          },
+        },
+        {
+          id: 'timer',
+          kind: 'layer',
+          x: 0,
+          y: 90,
+          w: 200,
+          h: 60,
+          config: { type: 'text', text: '{time}', font: 'JetBrains Mono', color: '#ffa424' },
+        },
+        {
+          id: 'mark',
+          kind: 'layer',
+          x: 1800,
+          y: 1000,
+          w: 60,
+          h: 50,
+          config: { type: 'brand', variant: 'mark' },
+        },
+      ] as never
+    expect(themeAccent(t)).toBe('#ffa424')
+    const r = restyleTheme(t, {
+      accent: '#2BB673',
+      font: 'bold',
+      handle: '@arxpunisher',
+      logo: 'm123',
+    })
+    if (r.kind !== 'theme') throw new Error('theme')
+    const [bar, sub, timer, logo] = r.content.scenes[0]!.layers.map(
+      (l) => l.config as unknown,
+    ) as Record<string, unknown>[]
+    expect([bar!.fill, bar!.fill2]).toEqual(['#2bb673', '#2bb67300'])
+    expect([sub!.text, sub!.font, sub!.color]).toEqual([
+      'twitch.tv/arxpunisher',
+      'Bricolage Grotesque',
+      '#eef0f4',
+    ])
+    expect([timer!.font, timer!.color]).toEqual(['JetBrains Mono', '#2bb673'])
+    expect(logo).toEqual({ type: 'image', media: 'm123', fit: 'contain' })
+    expect(r.branded).toBe(false)
+    // Without a logo the mark just goes; a second restyle finds the new colour.
+    const plain = restyleTheme(r, { accent: '#ff4fa3' })
+    if (plain.kind !== 'theme') throw new Error('theme')
+    expect(plain.content.scenes[0]!.layers).toHaveLength(3)
+    expect(themeAccent(plain)).toBe('#ff4fa3')
+  })
+
+  it('screens in OBS follow a theme you change, until edited by hand', async () => {
+    const { client, api } = demo()
+    const mine = await client.duplicateDesign('builtin.forge', 'Forge (mine)')
+    await api.apply(mine.id)
+    const brb = async () => (await client.overlays()).find((o) => o.design?.scene === 'brb')!
+    expect((await brb()).design!.follows).toBe(true)
+    const restyled = restyleTheme(mine as never, { handle: 'nova' })
+    if (restyled.kind !== 'theme') throw new Error('theme')
+    restyled.content.scenes.forEach((s) =>
+      s.layers.push({
+        id: 'extra',
+        kind: 'layer',
+        x: 0,
+        y: 0,
+        w: 40,
+        h: 40,
+        config: { type: 'shape', shape: 'rect', fill: '#ffffff' },
+      } as never),
+    )
+    await client.saveDesign(restyled)
+    expect((await brb()).widgets.some((w) => w.id === 'extra')).toBe(true)
+    const o = await brb()
+    const saved = await client.saveOverlay({
+      ...o,
+      widgets: o.widgets.filter((w) => w.id !== 'extra'),
+    })
+    expect(saved.design!.follows).toBe(false)
+    const back = await client.followDesign(o.id)
+    expect(back.design!.follows).toBe(true)
+    expect(back.url).toBe(o.url)
   })
 })

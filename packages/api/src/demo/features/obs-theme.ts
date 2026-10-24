@@ -25,6 +25,7 @@ export interface ObsThemeHost {
   studio: DemoStudio
   designs: DemoDesigns
   overlays(): Overlay[]
+  renameOverlay(id: string, name: string): Overlay
   obsConnected(): boolean
   now(): number
 }
@@ -181,17 +182,19 @@ export class DemoObsTheme {
 
   private apply(id: string, body: unknown): ThemeObsResult {
     const t = this.theme(id)
-    if (this.rec && this.rec.design_id !== t.id)
-      throw new HttpError(
-        409,
-        'theme_in_obs',
-        `${this.rec.design_name} is in OBS already.`,
-        'Take it out of OBS first (Studio, OBS), then put this one in.',
-      )
+    const switching = !!this.rec && this.rec.design_id !== t.id
     const obs = this.obs()
     const empty =
       body === undefined || body === null || (typeof body === 'object' && !Object.keys(body).length)
     const plan: ThemePlan = empty ? this.plan(id).plan : readPlan(body)
+    // No plan with a theme in OBS (Make it yours, again): the same screens as now.
+    const prev = this.rec
+    if (empty && prev)
+      plan.screens = plan.screens.map((p) =>
+        prev.screens.some((s) => s.key === p.key)
+          ? p
+          : { key: p.key, place: { kind: 'skip' }, under: null, role: null },
+      )
     const problem = checkThemePlan(
       plan,
       t.screens,
@@ -215,7 +218,16 @@ export class DemoObsTheme {
       scene_before: obs.current,
     }
     rec.at = this.host.now()
+    rec.design_id = t.id
+    rec.design_name = t.name
     const steps: ShowStep[] = []
+    if (switching)
+      steps.push({
+        id: 'switch_theme',
+        label: 'Theme',
+        status: 'done',
+        detail: `${t.name} takes the old theme’s place.`,
+      })
     const roles = this.roles()
     let starting: string | null = null
     for (const p of plan.screens) {
@@ -232,7 +244,34 @@ export class DemoObsTheme {
         (before && this.host.overlays().some((o) => o.id === before) ? before : null) ??
         this.host.overlays().find((o) => o.design?.id === t.id && o.design.scene === p.key)?.id ??
         null
-      const overlay = this.host.designs.placeScreen(t.id, p.key, existing)
+      let overlay = this.host.designs.placeScreen(t.id, p.key, existing)
+      // Switching theme: the overlay, its source and a scene Ferrocast made take new names.
+      const name = `${screen.name} (${t.name})`.slice(0, 60).trim()
+      if (overlay.name !== name) {
+        const [from, to] = [`Ferrocast: ${overlay.name}`, `Ferrocast: ${name}`]
+        overlay = this.host.renameOverlay(overlay.id, name)
+        for (const sc of obs.scenes)
+          for (const it of sc.items) if (it.source === from) it.source = to
+        rec.made_inputs = rec.made_inputs.map((n) => (n === from ? to : n))
+        rec.added_items = rec.added_items.map(([sc, n]) => [sc, n === from ? to : n])
+      }
+      const old = rec.screens.find((s) => s.key === p.key)?.scene
+      if (
+        p.place.kind === 'new' &&
+        old &&
+        old !== scene &&
+        rec.made_scenes.includes(old) &&
+        !obs.scenes.some((s) => s.name === scene)
+      ) {
+        const sc = obs.scenes.find((s) => s.name === old)
+        if (sc) {
+          sc.name = scene
+          for (const x of obs.scenes)
+            for (const it of x.items) if (it.source === old) it.source = scene
+          if (obs.current === old) obs.current = scene
+          rec.made_scenes = rec.made_scenes.map((n) => (n === old ? scene : n))
+        }
+      }
       let target = obs.scenes.find((s) => s.name === scene)
       if (!target) {
         target = { name: scene, items: [] }
