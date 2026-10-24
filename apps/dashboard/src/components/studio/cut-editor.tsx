@@ -152,14 +152,40 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
   )
 }
 
-/** What the cutter is doing, in one line. */
+/** What the cutter is doing, in one line (getting ffmpeg first, the first time). */
 function CutStatus({ cut }: { cut: CutView }) {
+  const api = useGoLive()
+  const { run, busy } = useAction()
   const s = cut.state
-  if (!cut.ffmpeg)
+  const f = cut.ffmpeg
+  if (f.state === 'downloading')
+    return (
+      <span className="inline-flex items-center gap-2 text-[13px] text-text-2" role="status">
+        Getting ffmpeg, once ({f.percent}%)
+        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3" aria-hidden>
+          <span className="block h-full bg-arc" style={{ width: `${f.percent}%` }} />
+        </span>
+      </span>
+    )
+  if (f.state === 'failed' || f.state === 'missing')
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2 text-[13px] text-warn">
+        <Warning size={15} weight="fill" aria-hidden />
+        {f.state === 'failed' ? f.reason : 'Cutting needs ffmpeg (about 25 MB, fetched once).'}
+        <Button
+          size="sm"
+          busy={busy === 'ffmpeg'}
+          onClick={() => void run('ffmpeg', () => api.getFfmpeg())}
+        >
+          {f.state === 'failed' ? 'Try again' : 'Get ffmpeg'}
+        </Button>
+      </span>
+    )
+  if (f.state === 'unsupported')
     return (
       <span className="inline-flex items-center gap-1.5 text-[13px] text-warn">
         <Warning size={15} weight="fill" aria-hidden />
-        Needs ffmpeg on this computer (on a Mac: brew install ffmpeg).
+        Install ffmpeg from ffmpeg.org; Ferrocast can’t fetch it for this computer.
       </span>
     )
   if (!s)

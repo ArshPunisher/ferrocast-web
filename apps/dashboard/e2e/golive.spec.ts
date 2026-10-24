@@ -244,6 +244,17 @@ test.describe('go live everywhere', () => {
     await expect(page.getByText('YouTube Shorts live: Live')).toBeVisible({ timeout: 8000 })
   })
 
+  test('cutting fetches ffmpeg the first time, with progress', async ({ page }) => {
+    await open(page, 'studio/vertical')
+    await demo(page, '(d) => d.setGoLive({ ffmpeg_missing: true })')
+    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    const editor = panel(page, 'Vertical layout')
+    await expect(editor.getByText(/Getting ffmpeg, once \(\d+%\)/)).toBeVisible()
+    await expect(editor.getByText('Tick a place on the left for it to start.')).toBeVisible({
+      timeout: 8000,
+    })
+  })
+
   test('the platform list reorders from the keyboard', async ({ page }) => {
     await open(page, 'studio/golive')
     const p = panel(page, 'Your platforms')
