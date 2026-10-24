@@ -174,7 +174,8 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
   const main = onCanvas(view.destinations, 'main')
   const [picked, setTab] = useState<string>(main[0]?.id ?? LOCAL)
   // A removed server's tab falls back to the first one (its settings went with it).
-  const tab = picked === LOCAL || main.some((d) => d.id === picked) ? picked : (main[0]?.id ?? LOCAL)
+  const tab =
+    picked === LOCAL || main.some((d) => d.id === picked) ? picked : (main[0]?.id ?? LOCAL)
   const [asking, setAsking] = useState(false)
   const problem = checkAdvanced(
     draft,
@@ -209,7 +210,7 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
         <div
           role="tablist"
           aria-label="Which settings"
-          className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1"
+          className="-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
         >
           {tabs.map((t) => (
             <button

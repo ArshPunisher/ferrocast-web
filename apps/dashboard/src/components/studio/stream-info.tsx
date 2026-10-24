@@ -201,7 +201,7 @@ function InfoTabs({
     <div
       role="tablist"
       aria-label="Which platform"
-      className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1"
+      className="-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
       onKeyDown={onKey}
     >
       {tabs.map((t) => {
