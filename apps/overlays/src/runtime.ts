@@ -8,6 +8,7 @@ import type {
   PollView,
   GiveawayCard,
   RenderedAlert,
+  MusicNow,
   Widget,
 } from '@ferrocast/api/types'
 import { el, mediaRef, speakText, warnOnce } from './dom'
@@ -18,6 +19,7 @@ import { EventsWidget, GoalWidget, LabelWidget, ViewersWidget } from './widgets/
 import { PollWidget } from './widgets/poll'
 import { GiveawayWidget } from './widgets/giveaway'
 import { LayerWidget, applyTransform } from './widgets/layer'
+import { motionLayer } from './widgets/motion'
 import { applyWidgetStyle } from './design/style'
 
 export interface OverlayRuntime {
@@ -51,6 +53,25 @@ const showEnds = (v: unknown): number | null => {
 const obj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
+/** The music's state from a frame, every field checked; null when it isn't one. */
+export function parseMusic(v: unknown): MusicNow | null {
+  if (!obj(v)) return null
+  const level = typeof v.level === 'number' && Number.isFinite(v.level) ? v.level : 0
+  const str = (s: unknown) => (typeof s === 'string' && s.trim() ? s.slice(0, 200) : null)
+  return {
+    playing: v.playing === true,
+    level: Math.min(1, Math.max(0, level)),
+    title: str(v.title),
+    artist: str(v.artist),
+  }
+}
+
+/** Layers that draw or play with the music get their own view; a type change rebuilds it. */
+const viewKind = (w: Widget): string => {
+  const t = w.kind === 'layer' ? (w.config as { type?: unknown } | undefined)?.type : null
+  return t === 'fx' || t === 'music' || t === 'sound' ? `layer:${t}` : w.kind
+}
+
 /** Rotation, opacity, hidden, and a widget design's style (API.md §4 Overlays). */
 function dress(node: HTMLElement, w: Widget): void {
   try {
@@ -61,7 +82,7 @@ function dress(node: HTMLElement, w: Widget): void {
   }
 }
 
-function build(w: Widget, ctx: WidgetContext): WidgetView | null {
+function build(w: Widget, ctx: WidgetContext, preview: boolean): WidgetView | null {
   switch (w.kind) {
     case 'alerts':
       return new AlertsWidget(w, ctx)
@@ -80,7 +101,7 @@ function build(w: Widget, ctx: WidgetContext): WidgetView | null {
     case 'giveaway':
       return new GiveawayWidget(w, ctx)
     case 'layer':
-      return new LayerWidget(w, ctx)
+      return motionLayer(w, ctx, preview) ?? new LayerWidget(w, ctx)
     default:
       warnOnce(`unknown widget kind: ${String((w as { kind?: unknown }).kind)}`)
       return null
@@ -153,19 +174,20 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       if (!obj(w) || typeof w.id !== 'string') continue
       keep.add(w.id)
       const cur = views.get(w.id)
-      if (cur && cur.kind === w.kind) {
+      const kind = viewKind(w)
+      if (cur && cur.kind === kind) {
         cur.view.update(w)
         dress(cur.view.el, w)
         canvas.appendChild(cur.view.el) // keeps the stacking order of the list
         continue
       }
       cur?.view.destroy()
-      const v = build(w, ctx)
+      const v = build(w, ctx, !opts.send)
       if (!v) {
         views.delete(w.id)
         continue
       }
-      views.set(w.id, { kind: w.kind, view: v })
+      views.set(w.id, { kind, view: v })
       dress(v.el, w)
       canvas.appendChild(v.el)
       if (!fresh) v.onSnapshot?.()
@@ -228,6 +250,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         poll: obj(s?.poll) ? (s.poll as PollView) : null,
         giveaway: obj(s?.giveaway) ? (s.giveaway as GiveawayCard) : null,
         show: { countdown_ends_at: showEnds(s?.show) },
+        ...(parseMusic(s?.music) ? { music: parseMusic(s?.music) as MusicNow } : {}),
       }
       layout(frame.data.overlay, true)
       each((v) => v.onSnapshot?.())
@@ -275,6 +298,13 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       case 'config':
         layout(frame.data, false)
         break
+      case 'music': {
+        const m = parseMusic(frame.data)
+        if (!m) break
+        state.music = m
+        each((v) => v.onMusic?.())
+        break
+      }
       case 'delete_message':
         each((v) => v.onDeleteMessage?.(frame.data.platform, frame.data.message_id))
         state.chat = state.chat.filter(

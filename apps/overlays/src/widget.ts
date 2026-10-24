@@ -22,6 +22,8 @@ export interface WidgetView {
   /** Same widget id, new config or geometry (`config` frame). */
   update(w: Widget): void
   onState?(): void
+  /** The music's loudness or song changed (`music` frames, many a second). */
+  onMusic?(): void
   onEvent?(e: FerroEvent): void
   /** `primary` = this widget sends the acks for this alert. Returns whether it took it. */
   onAlert?(a: RenderedAlert, primary: boolean): boolean

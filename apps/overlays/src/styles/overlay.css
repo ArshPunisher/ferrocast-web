@@ -882,3 +882,44 @@
   top: -16px;
   translate: -50% 0;
 }
+
+/* Motion backgrounds, the music piece and the sound element (25 Oct). */
+.fc-ov .fc-w-fx,
+.fc-ov .fc-w-music {
+  overflow: hidden;
+}
+.fc-ov .fc-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.fc-ov .fc-w-music {
+  transition: opacity 0.6s ease;
+}
+.fc-ov .fc-w-music.is-quiet {
+  opacity: 0;
+}
+.fc-ov .fc-music-song {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.5);
+}
+.fc-ov .fc-w-sound {
+  visibility: hidden;
+}
+.fc-ov.is-low .fc-w-music {
+  transition: none;
+}

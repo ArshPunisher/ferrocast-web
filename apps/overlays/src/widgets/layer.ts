@@ -8,6 +8,7 @@
 // rotator (lines shown in turn) and a countdown. Unknown values are ignored, never passed on.
 
 import {
+  COUNTDOWN_LOOKS,
   FRAME_VARIANTS,
   SHAPE_CLIPS,
   SHAPE_PATTERNS,
@@ -16,6 +17,7 @@ import {
   isMediaRef,
 } from '@ferrocast/api/design'
 import type {
+  CountdownLook,
   FrameVariant,
   LayerConfig,
   ShapeClip,
@@ -27,6 +29,7 @@ import { CLIP_PATH, frameDecor, isParticles, particles } from '../design/decor'
 import { fontStack } from '../design/fonts'
 import { EASE_IN, IN } from '../design/motion'
 import { sparkSvg } from '../design/spark'
+import { reportTimer } from '../design/timers'
 import { el, mediaRef, safeText } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
 
@@ -61,6 +64,17 @@ export function clockText(secs: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${String(m).padStart(2, '0')}:${ss}`
 }
 
+/** `{time}` for the words look: "4 minutes", "1 minute", "45 seconds". */
+export function wordsText(secs: number): string {
+  const s = Math.max(0, Math.ceil(secs))
+  // Rounded up, as people say it: 1:30 left is "2 minutes".
+  if (s > 60) return `${Math.ceil(s / 60)} minutes`
+  if (s === 60) return '1 minute'
+  return s === 1 ? '1 second' : `${s} seconds`
+}
+
+const SVG = 'http://www.w3.org/2000/svg'
+
 /** Applies a widget's rotation, opacity and hidden flag (shared by every widget kind). */
 export function applyTransform(node: HTMLElement, w: Widget): void {
   const rot = num(w.rotation, -360, 360, 0)
@@ -88,6 +102,14 @@ export class LayerWidget implements WidgetView {
   private at = 0
   private countFrom = 0
   private endsAt = 0
+  /** The countdown's look and the parts it draws besides the text. */
+  private look: CountdownLook = 'digital'
+  private ring: SVGCircleElement | null = null
+  private ringLen = 0
+  private bar: HTMLElement | null = null
+  /** The length the ring and bar measure against, and the end it was taken for. */
+  private total = 0
+  private totalFor = 0
 
   constructor(
     w: Widget & { kind: 'layer' },
@@ -109,6 +131,7 @@ export class LayerWidget implements WidgetView {
     this.id = String(w.id)
     this.box = box
     this.stopTicking()
+    reportTimer(this.id, null)
     this.render(w.config)
     if (this.shown) {
       this.applyMotion()
@@ -140,6 +163,8 @@ export class LayerWidget implements WidgetView {
     const node = this.el
     node.replaceChildren()
     this.textEl = null
+    this.ring = null
+    this.bar = null
     node.dataset.type = typeof c?.type === 'string' ? c.type.replace(/[^a-z]/g, '') : ''
     node.style.removeProperty('filter')
     node.style.removeProperty('--glow')
@@ -300,7 +325,18 @@ export class LayerWidget implements WidgetView {
     const split = opt(c.split, ['letters', 'words'] as const)
     if (this.countFrom > 0) {
       t.classList.add('is-countdown')
-      this.setText(this.countdownText(this.countFrom))
+      this.look = one(c.countdown_look, COUNTDOWN_LOOKS, 'digital')
+      if (this.look !== 'digital') t.classList.add(`cd-${this.look}`)
+      if (this.look === 'ring') this.makeRing(t, ink)
+      if (this.look === 'bar') {
+        const track = el('span', 'fc-cd-bar')
+        this.bar = el('span', 'fc-cd-fill')
+        track.appendChild(this.bar)
+        t.appendChild(track)
+      }
+      this.total = this.countFrom
+      this.totalFor = 0
+      this.paint(this.countFrom)
     } else if (this.items.length > 1) this.setText(this.items[0] ?? '')
     else if (
       split &&
@@ -326,6 +362,84 @@ export class LayerWidget implements WidgetView {
     node.appendChild(t)
   }
 
+  /** A circle around the timer that empties as it counts down. */
+  private makeRing(t: HTMLElement, ink: string): void {
+    const { w, h } = this.box
+    const stroke = Math.max(2, Math.min(w, h) * 0.035)
+    const r = Math.max(1, Math.min(w, h) / 2 - stroke)
+    const svg = document.createElementNS(SVG, 'svg')
+    svg.setAttribute('class', 'fc-cd-ring')
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
+    const circle = (cls: string) => {
+      const c = document.createElementNS(SVG, 'circle')
+      c.setAttribute('class', cls)
+      c.setAttribute('cx', String(w / 2))
+      c.setAttribute('cy', String(h / 2))
+      c.setAttribute('r', String(r))
+      c.setAttribute('fill', 'none')
+      c.setAttribute('stroke', ink)
+      c.setAttribute('stroke-width', String(stroke))
+      svg.appendChild(c)
+      return c
+    }
+    circle('track')
+    this.ring = circle('fill')
+    this.ringLen = 2 * Math.PI * r
+    this.ring.setAttribute('stroke-linecap', 'round')
+    this.ring.setAttribute('stroke-dasharray', String(this.ringLen))
+    this.ring.setAttribute('transform', `rotate(-90 ${w / 2} ${h / 2})`)
+    t.appendChild(svg)
+  }
+
+  /** Draws the countdown at `left` seconds: its words, and the ring, bar or flip cards. */
+  private paint(left: number, ends = 0): void {
+    // Start show's countdown can be longer than the layer's own: measure against the longer.
+    if (ends && ends !== this.totalFor) {
+      this.totalFor = ends
+      this.total = Math.max(this.countFrom, Math.ceil(left))
+    }
+    const text = this.countdownText(left)
+    if (this.look === 'flip') this.flip(text)
+    else this.setText(text)
+    const frac = this.total > 0 ? Math.min(1, Math.max(0, left / this.total)) : 0
+    this.ring?.setAttribute('stroke-dashoffset', String(this.ringLen * (1 - frac)))
+    if (this.bar) this.bar.style.transform = `scaleX(${frac})`
+  }
+
+  /** Flip cards: one per character; a card that changes flips (not in low motion). */
+  private flip(text: string): void {
+    const node = this.textEl
+    if (!node) return
+    const chars = Array.from(text)
+    if (node.childElementCount !== chars.length || node.dataset.flip !== '1') {
+      node.replaceChildren(
+        ...chars.map((ch) => el('span', /\d/.test(ch) ? 'fc-flip' : 'fc-flip-sep', ch)),
+      )
+      node.dataset.flip = '1'
+      node.dataset.text = text
+      return
+    }
+    const low = this.ctx.lowMotion()
+    chars.forEach((ch, i) => {
+      const card = node.children[i] as HTMLElement | undefined
+      if (!card || card.textContent === ch) return
+      card.textContent = ch
+      if (low || typeof card.animate !== 'function') return
+      try {
+        card.animate(
+          [
+            { transform: 'perspective(400px) rotateX(-80deg)', opacity: 0.4 },
+            { transform: 'none', opacity: 1 },
+          ],
+          { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+        )
+      } catch {
+        /* shown without the flip */
+      }
+    })
+    node.dataset.text = text
+  }
+
   private setText(s: string): void {
     if (!this.textEl) return
     this.textEl.textContent = s
@@ -340,8 +454,9 @@ export class LayerWidget implements WidgetView {
     if (left <= 0 && c.countdown_up) return `+${clockText(Math.floor(-left))}`
     if (left <= 0 && typeof c.countdown_done === 'string' && c.countdown_done.trim())
       return safeText(c.countdown_done, 80)
+    const clock = this.look === 'words' ? wordsText(left) : clockText(left)
     const src = safeText(c.text, 500)
-    return src.includes('{time}') ? src.split('{time}').join(clockText(left)) : clockText(left)
+    return src.includes('{time}') ? src.split('{time}').join(clock) : clock
   }
 
   /** Start show's countdown end, when this timer follows it and one is running. */
@@ -354,9 +469,11 @@ export class LayerWidget implements WidgetView {
   private tick(): void {
     if (this.countFrom > 0) {
       const c = this.config()
-      const ends = this.showEnds() ?? this.endsAt
+      const show = this.showEnds()
+      const ends = show ?? this.endsAt
       const left = (ends - Date.now()) / 1000
-      this.setText(this.countdownText(left))
+      reportTimer(this.id, ends)
+      this.paint(left, show ?? 0)
       if (left <= 0 && !(c?.type === 'text' && c.countdown_up)) this.stopTicking()
       return
     }
@@ -472,7 +589,10 @@ export class LayerWidget implements WidgetView {
     if (back && this.countFrom > 0 && !(c?.type === 'text' && c.countdown_restart === false))
       this.endsAt = 0
     if (visible) this.startTicking()
-    else this.stopTicking()
+    else {
+      this.stopTicking()
+      reportTimer(this.id, null)
+    }
   }
 
   /** Start show's countdown started, ended or was cancelled. */
@@ -482,6 +602,7 @@ export class LayerWidget implements WidgetView {
 
   destroy(): void {
     this.stopTicking()
+    reportTimer(this.id, null)
     this.el.remove()
   }
 }

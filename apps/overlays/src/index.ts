@@ -28,6 +28,8 @@ export { IN as ANIM_IN_FRAMES, OUT as ANIM_OUT_FRAMES, textAnimation } from './d
 export { sparkSvg } from './design/spark'
 export { mountMotionSwatch, type MotionSwatch, type SwatchKind } from './design/motion-swatch'
 export { unlockImpactAudio } from './design/impact-sound'
+export { playScreenSound, unlockScreenAudio, type Playing } from './design/screen-sounds'
+export { FX_PALETTE } from './design/fx'
 
 /**
  * Plays one alert in `root` (the alert editor's stage). With `loop` it replays after a

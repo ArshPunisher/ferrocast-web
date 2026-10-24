@@ -242,7 +242,11 @@ describe('built-in themes', () => {
         for (const l of layers)
           if (l.kind === 'layer' && l.config.type === 'text') {
             if (typeof l.config.countdown === 'number')
-              expect(deepText(root)).toMatch(/\d{1,2}:\d{2}/)
+              expect(deepText(root)).toMatch(
+                l.config.countdown_look === 'words'
+                  ? /\d+ (minutes?|seconds?)/
+                  : /\d{1,2}:\d{2}|\d:\d\d/,
+              )
             else expect(deepText(root)).toContain(l.config.text.slice(0, 12))
           }
         for (const l of s.layers.filter((x) => x.kind !== 'layer'))
