@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { aitumClashes, andList, goliveApi, goingTo, healthText, mbps } from '../src/golive'
+import {
+  aitumClashes,
+  andList,
+  checkCut,
+  goliveApi,
+  goingTo,
+  healthText,
+  mbps,
+} from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
@@ -149,6 +157,33 @@ describe('demo: upload protection', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('cut layout checks', () => {
+  it('names the field, and odd bodies are a message not a crash', async () => {
+    const { api, client } = demo()
+    const ok = (await api.view()).cut.config
+    expect(checkCut(ok)).toBeNull()
+    expect(checkCut(null)).toMatch(/object/)
+    expect(checkCut({ ...ok, game: undefined })).toMatch(/^game:/)
+    expect(checkCut({ ...ok, camera: { x: 0.9, y: 0, w: 0.3, h: 0.2 } })).toMatch(/^camera: .*edge/)
+    expect(checkCut({ ...ok, layout: 'game_only', camera: null })).toBeNull()
+    expect(checkCut({ ...ok, camera_share: '38' })).toMatch(/^camera_share:/)
+    expect(checkCut({ ...ok, layout: 'tiles' })).toMatch(/^layout:/)
+    expect(checkCut({ ...ok, width: 1080, height: 1280 })).toMatch(/^size:/)
+    expect(checkCut({ ...ok, fps: 50 })).toMatch(/^fps:/)
+    expect(checkCut({ ...ok, kbps: 20000 })).toMatch(/^kbps:/)
+    const bad = await refusal(
+      client.request('PUT', '/api/v1/golive/vertical/cut', { layout: 'camera_top' }),
+    )
+    expect(bad.status).toBe(400)
+    await api.setVerticalCut({ ...ok, layout: 'game_only' })
+    expect((await api.view()).cut.config.layout).toBe('game_only')
+    expect(
+      (await refusal(client.request('PUT', '/api/v1/golive/vertical/source', { source: 'x' })))
+        .status,
+    ).toBe(400)
   })
 })
 

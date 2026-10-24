@@ -3,9 +3,13 @@
 // lines while the pretend OBS streams. Same routes, shapes, error codes and messages as API.md
 // §4 "Go live everywhere".
 
+import { checkCut } from '../../golive'
 import type {
   AitumOutput,
   Canvas,
+  CutConfig,
+  CutState,
+  VerticalSource,
   DestinationConfig,
   DestinationView,
   GoLiveFrame,
@@ -75,6 +79,17 @@ export class DemoGoLive {
   private verticalHere = false
   private verticalBefore: string | null = null
   private verticalStreaming = false
+  private source: VerticalSource = 'canvas'
+  private cutConfig: CutConfig = {
+    layout: 'camera_top',
+    camera: { x: 0.74, y: 0.04, w: 0.24, h: 0.31 },
+    game: { x: 0.22, y: 0, w: 0.56, h: 1 },
+    camera_share: 38,
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    kbps: 4500,
+  }
   private aitumOk = false
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
@@ -115,9 +130,22 @@ export class DemoGoLive {
   }
 
   private verticalLive(): boolean {
+    if (this.source === 'cut') return this.live() && this.cutWanted()
     return (
       this.verticalInstalled && this.verticalHere && this.verticalStreaming && this.obsConnected()
     )
+  }
+
+  private cutState(): CutState | null {
+    if (!this.cutWanted()) return null
+    return this.live()
+      ? { state: 'running', encoder: 'h264_videotoolbox', on: 'your graphics card' }
+      : { state: 'waiting' }
+  }
+
+  /** As the engine: the cutter runs while cutting and a vertical destination is ticked. */
+  private cutWanted(): boolean {
+    return this.source === 'cut' && this.cfg.some((d) => d.enabled && d.canvas === 'vertical')
   }
 
   private liveFor(c: Canvas | undefined): boolean {
@@ -285,6 +313,12 @@ export class DemoGoLive {
       upload: clone(this.upload),
       protect: this.protect,
       aitum_ok: this.aitumOk,
+      cut: {
+        source: this.source,
+        config: clone(this.cutConfig),
+        state: this.cutState(),
+        ffmpeg: true,
+      },
     }
   }
 
@@ -295,6 +329,7 @@ export class DemoGoLive {
       vertical_live: this.verticalLive(),
       vertical_stats: this.verticalStats(),
       destinations: this.destinations(),
+      cut_state: this.cutState(),
     }
   }
 
@@ -340,6 +375,32 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()
+    if (method === 'GET' && path === 'picture') {
+      if (!this.obsConnected())
+        throw new HttpError(
+          422,
+          'obs_unreachable',
+          'Couldn’t reach OBS.',
+          'Open OBS on this computer, then check Settings, OBS.',
+        )
+      return { image: DEMO_PICTURE, width: 1920, height: 1080 }
+    }
+    if (method === 'PUT' && path === 'vertical/source') {
+      const b = requireObj(body)
+      if (b.source !== 'canvas' && b.source !== 'cut')
+        throw new HttpError(400, 'invalid', 'source: canvas or cut.')
+      this.source = b.source
+      this.tick()
+      return { destinations: clone(this.cfg) }
+    }
+    if (method === 'PUT' && path === 'vertical/cut') {
+      const err = checkCut(body)
+      if (err) throw new HttpError(400, 'invalid', err)
+      const c = body as CutConfig
+      this.cutConfig = clone(c)
+      this.tick()
+      return { destinations: clone(this.cfg), cut: clone(this.cutConfig) }
+    }
     if (method === 'POST' && path === 'vertical/obs/restore') return this.restoreVertical()
     if (method === 'POST' && path === 'upload-check') return this.check()
     if (method === 'PUT' && path === 'protection') return this.setProtect(body)
@@ -689,3 +750,16 @@ function unreachable(
       : `Your upload is ${mb}. Ferrocast couldn’t reach ${list}, so nothing was counted yet.`,
   }
 }
+
+/** The demo's "on air" picture: a game with a camera in the top-right corner (an SVG). */
+const DEMO_PICTURE = `data:image/svg+xml;base64,${btoa(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#24405f"/>' +
+    '<stop offset=".5" stop-color="#2f5a48"/><stop offset="1" stop-color="#5d5131"/></linearGradient></defs>' +
+    '<rect width="960" height="540" fill="url(#g)"/>' +
+    '<circle cx="480" cy="270" r="14" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>' +
+    '<rect x="38" y="490" width="170" height="30" rx="5" fill="#fff" fill-opacity=".18"/>' +
+    '<rect x="712" y="22" width="230" height="168" rx="8" fill="#4a3b55"/>' +
+    '<circle cx="827" cy="92" r="30" fill="#d9a37a"/><rect x="782" y="128" width="90" height="62" rx="20" fill="#2a2133"/>' +
+    '</svg>',
+)}`

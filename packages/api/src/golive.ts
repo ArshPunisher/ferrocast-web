@@ -123,6 +123,114 @@ export interface GoLiveView {
   protect: boolean
   /** The streamer said they run Aitum Multistream on purpose (hides the setup note). */
   aitum_ok: boolean
+  /** Where the vertical picture comes from, and the cut-from-stream layout. */
+  cut: CutView
+}
+
+/** A box on the normal picture, as fractions (0 to 1) of its width and height. */
+export interface CutBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type CutLayout = 'camera_top' | 'small_camera' | 'half_half' | 'game_only'
+
+export interface CutConfig {
+  layout: CutLayout
+  camera: CutBox
+  game: CutBox
+  /** camera_top: the camera's share of the height, 20 to 60 percent. */
+  camera_share: number
+  width: 1080 | 720
+  height: 1920 | 1280
+  fps: 30 | 60
+  kbps: number
+}
+
+export type CutState =
+  | { state: 'waiting' | 'starting' }
+  | { state: 'running'; encoder: string; on: string }
+  | { state: 'failed'; reason: string }
+
+export type VerticalSource = 'canvas' | 'cut'
+
+export interface CutView {
+  source: VerticalSource
+  config: CutConfig
+  /** `null` while not needed (another source, or no vertical destination ticked). */
+  state: CutState | null
+  /** ffmpeg is on this computer (cutting needs it). */
+  ffmpeg: boolean
+}
+
+const CUT_LAYOUTS: CutLayout[] = ['camera_top', 'small_camera', 'half_half', 'game_only']
+
+/**
+ * Same rules as the engine (`golive::cut`), so the editor can say so before saving. Takes any
+ * value (a request body too) and names the field that's wrong.
+ */
+export function checkCut(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return 'Send the layout as an object.'
+  const c = value as Partial<Record<keyof CutConfig, unknown>>
+  const box = (v: unknown, what: string) => {
+    const b = (typeof v === 'object' && v !== null ? v : {}) as Partial<
+      Record<keyof CutBox, unknown>
+    >
+    const n = [b.x, b.y, b.w, b.h]
+    if (!n.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1))
+      return `${what}: the box must be inside the picture and not tiny.`
+    const [x, y, w, h] = n as number[]
+    if ((w as number) < 0.02 || (h as number) < 0.02)
+      return `${what}: the box must be inside the picture and not tiny.`
+    if ((x as number) + (w as number) > 1.0001 || (y as number) + (h as number) > 1.0001)
+      return `${what}: the box goes past the edge of the picture.`
+    return null
+  }
+  if (!CUT_LAYOUTS.includes(c.layout as CutLayout))
+    return 'layout: camera_top, small_camera, half_half or game_only.'
+  const share = c.camera_share
+  const size = `${String(c.width)}x${String(c.height)}`
+  return (
+    box(c.game, 'game') ??
+    (c.layout === 'game_only' ? null : box(c.camera, 'camera')) ??
+    (typeof share !== 'number' || share < 20 || share > 60
+      ? 'camera_share: 20 to 60 percent of the height.'
+      : null) ??
+    (size !== '1080x1920' && size !== '720x1280' ? 'size: 1080×1920 or 720×1280.' : null) ??
+    (c.fps !== 30 && c.fps !== 60 ? 'fps: 30 or 60.' : null) ??
+    (typeof c.kbps !== 'number' || c.kbps < 1000 || c.kbps > 12000
+      ? 'kbps: 1,000 to 12,000.'
+      : null)
+  )
+}
+
+/** Where each part goes in the upright picture (fractions of it), for the preview. */
+export function cutSlots(
+  c: CutConfig,
+): { part: 'camera' | 'game'; x: number; y: number; w: number; h: number }[] {
+  switch (c.layout) {
+    case 'game_only':
+      return [{ part: 'game', x: 0, y: 0, w: 1, h: 1 }]
+    case 'small_camera': {
+      const pw = 0.42
+      const cam = c.camera
+      // The camera keeps its shape (its pixels' aspect) at 42% of the width.
+      const ph = Math.min(0.5, ((pw * cam.h) / Math.max(cam.w, 0.001)) * (9 / 16) * (9 / 16))
+      return [
+        { part: 'game', x: 0, y: 0, w: 1, h: 1 },
+        { part: 'camera', x: 1 - pw - 0.04, y: 0.03, w: pw, h: ph },
+      ]
+    }
+    default: {
+      const share = c.layout === 'half_half' ? 0.5 : c.camera_share / 100
+      return [
+        { part: 'camera', x: 0, y: 0, w: 1, h: share },
+        { part: 'game', x: 0, y: share, w: 1, h: 1 - share },
+      ]
+    }
+  }
 }
 
 /** The `golive` live frame: every second while OBS streams to Ferrocast, and on changes. */
@@ -132,6 +240,8 @@ export interface GoLiveFrame {
   vertical_live: boolean
   vertical_stats: StreamStats
   destinations: DestinationView[]
+  /** What the cutter is doing (A2.4), every second. */
+  cut_state?: CutState | null
 }
 
 export function goliveApi(c: FerroClient) {
@@ -161,6 +271,16 @@ export function goliveApi(c: FerroClient) {
         '/api/v1/golive/protection',
         { on },
       ),
+    /** Where the vertical picture comes from. */
+    setVerticalSource: (source: VerticalSource) =>
+      c.request<{ destinations: DestinationConfig[] }>('PUT', '/api/v1/golive/vertical/source', {
+        source,
+      }),
+    /** Saves the cut-from-stream layout; a running cut restarts with it. */
+    setVerticalCut: (cut: CutConfig) =>
+      c.request<{ cut: CutConfig }>('PUT', '/api/v1/golive/vertical/cut', cut),
+    /** What's on air in OBS, to mark the camera and game on. */
+    picture: () => get<{ image: string; width: number; height: number }>('/golive/picture'),
     /** "I use Aitum Multistream on purpose": hides the setup note. */
     setAitumOk: (ok: boolean) =>
       c.request<{ destinations: DestinationConfig[]; aitum_ok: boolean }>(
