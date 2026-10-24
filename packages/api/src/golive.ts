@@ -5,13 +5,21 @@ import type { FerroClient } from './client'
 
 export type Service = 'twitch' | 'youtube' | 'kick' | 'custom'
 
+/** Which picture a destination gets: OBS's normal stream, or its vertical canvas. */
+export type Canvas = 'main' | 'vertical'
+
+/** YouTube Shorts live: Ferrocast makes its stream and broadcast. */
+export const YOUTUBE_VERTICAL = 'youtube_vertical'
+
 export interface DestinationConfig {
-  /** `twitch`, `youtube`, `kick`, or `c_<hex>` for a custom server. */
+  /** `twitch`, `youtube`, `kick`, `youtube_vertical`, or `c_<hex>` for a custom server. */
   id: string
   kind: Service
   name?: string
   url?: string
   enabled: boolean
+  /** Left out: `main`. */
+  canvas?: Canvas
 }
 
 export type PushState =
@@ -37,6 +45,7 @@ export interface StreamStats {
 export interface DestinationView {
   id: string
   kind: Service
+  canvas: Canvas
   name: string
   /** The platform account, or a custom server's host. */
   account: string | null
@@ -81,6 +90,16 @@ export interface ObsSetup {
   before: string | null
   /** Aitum Multistream's outputs, when OBS has that plugin. */
   aitum: AitumOutput[] | null
+  /** OBS's vertical canvas (Aitum Vertical), when OBS has it. */
+  vertical: VerticalObs | null
+}
+
+export interface VerticalObs {
+  /** Its stream goes to Ferrocast's vertical key. */
+  points_here: boolean
+  streaming: boolean
+  /** Where "Put it back" sends it again (a host). */
+  before: string | null
 }
 
 /** One Aitum Multistream output: where it goes (when known) and whether it's sending now. */
@@ -95,6 +114,9 @@ export interface GoLiveView {
   obs: ObsSetup
   live: boolean
   stats: StreamStats
+  /** OBS's vertical canvas is streaming to Ferrocast. */
+  vertical_live: boolean
+  vertical_stats: StreamStats
   destinations: DestinationView[]
   upload: UploadCheck | null
   /** Upload protection: the bottom platform pauses when the upload can't carry them all. */
@@ -107,6 +129,8 @@ export interface GoLiveView {
 export interface GoLiveFrame {
   live: boolean
   stats: StreamStats
+  vertical_live: boolean
+  vertical_stats: StreamStats
   destinations: DestinationView[]
 }
 
@@ -115,18 +139,21 @@ export function goliveApi(c: FerroClient) {
   const post = <T>(p: string, b: unknown = {}) => c.request<T>('POST', `/api/v1${p}`, b)
   return {
     view: () => get<GoLiveView>('/golive'),
-    ingest: () => get<{ server: string; key: string }>('/golive/ingest'),
+    ingest: () => get<{ server: string; key: string; vertical_key: string }>('/golive/ingest'),
     /** Every destination once, top first (the bottom one pauses first). */
     saveOrder: (destinations: { id: string; enabled: boolean }[]) =>
       c.request<{ destinations: DestinationConfig[] }>('PUT', '/api/v1/golive/destinations', {
         destinations,
       }),
-    addCustom: (name: string, url: string, key: string) =>
-      post<DestinationConfig>('/golive/destinations', { name, url, key }),
+    addCustom: (name: string, url: string, key: string, canvas: Canvas = 'main') =>
+      post<DestinationConfig>('/golive/destinations', { name, url, key, canvas }),
     removeCustom: (id: string) =>
       c.request<void>('DELETE', `/api/v1/golive/destinations/${encodeURIComponent(id)}`),
     pointObs: () => post<ObsSetup>('/golive/obs/setup'),
     restoreObs: () => post<ObsSetup>('/golive/obs/restore'),
+    /** Points Aitum Vertical (OBS's vertical canvas) at Ferrocast. */
+    pointVertical: () => post<VerticalObs | null>('/golive/vertical/obs/setup'),
+    restoreVertical: () => post<VerticalObs | null>('/golive/vertical/obs/restore'),
     uploadCheck: () => post<UploadCheck>('/golive/upload-check'),
     setProtect: (on: boolean) =>
       c.request<{ destinations: DestinationConfig[]; protect: boolean }>(
@@ -218,4 +245,9 @@ export function aitumClashes(
 export function andList(names: string[]): string {
   if (names.length <= 1) return names[0] ?? ''
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
+/** Destinations of one picture, in order. */
+export function onCanvas<T extends { canvas?: Canvas }>(list: T[], canvas: Canvas): T[] {
+  return list.filter((d) => (d.canvas ?? 'main') === canvas)
 }

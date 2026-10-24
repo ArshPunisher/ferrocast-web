@@ -31,6 +31,7 @@ describe('demo: Go live everywhere', () => {
       ['twitch', true],
       ['youtube', true],
       ['kick', false],
+      ['youtube_vertical', false],
     ])
     expect(v.obs.points_here).toBe(false)
     expect(v.live).toBe(false)
@@ -42,8 +43,14 @@ describe('demo: Go live everywhere', () => {
       { id: 'kick', enabled: true },
       { id: 'twitch', enabled: true },
       { id: 'youtube', enabled: false },
+      { id: 'youtube_vertical', enabled: false },
     ])
-    expect(saved.destinations.map((d) => d.id)).toEqual(['kick', 'twitch', 'youtube'])
+    expect(saved.destinations.map((d) => d.id)).toEqual([
+      'kick',
+      'twitch',
+      'youtube',
+      'youtube_vertical',
+    ])
     expect((await refusal(api.saveOrder([{ id: 'kick', enabled: true }]))).status).toBe(400)
     const bad = await refusal(api.addCustom('Backup', 'https://x.com/live', 'k'))
     expect(bad.message).toContain('rtmp:// or rtmps://')
@@ -65,7 +72,7 @@ describe('demo: Go live everywhere', () => {
     expect((await refusal(api.removeCustom('twitch'))).status).toBe(400)
     expect((await refusal(api.removeCustom('c_nope'))).status).toBe(404)
     await api.removeCustom(c.id)
-    expect((await api.view()).destinations).toHaveLength(3)
+    expect((await api.view()).destinations).toHaveLength(4)
   })
 
   it('points OBS here and puts it back, never while OBS streams', async () => {
@@ -97,6 +104,7 @@ describe('demo: Go live everywhere', () => {
       { id: 'twitch', enabled: false },
       { id: 'youtube', enabled: false },
       { id: 'kick', enabled: false },
+      { id: 'youtube_vertical', enabled: false },
     ])
     expect((await refusal(api.uploadCheck())).code).toBe('golive_none')
   })
@@ -141,6 +149,38 @@ describe('demo: upload protection', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('demo: vertical canvas', () => {
+  it('Aitum Vertical is pointed here; only vertical destinations get its stream', async () => {
+    const { engine, api, studio } = demo()
+    const v = await api.view()
+    expect(v.obs.vertical).toEqual({ points_here: false, streaming: false, before: null })
+    expect(v.destinations.find((d) => d.id === 'youtube_vertical')?.name).toBe(
+      'YouTube Shorts live',
+    )
+    const pointed = await api.pointVertical()
+    expect(pointed?.points_here).toBe(true)
+    await api.saveOrder(
+      v.destinations.map((d) => ({ id: d.id, enabled: d.id === 'youtube_vertical' })),
+    )
+    engine.setGoLive({ vertical: { streaming: true } })
+    await studio.setObsStream(false)
+    const live = await api.view()
+    expect(live.vertical_live).toBe(true)
+    expect(live.live).toBe(false)
+    expect(live.vertical_stats.height).toBe(1920)
+    expect(live.destinations.find((d) => d.id === 'youtube_vertical')?.health?.state).toBe('live')
+    expect((await refusal(api.restoreVertical())).code).toBe('obs_streaming')
+    engine.setGoLive({ vertical: { streaming: false } })
+    expect((await api.restoreVertical())?.points_here).toBe(false)
+    expect((await refusal(api.restoreVertical())).code).toBe('golive_nothing_saved')
+    const c = await api.addCustom('Shorts box', 'rtmp://box.local/live', 'k', 'vertical')
+    expect(c.canvas).toBe('vertical')
+    engine.setGoLive({ vertical: { installed: false } })
+    expect((await api.view()).obs.vertical).toBeNull()
+    expect((await refusal(api.pointVertical())).code).toBe('aitum_vertical_missing')
   })
 })
 

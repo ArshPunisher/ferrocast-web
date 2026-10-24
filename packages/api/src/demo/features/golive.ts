@@ -5,6 +5,7 @@
 
 import type {
   AitumOutput,
+  Canvas,
   DestinationConfig,
   DestinationView,
   GoLiveFrame,
@@ -14,6 +15,7 @@ import type {
   Service,
   StreamStats,
   UploadCheck,
+  VerticalObs,
   VideoCodec,
 } from '../../golive'
 import type { Account } from '../../types'
@@ -28,6 +30,8 @@ export interface DemoGoLiveSetup {
   keyframe_interval_ms?: number
   /** Aitum Multistream's outputs in the pretend OBS (`null`: not installed). */
   aitum?: AitumOutput[] | null
+  /** Aitum Vertical in the pretend OBS: installed, pointed here, its canvas streaming. */
+  vertical?: { installed?: boolean; points_here?: boolean; streaming?: boolean }
 }
 
 const INGEST = 'rtmp://127.0.0.1:1935/live'
@@ -55,6 +59,7 @@ export class DemoGoLive {
     { id: 'twitch', kind: 'twitch', enabled: true },
     { id: 'youtube', kind: 'youtube', enabled: true },
     { id: 'kick', kind: 'kick', enabled: false },
+    { id: 'youtube_vertical', kind: 'youtube', enabled: false, canvas: 'vertical' },
   ]
   private pointsHere = false
   private before: string | null = null
@@ -66,6 +71,10 @@ export class DemoGoLive {
   private started = new Map<string, number>()
   private protect = true
   private aitum: AitumOutput[] | null = null
+  private verticalInstalled = true
+  private verticalHere = false
+  private verticalBefore: string | null = null
+  private verticalStreaming = false
   private aitumOk = false
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
@@ -92,11 +101,47 @@ export class DemoGoLive {
     if (s.codec) this.codec = s.codec
     if (s.keyframe_interval_ms !== undefined) this.keyint = s.keyframe_interval_ms
     if (s.aitum !== undefined) this.aitum = s.aitum
+    if (s.vertical?.installed !== undefined) this.verticalInstalled = s.vertical.installed
+    if (s.vertical?.points_here !== undefined) {
+      this.verticalHere = s.vertical.points_here
+      this.verticalBefore = s.vertical.points_here ? 'a.rtmps.youtube.com' : null
+    }
+    if (s.vertical?.streaming !== undefined) this.verticalStreaming = s.vertical.streaming
     this.tick()
   }
 
   private live(): boolean {
     return this.pointsHere && this.obsStreaming()
+  }
+
+  private verticalLive(): boolean {
+    return (
+      this.verticalInstalled && this.verticalHere && this.verticalStreaming && this.obsConnected()
+    )
+  }
+
+  private liveFor(c: Canvas | undefined): boolean {
+    return c === 'vertical' ? this.verticalLive() : this.live()
+  }
+
+  private verticalStats(): StreamStats {
+    if (!this.verticalLive())
+      return {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      }
+    return {
+      kbps: 4500,
+      keyframe_interval_ms: 2000,
+      video_codec: 'h264',
+      width: 1080,
+      height: 1920,
+      fps: 30,
+    }
   }
 
   private stats(): StreamStats {
@@ -124,7 +169,7 @@ export class DemoGoLive {
   }
 
   private health(d: DestinationConfig, now: number): PushHealth | null {
-    if (!this.live() || !d.enabled || this.blocked(d)) return null
+    if (!this.liveFor(d.canvas) || !d.enabled || this.blocked(d)) return null
     const p = this.paused.get(d.id)
     if (p)
       return {
@@ -155,7 +200,8 @@ export class DemoGoLive {
       }
     }
     const wobble = Math.round((this.host.random() - 0.5) * 300)
-    return { state: 'live', kbps: 6100 + wobble, dropped: 0, since_ms: since }
+    const base = d.canvas === 'vertical' ? 4500 : 6100
+    return { state: 'live', kbps: base + wobble, dropped: 0, since_ms: since }
   }
 
   private blocked(d: DestinationConfig): string | null {
@@ -163,8 +209,8 @@ export class DemoGoLive {
     return this.account(d.kind) ? null : `Connect ${LABELS[d.kind]} in Settings, Accounts first.`
   }
 
-  private rules(kind: Service, s: StreamStats): string[] {
-    if (kind === 'custom' || !this.live()) return []
+  private rules(kind: Service, s: StreamStats, vertical = false): string[] {
+    if (kind === 'custom' || !(vertical ? this.verticalLive() : this.live())) return []
     const name = LABELS[kind]
     const out: string[] = []
     const codecs: VideoCodec[] = kind === 'youtube' ? ['h264', 'hevc', 'av1'] : ['h264']
@@ -183,19 +229,26 @@ export class DemoGoLive {
   private destinations(): DestinationView[] {
     const now = Date.now()
     const s = this.stats()
+    const vs = this.verticalStats()
     return this.cfg.map((d) => {
       const custom = d.kind === 'custom'
       const acct = custom ? null : this.account(d.kind)
+      const vertical = d.canvas === 'vertical'
       return {
         id: d.id,
         kind: d.kind,
-        name: custom ? (d.name ?? 'Custom server') : LABELS[d.kind as Exclude<Service, 'custom'>],
+        canvas: d.canvas ?? 'main',
+        name: custom
+          ? (d.name ?? 'Custom server')
+          : vertical && d.kind === 'youtube'
+            ? 'YouTube Shorts live'
+            : LABELS[d.kind as Exclude<Service, 'custom'>],
         account: custom ? hostOf(d.url ?? '') : (acct?.name ?? null),
         enabled: d.enabled,
         connected: custom || !!acct,
         health: this.health(d, now),
-        blocked: d.enabled && this.live() ? this.blocked(d) : null,
-        rules: d.enabled ? this.rules(d.kind, s) : [],
+        blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
+        rules: d.enabled ? this.rules(d.kind, vertical ? vs : s, vertical) : [],
       }
     })
   }
@@ -207,6 +260,16 @@ export class DemoGoLive {
       streaming: this.obsStreaming(),
       before: this.before,
       aitum: this.obsConnected() ? clone(this.aitum) : null,
+      vertical: this.verticalObs(),
+    }
+  }
+
+  private verticalObs(): VerticalObs | null {
+    if (!this.obsConnected() || !this.verticalInstalled) return null
+    return {
+      points_here: this.verticalHere,
+      streaming: this.verticalStreaming,
+      before: this.verticalBefore,
     }
   }
 
@@ -216,6 +279,8 @@ export class DemoGoLive {
       obs: this.obs(),
       live: this.live(),
       stats: this.stats(),
+      vertical_live: this.verticalLive(),
+      vertical_stats: this.verticalStats(),
       destinations: this.destinations(),
       upload: clone(this.upload),
       protect: this.protect,
@@ -224,16 +289,23 @@ export class DemoGoLive {
   }
 
   private frame(): GoLiveFrame {
-    return { live: this.live(), stats: this.stats(), destinations: this.destinations() }
+    return {
+      live: this.live(),
+      stats: this.stats(),
+      vertical_live: this.verticalLive(),
+      vertical_stats: this.verticalStats(),
+      destinations: this.destinations(),
+    }
   }
 
   /** Sends the health lines while live, and once when live changes. */
   private tick(): void {
-    const live = this.live()
-    if (!live) {
-      this.started.clear()
-      this.resetProtect()
-    }
+    const live = this.live() || this.verticalLive()
+    if (!this.live())
+      for (const d of this.cfg) if (d.canvas !== 'vertical') this.started.delete(d.id)
+    if (!this.verticalLive())
+      for (const d of this.cfg) if (d.canvas === 'vertical') this.started.delete(d.id)
+    if (!live) this.resetProtect()
     if (live || live !== this.wasLive) {
       this.wasLive = live
       this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
@@ -267,6 +339,8 @@ export class DemoGoLive {
       return this.remove(seg[2] ?? '')
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
+    if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()
+    if (method === 'POST' && path === 'vertical/obs/restore') return this.restoreVertical()
     if (method === 'POST' && path === 'upload-check') return this.check()
     if (method === 'PUT' && path === 'protection') return this.setProtect(body)
     if (method === 'PUT' && path === 'aitum') {
@@ -335,6 +409,7 @@ export class DemoGoLive {
       name,
       url: url.replace(/\/+$/, ''),
       enabled: true,
+      ...(b.canvas === 'vertical' ? { canvas: 'vertical' as const } : {}),
     }
     this.cfg.push(d)
     this.tick()
@@ -417,6 +492,50 @@ export class DemoGoLive {
     this.paused.delete(id)
     this.tick()
     return undefined
+  }
+
+  private pointVertical(): VerticalObs | null {
+    if (!this.verticalInstalled || !this.obsConnected())
+      throw new HttpError(
+        422,
+        'aitum_vertical_missing',
+        'OBS doesn’t have Aitum Vertical.',
+        'Install Aitum Vertical in OBS (aitum.tv), or use “Cut it from your stream”.',
+      )
+    if (this.verticalStreaming)
+      throw new HttpError(
+        422,
+        'obs_streaming',
+        'OBS’s vertical canvas is streaming right now.',
+        'Stop the vertical stream in OBS first; Ferrocast changes this between streams.',
+      )
+    if (!this.verticalHere) {
+      this.verticalHere = true
+      this.verticalBefore = 'a.rtmps.youtube.com'
+    }
+    this.tick()
+    return this.verticalObs()
+  }
+
+  private restoreVertical(): VerticalObs | null {
+    if (!this.verticalBefore)
+      throw new HttpError(
+        422,
+        'golive_nothing_saved',
+        'There’s no earlier Aitum Vertical setting to put back.',
+        'Set its stream in OBS, in the vertical dock’s settings.',
+      )
+    if (this.verticalStreaming)
+      throw new HttpError(
+        422,
+        'obs_streaming',
+        'OBS’s vertical canvas is streaming right now.',
+        'Stop the vertical stream in OBS first; Ferrocast changes this between streams.',
+      )
+    this.verticalHere = false
+    this.verticalBefore = null
+    this.tick()
+    return this.verticalObs()
   }
 
   private refuseWhileStreaming(): void {
