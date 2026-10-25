@@ -54,8 +54,30 @@ export interface EngineOption {
   max: number | null
   step: number | null
   choices: string[]
+  /** The value saved for each choice, in the same order. */
+  values: (string | number | boolean)[]
   group: EngineOption[]
 }
+
+/** A source in the scene on air. */
+export interface EngineSource {
+  name: string
+  kind: string
+  visible: boolean
+}
+
+/** OBS's own settings for a source (the keys OBS saves in its scene collections). */
+export type EngineSettings = Record<string, unknown>
+
+export interface AddEngineSource {
+  kind: string
+  name: string
+  settings?: EngineSettings
+  /** Fit it to the screen once added. */
+  fit?: boolean
+}
+
+export type EngineSourceEdit = 'show' | 'hide' | 'fit' | 'remove'
 
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {
@@ -74,6 +96,26 @@ export function studioEngineApi(c: FerroClient) {
     kinds: () => c.request<EngineKinds>('GET', '/api/v1/studio/engine/kinds'),
     options: (kind: string) =>
       c.request<EngineOption[]>('GET', `/api/v1/studio/engine/kinds/${enc(kind)}/options`),
+    /** The settings a new source of this kind starts with. */
+    defaults: (kind: string) =>
+      c.request<EngineSettings>('GET', `/api/v1/studio/engine/kinds/${enc(kind)}/defaults`),
+    sources: () => c.request<EngineSource[]>('GET', '/api/v1/studio/engine/sources'),
+    addSource: (add: AddEngineSource) =>
+      c.request<{ source: EngineSource | null; settings: EngineSettings }>(
+        'POST',
+        '/api/v1/studio/engine/sources',
+        add,
+      ),
+    settings: (name: string) =>
+      c.request<EngineSettings>('GET', `/api/v1/studio/engine/sources/${enc(name)}/settings`),
+    /** Changes only the keys sent. */
+    update: (name: string, settings: EngineSettings) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/sources/${enc(name)}/settings`, { settings }),
+    /** The source's options as they look for its settings now. */
+    sourceOptions: (name: string) =>
+      c.request<EngineOption[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/options`),
+    edit: (name: string, what: EngineSourceEdit) =>
+      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/edit`, { do: what }),
     /** Puts the live preview over the box, or takes it away (null). */
     preview: (rect: PreviewRect | null) =>
       c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect }),

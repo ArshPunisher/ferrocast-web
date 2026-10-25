@@ -24,6 +24,13 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.kinds(),
       () => api.options('color_source'),
       () => api.preview(null),
+      () => api.defaults('color_source_v3'),
+      () => api.sources(),
+      () => api.addSource({ kind: 'color_source', name: 'Back', fit: true }),
+      () => api.settings('Back'),
+      () => api.update('Back', { color: 1 }),
+      () => api.sourceOptions('Back'),
+      () => api.edit('Back', 'remove'),
     ]) {
       const e = await call().then(
         () => null,
