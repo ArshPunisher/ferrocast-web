@@ -1139,7 +1139,7 @@ export function validateLayer(config: unknown): string | null {
         return `config.font: "${clip(f)}" isn't a font name (letters, digits, spaces and hyphens).`
       e = first(
         oneOf(config, path, 'look', ['wave', 'pulse']),
-        ...['color', 'color2', 'text_color'].map((c) => optColor(config, path, c)),
+        ...['color', 'color2', 'text_color', 'background'].map((c) => optColor(config, path, c)),
         numIn(config, path, 'title_size', 8, 160),
         optBool(config, path, 'show_title'),
         optBool(config, path, 'only_playing'),

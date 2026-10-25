@@ -29,7 +29,14 @@ describe('layers that move with the music (core::layer parity)', () => {
         density: 1,
         reactive: true,
       },
-      { type: 'music', look: 'pulse', color: '#ffa424', font: 'Space Grotesk', title_size: 28 },
+      {
+        type: 'music',
+        look: 'pulse',
+        color: '#ffa424',
+        background: '#0a0d14c7',
+        font: 'Space Grotesk',
+        title_size: 28,
+      },
       {
         type: 'sound',
         on_show: 'whoosh',
@@ -55,6 +62,7 @@ describe('layers that move with the music (core::layer parity)', () => {
       [{ type: 'fx', preset: 'hex', color: 'url(x)' }, 'config.color'],
       [{ type: 'music', look: 'ring' }, 'config.look'],
       [{ type: 'music', font: 'a;b' }, 'config.font'],
+      [{ type: 'music', background: 'url(x)' }, 'config.background'],
       [{ type: 'sound', on_show: 'airhorn' }, 'config.on_show'],
       [{ type: 'sound', loop: 'whoosh' }, 'config.loop'],
       [{ type: 'sound', volume: 2 }, 'config.volume'],

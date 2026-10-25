@@ -979,6 +979,18 @@ function LayerSettings({
           onChange={(v) => set({ color2: v }, true)}
         />
         <Switch
+          label="Panel behind it"
+          checked={!!c.background && c.background !== 'transparent'}
+          onChange={(v) => opt('background', v ? '#0a0d14c7' : '')}
+        />
+        {c.background && c.background !== 'transparent' && (
+          <ColorField
+            label="Panel"
+            value={c.background}
+            onChange={(v) => set({ background: v }, true)}
+          />
+        )}
+        <Switch
           label="Show the song"
           checked={c.show_title !== false}
           onChange={(v) => opt('show_title', v ? '' : false)}

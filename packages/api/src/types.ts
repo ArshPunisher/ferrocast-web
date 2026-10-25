@@ -550,6 +550,8 @@ export type LayerConfig =
       color?: string
       color2?: string
       text_color?: string
+      /** A panel behind the piece, shown and hidden with it. */
+      background?: string
       font?: string
       title_size?: number
       /** Song and artist beside it (default true). */

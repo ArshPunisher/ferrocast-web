@@ -216,6 +216,8 @@ export class MusicLayer extends CanvasLayer {
   private color = '#ffffff'
   private color2 = '#ffffff'
   private onlyPlaying = true
+  /** A panel behind the piece (shown and hidden with it), or null. */
+  private panel: string | null = null
   private readonly song: HTMLElement
   private songKey = ''
   private on = false
@@ -233,6 +235,10 @@ export class MusicLayer extends CanvasLayer {
     this.look = m.look === 'pulse' ? 'pulse' : 'wave'
     this.color = hex6(m.color, this.look === 'pulse' ? '#3dffb4' : '#ffffff')
     this.color2 = hex6(m.color2, this.color)
+    this.panel =
+      typeof m.background === 'string' && isColor(m.background) && m.background !== 'transparent'
+        ? m.background
+        : null
     this.onlyPlaying = m.only_playing !== false
     const s = this.song.style
     s.display = m.show_title === false ? 'none' : ''
@@ -270,6 +276,17 @@ export class MusicLayer extends CanvasLayer {
     // Hidden until music plays: nothing to draw.
     if (!this.on && dt > 0) return
     g.save()
+    if (this.panel) {
+      g.fillStyle = this.panel
+      g.beginPath()
+      if (typeof g.roundRect === 'function')
+        g.roundRect(0, 0, w, this.box.h, Math.min(22, this.box.h / 4))
+      else g.rect(0, 0, w, this.box.h)
+      g.fill()
+      g.strokeStyle = alpha(this.color, 0.35)
+      g.lineWidth = 1
+      g.stroke()
+    }
     g.lineJoin = 'round'
     g.lineCap = 'round'
     if (this.look === 'wave') {
