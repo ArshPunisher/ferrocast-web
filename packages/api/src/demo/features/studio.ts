@@ -1435,6 +1435,24 @@ export class DemoStudio {
       return { show: clone(run) }
     }
 
+    // The Studio's engine needs the desktop app (libobs in its window), like the engine says.
+    if (a === 'studio' && b === 'engine') {
+      if (is('GET', 'studio', 'engine'))
+        return {
+          available: false,
+          running: false,
+          version: null,
+          renderer: null,
+          detail: 'The Studio runs in the Ferrocast app on your computer. Open Ferrocast there.',
+        }
+      throw new HttpError(
+        422,
+        'studio_unavailable',
+        'The Studio runs in the Ferrocast app on your computer. Open Ferrocast there.',
+        'The Studio needs the desktop app; this is the server or a browser.',
+      )
+    }
+
     // OBS
     if (is('GET', 'obs', 'scenes'))
       return { current: this.obs.current, scenes: clone(this.obs.scenes) } satisfies ObsScenes

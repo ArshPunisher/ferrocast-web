@@ -23,6 +23,7 @@ export * from './golive'
 export * from './autoreplies'
 export * from './obs-theme'
 export * from './music'
+export * from './studio-engine'
 export {
   amountOf,
   appliesTo,
