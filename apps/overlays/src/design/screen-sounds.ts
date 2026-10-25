@@ -1,6 +1,7 @@
-// The sound element's sounds (`layer` type `sound`): six stingers and four loops, rendered
-// from sounds/screen-recipes.js into MP3 files (`render.mjs --screen`), or the streamer's own
-// file from the media library. One audio context for the page; OBS hears it as the browser
+// The sound element's sounds (`layer` type `sound`): six stingers and four loops, real
+// recordings from Freesound, all CC0 (sounds/screen-sounds.md lists each one), trimmed,
+// levelled and looped by sounds/prepare-screen.py; or the streamer's own file from the media
+// library. One audio context for the page; OBS hears it as the browser
 // source's audio ("Control audio via OBS", which Ferrocast switches on).
 
 import type { SoundLoop, Stinger } from '@ferrocast/api/types'
@@ -16,18 +17,18 @@ import wind from './sounds/screen/wind.mp3'
 import pad from './sounds/screen/pad.mp3'
 import hum from './sounds/screen/hum.mp3'
 
-/** Each file, with its length in ms (printed by `render.mjs --screen`). */
+/** Each file, with its length in ms (printed by `prepare-screen.py`). */
 export const SCREEN_SOUNDS: Record<Stinger | SoundLoop, { url: string; ms: number }> = {
-  whoosh: { url: whoosh, ms: 2071 },
-  riser: { url: riser, ms: 3600 },
-  impact: { url: impact, ms: 1919 },
-  tick: { url: tick, ms: 111 },
-  chime: { url: chime, ms: 2017 },
-  glitch: { url: glitch, ms: 1800 },
-  rain: { url: rain, ms: 8000 },
-  wind: { url: wind, ms: 8000 },
-  pad: { url: pad, ms: 8000 },
-  hum: { url: hum, ms: 8000 },
+  whoosh: { url: whoosh, ms: 1863 },
+  riser: { url: riser, ms: 3061 },
+  impact: { url: impact, ms: 4343 },
+  tick: { url: tick, ms: 445 },
+  chime: { url: chime, ms: 1544 },
+  glitch: { url: glitch, ms: 2000 },
+  rain: { url: rain, ms: 30000 },
+  wind: { url: wind, ms: 30000 },
+  pad: { url: pad, ms: 30000 },
+  hum: { url: hum, ms: 30000 },
 }
 
 let ctx: AudioContext | null = null

@@ -252,8 +252,8 @@ export const SCREEN_SOUND_LABEL: Record<Stinger | SoundLoop, string> = {
   glitch: 'Glitch',
   rain: 'Rain',
   wind: 'Wind',
-  pad: 'Synth pad',
-  hum: 'City hum',
+  pad: 'Soft pad',
+  hum: 'City at night',
 }
 /** core::layer::COUNTDOWN_LOOKS */
 export const COUNTDOWN_LOOKS: readonly CountdownLook[] = [

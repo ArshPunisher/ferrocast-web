@@ -1,33 +1,19 @@
 // Renders the built-in alert sounds (recipes.js) into small MP3 files the overlay, the
 // dashboard and OBS all play the same way. Run after changing a recipe:
 //   node apps/overlays/sounds/render.mjs
-//   node apps/overlays/sounds/render.mjs --screen   (the sound element's, screen-recipes.js)
 // Needs Playwright's Chromium (pnpm exec playwright install chromium) and ffmpeg on PATH.
 // Each file is peak-limited to -1 dBFS; the script prints every sound's length and peak.
 
 import { chromium } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const SCREEN = process.argv.includes('--screen')
-const out = join(here, SCREEN ? '../src/design/sounds/screen' : '../src/design/sounds')
-const SCREEN_IDS = [
-  'whoosh',
-  'riser',
-  'impact',
-  'tick',
-  'chime',
-  'glitch',
-  'rain',
-  'wind',
-  'pad',
-  'hum',
-]
-const ALERT_IDS = [
+const out = join(here, '../src/design/sounds')
+const IDS = [
   'sparkle',
   'glint',
   'cascade',
@@ -46,7 +32,6 @@ const ALERT_IDS = [
   'wink',
   'sparkle_classic',
 ]
-const IDS = SCREEN ? SCREEN_IDS : ALERT_IDS
 
 /** 16-bit stereo WAV from two float channels. */
 function wav(sr, l, r, scale) {
@@ -86,24 +71,17 @@ const browser = await chromium.launch(
 )
 const page = await browser.newPage()
 await page.setContent('<!doctype html><title>render</title>')
-await page.addScriptTag({
-  content: readFileSync(join(here, SCREEN ? 'screen-recipes.js' : 'recipes.js'), 'utf8'),
-})
-mkdirSync(out, { recursive: true })
+await page.addScriptTag({ content: readFileSync(join(here, 'recipes.js'), 'utf8') })
 const tmp = mkdtempSync(join(tmpdir(), 'fc-sounds-'))
 const lengths = {}
 try {
   for (const id of IDS) {
     const r = await page.evaluate((x) => window.FC_RENDER(x), id)
-    // A loop keeps its exact length, so it repeats without a gap.
-    const [l, rr] = r.loop ? [r.left, r.right] : trimTail(r.left, r.right, r.sr)
+    const [l, rr] = trimTail(r.left, r.right, r.sr)
     let peak = 0
     for (let i = 0; i < l.length; i++) peak = Math.max(peak, Math.abs(l[i]), Math.abs(rr[i]))
     const ceiling = 0.891 // -1 dBFS
-    // Screen sounds are brought to one loudness: stingers near the ceiling, loops (a bed
-    // behind the screen) well under it, so a volume slider means the same on each.
-    const target = SCREEN ? (r.loop ? 0.45 : 0.85) : null
-    const scale = target ? target / peak : peak > ceiling ? ceiling / peak : 1
+    const scale = peak > ceiling ? ceiling / peak : 1
     const w = join(tmp, `${id}.wav`)
     writeFileSync(w, wav(r.sr, l, rr, scale))
     const mp3 = join(out, `${id}.mp3`)
@@ -128,13 +106,11 @@ try {
     ])
     lengths[id] = Math.round((l.length / r.sr) * 1000)
     process.stdout.write(
-      `${id.padEnd(16)} ${String(lengths[id]).padStart(5)} ms  peak ${peak.toFixed(3)}${scale < 1 ? ' (limited)' : scale > 1 ? ' (raised)' : ''}  ${(statSync(mp3).size / 1024).toFixed(1)} KB\n`,
+      `${id.padEnd(16)} ${String(lengths[id]).padStart(5)} ms  peak ${peak.toFixed(3)}${scale < 1 ? ' (limited)' : ''}  ${(statSync(mp3).size / 1024).toFixed(1)} KB\n`,
     )
   }
 } finally {
   await browser.close()
   rmSync(tmp, { recursive: true, force: true })
 }
-process.stdout.write(
-  `\nLengths for ${SCREEN ? 'screen-sounds.ts' : 'sounds.ts'}:\n${JSON.stringify(lengths)}\n`,
-)
+process.stdout.write(`\nLengths for sounds.ts:\n${JSON.stringify(lengths)}\n`)
