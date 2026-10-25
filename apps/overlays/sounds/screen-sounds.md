@@ -6,7 +6,7 @@ domain): free to use, change and ship, no credit required. They're credited here
 
 | File | Recording | By | Source |
 |---|---|---|---|
-| `whoosh.mp3` | quick woosh | florianreichelt | https://freesound.org/s/683101/ |
+| `whoosh.mp3` | swoosh | Halgrimm | https://freesound.org/s/169867/ |
 | `riser.mp3` | Simple Riser | SoundEffectsForAll | https://freesound.org/s/840719/ |
 | `impact.mp3` | Cinematic Hit With Horns.wav | DeVern | https://freesound.org/s/427803/ |
 | `tick.mp3` | clock-tick-01.flac | pbimal | https://freesound.org/s/534094/ |

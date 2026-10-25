@@ -19,7 +19,7 @@ import hum from './sounds/screen/hum.mp3'
 
 /** Each file, with its length in ms (printed by `prepare-screen.py`). */
 export const SCREEN_SOUNDS: Record<Stinger | SoundLoop, { url: string; ms: number }> = {
-  whoosh: { url: whoosh, ms: 1863 },
+  whoosh: { url: whoosh, ms: 2236 },
   riser: { url: riser, ms: 3061 },
   impact: { url: impact, ms: 4343 },
   tick: { url: tick, ms: 445 },

@@ -17,7 +17,7 @@ OUT = os.path.join(HERE, '..', 'src', 'design', 'sounds', 'screen')
 SR = 48000
 # name: (file in the download folder, kind, LUFS for a stinger or start s for a loop)
 PICKS = {
-    'whoosh': ('whoosh-3.mp3', 'stinger', -17),
+    'whoosh': ('whoosh-2.mp3', 'stinger', -17),
     'riser': ('riser-3.mp3', 'stinger', -17),
     'impact': ('impact-1.mp3', 'stinger', -15),
     'tick': ('tick-1.mp3', 'stinger', -20),
