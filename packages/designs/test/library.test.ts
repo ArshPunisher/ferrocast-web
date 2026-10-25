@@ -199,6 +199,20 @@ describe('safe for streaming', () => {
     expect(JSON.stringify(catalog()).length).toBeLessThanOrEqual(1_800_000)
   })
 
+  it('a motion theme without music is the plain screen: no empty music panels', () => {
+    const motion = of('theme').filter((t) =>
+      t.content.scenes.some((s) => s.layers.some((l) => layerCfg(l)?.type === 'fx')),
+    )
+    expect(motion.length).toBeGreaterThanOrEqual(11)
+    for (const t of motion)
+      for (const s of t.content.scenes)
+        for (const l of s.layers)
+          expect(
+            ['band', 'panel'].includes(l.id),
+            `${t.id}/${s.key}: '${l.id}' stays when quiet`,
+          ).toBe(false)
+  })
+
   it('every live scene keeps the middle of the screen clear for the game', () => {
     for (const t of of('theme')) {
       const s = t.content.scenes.find((x) => x.key === 'in_game')!

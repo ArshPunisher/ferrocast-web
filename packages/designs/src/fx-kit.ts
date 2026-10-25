@@ -130,11 +130,13 @@ export function fxTheme(t: FxThemeSpec) {
     fill2: a8(t.bg, 0.78),
     angle: 180,
   })
+  // Wide display fonts (Monoton, Orbitron in capitals) run about 0.8 em a letter: a long
+  // title gets smaller instead of wrapping onto the line under it (seen in OBS, 25 Oct).
   const title = (words: string, b: Box, size = 132) =>
     text('title', b, {
       text: words,
       font: t.head.font,
-      size,
+      size: Math.min(size, Math.floor(b[2] / (Array.from(words).length * 0.8))),
       weight: t.head.weight ?? 800,
       color: t.ink,
       align: 'center',
@@ -182,12 +184,14 @@ export function fxTheme(t: FxThemeSpec) {
       },
       'Live now',
     )
-  const beat = (b: Box, size = 26) =>
+  /** The music piece; `panel` gives it a dark panel that comes and goes with the music. */
+  const beat = (b: Box, size = 26, panel = false) =>
     musicPiece('music', b, {
       look: t.music,
       color: t.a,
       color2: t.b,
       text_color: t.ink,
+      ...(panel ? { background: a8(t.bg, 0.78) } : {}),
       font: body,
       title_size: size,
       show_title: true,
@@ -226,8 +230,8 @@ export function fxTheme(t: FxThemeSpec) {
           shade,
           title('Starting soon', [160, 250, 1600, 170]),
           timer(450),
-          box('band', [0, 760, 1920, 200], { shape: 'rect', fill: a8(t.bg, 0.72) }),
-          beat([160, 772, 1600, 176], 28),
+          // The band is the music piece's own panel: without music the screen stays plain.
+          beat([80, 760, 1760, 200], 28, true),
           ...corner,
           tm,
           mark(),
@@ -239,14 +243,7 @@ export function fxTheme(t: FxThemeSpec) {
           shade,
           title('Starting soon', [160, 200, 1600, 170]),
           timer(390),
-          box('panel', [384, 610, 1152, 200], {
-            shape: 'rect',
-            fill: a8(t.bg, 0.78),
-            radius: 22,
-            stroke: a8(t.a, 0.35),
-            stroke_width: 1,
-          }),
-          beat([420, 622, 1080, 176], 28),
+          beat([384, 610, 1152, 200], 28, true),
           socials(870),
           ...corner,
           tm,
