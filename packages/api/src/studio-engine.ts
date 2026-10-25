@@ -77,6 +77,16 @@ export interface AddEngineSource {
   fit?: boolean
 }
 
+/** How the Studio's stream into Go live is going (null: not streaming). */
+export interface EngineStreamStats {
+  active: boolean
+  reconnecting: boolean
+  bytes: number
+  frames: number
+  dropped: number
+  error: string | null
+}
+
 export type EngineSourceEdit = 'show' | 'hide' | 'fit' | 'remove'
 
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
@@ -116,6 +126,10 @@ export function studioEngineApi(c: FerroClient) {
       c.request<EngineOption[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/options`),
     edit: (name: string, what: EngineSourceEdit) =>
       c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/edit`, { do: what }),
+    /** Starts or stops streaming the Studio into this PC's Go live. */
+    stream: (on: boolean) =>
+      c.request<EngineStreamStats | null>('POST', '/api/v1/studio/engine/stream', { on }),
+    streamStats: () => c.request<EngineStreamStats | null>('GET', '/api/v1/studio/engine/stream'),
     /** Puts the live preview over the box, or takes it away (null). */
     preview: (rect: PreviewRect | null) =>
       c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect }),
