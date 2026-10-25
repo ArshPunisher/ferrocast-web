@@ -73,6 +73,8 @@ export interface EngineScene {
   items: number
   /** On air. */
   current: boolean
+  /** Its own transition (OBS's Transition Override), or null for the Studio's. */
+  transition: EngineTransition | null
 }
 
 export interface EngineTransition {
@@ -99,6 +101,8 @@ export interface EngineItem {
   group: boolean
   /** How it mixes with what's under it. */
   blend: EngineBlend
+  /** How it's scaled. */
+  scale_filter: EngineScaleFilter
   children: EngineItem[]
 }
 
@@ -112,6 +116,16 @@ export const ENGINE_BLENDS = [
   'darken',
 ] as const
 export type EngineBlend = (typeof ENGINE_BLENDS)[number]
+
+export const ENGINE_SCALE_FILTERS = [
+  'off',
+  'point',
+  'bicubic',
+  'bilinear',
+  'lanczos',
+  'area',
+] as const
+export type EngineScaleFilter = (typeof ENGINE_SCALE_FILTERS)[number]
 
 export type EngineItemEdit =
   | 'show'
@@ -138,6 +152,7 @@ export type EngineItemEdit =
   /** A copy of the source just above it. */
   | 'duplicate'
   | `blend_${EngineBlend}`
+  | `scale_${EngineScaleFilter}`
 
 export interface NewEngineSource {
   kind: string
@@ -369,6 +384,18 @@ export function studioEngineApi(c: FerroClient) {
         { settings },
       ),
     /** A global sound device heard in every scene: 1, 2 desktop sound; 3 to 6 mics. */
+    /** A scene's own transition, or null to use the Studio's. */
+    setSceneTransition: (scene: string, transition: EngineTransition | null) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/transition`, {
+        transition,
+      }),
+    /** A PNG of a scene or source, saved where recordings go. */
+    screenshot: (name: string) =>
+      c.request<{ file: string }>(
+        'POST',
+        `/api/v1/studio/engine/sources/${enc(name)}/screenshot`,
+        {},
+      ),
     /** A Web page source: on screen to click and type in, back off-screen, or loaded again. */
     web: (name: string, what: 'interact' | 'stop' | 'reload') =>
       c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/web`, { do: what }),

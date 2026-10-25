@@ -10,6 +10,7 @@ import {
   ArrowsInSimple,
   ArrowsOut,
   ArrowsOutSimple,
+  Camera,
   CaretDown,
   CaretDoubleDown,
   CaretDoubleUp,
@@ -27,6 +28,7 @@ import {
   FlipVertical,
   FrameCorners,
   Funnel,
+  ImageSquare,
   LockSimple,
   LockSimpleOpen,
   PencilSimple,
@@ -35,13 +37,27 @@ import {
   SlidersHorizontal,
   Trash,
 } from '@phosphor-icons/react'
-import { ENGINE_BLENDS, type EngineItem, type EngineItemEdit } from '@ferrocast/api'
+import {
+  ENGINE_BLENDS,
+  ENGINE_SCALE_FILTERS,
+  type EngineItem,
+  type EngineItemEdit,
+} from '@ferrocast/api'
 import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { filterItems, useContextMenu, type MenuItem } from './menu'
+
+const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
+  off: 'Off',
+  point: 'Sharp pixels',
+  bicubic: 'Smooth',
+  bilinear: 'Fast',
+  lanczos: 'Sharpest',
+  area: 'Best for shrinking',
+}
 
 const BLEND_LABEL: Record<(typeof ENGINE_BLENDS)[number], string> = {
   normal: 'Normal',
@@ -164,6 +180,15 @@ export function SourcesDock() {
       ],
     },
     {
+      label: 'Scaling',
+      icon: ImageSquare,
+      items: ENGINE_SCALE_FILTERS.map((f) => ({
+        label: SCALE_LABEL[f],
+        checked: item.scale_filter === f,
+        onSelect: () => void act(item, `scale_${f}`),
+      })),
+    },
+    {
       label: 'Blending',
       icon: Faders,
       items: ENGINE_BLENDS.map((b) => ({
@@ -173,6 +198,14 @@ export function SourcesDock() {
       })),
     },
     { sep: true },
+    {
+      label: 'Screenshot',
+      icon: Camera,
+      onSelect: () =>
+        void run('shot', () => api.screenshot(item.name), {
+          success: 'Screenshot saved with your recordings.',
+        }),
+    },
     { label: 'Copy', icon: CopySimple, onSelect: () => setClip(item.name) },
     { label: 'Duplicate', icon: Copy, onSelect: () => void act(item, 'duplicate') },
     ...filterItems(item.name, { ...desk, paste: pasteFilters(item.name) }),

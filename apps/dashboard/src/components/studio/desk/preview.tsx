@@ -127,7 +127,7 @@ export function StageOff({
   )
 }
 
-const TRANSITIONS: Record<string, string> = {
+export const TRANSITIONS: Record<string, string> = {
   fade_transition: 'Fade',
   cut_transition: 'Cut',
   swipe_transition: 'Swipe',

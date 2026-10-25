@@ -67,6 +67,9 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.web('Alerts', 'interact'),
       () => api.obsCollections(),
       () => api.importObs('Untitled'),
+      () => api.setSceneTransition('Gameplay', { kind: 'cut_transition', ms: 0 }),
+      () => api.screenshot('Gameplay'),
+      () => api.editItem('Gameplay', 3, 'scale_lanczos'),
     ]) {
       const e = await call().then(
         () => null,

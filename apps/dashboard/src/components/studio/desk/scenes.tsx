@@ -3,7 +3,9 @@
 
 import { useState } from 'react'
 import {
+  ArrowsLeftRight,
   Broadcast,
+  Camera,
   CaretDoubleDown,
   CaretDoubleUp,
   CaretDown,
@@ -16,12 +18,14 @@ import {
   Stack,
   Trash,
 } from '@phosphor-icons/react'
+import { type EngineScene, type EngineTransition } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { ImportObsDialog } from './import-obs'
+import { TRANSITIONS } from './preview'
 import { filterItems, useContextMenu, type MenuItem } from './menu'
 
 /** A name not used yet: "Scene 2", "Scene 3"… */
@@ -58,78 +62,105 @@ export function ScenesDock() {
     if (ok) setNaming(null)
   }
 
-  const sceneMenu = (name: string, i: number, onAir: boolean): MenuItem[] => [
-    {
-      label: 'Put on air',
-      icon: Broadcast,
-      disabled: onAir,
-      onSelect: () => void act(`go:${name}`, () => api.setCurrent(name)),
-    },
-    { sep: true },
-    {
-      label: 'Add scene',
-      icon: Plus,
-      onSelect: () => setNaming({ from: null, value: freeName('Scene', names) }),
-    },
-    {
-      label: 'Duplicate',
-      icon: Copy,
-      onSelect: () => void act('copy', () => api.duplicateScene(name, freeName(name, names))),
-    },
-    {
-      label: 'Rename',
-      icon: PencilSimple,
-      hint: 'F2',
-      onSelect: () => setNaming({ from: name, value: name }),
-    },
-    {
-      label: 'Order',
-      icon: Stack,
-      items: [
-        {
-          label: 'Up',
-          icon: CaretUp,
-          disabled: i <= 0,
-          onSelect: () => void act('up', () => api.moveScene(name, i - 1)),
-        },
-        {
-          label: 'Down',
-          icon: CaretDown,
-          disabled: i >= names.length - 1,
-          onSelect: () => void act('down', () => api.moveScene(name, i + 1)),
-        },
-        {
-          label: 'To the top',
-          icon: CaretDoubleUp,
-          disabled: i <= 0,
-          onSelect: () => void act('top', () => api.moveScene(name, 0)),
-        },
-        {
-          label: 'To the bottom',
-          icon: CaretDoubleDown,
-          disabled: i >= names.length - 1,
-          onSelect: () => void act('bottom', () => api.moveScene(name, names.length - 1)),
-        },
-      ],
-    },
-    { sep: true },
-    { label: 'Filters', icon: Funnel, onSelect: () => edit(name) },
-    ...filterItems(name, {
-      ...desk,
-      paste: (from) =>
-        void run('filters', () => done(api.pasteFilters(name, from)), {
-          success: `Filters pasted onto ${name}.`,
-        }),
-    }),
-    { sep: true },
-    {
-      label: 'Remove',
-      icon: Trash,
-      danger: true,
-      disabled: names.length < 2,
-      onSelect: () => setRemoving(name),
-    },
-  ]
+  const shoot = (name: string) =>
+    void run('shot', () => api.screenshot(name), {
+      success: 'Screenshot saved with your recordings.',
+    })
+  const sceneMenu = (scene: EngineScene, i: number): MenuItem[] => {
+    const { name, current: onAir } = scene
+    const t = scene.transition
+    const ms = scenes.data?.transition.ms ?? 300
+    const setT = (next: EngineTransition | null) =>
+      void act('transition', () => api.setSceneTransition(name, next))
+    return [
+      {
+        label: 'Put on air',
+        icon: Broadcast,
+        disabled: onAir,
+        onSelect: () => void act(`go:${name}`, () => api.setCurrent(name)),
+      },
+      { sep: true },
+      {
+        label: 'Add scene',
+        icon: Plus,
+        onSelect: () => setNaming({ from: null, value: freeName('Scene', names) }),
+      },
+      {
+        label: 'Duplicate',
+        icon: Copy,
+        onSelect: () => void act('copy', () => api.duplicateScene(name, freeName(name, names))),
+      },
+      {
+        label: 'Rename',
+        icon: PencilSimple,
+        hint: 'F2',
+        onSelect: () => setNaming({ from: name, value: name }),
+      },
+      {
+        label: 'Order',
+        icon: Stack,
+        items: [
+          {
+            label: 'Up',
+            icon: CaretUp,
+            disabled: i <= 0,
+            onSelect: () => void act('up', () => api.moveScene(name, i - 1)),
+          },
+          {
+            label: 'Down',
+            icon: CaretDown,
+            disabled: i >= names.length - 1,
+            onSelect: () => void act('down', () => api.moveScene(name, i + 1)),
+          },
+          {
+            label: 'To the top',
+            icon: CaretDoubleUp,
+            disabled: i <= 0,
+            onSelect: () => void act('top', () => api.moveScene(name, 0)),
+          },
+          {
+            label: 'To the bottom',
+            icon: CaretDoubleDown,
+            disabled: i >= names.length - 1,
+            onSelect: () => void act('bottom', () => api.moveScene(name, names.length - 1)),
+          },
+        ],
+      },
+      { sep: true },
+      {
+        label: 'Transition',
+        icon: ArrowsLeftRight,
+        items: [
+          { label: 'Same as all', checked: !t, onSelect: () => setT(null) },
+          { sep: true },
+          ...Object.entries(TRANSITIONS).map(([kind, label]) => ({
+            label:
+              kind === 'cut_transition' ? label : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
+            checked: t?.kind === kind,
+            onSelect: () =>
+              setT({ kind, ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms }),
+          })),
+        ],
+      },
+      { label: 'Screenshot', icon: Camera, onSelect: () => shoot(name) },
+      { label: 'Filters', icon: Funnel, onSelect: () => edit(name) },
+      ...filterItems(name, {
+        ...desk,
+        paste: (from) =>
+          void run('filters', () => done(api.pasteFilters(name, from)), {
+            success: `Filters pasted onto ${name}.`,
+          }),
+      }),
+      { sep: true },
+      {
+        label: 'Remove',
+        icon: Trash,
+        danger: true,
+        disabled: names.length < 2,
+        onSelect: () => setRemoving(name),
+      },
+    ]
+  }
 
   const nameInput = (
     <form
@@ -204,7 +235,7 @@ export function ScenesDock() {
                       !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
                     }
                     onDoubleClick={() => setNaming({ from: s.name, value: s.name })}
-                    onContextMenu={(e) => open(e, s.name, sceneMenu(s.name, i, s.current))}
+                    onContextMenu={(e) => open(e, s.name, sceneMenu(s, i))}
                     onKeyDown={(e) => {
                       if (e.key === 'F2') setNaming({ from: s.name, value: s.name })
                     }}
