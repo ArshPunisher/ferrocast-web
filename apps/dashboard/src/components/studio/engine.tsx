@@ -185,7 +185,8 @@ function PreviewBox({ running }: { running: boolean }) {
       const inView = r.top >= bar && r.bottom <= window.innerHeight && r.width > 1 && r.height > 1
       const rect: PreviewRect | null =
         inView && !covered ? { x: r.left, y: r.top, w: r.width, h: r.height } : null
-      const key = JSON.stringify(rect)
+      // The window's height is part of it: the native side places the view from the bottom.
+      const key = JSON.stringify([rect, window.innerHeight])
       if (key === last) return
       last = key
       void api.preview(rect).catch(() => {
