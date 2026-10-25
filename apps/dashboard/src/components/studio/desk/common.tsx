@@ -62,6 +62,12 @@ export interface Desk {
   /** The engine, stream and recording now (read every second by the bar above). */
   stats: EngineStats | null
   setStats: (s: EngineStats) => void
+  /** A source copied from a menu, to paste into another scene (as the same source). */
+  clip: string | null
+  setClip: (name: string | null) => void
+  /** The source whose filters were copied, to paste onto another. */
+  filterClip: string | null
+  setFilterClip: (name: string | null) => void
   /** Opens Studio settings, at a page ("stream", "audio", "picture", "record", "keys",
    * "advanced"). */
   openSettings: (page?: string) => void
@@ -100,12 +106,15 @@ export interface KindEntry {
 
 export interface KindGroup {
   label: string
+  /** The group's colour (a CSS colour), on its icons. */
+  tone: string
   entries: KindEntry[]
 }
 
 export const KIND_GROUPS: KindGroup[] = [
   {
     label: 'Capture',
+    tone: 'var(--fc-accent-text)',
     entries: [
       {
         key: 'camera',
@@ -144,6 +153,7 @@ export const KIND_GROUPS: KindGroup[] = [
   },
   {
     label: 'Sound',
+    tone: 'var(--fc-ok)',
     entries: [
       {
         key: 'mic',
@@ -171,6 +181,7 @@ export const KIND_GROUPS: KindGroup[] = [
   },
   {
     label: 'Ferrocast',
+    tone: 'var(--fc-molten-text)',
     entries: [
       {
         key: 'overlay',
@@ -184,6 +195,7 @@ export const KIND_GROUPS: KindGroup[] = [
   },
   {
     label: 'Media',
+    tone: 'var(--fc-twitch)',
     entries: [
       { key: 'image', label: 'Image', icon: ImageIcon, kinds: ['image_source'] },
       { key: 'video', label: 'Video', icon: FilmStrip, kinds: ['ffmpeg_source', 'vlc_source'] },
@@ -199,6 +211,7 @@ export const KIND_GROUPS: KindGroup[] = [
   },
   {
     label: 'Build',
+    tone: 'var(--fc-warn)',
     entries: [
       {
         key: 'text',
@@ -222,6 +235,50 @@ export const KIND_GROUPS: KindGroup[] = [
 const ICONS: Record<string, Icon> = Object.fromEntries(
   KIND_GROUPS.flatMap((g) => g.entries.flatMap((e) => e.kinds.map((k) => [k, e.icon]))),
 )
+const TONES: Record<string, string> = Object.fromEntries(
+  KIND_GROUPS.flatMap((g) => g.entries.flatMap((e) => e.kinds.map((k) => [k, g.tone]))),
+)
+/** Colour for the kinds "More" lists and anything unknown. */
+export const PLAIN_TONE = 'var(--fc-text-2)'
+
+/** A kind's colour: its group's in "Add a source" (sound kinds green). */
+export function kindTone(kind: string): string {
+  if (kind === 'group' || kind === 'scene') return 'var(--fc-warn)'
+  return TONES[kind] ?? (kind.includes('audio') ? 'var(--fc-ok)' : PLAIN_TONE)
+}
+
+/** A kind's icon on a soft square of its colour. */
+export function KindTile({
+  kind,
+  icon,
+  tone,
+  size = 28,
+  dim,
+}: {
+  kind?: string | undefined
+  icon?: Icon | undefined
+  tone?: string | undefined
+  size?: number
+  /** Hidden or muted: greyed. */
+  dim?: boolean | undefined
+}) {
+  const I = icon ?? kindIcon(kind ?? '')
+  const c = dim ? 'var(--fc-text-3)' : (tone ?? kindTone(kind ?? ''))
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 place-items-center rounded-[8px]"
+      style={{
+        width: size,
+        height: size,
+        color: c,
+        background: `color-mix(in oklab, ${c} 15%, transparent)`,
+      }}
+    >
+      <I size={Math.round(size * 0.58)} weight="bold" />
+    </span>
+  )
+}
 
 /** The icon for a source's kind (sound kinds share the mic's). */
 export function kindIcon(kind: string): Icon {

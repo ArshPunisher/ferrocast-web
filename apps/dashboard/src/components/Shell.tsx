@@ -44,6 +44,7 @@ import { UpdateDialogHost, UpdateNavItem } from './update'
 import { AccountAvatar, SidebarAccount } from './account/parts'
 import { useAccount } from '../lib/account-status'
 import { useUpdateWatch } from '../lib/update'
+import { useIsWide } from '../lib/wide'
 
 type NavItem = {
   route: Route
@@ -334,6 +335,7 @@ function useHeaderHeight() {
 
 export function Shell({ children, demo }: { children: ReactNode; demo: boolean }) {
   const route = useRoute()
+  const wide = useIsWide()
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleTheme } = useTheme()
   const [more, setMore] = useState(false)
   const notices = useLive((s) => s.notices)
@@ -552,7 +554,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         <main
           id="main"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1400px] px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7 lg:pb-12"
+          className={cx(
+            'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7 lg:pb-12',
+            wide ? 'max-w-none' : 'max-w-[1400px]',
+          )}
         >
           {children}
         </main>

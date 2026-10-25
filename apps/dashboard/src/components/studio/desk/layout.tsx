@@ -623,7 +623,7 @@ export function DockHeader({
         if (movable) grab(id, e)
       }}
       className={cx(
-        'flex min-h-[42px] flex-none items-center gap-1.5 border-b border-line bg-surface-1 py-1.5 pr-1.5 select-none',
+        'flex h-11 min-w-0 flex-none items-center gap-1.5 border-b border-line bg-surface-1 pr-1.5 select-none',
         movable ? 'cursor-grab pl-1 active:cursor-grabbing' : 'pl-3',
       )}
     >
@@ -632,7 +632,7 @@ export function DockHeader({
           <DotsSixVertical size={15} />
         </span>
       )}
-      <h2 className="truncate font-display text-[14px] font-bold tracking-tight text-text">
+      <h2 className="truncate font-display text-[14.5px] font-extrabold tracking-tight text-text">
         {title ?? DOCK_NAMES[id]}
       </h2>
       {info}

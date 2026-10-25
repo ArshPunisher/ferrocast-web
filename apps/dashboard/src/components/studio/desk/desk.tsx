@@ -32,6 +32,7 @@ import {
 import { Button, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
+import { useWidePage } from '../../../lib/wide'
 import { AddSourceDialog } from './add-source'
 import { DeskProvider, useDesk, useEngine, type Desk } from './common'
 import { GoLiveDock } from './golive-dock'
@@ -54,6 +55,7 @@ export function StudioDesk({
   lead?: React.ReactNode
 }) {
   const api = useEngine()
+  useWidePage()
   const status = useResource(() => api.status(), [api])
   const s = status.data
   const start = useCallback(async () => {
@@ -110,6 +112,8 @@ function Running({
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
+  const [clip, setClip] = useState<string | null>(null)
+  const [filterClip, setFilterClip] = useState<string | null>(null)
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
@@ -136,6 +140,10 @@ function Running({
     setAdding,
     stats,
     setStats,
+    clip,
+    setClip,
+    filterClip,
+    setFilterClip,
     openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
   }
   const docks: Record<DockId, React.ReactNode> = {

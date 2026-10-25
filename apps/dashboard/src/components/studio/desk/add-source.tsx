@@ -3,17 +3,19 @@
 // scene; sound devices can play in every scene. Every other kind OBS has is under "More".
 
 import { useMemo, useState } from 'react'
-import { Cube, MagnifyingGlass } from '@phosphor-icons/react'
+import { CheckCircle, Cube, MagnifyingGlass } from '@phosphor-icons/react'
 import { type EngineKind, type EngineOption, type EngineSettings } from '@ferrocast/api'
 import { Button, Dialog, Field, Input, Skeleton, Switch, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource } from '../../../lib/hooks'
-import { KIND_GROUPS, kindIcon, pickKind, useDesk, type KindEntry } from './common'
+import { KIND_GROUPS, KindTile, PLAIN_TONE, pickKind, useDesk, type KindEntry } from './common'
 import { OptionsForm } from './options'
 
 interface Choice {
   entry: KindEntry
   kind: string
+  /** Its group's colour. */
+  tone: string
 }
 
 /** A name not used yet in the collection. */
@@ -40,7 +42,7 @@ export function AddSourceDialog() {
     <Dialog
       open={adding !== null}
       onClose={() => setAdding(null)}
-      size="lg"
+      size="xl"
       title={`Add to ${scene}`}
     >
       {adding !== null && <AddSource start={adding} onDone={() => setAdding(null)} />}
@@ -57,7 +59,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
     const out = KIND_GROUPS.map((g) => ({
       label: g.label,
       choices: g.entries
-        .map((entry) => ({ entry, kind: pickKind(entry, k) }))
+        .map((entry) => ({ entry, kind: pickKind(entry, k), tone: g.tone }))
         .filter((c): c is Choice => {
           if (!c.kind) return false
           if (c.entry.scene) return (scenes.data?.scenes.length ?? 0) > 1
@@ -71,6 +73,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
       .map((x: EngineKind) => ({
         entry: { key: `more:${x.id}`, label: x.name || x.id, icon: Cube, kinds: [x.id] },
         kind: x.id,
+        tone: PLAIN_TONE,
       }))
     if (more.length) out.push({ label: 'More', choices: more })
     return out.filter((g) => g.choices.length > 0)
@@ -83,8 +86,8 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
   if (kinds.error && !kinds.data) return <LoadError error={kinds.error} onRetry={kinds.reload} />
   if (!kinds.data) return <Skeleton className="h-80" />
   return (
-    <div className="-mx-1 flex flex-col gap-3 sm:grid sm:grid-cols-[210px_minmax(0,1fr)] sm:gap-4">
-      <nav aria-label="Kinds" className="flex flex-col gap-2">
+    <div className="-mx-1 flex flex-col gap-3 sm:grid sm:h-full sm:grid-cols-[240px_minmax(0,1fr)] sm:gap-5">
+      <nav aria-label="Kinds" className="flex min-h-0 flex-col gap-2">
         <div className="relative">
           <MagnifyingGlass
             size={15}
@@ -100,7 +103,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <div className="flex gap-1 overflow-x-auto sm:max-h-[440px] sm:flex-col sm:overflow-y-auto">
+        <div className="flex gap-1 overflow-x-auto sm:min-h-0 sm:flex-1 sm:flex-col sm:overflow-y-auto sm:pr-1">
           {groups.map((g) => {
             const shown = g.choices.filter(
               (c) => !needle || c.entry.label.toLowerCase().includes(needle),
@@ -108,11 +111,10 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
             if (!shown.length) return null
             return (
               <div key={g.label} className="flex gap-1 sm:flex-col sm:gap-px">
-                <h3 className="m-0 hidden px-2.5 pt-2 pb-1 text-[11.5px] font-bold text-text-3 sm:block">
+                <h3 className="m-0 hidden px-2.5 pt-3 pb-1 text-[11px] font-extrabold tracking-wide text-text-2 uppercase sm:block">
                   {g.label}
                 </h3>
                 {shown.map((c) => {
-                  const Icon = c.entry.icon
                   const on = chosen?.entry.key === c.entry.key
                   return (
                     <button
@@ -121,15 +123,12 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
                       aria-current={on ? 'true' : undefined}
                       onClick={() => setPick(c.entry.key)}
                       className={cx(
-                        'flex h-9 shrink-0 items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13.5px] whitespace-nowrap hover:bg-surface-2',
-                        on && 'bg-accent-soft font-semibold text-accent-text hover:bg-accent-soft',
+                        'flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
+                        on &&
+                          'bg-surface-3 shadow-[inset_0_0_0_1px_var(--fc-line-strong)] hover:bg-surface-3',
                       )}
                     >
-                      <Icon
-                        size={17}
-                        aria-hidden
-                        className={on ? 'text-accent-text' : 'text-text-3'}
-                      />
+                      <KindTile icon={c.entry.icon} tone={c.tone} size={26} />
                       <span className="truncate">{c.entry.label}</span>
                     </button>
                   )
@@ -139,7 +138,9 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
           })}
         </div>
       </nav>
-      {chosen && <Pick key={chosen.entry.key} c={chosen} scene={scene} onDone={onDone} />}
+      <div className="min-h-0 min-w-0 sm:overflow-y-auto sm:pr-1">
+        {chosen && <Pick key={chosen.entry.key} c={chosen} scene={scene} onDone={onDone} />}
+      </div>
     </div>
   )
 }
@@ -243,33 +244,54 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     >
       {dev && (
         <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-          <legend className="mb-2.5 font-display text-[14px] font-bold">Pick one</legend>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5">
-            {dev.choices.map((label, i) =>
-              !label.trim() ? null : (
+          <legend className="mb-3 font-display text-[15px] font-extrabold text-text">
+            Pick one
+          </legend>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+            {dev.choices.map((label, i) => {
+              if (!label.trim()) return null
+              const on = device === i
+              return (
                 <button
                   key={`${i}-${label}`}
                   type="button"
-                  aria-pressed={device === i}
+                  aria-pressed={on}
                   onClick={() => setDevice(i)}
-                  className={cx(
-                    'flex flex-col overflow-hidden rounded-control border border-line bg-surface-2 text-left transition-[border-color,transform] duration-150 hover:border-line-strong active:scale-[0.98]',
-                    device === i && 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]',
-                  )}
+                  style={on ? { borderColor: c.tone, boxShadow: `0 0 0 1px ${c.tone}` } : undefined}
+                  className="relative flex flex-col overflow-hidden rounded-[12px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
                 >
-                  <span className="grid aspect-video place-items-center bg-inset text-text-3">
-                    <Icon size={28} aria-hidden />
+                  <span
+                    className="grid aspect-video place-items-center"
+                    style={{
+                      background: `color-mix(in oklab, ${c.tone} ${on ? 22 : 9}%, var(--fc-surface-inset))`,
+                      color: c.tone,
+                    }}
+                  >
+                    <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
                   </span>
-                  <span className="truncate px-2.5 py-2 text-[13px] font-semibold">{label}</span>
+                  <span className="flex items-center gap-2 px-3 py-2.5">
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">
+                      {label}
+                    </span>
+                    {on && (
+                      <CheckCircle
+                        size={18}
+                        weight="fill"
+                        aria-hidden
+                        className="shrink-0"
+                        style={{ color: c.tone }}
+                      />
+                    )}
+                  </span>
                 </button>
-              ),
-            )}
+              )
+            })}
           </div>
         </fieldset>
       )}
       {c.entry.overlays && (
         <div className="flex flex-col gap-2.5">
-          <h4 className="m-0 font-display text-[14px] font-bold">Pick an overlay</h4>
+          <h4 className="m-0 font-display text-[15px] font-extrabold text-text">Pick an overlay</h4>
           {overlays.error && !overlays.data ? (
             <LoadError error={overlays.error} onRetry={overlays.reload} />
           ) : !overlays.data ? (
@@ -279,18 +301,18 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
               No overlays yet. Make one in Overlays, then add it here.
             </p>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
               {overlays.data.map((o) => (
                 <button
                   key={o.id}
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void addOverlay(o)}
-                  className="flex items-center gap-2.5 rounded-control border border-line bg-surface-2 px-3 py-2.5 text-left hover:border-line-strong active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 py-3 text-left hover:border-line-strong active:scale-[0.98]"
                 >
-                  <Icon size={18} aria-hidden className="shrink-0 text-text-3" />
+                  <KindTile icon={Icon} tone={c.tone} size={34} />
                   <span className="min-w-0">
-                    <b className="block truncate text-[13px]">{o.name}</b>
+                    <b className="block truncate text-[13.5px] text-text">{o.name}</b>
                     <span className="block font-mono text-[12px] text-text-3 tabular-nums">
                       {o.width}×{o.height}
                     </span>
@@ -303,23 +325,26 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )}
       {reuse.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <h4 className="m-0 font-display text-[14px] font-bold">
+          <h4 className="m-0 font-display text-[15px] font-extrabold text-text">
             {isScene ? 'Show a scene inside this one' : 'Or use one you already have'}
           </h4>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {reuse.map((r) => {
-              const RIcon = isScene ? kindIcon('scene') : Icon
               return (
                 <button
                   key={r.name}
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void addExisting(r.name)}
-                  className="flex items-center gap-2.5 rounded-control border border-line bg-surface-2 px-3 py-2.5 text-left hover:border-line-strong active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 py-3 text-left hover:border-line-strong active:scale-[0.98]"
                 >
-                  <RIcon size={18} aria-hidden className="shrink-0 text-text-3" />
+                  {isScene ? (
+                    <KindTile kind="scene" size={34} />
+                  ) : (
+                    <KindTile icon={Icon} tone={c.tone} size={34} />
+                  )}
                   <span className="min-w-0">
-                    <b className="block truncate text-[13px]">{r.name}</b>
+                    <b className="block truncate text-[13.5px] text-text">{r.name}</b>
                     <span className="block truncate text-[12px] text-text-3">{r.where}</span>
                   </span>
                 </button>

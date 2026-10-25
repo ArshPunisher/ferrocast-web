@@ -61,6 +61,12 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.record(true),
       () => api.pauseRecord(true),
       () => api.monitoring(),
+      () => api.editItem('Gameplay', 3, 'flip_h'),
+      () => api.editItem('Gameplay', 3, 'blend_screen'),
+      () => api.pasteFilters('Mic', 'Cam'),
+      () => api.web('Alerts', 'interact'),
+      () => api.obsCollections(),
+      () => api.importObs('Untitled'),
     ]) {
       const e = await call().then(
         () => null,

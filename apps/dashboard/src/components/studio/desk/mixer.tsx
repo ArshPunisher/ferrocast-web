@@ -1,28 +1,44 @@
-// The Audio panel: every sound in the scene on air, with a live meter and a fader on it like
-// OBS's mixer. Devices heard in every scene come first ("Everywhere"), then the scene's own.
+// The Audio panel: every sound in the scene on air, like OBS's mixer but easier to read. Each
+// has live meters (green, yellow, red, with a peak line and a clip light), a fader, mute and
+// "hear it". Rows or a mixing desk of columns; right-click a sound for the rest (lock its
+// volume, hide it, rename, filters). Devices heard in every scene come first.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import {
+  Columns,
   DotsThree,
+  Eye,
+  EyeSlash,
+  Funnel,
   GearSix,
   Headphones,
+  LockSimple,
+  LockSimpleOpen,
+  PencilSimple,
   Plus,
+  Rows,
+  SlidersHorizontal,
   SpeakerHigh,
   SpeakerSlash,
 } from '@phosphor-icons/react'
-import { type EngineAudio, type EngineLevel } from '@ferrocast/api'
-import { Button, IconButton, InfoTip, Segmented, Skeleton, cx } from '@ferrocast/ui'
+import { type EngineAudio, type EngineLevel, type EngineMonitor } from '@ferrocast/api'
+import { Button, Dialog, IconButton, InfoTip, Input, Segmented, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
-import { useAction, useResource } from '../../../lib/hooks'
-import { kindIcon, useDesk, type EngineApi } from './common'
+import { done, useAction, useResource } from '../../../lib/hooks'
+import { KindTile, useDesk, type EngineApi } from './common'
 import { DockHeader } from './layout'
+import { filterItems, useContextMenu, type MenuItem } from './menu'
 
 /** The fader is cubic like OBS's: halfway is about -18 dB, the top is 0 dB. */
 export const toDb = (pos: number): number =>
   pos <= 0 ? -100 : Math.max(-100, 60 * Math.log10(pos))
 export const toPos = (db: number): number => (db <= -100 ? 0 : Math.min(1, 10 ** (db / 60)))
-/** Where a level sits on the meter: -60 dB at the left, 0 at the right. */
+/** Where a level sits on the meter: -60 dB at one end, 0 at the other. */
 export const meterPct = (db: number): number => Math.max(0, Math.min(100, ((db + 60) / 60) * 100))
+const SCALE = [-60, -50, -40, -30, -20, -10, 0]
+/** OBS's zones: green to -20 dB, yellow to -9, red above. */
+const ZONES =
+  'linear-gradient(var(--dir),var(--fc-ok) 0 66.6%,var(--fc-warn) 66.6% 85%,var(--fc-danger) 85% 100%)'
 
 /** Live levels for these sounds, read about ten times a second while shown. */
 export function useLevels(api: EngineApi, names: string[]): Record<string, EngineLevel> {
@@ -51,7 +67,120 @@ export function useLevels(api: EngineApi, names: string[]): Record<string, Engin
   return levels
 }
 
-/** Two thin bars (left, right) with the volume fader over them. */
+/** The highest recent peak per side (held 1.5 s, then falling), and a clip light that stays
+ * on 2 s after a peak at 0 dB. */
+function useHold(level: EngineLevel | undefined): { hold: number[]; clip: boolean } {
+  const h = useRef<{ v: number[]; at: number[]; clip: number }>({
+    v: [-100, -100],
+    at: [0, 0],
+    clip: 0,
+  })
+  const now = Date.now()
+  const peaks = level?.peak ?? [-100, -100]
+  peaks.forEach((p, i) => {
+    const s = h.current
+    const held = s.v[i] ?? -100
+    if (p >= held) {
+      s.v[i] = p
+      s.at[i] = now
+    } else if (now - (s.at[i] ?? 0) > 1500) {
+      s.v[i] = Math.max(p, held - 2)
+    }
+    if (p >= -0.5) s.clip = now
+  })
+  return { hold: [...h.current.v], clip: now - h.current.clip < 2000 }
+}
+
+/** A volume fader over the meter: drag, click, arrows (1 dB), Page keys (6 dB), Home/End. */
+function Fader({
+  pos,
+  onMove,
+  label,
+  vertical,
+  disabled,
+}: {
+  pos: number
+  /** `last`: the pointer or key let go. */
+  onMove: (pos: number, last: boolean) => void
+  label: string
+  vertical?: boolean | undefined
+  disabled?: boolean | undefined
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const at = (e: PointerEvent) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return pos
+    const f = vertical ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width
+    return Math.max(0, Math.min(1, f))
+  }
+  const step = (db: number) => {
+    const d = toDb(pos)
+    const next = d <= -100 && db > 0 ? toPos(-60) : toPos(Math.min(0, d + db))
+    onMove(next, true)
+  }
+  const key = (e: KeyboardEvent) => {
+    const map: Record<string, () => void> = {
+      ArrowUp: () => step(1),
+      ArrowRight: () => step(1),
+      ArrowDown: () => step(-1),
+      ArrowLeft: () => step(-1),
+      PageUp: () => step(6),
+      PageDown: () => step(-6),
+      Home: () => onMove(0, true),
+      End: () => onMove(1, true),
+    }
+    const f = map[e.key]
+    if (!f || disabled) return
+    e.preventDefault()
+    f()
+  }
+  const db = toDb(pos)
+  return (
+    <div
+      ref={ref}
+      role="slider"
+      tabIndex={disabled ? -1 : 0}
+      aria-label={label}
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      aria-valuemin={-100}
+      aria-valuemax={0}
+      aria-valuenow={Math.round(db * 10) / 10}
+      aria-valuetext={db <= -100 ? 'Silent' : `${db.toFixed(1)} dB`}
+      aria-disabled={disabled || undefined}
+      onKeyDown={key}
+      onPointerDown={(e) => {
+        if (disabled || e.button !== 0) return
+        e.currentTarget.setPointerCapture(e.pointerId)
+        onMove(at(e), false)
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) onMove(at(e), false)
+      }}
+      onPointerUp={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+        e.currentTarget.releasePointerCapture(e.pointerId)
+        onMove(at(e), true)
+      }}
+      className={cx(
+        'group/f absolute inset-0 touch-none rounded-[6px] outline-none focus-visible:shadow-[var(--fc-focus)]',
+        disabled ? 'cursor-not-allowed' : vertical ? 'cursor-ns-resize' : 'cursor-ew-resize',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cx(
+          'absolute rounded-[5px] border-2 border-surface-1 bg-text shadow-[0_1px_4px_rgb(0_0_0/0.4)] transition-transform group-active/f:scale-110 motion-reduce:transition-none',
+          vertical ? 'inset-x-0 h-3 -translate-y-1/2' : 'inset-y-0 w-3 -translate-x-1/2',
+          disabled && 'bg-text-3',
+        )}
+        style={vertical ? { top: `${(1 - pos) * 100}%` } : { left: `${pos * 100}%` }}
+      />
+    </div>
+  )
+}
+
+/** Meters for both sides with the fader on top. Held peaks show as a line; `scale` adds dB
+ * marks. Used by the mixer and a source's own panel. */
 export function Meter({
   level,
   muted,
@@ -59,6 +188,9 @@ export function Meter({
   label,
   onVolume,
   tall,
+  vertical,
+  locked,
+  scale,
 }: {
   level: EngineLevel | undefined
   muted: boolean
@@ -66,147 +198,322 @@ export function Meter({
   label: string
   onVolume: (db: number) => void
   tall?: boolean
+  vertical?: boolean
+  locked?: boolean
+  scale?: boolean
 }) {
   const [pos, setPos] = useState<number | null>(null)
   const shown = pos ?? toPos(volumeDb)
   const last = useRef(0)
   const peaks = level?.peak ?? [-100, -100]
-  return (
-    <div className={cx('relative min-w-0', tall ? 'h-[30px] w-full flex-none' : 'h-6 flex-1')}>
+  const { hold, clip } = useHold(level)
+  const move = (p: number, end: boolean) => {
+    // Sent as it moves, at most every 80 ms; the last value always goes.
+    const now = Date.now()
+    if (end) {
+      setPos(null)
+      onVolume(toDb(p))
+    } else {
+      setPos(p)
+      if (now - last.current > 80) {
+        last.current = now
+        onVolume(toDb(p))
+      }
+    }
+  }
+  const bars = peaks.map((p, i) => {
+    const pct = meterPct(p)
+    const held = meterPct(hold[i] ?? -100)
+    return (
       <div
+        key={i}
         className={cx(
-          'absolute inset-x-0 flex flex-col',
-          tall ? 'top-[6px] gap-1' : 'top-1 gap-[3px]',
+          'relative overflow-hidden rounded-full',
+          vertical ? 'h-full w-[7px]' : tall ? 'h-[8px]' : 'h-[6px]',
         )}
+        style={{ ['--dir' as string]: vertical ? '0deg' : '90deg' }}
       >
-        {peaks.map((p, i) => (
+        <div aria-hidden className="absolute inset-0 opacity-20" style={{ background: ZONES }} />
+        <div
+          aria-hidden
+          className={cx(
+            'absolute inset-0 transition-[clip-path] duration-75 motion-reduce:transition-none',
+            muted && 'opacity-40 grayscale',
+          )}
+          style={{
+            background: ZONES,
+            clipPath: vertical ? `inset(${100 - pct}% 0 0 0)` : `inset(0 ${100 - pct}% 0 0)`,
+          }}
+        />
+        {held > 0 && (
           <div
-            key={i}
+            aria-hidden
+            className={cx('absolute bg-text', vertical ? 'inset-x-0 h-[2px]' : 'inset-y-0 w-[2px]')}
+            style={vertical ? { bottom: `${held}%` } : { left: `calc(${held}% - 2px)` }}
+          />
+        )}
+      </div>
+    )
+  })
+  const marks = scale && (
+    <div
+      aria-hidden
+      className={cx(
+        'pointer-events-none relative font-mono text-[9.5px] font-semibold text-text-3 tabular-nums',
+        vertical ? 'h-full w-5' : 'h-3 w-full',
+      )}
+    >
+      {SCALE.map((d) => (
+        <span
+          key={d}
+          className={cx(
+            'absolute leading-none',
+            vertical ? 'right-0 translate-y-1/2' : '-translate-x-1/2',
+          )}
+          style={
+            vertical
+              ? { bottom: `${meterPct(d)}%` }
+              : { left: `${Math.min(97, Math.max(3, meterPct(d)))}%` }
+          }
+        >
+          {Math.abs(d)}
+        </span>
+      ))}
+    </div>
+  )
+  const light = (
+    <span
+      aria-hidden
+      title={clip ? 'Too loud: it clipped' : undefined}
+      className={cx(
+        'size-2 shrink-0 rounded-full transition-colors',
+        clip ? 'bg-danger-fill shadow-[0_0_6px_var(--fc-danger)]' : 'bg-surface-3',
+      )}
+    />
+  )
+  if (vertical)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-1.5">
+        {light}
+        <div className="flex min-h-0 flex-1 gap-1">
+          {marks}
+          <div className="relative flex h-full gap-[3px] px-1">
+            {bars}
+            <Fader pos={shown} onMove={move} label={label} vertical disabled={locked} />
+          </div>
+        </div>
+      </div>
+    )
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <div className={cx('relative min-w-0 flex-1', tall ? 'h-[30px]' : 'h-6')}>
+          <div
             className={cx(
-              'relative overflow-hidden rounded-full bg-surface-3',
-              tall ? 'h-[7px]' : 'h-[5px]',
+              'absolute inset-x-0 flex flex-col',
+              tall ? 'top-[6px] gap-1' : 'top-[5px] gap-[3px]',
             )}
           >
-            <div
-              className={cx(
-                'absolute inset-0 rounded-full bg-[linear-gradient(90deg,var(--fc-ok)_0_66%,var(--fc-warn)_66%_85%,var(--fc-danger)_85%_100%)] transition-[clip-path] duration-75',
-                muted && 'opacity-40 grayscale',
-              )}
-              style={{ clipPath: `inset(0 ${100 - meterPct(p)}% 0 0)` }}
-            />
+            {bars}
           </div>
-        ))}
+          <Fader pos={shown} onMove={move} label={label} disabled={locked} />
+        </div>
+        {light}
       </div>
-      <input
-        type="range"
-        aria-label={label}
-        aria-valuetext={`${toDb(shown).toFixed(1)} dB`}
-        min={0}
-        max={1000}
-        value={Math.round(shown * 1000)}
-        onChange={(e) => {
-          const p = Number(e.target.value) / 1000
-          setPos(p)
-          // Sent as it moves, at most every 80 ms; the last value always goes.
-          const now = Date.now()
-          if (now - last.current > 80) {
-            last.current = now
-            onVolume(toDb(p))
-          }
-        }}
-        onPointerUp={() => {
-          if (pos !== null) onVolume(toDb(pos))
-          setPos(null)
-        }}
-        onKeyUp={() => {
-          if (pos !== null) onVolume(toDb(pos))
-          setPos(null)
-        }}
-        className="fc-fader absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none bg-transparent"
-      />
+      {marks && <div className="pr-3.5">{marks}</div>}
     </div>
   )
 }
 
 type AudioPatch = Partial<Pick<EngineAudio, 'volume_db' | 'muted' | 'monitor'>>
 
-function Channel({
-  a,
-  level,
-  onPatch,
-}: {
+// What's kept per browser: the view, sounds whose volume is locked, and hidden sounds.
+interface Prefs {
+  vertical: boolean
+  locked: string[]
+  hidden: string[]
+}
+const PREFS_KEY = 'fc-studio-mixer'
+function loadPrefs(): Prefs {
+  try {
+    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as Partial<Prefs> | null
+    return {
+      vertical: !!v?.vertical,
+      locked: Array.isArray(v?.locked) ? v.locked : [],
+      hidden: Array.isArray(v?.hidden) ? v.hidden : [],
+    }
+  } catch {
+    return { vertical: false, locked: [], hidden: [] }
+  }
+}
+function usePrefs(): [Prefs, (f: (p: Prefs) => Prefs) => void] {
+  const [p, setP] = useState(loadPrefs)
+  const set = (f: (p: Prefs) => Prefs) =>
+    setP((old) => {
+      const n = f(old)
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(n))
+      } catch {
+        // Private mode: kept for this visit.
+      }
+      return n
+    })
+  return [p, set]
+}
+const toggle = (list: string[], name: string) =>
+  list.includes(name) ? list.filter((x) => x !== name) : [...list, name]
+
+const HEAR: { value: EngineMonitor; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'only_me', label: 'Only me' },
+  { value: 'me_and_stream', label: 'Me and the stream' },
+]
+
+interface ChannelProps {
   a: EngineAudio
   level: EngineLevel | undefined
-  /** Shows a change in a list other than the scene's own (All). */
-  onPatch?: (name: string, patch: AudioPatch) => void
-}) {
-  const { api, audio, edit } = useDesk()
-  const { run } = useAction()
-  const Icon = kindIcon(a.kind)
-  const setAudio = (patch: AudioPatch) => {
-    // Shown at once; the engine follows.
-    audio.set((list) => (list ?? []).map((x) => (x.name === a.name ? { ...x, ...patch } : x)))
-    onPatch?.(a.name, patch)
-    void run(`audio:${a.name}`, () => api.setAudio(a.name, patch), { quiet: false })
-  }
+  locked: boolean
+  onAudio: (patch: AudioPatch) => void
+  onMenu: (e: React.MouseEvent) => void
+}
+
+function MuteButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
+  return (
+    <IconButton
+      size="sm"
+      variant="ghost"
+      label={a.muted ? `Unmute ${a.name}` : `Mute ${a.name}`}
+      aria-pressed={a.muted}
+      className={cx(a.muted ? 'bg-danger-soft text-danger hover:bg-danger-soft' : 'text-text')}
+      onClick={() => onAudio({ muted: !a.muted })}
+    >
+      {a.muted ? <SpeakerSlash size={16} weight="bold" /> : <SpeakerHigh size={16} weight="bold" />}
+    </IconButton>
+  )
+}
+
+function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
   const hearing = a.monitor !== 'off'
   return (
-    <div className="rounded-[10px] px-2.5 py-2 hover:bg-surface-2">
+    <IconButton
+      size="sm"
+      variant="ghost"
+      label={hearing ? `Stop hearing ${a.name}` : `Hear ${a.name} in your headphones`}
+      aria-pressed={hearing}
+      className={cx(
+        hearing ? 'bg-accent-soft text-accent-text hover:bg-accent-soft' : 'text-text-3',
+      )}
+      onClick={() => onAudio({ monitor: hearing ? 'off' : 'me_and_stream' })}
+    >
+      <Headphones size={16} weight="bold" />
+    </IconButton>
+  )
+}
+
+const dbText = (a: EngineAudio) =>
+  a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : `${a.volume_db.toFixed(1)} dB`
+
+function Row({ a, level, locked, onAudio, onMenu }: ChannelProps) {
+  return (
+    <div
+      onContextMenu={onMenu}
+      className={cx(
+        'rounded-[12px] border border-transparent px-2 pt-2 pb-1 transition-colors hover:border-line hover:bg-surface-2',
+        a.muted && 'bg-danger-soft/40',
+      )}
+    >
       <div className="flex items-center gap-2 text-[13.5px]">
-        <Icon size={16} className="shrink-0 text-text-3" aria-hidden />
-        <span className={cx('min-w-0 flex-1 truncate font-semibold', a.muted && 'text-text-3')}>
+        <KindTile kind={a.kind} size={26} dim={a.muted} />
+        <span
+          className={cx('min-w-0 flex-1 truncate font-bold', a.muted ? 'text-text-3' : 'text-text')}
+        >
           {a.name}
         </span>
+        {a.channel !== null && (
+          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent-text">
+            Everywhere
+          </span>
+        )}
+        {locked && (
+          <LockSimple size={13} weight="bold" className="text-text-3" aria-label="Locked" />
+        )}
         <span
           className={cx(
-            'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-            a.channel ? 'bg-accent-soft text-accent-text' : 'bg-surface-3 text-text-2',
+            'w-[68px] shrink-0 text-right font-mono text-[12.5px] font-bold tabular-nums',
+            a.muted ? 'text-danger' : 'text-text',
           )}
         >
-          {a.channel ? 'Everywhere' : 'This scene'}
-        </span>
-        <span className="w-16 shrink-0 text-right font-mono text-[12px] text-text-2 tabular-nums">
-          {a.muted ? 'Muted' : `${a.volume_db.toFixed(1)} dB`}
+          {dbText(a)}
         </span>
       </div>
-      <div className="mt-1.5 flex items-center gap-0.5">
-        <Meter
-          level={level}
-          muted={a.muted}
-          volumeDb={a.volume_db}
-          label={`${a.name} volume`}
-          onVolume={(volume_db) => setAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
-        />
-        <IconButton
-          size="sm"
-          variant="ghost"
-          label={a.muted ? `Unmute ${a.name}` : `Mute ${a.name}`}
-          aria-pressed={a.muted}
-          className={cx(a.muted && 'text-danger')}
-          onClick={() => setAudio({ muted: !a.muted })}
-        >
-          {a.muted ? <SpeakerSlash size={15} /> : <SpeakerHigh size={15} />}
+      <div className="mt-1 flex items-start gap-0.5">
+        <MuteButton a={a} onAudio={onAudio} />
+        <div className="min-w-0 flex-1 pt-1">
+          <Meter
+            level={level}
+            muted={a.muted}
+            volumeDb={a.volume_db}
+            label={`${a.name} volume`}
+            locked={locked}
+            scale
+            onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
+          />
+        </div>
+        <HearButton a={a} onAudio={onAudio} />
+        <IconButton size="sm" variant="ghost" label={`More for ${a.name}`} onClick={onMenu}>
+          <DotsThree size={16} weight="bold" />
         </IconButton>
-        <IconButton
-          size="sm"
-          variant="ghost"
-          label={
-            hearing
-              ? `Stop hearing ${a.name} in your headphones`
-              : `Hear ${a.name} in your headphones`
-          }
-          aria-pressed={hearing}
-          className={cx(hearing && 'bg-accent-soft text-accent-text')}
-          onClick={() => setAudio({ monitor: hearing ? 'off' : 'me_and_stream' })}
-        >
-          <Headphones size={15} />
-        </IconButton>
-        <IconButton
-          size="sm"
-          variant="ghost"
-          label={`${a.name} settings`}
-          onClick={() => edit(a.name)}
-        >
+      </div>
+    </div>
+  )
+}
+
+function Strip({ a, level, locked, onAudio, onMenu }: ChannelProps) {
+  return (
+    <div
+      onContextMenu={onMenu}
+      className={cx(
+        'flex h-full w-[112px] shrink-0 flex-col items-center gap-1.5 rounded-[12px] border border-line bg-surface-2 px-1.5 pt-2 pb-1.5',
+        a.muted && 'border-danger/30',
+      )}
+    >
+      <KindTile kind={a.kind} size={26} dim={a.muted} />
+      <span
+        className={cx(
+          'w-full truncate text-center text-[12.5px] font-bold',
+          a.muted ? 'text-text-3' : 'text-text',
+        )}
+        title={a.name}
+      >
+        {a.name}
+      </span>
+      <span
+        className={cx(
+          'font-mono text-[11.5px] font-bold tabular-nums',
+          a.muted ? 'text-danger' : 'text-text-2',
+        )}
+      >
+        {a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : a.volume_db.toFixed(1)}
+      </span>
+      {a.channel !== null && (
+        <span className="rounded-full bg-accent-soft px-1.5 py-px text-[10.5px] font-bold text-accent-text">
+          Everywhere
+        </span>
+      )}
+      <Meter
+        vertical
+        scale
+        level={level}
+        muted={a.muted}
+        volumeDb={a.volume_db}
+        label={`${a.name} volume`}
+        locked={locked}
+        onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
+      />
+      <div className="flex items-center">
+        <MuteButton a={a} onAudio={onAudio} />
+        <HearButton a={a} onAudio={onAudio} />
+        <IconButton size="sm" variant="ghost" label={`More for ${a.name}`} onClick={onMenu}>
           <DotsThree size={16} weight="bold" />
         </IconButton>
       </div>
@@ -215,8 +522,13 @@ function Channel({
 }
 
 export function AudioDock() {
-  const { api, audio, scenes, setAdding, openSettings } = useDesk()
+  const desk = useDesk()
+  const { api, audio, scenes, setAdding, openSettings, edit, refresh } = desk
+  const { run } = useAction()
   const [all, setAll] = useState(false)
+  const [prefs, setPrefs] = usePrefs()
+  const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
+  const { open, menu } = useContextMenu()
   const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
   // Every scene's sounds, each once: the global devices first, then in scene order.
   const every = useResource(async () => {
@@ -226,57 +538,173 @@ export function AudioDock() {
     return lists.flat().filter((a) => !seen.has(a.name) && seen.add(a.name))
   }, [api, all, names, audio.data])
   const list = all ? every.data : audio.data
-  const levels = useLevels(api, list?.map((a) => a.name) ?? [])
-  const patch = (name: string, p: AudioPatch) =>
-    every.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...p } : x)))
+  const shown = list?.filter((a) => !prefs.hidden.includes(a.name))
+  const hiddenHere = (list?.length ?? 0) - (shown?.length ?? 0)
+  const levels = useLevels(api, shown?.map((a) => a.name) ?? [])
+
+  const setAudio = (name: string, patch: AudioPatch) => {
+    // Shown at once; the engine follows.
+    audio.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
+    every.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
+    void run(`audio:${name}`, () => api.setAudio(name, patch), { quiet: false })
+  }
+  const rename = async () => {
+    if (!naming) return
+    const to = naming.value.trim()
+    if (!to || to === naming.from) return setNaming(null)
+    const ok = await run('rename', () => done(api.rename(naming.from, to)))
+    if (ok) {
+      // Locks and hiding follow the new name.
+      setPrefs((p) => ({
+        ...p,
+        locked: p.locked.map((x) => (x === naming.from ? to : x)),
+        hidden: p.hidden.map((x) => (x === naming.from ? to : x)),
+      }))
+      setNaming(null)
+      refresh()
+    }
+  }
+  const unhideAll: MenuItem = {
+    label: 'Show hidden sounds',
+    icon: Eye,
+    disabled: prefs.hidden.length === 0,
+    onSelect: () => setPrefs((p) => ({ ...p, hidden: [] })),
+  }
+  const channelMenu = (a: EngineAudio): MenuItem[] => {
+    const locked = prefs.locked.includes(a.name)
+    return [
+      {
+        label: a.muted ? 'Unmute' : 'Mute',
+        icon: a.muted ? SpeakerHigh : SpeakerSlash,
+        onSelect: () => setAudio(a.name, { muted: !a.muted }),
+      },
+      {
+        label: 'Hear it',
+        icon: Headphones,
+        items: HEAR.map((h) => ({
+          label: h.label,
+          checked: a.monitor === h.value,
+          onSelect: () => setAudio(a.name, { monitor: h.value }),
+        })),
+      },
+      {
+        label: locked ? 'Unlock volume' : 'Lock volume',
+        icon: locked ? LockSimpleOpen : LockSimple,
+        onSelect: () => setPrefs((p) => ({ ...p, locked: toggle(p.locked, a.name) })),
+      },
+      { sep: true },
+      {
+        label: 'Hide',
+        icon: EyeSlash,
+        onSelect: () => setPrefs((p) => ({ ...p, hidden: toggle(p.hidden, a.name) })),
+      },
+      unhideAll,
+      { sep: true },
+      {
+        label: 'Rename',
+        icon: PencilSimple,
+        onSelect: () => setNaming({ from: a.name, value: a.name }),
+      },
+      { label: 'Filters', icon: Funnel, onSelect: () => edit(a.name) },
+      { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(a.name) },
+      ...filterItems(a.name, {
+        ...desk,
+        paste: (from) =>
+          void run('filters', () => done(api.pasteFilters(a.name, from)), {
+            success: `Filters pasted onto ${a.name}.`,
+          }),
+      }),
+    ]
+  }
+  const props = (a: EngineAudio): ChannelProps => ({
+    a,
+    level: levels[a.name],
+    locked: prefs.locked.includes(a.name),
+    onAudio: (p) => setAudio(a.name, p),
+    onMenu: (e) => open(e, a.name, channelMenu(a)),
+  })
+  const error = all ? every.error : audio.error
+
   return (
     <section aria-label="Audio" className="flex min-h-0 flex-1 flex-col">
       <DockHeader
         id="audio"
         info={
           <InfoTip label="About audio">
-            Every scene has its own sounds. Devices marked Everywhere play in all of them.
+            Every scene has its own sounds. Everywhere: in all scenes. Right-click a sound for more.
           </InfoTip>
         }
         actions={
-          <Segmented
-            label="Which sounds"
-            value={all ? 'all' : 'scene'}
-            options={[
-              { value: 'scene', label: 'This scene' },
-              { value: 'all', label: 'All' },
-            ]}
-            onChange={(v) => setAll(v === 'all')}
-          />
+          <>
+            <Segmented
+              size="sm"
+              label="Which sounds"
+              value={all ? 'all' : 'scene'}
+              options={[
+                { value: 'scene', label: 'This scene' },
+                { value: 'all', label: 'All' },
+              ]}
+              onChange={(v) => setAll(v === 'all')}
+            />
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={prefs.vertical ? 'Show as rows' : 'Show as a mixing desk'}
+              onClick={() => setPrefs((p) => ({ ...p, vertical: !p.vertical }))}
+            >
+              {prefs.vertical ? (
+                <Rows size={16} weight="bold" />
+              ) : (
+                <Columns size={16} weight="bold" />
+              )}
+            </IconButton>
+          </>
         }
       />
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {(all ? every.error : audio.error) && !list ? (
-          <LoadError
-            error={all ? every.error : audio.error}
-            onRetry={all ? every.reload : audio.reload}
-          />
-        ) : !list ? (
+      <div
+        className={cx(
+          'min-h-0 flex-1 p-1.5',
+          prefs.vertical ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto',
+        )}
+        onContextMenu={(e) =>
+          open(e, 'Audio', [
+            { label: 'Add sound', icon: Plus, onSelect: () => setAdding('mic') },
+            unhideAll,
+            { label: 'Audio settings', icon: GearSix, onSelect: () => openSettings('audio') },
+          ])
+        }
+      >
+        {error && !list ? (
+          <LoadError error={error} onRetry={all ? every.reload : audio.reload} />
+        ) : !list || !shown ? (
           <Skeleton className="h-28" />
-        ) : list.length === 0 ? (
-          <p className="m-0 p-2.5 text-[13.5px] text-text-2">
-            {all ? 'No sound in any scene yet.' : 'No sound in this scene yet.'}
+        ) : shown.length === 0 ? (
+          <p className="m-0 p-2.5 text-[13.5px] font-medium text-text-2">
+            {list.length > 0 ? 'Every sound here is hidden.' : 'No sound here yet.'}
           </p>
+        ) : prefs.vertical ? (
+          <div className="flex h-full gap-1.5">
+            {shown.map((a) => (
+              <Strip key={a.name} {...props(a)} />
+            ))}
+          </div>
         ) : (
-          list.map((a) => (
-            <Channel
-              key={a.name}
-              a={a}
-              level={levels[a.name]}
-              {...(all ? { onPatch: patch } : {})}
-            />
-          ))
+          <div className="flex flex-col gap-1">
+            {shown.map((a) => (
+              <Row key={a.name} {...props(a)} />
+            ))}
+          </div>
         )}
       </div>
-      <footer className="flex flex-none items-center gap-0.5 border-t border-line px-1.5 py-1">
+      <footer className="flex h-10 flex-none items-center gap-0.5 border-t border-line px-1.5">
         <Button size="sm" variant="ghost" onClick={() => setAdding('mic')}>
-          <Plus size={14} /> Add sound
+          <Plus size={14} weight="bold" /> Add sound
         </Button>
+        {hiddenHere > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setPrefs((p) => ({ ...p, hidden: [] }))}>
+            <Eye size={14} weight="bold" /> {hiddenHere} hidden
+          </Button>
+        )}
         <span className="flex-1" />
         <IconButton
           size="sm"
@@ -284,9 +712,41 @@ export function AudioDock() {
           label="Audio settings"
           onClick={() => openSettings('audio')}
         >
-          <GearSix size={15} />
+          <GearSix size={15} weight="bold" />
         </IconButton>
       </footer>
+      {menu}
+      <Dialog
+        open={naming !== null}
+        onClose={() => setNaming(null)}
+        size="sm"
+        title={`Rename ${naming?.from ?? ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setNaming(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={() => void rename()}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void rename()
+          }}
+        >
+          <Input
+            autoFocus
+            aria-label="New name"
+            maxLength={100}
+            value={naming?.value ?? ''}
+            onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
+          />
+        </form>
+      </Dialog>
     </section>
   )
 }

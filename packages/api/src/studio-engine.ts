@@ -97,11 +97,47 @@ export interface EngineItem {
   /** It makes sound (shows in the mixer). */
   audio: boolean
   group: boolean
+  /** How it mixes with what's under it. */
+  blend: EngineBlend
   children: EngineItem[]
 }
 
+export const ENGINE_BLENDS = [
+  'normal',
+  'additive',
+  'subtract',
+  'screen',
+  'multiply',
+  'lighten',
+  'darken',
+] as const
+export type EngineBlend = (typeof ENGINE_BLENDS)[number]
+
 export type EngineItemEdit =
-  'show' | 'hide' | 'lock' | 'unlock' | 'fit' | 'remove' | 'up' | 'down' | 'top' | 'bottom'
+  | 'show'
+  | 'hide'
+  | 'lock'
+  | 'unlock'
+  | 'fit'
+  | 'remove'
+  | 'up'
+  | 'down'
+  | 'top'
+  | 'bottom'
+  /** Fills the screen, ignoring its shape. */
+  | 'stretch'
+  /** To the middle of the screen, size kept. */
+  | 'center'
+  /** Its own size at the top left, not turned or flipped. */
+  | 'reset'
+  | 'flip_h'
+  | 'flip_v'
+  | 'rotate_cw'
+  | 'rotate_ccw'
+  | 'rotate180'
+  /** A copy of the source just above it. */
+  | 'duplicate'
+  | `blend_${EngineBlend}`
 
 export interface NewEngineSource {
   kind: string
@@ -110,6 +146,25 @@ export interface NewEngineSource {
 }
 
 /** Who hears a sound besides the stream. */
+/** One of OBS's scene collections, to bring into the Studio. */
+export interface EngineObsCollection {
+  id: string
+  name: string
+  scenes: number
+  sources: number
+}
+
+/** What an import from OBS brought in. */
+export interface EngineImportReport {
+  name: string
+  scenes: number
+  sources: number
+  /** Browser sources changed into Web page sources. */
+  web_pages: number
+  /** Kinds of source this computer's OBS doesn't have. */
+  missing: string[]
+}
+
 export type EngineMonitor = 'off' | 'only_me' | 'me_and_stream'
 
 /** A sound in a scene's mixer. */
@@ -314,6 +369,22 @@ export function studioEngineApi(c: FerroClient) {
         { settings },
       ),
     /** A global sound device heard in every scene: 1, 2 desktop sound; 3 to 6 mics. */
+    /** A Web page source: on screen to click and type in, back off-screen, or loaded again. */
+    web: (name: string, what: 'interact' | 'stop' | 'reload') =>
+      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/web`, { do: what }),
+    /** OBS's scene collections on this computer. */
+    obsCollections: () =>
+      c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/obs-collections'),
+    /** Replaces the Studio's scenes with one of OBS's collections (the old ones are kept). */
+    importObs: (id: string) =>
+      c.request<EngineImportReport>('POST', '/api/v1/studio/engine/obs-collections/import', {
+        id,
+      }),
+    /** Copies every filter of `from` onto `name`. */
+    pasteFilters: (name: string, from: string) =>
+      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/paste-filters`, {
+        from,
+      }),
     setChannel: (channel: number, device: NewEngineSource | null) =>
       device
         ? c.request<void>('PUT', `/api/v1/studio/engine/channels/${channel}`, device)

@@ -3,7 +3,15 @@
 // plain words; and every setting OBS has for it, applied as you change them.
 
 import { useEffect, useRef, useState } from 'react'
-import { CaretDown, CaretUp, Plus, Trash, X } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  CaretDown,
+  CaretUp,
+  CursorClick,
+  Plus,
+  Trash,
+  X,
+} from '@phosphor-icons/react'
 import { describeError, type EngineMonitor, type EngineSettings } from '@ferrocast/api'
 import {
   Button,
@@ -18,7 +26,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource } from '../../../lib/hooks'
-import { FILTERS, FILTER_LABEL, kindIcon, useDesk } from './common'
+import { FILTERS, FILTER_LABEL, KindTile, useDesk } from './common'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
 
@@ -65,7 +73,6 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
   const a = audio.data?.find((x) => x.name === name) ?? null
   const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
   const kind = a?.kind ?? item?.kind ?? ''
-  const Icon = kindIcon(kind)
   const levels = useLevels(api, a ? [name] : [])
 
   useEffect(() => {
@@ -97,9 +104,7 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
       className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
     >
       <header className="flex items-center gap-2.5 border-b border-line py-3 pr-3 pl-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent-text">
-          <Icon size={18} aria-hidden />
-        </span>
+        <KindTile kind={kind} size={36} />
         <Input
           aria-label="Name"
           className="h-9! min-w-0 flex-1 border-transparent! bg-transparent! font-display text-[17px]! font-bold hover:border-line-strong!"
@@ -116,6 +121,24 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
         </IconButton>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
+        {kind === 'ferrocast_web' && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              busy={busy === 'interact'}
+              onClick={() => void run('interact', () => done(api.web(name, 'interact')))}
+            >
+              <CursorClick size={16} weight="bold" /> Interact
+            </Button>
+            <Button
+              variant="secondary"
+              busy={busy === 'reload'}
+              onClick={() => void run('reload', () => done(api.web(name, 'reload')))}
+            >
+              <ArrowClockwise size={16} weight="bold" /> Reload
+            </Button>
+          </div>
+        )}
         {a && (
           <section aria-label="Sound" className="flex flex-col gap-3">
             <h3 className="m-0 font-display text-[13px] font-bold text-text-2">Sound</h3>

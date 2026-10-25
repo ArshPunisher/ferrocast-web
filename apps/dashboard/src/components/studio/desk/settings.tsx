@@ -691,7 +691,7 @@ function KeysPage({ s, set }: PageProps) {
   }
   return (
     <>
-      <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held.">
+      <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held. On a Mac keyboard, hold fn with F1 to F12.">
         Shortcuts
       </Heading>
       {groups
