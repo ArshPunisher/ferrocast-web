@@ -1,5 +1,9 @@
 # Status
 
+## 26 Oct 2026, night (the Studio desk, round 3)
+
+- One + to add, aligned panel edges, the Studio uses the whole window, a screen-sized Add with a clear pick, right-click menus for scenes, sources and sounds, a new mixer (rows or columns, peak line, clip light), Import from OBS, Interact and Reload for web pages, and darker, bolder text with colour per kind. Two old e2e tests were updated to match last round's hidden internal codes.
+
 ## 26 Oct 2026 (Studio built to its design)
 
 - Go live › Ferrocast is an OBS-like desk: flush dockable panels (Sources, Scenes, Audio, Go live to), the preview placed by the page, a stats bar with Record and Pause, a settings dialog (stream quality, audio, picture, recording, shortcuts, advanced) and filter sliders with units. Add source has a Ferrocast group that adds your overlays as web pages in one click. Tested in the real app.
