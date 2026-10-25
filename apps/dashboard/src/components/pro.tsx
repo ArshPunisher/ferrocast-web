@@ -308,11 +308,6 @@ function StatusCard({
           )}
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={s.tone}>{s.badge}</Badge>
-            {p.subscription_id && (
-              <span translate="no" className="truncate font-mono text-[13.5px] text-text-3">
-                {p.subscription_id}
-              </span>
-            )}
           </div>
           <p className="text-sm text-text-2" data-testid="pro-summary">
             {s.text}

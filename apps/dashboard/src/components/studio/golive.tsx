@@ -800,7 +800,6 @@ function Setup({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
           <CheckCircle size={18} weight="fill" className="text-ok" aria-hidden />
           <span className="text-[13.5px] font-semibold">OBS sends to Ferrocast</span>
-          <code className="min-w-0 truncate text-[12px] text-text-3">{view.ingest}</code>
           {obs.before && (
             <Button
               size="sm"
@@ -1029,7 +1028,6 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
               <thead>
                 <tr className="text-left font-mono text-[11px] text-text-3 [&>th]:border-b [&>th]:border-line [&>th]:px-2.5 [&>th]:py-2 [&>th]:font-semibold">
                   <th scope="col">Platform</th>
-                  <th scope="col">Server</th>
                   <th scope="col">Delay</th>
                   <th scope="col">Needs</th>
                 </tr>
@@ -1042,14 +1040,11 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
                   >
                     <td className="font-semibold">{r.name}</td>
                     {r.problem ? (
-                      <td colSpan={3} className="!whitespace-normal text-danger">
+                      <td colSpan={2} className="!whitespace-normal text-danger">
                         {r.problem}
                       </td>
                     ) : (
                       <>
-                        <td className="max-w-[180px] truncate font-mono text-[12px] text-text-2">
-                          {r.server}
-                        </td>
                         <td
                           className={cx(
                             'tabular-nums',

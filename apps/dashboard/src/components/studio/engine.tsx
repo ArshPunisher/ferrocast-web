@@ -79,8 +79,6 @@ export function EngineTab() {
         >
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-text-3">
             <Badge tone={s.running ? 'ok' : 'neutral'}>{s.running ? 'Running' : 'Stopped'}</Badge>
-            {s.version && <span className="font-mono">OBS engine {s.version}</span>}
-            {s.renderer && <span className="font-mono">{s.renderer}</span>}
           </div>
           {s.running && <StreamControl />}
           {!s.available ? (
@@ -270,9 +268,6 @@ function SourcesPanel({ sources }: { sources: Resource<EngineSource[]> }) {
                   )}
                 >
                   <span className="min-w-0 truncate font-medium">{src.name}</span>
-                  <span className="hidden min-w-0 truncate font-mono text-[11.5px] text-text-3 sm:inline">
-                    {src.kind}
-                  </span>
                 </button>
                 <IconButton
                   size="sm"
@@ -455,7 +450,6 @@ function KindsPanel({ onAdded }: { onAdded: () => void }) {
                   )}
                 >
                   <span className="min-w-0 truncate">{k.name || k.id}</span>
-                  <span className="shrink-0 font-mono text-[11.5px] text-text-3">{k.id}</span>
                 </button>
               </li>
             ))}
