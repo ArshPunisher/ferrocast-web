@@ -53,6 +53,10 @@ export interface EngineOption {
   min: number | null
   max: number | null
   step: number | null
+  /** OBS shows this number as a slider. */
+  slider: boolean
+  /** The number's unit as OBS writes it ("dB", "ms", "%"), or "". */
+  suffix: string
   choices: string[]
   /** The value saved for each choice, in the same order. */
   values: (string | number | boolean)[]
@@ -151,12 +155,71 @@ export interface EngineStreamStats {
   error: string | null
 }
 
+/** How the Studio streams, records and runs (every field has a default). */
+export interface StudioSettings {
+  /** "hardware" (the Mac's H.264) or "software" (x264). */
+  encoder: 'hardware' | 'software'
+  video_kbps: number
+  vbr: boolean
+  /** 0 lets the encoder pick. */
+  keyframe_s: number
+  profile: 'high' | 'main' | 'baseline'
+  bframes: boolean
+  /** Send at this size instead of the canvas's. */
+  scale: [number, number] | null
+  audio_kbps: number
+  width: number
+  height: number
+  fps: number
+  /** null: Movies/Ferrocast. */
+  record_folder: string | null
+  record_format: 'mp4' | 'mov'
+  record_quality: 'stream' | 'high' | 'lossless'
+  reconnect: boolean
+  reconnect_every_s: number
+  reconnect_tries: number
+  delay_s: number
+  sample_rate: 44100 | 48000
+  stereo: boolean
+  /** [name, id]; null: the system's. */
+  monitoring: [string, string] | null
+  /** action (go_live, end_stream, record, pause_record, scene:<name>, mute:<sound>,
+   * push_to_talk:<sound>) → keys ("CmdOrCtrl+Shift+L"). */
+  hotkeys: Record<string, string>
+}
+
+export interface EngineRecordStats {
+  active: boolean
+  paused: boolean
+  bytes: number
+  frames: number
+  file: string
+  seconds: number
+  error: string | null
+}
+
+export interface EngineStats {
+  engine: {
+    cpu: number
+    fps: number
+    frame_ms: number
+    lagged: number
+    frames: number
+    memory_mb: number
+  }
+  canvas: { width: number; height: number; fps: number }
+  stream: EngineStreamStats | null
+  record: EngineRecordStats | null
+}
+
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {
   x: number
   y: number
   w: number
   h: number
+  /** The page's visible height (`window.innerHeight`): where its top is inside the window. */
+  vh?: number
 }
 
 export function studioEngineApi(c: FerroClient) {
@@ -255,6 +318,26 @@ export function studioEngineApi(c: FerroClient) {
       device
         ? c.request<void>('PUT', `/api/v1/studio/engine/channels/${channel}`, device)
         : c.request<void>('DELETE', `/api/v1/studio/engine/channels/${channel}`),
+    studioSettings: () => c.request<StudioSettings>('GET', '/api/v1/studio/engine/settings'),
+    /** Saves and applies them → what needs a restart or didn't apply, in words (or null). */
+    setStudioSettings: (s: StudioSettings) =>
+      c.request<{ settings: StudioSettings; restart: string | null }>(
+        'PUT',
+        '/api/v1/studio/engine/settings',
+        s,
+      ),
+    stats: () => c.request<EngineStats>('GET', '/api/v1/studio/engine/stats'),
+    /** Starts or stops recording → its stats (null when stopped). */
+    record: (on: boolean) =>
+      c.request<EngineRecordStats | null>('POST', '/api/v1/studio/engine/record', { on }),
+    pauseRecord: (on: boolean) =>
+      c.request<void>('POST', '/api/v1/studio/engine/record/pause', { on }),
+    /** Where "Hear it" can play. */
+    monitoring: () =>
+      c.request<{
+        devices: { name: string; id: string }[]
+        current: { name: string; id: string }
+      }>('GET', '/api/v1/studio/engine/monitoring'),
     /** Levels now, for these sounds (a meter starts on the first ask). */
     levels: (names: string[]) =>
       c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),

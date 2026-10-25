@@ -8,11 +8,16 @@ import {
   Broadcast,
   CheckSquare,
   Clock,
+  Cpu,
   Gauge,
+  GearSix,
   Layout as LayoutIcon,
   LockSimple,
   LockSimpleOpen,
+  Pause,
+  Play,
   Power,
+  Record as RecordIcon,
   Square,
   WifiHigh,
   X,
@@ -20,20 +25,21 @@ import {
 import {
   describeError,
   onCanvas,
-  type EngineStreamStats,
+  type EngineStats,
   type GoLiveView,
   type StudioEngineStatus,
 } from '@ferrocast/api'
-import { Button, Skeleton, cx, toast } from '@ferrocast/ui'
+import { Button, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { AddSourceDialog } from './add-source'
-import { DeskProvider, useEngine, type Desk } from './common'
+import { DeskProvider, useDesk, useEngine, type Desk } from './common'
 import { GoLiveDock } from './golive-dock'
 import { DOCK_NAMES, DockWorkspace, fresh, useLayout, type DockId, type Preset } from './layout'
 import { AudioDock } from './mixer'
 import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
+import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { SourcesDock } from './sources'
 
@@ -59,6 +65,15 @@ export function StudioDesk({
       status.reload()
     }
   }, [api, status])
+  // Off: checked again every 3 s, so a start from elsewhere (a shortcut, another screen)
+  // shows here too.
+  const off = !!s && !s.running
+  const reloadStatus = status.reload
+  useEffect(() => {
+    if (!off) return
+    const t = setInterval(reloadStatus, 3000)
+    return () => clearInterval(t)
+  }, [off, reloadStatus])
   if (status.error && !s) return <LoadError error={status.error} onRetry={status.reload} />
   if (!s) return <Skeleton className="h-[560px]" />
   if (!s.running)
@@ -93,6 +108,8 @@ function Running({
   const [selected, select] = useState<number | null>(null)
   const [editing, edit] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
+  const [stats, setStats] = useState<EngineStats | null>(null)
+  const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
@@ -117,6 +134,9 @@ function Running({
     edit,
     adding,
     setAdding,
+    stats,
+    setStats,
+    openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
   }
   const docks: Record<DockId, React.ReactNode> = {
     scenes: <ScenesDock />,
@@ -137,6 +157,11 @@ function Running({
         docks={docks}
       />
       <AddSourceDialog />
+      <SettingsDialog
+        open={settingsAt !== null}
+        start={settingsAt ?? undefined}
+        onClose={() => setSettingsAt(null)}
+      />
       <SourcePanel />
     </DeskProvider>
   )
@@ -160,28 +185,28 @@ function ControlBar({
   onStatus: (s: StudioEngineStatus) => void
 }) {
   const api = useEngine()
+  const { stats, setStats, openSettings } = useDesk()
   const { busy, run } = useAction()
-  const [stats, setStats] = useState<EngineStreamStats | null>(null)
   const last = useRef<{ bytes: number; at: number } | null>(null)
   const [kbps, setKbps] = useState<number | null>(null)
   const [since, setSince] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
-  // A stream exists until stopped; while connecting it isn't active yet but is on.
-  const on = !!stats && (stats.active || stats.reconnecting || !stats.error)
+  // One read a second: the engine, the stream and the recording.
   useEffect(() => {
     let alive = true
     const read = async () => {
       try {
-        const v = await api.streamStats()
+        const v = await api.stats()
         if (!alive) return
         setStats(v)
         const t = Date.now()
         setNow(t)
-        if (v && last.current && t > last.current.at) {
-          setKbps(Math.round(((v.bytes - last.current.bytes) * 8) / (t - last.current.at)))
-        } else if (!v) setKbps(null)
-        last.current = v ? { bytes: v.bytes, at: t } : null
-        setSince((s) => (v?.active ? (s ?? t) : null))
+        const st = v.stream
+        if (st && last.current && t > last.current.at) {
+          setKbps(Math.round(((st.bytes - last.current.bytes) * 8) / (t - last.current.at)))
+        } else if (!st) setKbps(null)
+        last.current = st ? { bytes: st.bytes, at: t } : null
+        setSince((x) => (st?.active ? (x ?? t) : null))
       } catch {
         // The next read tries again.
       }
@@ -192,35 +217,57 @@ function ControlBar({
       alive = false
       clearInterval(t)
     }
-  }, [api])
+  }, [api, setStats])
+  const stream = stats?.stream ?? null
+  const rec = stats?.record ?? null
+  // A stream exists until stopped; while connecting it isn't active yet but is on.
+  const on = !!stream && (stream.active || stream.reconnecting || !stream.error)
+  const recording = !!rec?.active
   const ticked = view ? onCanvas(view.destinations, 'main').filter((d) => d.enabled) : []
   const toggle = async () => {
     const v = await run('stream', () => api.stream(!on), {
       success: () => (on ? 'Stream ended.' : null),
     })
     if (v !== undefined) {
-      setStats(v)
       last.current = null
       setKbps(null)
+      // Shown at once, not on the next read.
+      if (stats) setStats({ ...stats, stream: v })
     }
   }
+  const record = async () => {
+    const v = await run('record', () => api.record(!recording), {
+      success: () => (recording ? 'Recording saved.' : null),
+    })
+    if (v !== undefined && stats) setStats({ ...stats, record: v })
+  }
+  const pause = () => void run('pause', () => api.pauseRecord(!rec?.paused))
+  const cpu = stats?.engine.cpu
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
       {lead}
+      <span className="hidden flex-1 xl:block" />
       <div
         aria-label="Stream health"
         className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[12.5px] text-text-3"
       >
+        <span className="inline-flex items-center gap-1.5" title="Ferrocast's CPU use">
+          <Cpu size={15} aria-hidden />
+          <span className="hidden md:inline">CPU</span>
+          <b className="font-mono font-semibold text-text tabular-nums">
+            {cpu === undefined ? '…' : `${cpu.toFixed(0)}%`}
+          </b>
+        </span>
         <span className="inline-flex items-center gap-1.5" title="Frames dropped">
           <WifiHigh size={15} aria-hidden />
           <span className="hidden md:inline">Dropped</span>
-          <b className="font-mono font-semibold text-text tabular-nums">{stats?.dropped ?? 0}</b>
+          <b className="font-mono font-semibold text-text tabular-nums">{stream?.dropped ?? 0}</b>
         </span>
         <span className="inline-flex items-center gap-1.5" title="Upload">
           <Gauge size={15} aria-hidden />
           <span className="hidden md:inline">Upload</span>
           <b className="font-mono font-semibold text-text tabular-nums">
-            {kbps === null ? '0.0' : (kbps / 1000).toFixed(1)} Mbps
+            {kbps === null ? '0.0' : (kbps / 1000).toFixed(1)}&nbsp;Mbps
           </b>
         </span>
         <span className="inline-flex items-center gap-1.5" title="Time live">
@@ -230,14 +277,55 @@ function ControlBar({
           </b>
         </span>
       </div>
-      {stats?.reconnecting && (
-        <span className="text-[13px] font-semibold text-warn">Reconnecting…</span>
+      {stream?.reconnecting && (
+        <span className="text-[13px] font-semibold text-warn" aria-live="polite">
+          Reconnecting…
+        </span>
       )}
-      {stats?.error && !stats.active && (
-        <span className="text-[13px] font-semibold text-danger">{stats.error}</span>
+      {stream?.error && !stream.active && (
+        <span className="text-[13px] font-semibold text-danger" aria-live="polite">
+          {stream.error}
+        </span>
       )}
-      <span className="flex-1" />
+      <span className="flex-1 xl:hidden" />
+      <IconButton
+        label="Studio settings"
+        className="h-10! w-10!"
+        variant="ghost"
+        onClick={() => openSettings()}
+      >
+        <GearSix size={18} />
+      </IconButton>
       <LayoutMenu onStatus={onStatus} />
+      {recording && (
+        <Button
+          variant="secondary"
+          className="h-10"
+          busy={busy === 'pause'}
+          onClick={pause}
+          aria-pressed={!!rec?.paused}
+        >
+          {rec?.paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
+          <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
+        </Button>
+      )}
+      <Button
+        variant="secondary"
+        className={cx('h-10', recording && 'text-danger')}
+        busy={busy === 'record'}
+        onClick={() => void record()}
+        title={rec?.file}
+      >
+        {recording ? (
+          <span aria-hidden className="size-2.5 rounded-full bg-danger-fill" />
+        ) : (
+          <RecordIcon size={16} weight="fill" />
+        )}
+        {recording
+          ? // Time recorded (frames over the frame rate): pauses don't count.
+            `Stop ${clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000).replace(/^00:/, '')}`
+          : 'Record'}
+      </Button>
       <Button
         variant={on ? 'danger' : 'primary'}
         className="h-10 px-5 text-[15px]"
@@ -247,7 +335,7 @@ function ControlBar({
         onClick={() => void toggle()}
       >
         {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
-        {on ? (stats?.active ? 'End stream' : 'Starting…') : 'Go live'}
+        {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
       </Button>
     </div>
   )
@@ -437,7 +525,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
             type="button"
             role="menuitem"
             className={item}
-            onClick={() => setLayout((l) => ({ ...fresh('classic'), mob: l.mob }))}
+            onClick={() => setLayout((l) => ({ ...fresh('side'), mob: l.mob }))}
           >
             <ArrowCounterClockwise size={17} aria-hidden /> Reset layout
           </button>

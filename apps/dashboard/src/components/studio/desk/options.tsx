@@ -102,27 +102,59 @@ function OptionField({
         </Button>
       )
     case 'int':
-    case 'float':
+    case 'float': {
+      const num = typeof v === 'number' ? v : null
+      const unit = o.suffix
+      const round = (n: number) => (o.kind === 'int' ? Math.round(n) : n)
+      const box = (p: { id?: string; 'aria-describedby'?: string }) => (
+        <div className="flex items-center gap-2">
+          <Input
+            {...p}
+            type="number"
+            inputMode={o.kind === 'int' ? 'numeric' : 'decimal'}
+            disabled={off}
+            value={num ?? ''}
+            min={o.min ?? undefined}
+            max={o.max ?? undefined}
+            step={o.step ?? undefined}
+            className={o.slider ? 'w-24! text-right tabular-nums' : 'tabular-nums'}
+            onChange={(e) => {
+              const n = e.target.valueAsNumber
+              if (Number.isFinite(n)) set(round(n))
+            }}
+          />
+          {unit && <span className="shrink-0 text-[13px] text-text-3">{unit}</span>}
+        </div>
+      )
+      if (!o.slider || o.min === null || o.max === null)
+        return (
+          <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+            {box}
+          </Field>
+        )
+      // OBS shows it as a slider: a slider to drag, the exact number beside it.
       return (
         <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
           {(p) => (
-            <Input
-              {...p}
-              type="number"
-              inputMode={o.kind === 'int' ? 'numeric' : 'decimal'}
-              disabled={off}
-              value={typeof v === 'number' ? v : ''}
-              min={o.min ?? undefined}
-              max={o.max ?? undefined}
-              step={o.step ?? undefined}
-              onChange={(e) => {
-                const n = e.target.valueAsNumber
-                if (Number.isFinite(n)) set(o.kind === 'int' ? Math.round(n) : n)
-              }}
-            />
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                aria-label={label}
+                aria-valuetext={num === null ? undefined : `${num}${unit ? ` ${unit}` : ''}`}
+                disabled={off}
+                min={o.min ?? 0}
+                max={o.max ?? 100}
+                step={o.step ?? (o.kind === 'int' ? 1 : 'any')}
+                value={num ?? o.min ?? 0}
+                onChange={(e) => set(round(Number(e.target.value)))}
+                className="h-6 min-w-0 flex-1 cursor-pointer accent-[var(--fc-accent)] disabled:opacity-50"
+              />
+              {box(p)}
+            </div>
           )}
         </Field>
       )
+    }
     case 'color':
     case 'color_alpha':
       return (

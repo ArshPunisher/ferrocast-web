@@ -29,6 +29,7 @@ import {
   type EngineItem,
   type EngineKinds,
   type EngineScenes,
+  type EngineStats,
 } from '@ferrocast/api'
 import { useClient, type Resource } from '../../../lib/hooks'
 
@@ -57,6 +58,12 @@ export interface Desk {
   /** "Add a source" is open, at this kind (an entry key from KIND_GROUPS, or "" for the first). */
   adding: string | null
   setAdding: (at: string | null) => void
+  /** The engine, stream and recording now (read every second by the bar above). */
+  stats: EngineStats | null
+  setStats: (s: EngineStats) => void
+  /** Opens Studio settings, at a page ("stream", "audio", "picture", "record", "keys",
+   * "advanced"). */
+  openSettings: (page?: string) => void
 }
 
 const Ctx = createContext<Desk | null>(null)

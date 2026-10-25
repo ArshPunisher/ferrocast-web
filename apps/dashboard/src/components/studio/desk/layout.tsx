@@ -96,12 +96,12 @@ function load(): Layout {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Layout | null
     if (!v || !Array.isArray(v.left) || !Array.isArray(v.right) || !Array.isArray(v.bottom))
-      return fresh('classic')
+      return fresh('side')
     const placed = [...v.left, ...v.right, ...v.bottom, ...Object.keys(v.float ?? {})]
     const ok = DOCKS.every((d) => placed.includes(d) || v.hidden?.includes(d))
-    return ok ? { ...fresh('classic'), ...v } : fresh('classic')
+    return ok ? { ...fresh('side'), ...v } : fresh('side')
   } catch {
-    return fresh('classic')
+    return fresh('side')
   }
 }
 
@@ -349,10 +349,10 @@ export function DockWorkspace({
           ref={ws}
           className="flex flex-col overflow-hidden rounded-panel border border-line bg-surface-1"
         >
-          {/* The picture keeps its 16:9 shape here (on wide screens it fills the space). */}
+          {/* The picture keeps its 16:9 shape here (on wide screens it fits the space). */}
           <div
             data-stage
-            className="flex flex-col [&>:first-child]:aspect-video [&>:first-child]:flex-none"
+            className="flex flex-col [&>:first-child]:aspect-video [&>:first-child]:flex-none [&>:first-child]:[container-type:inline-size]"
           >
             {stage}
           </div>

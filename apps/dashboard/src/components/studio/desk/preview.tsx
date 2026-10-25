@@ -39,7 +39,9 @@ export function PreviewBox({ running }: { running: boolean }) {
       const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
       const inView = r.top >= bar && r.bottom <= window.innerHeight && r.width > 1 && r.height > 1
       const rect: PreviewRect | null =
-        inView && !covered(r) ? { x: r.left, y: r.top, w: r.width, h: r.height } : null
+        inView && !covered(r)
+          ? { x: r.left, y: r.top, w: r.width, h: r.height, vh: window.innerHeight }
+          : null
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, window.innerHeight])
       if (key === last) return
@@ -74,13 +76,16 @@ export function PreviewBox({ running }: { running: boolean }) {
       void api.preview(null).catch(() => undefined)
     }
   }, [api, running, desktop])
+  // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
   return (
-    <div
-      ref={ref}
-      aria-label="Studio preview"
-      className="grid min-h-0 flex-1 place-items-center bg-[#0a0b0d] text-[13px] text-[#8a919d]"
-    >
-      {!desktop && 'The live picture shows in the Ferrocast app.'}
+    <div className="grid min-h-0 flex-1 place-items-center bg-inset p-3 [container-type:size]">
+      <div
+        ref={ref}
+        aria-label="Studio preview"
+        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#8a919d]"
+      >
+        {!desktop && 'The live picture shows in the Ferrocast app.'}
+      </div>
     </div>
   )
 }
@@ -133,7 +138,8 @@ const TRANSITIONS: Record<string, string> = {
 
 /** Under the picture: the scene on air and the transition between scenes. */
 export function StageBar() {
-  const { api, scenes, scene, kinds } = useDesk()
+  const { api, scenes, scene, kinds, stats, openSettings } = useDesk()
+  const c = stats?.canvas
   const { run } = useAction()
   const t = scenes.data?.transition
   const [ms, setMs] = useState<number | null>(null)
@@ -148,6 +154,16 @@ export function StageBar() {
   return (
     <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-surface-1 px-3 py-2 text-[13px] text-text-3">
       <span className="font-display text-[15px] font-bold text-text">{scene}</span>
+      {c && (
+        <button
+          type="button"
+          title="Change the picture size"
+          onClick={() => openSettings('picture')}
+          className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[11.5px] font-semibold text-text-2 tabular-nums hover:text-text"
+        >
+          {c.width}×{c.height} · {c.fps}&nbsp;fps
+        </button>
+      )}
       <span className="flex-1" />
       {t && (
         <div className="flex items-center gap-2">

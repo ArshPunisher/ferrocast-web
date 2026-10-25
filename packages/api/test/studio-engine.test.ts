@@ -55,6 +55,12 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.setChannel(3, { kind: 'coreaudio_input_capture', name: 'Mic' }),
       () => api.setChannel(3, null),
       () => api.levels(['Mic']),
+      () => api.studioSettings(),
+      () => api.setStudioSettings({} as never),
+      () => api.stats(),
+      () => api.record(true),
+      () => api.pauseRecord(true),
+      () => api.monitoring(),
     ]) {
       const e = await call().then(
         () => null,

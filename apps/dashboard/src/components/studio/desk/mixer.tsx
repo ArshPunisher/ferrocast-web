@@ -2,11 +2,18 @@
 // OBS's mixer. Devices heard in every scene come first ("Everywhere"), then the scene's own.
 
 import { useEffect, useRef, useState } from 'react'
-import { DotsThree, Headphones, Plus, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react'
+import {
+  DotsThree,
+  GearSix,
+  Headphones,
+  Plus,
+  SpeakerHigh,
+  SpeakerSlash,
+} from '@phosphor-icons/react'
 import { type EngineAudio, type EngineLevel } from '@ferrocast/api'
-import { Button, IconButton, InfoTip, Skeleton, cx } from '@ferrocast/ui'
+import { Button, IconButton, InfoTip, Segmented, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
-import { useAction } from '../../../lib/hooks'
+import { useAction, useResource } from '../../../lib/hooks'
 import { kindIcon, useDesk, type EngineApi } from './common'
 import { DockHeader } from './layout'
 
@@ -121,13 +128,25 @@ export function Meter({
   )
 }
 
-function Channel({ a, level }: { a: EngineAudio; level: EngineLevel | undefined }) {
+type AudioPatch = Partial<Pick<EngineAudio, 'volume_db' | 'muted' | 'monitor'>>
+
+function Channel({
+  a,
+  level,
+  onPatch,
+}: {
+  a: EngineAudio
+  level: EngineLevel | undefined
+  /** Shows a change in a list other than the scene's own (All). */
+  onPatch?: (name: string, patch: AudioPatch) => void
+}) {
   const { api, audio, edit } = useDesk()
   const { run } = useAction()
   const Icon = kindIcon(a.kind)
-  const setAudio = (patch: Partial<Pick<EngineAudio, 'volume_db' | 'muted' | 'monitor'>>) => {
+  const setAudio = (patch: AudioPatch) => {
     // Shown at once; the engine follows.
     audio.set((list) => (list ?? []).map((x) => (x.name === a.name ? { ...x, ...patch } : x)))
+    onPatch?.(a.name, patch)
     void run(`audio:${a.name}`, () => api.setAudio(a.name, patch), { quiet: false })
   }
   const hearing = a.monitor !== 'off'
@@ -196,9 +215,20 @@ function Channel({ a, level }: { a: EngineAudio; level: EngineLevel | undefined 
 }
 
 export function AudioDock() {
-  const { api, audio, setAdding } = useDesk()
-  const list = audio.data
+  const { api, audio, scenes, setAdding, openSettings } = useDesk()
+  const [all, setAll] = useState(false)
+  const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
+  // Every scene's sounds, each once: the global devices first, then in scene order.
+  const every = useResource(async () => {
+    if (!all || !names) return null
+    const lists = await Promise.all(names.split('\n').map((n) => api.audio(n)))
+    const seen = new Set<string>()
+    return lists.flat().filter((a) => !seen.has(a.name) && seen.add(a.name))
+  }, [api, all, names, audio.data])
+  const list = all ? every.data : audio.data
   const levels = useLevels(api, list?.map((a) => a.name) ?? [])
+  const patch = (name: string, p: AudioPatch) =>
+    every.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...p } : x)))
   return (
     <section aria-label="Audio" className="flex min-h-0 flex-1 flex-col">
       <DockHeader
@@ -208,22 +238,54 @@ export function AudioDock() {
             Every scene has its own sounds. Devices marked Everywhere play in all of them.
           </InfoTip>
         }
+        actions={
+          <Segmented
+            label="Which sounds"
+            value={all ? 'all' : 'scene'}
+            options={[
+              { value: 'scene', label: 'This scene' },
+              { value: 'all', label: 'All' },
+            ]}
+            onChange={(v) => setAll(v === 'all')}
+          />
+        }
       />
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {audio.error && !list ? (
-          <LoadError error={audio.error} onRetry={audio.reload} />
+        {(all ? every.error : audio.error) && !list ? (
+          <LoadError
+            error={all ? every.error : audio.error}
+            onRetry={all ? every.reload : audio.reload}
+          />
         ) : !list ? (
           <Skeleton className="h-28" />
         ) : list.length === 0 ? (
-          <p className="m-0 p-2.5 text-[13.5px] text-text-2">No sound in this scene yet.</p>
+          <p className="m-0 p-2.5 text-[13.5px] text-text-2">
+            {all ? 'No sound in any scene yet.' : 'No sound in this scene yet.'}
+          </p>
         ) : (
-          list.map((a) => <Channel key={a.name} a={a} level={levels[a.name]} />)
+          list.map((a) => (
+            <Channel
+              key={a.name}
+              a={a}
+              level={levels[a.name]}
+              {...(all ? { onPatch: patch } : {})}
+            />
+          ))
         )}
       </div>
       <footer className="flex flex-none items-center gap-0.5 border-t border-line px-1.5 py-1">
         <Button size="sm" variant="ghost" onClick={() => setAdding('mic')}>
           <Plus size={14} /> Add sound
         </Button>
+        <span className="flex-1" />
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="Audio settings"
+          onClick={() => openSettings('audio')}
+        >
+          <GearSix size={15} />
+        </IconButton>
       </footer>
     </section>
   )
