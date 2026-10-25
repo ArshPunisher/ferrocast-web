@@ -3,7 +3,7 @@
 // source OBS has with its options, and change, hide, fit or remove the sources on air.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowsOut, Eye, EyeSlash, Play, Stop, Trash } from '@phosphor-icons/react'
+import { ArrowsOut, Broadcast, Eye, EyeSlash, Play, Stop, Trash } from '@phosphor-icons/react'
 import {
   describeError,
   studioEngineApi,
@@ -11,6 +11,7 @@ import {
   type EngineOption,
   type EngineSettings,
   type EngineSource,
+  type EngineStreamStats,
   type PreviewRect,
   type StudioEngineStatus,
 } from '@ferrocast/api'
@@ -20,6 +21,7 @@ import {
   Dialog,
   Field,
   IconButton,
+  InfoTip,
   Input,
   Select,
   Skeleton,
@@ -80,6 +82,7 @@ export function EngineTab() {
             {s.version && <span className="font-mono">OBS engine {s.version}</span>}
             {s.renderer && <span className="font-mono">{s.renderer}</span>}
           </div>
+          {s.running && <StreamControl />}
           {!s.available ? (
             <p className="text-[13.5px] text-text-2">{s.detail}</p>
           ) : (
@@ -89,6 +92,73 @@ export function EngineTab() {
         {s.running && <SourcesPanel sources={sources} />}
       </div>
       {s.running && <KindsPanel onAdded={sources.reload} />}
+    </div>
+  )
+}
+
+/** Sends the Studio into Go live, which streams it to the platforms switched on there. */
+function StreamControl() {
+  const api = useEngine()
+  const { busy, run } = useAction()
+  const [stats, setStats] = useState<EngineStreamStats | null>(null)
+  const last = useRef<{ bytes: number; at: number } | null>(null)
+  const [kbps, setKbps] = useState<number | null>(null)
+  // A stream exists until stopped; while connecting it isn't active yet but is on.
+  const on = !!stats && (stats.active || stats.reconnecting || !stats.error)
+  useEffect(() => {
+    let alive = true
+    const read = async () => {
+      try {
+        const v = await api.streamStats()
+        if (!alive) return
+        setStats(v)
+        const now = Date.now()
+        if (v && last.current && now > last.current.at) {
+          setKbps(Math.round(((v.bytes - last.current.bytes) * 8) / (now - last.current.at)))
+        } else if (!v) setKbps(null)
+        last.current = v ? { bytes: v.bytes, at: now } : null
+      } catch {
+        // The next read tries again.
+      }
+    }
+    void read()
+    const t = setInterval(() => void read(), 2000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [api])
+  const toggle = async () => {
+    const v = await run('stream', () => api.stream(!on))
+    if (v !== undefined) {
+      setStats(v)
+      last.current = null
+      setKbps(null)
+    }
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <Button
+        variant={on ? 'secondary' : 'primary'}
+        size="sm"
+        busy={busy === 'stream'}
+        onClick={() => void toggle()}
+      >
+        {on ? <Stop size={15} weight="fill" /> : <Broadcast size={15} />}
+        {on ? 'Stop stream' : 'Stream'}
+      </Button>
+      <InfoTip label="About Stream">
+        Sends this picture to Go live, which streams it to the platforms switched on there.
+      </InfoTip>
+      {stats && (
+        <span className="text-[13px] tabular-nums text-text-3" aria-live="polite">
+          {stats.reconnecting
+            ? 'Reconnecting…'
+            : stats.active
+              ? `${kbps === null ? '…' : `${(kbps / 1000).toFixed(1)} Mbps`} · ${stats.dropped} dropped`
+              : (stats.error ?? 'Starting…')}
+        </span>
+      )}
     </div>
   )
 }
