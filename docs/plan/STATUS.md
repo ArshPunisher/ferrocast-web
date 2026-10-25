@@ -1,5 +1,9 @@
 # Status
 
+## 26 Oct 2026 (Studio built to its design)
+
+- Go live › Ferrocast is an OBS-like desk: flush dockable panels (Sources, Scenes, Audio, Go live to), the preview placed by the page, a stats bar with Record and Pause, a settings dialog (stream quality, audio, picture, recording, shortcuts, advanced) and filter sliders with units. Add source has a Ferrocast group that adds your overlays as web pages in one click. Tested in the real app.
+
 ## 25 Oct 2026 (2.0.0 released)
 - 2.0.0 published (Go live everywhere, themes in OBS, motion themes, music and sound). The website's dashboard and the relay's copy (and cloud-mode overlay pages) are on the same build.
 - Sound element: the synthesized set was turned down by the owner; real CC0 recordings from Freesound replaced it (owner picked the chime), whoosh swapped after it read as a click in OBS. All heard in OBS through the browser source's audio.
