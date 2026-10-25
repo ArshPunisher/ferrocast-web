@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { demo, open } from './helpers'
+import { demo, open, settled } from './helpers'
 
 // Go live everywhere (Studio's first tab) in the demo engine: setup, the upload check, a
 // server of your own, and the health lines while OBS streams.
@@ -355,6 +355,9 @@ test.describe('go live everywhere', () => {
       await expect(
         panel(page, 'Vertical layout').getByRole('group', { name: /Game box/ }),
       ).toBeVisible()
+      // Measure at rest: on the slower CI WebKit a bare <p> (most likely a toast still
+      // fading in) read as low contrast.
+      await settled(page)
       const r = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze()
