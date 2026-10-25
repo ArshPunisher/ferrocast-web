@@ -28,8 +28,8 @@
 
   /* Text. All pass WCAG AA on --fc-bg and --fc-surface-2. */
   --fc-text: #eef0f4;
-  --fc-text-2: #b3b9c4;
-  --fc-text-3: #8a919d;
+  --fc-text-2: #c3c8d1;
+  --fc-text-3: #9aa1ac;
 
   /* The Spark mark's own colours (logo, brand art). */
   --fc-brand-molten: #ffa424;
@@ -119,8 +119,8 @@
   --fc-line: #dfe2e8;
   --fc-line-strong: #c9ced7;
   --fc-text: #0e1014;
-  --fc-text-2: #424854;
-  --fc-text-3: #5f6672;
+  --fc-text-2: #343a45;
+  --fc-text-3: #4f5662;
   /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
      fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface). */
   --fc-accent: #cf7400;
@@ -169,8 +169,8 @@
     --fc-line: #dfe2e8;
     --fc-line-strong: #c9ced7;
     --fc-text: #0e1014;
-    --fc-text-2: #424854;
-    --fc-text-3: #5f6672;
+    --fc-text-2: #343a45;
+    --fc-text-3: #4f5662;
     --fc-accent: #cf7400;
     --fc-accent-strong: #e08a1a;
     --fc-on-accent: #0a0600;

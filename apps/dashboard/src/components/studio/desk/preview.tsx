@@ -82,7 +82,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       <div
         ref={ref}
         aria-label="Studio preview"
-        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#8a919d]"
+        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac]"
       >
         {!desktop && 'The live picture shows in the Ferrocast app.'}
       </div>
@@ -105,7 +105,7 @@ export function StageOff({
     <div className="grid min-h-0 flex-1 place-items-center bg-[#0a0b0d] p-6 text-center">
       {available ? (
         <div className="flex flex-col items-center gap-3">
-          <p className="m-0 max-w-[36ch] text-[14px] text-[#b3b9c4]">
+          <p className="m-0 max-w-[36ch] text-[14px] text-[#c3c8d1]">
             Your scenes come back where you left them.
           </p>
           <Button
@@ -121,7 +121,7 @@ export function StageOff({
           </Button>
         </div>
       ) : (
-        <p className="m-0 max-w-[48ch] text-[14px] text-[#b3b9c4]">{detail}</p>
+        <p className="m-0 max-w-[48ch] text-[14px] text-[#c3c8d1]">{detail}</p>
       )}
     </div>
   )

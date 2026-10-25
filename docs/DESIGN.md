@@ -39,7 +39,7 @@ Two brand colours from the X1 Spark mark, each with one job. Not Hookline orange
 | `--fc-bg` | `#0a0b0d` | `#f2f3f6` | page |
 | `--fc-surface-1/2/3` | `#101216` / `#16191e` / `#1d2127` | `#fff` / `#f7f8fa` / `#eceef2` | panels, raised, controls |
 | `--fc-line` / `-strong` | `#252a31` / `#343a44` | `#dfe2e8` / `#c9ced7` | hairlines |
-| `--fc-text` / `-2` / `-3` | `#eef0f4` / `#b3b9c4` / `#8a919d` | `#0e1014` / `#424854` / `#5f6672` | text (all AA) |
+| `--fc-text` / `-2` / `-3` | `#eef0f4` / `#c3c8d1` / `#9aa1ac` | `#0e1014` / `#343a45` / `#4f5662` | text (all AA) |
 | `--fc-accent` | `#ffa424` | `#cf7400` | Molten fill (primary buttons, bars) |
 | `--fc-accent-strong` | `#ffb547` | `#e08a1a` | hover of a Molten fill |
 | `--fc-on-accent` | `#120a00` | `#0a0600` | text on Molten (9.9:1 / 5.9:1) |

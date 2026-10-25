@@ -10,7 +10,8 @@ export interface DialogProps {
   description?: ReactNode
   children?: ReactNode
   footer?: ReactNode
-  size?: 'sm' | 'md' | 'lg'
+  /** `xl`: most of the screen (a big picker), its body filling the height. */
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   /** Bottom sheet on phones, centred card above 640 px. */
   sheetOnMobile?: boolean
 }
@@ -47,7 +48,14 @@ export function Dialog({
     d.addEventListener('cancel', onCancel)
     return () => d.removeEventListener('cancel', onCancel)
   }, [onClose])
-  const width = size === 'sm' ? 'sm:max-w-md' : size === 'lg' ? 'sm:max-w-3xl' : 'sm:max-w-xl'
+  const width =
+    size === 'sm'
+      ? 'sm:max-w-md'
+      : size === 'lg'
+        ? 'sm:max-w-3xl'
+        : size === 'xl'
+          ? 'sm:max-w-[min(1280px,92vw)] sm:h-[min(860px,88dvh)]'
+          : 'sm:max-w-xl'
   return (
     <dialog
       ref={ref}

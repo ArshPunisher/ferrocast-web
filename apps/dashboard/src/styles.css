@@ -184,7 +184,7 @@ input[type='range'] {
 }
 :root[data-theme='light'] .fc-plate {
   --fc-plate-text: #0e1014;
-  --fc-plate-text-2: #424854;
+  --fc-plate-text-2: #343a45;
   --fc-plate-gap: #eceff3;
   background: linear-gradient(160deg, #ffffff 0%, #e4e8ee 52%, #d3d8e0 100%);
   border-color: rgb(16 24 40 / 0.12);
@@ -192,7 +192,7 @@ input[type='range'] {
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']):not([data-theme='light']) .fc-plate {
     --fc-plate-text: #0e1014;
-    --fc-plate-text-2: #424854;
+    --fc-plate-text-2: #343a45;
     --fc-plate-gap: #eceff3;
     background: linear-gradient(160deg, #ffffff 0%, #e4e8ee 52%, #d3d8e0 100%);
     border-color: rgb(16 24 40 / 0.12);
