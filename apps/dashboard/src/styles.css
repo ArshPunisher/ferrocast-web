@@ -198,3 +198,34 @@ input[type='range'] {
     border-color: rgb(16 24 40 / 0.12);
   }
 }
+
+/* The mixer's fader: a pill thumb over the level meter (Studio › Audio), like OBS's. */
+.fc-fader::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.fc-fader::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--fc-text);
+  border: 2px solid var(--fc-surface-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.fc-fader::-moz-range-thumb {
+  width: 10px;
+  height: calc(100% - 4px);
+  border-radius: 6px;
+  background: var(--fc-text);
+  border: 2px solid var(--fc-surface-1);
+}
+.fc-fader:focus-visible {
+  outline: none;
+}
+.fc-fader:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--fc-focus);
+}
+.fc-fader:focus-visible::-moz-range-thumb {
+  box-shadow: var(--fc-focus);
+}

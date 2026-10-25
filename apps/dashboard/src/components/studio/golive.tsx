@@ -48,6 +48,7 @@ import {
   Switch,
   cx,
   toast,
+  Segmented,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
@@ -56,6 +57,8 @@ import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useObsHealth } from './obs'
+import { inDesktopApp } from '../../lib/external'
+import { StudioDesk } from './desk/desk'
 
 export function useGoLive() {
   const client = useClient()
@@ -113,6 +116,7 @@ export function GoLiveTab() {
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
   const [mode] = useMode('studio')
+  const [picture, setPicture] = usePicture(view)
   const live = !!view?.live
   const reload = res.reload
   // While live, OBS's side (Aitum Multistream's outputs) is read again every 15 s.
@@ -131,22 +135,64 @@ export function GoLiveTab() {
     )
   const set = (patch: Partial<GoLiveView>) => res.set((v) => ({ ...(v ?? view), ...patch }))
   const clashes = aitumClashes(view.obs.aitum, onCanvas(view.destinations, 'main'))
-  return (
-    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col gap-5">
-        {view.live && <LiveCard view={view} onSaved={res.reload} />}
-        <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
-        {mode === 'advanced' && <AdvancedCard view={view} onSaved={res.reload} />}
-      </div>
-      <div className="flex min-w-0 flex-col gap-5">
-        {!view.live && !view.aitum_ok && clashes.length > 0 && (
-          <AitumNote names={clashes.map((c) => c.name)} onOk={() => set({ aitum_ok: true })} />
-        )}
-        <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
-        {view.upload && <Upload view={view} onUpload={(upload) => set({ upload })} />}
-      </div>
-    </div>
+  const pick = (
+    <Segmented
+      label="Picture from"
+      value={picture}
+      options={[
+        { value: 'ferrocast', label: 'Ferrocast' },
+        { value: 'obs', label: 'OBS' },
+      ]}
+      onChange={setPicture}
+    />
   )
+  if (picture === 'ferrocast') return <StudioDesk res={res} view={view} lead={pick} />
+  return (
+    <>
+      <div className="mb-4 flex">{pick}</div>
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {view.live && <LiveCard view={view} onSaved={res.reload} />}
+          <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
+          {mode === 'advanced' && <AdvancedCard view={view} onSaved={res.reload} />}
+        </div>
+        <div className="flex min-w-0 flex-col gap-5">
+          {!view.live && !view.aitum_ok && clashes.length > 0 && (
+            <AitumNote names={clashes.map((c) => c.name)} onOk={() => set({ aitum_ok: true })} />
+          )}
+          <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
+          {view.upload && <Upload view={view} onUpload={(upload) => set({ upload })} />}
+        </div>
+      </div>
+    </>
+  )
+}
+
+type Picture = 'ferrocast' | 'obs'
+const PICTURE_KEY = 'fc-golive-picture'
+
+/** Where the stream's picture comes from: Ferrocast's own Studio, or OBS. Remembered here;
+ * the first time, OBS if it already sends to Ferrocast or this isn't the desktop app. */
+function usePicture(view: GoLiveView | null): [Picture, (p: Picture) => void] {
+  const [saved, setSaved] = useState<Picture | null>(() => {
+    try {
+      const v = localStorage.getItem(PICTURE_KEY)
+      return v === 'ferrocast' || v === 'obs' ? v : null
+    } catch {
+      return null
+    }
+  })
+  // The Studio runs only in the desktop app; elsewhere OBS is the way in.
+  const picture: Picture = saved ?? (!inDesktopApp() || view?.obs.points_here ? 'obs' : 'ferrocast')
+  const set = (p: Picture) => {
+    setSaved(p)
+    try {
+      localStorage.setItem(PICTURE_KEY, p)
+    } catch {
+      // Private mode: it lasts this visit.
+    }
+  }
+  return [picture, set]
 }
 
 // ---------------------------------------------------------------- 5A: while live
@@ -522,7 +568,7 @@ export function Platforms({
   )
 }
 
-function RowText({ d }: { d: DestinationView }) {
+export function RowText({ d }: { d: DestinationView }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   return (
     <div className="min-w-0">

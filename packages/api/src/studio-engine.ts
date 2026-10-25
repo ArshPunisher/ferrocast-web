@@ -59,22 +59,86 @@ export interface EngineOption {
   group: EngineOption[]
 }
 
-/** A source in the scene on air. */
-export interface EngineSource {
-  name: string
-  kind: string
-  visible: boolean
-}
-
 /** OBS's own settings for a source (the keys OBS saves in its scene collections). */
 export type EngineSettings = Record<string, unknown>
 
-export interface AddEngineSource {
+/** A scene, in the order shown. */
+export interface EngineScene {
+  name: string
+  /** Sources directly in it. */
+  items: number
+  /** On air. */
+  current: boolean
+}
+
+export interface EngineTransition {
+  /** `fade_transition`, `cut_transition`, `swipe_transition`… */
+  kind: string
+  ms: number
+}
+
+export interface EngineScenes {
+  scenes: EngineScene[]
+  current: string
+  transition: EngineTransition
+}
+
+/** A source in a scene, top first. A group lists its own items. */
+export interface EngineItem {
+  id: number
+  name: string
+  kind: string
+  visible: boolean
+  locked: boolean
+  /** It makes sound (shows in the mixer). */
+  audio: boolean
+  group: boolean
+  children: EngineItem[]
+}
+
+export type EngineItemEdit =
+  'show' | 'hide' | 'lock' | 'unlock' | 'fit' | 'remove' | 'up' | 'down' | 'top' | 'bottom'
+
+export interface NewEngineSource {
   kind: string
   name: string
   settings?: EngineSettings
-  /** Fit it to the screen once added. */
-  fit?: boolean
+}
+
+/** Who hears a sound besides the stream. */
+export type EngineMonitor = 'off' | 'only_me' | 'me_and_stream'
+
+/** A sound in a scene's mixer. */
+export interface EngineAudio {
+  name: string
+  kind: string
+  /** A global device (1 to 6), heard in every scene; null for one in this scene only. */
+  channel: number | null
+  /** -100 (silent) to 26. */
+  volume_db: number
+  muted: boolean
+  monitor: EngineMonitor
+}
+
+/** A source and the scenes it's in. */
+export interface EngineSourceUse {
+  name: string
+  kind: string
+  scenes: string[]
+}
+
+export interface EngineFilter {
+  name: string
+  kind: string
+  enabled: boolean
+}
+
+export type EngineFilterEdit = 'enable' | 'disable' | 'up' | 'down' | 'top' | 'bottom'
+
+/** dBFS for the left and right channels; -100 is silence. */
+export interface EngineLevel {
+  peak: [number, number]
+  magnitude: [number, number]
 }
 
 /** How the Studio's stream into Go live is going (null: not streaming). */
@@ -86,8 +150,6 @@ export interface EngineStreamStats {
   dropped: number
   error: string | null
 }
-
-export type EngineSourceEdit = 'show' | 'hide' | 'fit' | 'remove'
 
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {
@@ -109,13 +171,44 @@ export function studioEngineApi(c: FerroClient) {
     /** The settings a new source of this kind starts with. */
     defaults: (kind: string) =>
       c.request<EngineSettings>('GET', `/api/v1/studio/engine/kinds/${enc(kind)}/defaults`),
-    sources: () => c.request<EngineSource[]>('GET', '/api/v1/studio/engine/sources'),
-    addSource: (add: AddEngineSource) =>
-      c.request<{ source: EngineSource | null; settings: EngineSettings }>(
+    scenes: () => c.request<EngineScenes>('GET', '/api/v1/studio/engine/scenes'),
+    addScene: (name: string) => c.request<void>('POST', '/api/v1/studio/engine/scenes', { name }),
+    removeScene: (scene: string) =>
+      c.request<void>('DELETE', `/api/v1/studio/engine/scenes/${enc(scene)}`),
+    duplicateScene: (scene: string, name: string) =>
+      c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/duplicate`, { name }),
+    /** Moves a scene to `to` in the list (0 is the top). */
+    moveScene: (scene: string, to: number) =>
+      c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/move`, { to }),
+    /** Puts a scene on air through the transition. */
+    setCurrent: (scene: string) =>
+      c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/current`, {}),
+    setTransition: (t: EngineTransition) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/transition', t),
+    items: (scene: string) =>
+      c.request<EngineItem[]>('GET', `/api/v1/studio/engine/scenes/${enc(scene)}/items`),
+    /** A new source on top of the scene; `fit` fits it to the screen. */
+    addSource: (scene: string, source: NewEngineSource, fit = false) =>
+      c.request<{ item: EngineItem; settings: EngineSettings }>(
         'POST',
-        '/api/v1/studio/engine/sources',
-        add,
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items`,
+        { ...source, fit },
       ),
+    /** A source from another scene: the same one, shown in both. */
+    addExisting: (scene: string, name: string) =>
+      c.request<{ item: EngineItem }>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
+        existing: name,
+      }),
+    editItem: (scene: string, id: number, what: EngineItemEdit) =>
+      c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/edit`, {
+        do: what,
+      }),
+    audio: (scene: string) =>
+      c.request<EngineAudio[]>('GET', `/api/v1/studio/engine/scenes/${enc(scene)}/audio`),
+    /** Every source in a scene, with the scenes it's in. */
+    sources: () => c.request<EngineSourceUse[]>('GET', '/api/v1/studio/engine/sources'),
+    rename: (name: string, to: string) =>
+      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/rename`, { name: to }),
     settings: (name: string) =>
       c.request<EngineSettings>('GET', `/api/v1/studio/engine/sources/${enc(name)}/settings`),
     /** Changes only the keys sent. */
@@ -124,8 +217,47 @@ export function studioEngineApi(c: FerroClient) {
     /** The source's options as they look for its settings now. */
     sourceOptions: (name: string) =>
       c.request<EngineOption[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/options`),
-    edit: (name: string, what: EngineSourceEdit) =>
-      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/edit`, { do: what }),
+    setAudio: (name: string, a: { volume_db?: number; muted?: boolean; monitor?: EngineMonitor }) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/sources/${enc(name)}/audio`, a),
+    filters: (name: string) =>
+      c.request<EngineFilter[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/filters`),
+    addFilter: (name: string, filter: NewEngineSource) =>
+      c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/filters`, filter),
+    removeFilter: (name: string, filter: string) =>
+      c.request<void>(
+        'DELETE',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}`,
+      ),
+    editFilter: (name: string, filter: string, what: EngineFilterEdit) =>
+      c.request<void>(
+        'POST',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/edit`,
+        { do: what },
+      ),
+    filterSettings: (name: string, filter: string) =>
+      c.request<EngineSettings>(
+        'GET',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/settings`,
+      ),
+    filterOptions: (name: string, filter: string) =>
+      c.request<EngineOption[]>(
+        'GET',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/options`,
+      ),
+    updateFilter: (name: string, filter: string, settings: EngineSettings) =>
+      c.request<void>(
+        'PUT',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/settings`,
+        { settings },
+      ),
+    /** A global sound device heard in every scene: 1, 2 desktop sound; 3 to 6 mics. */
+    setChannel: (channel: number, device: NewEngineSource | null) =>
+      device
+        ? c.request<void>('PUT', `/api/v1/studio/engine/channels/${channel}`, device)
+        : c.request<void>('DELETE', `/api/v1/studio/engine/channels/${channel}`),
+    /** Levels now, for these sounds (a meter starts on the first ask). */
+    levels: (names: string[]) =>
+      c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),
     /** Starts or stops streaming the Studio into this PC's Go live. */
     stream: (on: boolean) =>
       c.request<EngineStreamStats | null>('POST', '/api/v1/studio/engine/stream', { on }),

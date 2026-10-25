@@ -1,0 +1,481 @@
+// A source's panel, beside the preview (it stays visible where the panel doesn't cover it):
+// rename it; for a sound, its level, "hear it" and the scenes it plays in; its filters in
+// plain words; and every setting OBS has for it, applied as you change them.
+
+import { useEffect, useRef, useState } from 'react'
+import { CaretDown, CaretUp, Plus, Trash, X } from '@phosphor-icons/react'
+import { describeError, type EngineMonitor, type EngineSettings } from '@ferrocast/api'
+import {
+  Button,
+  IconButton,
+  InfoTip,
+  Input,
+  Segmented,
+  Skeleton,
+  Switch,
+  cx,
+  toast,
+} from '@ferrocast/ui'
+import { LoadError } from '../../Panel'
+import { done, useAction, useResource } from '../../../lib/hooks'
+import { FILTERS, FILTER_LABEL, kindIcon, useDesk } from './common'
+import { Meter, useLevels } from './mixer'
+import { OptionsForm } from './options'
+
+/** Sends edits once they've stopped changing for a moment. */
+function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: () => void) {
+  const [edits, setEdits] = useState<EngineSettings>({})
+  const applyRef = useRef(apply)
+  applyRef.current = apply
+  const afterRef = useRef(after)
+  afterRef.current = after
+  useEffect(() => {
+    if (Object.keys(edits).length === 0) return
+    const t = setTimeout(() => {
+      const sent = edits
+      void applyRef
+        .current(sent)
+        .catch((err: unknown) => {
+          // Not applied: say why, and show the engine's own values again.
+          const d = describeError(err)
+          toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+        })
+        .finally(() => {
+          setEdits((e) => (e === sent ? {} : e))
+          afterRef.current()
+        })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [edits])
+  return [edits, (k: string, v: unknown) => setEdits((p) => ({ ...p, [k]: v }))] as const
+}
+
+export function SourcePanel() {
+  const { editing, edit } = useDesk()
+  if (!editing) return null
+  return <Panel key={editing} name={editing} onClose={() => edit(null)} />
+}
+
+function Panel({ name, onClose }: { name: string; onClose: () => void }) {
+  const { api, audio, items, scene, refresh, edit } = useDesk()
+  const { run, busy } = useAction()
+  const [rename, setRename] = useState(name)
+  // Removing asks once more: the button turns into "Sure? Remove".
+  const [sure, setSure] = useState(false)
+  const a = audio.data?.find((x) => x.name === name) ?? null
+  const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
+  const kind = a?.kind ?? item?.kind ?? ''
+  const Icon = kindIcon(kind)
+  const levels = useLevels(api, a ? [name] : [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const commitName = async () => {
+    const to = rename.trim()
+    if (!to || to === name) return setRename(name)
+    const ok = await run('rename', () => done(api.rename(name, to)))
+    if (ok) {
+      refresh()
+      edit(to)
+    } else setRename(name)
+  }
+  const setAudio = (patch: { volume_db?: number; muted?: boolean; monitor?: EngineMonitor }) => {
+    audio.set((list) => (list ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
+    void run('audio', () => api.setAudio(name, patch))
+  }
+
+  return (
+    <aside
+      data-over-preview
+      aria-label={`${name} settings`}
+      className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+    >
+      <header className="flex items-center gap-2.5 border-b border-line py-3 pr-3 pl-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent-text">
+          <Icon size={18} aria-hidden />
+        </span>
+        <Input
+          aria-label="Name"
+          className="h-9! min-w-0 flex-1 border-transparent! bg-transparent! font-display text-[17px]! font-bold hover:border-line-strong!"
+          maxLength={100}
+          value={rename}
+          onChange={(e) => setRename(e.target.value)}
+          onBlur={() => void commitName()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+        />
+        <IconButton label="Close" onClick={onClose}>
+          <X size={18} />
+        </IconButton>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
+        {a && (
+          <section aria-label="Sound" className="flex flex-col gap-3">
+            <h3 className="m-0 font-display text-[13px] font-bold text-text-2">Sound</h3>
+            <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
+              <div className="flex items-center justify-between text-[13.5px]">
+                <span>Volume</span>
+                <span className="font-mono text-[12.5px] text-text-2 tabular-nums">
+                  {a.muted ? 'Muted' : `${a.volume_db.toFixed(1)} dB`}
+                </span>
+              </div>
+              <Meter
+                tall
+                level={levels[name]}
+                muted={a.muted}
+                volumeDb={a.volume_db}
+                label={`${name} volume`}
+                onVolume={(d) => setAudio({ volume_db: Math.round(d * 10) / 10 })}
+              />
+              <Switch label="Mute" checked={a.muted} onChange={(m) => setAudio({ muted: m })} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-1 text-sm font-medium">
+                  Hear it
+                  <InfoTip label="About hearing it">
+                    Plays it in your headphones. Only me keeps it off the stream.
+                  </InfoTip>
+                </span>
+                <Segmented
+                  label="Hear it"
+                  value={a.monitor}
+                  options={[
+                    { value: 'off', label: 'Off' },
+                    { value: 'only_me', label: 'Only me' },
+                    { value: 'me_and_stream', label: 'Me and stream' },
+                  ]}
+                  onChange={(monitor) => setAudio({ monitor })}
+                />
+              </div>
+            </div>
+            {a.channel ? (
+              <p className="m-0 text-[13px] text-text-3">Plays in every scene.</p>
+            ) : (
+              <PlaysIn name={name} />
+            )}
+          </section>
+        )}
+        <Filters name={name} audio={!!a} />
+        <Settings name={name} />
+      </div>
+      <footer className="flex items-center gap-2 border-t border-line px-4 py-3">
+        {item ? (
+          <Button
+            variant="ghost"
+            className="text-danger hover:bg-danger-soft"
+            busy={busy === 'remove'}
+            onBlur={() => setSure(false)}
+            onClick={() =>
+              !sure
+                ? setSure(true)
+                : void run('remove', () => done(api.editItem(scene, item.id, 'remove'))).then(
+                    (ok) => {
+                      if (!ok) return
+                      refresh()
+                      onClose()
+                    },
+                  )
+            }
+          >
+            <Trash size={15} /> {sure ? `Sure? Remove from ${scene}` : `Remove from ${scene}`}
+          </Button>
+        ) : a?.channel ? (
+          <Button
+            variant="ghost"
+            className="text-danger hover:bg-danger-soft"
+            busy={busy === 'remove'}
+            onBlur={() => setSure(false)}
+            onClick={() =>
+              !sure
+                ? setSure(true)
+                : void run('remove', () => done(api.setChannel(a.channel ?? 0, null))).then(
+                    (ok) => {
+                      if (!ok) return
+                      refresh()
+                      onClose()
+                    },
+                  )
+            }
+          >
+            <Trash size={15} /> {sure ? 'Sure? Remove' : 'Remove'}
+          </Button>
+        ) : null}
+        <span className="flex-1" />
+        <Button variant="primary" onClick={onClose}>
+          Done
+        </Button>
+      </footer>
+    </aside>
+  )
+}
+
+/** The scenes a sound (or any source) is in: on adds it there, off takes it out. */
+function PlaysIn({ name }: { name: string }) {
+  const { api, scenes, refresh } = useDesk()
+  const { run, busy } = useAction()
+  const uses = useResource(() => api.sources(), [api])
+  const mine = uses.data?.find((u) => u.name === name)?.scenes ?? []
+  const toggle = async (scene: string, on: boolean) => {
+    const ok = await run(`in:${scene}`, async () => {
+      if (on) return done(api.addExisting(scene, name))
+      if (mine.length <= 1)
+        throw new Error('A source stays in at least one scene. Remove it instead.')
+      const items = await api.items(scene)
+      const it = items.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)
+      return it ? done(api.editItem(scene, it.id, 'remove')) : true
+    })
+    if (ok) {
+      uses.reload()
+      refresh()
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[13px] font-semibold text-text-2">Plays in</span>
+      <div className="flex flex-wrap gap-1.5">
+        {(scenes.data?.scenes ?? []).map((s) => {
+          const on = mine.includes(s.name)
+          return (
+            <button
+              key={s.name}
+              type="button"
+              aria-pressed={on}
+              disabled={busy !== null || !uses.data}
+              onClick={() => void toggle(s.name, !on)}
+              className={cx(
+                'inline-flex h-8 items-center rounded-full border px-3 text-[13px] transition-colors',
+                on
+                  ? 'border-accent-line bg-accent-soft font-semibold text-accent-text'
+                  : 'border-line-strong text-text-2 hover:bg-surface-2',
+              )}
+            >
+              {s.name}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** Filters, in the order they run: each can be switched off, opened, moved or removed. */
+function Filters({ name, audio }: { name: string; audio: boolean }) {
+  const { api, kinds } = useDesk()
+  const { run, busy } = useAction()
+  const list = useResource(() => api.filters(name), [api, name])
+  const [open, setOpen] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
+  // A filter's trash asks once more (its settings go with it).
+  const [sure, setSure] = useState<string | null>(null)
+  const have = new Set(kinds.data?.filters.map((k) => k.id))
+  const curated = FILTERS.filter((f) => !!f.audio === audio)
+    .map((f) => ({ ...f, kind: f.kinds.find((k) => have.has(k)) }))
+    .filter((f): f is typeof f & { kind: string } => !!f.kind)
+  const curatedKinds = new Set(FILTERS.flatMap((f) => f.kinds))
+  const more = (kinds.data?.filters ?? []).filter((k) => !curatedKinds.has(k.id))
+  const taken = new Set(list.data?.map((f) => f.name))
+  const act = async (key: string, f: () => Promise<unknown>) => {
+    const ok = await run(key, () => done(f()))
+    if (ok) list.reload()
+    return ok
+  }
+  const add = async (kind: string, label: string) => {
+    let n = label
+    for (let i = 2; taken.has(n); i++) n = `${label} ${i}`
+    const ok = await act('add', () => api.addFilter(name, { kind, name: n }))
+    if (ok) {
+      setPicking(false)
+      setOpen(n)
+    }
+  }
+  return (
+    <section aria-label="Filters" className="flex flex-col gap-2">
+      <h3 className="m-0 flex items-center gap-1 font-display text-[13px] font-bold text-text-2">
+        {audio ? 'Clean up' : 'Filters'}
+        <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
+      </h3>
+      {list.error && !list.data ? (
+        <LoadError error={list.error} onRetry={list.reload} />
+      ) : !list.data ? (
+        <Skeleton className="h-16" />
+      ) : (
+        list.data.map((f, i) => (
+          <div
+            key={f.name}
+            className={cx(
+              'rounded-control border border-line bg-surface-2',
+              !f.enabled && 'opacity-70',
+            )}
+          >
+            <div className="flex items-center gap-1 py-1.5 pr-1.5 pl-3">
+              <button
+                type="button"
+                aria-expanded={open === f.name}
+                onClick={() => setOpen(open === f.name ? null : f.name)}
+                className="min-w-0 flex-1 truncate text-left text-[13.5px] font-semibold"
+              >
+                {f.name}
+                {FILTER_LABEL[f.kind] && FILTER_LABEL[f.kind] !== f.name && (
+                  <span className="ml-1.5 font-normal text-text-3">{FILTER_LABEL[f.kind]}</span>
+                )}
+              </button>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Move ${f.name} up`}
+                disabled={i === 0 || busy !== null}
+                onClick={() => void act('up', () => api.editFilter(name, f.name, 'up'))}
+              >
+                <CaretUp size={14} />
+              </IconButton>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Move ${f.name} down`}
+                disabled={i === (list.data?.length ?? 0) - 1 || busy !== null}
+                onClick={() => void act('down', () => api.editFilter(name, f.name, 'down'))}
+              >
+                <CaretDown size={14} />
+              </IconButton>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                className={cx(
+                  'hover:bg-danger-soft hover:text-danger',
+                  sure === f.name && 'bg-danger-soft text-danger',
+                )}
+                label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
+                disabled={busy !== null}
+                onBlur={() => setSure(null)}
+                onClick={() =>
+                  sure === f.name
+                    ? void act('rm', () => api.removeFilter(name, f.name))
+                    : setSure(f.name)
+                }
+              >
+                <Trash size={14} weight={sure === f.name ? 'fill' : 'regular'} />
+              </IconButton>
+              <Switch
+                label={`${f.name} on`}
+                hideLabel
+                checked={f.enabled}
+                onChange={(on) =>
+                  void act('on', () => api.editFilter(name, f.name, on ? 'enable' : 'disable'))
+                }
+              />
+            </div>
+            {open === f.name && (
+              <div className="border-t border-line p-3">
+                <FilterSettings source={name} filter={f.name} />
+              </div>
+            )}
+          </div>
+        ))
+      )}
+      {picking ? (
+        <div
+          className="flex flex-col gap-1 rounded-control border border-line p-1.5"
+          role="group"
+          aria-label="Add a filter"
+        >
+          {curated.map((f) => (
+            <button
+              key={f.kind}
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void add(f.kind, f.label)}
+              className="flex flex-col items-start rounded-[8px] px-2.5 py-2 text-left hover:bg-surface-2"
+            >
+              <span className="text-[13.5px] font-semibold">{f.label}</span>
+              <span className="text-[12.5px] text-text-3">{f.help}</span>
+            </button>
+          ))}
+          {more.length > 0 && (
+            <details className="rounded-[8px] px-2.5 py-1.5">
+              <summary className="cursor-pointer text-[13px] font-semibold text-accent-text">
+                More filters
+              </summary>
+              <div className="mt-1 flex flex-col">
+                {more.map((k) => (
+                  <button
+                    key={k.id}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void add(k.id, k.name || k.id)}
+                    className="rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-surface-2"
+                  >
+                    {k.name || k.id}
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="self-start"
+            onClick={() => setPicking(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="self-start"
+          onClick={() => setPicking(true)}
+        >
+          <Plus size={14} /> Add a filter
+        </Button>
+      )}
+    </section>
+  )
+}
+
+function FilterSettings({ source, filter }: { source: string; filter: string }) {
+  const { api } = useDesk()
+  const loaded = useResource(
+    () => Promise.all([api.filterOptions(source, filter), api.filterSettings(source, filter)]),
+    [api, source, filter],
+  )
+  const [edits, set] = useApplied((e) => api.updateFilter(source, filter, e), loaded.reload)
+  if (loaded.error && !loaded.data)
+    return <LoadError error={loaded.error} onRetry={loaded.reload} />
+  if (!loaded.data) return <Skeleton className="h-20" />
+  return (
+    <OptionsForm opts={loaded.data[0]} values={{ ...loaded.data[1], ...edits }} onChange={set} />
+  )
+}
+
+/** Every setting OBS has for the source, applied as it changes. */
+function Settings({ name }: { name: string }) {
+  const { api } = useDesk()
+  const loaded = useResource(
+    () => Promise.all([api.sourceOptions(name), api.settings(name)]),
+    [api, name],
+  )
+  const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload)
+  return (
+    <section aria-label="All settings" className="flex flex-col gap-2">
+      <h3 className="m-0 font-display text-[13px] font-bold text-text-2">Settings</h3>
+      {loaded.error && !loaded.data ? (
+        <LoadError error={loaded.error} onRetry={loaded.reload} />
+      ) : !loaded.data ? (
+        <Skeleton className="h-32" />
+      ) : (
+        <OptionsForm
+          opts={loaded.data[0]}
+          values={{ ...loaded.data[1], ...edits }}
+          onChange={set}
+        />
+      )}
+    </section>
+  )
+}
