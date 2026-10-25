@@ -156,6 +156,10 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         : Promise.all([api.options(c.kind), api.defaults(c.kind), api.sources()]),
     [api, c.kind, isScene],
   )
+  const overlays = useResource(
+    (client) => (c.entry.overlays ? client.overlays() : Promise.resolve([])),
+    [c.entry.overlays],
+  )
   const [device, setDevice] = useState<number | null>(null)
   const [edits, setEdits] = useState<EngineSettings>({})
   const [name, setName] = useState<string | null>(null)
@@ -187,6 +191,19 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     (c.entry.key === 'mic' ? [3, 4, 5, 6] : [1, 2]).find((ch) => !used.has(ch)) ?? null
   const global = sound && everywhere && channel !== null
 
+  /** One of Ferrocast's overlays, as a web page at its own size, fitted to the screen. */
+  const addOverlay = async (o: { name: string; url: string; width: number; height: number }) => {
+    const source = {
+      kind: c.kind,
+      name: freeName(o.name, taken),
+      settings: { url: o.url, width: o.width, height: o.height },
+    }
+    finish(
+      await run('overlay', () => api.addSource(scene, source, true), {
+        success: `Added ${source.name}.`,
+      }),
+    )
+  }
   const finish = (ok: unknown) => {
     if (!ok) return
     refresh()
@@ -250,6 +267,40 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           </div>
         </fieldset>
       )}
+      {c.entry.overlays && (
+        <div className="flex flex-col gap-2.5">
+          <h4 className="m-0 font-display text-[14px] font-bold">Pick an overlay</h4>
+          {overlays.error && !overlays.data ? (
+            <LoadError error={overlays.error} onRetry={overlays.reload} />
+          ) : !overlays.data ? (
+            <Skeleton className="h-24" />
+          ) : overlays.data.length === 0 ? (
+            <p className="m-0 text-[13.5px] text-text-2">
+              No overlays yet. Make one in Overlays, then add it here.
+            </p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+              {overlays.data.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void addOverlay(o)}
+                  className="flex items-center gap-2.5 rounded-control border border-line bg-surface-2 px-3 py-2.5 text-left hover:border-line-strong active:scale-[0.98]"
+                >
+                  <Icon size={18} aria-hidden className="shrink-0 text-text-3" />
+                  <span className="min-w-0">
+                    <b className="block truncate text-[13px]">{o.name}</b>
+                    <span className="block font-mono text-[12px] text-text-3 tabular-nums">
+                      {o.width}×{o.height}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {reuse.length > 0 && (
         <div className="flex flex-col gap-2.5">
           <h4 className="m-0 font-display text-[14px] font-bold">
@@ -277,7 +328,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           </div>
         </div>
       )}
-      {!isScene && (
+      {!isScene && !c.entry.overlays && (
         <>
           {!dev && (
             <details className="group rounded-control border border-line" open={!c.entry.device}>

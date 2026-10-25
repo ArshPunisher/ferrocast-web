@@ -17,6 +17,7 @@ import {
   Palette,
   Slideshow,
   SpeakerHigh,
+  Stack,
   TextT,
   VideoCamera,
   Waveform,
@@ -93,6 +94,8 @@ export interface KindEntry {
   fit?: boolean
   /** Adds an existing scene instead of a new source. */
   scene?: boolean
+  /** Lists Ferrocast's overlays to add as web pages. */
+  overlays?: boolean
 }
 
 export interface KindGroup {
@@ -167,6 +170,19 @@ export const KIND_GROUPS: KindGroup[] = [
     ],
   },
   {
+    label: 'Ferrocast',
+    entries: [
+      {
+        key: 'overlay',
+        label: 'Your overlays',
+        icon: Stack,
+        kinds: ['ferrocast_web', 'browser_source'],
+        overlays: true,
+        fit: true,
+      },
+    ],
+  },
+  {
     label: 'Media',
     entries: [
       { key: 'image', label: 'Image', icon: ImageIcon, kinds: ['image_source'] },
@@ -178,7 +194,7 @@ export const KIND_GROUPS: KindGroup[] = [
         kinds: ['slideshow_v2', 'slideshow'],
         fit: true,
       },
-      { key: 'web', label: 'Web page', icon: Browser, kinds: ['browser_source'] },
+      { key: 'web', label: 'Web page', icon: Browser, kinds: ['ferrocast_web', 'browser_source'] },
     ],
   },
   {
@@ -213,6 +229,7 @@ export function kindIcon(kind: string): Icon {
   if (kind === 'scene') return CardsThree
   if (kind.includes('alert')) return BellRinging
   if (kind.includes('chat')) return ChatCircleText
+  if (kind === 'ferrocast_web') return Browser
   return ICONS[kind] ?? (kind.includes('audio') ? Waveform : Cube)
 }
 
