@@ -1,5 +1,9 @@
 # Status
 
+## 25 Oct 2026 (2.0.0 released)
+- 2.0.0 published (Go live everywhere, themes in OBS, motion themes, music and sound). The website's dashboard and the relay's copy (and cloud-mode overlay pages) are on the same build.
+- Sound element: the synthesized set was turned down by the owner; real CC0 recordings from Freesound replaced it (owner picked the chime), whoosh swapped after it read as a click in OBS. All heard in OBS through the browser source's audio.
+
 ## 25 Oct 2026 (themes, music and sound: the owner's 25 Oct picks)
 - Eleven motion themes (`packages/designs/src/fx-kit.ts`, one file each): Hex Pulse, Night Drive, Wasteland, Circuit, Neon Tunnel, Night Dunes, Lava Forge, Arena Lights, Code Rain City, Orbit, Deep Sonar. Each has eight screens: In game, Just chatting, Starting soon, Getting ready, BRB, Paused, Offline, Ending. Starting soon on Hex Pulse, Night Drive, Wasteland and Neon Tunnel are the board's combos A to D.
 - New layers: `fx` (a live world on a canvas, 30 fps at most, paused when hidden, still in low motion), `music` (the wave player or heartbeat line with the song, only while music plays), `sound` (stinger on show, a loop, last-ten-second ticks and a sound at zero; real CC0 recordings from Freesound, `sounds/screen-sounds.md`; the first synthesized set was turned down by the owner). Text timers get six looks: digital, thin, ring, bar, flip, words.
