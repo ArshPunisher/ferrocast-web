@@ -14,6 +14,7 @@ import { StreamInfoEditor } from '../components/studio/stream-info'
 import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
 import { ThemeInObsCard } from '../components/design/theme-obs'
+import { EngineTab } from '../components/studio/engine'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -22,6 +23,7 @@ const TABS: { value: StudioSection; label: string }[] = [
   { value: 'info', label: 'Stream info' },
   { value: 'obs', label: 'OBS' },
   { value: 'moments', label: 'Moments' },
+  { value: 'engine', label: 'Without OBS' },
 ]
 
 export function Studio({ section = 'golive' }: { section?: StudioSection | undefined }) {
@@ -68,6 +70,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
           </div>
         </div>
       )}
+      {section === 'engine' && <EngineTab />}
       {section === 'moments' && (
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <MarkersPanel title="Markers this stream" />
