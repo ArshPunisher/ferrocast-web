@@ -35,7 +35,8 @@ test.describe('settings: Ferrocast Pro', () => {
     await unlock.getByRole('button', { name: 'Done' }).click()
     await expect(unlock).toHaveCount(0)
     await expect(pro.getByTestId('pro-summary')).toHaveText(/is active\. Renews on/)
-    await expect(pro.getByText('sub_DemoPro00001')).toBeVisible()
+    // The subscription's id is an internal code: not shown once Pro is on.
+    await expect(pro.getByText('sub_DemoPro00001')).toHaveCount(0)
     await pro.getByRole('button', { name: 'Manage' }).click()
     const link = pro.getByRole('link', { name: 'Open the manage page' })
     await expect(link).toHaveAttribute('target', '_blank')

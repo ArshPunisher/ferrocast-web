@@ -47,7 +47,9 @@ test.describe('go live everywhere', () => {
     await expect(
       upload.getByText('Your upload is 24 Mbps. 2 platforms fit, using 12 Mbps.'),
     ).toBeVisible()
-    await expect(upload.getByRole('cell', { name: 'a.rtmps.youtube.com' })).toBeVisible()
+    // Platforms by name; servers' addresses stay out of sight.
+    await expect(upload.getByRole('cell', { name: 'YouTube' })).toBeVisible()
+    await expect(upload.getByText('a.rtmps.youtube.com')).toHaveCount(0)
     // Done: the steps shrink to one line with the way back.
     const obs = panel(page, 'OBS')
     await expect(obs.getByText('OBS sends to Ferrocast')).toBeVisible()
