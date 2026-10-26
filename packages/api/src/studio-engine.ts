@@ -885,6 +885,11 @@ export function studioEngineApi(c: FerroClient) {
         to,
       }),
     /** Looks for the missing files by name in a folder → each found path's new place. */
+    /** Moves a source to place `to` in its list (0 is the top: on top of everything). */
+    itemOrder: (scene: string, id: number, to: number) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/order`, {
+        to,
+      }),
     findMissing: (folder: string) =>
       c.request<{ found: Record<string, string> }>(
         'POST',

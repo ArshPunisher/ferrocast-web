@@ -1,8 +1,9 @@
 // The Sources panel: what's in the scene on air, top first, as OBS lists it. Show or hide and
-// lock each one; pick one to move it, fit it, open its settings or remove it; right-click for
-// everything else OBS's menu has (transform, order, blending, copy, filters, rename).
+// lock each one; drag one up or down to put it over or under the others; pick one to move it,
+// fit it, open its settings or remove it; right-click for everything else OBS's menu has
+// (transform, order, blending, copy, filters, rename).
 
-import { useState } from 'react'
+import { useRef, useState, type PointerEvent } from 'react'
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -119,6 +120,84 @@ export function SourcesDock() {
   const list = items.data
   const flat = list?.flatMap((i) => [i, ...i.children]) ?? []
   const picked = flat.find((i) => i.id === selected) ?? null
+
+  // Drag to reorder, as in OBS: a source moves among its neighbours (the scene's, or its
+  // group's); higher in the list is on top in the picture. Pointer events, not the browser's
+  // drag and drop (the app's window keeps that for files).
+  const listRef = useRef<HTMLDivElement>(null)
+  const dragged = useRef<{ id: number; y: number; on: boolean } | null>(null)
+  const justDragged = useRef(false)
+  const [dragging, setDragging] = useState<number | null>(null)
+  // Where the pointer is while dragging: a chip with the source's name follows it.
+  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
+  const [drop, setDrop] = useState<{ id: number; after: boolean } | null>(null)
+  const siblingsOf = (id: number): EngineItem[] | null => {
+    if (!list) return null
+    if (list.some((i) => i.id === id)) return list
+    return list.find((g) => g.children.some((c) => c.id === id))?.children ?? null
+  }
+  // The neighbour under the pointer, and whether it goes after it.
+  const dropAt = (y: number, from: number) => {
+    const sib = siblingsOf(from)
+    if (!sib) return null
+    for (const el of listRef.current?.querySelectorAll<HTMLElement>('[data-item-id]') ?? []) {
+      const id = Number(el.dataset.itemId)
+      if (id === from || !sib.some((i) => i.id === id)) continue
+      const r = el.getBoundingClientRect()
+      if (y >= r.top && y <= r.bottom) return { id, after: y > r.top + r.height / 2 }
+    }
+    return null
+  }
+  const press = (e: PointerEvent<HTMLDivElement>, item: EngineItem) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('[data-no-drag], input')) return
+    dragged.current = { id: item.id, y: e.clientY, on: false }
+  }
+  const pull = (e: PointerEvent<HTMLDivElement>) => {
+    const d = dragged.current
+    if (!d) return
+    // The button was let go outside this row: the press is over.
+    if (e.buttons === 0) {
+      dragged.current = null
+      setDragging(null)
+      setGhost(null)
+      setDrop(null)
+      return
+    }
+    if (!d.on) {
+      if (Math.abs(e.clientY - d.y) < 5) return
+      d.on = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+      setDragging(d.id)
+    }
+    setGhost({ x: e.clientX, y: e.clientY })
+    const at = dropAt(e.clientY, d.id)
+    setDrop((p) => (p?.id === at?.id && p?.after === at?.after ? p : at))
+  }
+  const letGo = (e: PointerEvent<HTMLDivElement>) => {
+    const d = dragged.current
+    dragged.current = null
+    if (!d?.on) return
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    // The click that ends a drag doesn't pick the source.
+    justDragged.current = true
+    setTimeout(() => (justDragged.current = false), 0)
+    const at = dropAt(e.clientY, d.id)
+    setDragging(null)
+    setGhost(null)
+    setDrop(null)
+    const target = at && flat.find((i) => i.id === at.id)
+    if (target) void reorder(d.id, target, at.after)
+  }
+  const reorder = async (id: number, target: EngineItem, after: boolean) => {
+    const sib = siblingsOf(target.id)
+    if (!sib) return
+    const order = sib.filter((i) => i.id !== id)
+    const at = order.findIndex((i) => i.id === target.id) + (after ? 1 : 0)
+    if (sib.findIndex((i) => i.id === id) === at) return
+    const ok = await run(`order:${id}`, () => done(api.itemOrder(scene, id, at)))
+    if (ok) refresh()
+  }
 
   const act = async (item: EngineItem, what: EngineItemEdit) => {
     const ok = await run(`${what}:${item.id}`, () => done(api.editItem(scene, item.id, what)))
@@ -504,24 +583,51 @@ export function SourcesDock() {
           />
         </form>
       )
+    const marker = drop?.id === item.id ? (drop.after ? 'after' : 'before') : null
     return (
       <div
+        data-item-id={item.id}
+        onPointerDown={(e) => press(e, item)}
+        onPointerMove={pull}
+        onPointerUp={letGo}
+        onPointerCancel={() => {
+          dragged.current = null
+          setDragging(null)
+          setGhost(null)
+          setDrop(null)
+        }}
+        onClickCapture={(e) => {
+          if (justDragged.current) e.stopPropagation()
+        }}
         onContextMenu={(e) => {
           select(item.id)
           desk.screens.reload()
           open(e, item.name, itemMenu(item))
         }}
         className={cx(
-          'group flex min-h-10 items-center gap-1 rounded-[9px] pr-1 text-[14.5px] transition-colors hover:bg-surface-2',
+          'group relative flex min-h-10 touch-none items-center gap-1 rounded-[9px] pr-1 text-[14.5px] transition-colors select-none hover:bg-surface-2',
           child ? 'pl-7' : 'pl-1',
+          // Its place in the list while it's carried: a dashed outline.
+          dragging === item.id &&
+            'bg-transparent opacity-50 outline-2 -outline-offset-2 outline-line-strong outline-dashed',
           on &&
             'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft',
         )}
       >
+        {marker && (
+          <span
+            aria-hidden
+            className={cx(
+              'pointer-events-none absolute right-1 left-1 h-[3px] rounded-full bg-accent',
+              marker === 'before' ? '-top-[2px]' : '-bottom-[2px]',
+            )}
+          />
+        )}
         {item.group ? (
           <IconButton
             size="sm"
             variant="ghost"
+            data-no-drag
             label={isOpen ? `Fold ${item.name}` : `Unfold ${item.name}`}
             onClick={() =>
               setClosed((s) => {
@@ -565,6 +671,7 @@ export function SourcesDock() {
         <IconButton
           size="sm"
           variant="ghost"
+          data-no-drag
           label={item.visible ? `Hide ${item.name}` : `Show ${item.name}`}
           disabled={busy !== null}
           className={cx(!item.visible && 'text-text-3')}
@@ -575,6 +682,7 @@ export function SourcesDock() {
         <IconButton
           size="sm"
           variant="ghost"
+          data-no-drag
           label={item.locked ? `Unlock ${item.name}` : `Lock ${item.name}`}
           aria-pressed={item.locked}
           className={cx(item.locked ? 'text-accent-text' : 'text-text-3')}
@@ -589,6 +697,23 @@ export function SourcesDock() {
 
   return (
     <section aria-label={`Sources in ${scene}`} className="flex min-h-0 flex-1 flex-col">
+      {ghost && dragging !== null && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 flex max-w-[260px] cursor-grabbing items-center gap-2 rounded-[10px] border border-[var(--fc-accent)] bg-surface-1 py-1.5 pr-3 pl-1.5 text-[14.5px] font-bold text-text shadow-pop"
+          style={{ left: ghost.x + 14, top: ghost.y - 18 }}
+        >
+          {(() => {
+            const it = flat.find((i) => i.id === dragging)
+            return it ? (
+              <>
+                <KindTile kind={it.group ? 'group' : it.kind} size={24} />
+                <span className="truncate">{it.name}</span>
+              </>
+            ) : null
+          })()}
+        </div>
+      )}
       <DockHeader
         id="sources"
         info={
@@ -603,6 +728,7 @@ export function SourcesDock() {
         }
       />
       <div
+        ref={listRef}
         className="min-h-0 flex-1 overflow-y-auto p-1.5"
         onContextMenu={(e) => open(e, `Sources in ${scene}`, emptyMenu)}
       >
