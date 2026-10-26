@@ -1,13 +1,26 @@
 // The stage: the live picture (a native view the app draws over this box, letterboxed like
 // OBS's preview) and, under it, the scene on air and how scenes change.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { Play } from '@phosphor-icons/react'
-import { type PreviewRect } from '@ferrocast/api'
+import { type EngineItem, type PreviewRect } from '@ferrocast/api'
 import { Button, InfoTip, Input, Select } from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
+import {
+  MOVE,
+  boxOf,
+  cursorFor,
+  drag,
+  fit,
+  gripAt,
+  pick,
+  type Box,
+  type Frame,
+  type Grip,
+  type Pt,
+} from './stage-edit'
 
 /** True while something sits over the box: the native view can't be covered, so it hides. */
 function covered(r: DOMRect): boolean {
@@ -76,18 +89,205 @@ export function PreviewBox({ running }: { running: boolean }) {
       void api.preview(null).catch(() => undefined)
     }
   }, [api, running, desktop])
+  const editing = useStageEdit(ref, running && desktop)
   // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
   return (
     <div className="grid min-h-0 flex-1 place-items-center bg-inset p-3 [container-type:size]">
       <div
         ref={ref}
-        aria-label="Studio preview"
-        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac]"
+        aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
+        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent"
+        {...editing}
       >
         {!desktop && 'The live picture shows in the Ferrocast app.'}
       </div>
     </div>
   )
+}
+
+/** A drag in the preview: the item, the box and pointer it started from, and the handle. */
+interface Held {
+  id: number
+  from: Frame
+  start: Pt
+  grip: Grip
+  /** The pointer moved enough to count as a drag (a click only picks). */
+  moved: boolean
+  last: Box | null
+}
+
+/**
+ * Pick, move and resize sources in the preview, as in OBS: click picks (the engine outlines
+ * it), drag moves, the handles resize (corners keep the shape unless Shift is held), it snaps
+ * to the canvas's edges and middle (Alt turns that off), arrows nudge (Shift: 10 pixels) and
+ * a double-click opens its settings. The picture is a native view drawn over this box that
+ * lets clicks through, so this box gets them.
+ */
+function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
+  const { api, scene, items, selected, select, edit, stats } = useDesk()
+  const { run } = useAction()
+  const canvas = stats?.canvas ?? null
+  const held = useRef<Held | null>(null)
+  const sending = useRef<{ busy: boolean; next: (Box & { save: boolean; id: number }) | null }>({
+    busy: false,
+    next: null,
+  })
+
+  // The engine outlines whatever is picked here or in the Sources panel.
+  useEffect(() => {
+    if (!on) return
+    void api.select(selected === null ? null : { scene, id: selected }).catch(() => undefined)
+  }, [api, on, scene, selected])
+  useEffect(() => {
+    if (!on) return
+    return () => void api.select(null).catch(() => undefined)
+  }, [api, on])
+
+  const list = items.data ?? []
+  const where = (e: { clientX: number; clientY: number }) => {
+    const el = ref.current
+    if (!el || !canvas) return null
+    const r = el.getBoundingClientRect()
+    const f = fit(r, canvas)
+    if (!(f.scale > 0)) return null
+    return {
+      p: { x: (e.clientX - r.left - f.ox) / f.scale, y: (e.clientY - r.top - f.oy) / f.scale },
+      // Handles are 10 screen pixels; a little more is easier to grab.
+      reach: 9 / f.scale,
+      snap: 8 / f.scale,
+    }
+  }
+
+  const put = (item: EngineItem) =>
+    items.set((prev) =>
+      (prev ?? []).map((i) => (i.id === item.id && item.frame ? { ...i, frame: item.frame } : i)),
+    )
+
+  // One change on the way at a time; the newest waits and replaces older ones.
+  const pump = () => {
+    const q = sending.current
+    if (q.busy || !q.next) return
+    const b = q.next
+    q.next = null
+    q.busy = true
+    const go = api.setItemBox(scene, b.id, { x: b.x, y: b.y, w: b.w, h: b.h, save: b.save })
+    const done = b.save ? run('move', () => go) : go.catch(() => undefined)
+    void done
+      .then((item) => {
+        if (item) put(item)
+      })
+      .finally(() => {
+        q.busy = false
+        pump()
+      })
+  }
+  const send = (id: number, b: Box, save: boolean) => {
+    const q = sending.current
+    // A save never gets replaced by a later move without one.
+    q.next = { ...b, id, save: save || !!(q.next?.save && q.next.id === id) }
+    pump()
+  }
+
+  const frameOf = (id: number | null) => list.find((i) => i.id === id)?.frame ?? null
+
+  if (!on || !canvas) return {}
+  return {
+    tabIndex: 0,
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      const w = where(e)
+      if (!w) return
+      ref.current?.focus({ preventScroll: true })
+      const current = list.find((i) => i.id === selected)
+      let target: EngineItem | null = null
+      let grip: Grip | null = null
+      if (current?.frame && current.visible) {
+        grip = gripAt(current.frame, w.p, w.reach)
+        if (grip) target = current
+      }
+      if (!target) {
+        target = pick(list, w.p)
+        grip = MOVE
+      }
+      if (!target || !grip || !target.frame) {
+        select(null)
+        return
+      }
+      if (target.id !== selected) select(target.id)
+      if (target.locked) return
+      e.currentTarget.setPointerCapture(e.pointerId)
+      held.current = {
+        id: target.id,
+        from: target.frame,
+        start: w.p,
+        grip,
+        moved: false,
+        last: null,
+      }
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      const w = where(e)
+      if (!w) return
+      const h = held.current
+      if (!h) {
+        // The cursor says what a press would do.
+        const f = frameOf(selected)
+        const g = f ? gripAt(f, w.p, w.reach) : null
+        const over = g ? cursorFor(f as Frame, g) : pick(list, w.p) ? 'pointer' : ''
+        e.currentTarget.style.cursor = over
+        return
+      }
+      const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
+      // Three screen pixels before a press becomes a drag.
+      if (!h.moved && Math.hypot(d.x, d.y) < w.snap * (3 / 8)) return
+      h.moved = true
+      const b = drag(h.from, h.grip, d, {
+        free: e.shiftKey,
+        canvas,
+        snap: e.altKey ? 0 : w.snap,
+      })
+      h.last = b
+      send(h.id, b, false)
+    },
+    onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+      const h = held.current
+      held.current = null
+      if (e.currentTarget.hasPointerCapture(e.pointerId))
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      if (h?.moved && h.last) send(h.id, h.last, true)
+    },
+    onPointerCancel: () => {
+      const h = held.current
+      held.current = null
+      if (h?.moved && h.last) send(h.id, h.last, true)
+    },
+    onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => {
+      const w = where(e)
+      const it = w && pick(list, w.p)
+      if (it) edit(it.name)
+    },
+    onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Escape') {
+        select(null)
+        return
+      }
+      const step = e.shiftKey ? 10 : 1
+      const d = {
+        ArrowLeft: { x: -step, y: 0 },
+        ArrowRight: { x: step, y: 0 },
+        ArrowUp: { x: 0, y: -step },
+        ArrowDown: { x: 0, y: step },
+      }[e.key]
+      const it = list.find((i) => i.id === selected)
+      if (!d || !it?.frame || it.locked) return
+      e.preventDefault()
+      const b = boxOf(it.frame)
+      // Moved here at once, so a held key builds on each step before the engine answers.
+      const f = it.frame
+      put({ ...it, frame: [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y] })
+      send(it.id, { ...b, x: b.x + d.x, y: b.y + d.y }, true)
+    },
+  }
 }
 
 /** The stage when the Studio isn't running: start it, or say why it can't. */
