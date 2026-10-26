@@ -82,18 +82,24 @@ export function PageHeader({
   title,
   description,
   actions,
+  beside,
 }: {
   title: string
   description?: ReactNode
   actions?: ReactNode
+  /** Right after the title on the same line (a screen's tabs), saving a row. */
+  beside?: ReactNode
 }) {
   return (
     <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <h1 className="font-display text-[26px] font-extrabold tracking-[-0.025em] text-balance text-text sm:text-[32px]">
-          {title}
-        </h1>
-        {description && <InfoTip>{description}</InfoTip>}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h1 className="font-display text-[26px] font-extrabold tracking-[-0.025em] text-balance text-text sm:text-[32px]">
+            {title}
+          </h1>
+          {description && <InfoTip>{description}</InfoTip>}
+        </div>
+        {beside}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

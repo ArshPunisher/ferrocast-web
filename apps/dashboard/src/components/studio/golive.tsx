@@ -8,6 +8,7 @@ import {
   ArrowCounterClockwise,
   ArrowsClockwise,
   Broadcast,
+  CaretRight,
   CheckCircle,
   Copy,
   DotsSixVertical,
@@ -124,7 +125,7 @@ export function GoLiveTab() {
   const api = useGoLive()
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
-  const [mode] = useMode('studio')
+  const [mode, setMode] = useMode('studio')
   const [picture, setPicture] = usePicture(view)
   const live = !!view?.live
   const reload = res.reload
@@ -163,6 +164,22 @@ export function GoLiveTab() {
         <div className="flex min-w-0 flex-col gap-5">
           {view.live && <LiveCard view={view} onSaved={res.reload} />}
           <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
+          {/* The extras (each platform's server and retries, the protection rule, the vertical
+              numbers) fold away; open, they stay open on this computer. */}
+          <button
+            type="button"
+            aria-expanded={mode === 'advanced'}
+            aria-controls="golive-advanced"
+            onClick={() => setMode(mode === 'advanced' ? 'simple' : 'advanced')}
+            className="flex items-center gap-2 self-start rounded-control px-1 py-1 text-[14.5px] font-bold text-text-2 hover:text-text"
+          >
+            <CaretRight
+              size={14}
+              weight="bold"
+              className={cx('transition-transform', mode === 'advanced' && 'rotate-90')}
+            />
+            Advanced settings
+          </button>
           {mode === 'advanced' && <AdvancedCard view={view} onSaved={res.reload} />}
         </div>
         <div className="flex min-w-0 flex-col gap-5">

@@ -256,12 +256,12 @@ test.describe('go live everywhere', () => {
     })
   })
 
-  test('Advanced mode: the switch is remembered and adds the rule, the settings card and the numbers', async ({
+  test('Advanced settings: the fold is remembered and adds the rule, the settings card and the numbers', async ({
     page,
   }) => {
     await open(page, 'studio/golive')
     await expect(page.locator('#golive-advanced')).toHaveCount(0)
-    await page.getByRole('radiogroup', { name: 'Simple or Advanced' }).getByText('Advanced').click()
+    await page.getByRole('button', { name: 'Advanced settings' }).click()
     const card = panel(page, 'Advanced settings')
     await expect(card).toBeVisible()
     // The rule as a sentence: a bad number says so, a good one saves.
@@ -296,9 +296,13 @@ test.describe('go live everywhere', () => {
     await editor.getByLabel('Bitrate').fill('6000')
     await editor.getByRole('button', { name: 'Save layout' }).click()
     await expect(page.getByText('Layout saved.')).toBeVisible()
-    // Back to Simple: the extras go.
-    await page.getByRole('radiogroup', { name: 'Simple or Advanced' }).getByText('Simple').click()
-    await expect(editor.getByLabel('Bitrate')).toHaveCount(0)
+    // Folded again in Go live: the extras go.
+    await section.getByText('Go live', { exact: true }).click()
+    await page.getByRole('button', { name: 'Advanced settings' }).click()
+    await expect(page.locator('#golive-advanced')).toHaveCount(0)
+    await section.getByText('Vertical', { exact: true }).click()
+    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    await expect(panel(page, 'Vertical layout').getByLabel('Bitrate')).toHaveCount(0)
   })
 
   test('the platform list reorders from the keyboard', async ({ page }) => {

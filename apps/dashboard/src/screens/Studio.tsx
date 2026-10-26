@@ -2,7 +2,6 @@
 // "Studio" and "Go live everywhere").
 
 import { Segmented } from '@ferrocast/ui'
-import { ModeSwitch } from '../components/ModeSwitch'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
@@ -37,14 +36,15 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
       <PageHeader
         title="Studio"
         description="Go live, set your title everywhere, run OBS, keep the big moments."
-        actions={<ModeSwitch screen="studio" />}
-      />
-      <Segmented
-        label="Studio section"
-        className="mb-5 max-w-full overflow-x-auto"
-        value={section === 'engine' ? 'golive' : section}
-        options={TABS}
-        onChange={(s) => go({ name: 'studio', section: s })}
+        beside={
+          <Segmented
+            label="Studio section"
+            className="max-w-full overflow-x-auto"
+            value={section === 'engine' ? 'golive' : section}
+            options={TABS}
+            onChange={(s) => go({ name: 'studio', section: s })}
+          />
+        }
       />
       {/* The Studio without OBS lives in Go live now ("engine" links from 2.1 previews land there). */}
       {(section === 'golive' || section === 'engine') && <GoLiveTab />}
