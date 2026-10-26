@@ -767,6 +767,44 @@ function PicturePage({ s, set }: PageProps) {
           </Select>
         </Row>
       </div>
+      <Heading info="A projector of every scene at once; a click puts one on air (in Studio Mode, in the preview).">
+        Multiview
+      </Heading>
+      <div className="flex flex-col">
+        <Row label="What's on air goes">
+          <Select
+            aria-label="Multiview layout"
+            value={s.multiview_layout ?? 'top'}
+            onChange={(e) =>
+              set({
+                multiview_layout: e.target.value as NonNullable<StudioSettings['multiview_layout']>,
+              })
+            }
+          >
+            <option value="top">Above the scenes</option>
+            <option value="bottom">Below the scenes</option>
+            <option value="left">Left of the scenes</option>
+            <option value="right">Right of the scenes</option>
+            <option value="scenes_only">Scenes only</option>
+          </Select>
+        </Row>
+        <Row label="Scene names">
+          <Switch
+            label="Scene names"
+            hideLabel
+            checked={s.multiview_labels ?? true}
+            onChange={(multiview_labels) => set({ multiview_labels })}
+          />
+        </Row>
+        <Row label="Safe areas" info="EBU R95: where text and action stay clear of a TV's edges.">
+          <Switch
+            label="Safe areas"
+            hideLabel
+            checked={!!s.multiview_safe_areas}
+            onChange={(multiview_safe_areas) => set({ multiview_safe_areas })}
+          />
+        </Row>
+      </div>
     </>
   )
 }

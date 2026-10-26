@@ -402,6 +402,10 @@ export interface StudioSettings {
   speakers?: '2.1' | '4.0' | '4.1' | '5.1' | '7.1' | null
   /** Meters read true peak instead of sample peak. */
   true_peak?: boolean
+  /** Multiviews: what's on air above, below, left or right of the scenes, or scenes only. */
+  multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
+  multiview_labels?: boolean
+  multiview_safe_areas?: boolean
 }
 
 export interface EngineRecordStats {
@@ -490,8 +494,8 @@ export interface EngineScreen {
 
 /** What a projector shows: what's on air, one scene or source, or every scene. */
 export type EngineProjector =
-  | { what: 'program' | 'multiview'; screen?: number }
-  | { what: 'source'; name: string; screen?: number }
+  | { what: 'program' | 'multiview'; screen?: number; on_top?: boolean }
+  | { what: 'source'; name: string; screen?: number; on_top?: boolean }
 
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {

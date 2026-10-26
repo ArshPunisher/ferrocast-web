@@ -124,15 +124,17 @@ describe('projectors', () => {
     const sub = (item.items ?? []).filter((m): m is Entry => !('sep' in m))
     expect(sub.map((m) => m.label)).toEqual([
       'In a window',
+      'In a window, always on top',
       'Full screen on Studio Display (main)',
       'Full screen on BenQ',
     ])
     sub[0]?.onSelect?.()
-    sub[2]?.onSelect?.()
-    expect(show.mock.calls).toEqual([[undefined], [1]])
+    sub[1]?.onSelect?.()
+    sub[3]?.onSelect?.()
+    expect(show.mock.calls).toEqual([[undefined], [undefined, true], [1]])
     // No displays known yet: just the window.
     const none = projectorItem('Projector', null, show) as Entry
-    expect(none.items).toHaveLength(1)
+    expect(none.items).toHaveLength(2)
   })
 })
 

@@ -312,13 +312,18 @@ export function filterItems(
 export function projectorItem(
   label: string,
   screens: EngineScreen[] | null,
-  show: (screen: number | undefined) => void,
+  show: (screen: number | undefined, onTop?: boolean) => void,
 ): MenuItem {
   return {
     label,
     icon: ProjectorScreen,
     items: [
       { label: 'In a window', icon: AppWindow, onSelect: () => show(undefined) },
+      {
+        label: 'In a window, always on top',
+        icon: AppWindow,
+        onSelect: () => show(undefined, true),
+      },
       ...(screens?.length ? [{ sep: true } as const] : []),
       ...(screens ?? []).map((s) => ({
         label: `Full screen on ${s.name}${s.main ? ' (main)' : ''}`,

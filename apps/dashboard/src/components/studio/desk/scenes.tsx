@@ -178,12 +178,13 @@ export function ScenesDock() {
             projectorItem(
               'Projector',
               desk.screens.data,
-              (screen) =>
+              (screen, onTop) =>
                 void run('projector', () =>
                   api.projector({
                     what: 'source',
                     name,
                     ...(screen === undefined ? {} : { screen }),
+                    ...(onTop ? { on_top: true } : {}),
                   }),
                 ),
             ),

@@ -373,11 +373,12 @@ export function SourcesDock() {
     },
     ...(inDesktopApp()
       ? [
-          projectorItem('Projector', desk.screens.data, (screen) =>
+          projectorItem('Projector', desk.screens.data, (screen, onTop) =>
             project({
               what: 'source',
               name: item.name,
               ...(screen === undefined ? {} : { screen }),
+              ...(onTop ? { on_top: true } : {}),
             }),
           ),
         ]

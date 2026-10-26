@@ -744,17 +744,21 @@ export function StageBar() {
     const at = { preventDefault() {}, stopPropagation() {}, currentTarget: el, clientX, clientY }
     open(at as unknown as React.MouseEvent, 'History', historyMenu(list, steps))
   }
-  const show = (what: 'program' | 'multiview', screen: number | undefined) =>
+  const show = (what: 'program' | 'multiview', screen: number | undefined, onTop?: boolean) =>
     void run('projector', () =>
-      api.projector({ what, ...(screen === undefined ? {} : { screen }) }),
+      api.projector({
+        what,
+        ...(screen === undefined ? {} : { screen }),
+        ...(onTop ? { on_top: true } : {}),
+      }),
     )
   const projectors = (e: React.MouseEvent) => {
     // A display plugged in since shows next time.
     screens.reload()
     open(e, 'Projectors', [
-      projectorItem('On air', screens.data, (sc) => show('program', sc)),
+      projectorItem('On air', screens.data, (sc, top) => show('program', sc, top)),
       {
-        ...projectorItem('Multiview', screens.data, (sc) => show('multiview', sc)),
+        ...projectorItem('Multiview', screens.data, (sc, top) => show('multiview', sc, top)),
         icon: SquaresFour,
       },
       { sep: true },
