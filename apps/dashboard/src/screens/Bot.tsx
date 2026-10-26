@@ -127,6 +127,7 @@ function CommandDialog({
               <Input
                 {...p}
                 autoFocus
+                data-autofocus
                 className="font-mono"
                 spellCheck={false}
                 value={c.name}
@@ -289,6 +290,7 @@ function TimerDialog({
             <Input
               {...p}
               autoFocus
+              data-autofocus
               value={t.name}
               maxLength={40}
               onChange={(e) => setT({ ...t, name: e.target.value })}

@@ -268,6 +268,7 @@ function AutoReplyDialog({
             <Input
               {...p}
               autoFocus
+              data-autofocus
               value={r.match.text}
               maxLength={AUTOREPLY_LIMITS.matchChars}
               spellCheck={r.match.kind !== 'regex'}

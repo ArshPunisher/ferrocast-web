@@ -4,6 +4,7 @@ import { Meter, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
+import { fileName } from './library'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -158,5 +159,13 @@ describe('edit transform', () => {
     // A source with no size yet can't be sized.
     expect(scaleFor({ ...base, width: 0 }, 100, 100)).toBeNull()
     expect(scaleFor(base, 0, 100)).toBeNull()
+  })
+})
+
+describe('scene collections and profiles', () => {
+  it('exports to a file name any system accepts', () => {
+    expect(fileName('Gaming')).toBe('Gaming.json')
+    expect(fileName('Show: Live/Late?')).toBe('Show- Live-Late-.json')
+    expect(fileName('   ')).toBe('Studio.json')
   })
 })

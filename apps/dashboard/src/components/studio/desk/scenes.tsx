@@ -217,6 +217,7 @@ export function ScenesDock() {
     >
       <Input
         autoFocus
+        data-autofocus
         aria-label={naming?.from ? `New name for ${naming.from}` : 'New scene name'}
         className="h-8! text-[13.5px]"
         maxLength={100}
@@ -288,13 +289,13 @@ export function ScenesDock() {
           <ul
             className={cx(
               grid
-                ? 'grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-1.5'
+                ? 'grid auto-rows-[84px] grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-1.5'
                 : 'flex flex-col gap-px',
             )}
             aria-label="Scenes, click to go on air"
           >
             {list.map((s, i) => (
-              <li key={s.name}>
+              <li key={s.name} className="min-w-0">
                 {naming?.from === s.name ? (
                   nameInput
                 ) : (
@@ -316,7 +317,7 @@ export function ScenesDock() {
                     className={cx(
                       'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
                       grid
-                        ? 'flex min-h-[72px] flex-col justify-between gap-2 rounded-[11px] border border-line bg-surface-2 p-2.5 text-[13px] hover:border-line-strong active:scale-[0.98]'
+                        ? 'flex h-full flex-col justify-between gap-1.5 overflow-hidden rounded-[11px] border border-line bg-surface-2 p-2.5 text-[13px] hover:border-line-strong active:scale-[0.98]'
                         : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[13.5px] hover:bg-surface-2',
                       s.current &&
                         (grid
@@ -348,7 +349,7 @@ export function ScenesDock() {
                             )
                           )}
                         </span>
-                        <span className="line-clamp-2 leading-snug break-words">{s.name}</span>
+                        <span className="line-clamp-2 leading-[1.25] break-words">{s.name}</span>
                       </>
                     ) : (
                       <>

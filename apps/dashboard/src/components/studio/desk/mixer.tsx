@@ -740,6 +740,7 @@ export function AudioDock() {
         >
           <Input
             autoFocus
+            data-autofocus
             aria-label="New name"
             maxLength={100}
             value={naming?.value ?? ''}

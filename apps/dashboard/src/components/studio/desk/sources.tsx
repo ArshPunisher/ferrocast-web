@@ -277,6 +277,7 @@ export function SourcesDock() {
         >
           <Input
             autoFocus
+            data-autofocus
             aria-label={`New name for ${item.name}`}
             className="h-8! text-[13.5px]"
             maxLength={100}

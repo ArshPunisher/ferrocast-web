@@ -230,6 +230,7 @@ function NewGoal({ onCreated }: { onCreated: (g: Goal) => void }) {
           <Input
             {...p}
             autoFocus
+            data-autofocus
             value={title}
             maxLength={60}
             placeholder="New mic…"

@@ -920,6 +920,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                   <Input
                     {...p}
                     autoFocus
+                    data-autofocus
                     maxLength={60}
                     value={naming}
                     onChange={(e) => setNaming(e.target.value)}

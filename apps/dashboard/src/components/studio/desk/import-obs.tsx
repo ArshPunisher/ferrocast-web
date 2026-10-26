@@ -19,7 +19,7 @@ export function ImportObsDialog({ open, onClose }: { open: boolean; onClose: () 
 }
 
 function Picker({ onDone }: { onDone: () => void }) {
-  const { api, refresh } = useDesk()
+  const { api, refresh, bumpLibrary } = useDesk()
   const list = useResource(() => api.obsCollections(), [api])
   const { run, busy } = useAction()
   const [pick, setPick] = useState<EngineObsCollection | null>(null)
@@ -28,6 +28,7 @@ function Picker({ onDone }: { onDone: () => void }) {
     const r = await run('import', () => api.importObs(pick.id))
     if (!r) return
     refresh()
+    bumpLibrary()
     onDone()
     const extra = [
       r.web_pages > 0 &&
@@ -86,10 +87,10 @@ function Picker({ onDone }: { onDone: () => void }) {
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
         <span className="mr-auto flex items-center gap-1 text-[13px] font-semibold text-text-2">
-          Replaces your Studio scenes
+          Adds it as a new scene collection
           <InfoTip label="About importing">
-            A copy of your current scenes is kept in Ferrocast's data folder (studio). OBS's own
-            files aren't changed.
+            Your Studio scenes stay as they are; switch back any time from the collection button at
+            the top. OBS's own files aren't changed.
           </InfoTip>
         </span>
         <Button

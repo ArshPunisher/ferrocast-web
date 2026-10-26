@@ -84,6 +84,7 @@ function NewGoal({ onCreated, onCancel }: { onCreated: (g: Goal) => void; onCanc
           <Input
             {...p}
             autoFocus
+            data-autofocus
             value={title}
             maxLength={80}
             placeholder="A new mic"

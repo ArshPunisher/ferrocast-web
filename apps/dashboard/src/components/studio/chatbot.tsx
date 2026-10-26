@@ -115,6 +115,7 @@ function CounterDialog({
               <Input
                 {...p}
                 autoFocus
+                data-autofocus
                 maxLength={40}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -343,6 +344,7 @@ export function QuotesPanel() {
                   <Input
                     id={`quote-${q.id}`}
                     autoFocus
+                    data-autofocus
                     maxLength={400}
                     value={editing.text}
                     onChange={(e) => setEditing({ id: q.id, text: e.target.value })}

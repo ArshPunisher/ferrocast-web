@@ -70,6 +70,9 @@ export interface Desk {
   /** The source whose filters were copied, to paste onto another. */
   filterClip: string | null
   setFilterClip: (name: string | null) => void
+  /** Bumped when the scene collections or profiles change (the library bar reads again). */
+  library: number
+  bumpLibrary: () => void
   /** The item whose Edit Transform is open. */
   transforming: { scene: string; id: number; name: string } | null
   setTransforming: (t: { scene: string; id: number; name: string } | null) => void

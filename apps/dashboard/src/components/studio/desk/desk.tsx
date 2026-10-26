@@ -43,6 +43,7 @@ import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
+import { LibraryBar } from './library'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
 
@@ -119,6 +120,7 @@ function Running({
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
   const [transforming, setTransforming] = useState<Desk['transforming']>(null)
+  const [library, setLibrary] = useState(0)
   const [transformClip, setTransformClip] = useState<Desk['transformClip']>(null)
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
@@ -174,6 +176,8 @@ function Running({
     screens,
     transforming,
     setTransforming,
+    library,
+    bumpLibrary: () => setLibrary((n) => n + 1),
     transformClip,
     setTransformClip,
     openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
@@ -293,6 +297,7 @@ function ControlBar({
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
       {lead}
+      <LibraryBar />
       <span className="hidden flex-1 xl:block" />
       <div
         aria-label="Stream health"

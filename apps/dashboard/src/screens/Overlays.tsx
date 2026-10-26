@@ -252,6 +252,7 @@ export function Overlays() {
               <Input
                 {...p}
                 autoFocus
+                data-autofocus
                 value={name}
                 maxLength={60}
                 placeholder="Starting soon…"
@@ -391,6 +392,7 @@ export function Overlays() {
               <Input
                 {...p}
                 autoFocus
+                data-autofocus
                 value={renaming.name}
                 maxLength={60}
                 onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
