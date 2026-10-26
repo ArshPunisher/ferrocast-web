@@ -99,7 +99,46 @@ export interface EngineScenes {
   preview?: string | null
   /** OBS's quick transitions: one-click ways to send the preview on air. */
   quick?: EngineTransition[]
+  /** How Studio Mode sends scenes on air. */
+  studio_options?: EngineStudioOptions
+  /** Where the T-bar stands. */
+  tbar?: EngineTBar
+  /** Faded to black now. */
+  black?: boolean
 }
+
+/** Studio Mode's options, as OBS has them under the Transition button. */
+export interface EngineStudioOptions {
+  /** After a transition, the preview shows what was on air. */
+  swap: boolean
+  /** What goes on air is a copy: moving or hiding sources in the preview doesn't touch it. */
+  duplicate_scene: boolean
+  /** The copy has its own copies of the sources too. */
+  duplicate_sources: boolean
+  /** A double-click on a scene sends it on air. */
+  double_click: boolean
+}
+
+export interface EngineTBar {
+  /** Held between both scenes. */
+  active: boolean
+  /** 0 (on air) to 1 (the preview). */
+  at: number
+}
+
+/** OBS's deinterlacing modes. */
+export const ENGINE_DEINTERLACE = [
+  'off',
+  'discard',
+  'retro',
+  'blend',
+  'blend_2x',
+  'linear',
+  'linear_2x',
+  'yadif',
+  'yadif_2x',
+] as const
+export type EngineDeinterlace = (typeof ENGINE_DEINTERLACE)[number]
 
 /** A source in a scene, top first. A group lists its own items. */
 export interface EngineItem {
@@ -121,6 +160,12 @@ export interface EngineItem {
    */
   frame?: [number, number, number, number, number, number]
   children: EngineItem[]
+  /** How it appears when shown, and goes when hidden (null: at once). */
+  show_transition?: EngineTransition | null
+  hide_transition?: EngineTransition | null
+  /** For video from a device or file: how it's deinterlaced; null for other sources. */
+  deinterlace?: EngineDeinterlace | null
+  top_field_first?: boolean
 }
 
 export const ENGINE_BLENDS = [
@@ -209,6 +254,25 @@ export interface EngineAudio {
   volume_db: number
   muted: boolean
   monitor: EngineMonitor
+  /** Left to right, 0 to 1 (0.5 is the middle). */
+  balance?: number
+  /** Heard this much later (negative: earlier), ms. */
+  sync_ms?: number
+  /** Both speakers get the same sound. */
+  mono?: boolean
+  /** The audio tracks (1 to 6) it's mixed into. */
+  tracks?: number[]
+}
+
+/** What to change in a sound's mixer settings (anything left out stays). */
+export interface EngineAudioChange {
+  volume_db?: number
+  muted?: boolean
+  monitor?: EngineMonitor
+  balance?: number
+  sync_ms?: number
+  mono?: boolean
+  tracks?: number[]
 }
 
 /** A source and the scenes it's in. */
@@ -422,7 +486,7 @@ export function studioEngineApi(c: FerroClient) {
     /** The source's options as they look for its settings now. */
     sourceOptions: (name: string) =>
       c.request<EngineOption[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/options`),
-    setAudio: (name: string, a: { volume_db?: number; muted?: boolean; monitor?: EngineMonitor }) =>
+    setAudio: (name: string, a: EngineAudioChange) =>
       c.request<void>('PUT', `/api/v1/studio/engine/sources/${enc(name)}/audio`, a),
     filters: (name: string) =>
       c.request<EngineFilter[]>('GET', `/api/v1/studio/engine/sources/${enc(name)}/filters`),
@@ -551,6 +615,9 @@ export function studioEngineApi(c: FerroClient) {
         '/api/v1/studio/engine/redo',
         {},
       ),
+    /** Every step Undo and Redo can take, newest first. */
+    history: () =>
+      c.request<{ undo: string[]; redo: string[] }>('GET', '/api/v1/studio/engine/history'),
     /** Outlines an item in the preview, or nothing. */
     select: (pick: { scene: string; id: number } | null) =>
       c.request<void>(
@@ -639,5 +706,30 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    setStudioOptions: (options: EngineStudioOptions) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/studio-mode/options', options),
+    /** Swaps the preview and what's on air, with a cut. */
+    swapScenes: () => c.request<void>('POST', '/api/v1/studio/engine/studio-mode/swap', {}),
+    /** Moves the T-bar (0 on air, 1 preview); `release` when let go. */
+    tbar: (at: number, release = false) =>
+      c.request<EngineTBar>('PUT', '/api/v1/studio/engine/studio-mode/tbar', { at, release }),
+    /** Fades to black, or back. */
+    fadeToBlack: () => c.request<{ black: boolean }>('POST', '/api/v1/studio/engine/black', {}),
+    /** How an item appears when shown (or goes when hidden); null for at once. */
+    setItemTransition: (
+      scene: string,
+      id: number,
+      show: boolean,
+      transition: EngineTransition | null,
+    ) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/transition`, {
+        show,
+        transition,
+      }),
+    setDeinterlace: (name: string, mode: EngineDeinterlace, topFieldFirst: boolean) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/sources/${enc(name)}/deinterlace`, {
+        mode,
+        top_field_first: topFieldFirst,
+      }),
   }
 }
