@@ -11,6 +11,7 @@ import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
 import { asksFirst } from './desk'
+import { levelOf, visibleLines } from './log-viewer'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -328,6 +329,24 @@ describe('asking first', () => {
     expect(asksFirst('record', true, p)).toBe('record')
     // Starting a recording never asks.
     expect(asksFirst('record', false, p)).toBeNull()
+  })
+})
+
+describe('the log', () => {
+  const lines = [
+    '2026-10-26T17:13:21Z  INFO ferrocast: Ferrocast starting',
+    '2026-10-26T17:13:22Z  WARN libobs: [ coreaudio ]: device not found',
+    '2026-10-26T17:13:23Z ERROR ferrocast_studio: encoder failed',
+    "thread 'main' panicked at src/x.rs:1",
+  ]
+  it('tells problems from everyday lines', () => {
+    expect(lines.map(levelOf)).toEqual(['info', 'warn', 'error', 'error'])
+  })
+  it('shows only problems, or lines holding the search', () => {
+    expect(visibleLines(lines, 'problems', '')).toHaveLength(3)
+    expect(visibleLines(lines, 'all', 'COREAUDIO')).toEqual([lines[1]])
+    expect(visibleLines(lines, 'problems', 'starting')).toEqual([])
+    expect(visibleLines(lines, 'all', '  ')).toHaveLength(4)
   })
 })
 

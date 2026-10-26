@@ -35,6 +35,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
+import { LogDialog } from './log-viewer'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
 
@@ -1475,8 +1476,20 @@ function GeneralPage({ s, set }: PageProps) {
 }
 
 function AdvancedPage({ s, set }: PageProps) {
+  const [logOpen, setLogOpen] = useState(false)
   return (
     <>
+      <Heading info="What the app and OBS's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
+        Log
+      </Heading>
+      <div className="flex flex-col">
+        <Row label="See what happened">
+          <Button size="sm" onClick={() => setLogOpen(true)}>
+            Open the log
+          </Button>
+        </Row>
+      </div>
+      <LogDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <Heading>If the connection drops</Heading>
       <div className="flex flex-col">
         <Row label="Reconnect by itself">

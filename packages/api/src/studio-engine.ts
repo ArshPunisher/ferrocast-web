@@ -769,6 +769,14 @@ export function studioEngineApi(c: FerroClient) {
       device
         ? c.request<void>('PUT', `/api/v1/studio/engine/channels/${channel}`, device)
         : c.request<void>('DELETE', `/api/v1/studio/engine/channels/${channel}`),
+    /** The app's log, newest last (stream keys and tokens already taken out). */
+    log: (lines: number) =>
+      c.request<{ file: string; lines: string[] }>(
+        'GET',
+        `/api/v1/studio/engine/log?lines=${lines}`,
+      ),
+    /** Shows the log file in Finder or Explorer. */
+    showLog: () => c.request<null>('POST', '/api/v1/studio/engine/log/show'),
     /** Opens a web page in a window of its own in the app (a web panel the page won't frame). */
     webWindow: (name: string, url: string) =>
       c.request<{ ok: true }>('POST', '/api/v1/studio/engine/web-window', { name, url }),
