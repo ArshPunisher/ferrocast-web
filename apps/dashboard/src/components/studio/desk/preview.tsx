@@ -125,7 +125,7 @@ interface Held {
  * lets clicks through, so this box gets them.
  */
 function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
-  const { api, scene, items, selected, select, edit, stats } = useDesk()
+  const { api, scene, items, selected, select, edit, stats, setTransforming } = useDesk()
   const { run } = useAction()
   const canvas = stats?.canvas ?? null
   const held = useRef<Held | null>(null)
@@ -270,6 +270,15 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key === 'Escape') {
         select(null)
+        return
+      }
+      // ⌘E (Ctrl+E): Edit Transform for the picked source, as in OBS.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
+        const it = list.find((i) => i.id === selected)
+        if (it) {
+          e.preventDefault()
+          setTransforming({ scene, id: it.id, name: it.name })
+        }
         return
       }
       const step = e.shiftKey ? 10 : 1

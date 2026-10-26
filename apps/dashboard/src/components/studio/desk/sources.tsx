@@ -150,6 +150,33 @@ export function SourcesDock() {
       icon: FrameCorners,
       disabled: item.locked,
       items: [
+        {
+          label: 'Edit transform',
+          icon: SlidersHorizontal,
+          hint: '⌘E',
+          onSelect: () => desk.setTransforming({ scene, id: item.id, name: item.name }),
+        },
+        {
+          label: 'Copy transform',
+          icon: CopySimple,
+          onSelect: () =>
+            void run('transform', () => api.transform(scene, item.id)).then(
+              (t) => t && desk.setTransformClip(t),
+            ),
+        },
+        {
+          label: 'Paste transform',
+          icon: ClipboardText,
+          disabled: !desk.transformClip,
+          onSelect: () => {
+            const t = desk.transformClip
+            if (t)
+              void run('transform', () => done(api.setTransform(scene, item.id, t))).then(
+                (ok) => ok && refresh(),
+              )
+          },
+        },
+        { sep: true },
         { label: 'Fit to screen', icon: ArrowsInSimple, onSelect: () => void act(item, 'fit') },
         { label: 'Stretch to screen', icon: ArrowsOut, onSelect: () => void act(item, 'stretch') },
         { label: 'Centre', icon: Crosshair, onSelect: () => void act(item, 'center') },

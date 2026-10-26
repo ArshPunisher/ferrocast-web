@@ -44,6 +44,7 @@ import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { SourcesDock } from './sources'
+import { TransformDialog } from './transform'
 
 export function StudioDesk({
   res,
@@ -117,6 +118,8 @@ function Running({
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
+  const [transforming, setTransforming] = useState<Desk['transforming']>(null)
+  const [transformClip, setTransformClip] = useState<Desk['transformClip']>(null)
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
@@ -153,6 +156,10 @@ function Running({
     filterClip,
     setFilterClip,
     screens,
+    transforming,
+    setTransforming,
+    transformClip,
+    setTransformClip,
     openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
   }
   const docks: Record<DockId, React.ReactNode> = {
@@ -180,6 +187,13 @@ function Running({
         onClose={() => setSettingsAt(null)}
       />
       <SourcePanel />
+      <TransformDialog
+        target={transforming}
+        onClose={() => {
+          setTransforming(null)
+          reloadItems()
+        }}
+      />
     </DeskProvider>
   )
 }

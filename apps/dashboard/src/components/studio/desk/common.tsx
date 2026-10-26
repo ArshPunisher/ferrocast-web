@@ -32,6 +32,7 @@ import {
   type EngineScenes,
   type EngineScreen,
   type EngineStats,
+  type EngineTransform,
 } from '@ferrocast/api'
 import { useClient, type Resource } from '../../../lib/hooks'
 
@@ -69,6 +70,12 @@ export interface Desk {
   /** The source whose filters were copied, to paste onto another. */
   filterClip: string | null
   setFilterClip: (name: string | null) => void
+  /** The item whose Edit Transform is open. */
+  transforming: { scene: string; id: number; name: string } | null
+  setTransforming: (t: { scene: string; id: number; name: string } | null) => void
+  /** A transform copied from a menu, to paste onto another item. */
+  transformClip: EngineTransform | null
+  setTransformClip: (t: EngineTransform | null) => void
   /** The displays a full-screen projector can go on (empty outside the app). */
   screens: Resource<EngineScreen[]>
   /** Opens Studio settings, at a page ("stream", "audio", "picture", "record", "keys",

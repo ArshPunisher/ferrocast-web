@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { Meter, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { filterItems, projectorItem, type MenuItem } from './menu'
+import { scaleFor, shownSize } from './transform'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -126,5 +127,36 @@ describe('projectors', () => {
     // No displays known yet: just the window.
     const none = projectorItem('Projector', null, show) as Entry
     expect(none.items).toHaveLength(1)
+  })
+})
+
+describe('edit transform', () => {
+  const base = {
+    x: 0,
+    y: 0,
+    rotation: 0,
+    scale_x: 0.5,
+    scale_y: 0.5,
+    alignment: 5,
+    bounds: 'none' as const,
+    bounds_alignment: 0,
+    bounds_width: 0,
+    bounds_height: 0,
+    crop_left: 100,
+    crop_top: 0,
+    crop_right: 100,
+    crop_bottom: 80,
+    width: 1920,
+    height: 1080,
+  }
+
+  it('shows the size after crop and scale, and finds the scale for a size', () => {
+    expect(shownSize(base)).toEqual({ w: 860, h: 500 })
+    expect(scaleFor(base, 1720, 1000)).toEqual({ x: 1, y: 1 })
+    // A flip stays a flip.
+    expect(scaleFor({ ...base, scale_x: -0.5 }, 860, 500)).toEqual({ x: -0.5, y: 0.5 })
+    // A source with no size yet can't be sized.
+    expect(scaleFor({ ...base, width: 0 }, 100, 100)).toBeNull()
+    expect(scaleFor(base, 0, 100)).toBeNull()
   })
 })
