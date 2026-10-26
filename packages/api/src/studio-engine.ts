@@ -67,6 +67,10 @@ export interface EngineOption {
   filter?: string
   /** A group with its own on/off switch (its key holds true or false). */
   checkable?: boolean
+  /** A text's kind: a box of several lines, a password, read-only info, or one line (""). */
+  text_type?: 'multiline' | 'password' | 'info' | ''
+  /** A text OBS shows in a fixed-width font (code, CSS). */
+  monospace?: boolean
 }
 
 /** OBS's own settings for a source (the keys OBS saves in its scene collections). */

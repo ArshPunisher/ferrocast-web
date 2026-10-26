@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { FolderOpen, Plus, Trash } from '@phosphor-icons/react'
 import { type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Field, IconButton, Input, Select, Switch } from '@ferrocast/ui'
+import { Button, Field, IconButton, Input, Select, Switch, Textarea, cx } from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction } from '../../../lib/hooks'
 import { useEngine } from './common'
@@ -239,21 +239,53 @@ function OptionField({
       return <PathField o={o} label={label} hint={hint} value={v} off={off} set={set} />
     case 'editable_list':
       return <ListField o={o} label={label} hint={hint} value={v} off={off} set={set} />
-    case 'text':
+    case 'text': {
+      const text = typeof v === 'string' ? v : ''
+      // OBS's text kinds: a box for several lines (Custom CSS, a text source), a hidden
+      // password, read-only info, or one line.
+      if (o.text_type === 'info') {
+        return (
+          <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+            {(p) => (
+              <p id={p.id} className="m-0 text-[14px] whitespace-pre-wrap text-text-2">
+                {text}
+              </p>
+            )}
+          </Field>
+        )
+      }
       return (
         <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
-          {(p) => (
-            <Input
-              {...p}
-              disabled={off}
-              value={typeof v === 'string' ? v : ''}
-              autoComplete="off"
-              spellCheck
-              onChange={(e) => set(e.target.value)}
-            />
-          )}
+          {(p) =>
+            o.text_type === 'multiline' ? (
+              <Textarea
+                {...p}
+                disabled={off}
+                value={text}
+                rows={o.monospace ? 6 : 4}
+                autoComplete="off"
+                spellCheck={!o.monospace}
+                className={cx(
+                  'min-h-24 resize-y',
+                  o.monospace && 'font-mono text-[13px] leading-relaxed',
+                )}
+                onChange={(e) => set(e.target.value)}
+              />
+            ) : (
+              <Input
+                {...p}
+                type={o.text_type === 'password' ? 'password' : 'text'}
+                disabled={off}
+                value={text}
+                autoComplete="off"
+                spellCheck={o.text_type !== 'password'}
+                onChange={(e) => set(e.target.value)}
+              />
+            )
+          }
         </Field>
       )
+    }
     default:
       // frame_rate and the rest: shown, edited in a later step.
       return (
