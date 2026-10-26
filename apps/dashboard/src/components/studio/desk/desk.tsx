@@ -20,7 +20,9 @@ import {
   Play,
   Power,
   Record as RecordIcon,
+  ClockCounterClockwise,
   Scissors,
+  VideoCamera,
   Square,
   WifiHigh,
   X,
@@ -320,6 +322,35 @@ function ControlBar({
       },
     ])
   const remux = stats?.remux ?? null
+  const replayOn = !!stats?.replay?.active
+  const camOn = !!stats?.virtualcam?.active
+  const outputsMenu = (e: React.MouseEvent) =>
+    openMenu(e, 'More outputs', [
+      {
+        label: 'Replay buffer',
+        icon: ClockCounterClockwise,
+        checked: replayOn,
+        onSelect: () =>
+          void run('replay', () => api.replay(!replayOn), {
+            success: replayOn
+              ? 'Replay buffer off.'
+              : 'Replay buffer on: it keeps the last seconds.',
+          }),
+      },
+      {
+        label: 'Virtual camera',
+        icon: VideoCamera,
+        checked: camOn,
+        onSelect: () =>
+          void run('virtualcam', () => api.virtualCamera(!camOn), {
+            success: camOn ? 'Virtual camera off.' : 'Virtual camera on: other apps can pick it.',
+          }),
+      },
+    ])
+  const saveReplay = () =>
+    void run('save-replay', () => api.saveReplay(), {
+      success: 'Replay saved with your recordings.',
+    })
   const cpu = stats?.engine.cpu
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
@@ -398,6 +429,25 @@ function ControlBar({
           <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
         </Button>
       )}
+      {replayOn && (
+        <Button
+          variant="secondary"
+          className="h-10"
+          busy={busy === 'save-replay'}
+          onClick={saveReplay}
+        >
+          <ClockCounterClockwise size={15} weight="bold" />
+          <span className="hidden sm:inline">Save replay</span>
+        </Button>
+      )}
+      <IconButton
+        label="Replay buffer and virtual camera"
+        className={cx('h-10! w-10!', (replayOn || camOn) && 'text-accent-text')}
+        variant="ghost"
+        onClick={outputsMenu}
+      >
+        <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'bold'} />
+      </IconButton>
       {recording && (
         <IconButton
           label="Chapter or a new file"

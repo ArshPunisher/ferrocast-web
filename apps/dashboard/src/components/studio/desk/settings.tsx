@@ -908,6 +908,31 @@ function RecordPage({ s, set }: PageProps) {
             })}
           </span>
         </Row>
+        <Row label="Replay buffer keeps" sub="The last seconds, saved on request">
+          <NumberBox
+            label="Replay buffer seconds"
+            value={s.replay_seconds ?? 30}
+            min={5}
+            max={21600}
+            unit="s"
+            onChange={(replay_seconds) => set({ replay_seconds })}
+          />
+        </Row>
+        <Row label="Replays as">
+          <Select
+            aria-label="Replays as"
+            value={s.replay_format ?? 'mp4'}
+            onChange={(e) =>
+              set({ replay_format: e.target.value as NonNullable<StudioSettings['replay_format']> })
+            }
+          >
+            <option value="mp4">MP4</option>
+            <option value="mkv">MKV</option>
+            <option value="mov">MOV</option>
+            <option value="flv">FLV</option>
+            <option value="ts">MPEG-TS</option>
+          </Select>
+        </Row>
         <Row label="Remux a recording" sub="An MKV, FLV or TS into MP4, without encoding again">
           <RemuxButton />
         </Row>
@@ -986,6 +1011,9 @@ function KeysPage({ s, set }: PageProps) {
       actions: [
         { id: 'record', label: 'Start or stop recording' },
         { id: 'pause_record', label: 'Pause or resume recording' },
+        { id: 'replay', label: 'Replay buffer on or off' },
+        { id: 'save_replay', label: 'Save replay' },
+        { id: 'virtualcam', label: 'Virtual camera on or off' },
       ],
     },
     {
