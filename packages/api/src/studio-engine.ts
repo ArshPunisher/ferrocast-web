@@ -293,6 +293,35 @@ export interface EngineStats {
   scene?: string | null
 }
 
+/** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
+export const ENGINE_BOUNDS = ['none', 'stretch', 'fit', 'fill', 'width', 'height', 'max'] as const
+export type EngineBounds = (typeof ENGINE_BOUNDS)[number]
+
+/** Everything OBS's Edit Transform shows for an item. */
+export interface EngineTransform {
+  /** Where its alignment point is on the canvas. */
+  x: number
+  y: number
+  /** Degrees, clockwise. */
+  rotation: number
+  /** Minus flips. */
+  scale_x: number
+  scale_y: number
+  /** OBS's bits: 0 the middle; 1 left, 2 right, 4 top, 8 bottom. */
+  alignment: number
+  bounds: EngineBounds
+  bounds_alignment: number
+  bounds_width: number
+  bounds_height: number
+  crop_left: number
+  crop_top: number
+  crop_right: number
+  crop_bottom: number
+  /** The source's own size before cropping (only read). */
+  width: number
+  height: number
+}
+
 /** A display a full-screen projector can go on. */
 export interface EngineScreen {
   index: number
@@ -446,6 +475,18 @@ export function studioEngineApi(c: FerroClient) {
         'PUT',
         `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/box`,
         box,
+      ),
+    transform: (scene: string, id: number) =>
+      c.request<EngineTransform>(
+        'GET',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/transform`,
+      ),
+    /** Sets all of an item's transform at once → the item. */
+    setTransform: (scene: string, id: number, t: EngineTransform) =>
+      c.request<EngineItem>(
+        'PUT',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/transform`,
+        t,
       ),
     /** Outlines an item in the preview, or nothing. */
     select: (pick: { scene: string; id: number } | null) =>
