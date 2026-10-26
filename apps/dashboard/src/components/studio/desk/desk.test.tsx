@@ -5,6 +5,8 @@ import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
+import { historyMenu, tbarEnd } from './preview'
+import { balanceLabel } from './advanced-audio'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -167,5 +169,55 @@ describe('scene collections and profiles', () => {
     expect(fileName('Gaming')).toBe('Gaming.json')
     expect(fileName('Show: Live/Late?')).toBe('Show- Live-Late-.json')
     expect(fileName('   ')).toBe('Studio.json')
+  })
+})
+
+describe('studio mode', () => {
+  it('the T-bar finishes near the end, goes back near the start, else holds', () => {
+    expect(tbarEnd(0.95)).toBe('finish')
+    expect(tbarEnd(0.9)).toBe('finish')
+    expect(tbarEnd(0.1)).toBe('back')
+    expect(tbarEnd(0)).toBe('back')
+    expect(tbarEnd(0.5)).toBe('hold')
+    expect(tbarEnd(0.11)).toBe('hold')
+  })
+})
+
+describe('history', () => {
+  it('lists redo steps furthest first, then undo steps newest first, each with its count', () => {
+    const steps = vi.fn()
+    const items = historyMenu(
+      { undo: ['Move Cam', 'Add Cam'], redo: ['Hide Mic', 'Mute Mic'] },
+      steps,
+    ) as MenuItem[]
+    const entries = items.filter((m): m is Entry => !('sep' in m))
+    expect(entries.map((m) => m.label)).toEqual([
+      'Redo: Mute Mic',
+      'Redo: Hide Mic',
+      'Move Cam',
+      'Add Cam',
+    ])
+    expect(items.some((m) => 'sep' in m)).toBe(true)
+    for (const e of entries) e.onSelect?.()
+    expect(steps.mock.calls).toEqual([
+      [true, 2],
+      [true, 1],
+      [false, 1],
+      [false, 2],
+    ])
+    expect(entries[2]?.hint).toBe('⌘Z')
+    const empty = historyMenu({ undo: [], redo: [] }, steps) as Entry[]
+    expect(empty).toHaveLength(1)
+    expect(empty[0]?.disabled).toBe(true)
+  })
+})
+
+describe('advanced audio', () => {
+  it('says balance as left, centre or right', () => {
+    expect(balanceLabel(0.5)).toBe('Centre')
+    expect(balanceLabel(0)).toBe('L 100%')
+    expect(balanceLabel(0.3)).toBe('L 40%')
+    expect(balanceLabel(1)).toBe('R 100%')
+    expect(balanceLabel(0.501)).toBe('Centre')
   })
 })

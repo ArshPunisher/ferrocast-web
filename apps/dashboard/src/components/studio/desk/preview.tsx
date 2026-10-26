@@ -6,7 +6,11 @@ import {
   ArrowUUpLeft,
   ArrowFatRight,
   ArrowUUpRight,
+  ArrowsLeftRight,
+  ClockCounterClockwise,
   Columns,
+  DotsThree,
+  MoonStars,
   GearSix,
   Plus,
   Trash,
@@ -18,6 +22,7 @@ import {
 import {
   type EngineItem,
   type EngineSettings,
+  type EngineStudioOptions,
   type EngineTransition,
   type PreviewRect,
 } from '@ferrocast/api'
@@ -26,7 +31,7 @@ import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
-import { projectorItem, useContextMenu } from './menu'
+import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OptionsForm } from './options'
 import {
   MOVE,
@@ -166,13 +171,24 @@ export function PreviewBox({ running }: { running: boolean }) {
   )
 }
 
-/** Studio Mode's middle: Transition (the scene's own way in, or the Studio's), and OBS's quick
- * transitions, each one click. Right-click one to remove it; + adds one. */
+/** OBS's Studio Mode defaults. */
+const STUDIO_DEFAULTS: EngineStudioOptions = {
+  swap: true,
+  duplicate_scene: true,
+  duplicate_sources: false,
+  double_click: false,
+}
+
+/** Studio Mode's middle: Transition (the scene's own way in, or the Studio's), the T-bar,
+ * swap, fade to black, and OBS's quick transitions, each one click. Right-click a quick one to
+ * remove it; + adds one. */
 function SwitchColumn() {
   const { api, scenes, refresh } = useDesk()
   const { run, busy } = useAction()
   const { open, menu } = useContextMenu()
   const quick = scenes.data?.quick ?? []
+  const options = scenes.data?.studio_options ?? STUDIO_DEFAULTS
+  const black = !!scenes.data?.black
   const label = (t: EngineTransition) =>
     t.kind === 'cut_transition' || t.kind === 'obs_stinger_transition'
       ? (TRANSITIONS[t.kind] ?? t.kind)
@@ -181,6 +197,10 @@ function SwitchColumn() {
     void run('go', () => done(api.transitionNow(q))).then((ok) => ok && refresh())
   const save = (list: EngineTransition[]) =>
     void run('quick', () => done(api.setQuickTransitions(list))).then((ok) => ok && refresh())
+  const setOptions = (o: Partial<EngineStudioOptions>) =>
+    void run('options', () => done(api.setStudioOptions({ ...options, ...o }))).then(
+      (ok) => ok && refresh(),
+    )
   const adding = (e: React.MouseEvent) =>
     open(
       e,
@@ -194,46 +214,243 @@ function SwitchColumn() {
             })),
       ),
     )
+  const optionsMenu = (e: React.MouseEvent) =>
+    open(e, 'Studio Mode options', [
+      {
+        label: 'Swap after a transition',
+        checked: options.swap,
+        onSelect: () => setOptions({ swap: !options.swap }),
+      },
+      {
+        label: 'Copy the scene on air',
+        checked: options.duplicate_scene,
+        onSelect: () => setOptions({ duplicate_scene: !options.duplicate_scene }),
+      },
+      {
+        label: 'Copy its sources too',
+        checked: options.duplicate_scene && options.duplicate_sources,
+        disabled: !options.duplicate_scene,
+        onSelect: () => setOptions({ duplicate_sources: !options.duplicate_sources }),
+      },
+      { sep: true },
+      {
+        label: 'Double-click a scene to send it on air',
+        checked: options.double_click,
+        onSelect: () => setOptions({ double_click: !options.double_click }),
+      },
+    ])
+  // Centred when it fits; scrolls inside the stage when the stage is short.
   return (
-    <div className="flex w-[126px] flex-none flex-col items-stretch gap-1.5 self-center">
-      <Button variant="primary" busy={busy === 'go'} onClick={() => go()}>
-        <ArrowFatRight size={16} weight="fill" /> Transition
-      </Button>
-      <span className="mt-1 text-center text-[11px] font-bold tracking-wide text-text-3 uppercase">
-        Quick
-      </span>
-      {quick.map((q, i) => (
-        <Button
-          key={`${q.kind}-${q.ms}-${i}`}
-          variant="secondary"
-          size="sm"
-          title="Right-click to remove"
-          onClick={() => go(q)}
-          onContextMenu={(e) =>
-            open(e, label(q), [
-              {
-                label: 'Remove',
-                icon: Trash,
-                danger: true,
-                onSelect: () => save(quick.filter((_, j) => j !== i)),
-              },
-            ])
-          }
-        >
-          {label(q)}
+    <div className="flex w-[130px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin]">
+      <div className="my-auto flex flex-col items-stretch gap-1.5 px-0.5 py-1">
+        <Button variant="primary" busy={busy === 'go'} onClick={() => go()}>
+          <ArrowFatRight size={16} weight="fill" /> Transition
         </Button>
-      ))}
-      {quick.length < 10 && (
-        <IconButton
-          size="sm"
-          label="Add a quick transition"
-          className="self-center"
-          onClick={adding}
-        >
-          <Plus size={15} weight="bold" />
-        </IconButton>
-      )}
+        <TBar />
+        <div className="flex flex-wrap items-center justify-center gap-0.5">
+          <IconButton
+            size="sm"
+            label="Swap the preview and what's on air"
+            onClick={() =>
+              void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())
+            }
+          >
+            <ArrowsLeftRight size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={black ? 'Fade back from black' : 'Fade to black'}
+            aria-pressed={black}
+            className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
+            onClick={() =>
+              void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
+            }
+          >
+            <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
+          </IconButton>
+          <IconButton size="sm" label="Studio Mode options" onClick={optionsMenu}>
+            <DotsThree size={16} weight="bold" />
+          </IconButton>
+          <InfoTip label="About Studio Mode">
+            Edit the preview, then send it on air. With "Copy the scene on air" on, moving or hiding
+            sources in the preview never touches the stream, even when both show the same scene.
+            Drag the bar to mix by hand; let go near the end to finish, near the start to go back.
+          </InfoTip>
+        </div>
+        <span className="mt-1 text-center text-[11px] font-bold tracking-wide text-text-3 uppercase">
+          Quick
+        </span>
+        {quick.map((q, i) => (
+          <Button
+            key={`${q.kind}-${q.ms}-${i}`}
+            variant="secondary"
+            size="sm"
+            title="Right-click to remove"
+            onClick={() => go(q)}
+            onContextMenu={(e) =>
+              open(e, label(q), [
+                {
+                  label: 'Remove',
+                  icon: Trash,
+                  danger: true,
+                  onSelect: () => save(quick.filter((_, j) => j !== i)),
+                },
+              ])
+            }
+          >
+            {label(q)}
+          </Button>
+        ))}
+        {quick.length < 10 && (
+          <IconButton
+            size="sm"
+            label="Add a quick transition"
+            className="self-center"
+            onClick={adding}
+          >
+            <Plus size={15} weight="bold" />
+          </IconButton>
+        )}
+      </div>
       {menu}
+    </div>
+  )
+}
+
+/** The history list: steps to redo (furthest first), then steps to undo (newest first). Each
+ * picks how many steps to take to get there. */
+export function historyMenu(
+  list: { undo: string[]; redo: string[] },
+  steps: (redo: boolean, n: number) => void,
+): MenuItem[] {
+  return [
+    ...list.redo
+      .slice()
+      .reverse()
+      .map((label, i, all) => ({
+        label: `Redo: ${label}`,
+        onSelect: () => steps(true, all.length - i),
+      })),
+    ...(list.redo.length ? [{ sep: true as const }] : []),
+    ...(list.undo.length
+      ? list.undo.map((label, i) => ({
+          label,
+          hint: i === 0 ? '⌘Z' : undefined,
+          onSelect: () => steps(false, i + 1),
+        }))
+      : [{ label: 'Nothing to undo yet', disabled: true }]),
+  ]
+}
+
+/** Where the T-bar goes when let go at `v`, as in OBS: near the end it finishes, near the start
+ * it goes back, anywhere else it holds both scenes. */
+export function tbarEnd(v: number): 'finish' | 'back' | 'hold' {
+  return v >= 0.9 ? 'finish' : v <= 0.1 ? 'back' : 'hold'
+}
+
+/**
+ * OBS's T-bar: drag the grip to mix from what's on air to the preview by hand. Only the grip
+ * drags (a click on the track does nothing, as OBS fixed); let go near the end to finish, near
+ * the start to go back, anywhere else to hold both. Arrow keys move it in tenths.
+ */
+function TBar() {
+  const { api, scenes, refresh } = useDesk()
+  const track = useRef<HTMLDivElement>(null)
+  const [at, setAt] = useState<number | null>(null)
+  const held = scenes.data?.tbar?.active ? (scenes.data.tbar.at ?? 0) : 0
+  const shown = at ?? held
+  // Not being dragged: the engine's place wins (a refused move, a transition, another screen).
+  const dragging = useRef(false)
+  useEffect(() => {
+    if (!dragging.current) setAt(null)
+  }, [held, scenes.data?.tbar?.active])
+  // One request at a time; the newest place waits for the one before.
+  const sending = useRef(false)
+  const next = useRef<{ at: number; release: boolean } | null>(null)
+  const send = (v: number, release: boolean) => {
+    next.current = { at: v, release }
+    if (sending.current) return
+    const pump = async () => {
+      sending.current = true
+      while (next.current) {
+        const n = next.current
+        next.current = null
+        try {
+          await api.tbar(n.at, n.release)
+        } catch {
+          // A refused move (Studio Mode off, a transition running) leaves the bar where it is.
+        }
+        if (n.release) refresh()
+      }
+      sending.current = false
+    }
+    void pump()
+  }
+  const valueAt = (clientX: number) => {
+    const r = track.current?.getBoundingClientRect()
+    if (!r || r.width === 0) return 0
+    return Math.min(1, Math.max(0, (clientX - r.left) / r.width))
+  }
+  const release = (v: number) => {
+    send(v, true)
+    // Near either end it snaps home, as in OBS.
+    setAt(tbarEnd(v) === 'hold' ? v : null)
+  }
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      e.key === 'ArrowRight' || e.key === 'ArrowUp'
+        ? 0.1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowDown'
+          ? -0.1
+          : 0
+    if (!step) return
+    e.preventDefault()
+    const v = Math.min(1, Math.max(0, Math.round((shown + step) * 10) / 10))
+    setAt(v)
+    // Keys step through the middle; only the very ends let go (finish, or back).
+    if (v >= 1 || v <= 0) release(v)
+    else send(v, false)
+  }
+  return (
+    <div ref={track} className="relative mx-1 my-2 h-1.5 rounded-full bg-surface-3 select-none">
+      <div
+        aria-hidden
+        className="absolute inset-y-0 left-0 rounded-full bg-accent/60"
+        style={{ width: `${shown * 100}%` }}
+      />
+      <div
+        role="slider"
+        tabIndex={0}
+        aria-label="T-bar: drag to mix from on air to the preview"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(shown * 100)}
+        aria-valuetext={shown === 0 ? 'On air' : `${Math.round(shown * 100)}% to the preview`}
+        className="absolute top-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-[4px] border border-line-strong bg-surface-1 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+        style={{ left: `${shown * 100}%` }}
+        onKeyDown={onKey}
+        onPointerDown={(e: PointerEvent<HTMLDivElement>) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          dragging.current = true
+          setAt(shown)
+        }}
+        onPointerMove={(e: PointerEvent<HTMLDivElement>) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+          const v = valueAt(e.clientX)
+          setAt(v)
+          send(v, false)
+        }}
+        onPointerUp={(e: PointerEvent<HTMLDivElement>) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+          e.currentTarget.releasePointerCapture(e.pointerId)
+          dragging.current = false
+          release(valueAt(e.clientX))
+        }}
+        onPointerCancel={() => {
+          dragging.current = false
+          release(shown)
+        }}
+      />
     </div>
   )
 }
@@ -499,6 +716,34 @@ export function StageBar() {
     void run('undo', () => (redo ? api.redo() : api.undo()), {
       success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),
     }).then((r) => r && refresh())
+  // Steps back (or forward) several at once from the history list.
+  const steps = (redo: boolean, n: number) =>
+    void run(
+      'undo',
+      async () => {
+        let last = null as Awaited<ReturnType<typeof api.undo>> | null
+        try {
+          for (let k = 0; k < n; k++) last = await (redo ? api.redo() : api.undo())
+        } catch (err) {
+          // The steps before this one were taken: show them.
+          refresh()
+          throw err
+        }
+        return last
+      },
+      {
+        success: () => (n > 1 ? `${redo ? 'Redone' : 'Undone'}: ${n} steps` : null),
+      },
+    ).then((r) => r && refresh())
+  const historyList = async (e: React.MouseEvent) => {
+    // The menu opens once the list is in, at the button.
+    const el = e.currentTarget as HTMLElement
+    const { clientX, clientY } = e
+    const list = await api.history().catch(() => null)
+    if (!list) return
+    const at = { preventDefault() {}, stopPropagation() {}, currentTarget: el, clientX, clientY }
+    open(at as unknown as React.MouseEvent, 'History', historyMenu(list, steps))
+  }
   const show = (what: 'program' | 'multiview', screen: number | undefined) =>
     void run('projector', () =>
       api.projector({ what, ...(screen === undefined ? {} : { screen }) }),
@@ -633,6 +878,9 @@ export function StageBar() {
           onClick={() => step(true)}
         >
           <ArrowUUpRight size={16} weight="bold" />
+        </IconButton>
+        <IconButton size="sm" label="History: step back to any change" onClick={historyList}>
+          <ClockCounterClockwise size={16} weight="bold" />
         </IconButton>
       </span>
       {inDesktopApp() && (

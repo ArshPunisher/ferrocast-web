@@ -312,7 +312,16 @@ export function ScenesDock() {
                         ? !s.preview && void act(`pv:${s.name}`, () => api.setPreview(s.name))
                         : !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
                     }
-                    onDoubleClick={() => setNaming({ from: s.name, value: s.name })}
+                    onDoubleClick={() =>
+                      // Studio Mode with "Double-click to send on air": straight on air, as in
+                      // OBS; otherwise a double-click renames it.
+                      studio && scenes.data?.studio_options?.double_click
+                        ? void act(`go:${s.name}`, async () => {
+                            await api.setPreview(s.name)
+                            await api.transitionNow()
+                          })
+                        : setNaming({ from: s.name, value: s.name })
+                    }
                     onContextMenu={(e) => {
                       desk.screens.reload()
                       open(e, s.name, sceneMenu(s, i))
