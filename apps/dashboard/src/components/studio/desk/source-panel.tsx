@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowClockwise,
   CaretDown,
+  Check,
   CaretUp,
   CursorClick,
   Plus,
@@ -238,12 +239,46 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
   )
 }
 
-/** The scenes a sound (or any source) is in: on adds it there, off takes it out. */
+/** Scenes grouped by a shared first part ("Lo-fi loft · Ending" goes in "Lo-fi loft"), when
+ * two or more share it; the rest are "Your scenes". */
+export function groupScenes(
+  names: string[],
+): { title: string; scenes: { name: string; label: string }[] }[] {
+  const prefix = (n: string) => (n.includes(' · ') ? n.slice(0, n.indexOf(' · ')) : null)
+  const counts = new Map<string, number>()
+  for (const n of names) {
+    const p = prefix(n)
+    if (p) counts.set(p, (counts.get(p) ?? 0) + 1)
+  }
+  const mine: { name: string; label: string }[] = []
+  const groups = new Map<string, { name: string; label: string }[]>()
+  for (const n of names) {
+    const p = prefix(n)
+    if (p && (counts.get(p) ?? 0) >= 2) {
+      const g = groups.get(p) ?? []
+      g.push({ name: n, label: n.slice(p.length + 3) })
+      groups.set(p, g)
+    } else mine.push({ name: n, label: n })
+  }
+  return [
+    ...(mine.length ? [{ title: 'Your scenes', scenes: mine }] : []),
+    ...[...groups].map(([title, scenes]) => ({ title, scenes })),
+  ]
+}
+
+/** The scenes a sound (or any source) is in: every scene, or some, picked from tiles grouped
+ * as the scenes are named. On adds it to a scene, off takes it out. */
 function PlaysIn({ name }: { name: string }) {
   const { api, scenes, refresh } = useDesk()
   const { run, busy } = useAction()
   const uses = useResource(() => api.sources(), [api])
   const mine = uses.data?.find((u) => u.name === name)?.scenes ?? []
+  const all = (scenes.data?.scenes ?? []).map((s) => s.name)
+  const current = scenes.data?.current
+  const everywhere = all.length > 0 && all.every((n) => mine.includes(n))
+  // "Some scenes" shows the tiles; picking it from "Every scene" changes nothing until a tile.
+  const [choosing, setChoosing] = useState(false)
+  const showTiles = !everywhere || choosing
   const toggle = async (scene: string, on: boolean) => {
     const ok = await run(`in:${scene}`, async () => {
       if (on) return done(api.addExisting(scene, name))
@@ -258,31 +293,112 @@ function PlaysIn({ name }: { name: string }) {
       refresh()
     }
   }
+  const addEverywhere = async () => {
+    const ok = await run('in:all', async () => {
+      for (const s of all) if (!mine.includes(s)) await api.addExisting(s, name)
+      return true
+    })
+    if (ok) {
+      setChoosing(false)
+      uses.reload()
+      refresh()
+    }
+  }
+  const off = busy !== null || !uses.data
+  const option = (on: boolean, label: string, onPick: () => void, extra?: React.ReactNode) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      disabled={off}
+      onClick={onPick}
+      className={cx(
+        'flex min-h-11 items-center gap-3 rounded-[11px] border px-3.5 text-left text-[14.5px] font-bold transition-colors',
+        on
+          ? 'border-[var(--fc-accent)] bg-[color-mix(in_srgb,var(--fc-accent)_9%,transparent)] text-text'
+          : 'border-line text-text-2 hover:bg-surface-2',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cx(
+          'size-5 shrink-0 rounded-full border-2',
+          on ? 'border-[6px] border-[var(--fc-accent)]' : 'border-line-strong',
+        )}
+      />
+      <span className="flex-1">{label}</span>
+      {extra}
+    </button>
+  )
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[14px] font-semibold text-text-2">Plays in</span>
-      <div className="flex flex-wrap gap-1.5">
-        {(scenes.data?.scenes ?? []).map((s) => {
-          const on = mine.includes(s.name)
-          return (
-            <button
-              key={s.name}
-              type="button"
-              aria-pressed={on}
-              disabled={busy !== null || !uses.data}
-              onClick={() => void toggle(s.name, !on)}
-              className={cx(
-                'inline-flex h-8 items-center rounded-full border px-3 text-[14px] transition-colors',
-                on
-                  ? 'border-accent-line bg-accent-soft font-semibold text-accent-text'
-                  : 'border-line-strong text-text-2 hover:bg-surface-2',
-              )}
-            >
-              {s.name}
-            </button>
-          )
-        })}
+    <div className="flex flex-col gap-2.5">
+      <span id="plays-in" className="text-[14px] font-semibold text-text-2">
+        Plays in
+      </span>
+      <div role="radiogroup" aria-labelledby="plays-in" className="grid gap-2">
+        {option(everywhere && !choosing, 'Every scene', () => void addEverywhere())}
+        {option(
+          showTiles,
+          'Some scenes',
+          () => setChoosing(true),
+          <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[12.5px] font-bold text-ok">
+            {mine.length} picked
+          </span>,
+        )}
       </div>
+      {showTiles &&
+        groupScenes(all).map((g) => (
+          <section
+            key={g.title}
+            aria-label={g.title}
+            className="overflow-hidden rounded-[11px] border border-line"
+          >
+            <h3 className="m-0 flex items-center bg-surface-2 px-3.5 py-2 text-[14px] font-extrabold text-text">
+              {g.title}
+              <span className="ml-auto text-[12.5px] font-bold text-text-3">{g.scenes.length}</span>
+            </h3>
+            <div className="grid grid-cols-2 gap-2 p-2.5">
+              {g.scenes.map((s) => {
+                const on = mine.includes(s.name)
+                return (
+                  <button
+                    key={s.name}
+                    type="button"
+                    aria-pressed={on}
+                    title={s.name}
+                    disabled={off}
+                    onClick={() => void toggle(s.name, !on)}
+                    className={cx(
+                      'flex min-h-9 min-w-0 items-center gap-2 rounded-[10px] border px-2.5 text-left text-[13.5px] transition-colors',
+                      on
+                        ? 'border-[var(--fc-accent)] bg-[color-mix(in_srgb,var(--fc-accent)_9%,transparent)] font-extrabold text-text'
+                        : 'border-line font-semibold text-text-2 hover:bg-surface-2',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cx(
+                        'grid size-[18px] shrink-0 place-items-center rounded-[5px] border-2',
+                        on
+                          ? 'border-[var(--fc-btn-primary)] bg-[var(--fc-btn-primary)] text-white'
+                          : 'border-line-strong',
+                      )}
+                    >
+                      {on && <Check size={11} weight="bold" />}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                    {s.name === current && (
+                      <span
+                        aria-label="on air"
+                        className="size-[7px] shrink-0 rounded-full bg-danger-fill"
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        ))}
     </div>
   )
 }
