@@ -50,7 +50,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           <Skeleton className="m-3 h-28" />
         ) : mine.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-3">
-            <p className="m-0 text-[13.5px] text-text-2">No platforms yet.</p>
+            <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
             <Button size="sm" variant="primary" onClick={() => setManaging(true)}>
               Add a platform
             </Button>
@@ -127,7 +127,7 @@ function StreamTitle() {
         void apply()
       }}
     >
-      <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold text-text-2">
+      <label className="flex flex-col gap-1.5 text-[13.5px] font-semibold text-text-2">
         Title
         <Input
           value={shown}
@@ -139,7 +139,7 @@ function StreamTitle() {
           onBlur={() => void apply()}
         />
       </label>
-      <div className="flex items-center justify-between gap-2 text-[12.5px]">
+      <div className="flex items-center justify-between gap-2 text-[13.5px]">
         <span className="min-w-0 truncate text-text-2">
           <span className="font-semibold">Category</span>{' '}
           <span className="text-text">{last?.category?.name ?? 'Not set'}</span>

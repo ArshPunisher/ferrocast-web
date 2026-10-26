@@ -162,11 +162,11 @@ function OptionRow({
     >
       {swatch}
       <span className="min-w-0">
-        <b className="flex items-center gap-1.5 text-[14px] font-semibold text-text">
+        <b className="flex items-center gap-1.5 text-[15px] font-semibold text-text">
           {info.name}
           {on && <Check size={13} weight="bold" className="text-accent-text" aria-hidden="true" />}
         </b>
-        <span className="mt-0.5 block text-[12.5px] leading-snug text-text-3">{info.desc}</span>
+        <span className="mt-0.5 block text-[13.5px] leading-snug text-text-3">{info.desc}</span>
       </span>
     </button>
   )
@@ -189,7 +189,7 @@ function SimpleChips<T extends string>({
   const id = useId()
   return (
     <div role="group" aria-labelledby={id} className="mt-2 flex flex-col gap-1.5 px-1.5">
-      <span id={id} className="text-[12.5px] font-medium text-text-3">
+      <span id={id} className="text-[13.5px] font-medium text-text-3">
         {label}
       </span>
       <div className="flex flex-wrap gap-1.5">
@@ -201,7 +201,7 @@ function SimpleChips<T extends string>({
             title={info[v].desc}
             onClick={() => onPick(v)}
             className={cx(
-              'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[14px] font-medium focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               v === value
                 ? 'border-accent-line bg-accent-soft text-text'
                 : 'border-line text-text-2 hover:border-line-strong',
@@ -241,12 +241,12 @@ function Section({
           onClick={onToggle}
           className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-[10px] px-2.5 py-3 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
-          <span className="font-display text-[15px] font-bold tracking-tight text-text">
+          <span className="font-display text-[16px] font-bold tracking-tight text-text">
             {label}
           </span>
           <span
             className={cx(
-              'max-w-[130px] truncate font-mono text-[12.5px]',
+              'max-w-[130px] truncate font-mono text-[13.5px]',
               open ? 'text-accent-text' : 'text-text-3',
             )}
           >
@@ -274,7 +274,7 @@ function Section({
 function Fieldset({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <fieldset className="m-0 flex min-w-0 flex-col gap-3.5 border-0 border-t border-line p-0 pt-4">
-      <legend className="float-left mb-0.5 w-full p-0 font-display text-[16px] font-bold tracking-tight text-text">
+      <legend className="float-left mb-0.5 w-full p-0 font-display text-[17px] font-bold tracking-tight text-text">
         {legend}
       </legend>
       {children}
@@ -436,7 +436,7 @@ export function MotionSection({
           <button
             type="button"
             onClick={stage.play}
-            className="fc-press inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(180deg,#b25600_0%,#9a4c00_100%)] px-5 text-[16px] font-semibold text-white shadow-[0_1px_0_rgb(255_255_255/0.22)_inset,0_10px_24px_-12px_rgb(178_86_0/0.9)] hover:bg-[linear-gradient(180deg,#a85100_0%,#8e4600_100%)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="fc-press inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(180deg,#b25600_0%,#9a4c00_100%)] px-5 text-[17px] font-semibold text-white shadow-[0_1px_0_rgb(255_255_255/0.22)_inset,0_10px_24px_-12px_rgb(178_86_0/0.9)] hover:bg-[linear-gradient(180deg,#a85100_0%,#8e4600_100%)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             <Play size={17} weight="fill" aria-hidden="true" />
             Play alert
@@ -486,7 +486,7 @@ export function MotionSection({
           </div>
           {usual && (
             <div className="flex basis-full flex-col gap-1.5">
-              <span className="text-[12.5px] font-medium text-text-3">Test with</span>
+              <span className="text-[13.5px] font-medium text-text-3">Test with</span>
               <Segmented
                 label="Test amount"
                 size="sm"
@@ -619,7 +619,7 @@ export function MotionSection({
             aria-label="Particle colour"
             className="flex flex-wrap items-center gap-2 px-1.5 pt-1 pb-2.5"
           >
-            <span className="w-full text-[12.5px] font-medium text-text-3">Colour</span>
+            <span className="w-full text-[13.5px] font-medium text-text-3">Colour</span>
             {PARTICLE_COLORS.filter((c) => c !== 'custom').map((c) => (
               <button
                 key={c}
@@ -743,7 +743,7 @@ export function MotionSection({
           label="Bigger tips hit harder"
           description="More shake, particles and volume as the amount grows"
         />
-        <p className="text-[12.5px] leading-snug text-text-3">
+        <p className="text-[13.5px] leading-snug text-text-3">
           Impacts come with the entrances and exits above; the simple ones have none.
         </p>
       </Fieldset>
@@ -751,7 +751,7 @@ export function MotionSection({
       <Fieldset legend="Placement">
         <div className="flex flex-wrap items-start gap-5">
           <div role="group" aria-label="Where it sits" className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-text-2" aria-hidden="true">
+            <span className="text-[14px] font-medium text-text-2" aria-hidden="true">
               Where it sits
             </span>
             <div className="grid w-max grid-cols-[repeat(3,34px)] grid-rows-[repeat(3,24px)] gap-1 rounded-[10px] border border-line bg-inset p-1.5">
@@ -774,7 +774,7 @@ export function MotionSection({
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-text-2" id="motion-dir">
+            <span className="text-[14px] font-medium text-text-2" id="motion-dir">
               Comes in from
             </span>
             <div role="group" aria-labelledby="motion-dir" className="flex flex-wrap gap-1">
@@ -796,7 +796,7 @@ export function MotionSection({
                     aria-pressed={m.direction === d}
                     onClick={() => setM({ direction: d }, { keepRecipe: true })}
                     className={cx(
-                      'fc-press inline-flex h-[34px] min-w-[38px] items-center justify-center rounded-[9px] border px-2.5 text-[13.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                      'fc-press inline-flex h-[34px] min-w-[38px] items-center justify-center rounded-[9px] border px-2.5 text-[14.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                       m.direction === d
                         ? 'border-accent-line bg-accent-soft text-text'
                         : 'border-line-strong bg-surface-2 text-text-2',
@@ -807,14 +807,14 @@ export function MotionSection({
                 )
               })}
             </div>
-            <p className="text-[12.5px] leading-snug text-text-3">
+            <p className="text-[13.5px] leading-snug text-text-3">
               Used by Elastic drop, Dash in, Flip and shine, Slide and blur.
             </p>
           </div>
         </div>
         {stage && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-text-2">Preview over</span>
+            <span className="text-[14px] font-medium text-text-2">Preview over</span>
             <div className="flex flex-wrap items-center gap-2">
               <Segmented
                 label="Preview backdrop"
@@ -830,7 +830,7 @@ export function MotionSection({
                   stage.onScene(s as Scene)
                 }}
               />
-              <label className="fc-press inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-control border border-line-strong bg-surface-2 px-3 text-[13px] font-medium text-text has-[:focus-visible]:shadow-[var(--fc-focus)]">
+              <label className="fc-press inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-control border border-line-strong bg-surface-2 px-3 text-[14px] font-medium text-text has-[:focus-visible]:shadow-[var(--fc-focus)]">
                 <UploadSimple size={14} aria-hidden="true" />
                 Your screenshot
                 <input
@@ -845,11 +845,11 @@ export function MotionSection({
               </label>
             </div>
             {shotErr && (
-              <p role="alert" className="text-[13px] text-danger">
+              <p role="alert" className="text-[14px] text-danger">
                 {shotErr}
               </p>
             )}
-            <p className="text-[12.5px] leading-snug text-text-3">
+            <p className="text-[13.5px] leading-snug text-text-3">
               Only for this preview; the screenshot never leaves this computer.
             </p>
           </div>
@@ -902,13 +902,13 @@ export function MotionSection({
               </Button>
             </div>
           ) : (
-            <p className="text-[12.5px] leading-snug text-text-3">
+            <p className="text-[13.5px] leading-snug text-text-3">
               Set this to your alert sound’s tempo. With your own sound picked, Ferrocast can find
               it for you.
             </p>
           )}
           {tempo.error && (
-            <p role="alert" className="text-[13px] text-danger">
+            <p role="alert" className="text-[14px] text-danger">
               {tempo.error}
             </p>
           )}
@@ -962,7 +962,7 @@ export function MotionSection({
               )
             }
           />
-          <p className="text-[12.5px] leading-snug text-text-3">
+          <p className="text-[13.5px] leading-snug text-text-3">
             The motion designer’s entrances and exits take their length from Feel.
           </p>
         </Fieldset>

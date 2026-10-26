@@ -107,10 +107,10 @@ export function QueuePanel({ className }: { className?: string }) {
       )}
     >
       <header className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3 sm:px-5">
-        <h2 id="queue-title" className="font-display text-[15px] font-semibold tracking-tight">
+        <h2 id="queue-title" className="font-display text-[18px] font-extrabold tracking-tight">
           Alert queue
           {waiting.length > 0 && (
-            <span className="ml-2 font-mono text-[12px] font-medium text-text-3 tabular-nums">
+            <span className="ml-2 font-mono text-[13px] font-medium text-text-3 tabular-nums">
               {waiting.length} waiting
             </span>
           )}
@@ -163,7 +163,7 @@ export function QueuePanel({ className }: { className?: string }) {
         {paused && (
           <p
             role="status"
-            className="rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[13px] text-warn"
+            className="rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14px] text-warn"
           >
             Paused. Alerts keep arriving and wait here until you resume.
           </p>
@@ -179,16 +179,16 @@ export function QueuePanel({ className }: { className?: string }) {
               className="rounded-[12px] border border-accent-line bg-accent-soft p-3.5"
               aria-live="polite"
             >
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-accent-text">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-accent-text">
                 <span>Playing now</span>
                 <PlatformMark platform={playing.alert.platform} size={12} />
                 {playing.alert.test && <span className="text-text-3">test</span>}
               </div>
-              <p className="mt-1.5 line-clamp-2 font-display text-[17px] font-semibold tracking-tight break-words text-text">
+              <p className="mt-1.5 line-clamp-2 font-display text-[18px] font-semibold tracking-tight break-words text-text">
                 {playing.alert.title}
               </p>
               {playing.alert.body && (
-                <p className="mt-0.5 line-clamp-2 text-[13px] break-words text-text-2">
+                <p className="mt-0.5 line-clamp-2 text-[14px] break-words text-text-2">
                   {playing.alert.body}
                 </p>
               )}
@@ -226,11 +226,11 @@ export function QueuePanel({ className }: { className?: string }) {
                   className="group flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-surface-2"
                 >
                   <PlatformMark platform={w.alert.platform} size={13} />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-text-2">
+                  <span className="min-w-0 flex-1 truncate text-[14.5px] text-text-2">
                     {w.alert.title}
                   </span>
                   {w.priority > 0 && (
-                    <span className="text-[11px] font-semibold text-tips">priority</span>
+                    <span className="text-[12px] font-semibold text-tips">priority</span>
                   )}
                   <IconButton
                     size="sm"
@@ -246,7 +246,7 @@ export function QueuePanel({ className }: { className?: string }) {
               ))}
             </AnimatePresence>
             {waiting.length > 6 && (
-              <li className="px-2 text-[12.5px] text-text-3">and {waiting.length - 6} more</li>
+              <li className="px-2 text-[13.5px] text-text-3">and {waiting.length - 6} more</li>
             )}
           </ol>
         )}
@@ -295,11 +295,11 @@ export function TtsApprovals() {
       className="rounded-panel border border-warn/30 bg-surface-1 shadow-1"
     >
       <header className="flex items-center justify-between px-4 pt-3 sm:px-5">
-        <h2 id="tts-title" className="font-display text-[15px] font-semibold tracking-tight">
+        <h2 id="tts-title" className="font-display text-[18px] font-extrabold tracking-tight">
           Read aloud?{' '}
-          <span className="ml-1 font-mono text-[12px] font-medium text-text-3">{tts.length}</span>
+          <span className="ml-1 font-mono text-[13px] font-medium text-text-3">{tts.length}</span>
         </h2>
-        <p className="text-[12.5px] text-text-3">Nothing is read until you approve it.</p>
+        <p className="text-[13.5px] text-text-3">Nothing is read until you approve it.</p>
       </header>
       <ul className="flex flex-col gap-2 px-4 pt-3 pb-4 sm:px-5">
         <AnimatePresence initial={false}>
@@ -311,7 +311,7 @@ export function TtsApprovals() {
               className="flex flex-col gap-2 rounded-[12px] border border-line bg-surface-2 p-3 sm:flex-row sm:items-center"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] text-text-3">
+                <p className="text-[13.5px] text-text-3">
                   <span className="font-semibold text-text-2">{t.name}</span>
                   {t.amount && <> · {t.amount}</>} · {PLATFORM_LABEL[t.platform]}
                 </p>

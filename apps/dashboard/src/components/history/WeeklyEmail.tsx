@@ -53,7 +53,7 @@ function Heading({
           {title}
         </p>
         {children ? (
-          <div className="mt-1 text-[15px] leading-relaxed text-text-2">{children}</div>
+          <div className="mt-1 text-[16px] leading-relaxed text-text-2">{children}</div>
         ) : null}
       </div>
     </div>
@@ -263,7 +263,7 @@ export function WeeklyEmail() {
             We sent a link to <Hint hint={v.address_hint} />. Open it and press Confirm.
           </p>
           {v.expires_at ? (
-            <p className="text-[13.5px] text-text-3">
+            <p className="text-[14.5px] text-text-3">
               {linkExpired
                 ? 'That link has expired. Send it again for a new one.'
                 : `Works until ${shortDate(v.expires_at)}, ${shortTime(v.expires_at)}. Not there? Look in spam.`}
@@ -300,7 +300,7 @@ export function WeeklyEmail() {
           title="Emails paused"
         >
           <p>{pausedText(v).line}</p>
-          <p className="text-[13.5px] text-text-3">{pausedText(v).next}</p>
+          <p className="text-[14.5px] text-text-3">{pausedText(v).next}</p>
         </Heading>
         <InlineProblem problem={problem} />
         <div className="flex flex-wrap gap-2">
@@ -321,7 +321,7 @@ export function WeeklyEmail() {
             Every {when?.weekday ?? v.day} to <Hint hint={v.address_hint} />.
           </p>
           {v.next_at ? (
-            <p className="text-[13.5px] text-text-3">
+            <p className="text-[14.5px] text-text-3">
               {v.next_at <= now
                 ? 'This week’s is on its way.'
                 : `Next one ${shortDate(v.next_at)}, ${shortTime(v.next_at)}.`}{' '}
@@ -331,7 +331,7 @@ export function WeeklyEmail() {
         </Heading>
         {v.pending_hint ? (
           <div
-            className="rounded-panel border border-line p-3 text-[14px] leading-relaxed text-text-2 sm:max-w-[520px]"
+            className="rounded-panel border border-line p-3 text-[15px] leading-relaxed text-text-2 sm:max-w-[520px]"
             data-testid="weekly-email-waiting"
           >
             <p>
@@ -340,7 +340,7 @@ export function WeeklyEmail() {
                 ? 'Its link has expired.'
                 : 'Open the link we sent there and press Confirm.'}
             </p>
-            <p className="text-[13px] text-text-3">
+            <p className="text-[14px] text-text-3">
               Until then, reports keep going to <Hint hint={v.address_hint} />.
             </p>
             {typed.current ? (
@@ -379,7 +379,9 @@ export function WeeklyEmail() {
       aria-label="Weekly email"
       id="weekly-email"
     >
-      <h3 className="font-display text-[15px] font-bold tracking-tight text-text">Weekly email</h3>
+      <h3 className="font-display text-[18px] font-extrabold tracking-tight text-text">
+        Weekly email
+      </h3>
       {body}
     </section>
   )
@@ -393,7 +395,7 @@ function InlineProblem({ problem }: { problem: Problem | null }) {
       className="rounded-panel border border-danger/30 bg-danger-soft p-3 sm:max-w-[520px]"
     >
       <p className="text-sm font-semibold text-text">{problem.message}</p>
-      {problem.hint ? <p className="mt-0.5 text-[13px] text-text-2">{problem.hint}</p> : null}
+      {problem.hint ? <p className="mt-0.5 text-[14px] text-text-2">{problem.hint}</p> : null}
     </div>
   )
 }

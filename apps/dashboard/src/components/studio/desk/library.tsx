@@ -205,7 +205,7 @@ export function LibraryBar() {
             busy={busy === `switch:${kind}`}
             disabled={!shelf}
             onClick={(e) => shelf && open(e, WORDS[kind].one, items(kind, shelf))}
-            className="h-10 max-w-[220px]"
+            className="h-10 max-w-[170px] 2xl:max-w-[240px]"
           >
             <Icon size={16} weight="bold" className="shrink-0 text-accent-text" aria-hidden />
             <span className="min-w-0 truncate">{name}</span>
@@ -276,7 +276,7 @@ export function LibraryBar() {
             placeholder="Name"
             value={naming?.value ?? ''}
             onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
-            className={cx('text-[15px]')}
+            className={cx('text-[16px]')}
           />
         </form>
       </Dialog>

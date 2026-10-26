@@ -50,7 +50,7 @@ export function Plans() {
             <h1 className="font-display text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em] text-text">
               Ferrocast Pro
             </h1>
-            <p className="mt-1.5 text-[14.5px] text-pretty text-text-2">
+            <p className="mt-1.5 text-[15.5px] text-pretty text-text-2">
               Pro pays for the parts that run on our servers. Everything free stays free, for good.
             </p>
           </div>
@@ -62,8 +62,8 @@ export function Plans() {
               className="grid grid-cols-[auto_1fr] content-start gap-x-3 gap-y-0.5 rounded-[12px] border border-line bg-surface-1 p-3.5"
             >
               <I size={20} className="row-span-2 mt-px text-accent-text" aria-hidden />
-              <b className="text-[14px] font-semibold text-text">{title}</b>
-              <span className="text-[13px] text-text-2">{text}</span>
+              <b className="text-[15px] font-semibold text-text">{title}</b>
+              <span className="text-[14px] text-text-2">{text}</span>
             </li>
           ))}
         </ul>
@@ -78,7 +78,7 @@ export function Plans() {
           webPrices ? (
             <Choose prices={webPrices} was={{}} note={null} code={null} web />
           ) : webErr ? (
-            <p role="alert" className="text-[14px] text-text-2">
+            <p role="alert" className="text-[15px] text-text-2">
               Prices didn’t load. Reload the page in a moment.
             </p>
           ) : (
@@ -97,11 +97,11 @@ export function Plans() {
 function HavePro() {
   return (
     <div className="flex flex-col gap-3">
-      <p id="plans-choose" className="flex items-center gap-2 text-[15px] font-semibold text-text">
+      <p id="plans-choose" className="flex items-center gap-2 text-[16px] font-semibold text-text">
         <CheckCircle size={20} weight="fill" className="text-ok" aria-hidden />
         You have Pro
       </p>
-      <p className="text-[13.5px] text-text-2">
+      <p className="text-[14.5px] text-text-2">
         Your plan, renewal and receipts are on your Account page.
       </p>
       <a
@@ -120,10 +120,10 @@ function AppChoose({ p }: { p: ProView }) {
   if (!buy)
     return (
       <div className="flex flex-col gap-3">
-        <p id="plans-choose" className="text-[15px] font-semibold text-text">
+        <p id="plans-choose" className="text-[16px] font-semibold text-text">
           Choose a plan
         </p>
-        <p className="text-[13.5px] text-text-2">
+        <p className="text-[14.5px] text-text-2">
           {p.launch_note || 'Pro isn’t on sale right now. Everything free keeps working.'}
         </p>
         <hr className="my-1 border-line" />
@@ -214,7 +214,7 @@ function Choose({
 
   return (
     <>
-      <p id="plans-choose" className="text-[15px] font-semibold text-text">
+      <p id="plans-choose" className="text-[16px] font-semibold text-text">
         Choose a plan
       </p>
       <div role="radiogroup" aria-labelledby="plans-choose" className="flex flex-col gap-3">
@@ -238,11 +238,11 @@ function Choose({
                 onChange={() => setPlan(k)}
                 className="sr-only"
               />
-              <span className="flex items-center justify-between gap-2 text-[13.5px] font-semibold text-text-2">
+              <span className="flex items-center justify-between gap-2 text-[14.5px] font-semibold text-text-2">
                 <span className="flex items-center gap-2">
                   {c.name}
                   {c.save && (
-                    <span className="rounded-full bg-ok-soft px-[7px] py-1 font-mono text-[11px] leading-none font-semibold text-ok">
+                    <span className="rounded-full bg-ok-soft px-[7px] py-1 font-mono text-[12px] leading-none font-semibold text-ok">
                       {c.save}
                     </span>
                   )}
@@ -263,16 +263,16 @@ function Choose({
                   </s>
                 )}
                 {c.price}
-                <small className="ml-1 font-sans text-[14px] font-medium tracking-normal text-text-3">
+                <small className="ml-1 font-sans text-[15px] font-medium tracking-normal text-text-3">
                   {c.per}
                 </small>
               </span>
-              <span className="text-[13px] text-text-3">{c.sub}</span>
+              <span className="text-[14px] text-text-3">{c.sub}</span>
             </label>
           )
         })}
       </div>
-      {note && <p className="text-[13px] text-ok">{note}</p>}
+      {note && <p className="text-[14px] text-ok">{note}</p>}
       <Button
         variant="primary"
         size="lg"
@@ -284,11 +284,11 @@ function Choose({
         <ArrowSquareOut size={16} aria-hidden />
       </Button>
       {waiting ? (
-        <p role="status" className="text-[13px] text-text-2">
+        <p role="status" className="text-[14px] text-text-2">
           Finish paying in your browser. Pro turns on here by itself once it’s done.
         </p>
       ) : (
-        <p className="flex items-start gap-2 text-[13px] text-text-3">
+        <p className="flex items-start gap-2 text-[14px] text-text-3">
           <Browser size={16} className="mt-0.5 shrink-0" aria-hidden />
           <span>
             Payment opens in your browser. Pro turns on here by itself once it’s done.

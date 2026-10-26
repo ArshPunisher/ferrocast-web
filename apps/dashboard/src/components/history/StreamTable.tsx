@@ -54,7 +54,7 @@ export function StreamTable({
       >
         <table className="w-full min-w-[780px] border-collapse text-sm" data-testid="history-table">
           <thead>
-            <tr className="border-b border-line text-left text-[12.5px] text-text-3">
+            <tr className="border-b border-line text-left text-[13.5px] text-text-3">
               <th scope="col" className="sticky left-0 z-[1] bg-surface-1 px-3 py-2 font-medium">
                 Stream
               </th>
@@ -118,7 +118,7 @@ export function StreamTable({
                           {s.title ? tameText(s.title) : PLATFORM_LABEL[s.platform]}
                         </span>
                       )}
-                      <span className="block truncate text-[12.5px] text-text-3">
+                      <span className="block truncate text-[13.5px] text-text-3">
                         {when(s.started_at)}
                         {s.category ? ` · ${tameText(s.category)}` : ''}
                       </span>

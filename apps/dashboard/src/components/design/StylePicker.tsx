@@ -15,7 +15,7 @@ export function StylePicker({ ev, look, set }: { ev: EventKey; look: AlertLook; 
   if (!builtins.length) return null
   return (
     <div role="group" aria-label="Start from a style" className="flex flex-col gap-2">
-      <span className="text-[13px] font-medium text-text-2">Start from a style</span>
+      <span className="text-[14px] font-medium text-text-2">Start from a style</span>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {builtins.map((d) => (
           <StyleTile key={d.id} design={d} ev={ev} current={look} onPick={(l) => set(l)} />
@@ -56,7 +56,7 @@ function StyleTile({
         onPick({ ...structuredClone(rest), media: current.media.ref ? current.media : rest.media })
       }}
       className={cx(
-        'fc-press flex flex-col gap-1.5 rounded-[12px] border p-1.5 text-left text-[13px] font-semibold text-text',
+        'fc-press flex flex-col gap-1.5 rounded-[12px] border p-1.5 text-left text-[14px] font-semibold text-text',
         on
           ? 'border-accent-line bg-accent-soft'
           : 'border-line bg-surface-2 hover:border-line-strong',

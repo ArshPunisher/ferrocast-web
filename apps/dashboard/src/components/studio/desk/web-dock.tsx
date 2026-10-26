@@ -200,7 +200,7 @@ export function WebDockPanel({ dock }: { dock: WebDock }) {
       />
       {problem ? (
         // Only reachable through a hand-edited saved layout: never framed.
-        <p role="alert" className="m-0 p-3 text-[13.5px] text-danger">
+        <p role="alert" className="m-0 p-3 text-[14.5px] text-danger">
           {problem}
         </p>
       ) : (

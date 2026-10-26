@@ -131,7 +131,7 @@ function NewGoal({ onCreated, onCancel }: { onCreated: (g: Goal) => void; onCanc
         )}
       </div>
       {err && !['title', 'target', 'currency'].includes(err.field ?? '') && (
-        <p role="alert" className="text-[13.5px] text-danger">
+        <p role="alert" className="text-[14.5px] text-danger">
           {err.message}
         </p>
       )}
@@ -170,12 +170,12 @@ function GoalRow({
           <p id={id} dir="auto" className="text-sm font-semibold break-words text-text">
             {tameText(g.title)}
           </p>
-          <p className="text-[12.5px] text-text-3">
+          <p className="text-[13.5px] text-text-3">
             {label}
             {g.kind === 'tips' && g.currency ? ` in ${g.currency}` : ''}
           </p>
         </div>
-        <p className="shrink-0 font-mono text-[13.5px] text-text-2 tabular-nums">
+        <p className="shrink-0 font-mono text-[14.5px] text-text-2 tabular-nums">
           {amount(g, g.current)} <span className="text-text-3">of {amount(g, g.target)}</span>
         </p>
       </div>

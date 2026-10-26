@@ -96,7 +96,7 @@ export function OverlayEditor({ id }: { id: string }) {
         >
           <CaretLeft size={18} />
         </a>
-        <h1 className="mr-auto min-w-0 truncate font-display text-2xl font-bold tracking-tight">
+        <h1 className="mr-auto min-w-0 truncate font-display text-2xl font-extrabold tracking-tight">
           {draft.name}
         </h1>
         <IconButton size="sm" label="Undo" disabled={!history.canUndo} onClick={history.undo}>
@@ -127,7 +127,7 @@ export function OverlayEditor({ id }: { id: string }) {
       </div>
       <SecretUrl url={draft.url} className="max-w-xl" />
       {brandLocked && (
-        <p className="text-[13px] text-text-3">
+        <p className="text-[14px] text-text-3">
           Made from a built-in design: it keeps a small Ferrocast mark. Duplicate the design in
           Designs to make an unbranded copy.
         </p>
@@ -152,7 +152,7 @@ export function OverlayEditor({ id }: { id: string }) {
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
             className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-4"
           >
-            <p className="min-w-0 flex-1 text-[13px] text-text-2">
+            <p className="min-w-0 flex-1 text-[14px] text-text-2">
               Unsaved layout. OBS keeps the old one until you save.
             </p>
             <Button size="sm" variant="ghost" onClick={() => ov.data && setDraft(ov.data)}>

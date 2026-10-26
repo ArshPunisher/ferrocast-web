@@ -23,7 +23,7 @@ export function OptionsForm({ opts, values, onChange, disabled }: FormProps) {
   const isFile = (o: EngineOption) =>
     o.kind === 'path' || (o.kind === 'editable_list' && o.path === 'files')
   const shown = opts.filter((o) => o.visible).sort((a, b) => Number(isFile(b)) - Number(isFile(a)))
-  if (shown.length === 0) return <p className="text-[13px] text-text-3">No options.</p>
+  if (shown.length === 0) return <p className="text-[14px] text-text-3">No options.</p>
   return (
     <div className="flex flex-col gap-3">
       {shown.map((o) => (
@@ -110,7 +110,7 @@ function OptionField({
       const on = !o.checkable || v === true
       return (
         <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
-          <legend className="px-1 text-[13px] font-semibold">
+          <legend className="px-1 text-[14px] font-semibold">
             {o.checkable ? (
               <Switch label={label} checked={on} onChange={set} disabled={off} />
             ) : (
@@ -151,7 +151,7 @@ function OptionField({
               if (Number.isFinite(n)) set(round(n))
             }}
           />
-          {unit && <span className="shrink-0 text-[13px] text-text-3">{unit}</span>}
+          {unit && <span className="shrink-0 text-[14px] text-text-3">{unit}</span>}
         </div>
       )
       if (!o.slider || o.min === null || o.max === null)
@@ -340,16 +340,16 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
   const name = (v: string) => (files ? (v.split(/[\\/]/).pop() ?? v) : v)
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1.5 text-[13px] font-semibold text-text">{label}</legend>
-      {hint && <p className="m-0 text-[12.5px] text-text-3">{hint}</p>}
+      <legend className="mb-1.5 text-[14px] font-semibold text-text">{label}</legend>
+      {hint && <p className="m-0 text-[13.5px] text-text-3">{hint}</p>}
       {list.length > 0 ? (
         <ol className="m-0 flex list-none flex-col divide-y divide-line rounded-control border border-line p-0">
           {list.map((e, i) => (
             <li key={`${i}-${e.value}`} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
-              <span className="w-5 shrink-0 text-right text-[12px] font-semibold text-text-3 tabular-nums">
+              <span className="w-5 shrink-0 text-right text-[13px] font-semibold text-text-3 tabular-nums">
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium" title={e.value}>
+              <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium" title={e.value}>
                 {name(e.value)}
               </span>
               <IconButton
@@ -364,7 +364,7 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
           ))}
         </ol>
       ) : (
-        <p className="m-0 rounded-control border border-dashed border-line px-3 py-4 text-center text-[13px] font-medium text-text-3">
+        <p className="m-0 rounded-control border border-dashed border-line px-3 py-4 text-center text-[14px] font-medium text-text-3">
           {files ? 'No files yet.' : 'Nothing yet.'}
         </p>
       )}

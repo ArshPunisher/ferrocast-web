@@ -283,7 +283,7 @@ export function Meter({
     <div
       aria-hidden
       className={cx(
-        'pointer-events-none relative font-mono text-[9.5px] font-semibold text-text-3 tabular-nums',
+        'pointer-events-none relative font-mono text-[10.5px] font-semibold text-text-3 tabular-nums',
         vertical ? 'h-full w-5' : 'h-3 w-full',
       )}
     >
@@ -453,7 +453,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         a.muted && 'bg-danger-soft/40',
       )}
     >
-      <div className="flex items-center gap-2 text-[13.5px]">
+      <div className="flex items-center gap-2 text-[14.5px]">
         <KindTile kind={a.kind} size={26} dim={a.muted} />
         <span
           className={cx('min-w-0 flex-1 truncate font-bold', a.muted ? 'text-text-3' : 'text-text')}
@@ -461,7 +461,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
           {a.name}
         </span>
         {a.channel !== null && (
-          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent-text">
+          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-bold text-accent-text">
             Everywhere
           </span>
         )}
@@ -470,7 +470,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         )}
         <span
           className={cx(
-            'w-[68px] shrink-0 text-right font-mono text-[12.5px] font-bold tabular-nums',
+            'w-[68px] shrink-0 text-right font-mono text-[13.5px] font-bold tabular-nums',
             a.muted ? 'text-danger' : 'text-text',
           )}
         >
@@ -512,7 +512,7 @@ function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
       <KindTile kind={a.kind} size={26} dim={a.muted} />
       <span
         className={cx(
-          'w-full truncate text-center text-[12.5px] font-bold',
+          'w-full truncate text-center text-[13.5px] font-bold',
           a.muted ? 'text-text-3' : 'text-text',
         )}
         title={a.name}
@@ -521,14 +521,14 @@ function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
       </span>
       <span
         className={cx(
-          'font-mono text-[11.5px] font-bold tabular-nums',
+          'font-mono text-[12.5px] font-bold tabular-nums',
           a.muted ? 'text-danger' : 'text-text-2',
         )}
       >
         {a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : a.volume_db.toFixed(1)}
       </span>
       {a.channel !== null && (
-        <span className="rounded-full bg-accent-soft px-1.5 py-px text-[10.5px] font-bold text-accent-text">
+        <span className="rounded-full bg-accent-soft px-1.5 py-px text-[11.5px] font-bold text-accent-text">
           Everywhere
         </span>
       )}
@@ -737,7 +737,7 @@ export function AudioDock() {
         ) : !list || !shown ? (
           <Skeleton className="h-28" />
         ) : shown.length === 0 ? (
-          <p className="m-0 p-2.5 text-[13.5px] font-medium text-text-2">
+          <p className="m-0 p-2.5 text-[14.5px] font-medium text-text-2">
             {list.length > 0 ? 'Every sound here is hidden.' : 'No sound here yet.'}
           </p>
         ) : prefs.vertical ? (

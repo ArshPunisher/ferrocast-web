@@ -66,7 +66,7 @@ export function TipPreview({
         </p>
         {message && (
           <p
-            className="mx-auto mt-1.5 max-w-[34ch] text-[13.5px] break-words"
+            className="mx-auto mt-1.5 max-w-[34ch] text-[14.5px] break-words"
             style={{ color: p.muted }}
           >
             {message}
@@ -77,17 +77,17 @@ export function TipPreview({
             buttons.map((b) => (
               <span
                 key={b.label}
-                className="flex items-center justify-between rounded-[12px] border px-4 py-3 text-left text-[13.5px] font-semibold"
+                className="flex items-center justify-between rounded-[12px] border px-4 py-3 text-left text-[14.5px] font-semibold"
                 style={{ background: p.surface, borderColor: p.line }}
               >
                 {b.label}
-                <span className="text-[12.5px] font-normal" style={{ color: p.muted }}>
+                <span className="text-[13.5px] font-normal" style={{ color: p.muted }}>
                   {b.hint}
                 </span>
               </span>
             ))
           ) : (
-            <span className="text-[13.5px]" style={{ color: p.muted }}>
+            <span className="text-[14.5px]" style={{ color: p.muted }}>
               Tips aren’t set up yet.
             </span>
           )}
@@ -97,7 +97,7 @@ export function TipPreview({
             className="mt-3 rounded-[12px] border px-4 py-3 text-left"
             style={{ background: p.surface, borderColor: p.line }}
           >
-            <p className="flex flex-wrap justify-between gap-x-3 text-[13.5px] font-semibold">
+            <p className="flex flex-wrap justify-between gap-x-3 text-[14.5px] font-semibold">
               <span className="min-w-0 break-words">{goal.title}</span>
               <span className="font-normal" style={{ color: p.muted }}>
                 {goal.raised} of {goal.target}
@@ -114,7 +114,7 @@ export function TipPreview({
             </div>
           </div>
         )}
-        <p className="mx-auto mt-5 max-w-[36ch] text-[12.5px]" style={{ color: p.muted }}>
+        <p className="mx-auto mt-5 max-w-[36ch] text-[13.5px]" style={{ color: p.muted }}>
           Your name and message can show on stream. Payments go straight to the streamer through the
           provider you pick.
         </p>

@@ -42,7 +42,7 @@ export function CloudSyncSettings() {
         ) : (
           <div className="flex flex-col gap-4">
             {!v.signed_in && (
-              <p className="flex items-start gap-2 rounded-control bg-surface-2 px-3 py-2.5 text-[13.5px] text-text-2">
+              <p className="flex items-start gap-2 rounded-control bg-surface-2 px-3 py-2.5 text-[14.5px] text-text-2">
                 <CloudArrowUp
                   size={17}
                   className="mt-0.5 shrink-0 text-accent-text"
@@ -82,7 +82,7 @@ export function CloudSyncSettings() {
             />
             {v.sync && (
               <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
-                <p className="min-w-0 flex-1 text-[13px] text-text-3" aria-live="polite">
+                <p className="min-w-0 flex-1 text-[14px] text-text-3" aria-live="polite">
                   {v.last_sync_at
                     ? `Last synced ${relativeTime(v.last_sync_at)}. ${v.synced} item${v.synced === 1 ? '' : 's'} in sync.`
                     : 'Not synced yet.'}
@@ -103,14 +103,14 @@ export function CloudSyncSettings() {
                 role="alert"
                 className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5"
               >
-                <p className="text-[13.5px] font-semibold text-text">{v.error.message}</p>
-                <p className="text-[13px] text-text-2">{v.error.hint}</p>
+                <p className="text-[14.5px] font-semibold text-text">{v.error.message}</p>
+                <p className="text-[14px] text-text-2">{v.error.hint}</p>
               </div>
             )}
             {v.notes.length > 0 && (
               <div>
-                <p className="text-[13px] font-semibold text-text">Replaced by the web</p>
-                <ul className="mt-1 flex flex-col gap-1 text-[13px] text-text-2">
+                <p className="text-[14px] font-semibold text-text">Replaced by the web</p>
+                <ul className="mt-1 flex flex-col gap-1 text-[14px] text-text-2">
                   {v.notes.slice(0, 5).map((n, i) => (
                     <li key={`${i}-${n}`}>{n}</li>
                   ))}

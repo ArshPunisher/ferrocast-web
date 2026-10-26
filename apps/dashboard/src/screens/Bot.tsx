@@ -101,7 +101,7 @@ function CommandDialog({
       footer={
         <>
           {err && !err.field && (
-            <p role="alert" className="mr-auto text-[13.5px] text-danger">
+            <p role="alert" className="mr-auto text-[14.5px] text-danger">
               {err.message}
             </p>
           )}
@@ -159,14 +159,14 @@ function CommandDialog({
         {placeholder && (
           <p
             role="status"
-            className="rounded-control border border-warn/50 bg-warn-soft px-3 py-2 text-[13.5px] text-text-2"
+            className="rounded-control border border-warn/50 bg-warn-soft px-3 py-2 text-[14.5px] text-text-2"
           >
             Replace this reply with your links, like “Twitter: x.com/you · Discord: discord.gg/you”.{' '}
             {c.name} stays off until you do, so viewers never see this text.
           </p>
         )}
         {switchesOn && (
-          <p role="status" className="text-[13.5px] text-text-3">
+          <p role="status" className="text-[14.5px] text-text-3">
             {c.name} switches on when you save.
           </p>
         )}
@@ -271,7 +271,7 @@ function TimerDialog({
       footer={
         <>
           {err && !err.field && (
-            <p role="alert" className="mr-auto text-[13.5px] text-danger">
+            <p role="alert" className="mr-auto text-[14.5px] text-danger">
               {err.message}
             </p>
           )}
@@ -448,9 +448,11 @@ export function Bot() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-semibold text-text">{c.name}</span>
+                      <span className="font-mono text-[15.5px] font-bold text-accent-text">
+                        {c.name}
+                      </span>
                       {c.aliases.map((a) => (
-                        <span key={a} className="font-mono text-[12.5px] text-text-3">
+                        <span key={a} className="font-mono text-[13.5px] text-text-3">
                           {a}
                         </span>
                       ))}
@@ -459,7 +461,7 @@ export function Bot() {
                         <Badge tone="warn">Add your links</Badge>
                       )}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[13.5px] break-words text-text-3">
+                    <p className="mt-0.5 line-clamp-2 text-[14.5px] break-words text-text-3">
                       {c.response}
                     </p>
                   </div>
@@ -559,7 +561,7 @@ export function Bot() {
                     <span className="block text-sm font-semibold text-text">
                       {t.name || 'Timer'}
                     </span>
-                    <span className="mt-0.5 block text-[13px] text-text-3">
+                    <span className="mt-0.5 block text-[14px] text-text-3">
                       Every {t.every_min} min · after{' '}
                       {plural(t.min_chat_lines, 'message', 'messages')}
                     </span>

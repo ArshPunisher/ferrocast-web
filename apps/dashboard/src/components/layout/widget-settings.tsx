@@ -168,7 +168,7 @@ function PlatformChecks({
               onChange(next.length ? next : [p])
             }}
             className={cx(
-              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium',
+              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14px] font-medium',
               on ? 'border-accent-line bg-accent-soft text-text' : 'border-line text-text-3',
             )}
           >
@@ -326,7 +326,7 @@ export function WidgetSettings({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-[15px] font-semibold">{kindInfo(w.kind).label}</h3>
+        <h3 className="font-display text-[18px] font-extrabold">{kindInfo(w.kind).label}</h3>
         <IconButton size="sm" variant="danger-ghost" label="Remove widget" onClick={onRemove}>
           <Trash size={16} />
         </IconButton>
@@ -488,7 +488,7 @@ export function WidgetSettings({
         </>
       )}
       <details className="rounded-[12px] border border-line">
-        <summary className="cursor-pointer list-none px-3 py-2.5 text-[13.5px] font-semibold text-text-2 hover:text-text">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-text-2 hover:text-text">
           Exact position
         </summary>
         <div className="grid grid-cols-4 gap-2 px-3 pb-3">

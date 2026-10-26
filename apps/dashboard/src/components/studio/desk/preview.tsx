@@ -126,7 +126,7 @@ export function PreviewBox({ running }: { running: boolean }) {
   }, [api, running, desktop, studio])
   const editing = useStageEdit(ref, running && desktop)
   const screen =
-    'grid aspect-video touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent'
+    'grid aspect-video touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent'
   if (!studio)
     // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
     return (
@@ -146,7 +146,7 @@ export function PreviewBox({ running }: { running: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center gap-3 bg-inset p-3 [container-type:size]">
       <figure className="m-0 flex flex-col gap-1.5">
-        <figcaption className="flex items-center gap-1.5 text-[12px] font-bold text-text-2">
+        <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-text-2">
           <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
           Preview: {scenes.data?.preview}
         </figcaption>
@@ -161,7 +161,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       </figure>
       <SwitchColumn />
       <figure className="m-0 flex flex-col gap-1.5">
-        <figcaption className="flex items-center gap-1.5 text-[12px] font-bold text-danger">
+        <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-danger">
           <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
           On air: {scenes.data?.current}
         </figcaption>
@@ -277,7 +277,7 @@ function SwitchColumn() {
             Drag the bar to mix by hand; let go near the end to finish, near the start to go back.
           </InfoTip>
         </div>
-        <span className="mt-1 text-center text-[11px] font-bold tracking-wide text-text-3 uppercase">
+        <span className="mt-1 text-center text-[12px] font-bold tracking-wide text-text-3 uppercase">
           Quick
         </span>
         {quick.map((q, i) => (
@@ -676,7 +676,7 @@ export function StageOff({
     <div className="grid min-h-0 flex-1 place-items-center bg-[#0a0b0d] p-6 text-center">
       {available ? (
         <div className="flex flex-col items-center gap-3">
-          <p className="m-0 max-w-[36ch] text-[14px] text-[#c3c8d1]">
+          <p className="m-0 max-w-[36ch] text-[15px] text-[#c3c8d1]">
             Your scenes come back where you left them.
           </p>
           <Button
@@ -692,7 +692,7 @@ export function StageOff({
           </Button>
         </div>
       ) : (
-        <p className="m-0 max-w-[48ch] text-[14px] text-[#c3c8d1]">{detail}</p>
+        <p className="m-0 max-w-[48ch] text-[15px] text-[#c3c8d1]">{detail}</p>
       )}
     </div>
   )
@@ -793,14 +793,14 @@ export function StageBar() {
     if (ok) scenes.reload()
   }
   return (
-    <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-surface-1 px-3 py-2 text-[13px] text-text-3">
-      <span className="font-display text-[15px] font-bold text-text">{scene}</span>
+    <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-surface-1 px-3 py-2 text-[14px] text-text-3">
+      <span className="font-display text-[16px] font-bold text-text">{scene}</span>
       {c && (
         <button
           type="button"
           title="Change the picture size"
           onClick={() => openSettings('picture')}
-          className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[11.5px] font-semibold text-text-2 tabular-nums hover:text-text"
+          className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text"
         >
           {c.width}×{c.height} · {c.fps}&nbsp;fps
         </button>
@@ -813,7 +813,7 @@ export function StageBar() {
           </label>
           <Select
             id="studio-transition"
-            className="h-8! w-auto! py-0! text-[13px]"
+            className="h-8! w-auto! py-0! text-[14px]"
             value={t.kind}
             onChange={(e) => void set(e.target.value, t.ms)}
           >
@@ -842,7 +842,7 @@ export function StageBar() {
                 min={0}
                 max={20000}
                 step={50}
-                className="h-8! w-20! py-0! text-right text-[13px] tabular-nums"
+                className="h-8! w-20! py-0! text-right text-[14px] tabular-nums"
                 value={ms ?? t.ms}
                 onChange={(e) =>
                   setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)

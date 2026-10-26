@@ -51,7 +51,7 @@ export function HeldPanel() {
                       </span>
                       <MessageText event={event} />
                     </p>
-                    <p className="mt-0.5 text-[12.5px] text-text-3">{reason}</p>
+                    <p className="mt-0.5 text-[13.5px] text-text-3">{reason}</p>
                   </div>
                 </div>
                 <HeldButtons

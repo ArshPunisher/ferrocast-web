@@ -11,6 +11,7 @@ export function Panel({
   id,
   as: Tag = 'section',
   description,
+  scrolls,
 }: {
   title?: ReactNode
   actions?: ReactNode
@@ -20,6 +21,8 @@ export function Panel({
   id?: string
   as?: 'section' | 'div'
   description?: ReactNode
+  /** The body scrolls inside the panel: it takes keyboard focus so arrows can scroll it. */
+  scrolls?: boolean
 }) {
   const headingId = id ? `${id}-title` : undefined
   return (
@@ -37,7 +40,7 @@ export function Panel({
             {title && (
               <h2
                 id={headingId}
-                className="truncate font-display text-base font-bold tracking-tight text-text"
+                className="truncate font-display text-[18px] font-extrabold tracking-tight text-text"
               >
                 {title}
               </h2>
@@ -53,6 +56,7 @@ export function Panel({
           title || actions ? 'pt-2' : 'pt-4',
           bodyClassName,
         )}
+        {...(scrolls && { tabIndex: 0 })}
       >
         {children}
       </div>
@@ -72,7 +76,7 @@ export function PageHeader({
   return (
     <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
       <div className="flex min-w-0 items-center gap-1.5">
-        <h1 className="font-display text-2xl font-bold tracking-[-0.025em] text-balance text-text sm:text-[28px]">
+        <h1 className="font-display text-[26px] font-extrabold tracking-[-0.025em] text-balance text-text sm:text-[32px]">
           {title}
         </h1>
         {description && <InfoTip>{description}</InfoTip>}
@@ -93,11 +97,11 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry: () => v
       className="flex flex-col items-start gap-2 rounded-panel border border-danger/30 bg-danger-soft p-4"
     >
       <p className="text-sm font-semibold text-text">{msg}</p>
-      <p className="text-[13px] text-text-2">{hint}</p>
+      <p className="text-[14px] text-text-2">{hint}</p>
       <button
         type="button"
         onClick={onRetry}
-        className="fc-press mt-1 rounded-control border border-line-strong bg-surface-2 px-3 py-1.5 text-[13px] font-semibold text-text hover:border-text-3"
+        className="fc-press mt-1 rounded-control border border-line-strong bg-surface-2 px-3 py-1.5 text-[14px] font-semibold text-text hover:border-text-3"
       >
         Try again
       </button>

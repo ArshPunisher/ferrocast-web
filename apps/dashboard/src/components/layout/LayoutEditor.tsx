@@ -451,7 +451,7 @@ function Canvas({
             {(!preview || sel) && (
               <span
                 className={cx(
-                  'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[12px] font-semibold',
+                  'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
                   sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                 )}
               >
@@ -544,7 +544,7 @@ function LayersPanel({
               onClick={() => onSelect(w.id)}
               aria-pressed={w.id === selected}
               className={cx(
-                'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-[14px] font-semibold',
+                'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-[15px] font-semibold',
                 w.id === selected ? 'text-accent-text' : 'text-text',
                 w.hidden && 'opacity-55',
               )}
@@ -1031,7 +1031,7 @@ function LayerSettings({
         />
         <a
           href="#/settings/music"
-          className="text-[13px] font-semibold text-accent-text underline-offset-2 hover:underline"
+          className="text-[14px] font-semibold text-accent-text underline-offset-2 hover:underline"
         >
           Music settings
         </a>
@@ -1308,7 +1308,7 @@ function LayerSettings({
       </div>
     )
   return (
-    <p className="text-[13.5px] text-text-3">
+    <p className="text-[14.5px] text-text-3">
       Built-in designs keep this small Ferrocast mark. Duplicate the design in the gallery to make
       an unbranded copy.
     </p>
@@ -1449,7 +1449,7 @@ export function LayoutEditor({
   }
   const layers = (
     <section aria-label="Layers" className="flex flex-col gap-2">
-      <h2 className="font-display text-[15px] font-bold">Layers</h2>
+      <h2 className="font-display text-[18px] font-extrabold">Layers</h2>
       <LayersPanel
         layout={layout}
         selected={selected}
@@ -1576,7 +1576,7 @@ export function LayoutEditor({
                 const Icon = iconFor(sel)
                 return <Icon size={18} className="shrink-0 text-accent-text" aria-hidden="true" />
               })()}
-              <h2 className="min-w-0 flex-1 truncate font-display text-base font-bold">
+              <h2 className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold">
                 {layerName(sel)}
               </h2>
               {!lockedSel && (
@@ -1642,7 +1642,7 @@ export function LayoutEditor({
               !lockedSel ? (
                 <LayerSettings w={sel} onChange={update} media={media} />
               ) : (
-                <p className="text-[13.5px] text-text-2">
+                <p className="text-[14.5px] text-text-2">
                   Built-in designs keep this mark. Duplicate the design to remove it.
                 </p>
               )

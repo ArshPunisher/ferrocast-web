@@ -180,7 +180,7 @@ function Screens({
             </span>
             <span
               className={cx(
-                'truncate text-[12px] font-semibold',
+                'truncate text-[13px] font-semibold',
                 on ? 'text-text-2' : 'text-text-3',
               )}
             >
@@ -307,7 +307,7 @@ function PlanForm({
         <ModeSwitch screen="theme-obs" />
       </div>
       {switching && (
-        <p className="m-0 flex items-center gap-1.5 text-[13px] text-text-2">
+        <p className="m-0 flex items-center gap-1.5 text-[14px] text-text-2">
           <Swap size={15} aria-hidden className="text-accent-text" />
           Takes {data.applied?.design_name}’s place in OBS.
         </p>
@@ -331,7 +331,7 @@ function PlanForm({
         />
       )}
       {problem && (
-        <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+        <p role="alert" className="m-0 text-[14px] font-semibold text-danger">
           {problem.replace(/^[\w.]+:\s*/, '')}
         </p>
       )}
@@ -358,7 +358,7 @@ function Under({ plan }: { plan: ThemePlan }) {
   const under = plan.screens.filter((s) => s.under && s.place.kind !== 'skip')
   if (!under.length) return null
   return (
-    <p className="m-0 flex flex-wrap items-center gap-x-1 text-[13px] text-text-2">
+    <p className="m-0 flex flex-wrap items-center gap-x-1 text-[14px] text-text-2">
       Under them:
       {under.map((s, i) => (
         <span key={s.key}>
@@ -404,7 +404,7 @@ function Table({
   const ownScenes = data.obs_scenes.filter((n) => !n.startsWith(plan.prefix) || !plan.prefix)
   return (
     <div className="flex flex-col gap-3">
-      <div className="hidden grid-cols-[96px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2 font-mono text-[11px] text-text-3 sm:grid">
+      <div className="hidden grid-cols-[96px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2 font-mono text-[12px] text-text-3 sm:grid">
         <span>Screen</span>
         <span>In OBS</span>
         <span>Under it</span>
@@ -428,11 +428,11 @@ function Table({
               <span className="block w-20 overflow-hidden rounded-[6px] border border-line sm:w-full">
                 <ScenePreview design={design} sceneKey={s.key} lazy />
               </span>
-              <span className="text-[12px] font-semibold text-text-2">{s.name}</span>
+              <span className="text-[13px] font-semibold text-text-2">{s.name}</span>
             </div>
             <Select
               aria-label={`${s.name}: in OBS`}
-              className="h-9 text-[13px]"
+              className="h-9 text-[14px]"
               value={placeValue(p.place)}
               onChange={(e) => {
                 const place = fromValue(e.target.value)
@@ -457,7 +457,7 @@ function Table({
             </Select>
             <Select
               aria-label={`${s.name}: under it`}
-              className="h-9 text-[13px]"
+              className="h-9 text-[14px]"
               disabled={off}
               value={p.under ?? ''}
               onChange={(e) => setScreen(p.key, { under: e.target.value || null })}
@@ -476,7 +476,7 @@ function Table({
             </Select>
             <Select
               aria-label={`${s.name}: Start show uses it for`}
-              className="h-9 text-[13px]"
+              className="h-9 text-[14px]"
               disabled={off}
               value={p.role ?? ''}
               onChange={(e) =>
@@ -548,12 +548,12 @@ function OldWidgets({
   return (
     <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
       <legend className="sr-only">Hide old widgets</legend>
-      <div className="mb-1 flex items-center gap-1 text-[13.5px] font-semibold text-text">
+      <div className="mb-1 flex items-center gap-1 text-[14.5px] font-semibold text-text">
         <span aria-hidden>Hide old widgets</span>
         <InfoTip>Hidden, not deleted. Undo shows them again.</InfoTip>
       </div>
       {data.old_widgets.map((w) => (
-        <label key={w.source} className="flex items-center gap-2.5 text-[13.5px] text-text">
+        <label key={w.source} className="flex items-center gap-2.5 text-[14.5px] text-text">
           <input
             type="checkbox"
             className="size-4 accent-[var(--fc-arc)]"
@@ -568,7 +568,7 @@ function OldWidgets({
             }
           />
           {w.source}
-          <span className="ml-auto text-[12px] text-text-3">
+          <span className="ml-auto text-[13px] text-text-3">
             {w.vendor} · {w.scenes.join(', ')}
           </span>
         </label>
@@ -635,7 +635,7 @@ function ResultDialog({
     >
       <StepList steps={steps} />
       {applied && (
-        <p className="m-0 mt-3 text-[12.5px] text-text-3">
+        <p className="m-0 mt-3 text-[13.5px] text-text-3">
           {applied.screens.length} scenes · nothing of yours removed
         </p>
       )}
@@ -647,7 +647,7 @@ function StepList({ steps }: { steps: ShowStep[] }) {
   return (
     <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="What happened">
       {steps.map((s) => (
-        <li key={s.id} className="flex items-start gap-2.5 text-[13.5px]">
+        <li key={s.id} className="flex items-start gap-2.5 text-[14.5px]">
           <StatusIcon status={s.status} className="mt-0.5" />
           <span className="min-w-0 flex-1 font-medium text-text">{s.label}</span>
           {s.detail && <InfoTip>{s.detail}</InfoTip>}
@@ -728,7 +728,7 @@ export function MakeItYoursDialog({
           </Button>
           <a
             href={href({ name: 'designer', id: design.id })}
-            className="mr-auto self-center text-[13.5px] font-semibold text-accent-text hover:underline sm:order-first"
+            className="mr-auto self-center text-[14.5px] font-semibold text-accent-text hover:underline sm:order-first"
             onClick={onClose}
           >
             Full designer
@@ -742,7 +742,7 @@ export function MakeItYoursDialog({
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
         <div className="flex flex-col gap-4">
           <fieldset className="m-0 border-0 p-0">
-            <legend className="mb-2 text-[13.5px] font-semibold text-text">Colour</legend>
+            <legend className="mb-2 text-[14.5px] font-semibold text-text">Colour</legend>
             <div className="flex flex-wrap items-center gap-2">
               {swatches.map((c) => (
                 <button
@@ -770,7 +770,7 @@ export function MakeItYoursDialog({
             </div>
           </fieldset>
           <div className="flex flex-col gap-2">
-            <span className="text-[13.5px] font-semibold text-text">Font</span>
+            <span className="text-[14.5px] font-semibold text-text">Font</span>
             <Segmented<ThemeFont>
               label="Font"
               value={r.font ?? 'theme'}
@@ -798,7 +798,7 @@ export function MakeItYoursDialog({
             )}
           </Field>
           <div className="flex flex-col gap-2">
-            <span className="flex items-center gap-1 text-[13.5px] font-semibold text-text">
+            <span className="flex items-center gap-1 text-[14.5px] font-semibold text-text">
               Logo
               <InfoTip>Where the theme has its mark. PNG, JPG or WebP.</InfoTip>
             </span>
@@ -813,7 +813,7 @@ export function MakeItYoursDialog({
               </Button>
               {r.logo && (
                 <>
-                  <span className="max-w-40 truncate text-[12.5px] text-text-3">{logoName}</span>
+                  <span className="max-w-40 truncate text-[13.5px] text-text-3">{logoName}</span>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -910,10 +910,10 @@ export function ThemeInObsCard() {
         <Skeleton className="h-20 w-full" />
       ) : !t ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[13.5px] text-text-3">None yet.</span>
+          <span className="text-[14.5px] text-text-3">None yet.</span>
           <a
             href={href({ name: 'designs', tab: 'themes' })}
-            className="fc-press inline-flex h-9 items-center gap-2 rounded-control border border-line-strong bg-surface-2 px-3 text-[13.5px] font-semibold text-text hover:border-text-3"
+            className="fc-press inline-flex h-9 items-center gap-2 rounded-control border border-line-strong bg-surface-2 px-3 text-[14.5px] font-semibold text-text hover:border-text-3"
           >
             <MonitorPlay size={16} aria-hidden />
             Pick a theme
@@ -930,10 +930,10 @@ export function ThemeInObsCard() {
               )}
             </span>
             <div className="min-w-0">
-              <p className="m-0 truncate text-[15px] font-semibold text-text">{t.design_name}</p>
+              <p className="m-0 truncate text-[16px] font-semibold text-text">{t.design_name}</p>
               <p
                 className={cx(
-                  'm-0 text-[13px]',
+                  'm-0 text-[14px]',
                   t.screens.some((s) => s.found === false) ? 'text-warn' : 'text-text-3',
                 )}
               >
@@ -956,7 +956,7 @@ export function ThemeInObsCard() {
             </Button>
             <a
               href={href({ name: 'designs', tab: 'themes' })}
-              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-2 px-3 text-[13px] font-semibold text-text hover:border-text-3"
+              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-2 px-3 text-[14px] font-semibold text-text hover:border-text-3"
             >
               <Swap size={15} aria-hidden />
               Switch theme

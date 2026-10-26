@@ -101,7 +101,7 @@ const SceneTab = memo(function SceneTab({
       </span>
       <span
         className={cx(
-          'truncate text-[13.5px] font-semibold',
+          'truncate text-[14.5px] font-semibold',
           selected ? 'text-accent-text' : 'text-text-2',
         )}
       >
@@ -167,7 +167,7 @@ export function SceneDesigner({
         onDuplicate={() => setAskDuplicate(true)}
       />
       {design.built_in && (
-        <p className="rounded-control bg-surface-2 px-3 py-2 text-[13.5px] font-medium text-text-2">
+        <p className="rounded-control bg-surface-2 px-3 py-2 text-[14.5px] font-medium text-text-2">
           Built-in: edits stay a draft until you save your own copy, which drops the Ferrocast mark.
         </p>
       )}
@@ -384,7 +384,7 @@ export function WidgetDesigner({
             label="All caps"
           />
           {design.built_in && (
-            <p className="text-[12.5px] text-text-3">
+            <p className="text-[13.5px] text-text-3">
               Built-in: it keeps a small Ferrocast mark on stream. Save your own copy to drop it.
             </p>
           )}

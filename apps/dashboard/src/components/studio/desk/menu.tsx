@@ -243,7 +243,7 @@ function MenuList({
               }
             }}
             className={cx(
-              'flex h-8 cursor-default items-center gap-2.5 rounded-[7px] px-2 text-[13px] font-semibold outline-none select-none',
+              'flex h-8 cursor-default items-center gap-2.5 rounded-[7px] px-2 text-[14px] font-semibold outline-none select-none',
               e.disabled
                 ? 'text-text-3 opacity-60'
                 : e.danger
@@ -260,7 +260,7 @@ function MenuList({
             </span>
             <span className="min-w-0 flex-1 truncate">{e.label}</span>
             {e.hint && (
-              <span className="font-mono text-[11px] font-medium text-text-3">{e.hint}</span>
+              <span className="font-mono text-[12px] font-medium text-text-3">{e.hint}</span>
             )}
             {hasSub && <CaretRight size={12} weight="bold" className="text-text-3" />}
           </div>

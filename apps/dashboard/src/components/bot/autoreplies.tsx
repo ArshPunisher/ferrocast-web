@@ -126,13 +126,13 @@ function TryIt({ draft, initial }: { draft: Draft; initial: string }) {
       </Field>
       <div aria-live="polite" className="mt-3 min-h-11">
         {problem ? (
-          <p className="text-[13.5px] font-semibold text-danger">{problem}</p>
+          <p className="text-[14.5px] font-semibold text-danger">{problem}</p>
         ) : result?.matched ? (
           <div className="flex items-start gap-2.5">
             <CheckCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-ok" />
             <div className="min-w-0">
-              <p className="font-display text-[17px] font-bold tracking-tight text-text">Matches</p>
-              <p className="mt-0.5 text-[14.5px] break-words text-text-2">
+              <p className="font-display text-[18px] font-bold tracking-tight text-text">Matches</p>
+              <p className="mt-0.5 text-[15.5px] break-words text-text-2">
                 {result.reply ? (
                   <>
                     Bot says: <span className="font-semibold text-text">{result.reply}</span>
@@ -146,7 +146,7 @@ function TryIt({ draft, initial }: { draft: Draft; initial: string }) {
         ) : result ? (
           <div className="flex items-center gap-2.5">
             <XCircle size={22} weight="fill" className="shrink-0 text-text-3" />
-            <p className="font-display text-[17px] font-bold tracking-tight text-text-2">
+            <p className="font-display text-[18px] font-bold tracking-tight text-text-2">
               No match
             </p>
           </div>
@@ -223,7 +223,7 @@ function AutoReplyDialog({
       footer={
         <>
           {err && !err.field && (
-            <p role="alert" className="mr-auto text-[13.5px] font-semibold text-danger">
+            <p role="alert" className="mr-auto text-[14.5px] font-semibold text-danger">
               {err.message}
             </p>
           )}
@@ -244,7 +244,7 @@ function AutoReplyDialog({
         }}
       >
         <div className="flex flex-col gap-2">
-          <span className="text-[13.5px] font-semibold text-text" id="ar-kind">
+          <span className="text-[14.5px] font-semibold text-text" id="ar-kind">
             When a message
           </span>
           <Segmented<AutoReplyMatchKind>
@@ -273,7 +273,7 @@ function AutoReplyDialog({
               maxLength={AUTOREPLY_LIMITS.matchChars}
               spellCheck={r.match.kind !== 'regex'}
               className={cx(
-                'h-11 text-[16px] font-semibold',
+                'h-11 text-[17px] font-semibold',
                 r.match.kind === 'regex' && 'font-mono',
               )}
               placeholder={r.match.kind === 'regex' ? '(what|which) game' : 'discord'}
@@ -283,7 +283,7 @@ function AutoReplyDialog({
         </Field>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-end justify-between gap-2">
-            <label htmlFor="ar-reply" className="text-[13.5px] font-semibold text-text">
+            <label htmlFor="ar-reply" className="text-[14.5px] font-semibold text-text">
               Bot replies
             </label>
             <Menu
@@ -303,7 +303,7 @@ function AutoReplyDialog({
               )}
               items={AUTOREPLY_VARS.map((v) => ({
                 key: v.name,
-                label: <span className="font-mono text-[13px]">{`{${v.name}}`}</span>,
+                label: <span className="font-mono text-[14px]">{`{${v.name}}`}</span>,
                 hint: v.hint,
                 onSelect: () => insert(v.name),
               }))}
@@ -317,11 +317,11 @@ function AutoReplyDialog({
             maxLength={AUTOREPLY_LIMITS.replyChars + 50}
             aria-invalid={fieldErr('reply') ? true : undefined}
             aria-describedby="ar-reply-meta"
-            className="text-[15px]"
+            className="text-[16px]"
             placeholder="Join the Discord: discord.gg/yourcode"
             onChange={(e) => setR({ ...r, reply: e.target.value })}
           />
-          <p id="ar-reply-meta" className="flex justify-between gap-3 text-[13px] leading-snug">
+          <p id="ar-reply-meta" className="flex justify-between gap-3 text-[14px] leading-snug">
             {fieldErr('reply') ? (
               <span role="alert" className="font-semibold text-danger">
                 {fieldErr('reply')}
@@ -345,9 +345,9 @@ function AutoReplyDialog({
         <TryIt draft={r} initial={sample} />
 
         <details className="group rounded-panel border border-line">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-panel px-4 py-3 text-[14px] font-semibold text-text select-none hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-panel px-4 py-3 text-[15px] font-semibold text-text select-none hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
             More
-            <span className="flex items-center gap-2 text-[13px] font-normal text-text-3">
+            <span className="flex items-center gap-2 text-[14px] font-normal text-text-3">
               {r.only_when_live ? 'Live only' : 'Always'}, {seconds(r.cooldown_s).toLowerCase()}
               <CaretDown size={14} className="transition-transform group-open:rotate-180" />
             </span>
@@ -365,12 +365,12 @@ function AutoReplyDialog({
               )}
             </Field>
             {fieldErr('name') && (
-              <p role="alert" className="-mt-2 text-[13px] font-semibold text-danger">
+              <p role="alert" className="-mt-2 text-[14px] font-semibold text-danger">
                 {fieldErr('name')}
               </p>
             )}
             <div className="flex flex-col gap-2">
-              <span className="text-[13.5px] font-semibold text-text">Platforms</span>
+              <span className="text-[14.5px] font-semibold text-text">Platforms</span>
               <div className="flex flex-wrap gap-2">
                 {CHAT_PLATFORMS.map((p) => {
                   const on = r.platforms.length === 0 || r.platforms.includes(p)
@@ -381,7 +381,7 @@ function AutoReplyDialog({
                       aria-pressed={on}
                       onClick={() => togglePlatform(p)}
                       className={cx(
-                        'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-semibold transition-colors',
+                        'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14.5px] font-semibold transition-colors',
                         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none active:scale-[0.97]',
                         on
                           ? 'border-accent-line bg-accent-soft text-accent-text'
@@ -558,13 +558,13 @@ export function AutoRepliesPanel() {
                     'hover:border-accent-line focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none active:scale-[0.98]',
                   )}
                 >
-                  <span className="text-[13px] font-semibold text-text-3">
+                  <span className="text-[14px] font-semibold text-text-3">
                     Chat says “{s.match.text}”
                   </span>
-                  <span className="text-[15px] leading-snug font-semibold break-words text-text">
+                  <span className="text-[16px] leading-snug font-semibold break-words text-text">
                     {s.reply}
                   </span>
-                  <span className="mt-auto pt-1 text-[13.5px] font-bold text-accent-text">
+                  <span className="mt-auto pt-1 text-[14.5px] font-bold text-accent-text">
                     Use this
                   </span>
                 </button>
@@ -593,7 +593,7 @@ export function AutoRepliesPanel() {
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <button
                     type="button"
-                    className="text-left text-[15.5px] font-bold text-text hover:underline focus-visible:underline focus-visible:outline-none"
+                    className="text-left text-[16.5px] font-bold text-text hover:underline focus-visible:underline focus-visible:outline-none"
                     onClick={() => setEdit({ value: r, sample: '' })}
                   >
                     {r.name}
@@ -601,10 +601,10 @@ export function AutoRepliesPanel() {
                   {r.min_role !== 'everyone' && <Badge>{ROLE_LABEL[r.min_role]}</Badge>}
                   {!r.only_when_live && <Badge>Always</Badge>}
                 </p>
-                <p className="mt-0.5 font-mono text-[12.5px] break-all text-text-3">
+                <p className="mt-0.5 font-mono text-[13.5px] break-all text-text-3">
                   {matchSummary(r)}
                 </p>
-                <p className="mt-1 line-clamp-2 text-[14px] break-words text-text-2">{r.reply}</p>
+                <p className="mt-1 line-clamp-2 text-[15px] break-words text-text-2">{r.reply}</p>
               </div>
               <div className="order-3 -ml-2 flex w-full shrink-0 items-center gap-0.5 sm:order-2 sm:ml-0 sm:w-auto">
                 <IconButton

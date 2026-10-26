@@ -82,12 +82,12 @@ export function DontMissLane() {
             key={i.id}
             className="relative flex w-64 shrink-0 flex-col gap-1 rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 pr-9"
           >
-            <span className="text-[12.5px] font-semibold text-accent-text">
+            <span className="text-[13.5px] font-semibold text-accent-text">
               {KIND[i.kind] ?? 'Moment'} · {relativeTime(i.at, now)}
             </span>
             <span className="text-sm font-semibold break-words text-text">{i.title}</span>
             {i.detail && (
-              <span className="line-clamp-2 text-[13.5px] break-words text-text-2">{i.detail}</span>
+              <span className="line-clamp-2 text-[14.5px] break-words text-text-2">{i.detail}</span>
             )}
             <IconButton
               size="sm"
@@ -178,7 +178,7 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
       ) : !list.data ? (
         <Skeleton className="h-24" />
       ) : list.data.length === 0 ? (
-        <p className="text-[13.5px] text-text-2">
+        <p className="text-[14.5px] text-text-2">
           No markers yet. Big moments add them by themselves.
         </p>
       ) : (
@@ -188,7 +188,7 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
               key={m.id}
               className="flex items-center gap-3 rounded-control px-2 py-1.5 hover:bg-surface-2"
             >
-              <span className="w-20 shrink-0 font-mono text-[13.5px] tabular-nums text-text-2">
+              <span className="w-20 shrink-0 font-mono text-[14.5px] tabular-nums text-text-2">
                 {m.offset_ms === null ? '--:--:--' : timecode(m.offset_ms)}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm text-text">{m.label}</span>

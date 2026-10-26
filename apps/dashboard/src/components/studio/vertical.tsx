@@ -103,7 +103,7 @@ function Source({
           found={v ? 'Aitum Vertical found' : null}
         />
       </fieldset>
-      <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[13.5px] text-text-2">
+      <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2">
         {source === 'cut' ? null : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
@@ -209,7 +209,7 @@ function Option({
           disabled={busy}
           onChange={onPick}
         />
-        <span className="flex items-center gap-2 text-[14px] font-bold text-text">
+        <span className="flex items-center gap-2 text-[15px] font-bold text-text">
           <span
             aria-hidden
             className={cx(
@@ -219,9 +219,9 @@ function Option({
           />
           {title}
         </span>
-        <span className="pl-6 text-[12.5px] text-text-2">{text}</span>
+        <span className="pl-6 text-[13.5px] text-text-2">{text}</span>
         {found && (
-          <span className="inline-flex items-center gap-1.5 pl-6 text-[12px] font-semibold text-ok">
+          <span className="inline-flex items-center gap-1.5 pl-6 text-[13px] font-semibold text-ok">
             <CheckCircle size={13} weight="fill" aria-hidden />
             {found}
           </span>

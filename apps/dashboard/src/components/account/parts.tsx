@@ -90,7 +90,7 @@ export function ProChrome({ className = '' }: { className?: string }) {
     <span
       role="img"
       aria-label="Pro"
-      className={`fc-pro-mark inline-flex h-[18px] shrink-0 items-center rounded-full px-[7px] font-mono text-[10px] font-bold tracking-[0.07em] ${className}`}
+      className={`fc-pro-mark inline-flex h-[18px] shrink-0 items-center rounded-full px-[7px] font-mono text-[11px] font-bold tracking-[0.07em] ${className}`}
     >
       <span aria-hidden="true">PRO</span>
     </span>
@@ -103,7 +103,7 @@ export function GetProButton({ className = '' }: { className?: string }) {
     <a
       href={href({ name: 'plans' })}
       data-testid="get-pro"
-      className={`fc-press flex h-[38px] items-center justify-center gap-2 rounded-control bg-btn-primary px-3.5 text-[14px] font-bold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18)] hover:bg-btn-primary-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none ${className}`}
+      className={`fc-press flex h-[38px] items-center justify-center gap-2 rounded-control bg-btn-primary px-3.5 text-[15px] font-bold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18)] hover:bg-btn-primary-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none ${className}`}
     >
       <LogoMark size={18} className="text-white! [--fc-brand-arc:#ffffff]" />
       Get Pro
@@ -167,10 +167,10 @@ const barBase =
 function Who({ title, sub }: { title: ReactNode; sub: ReactNode }) {
   return (
     <span className="min-w-0 flex-1">
-      <b className="flex min-w-0 items-center gap-1.5 text-[13.5px] leading-tight font-semibold text-text">
+      <b className="flex min-w-0 items-center gap-1.5 text-[14.5px] leading-tight font-semibold text-text">
         {title}
       </b>
-      <small className="block truncate text-[12px] leading-snug text-text-3">{sub}</small>
+      <small className="block truncate text-[13px] leading-snug text-text-3">{sub}</small>
     </span>
   )
 }
@@ -212,7 +212,7 @@ function UtilStack({ utils }: { utils: Utils }) {
               aria-pressed={on}
               title={value === 'system' ? 'Match your system' : undefined}
               onClick={() => utils.setThemePref(value)}
-              className={`fc-press flex h-[30px] items-center justify-center gap-1.5 rounded-[7px] text-[12.5px] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none ${
+              className={`fc-press flex h-[30px] items-center justify-center gap-1.5 rounded-[7px] text-[13.5px] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none ${
                 on
                   ? 'bg-surface-1 font-semibold text-text shadow-[0_1px_2px_rgb(0_0_0/0.16),0_0_0_1px_var(--fc-line)]'
                   : 'font-medium text-text-3 hover:text-text'
@@ -228,7 +228,7 @@ function UtilStack({ utils }: { utils: Utils }) {
         <button
           type="button"
           onClick={utils.openInBrowser}
-          className="fc-press flex h-10 items-center gap-2.5 rounded-control px-2.5 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          className="fc-press flex h-10 items-center gap-2.5 rounded-control px-2.5 text-[14.5px] font-medium text-text-2 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
           <ArrowSquareOut size={17} className="text-text-3" aria-hidden />
           <span className="flex-1 text-left">Open in browser</span>
@@ -277,7 +277,7 @@ function Menu({
     }
   }, [onClose])
   const item =
-    'flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13.5px] text-text-2 hover:bg-surface-2 hover:text-text focus-visible:bg-surface-2 focus-visible:text-text focus-visible:outline-none'
+    'flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[14.5px] text-text-2 hover:bg-surface-2 hover:text-text focus-visible:bg-surface-2 focus-visible:text-text focus-visible:outline-none'
   const ThemeIcon = utils.theme === 'dark' ? Sun : Moon
   const go = (h: string) => {
     onClose(false)
@@ -291,10 +291,10 @@ function Menu({
       className="absolute inset-x-0 bottom-[calc(100%+6px)] z-40 rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-[var(--fc-shadow-pop)]"
     >
       <div className="mb-1 border-b border-line px-2 pt-2 pb-2.5">
-        <b className="block truncate text-[13.5px] font-semibold text-text">
+        <b className="block truncate text-[14.5px] font-semibold text-text">
           {accountName(view.account)}
         </b>
-        <small className="block truncate text-[12px] text-text-3">{view.account?.email}</small>
+        <small className="block truncate text-[13px] text-text-3">{view.account?.email}</small>
       </div>
       <button
         type="button"
@@ -399,7 +399,7 @@ export function SidebarAccount({
           <button
             type="button"
             onClick={() => void cancelSignIn()}
-            className="rounded-[6px] text-[12px] font-semibold text-accent-text underline underline-offset-[3px] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="rounded-[6px] text-[13px] font-semibold text-accent-text underline underline-offset-[3px] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             Cancel
           </button>

@@ -107,7 +107,7 @@ export function OwnAddress({
 
   if (!hasPage)
     return (
-      <p className="text-[15px] text-text-2">Create your tip page first. Your address shows it.</p>
+      <p className="text-[16px] text-text-2">Create your tip page first. Your address shows it.</p>
     )
 
   if (!domain) {
@@ -133,7 +133,7 @@ export function OwnAddress({
           add()
         }}
       >
-        <p className="text-[15px] leading-snug text-text-2">
+        <p className="text-[16px] leading-snug text-text-2">
           Show your tip page on a subdomain you own, like{' '}
           <span translate="no" className="font-mono text-text">
             tips.yourchannel.com
@@ -190,7 +190,7 @@ export function OwnAddress({
           <Badge tone={live ? 'ok' : stopped ? 'danger' : 'warn'}>{step.label}</Badge>
         </div>
         {shown !== domain.hostname && (
-          <p className="text-[13px] leading-snug text-text-3">
+          <p className="text-[14px] leading-snug text-text-3">
             In DNS it’s written{' '}
             <span translate="no" className="font-mono break-all">
               {domain.hostname}
@@ -198,16 +198,16 @@ export function OwnAddress({
           </p>
         )}
         {!stopped && <Stepper status={domain.status} />}
-        <p className="text-[15px] leading-snug text-text-2" role="status">
+        <p className="text-[16px] leading-snug text-text-2" role="status">
           {step.line}
         </p>
         {domain.delete_at && (
-          <p className="text-[14px] leading-snug text-warn">
+          <p className="text-[15px] leading-snug text-warn">
             Pro ended. This address stops on {new Date(domain.delete_at).toLocaleDateString()}.
           </p>
         )}
         {!live && domain.expires_at && !domain.delete_at && (
-          <p className="text-[13.5px] leading-snug text-text-2">
+          <p className="text-[14.5px] leading-snug text-text-2">
             If it isn’t live by {new Date(domain.expires_at).toLocaleDateString()}, it’s removed and
             the address is free again.
           </p>
@@ -218,17 +218,17 @@ export function OwnAddress({
 
       {!live && dns && (
         <div className="flex flex-col gap-3">
-          <p className="text-[15px] font-semibold text-text">
+          <p className="text-[16px] font-semibold text-text">
             Add both records where you manage your domain
           </p>
           <section aria-label="Record 1 of 2: CNAME" className="flex flex-col gap-2">
-            <p className="text-[13.5px] font-semibold text-text-2">1. Point the address here</p>
+            <p className="text-[14.5px] font-semibold text-text-2">1. Point the address here</p>
             <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
               <Cell label="Type" value={dns.type} />
               <Cell label="Name" value={dns.host || dns.name} copy="Name" />
               <Cell label="Target" value={dns.target} copy="Target" />
             </dl>
-            <p className="text-[13.5px] leading-snug text-text-2">
+            <p className="text-[14.5px] leading-snug text-text-2">
               Some providers want the full name,{' '}
               <span translate="no" className="font-mono break-all">
                 {dns.name}
@@ -239,7 +239,7 @@ export function OwnAddress({
           <ProofRecord proof={proof} />
           {domain.verification.length > 0 && (
             <details className="group rounded-[12px] border border-line bg-surface-2 px-3.5 py-2.5">
-              <summary className="cursor-pointer text-[14px] font-semibold text-text marker:text-text-3">
+              <summary className="cursor-pointer text-[15px] font-semibold text-text marker:text-text-3">
                 Optional: Cloudflare’s TXT record for a faster check
               </summary>
               <dl className="mt-3 flex flex-col gap-2">
@@ -256,7 +256,7 @@ export function OwnAddress({
             </details>
           )}
           {domain.errors.length > 0 && (
-            <div className="text-[13.5px] leading-snug text-text-2">
+            <div className="text-[14.5px] leading-snug text-text-2">
               <p className="font-semibold text-text">Still missing</p>
               <ul className="mt-1 list-disc pl-5">
                 {domain.errors.map((e, i) => (
@@ -345,7 +345,7 @@ function Stepper({ status }: { status: TipDomainStatus }) {
             />
             <span
               className={cx(
-                'truncate text-[13px] font-semibold',
+                'truncate text-[14px] font-semibold',
                 done || now ? 'text-text' : 'text-text-3',
               )}
             >
@@ -366,7 +366,7 @@ function Checked({ at }: { at: number }) {
   if (!at) return null
   const ago = relativeTime(at, now)
   return (
-    <span className="text-[13px] whitespace-nowrap text-text-3">
+    <span className="text-[14px] whitespace-nowrap text-text-3">
       {ago === 'now' ? 'Checked just now' : `Checked ${ago} ago`}
     </span>
   )
@@ -375,33 +375,33 @@ function Checked({ at }: { at: number }) {
 function Live({ domain }: { domain: TipDomain }) {
   return (
     <div className="rounded-[12px] border border-accent-line bg-accent-soft p-3.5">
-      <p className="flex items-center gap-2 text-[14px] font-semibold text-text">
+      <p className="flex items-center gap-2 text-[15px] font-semibold text-text">
         <Check size={14} weight="bold" className="text-ok" aria-hidden="true" />
         Your tip page is on your own address
       </p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <code translate="no" className="min-w-0 flex-1 font-mono text-[14px] break-all text-text-2">
+        <code translate="no" className="min-w-0 flex-1 font-mono text-[15px] break-all text-text-2">
           {domain.page_url}
         </code>
         <div className="flex gap-2">
           <CopyButton text={domain.page_url} what="Link" />
           <a
             {...externalLink(domain.page_url)}
-            className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             Open <ArrowSquareOut size={14} aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         </div>
       </div>
-      <p className="mt-2 text-[13.5px] text-text-2">
+      <p className="mt-2 text-[14.5px] text-text-2">
         The goal page is at{' '}
         <span translate="no" className="font-mono break-all">
           {domain.goal_url}
         </span>
         .
       </p>
-      <p className="mt-2 text-[13.5px] text-text-2">
+      <p className="mt-2 text-[14.5px] text-text-2">
         Keep the TXT record{' '}
         <span translate="no" className="font-mono break-all">
           {domain.proof.name}
@@ -416,7 +416,7 @@ function ProofRecord({ proof }: { proof: TipDomain['proof'] }) {
   return (
     <section aria-label="Record 2 of 2: TXT, required" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="text-[13.5px] font-semibold text-text-2">2. Prove it’s yours</p>
+        <p className="text-[14.5px] font-semibold text-text-2">2. Prove it’s yours</p>
         {proof.found ? <Badge tone="ok">Found</Badge> : <Badge tone="warn">Required</Badge>}
       </div>
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
@@ -424,7 +424,7 @@ function ProofRecord({ proof }: { proof: TipDomain['proof'] }) {
         <Cell label="Name" value={proof.host} copy="TXT name" />
         <Cell label="Value" value={proof.value} copy="TXT value" />
       </dl>
-      <p className="text-[13.5px] leading-snug text-text-2">
+      <p className="text-[14.5px] leading-snug text-text-2">
         Full name{' '}
         <span translate="no" className="font-mono break-all">
           {proof.name}
@@ -439,13 +439,13 @@ function ProofRecord({ proof }: { proof: TipDomain['proof'] }) {
 function ClaimProof({ proof }: { proof: TipDomainClaimProof }) {
   return (
     <section aria-label="TXT record to prove it’s yours" className="flex flex-col gap-2">
-      <p className="text-[14px] font-semibold text-text">Prove it’s yours with this TXT record</p>
+      <p className="text-[15px] font-semibold text-text">Prove it’s yours with this TXT record</p>
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
         <Cell label="Type" value={proof.type} />
         <Cell label="Name" value={proof.host} copy="TXT name" />
         <Cell label="Value" value={proof.value} copy="TXT value" />
       </dl>
-      <p className="text-[13.5px] leading-snug text-text-2">
+      <p className="text-[14.5px] leading-snug text-text-2">
         Full name{' '}
         <span translate="no" className="font-mono break-all">
           {proof.name}
@@ -459,11 +459,11 @@ function ClaimProof({ proof }: { proof: TipDomainClaimProof }) {
 function Cell({ label, value, copy }: { label: string; value: string; copy?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-[12px] border border-line bg-surface-2 px-3 py-2.5">
-      <dt className="text-[12.5px] font-semibold text-text-3">{label}</dt>
+      <dt className="text-[13.5px] font-semibold text-text-3">{label}</dt>
       <dd className="flex min-w-0 items-center justify-between gap-2">
         <code
           translate="no"
-          className="min-w-0 font-mono text-[15px] font-semibold break-all text-text"
+          className="min-w-0 font-mono text-[16px] font-semibold break-all text-text"
         >
           {value}
         </code>
@@ -508,7 +508,7 @@ function Note({ problem }: { problem: Problem }) {
       className="flex gap-2.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5"
     >
       <Warning size={16} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
-      <div className="min-w-0 text-[14px] leading-snug">
+      <div className="min-w-0 text-[15px] leading-snug">
         <p className="font-semibold text-text">{problem.message}</p>
         {problem.hint && <p className="mt-0.5 text-text-2">{problem.hint}</p>}
       </div>

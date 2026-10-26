@@ -36,7 +36,7 @@ export function MissingFiles() {
       {n > 0 && (
         <div
           role="status"
-          className="mb-3 flex flex-wrap items-center gap-2 rounded-control border border-warn/40 bg-warn-soft px-3.5 py-2 text-[13.5px]"
+          className="mb-3 flex flex-wrap items-center gap-2 rounded-control border border-warn/40 bg-warn-soft px-3.5 py-2 text-[14.5px]"
         >
           <WarningCircle size={18} weight="fill" className="text-warn" aria-hidden />
           <span className="flex-1">
@@ -108,7 +108,7 @@ function Fixer({
   if (list.data.length === 0)
     return (
       <div className="flex flex-col items-start gap-3">
-        <p className="m-0 text-[13.5px] text-text-2">Every file is where it should be.</p>
+        <p className="m-0 text-[14.5px] text-text-2">Every file is where it should be.</p>
         <Button onClick={onDone}>Close</Button>
       </div>
     )
@@ -126,8 +126,8 @@ function Fixer({
             className="flex flex-col gap-2 rounded-[10px] border border-line p-3 sm:flex-row sm:items-center"
           >
             <div className="min-w-0 flex-1">
-              <b className="block truncate text-[13.5px]">{fileName(m.path)}</b>
-              <span className="block truncate text-[12.5px] text-text-3" title={m.path}>
+              <b className="block truncate text-[14.5px]">{fileName(m.path)}</b>
+              <span className="block truncate text-[13.5px] text-text-3" title={m.path}>
                 {ownerText(m)} · {m.path}
               </span>
             </div>

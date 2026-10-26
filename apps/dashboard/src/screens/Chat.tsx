@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PLATFORM_LABEL, Roles, type Actor, type ChatPlatform } from '@ferrocast/api'
-import { EmptyState, PlatformMark, Segmented, cx } from '@ferrocast/ui'
+import { EmptyState, InfoTip, PlatformMark, Segmented, cx } from '@ferrocast/ui'
 import {
   ChatLine,
   ChatScroller,
@@ -68,7 +68,7 @@ export function Chat() {
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5 sm:px-4">
         <h1
           id="chat-title"
-          className="mr-auto font-display text-[17px] font-semibold tracking-tight"
+          className="mr-auto font-display text-[18px] font-extrabold tracking-tight"
         >
           Chat
         </h1>
@@ -87,7 +87,7 @@ export function Chat() {
                 label: (
                   <span className="inline-flex items-center gap-1.5">
                     <PlatformMark platform={p} size={12} />
-                    <span className="hidden font-mono text-[12.5px] tabular-nums sm:inline">
+                    <span className="hidden font-mono text-[13.5px] tabular-nums sm:inline">
                       {counts[p] ?? 0}
                     </span>
                   </span>
@@ -102,7 +102,7 @@ export function Chat() {
             onClick={() => setOnlyHeld((v) => !v)}
             title="Messages waiting for a mod"
             className={cx(
-              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14.5px] font-semibold',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               onlyHeld
                 ? 'border-warn bg-warn-soft text-text'
@@ -118,7 +118,7 @@ export function Chat() {
             </span>
           </button>
         )}
-        <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-medium text-text-2">
+        <label className="flex cursor-pointer items-center gap-2 text-[14.5px] font-medium text-text-2">
           <input
             type="checkbox"
             checked={hideBots}
@@ -177,13 +177,13 @@ export function Chat() {
       aria-labelledby="events-title"
       className="flex min-h-0 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
     >
-      <header className="border-b border-line px-4 py-3">
-        <h2 id="events-title" className="font-display text-[15px] font-semibold tracking-tight">
+      <header className="flex items-center gap-1 border-b border-line px-4 py-3">
+        <h2 id="events-title" className="font-display text-[18px] font-extrabold tracking-tight">
           Events
         </h2>
-        <p className="mt-0.5 text-[13.5px] text-text-2">
-          Hover to replay, or see why it didn’t alert.
-        </p>
+        <InfoTip label="About events">
+          Hover one to replay it, or to see why it didn’t alert.
+        </InfoTip>
       </header>
       <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {feed.length === 0 ? (

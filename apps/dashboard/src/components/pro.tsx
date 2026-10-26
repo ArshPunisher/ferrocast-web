@@ -233,7 +233,7 @@ function ExternalLink({ href, children }: { href: string; children: string }) {
   return (
     <a
       {...externalLink(href)}
-      className="fc-press inline-flex h-10 items-center gap-1.5 self-start rounded-control border border-line-strong bg-surface-3 px-3.5 text-[13.5px] font-semibold text-text"
+      className="fc-press inline-flex h-10 items-center gap-1.5 self-start rounded-control border border-line-strong bg-surface-3 px-3.5 text-[14.5px] font-semibold text-text"
     >
       {children} <ArrowSquareOut size={15} aria-hidden />
     </a>
@@ -301,7 +301,7 @@ function StatusCard({
       <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-3.5 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {p.active && (
-            <h3 className="flex items-center gap-2 font-display text-[19px] font-bold tracking-tight text-text">
+            <h3 className="flex items-center gap-2 font-display text-[19px] font-extrabold tracking-tight text-text">
               <CheckCircle size={22} weight="fill" className="text-ok" aria-hidden />
               Pro is on
             </h3>
@@ -319,17 +319,17 @@ function StatusCard({
             )}
           </p>
           {p.stale && (
-            <p role="status" className="text-[13.5px] font-medium text-warn">
+            <p role="status" className="text-[14.5px] font-medium text-warn">
               {p.checked_at
                 ? `Couldn’t reach the relay. Last check: ${day(p.checked_at)}. Pro works offline for ${p.offline_grace_days} days.`
                 : 'Couldn’t reach the relay to check Pro. Everything else works.'}
             </p>
           )}
-          {!p.stale && p.warning && <p className="text-[13.5px] text-text-2">{p.warning}</p>}
+          {!p.stale && p.warning && <p className="text-[14.5px] text-text-2">{p.warning}</p>}
           {p.active && p.features.cloud_bot && (
             <a
               href={href({ name: 'bot' })}
-              className="fc-press mt-1.5 inline-flex h-8 items-center self-start rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text hover:border-text-3"
+              className="fc-press mt-1.5 inline-flex h-8 items-center self-start rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text hover:border-text-3"
             >
               Set up the cloud bot
             </a>
@@ -359,7 +359,7 @@ function StatusCard({
       {manageUrl && (
         <div className="flex flex-col gap-2">
           <ExternalLink href={manageUrl}>Open the manage page</ExternalLink>
-          <p className="text-[13.5px] text-text-2">
+          <p className="text-[14.5px] text-text-2">
             See your plan or stop renewing. The link works for 30 minutes.
           </p>
         </div>
@@ -449,10 +449,13 @@ function Checkout({
   return (
     <section aria-labelledby="pro-get" className="flex max-w-[640px] flex-col">
       <div className="flex items-center justify-between gap-3">
-        <h3 id="pro-get" className="font-display text-[18px] font-bold tracking-tight text-text">
+        <h3
+          id="pro-get"
+          className="font-display text-[18px] font-extrabold tracking-tight text-text"
+        >
           Get Pro
         </h3>
-        <span className="font-mono text-[12.5px] text-text-3" aria-live="polite">
+        <span className="font-mono text-[13.5px] text-text-3" aria-live="polite">
           {checkout ? 'Waiting for Razorpay' : `Step ${step + 1} of 3`}
         </span>
       </div>
@@ -467,7 +470,7 @@ function Checkout({
         ))}
       </div>
       <div
-        className="mt-1.5 grid grid-cols-3 gap-1.5 font-mono text-[11.5px] text-text-3"
+        className="mt-1.5 grid grid-cols-3 gap-1.5 font-mono text-[12.5px] text-text-3"
         aria-hidden="true"
       >
         {STEPS.map((s, i) => (
@@ -503,13 +506,13 @@ function Checkout({
               >
                 Pro adds the always-on parts <Badge>Free plan</Badge>
               </h4>
-              <p className="mt-1 max-w-[52ch] text-[14.5px] text-text-2">
+              <p className="mt-1 max-w-[52ch] text-[15.5px] text-text-2">
                 Everything you use today stays free. Pro adds YouTube from the cloud, smart
                 moderation and replies, and a year of insights.
               </p>
             </div>
             {note && (
-              <p className="text-[14px] font-semibold text-molten-text" data-testid="pro-offer">
+              <p className="text-[15px] font-semibold text-molten-text" data-testid="pro-offer">
                 {note}
               </p>
             )}
@@ -518,7 +521,7 @@ function Checkout({
               {FEATURES.map((f) => (
                 <li key={f.title} className="grid grid-cols-[20px_1fr] items-start gap-2.5">
                   <f.icon size={18} className="mt-0.5 text-accent-text" aria-hidden />
-                  <span className="text-[14.5px] text-text-2">
+                  <span className="text-[15.5px] text-text-2">
                     <b className="block font-semibold text-text">{f.title}</b>
                     {f.text}
                   </span>
@@ -587,7 +590,7 @@ function Checkout({
               Check and pay
             </h4>
             <dl
-              className="grid gap-2 rounded-[12px] border border-dashed border-line-strong px-4 py-3.5 text-[14.5px]"
+              className="grid gap-2 rounded-[12px] border border-dashed border-line-strong px-4 py-3.5 text-[15.5px]"
               data-testid="pro-receipt"
             >
               <Row
@@ -614,7 +617,7 @@ function Checkout({
                 <dd className="font-mono">{c.price}</dd>
               </div>
             </dl>
-            <p className="text-[13px] text-text-3">
+            <p className="text-[14px] text-text-3">
               Billed in INR through Razorpay. Your price stays the same for at least 12 months.
               Cancel any time and keep Pro until the period ends.
             </p>
@@ -707,7 +710,7 @@ function PlanCards({
                 : 'border-line-strong bg-surface-2 hover:border-text-3',
             )}
           >
-            <span className="flex items-center justify-between gap-2 text-[13.5px] font-semibold text-text-2">
+            <span className="flex items-center justify-between gap-2 text-[14.5px] font-semibold text-text-2">
               {c.name}
               {c.save ? (
                 <Badge className="border-line-strong text-molten-text">{c.save}</Badge>
@@ -725,17 +728,17 @@ function PlanCards({
             </span>
             <span className="font-display text-[24px] leading-tight font-bold tracking-tight text-text">
               {was[k] && (
-                <s className="mr-1.5 font-sans text-[16px] font-medium tracking-normal text-text-3">
+                <s className="mr-1.5 font-sans text-[17px] font-medium tracking-normal text-text-3">
                   <span className="sr-only">was </span>
                   {rupeesFromPaise(was[k])}
                 </s>
               )}
               {c.price}{' '}
-              <small className="font-sans text-[14px] font-medium tracking-normal text-text-3">
+              <small className="font-sans text-[15px] font-medium tracking-normal text-text-3">
                 {c.per}
               </small>
             </span>
-            <span className="text-[13px] text-text-3">{c.sub}</span>
+            <span className="text-[14px] text-text-3">{c.sub}</span>
           </button>
         )
       })}
@@ -809,7 +812,7 @@ function Waiting({
         role="status"
         className="flex flex-col gap-3 rounded-[12px] border border-accent-line bg-accent-soft px-4 py-3.5"
       >
-        <p className="text-[14.5px] text-text-2">
+        <p className="text-[15.5px] text-text-2">
           <span
             aria-hidden="true"
             className="fc-pro-pulse mr-2 inline-block size-2 rounded-full bg-arc align-middle"
@@ -837,7 +840,7 @@ function Waiting({
           </Button>
           <a
             {...externalLink(checkout.checkout_url)}
-            className="rounded-[6px] text-[13.5px] font-semibold text-accent-text underline-offset-2 hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="rounded-[6px] text-[14.5px] font-semibold text-accent-text underline-offset-2 hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             Open checkout again
           </a>

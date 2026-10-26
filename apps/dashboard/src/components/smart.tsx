@@ -53,7 +53,7 @@ function until(ms: number): string {
 function Quota({ label, q }: { label: string; q: ProQuota | undefined }) {
   if (!q) return null
   return (
-    <span className="font-mono text-[12.5px] text-text-3 tabular-nums">
+    <span className="font-mono text-[13.5px] text-text-3 tabular-nums">
       {label} {formatCount(q.used)} of {formatCount(q.limit)} today
     </span>
   )
@@ -66,7 +66,7 @@ function Paused({ v, which }: { v: SmartView; which: 'moderation' | 'replies' })
   return (
     <div
       role="status"
-      className="rounded-control border border-line bg-warn-soft px-3 py-2.5 text-[13.5px]"
+      className="rounded-control border border-line bg-warn-soft px-3 py-2.5 text-[14.5px]"
     >
       <p className="font-semibold text-warn">{v.last_error?.message ?? 'Paused for now.'}</p>
       <p className="mt-0.5 text-text-2">
@@ -128,10 +128,10 @@ function SuggestionRow({
     >
       <div className="flex min-w-0 items-center gap-2">
         <PlatformMark platform={s.platform} size={14} />
-        <b className="min-w-0 truncate text-[14px] font-semibold text-text" dir="auto">
+        <b className="min-w-0 truncate text-[15px] font-semibold text-text" dir="auto">
           {tameText(s.name)}
         </b>
-        <span className="shrink-0 text-[12.5px] text-text-3">{ago(s.at)}</span>
+        <span className="shrink-0 text-[13.5px] text-text-3">{ago(s.at)}</span>
         <span className="ml-auto shrink-0">
           {done ? (
             <Badge tone="ok">
@@ -152,16 +152,16 @@ function SuggestionRow({
         </span>
       </div>
       <p
-        className="rounded-control bg-inset px-3 py-2 text-[14px] break-words text-text"
+        className="rounded-control bg-inset px-3 py-2 text-[15px] break-words text-text"
         dir="auto"
       >
         {tameText(s.text)}
       </p>
-      <p className="text-[13px] text-text-2">
+      <p className="text-[14px] text-text-2">
         {s.reason || s.category}{' '}
         <span className="font-mono text-text-3 tabular-nums">· {pct}% sure</span>
       </p>
-      {s.error && <p className="text-[13px] font-semibold text-danger">{s.error}</p>}
+      {s.error && <p className="text-[14px] font-semibold text-danger">{s.error}</p>}
       <div className="flex flex-wrap gap-2">
         {s.state === 'suggested' && (
           <>
@@ -249,7 +249,7 @@ function SmartModerationBody() {
   const r = rules ?? v.settings.rules
   return (
     <div className="flex flex-col gap-4" data-testid="smart-moderation">
-      <p className="max-w-[70ch] text-[13.5px] text-text-2">
+      <p className="max-w-[70ch] text-[14.5px] text-text-2">
         A second look at doubtful chat that passed your filters, in English, Hindi and Hinglish. You
         decide what happens. Nothing is ever banned on its own.
       </p>
@@ -315,7 +315,7 @@ function SmartModerationBody() {
       )}
       <Paused v={v} which="moderation" />
       <div>
-        <h3 className="flex items-center gap-2 text-[14px] font-semibold text-text">
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-text">
           Suggestions {open.length > 0 && <Badge tone="warn">{open.length} to look at</Badge>}
         </h3>
         {log.error ? (
@@ -323,7 +323,7 @@ function SmartModerationBody() {
         ) : !log.data ? (
           <Skeleton className="mt-2 h-24" />
         ) : items.length === 0 ? (
-          <p className="mt-2 text-[13.5px] text-text-3">
+          <p className="mt-2 text-[14.5px] text-text-3">
             Nothing flagged yet. Flagged messages show up here as they come in.
           </p>
         ) : (
@@ -397,7 +397,7 @@ function SmartRepliesBody() {
       </Field>
       <div className="flex flex-wrap items-center gap-3">
         {v.about_approved && !dirty ? (
-          <span className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ok">
+          <span className="flex items-center gap-1.5 text-[14.5px] font-semibold text-ok">
             <Check size={15} aria-hidden /> Approved
           </span>
         ) : (
@@ -412,28 +412,28 @@ function SmartRepliesBody() {
           </Button>
         )}
         {v.settings.replies && !v.about_approved && (
-          <span className="text-[13px] text-text-3">Replies start once you approve the facts.</span>
+          <span className="text-[14px] text-text-3">Replies start once you approve the facts.</span>
         )}
         <Quota label="Replies" q={v.quotas.smart_replies} />
       </div>
       <Paused v={v} which="replies" />
       {replies.length > 0 && (
         <div>
-          <h3 className="mb-1 text-[13px] font-semibold text-text-3">Recent replies</h3>
+          <h3 className="mb-1 text-[14px] font-semibold text-text-3">Recent replies</h3>
           <ul className="flex flex-col">
             {replies.slice(0, 5).map((r) => (
               <li
                 key={`${r.at}:${r.name}`}
                 className="flex flex-col gap-0.5 border-b border-line/60 py-2 last:border-0"
               >
-                <span className="flex min-w-0 items-center gap-2 text-[13px] text-text-3">
+                <span className="flex min-w-0 items-center gap-2 text-[14px] text-text-3">
                   <PlatformMark platform={r.platform} size={13} />
                   <span className="truncate" dir="auto">
                     {tameText(r.name)}: {tameText(r.question)}
                   </span>
                   <span className="ml-auto shrink-0">{ago(r.at)}</span>
                 </span>
-                <span className="text-[14px] text-text" dir="auto">
+                <span className="text-[15px] text-text" dir="auto">
                   {tameText(r.reply)}
                 </span>
               </li>
@@ -479,8 +479,8 @@ function RecapWriterBody({ startedAt }: { startedAt: number }) {
               key={i}
               className={
                 line.startsWith('- ')
-                  ? 'pl-3 text-[14px] text-text-2'
-                  : 'text-[14.5px] leading-relaxed text-text'
+                  ? 'pl-3 text-[15px] text-text-2'
+                  : 'text-[15.5px] leading-relaxed text-text'
               }
             >
               {line}
@@ -488,7 +488,7 @@ function RecapWriterBody({ startedAt }: { startedAt: number }) {
           ))}
         </div>
       ) : (
-        <p className="text-[13.5px] text-text-2">
+        <p className="text-[14.5px] text-text-2">
           A few lines on how the stream went, who to thank and two ideas for next time. Only you see
           it.
         </p>

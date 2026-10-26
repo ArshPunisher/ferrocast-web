@@ -95,7 +95,7 @@ function CloudBackupsBody() {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="max-w-[62ch] text-[15px] leading-relaxed text-text-2">
+      <p className="max-w-[62ch] text-[16px] leading-relaxed text-text-2">
         Your setup, encrypted on this PC before it goes up. Only your recovery key can open it.
       </p>
 
@@ -128,7 +128,7 @@ function CloudBackupsBody() {
             >
               {busy === 'now' ? 'Backing up…' : 'Back up now'}
             </Button>
-            <p className="text-[14px] text-text-3" data-testid="cloud-usage">
+            <p className="text-[15px] text-text-3" data-testid="cloud-usage">
               {v.backups.length} of {CLOUD_BACKUP_LIMITS.backups} backups · {backupSize(usage.used)}{' '}
               of {backupSize(CLOUD_BACKUP_LIMITS.bytes)}
             </p>
@@ -136,7 +136,7 @@ function CloudBackupsBody() {
           {v.last && !v.last.ok && (
             <p
               role="status"
-              className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[14px] text-warn"
+              className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[15px] text-warn"
             >
               <WarningCircle
                 size={18}
@@ -214,10 +214,10 @@ function NewPcOffer({ backup, onUse }: { backup: CloudBackup; onUse: () => void 
       data-testid="cloud-new-pc"
     >
       <div className="min-w-0">
-        <h3 className="font-display text-[17px] font-bold tracking-tight text-text">
+        <h3 className="font-display text-[18px] font-extrabold tracking-tight text-text">
           Use your newest backup from another PC
         </h3>
-        <p className="mt-1 text-[14.5px] text-text-2">
+        <p className="mt-1 text-[15.5px] text-text-2">
           {when(backup.created_at)} · {backupSize(backup.bytes)}. You’ll need its recovery key or
           passphrase.
         </p>
@@ -283,11 +283,11 @@ function SaveKey({
         <div className="min-w-0">
           <h3
             id="cloud-key-title"
-            className="font-display text-[18px] font-bold tracking-tight text-text"
+            className="font-display text-[18px] font-extrabold tracking-tight text-text"
           >
             {freshPc ? 'Or start fresh: save a new recovery key' : 'Save your recovery key'}
           </h3>
-          <p className="mt-1 max-w-[60ch] text-[15px] leading-relaxed text-text-2">
+          <p className="mt-1 max-w-[60ch] text-[16px] leading-relaxed text-text-2">
             Your backups open only with this key.{' '}
             <strong className="font-semibold text-text">
               If you lose it, your backups are lost. Nobody can open them, Ferrocast included.
@@ -308,7 +308,7 @@ function SaveKey({
           Copy key
         </Button>
       </div>
-      <label className="flex cursor-pointer items-start gap-3 text-[15px] text-text">
+      <label className="flex cursor-pointer items-start gap-3 text-[16px] text-text">
         <input
           type="checkbox"
           className="mt-1 size-4 shrink-0 accent-[var(--fc-arc)]"
@@ -360,8 +360,8 @@ function KeyStatus({
           aria-hidden="true"
         />
         <div className="min-w-0">
-          <p className="text-[15.5px] font-semibold text-text">Recovery key saved</p>
-          <p className="text-[14px] text-text-3">
+          <p className="text-[16.5px] font-semibold text-text">Recovery key saved</p>
+          <p className="text-[15px] text-text-3">
             {view.key.passphrase
               ? 'A passphrase opens new backups too.'
               : 'No passphrase. Only the key file opens them.'}
@@ -417,7 +417,7 @@ function BackupList({
   if (view.backups.length === 0)
     return (
       <p
-        className="rounded-panel border border-dashed border-line-strong px-4 py-6 text-center text-[15px] text-text-2"
+        className="rounded-panel border border-dashed border-line-strong px-4 py-6 text-center text-[16px] text-text-2"
         data-testid="cloud-empty"
       >
         No cloud backups yet. They’re encrypted on this PC before upload.
@@ -425,7 +425,9 @@ function BackupList({
     )
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="font-display text-[16px] font-bold tracking-tight text-text">In the cloud</h3>
+      <h3 className="font-display text-[17px] font-extrabold tracking-tight text-text">
+        In the cloud
+      </h3>
       <ul className="flex flex-col gap-1" data-testid="cloud-list">
         {view.backups.map((b) => (
           <li
@@ -433,10 +435,10 @@ function BackupList({
             className="flex items-center gap-3 rounded-control px-2 py-2.5 hover:bg-surface-2"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-              <span className="font-mono text-[14.5px] text-text tabular-nums">
+              <span className="font-mono text-[15.5px] text-text tabular-nums">
                 {when(b.created_at)}
               </span>
-              <span className="text-[14px] text-text-3">
+              <span className="text-[15px] text-text-3">
                 {b.this_install ? 'This PC' : 'Another PC'} ·{' '}
                 {b.reason === 'manual' ? 'By you' : 'Automatic'} · {backupSize(b.bytes)}
               </span>
@@ -531,7 +533,7 @@ function RestoreDialog({
     >
       {backup && (
         <div className="flex flex-col gap-4">
-          <p className="text-[15px] text-text-2">
+          <p className="text-[16px] text-text-2">
             {when(backup.created_at)} · {backup.this_install ? 'This PC' : 'Another PC'} ·{' '}
             {backupSize(backup.bytes)}
           </p>
@@ -562,7 +564,7 @@ function RestoreDialog({
                       rows={3}
                       spellCheck={false}
                       autoComplete="off"
-                      className="font-mono text-[13px]"
+                      className="font-mono text-[14px]"
                       value={secret}
                       onChange={(e) => setSecret(e.target.value)}
                     />

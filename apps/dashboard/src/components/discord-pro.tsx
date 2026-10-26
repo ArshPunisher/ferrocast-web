@@ -118,7 +118,7 @@ function NotConnected({ reload, pcCode }: { reload: () => void; pcCode: string }
         <p className="font-display text-[19px] leading-snug font-bold tracking-tight text-text">
           Go-live posts and supporter roles, run by Ferrocast.
         </p>
-        <p className="text-[15px] leading-relaxed text-text-2">
+        <p className="text-[16px] leading-relaxed text-text-2">
           Add the bot to your server. Viewers link their own Discord; Ferrocast never messages them.
         </p>
       </div>
@@ -138,7 +138,7 @@ function NotConnected({ reload, pcCode }: { reload: () => void; pcCode: string }
           <div className="flex flex-wrap gap-2">
             <a
               {...externalLink(invite.invite_url)}
-              className="fc-press inline-flex h-12 items-center gap-2 rounded-control bg-btn-primary px-5 text-[15px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
+              className="fc-press inline-flex h-12 items-center gap-2 rounded-control bg-btn-primary px-5 text-[16px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
             >
               <DiscordLogo size={20} weight="fill" aria-hidden /> Open Discord
               <ArrowSquareOut size={16} aria-hidden />
@@ -147,11 +147,11 @@ function NotConnected({ reload, pcCode }: { reload: () => void; pcCode: string }
               Check again
             </Button>
           </div>
-          <p className="text-[14px] text-text-2">
+          <p className="text-[15px] text-text-2">
             Pick your server in Discord, then come back. The link works for 10 minutes.
           </p>
           {pcCode && (
-            <p className="text-[13.5px] text-text-3" data-testid="discord-pc-code">
+            <p className="text-[14.5px] text-text-3" data-testid="discord-pc-code">
               The page after Discord shows this PC’s code:{' '}
               <span className="font-mono font-semibold text-text" translate="no">
                 {pcCode}
@@ -233,7 +233,7 @@ function Connected({
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Badge tone="ok">Connected</Badge>
               {by && (
-                <span className="text-[13px] text-text-3" data-testid="discord-connected-by">
+                <span className="text-[14px] text-text-3" data-testid="discord-connected-by">
                   {by.this_pc ? 'Added from this PC' : 'Added from another PC'}, code{' '}
                   <span className="font-mono font-semibold text-text-2" translate="no">
                     {by.pc_code}
@@ -247,14 +247,14 @@ function Connected({
           <p className="font-mono text-[28px] leading-none font-bold text-text tabular-nums">
             {v.linked.toLocaleString('en-US')}
           </p>
-          <p className="mt-1 text-[13.5px] text-text-3">Members linked</p>
+          <p className="mt-1 text-[14.5px] text-text-3">Members linked</p>
         </div>
       </div>
 
       {v.warning && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[14px] text-warn"
+          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[15px] text-warn"
         >
           <WarningCircle size={18} className="mt-0.5 shrink-0" aria-hidden />
           <span>
@@ -301,7 +301,7 @@ function Connected({
         }
       >
         {leaveErr && (
-          <p role="alert" className="text-[13.5px] font-semibold text-danger">
+          <p role="alert" className="text-[14.5px] font-semibold text-danger">
             {leaveErr}
           </p>
         )}
@@ -311,7 +311,9 @@ function Connected({
 }
 
 function SubHeading({ children }: { children: string }) {
-  return <h3 className="font-display text-[16px] font-bold tracking-tight text-text">{children}</h3>
+  return (
+    <h3 className="font-display text-[17px] font-extrabold tracking-tight text-text">{children}</h3>
+  )
 }
 
 function GoLive({
@@ -397,7 +399,7 @@ function GoLive({
         )}
       </Field>
       {err && (
-        <p role="alert" className="text-[13.5px] font-semibold text-danger">
+        <p role="alert" className="text-[14.5px] font-semibold text-danger">
           {err}
         </p>
       )}
@@ -474,7 +476,7 @@ function Rules({
       </div>
       {rolesHint(v.roles) && (
         <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[14px] text-text-2"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[15px] text-text-2"
           data-testid="discord-roles-hint"
         >
           <p className="min-w-0 flex-1 basis-60">{rolesHint(v.roles)}</p>
@@ -487,7 +489,7 @@ function Rules({
         <p
           role="status"
           data-testid="discord-perk-issue"
-          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[14px] text-warn"
+          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[15px] text-warn"
         >
           <WarningCircle size={18} className="mt-0.5 shrink-0" aria-hidden />
           <span>
@@ -497,7 +499,7 @@ function Rules({
         </p>
       )}
       {v.rules.length === 0 ? (
-        <p className="rounded-control border border-dashed border-line-strong px-4 py-5 text-[14.5px] text-text-2">
+        <p className="rounded-control border border-dashed border-line-strong px-4 py-5 text-[15.5px] text-text-2">
           No roles yet. Add one for subs, YouTube members or tippers.
         </p>
       ) : (
@@ -508,7 +510,7 @@ function Rules({
           {v.rules.map((r) => (
             <li key={r.id} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
-                <span className="text-[14.5px] font-medium text-text sm:w-56 sm:shrink-0">
+                <span className="text-[15.5px] font-medium text-text sm:w-56 sm:shrink-0">
                   {ruleWhat(r)}
                 </span>
                 <RoleName role={v.roles.find((x) => x.id === r.role_id)} />
@@ -517,7 +519,7 @@ function Rules({
                     Not given
                   </Badge>
                 )}
-                <span className="text-[13px] text-text-3 sm:ml-auto">{keepLabel(r.keep_days)}</span>
+                <span className="text-[14px] text-text-3 sm:ml-auto">{keepLabel(r.keep_days)}</span>
               </div>
               <div className="flex shrink-0">
                 <IconButton
@@ -540,7 +542,7 @@ function Rules({
           ))}
         </ul>
       )}
-      <p className="text-[13.5px] text-text-3">
+      <p className="text-[14.5px] text-text-3">
         {v.rules.length} of {v.limits.rules} rules. A role comes off after its days unless they
         support again.
       </p>
@@ -854,12 +856,12 @@ function RuleDialog({
                 value={d.keep}
                 onChange={(e) => patch({ keep: e.target.value.replace(/[^\d]/g, '') })}
               />
-              <span className="text-[14px] text-text-2">days</span>
+              <span className="text-[15px] text-text-2">days</span>
             </div>
           )}
         </Field>
         {err && err.field === null && (
-          <p role="alert" className="text-[13.5px] font-semibold text-danger">
+          <p role="alert" className="text-[14.5px] font-semibold text-danger">
             {err.message}
           </p>
         )}
@@ -874,7 +876,7 @@ function ViewerLink({ url }: { url: string }) {
       <div id="discord-link-h">
         <SubHeading>Link for viewers</SubHeading>
       </div>
-      <p className="max-w-[62ch] text-[14px] text-text-2">
+      <p className="max-w-[62ch] text-[15px] text-text-2">
         Share it in your server. Viewers sign in with Discord and their Twitch or YouTube is
         matched. Nothing is posted for them.
       </p>
@@ -882,7 +884,7 @@ function ViewerLink({ url }: { url: string }) {
         <code
           className={cx(
             'min-w-0 flex-1 truncate rounded-control border border-line bg-inset px-3 py-2.5',
-            'font-mono text-[13.5px] text-text',
+            'font-mono text-[14.5px] text-text',
           )}
           data-testid="discord-link-url"
           translate="no"

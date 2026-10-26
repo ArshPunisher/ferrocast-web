@@ -108,7 +108,7 @@ export function RemoteStrip({ remote }: { remote: RemoteState }) {
       data-testid="remote-strip"
       data-online={on ? 'yes' : 'no'}
       className={cx(
-        'flex min-h-10 items-center gap-2.5 border-b px-4 py-2 text-[14px] font-semibold sm:px-6',
+        'flex min-h-10 items-center gap-2.5 border-b px-4 py-2 text-[15px] font-semibold sm:px-6',
         on
           ? 'border-accent-line bg-accent-soft text-text'
           : 'border-warn/30 bg-warn-soft text-warn',
@@ -163,10 +163,10 @@ function LimitedStrip({ remote }: { remote: RemoteState }) {
         <CloudSlash size={22} weight="bold" className="shrink-0 text-warn" aria-hidden="true" />
         {/* Only the words are announced (not the Pause button) when the mode changes. */}
         <p role="status" aria-live="polite" className="min-w-0 flex-1 leading-tight">
-          <span className="block font-display text-[16px] font-bold tracking-tight text-text">
+          <span className="block font-display text-[17px] font-bold tracking-tight text-text">
             Your PC is off
           </span>
-          <span className="block text-[13.5px] font-medium text-text-2" data-testid="limited-works">
+          <span className="block text-[14.5px] font-medium text-text-2" data-testid="limited-works">
             {stillWorks}
           </span>
         </p>
@@ -208,7 +208,7 @@ function LimitedStrip({ remote }: { remote: RemoteState }) {
         }
       >
         {error && (
-          <p role="alert" className="text-[14px] font-semibold text-danger">
+          <p role="alert" className="text-[15px] font-semibold text-danger">
             {error}
           </p>
         )}
@@ -221,7 +221,7 @@ function LimitedStrip({ remote }: { remote: RemoteState }) {
 export function NeedsPc({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <p
-      className={cx('flex items-center gap-2 text-[14px] font-semibold text-text-2', className)}
+      className={cx('flex items-center gap-2 text-[15px] font-semibold text-text-2', className)}
       data-testid="needs-pc"
     >
       <Power size={18} weight="bold" className="shrink-0 text-text-3" aria-hidden="true" />
@@ -384,7 +384,7 @@ export function RemoteGate({
               problem === 'pc_offline' ||
               problem === 'pro_paused') && (
               <div className="flex w-full flex-col items-start gap-2 rounded-panel border border-line bg-surface-1 p-4">
-                <p className="text-[15px] leading-snug text-text-2">
+                <p className="text-[16px] leading-snug text-text-2">
                   No PC needed: alerts, overlays, chat and the bot can run from Ferrocast’s servers.
                   It’s free.
                 </p>
@@ -398,7 +398,7 @@ export function RemoteGate({
               </div>
             )}
           {switchError && (
-            <p role="alert" className="text-[15px] font-semibold text-danger">
+            <p role="alert" className="text-[16px] font-semibold text-danger">
               {switchError.message}
               {switchError.hint ? ` ${switchError.hint}` : ''}
             </p>
@@ -432,10 +432,10 @@ function PcChoice({ onDone }: { onDone: () => void }) {
         {accountPcs.map((pc) => (
           <li key={pc.id} className="flex items-center gap-3 px-3.5 py-3">
             <span className="min-w-0 flex-1">
-              <b className="block truncate text-[15px] font-semibold text-text">
+              <b className="block truncate text-[16px] font-semibold text-text">
                 {pc.label || 'Your PC'}
               </b>
-              <small className="block text-[13px] text-text-3">
+              <small className="block text-[14px] text-text-3">
                 {pc.pc_online ? 'On now' : 'Off'}
               </small>
             </span>
@@ -460,7 +460,7 @@ function PcChoice({ onDone }: { onDone: () => void }) {
         ))}
       </ul>
       {err && (
-        <p role="alert" className="text-[14px] font-semibold text-danger">
+        <p role="alert" className="text-[15px] font-semibold text-danger">
           {err}
         </p>
       )}
@@ -496,7 +496,7 @@ function RemoteBody() {
   const mods = v?.devices.filter((d) => d.role === 'mod').length ?? 0
   return (
     <div className="flex flex-col gap-5">
-      <p className="max-w-[60ch] text-[15px] leading-relaxed font-medium text-text">
+      <p className="max-w-[60ch] text-[16px] leading-relaxed font-medium text-text">
         Your dashboard on your phone, from anywhere. Your PC needs to be on.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -542,12 +542,12 @@ function RemoteBody() {
                   <DeviceMobile size={22} className="shrink-0 text-text-3" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[15px] font-semibold text-text">{d.name}</span>
+                      <span className="truncate text-[16px] font-semibold text-text">{d.name}</span>
                       <Badge tone={d.role === 'owner' ? 'accent' : 'neutral'}>
                         {ROLE_LABEL[d.role]}
                       </Badge>
                     </p>
-                    <p className="mt-0.5 text-[13px] text-text-3">
+                    <p className="mt-0.5 text-[14px] text-text-3">
                       {now - d.last_used_at < 60_000
                         ? 'Used just now'
                         : `Used ${relativeTime(d.last_used_at, now)} ago`}
@@ -566,7 +566,7 @@ function RemoteBody() {
               ))}
             </ul>
           )}
-          <p className="text-[13px] text-text-3" data-testid="remote-counts">
+          <p className="text-[14px] text-text-3" data-testid="remote-counts">
             {owners} of {v.limits.owner} own devices, {mods} of {v.limits.mod} mods
           </p>
           {v.audit.length > 0 && <Activity view={v} now={now} />}
@@ -632,7 +632,7 @@ function TunnelLine({ view }: { view: RemoteView }) {
   return (
     <p
       className={cx(
-        'flex items-center gap-2 text-[14px] font-semibold',
+        'flex items-center gap-2 text-[15px] font-semibold',
         t === 'connected' ? 'text-text' : t === 'retrying' ? 'text-warn' : 'text-text-2',
       )}
       data-testid="remote-tunnel"
@@ -655,12 +655,12 @@ function Activity({ view, now }: { view: RemoteView; now: number }) {
       aria-labelledby="remote-activity"
       className="flex flex-col gap-2 border-t border-line pt-4"
     >
-      <h3 id="remote-activity" className="font-display text-[15px] font-semibold tracking-tight">
+      <h3 id="remote-activity" className="font-display text-[18px] font-extrabold tracking-tight">
         Recent from phones
       </h3>
       <ul className="flex flex-col gap-1.5">
         {lines.map((a, i) => (
-          <li key={`${a.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-[14px]">
+          <li key={`${a.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-[15px]">
             <span className="font-medium text-text">{auditLabel(a)}</span>
             <span className="text-text-3">
               by {a.device_name},{auditSource(a) ? ` ${auditSource(a)},` : ''}{' '}
@@ -793,7 +793,7 @@ function LinkDialog({
         <div className="flex flex-col items-center gap-4">
           {expired ? (
             <div className="flex h-[232px] w-[232px] flex-col items-center justify-center gap-3 rounded-[12px] border border-line bg-surface-2 text-center">
-              <p className="text-[15px] font-semibold">This link expired.</p>
+              <p className="text-[16px] font-semibold">This link expired.</p>
               <Button
                 variant="primary"
                 onClick={() => make(link.v.role === 'mod' ? link.v.name : undefined)}
@@ -813,7 +813,7 @@ function LinkDialog({
               readOnly
               value={link.v.url}
               aria-label="Pairing link"
-              className="min-w-0 flex-1 font-mono text-[13px]"
+              className="min-w-0 flex-1 font-mono text-[14px]"
               onFocus={(e) => e.currentTarget.select()}
             />
             <Button
@@ -831,7 +831,7 @@ function LinkDialog({
               Copy
             </Button>
           </div>
-          <p className="text-[14px] font-semibold text-text-2">
+          <p className="text-[15px] font-semibold text-text-2">
             {expired
               ? 'Links work once, for 10 minutes.'
               : `Works once, for ${mmss(left * 1000)} more.`}

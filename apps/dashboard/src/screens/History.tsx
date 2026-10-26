@@ -45,7 +45,9 @@ function Section({
   return (
     <section className="flex min-w-0 flex-col gap-4 border-t border-line pt-5" aria-label={title}>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-[15px] font-bold tracking-tight text-text">{title}</h3>
+        <h3 className="font-display text-[18px] font-extrabold tracking-tight text-text">
+          {title}
+        </h3>
         {aside}
       </div>
       {children}
@@ -70,7 +72,7 @@ function Tiles({ v, now }: { v: HistoryView; now: number }) {
     >
       {tiles.map(([k, val], i) => (
         <div key={k} className="min-w-0">
-          <dt className="text-[13px] font-medium text-text-3">{k}</dt>
+          <dt className="text-[14px] font-medium text-text-3">{k}</dt>
           <dd
             className={
               i === 0
@@ -108,7 +110,7 @@ function Loading() {
 function KeptNote({ v }: { v: HistoryView }) {
   if (!v.limited || v.plan !== 'free') return null
   return (
-    <p className="text-[13.5px] text-text-2" data-testid="history-limited">
+    <p className="text-[14.5px] text-text-2" data-testid="history-limited">
       Showing the last {v.keep_days ?? 30} days, what a free account keeps. Pro keeps a year of
       insights.{' '}
       <a
@@ -128,8 +130,8 @@ function NeedsAccount() {
       className="flex flex-col items-start gap-2 rounded-panel border border-line bg-surface-2 p-4"
       data-testid="history-account"
     >
-      <p className="text-[15px] font-semibold text-text">Sign in to keep your stream history</p>
-      <p className="text-[13.5px] text-text-2">
+      <p className="text-[16px] font-semibold text-text">Sign in to keep your stream history</p>
+      <p className="text-[14.5px] text-text-2">
         A free Ferrocast account keeps the last 30 days of streams, with charts, best times and a
         CSV. Pro keeps a year.
       </p>
@@ -255,7 +257,7 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
           <Section
             title="Every stream"
             aside={
-              <span className="font-mono text-[12.5px] text-text-3 tabular-nums">
+              <span className="font-mono text-[13.5px] text-text-3 tabular-nums">
                 {formatCount(v.streams.length)}
               </span>
             }
@@ -267,7 +269,7 @@ function Body({ email, phone = false }: { email: boolean; phone?: boolean }) {
               onSelect={setPicked}
             />
             {v.truncated && (
-              <p className="text-[13px] text-text-3">
+              <p className="text-[14px] text-text-3">
                 {phone
                   ? 'Showing the newest 2,000. Export CSV on your PC has them all.'
                   : 'Showing the newest 2,000. Export CSV has them all.'}

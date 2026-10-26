@@ -43,6 +43,15 @@ const PRESETS: { value: OverlayPreset; title: string; body: string }[] = [
   { value: 'blank', title: 'Blank', body: 'Start empty and add widgets yourself.' },
 ]
 
+/** A widget kind's colour in the little layout map. */
+function thumbTone(kind: string): string {
+  if (kind === 'alerts') return 'var(--fc-accent)'
+  if (kind === 'chat') return 'var(--fc-arc)'
+  if (kind === 'goal' || kind === 'tips') return 'var(--fc-ok)'
+  if (kind === 'viewers' || kind === 'event_list') return 'var(--fc-twitch)'
+  return 'var(--fc-text-3)'
+}
+
 /** A tiny map of where each widget sits, drawn from the real layout. */
 function LayoutThumb({ overlay }: { overlay: Overlay }) {
   return (
@@ -53,13 +62,11 @@ function LayoutThumb({ overlay }: { overlay: Overlay }) {
       {overlay.widgets.map((w) => (
         <div
           key={w.id}
-          className={cx(
-            'absolute rounded-[3px] border',
-            w.kind === 'alerts'
-              ? 'border-accent-line bg-accent-soft'
-              : 'border-line-strong bg-surface-1/70',
-          )}
+          className="absolute rounded-[3px] border"
           style={{
+            // Each kind of widget in its own colour, as in the editor's palette.
+            borderColor: `color-mix(in srgb, ${thumbTone(w.kind)} 55%, transparent)`,
+            background: `color-mix(in srgb, ${thumbTone(w.kind)} 22%, var(--fc-surface-1))`,
             left: `${(w.x / overlay.width) * 100}%`,
             top: `${(w.y / overlay.height) * 100}%`,
             width: `${(w.w / overlay.width) * 100}%`,
@@ -154,10 +161,10 @@ export function Overlays() {
               </a>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h2 className="truncate font-display text-base font-semibold tracking-tight">
+                  <h2 className="truncate font-display text-[18px] font-extrabold tracking-tight">
                     {o.name}
                   </h2>
-                  <p className="mt-0.5 truncate text-[13.5px] text-text-2">
+                  <p className="mt-0.5 truncate text-[14.5px] text-text-2">
                     {o.widgets.length
                       ? o.widgets.map((w) => WIDGET_NAME[w.kind]).join(', ')
                       : 'No widgets yet'}
@@ -264,7 +271,7 @@ export function Overlays() {
             )}
           </Field>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1.5 text-[13.5px] font-semibold text-text">Start with</legend>
+            <legend className="mb-1.5 text-[14.5px] font-semibold text-text">Start with</legend>
             {PRESETS.map((p) => (
               <label
                 key={p.value}
@@ -285,7 +292,7 @@ export function Overlays() {
                 />
                 <span>
                   <span className="block text-sm font-semibold text-text">{p.title}</span>
-                  <span className="block text-[13.5px] text-text-2">{p.body}</span>
+                  <span className="block text-[14.5px] text-text-2">{p.body}</span>
                 </span>
               </label>
             ))}

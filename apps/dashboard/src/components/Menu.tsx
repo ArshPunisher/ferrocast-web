@@ -207,7 +207,7 @@ export function Menu({
                         it.onSelect()
                       }}
                       className={cx(
-                        'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[14px] font-semibold',
+                        'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[15px] font-semibold',
                         it.description ? 'items-start py-2.5' : 'items-center py-2',
                         'focus-visible:bg-surface-3 focus-visible:outline-none disabled:opacity-40',
                         it.danger
@@ -225,13 +225,13 @@ export function Menu({
                       <span className="min-w-0 flex-1">
                         <span className="block">{it.label}</span>
                         {it.description && (
-                          <span className="mt-0.5 block text-[12.5px] font-normal leading-snug text-text-3">
+                          <span className="mt-0.5 block text-[13.5px] font-normal leading-snug text-text-3">
                             {it.description}
                           </span>
                         )}
                       </span>
                       {it.hint && (
-                        <span className="shrink-0 text-[12px] text-text-3">{it.hint}</span>
+                        <span className="shrink-0 text-[13px] text-text-3">{it.hint}</span>
                       )}
                     </button>
                   </li>

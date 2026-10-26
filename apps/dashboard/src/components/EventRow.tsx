@@ -80,7 +80,7 @@ export function EventRow({
           )}
         </p>
         {d.detail && !compact && (
-          <p dir="auto" className="mt-0.5 line-clamp-2 text-[13px] break-words text-text-3">
+          <p dir="auto" className="mt-0.5 line-clamp-2 text-[14px] break-words text-text-3">
             {d.detail}
           </p>
         )}
@@ -88,7 +88,7 @@ export function EventRow({
       <time
         dateTime={new Date(event.received_at).toISOString()}
         title={new Date(event.received_at).toLocaleString()}
-        className="mt-0.5 shrink-0 font-mono text-[11.5px] text-text-3 tabular-nums group-hover:hidden group-focus-within:hidden"
+        className="mt-0.5 shrink-0 font-mono text-[12.5px] text-text-3 tabular-nums group-hover:hidden group-focus-within:hidden"
       >
         {relativeTime(event.received_at, now)}
       </time>
@@ -153,7 +153,7 @@ export function WhyDialog({ event, onClose }: { event: FerroEvent; onClose: () =
             <a
               href={href({ name: 'alerts', rule })}
               onClick={onClose}
-              className="mr-auto text-[13px] font-semibold text-accent-text hover:underline"
+              className="mr-auto text-[14px] font-semibold text-accent-text hover:underline"
             >
               Open the alert rule
             </a>

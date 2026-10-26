@@ -98,7 +98,7 @@ function DiscordForm({
         )}
       </Field>
       {cfg.pro_go_live && (
-        <p className="text-[13.5px] text-text-2" data-testid="discord-pro-posts">
+        <p className="text-[14.5px] text-text-2" data-testid="discord-pro-posts">
           The Ferrocast bot posts your go-live now, so this webhook stays quiet.
         </p>
       )}
@@ -123,7 +123,7 @@ function DiscordForm({
         }
       />
       {err && err.field !== 'webhook_url' && err.field !== 'template' && (
-        <p role="alert" className="text-[13px] text-danger">
+        <p role="alert" className="text-[14px] text-danger">
           {err.message}
         </p>
       )}

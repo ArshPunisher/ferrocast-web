@@ -343,7 +343,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
   const testBar = (
     <div className="flex flex-wrap items-center gap-2">
       {hasAmount(ev) && (
-        <label className="flex items-center gap-1.5 text-[13.5px] text-text-3">
+        <label className="flex items-center gap-1.5 text-[14.5px] text-text-3">
           Amount
           <div className="w-24">
             <Input
@@ -453,7 +453,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           title={conditionText(v.condition)}
           onClick={() => setVi(i)}
           className={cx(
-            'fc-press inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[13px] font-medium',
+            'fc-press inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[14px] font-medium',
             i === index
               ? 'border-accent-line bg-accent-soft text-text'
               : 'border-line text-text-2 hover:border-line-strong',
@@ -626,7 +626,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
 function BrandNote({ onDuplicate }: { onDuplicate: () => void }) {
   return (
     <div className="flex flex-col items-start gap-2.5 rounded-[14px] border border-line bg-surface-2 px-3.5 py-3">
-      <p className="text-[13.5px] leading-snug text-text-2">
+      <p className="text-[14.5px] leading-snug text-text-2">
         <b className="font-semibold text-text">Built-in design.</b> It shows a small Ferrocast mark
         on stream. Your edits stay a draft until you save your own copy.
       </p>
@@ -678,7 +678,7 @@ export function DesignerHeader({
           <CaretLeft size={18} />
         </a>
         {design.built_in ? (
-          <h1 className="min-w-0 truncate font-display text-2xl font-bold tracking-tight">
+          <h1 className="min-w-0 truncate font-display text-2xl font-extrabold tracking-tight">
             {name}
           </h1>
         ) : (
@@ -802,7 +802,7 @@ export function DuplicateDialog({
         </>
       }
     >
-      <label className="flex flex-col gap-1.5 text-[13.5px] font-medium text-text-2">
+      <label className="flex flex-col gap-1.5 text-[14.5px] font-medium text-text-2">
         Name
         <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
       </label>
@@ -898,7 +898,7 @@ function StageView({
             }
           }}
           className={cx(
-            'flex min-h-12 flex-1 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[9px] px-2 text-[12.5px] font-semibold',
+            'flex min-h-12 flex-1 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[9px] px-2 text-[13.5px] font-semibold',
             t.id === tab
               ? 'bg-surface-3 text-text [&_svg]:text-accent-text'
               : 'text-text-3 hover:bg-surface-2 hover:text-text',
@@ -1023,7 +1023,7 @@ function GuidedView({
   return (
     <div className="flex flex-col gap-4 pb-[calc(72px)] lg:pb-0">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="font-display text-xl font-bold tracking-tight">
+        <h2 className="font-display text-xl font-extrabold tracking-tight">
           Make your {EVENT_LABEL[ev].toLowerCase()} alert
         </h2>
         <span className="flex-1" />
@@ -1045,7 +1045,7 @@ function GuidedView({
               aria-pressed={k === ev}
               onClick={() => onEv(k)}
               className={cx(
-                'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-medium',
+                'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[14.5px] font-medium',
                 k === ev
                   ? 'border-accent-line bg-accent-soft text-text'
                   : 'border-line text-text-2 hover:border-line-strong',
@@ -1069,7 +1069,7 @@ function GuidedView({
                 aria-current={i === step ? 'step' : undefined}
                 onClick={() => goTo(i, false)}
                 className={cx(
-                  'flex min-h-10 flex-1 shrink-0 items-center gap-2 rounded-full border pr-3.5 pl-2 text-[13.5px] font-semibold',
+                  'flex min-h-10 flex-1 shrink-0 items-center gap-2 rounded-full border pr-3.5 pl-2 text-[14.5px] font-semibold',
                   i === step
                     ? 'border-accent-text bg-accent-soft text-text'
                     : 'border-line bg-surface-1 text-text-3',
@@ -1077,7 +1077,7 @@ function GuidedView({
               >
                 <span
                   className={cx(
-                    'grid size-6 place-items-center rounded-full font-mono text-[12.5px] font-bold',
+                    'grid size-6 place-items-center rounded-full font-mono text-[13.5px] font-bold',
                     done.has(i) && i !== step
                       ? 'bg-btn-primary text-on-btn-primary'
                       : i === step
@@ -1120,10 +1120,10 @@ function GuidedView({
                       <s.icon size={20} />
                     </span>
                     <span className="flex min-w-0 flex-col">
-                      <b className="font-display text-[17px] font-bold tracking-tight text-text">
+                      <b className="font-display text-[18px] font-bold tracking-tight text-text">
                         {s.label}
                       </b>
-                      <span className="truncate text-[13.5px] text-text-3">{s.sub}</span>
+                      <span className="truncate text-[14.5px] text-text-3">{s.sub}</span>
                     </span>
                   </button>
                 </h3>
@@ -1137,7 +1137,7 @@ function GuidedView({
                     {s.id === 'motion' && <MotionSection {...p} stage={motion} timing={advanced} />}
                     {s.id === 'motion' && advanced && (
                       <div className="flex flex-col gap-3 rounded-[14px] border border-dashed border-line-strong bg-surface-2 p-3.5">
-                        <span className="font-mono text-[12.5px] font-semibold text-accent-text">
+                        <span className="font-mono text-[13.5px] font-semibold text-accent-text">
                           Advanced
                         </span>
                         {when}

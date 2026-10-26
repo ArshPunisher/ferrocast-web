@@ -148,7 +148,7 @@ function OpenInBrowser() {
       type="button"
       onClick={open}
       disabled={busy}
-      className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60"
+      className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[14.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60"
     >
       <ArrowSquareOut size={17} />
       Open in browser
@@ -231,9 +231,11 @@ function NavLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cx(
-        'fc-press group relative flex h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors duration-150',
+        'fc-press group relative flex h-10 items-center gap-3 rounded-control px-3 text-[15px] font-semibold transition-colors duration-150',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-        active ? 'bg-surface-3 text-text' : 'text-text-3 hover:bg-surface-2 hover:text-text',
+        active
+          ? 'bg-accent-soft font-bold text-accent-text'
+          : 'text-text-2 hover:bg-surface-2 hover:text-text',
       )}
     >
       {seam && active && (
@@ -258,7 +260,7 @@ function ProMark() {
     <span
       role="img"
       aria-label="Ferrocast Pro is on"
-      className="fc-pro-mark inline-flex h-5 shrink-0 items-center rounded-full px-2 font-mono text-[10.5px] font-bold tracking-[0.06em]"
+      className="fc-pro-mark inline-flex h-5 shrink-0 items-center rounded-full px-2 font-mono text-[11.5px] font-bold tracking-[0.06em]"
     >
       <span aria-hidden="true">PRO</span>
     </span>
@@ -282,13 +284,13 @@ function AccountChip({ pro }: { pro: ProView }) {
     >
       <span
         aria-hidden="true"
-        className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 font-display text-[12px] font-bold text-text"
+        className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 font-display text-[13px] font-bold text-text"
       >
         {initials}
       </span>
       <span className="min-w-0">
-        <b className="block truncate text-[13.5px] leading-tight font-semibold text-text">{name}</b>
-        <small className="flex items-center gap-1 text-[12px] text-text-3">
+        <b className="block truncate text-[14.5px] leading-tight font-semibold text-text">{name}</b>
+        <small className="flex items-center gap-1 text-[13px] text-text-3">
           <SealCheck size={14} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
           {proPlanLine(pro)}
         </small>
@@ -453,7 +455,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[13.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[14.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 <ThemeIcon size={17} />
                 {theme === 'dark' ? 'Light theme' : 'Dark theme'}
@@ -581,7 +583,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                   href={href(i.route)}
                   aria-current={active ? 'page' : undefined}
                   className={cx(
-                    'flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
+                    'flex h-full flex-col items-center justify-center gap-1 text-[13px] font-medium',
                     active ? 'text-text' : 'text-text-3',
                   )}
                 >
@@ -601,7 +603,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               onClick={() => setMore(true)}
               aria-haspopup="dialog"
               className={cx(
-                'flex h-full w-full flex-col items-center justify-center gap-1 text-[12px] font-medium',
+                'flex h-full w-full flex-col items-center justify-center gap-1 text-[13px] font-medium',
                 [
                   'overlays',
                   'overlay',
@@ -666,7 +668,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
 function DemoNote() {
   return (
-    <div className="rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 text-[13px] leading-snug text-text-2">
+    <div className="rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 text-[14px] leading-snug text-text-2">
       <span className="font-semibold text-text">Demo mode.</span> This is a simulated stream. Open
       the dashboard from the Ferrocast app to see yours.
     </div>

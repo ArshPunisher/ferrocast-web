@@ -122,7 +122,7 @@ export function useConnect(): {
             </Button>
             <a
               {...externalLink(flow.flow.verification_url)}
-              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13px] font-semibold text-text"
+              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14px] font-semibold text-text"
             >
               Open twitch.tv/activate <ArrowSquareOut size={14} />
             </a>
@@ -132,11 +132,11 @@ export function useConnect(): {
       {flow.flow.flow === 'browser' && !done && (
         <div className="flex flex-col items-center gap-2 pb-1 text-center">
           {browserFailed && (
-            <p role="alert" className="text-[13.5px] font-medium text-warn">
+            <p role="alert" className="text-[14.5px] font-medium text-warn">
               Your browser didn’t open. Copy the link and paste it into your browser.
             </p>
           )}
-          <p className="text-[13.5px] text-text-2">
+          <p className="text-[14.5px] text-text-2">
             {browserFailed ? 'Or try again: ' : 'Nothing opened? '}
             <a
               {...externalLink(flow.flow.url)}
@@ -210,7 +210,7 @@ export function AccountRow({
             <Badge tone={tone === 'off' ? 'neutral' : tone === 'ok' ? 'ok' : tone}>{label}</Badge>
           )}
         </p>
-        <p className="mt-0.5 text-[13.5px] text-text-2">
+        <p className="mt-0.5 text-[14.5px] text-text-2">
           {c.detail && !on ? c.detail : BLURB[platform]}
         </p>
       </div>
@@ -219,7 +219,7 @@ export function AccountRow({
           Disconnect
         </Button>
       ) : on ? (
-        <span className="inline-flex items-center gap-1 text-[13.5px] font-semibold text-ok">
+        <span className="inline-flex items-center gap-1 text-[14.5px] font-semibold text-ok">
           <Check size={15} weight="bold" /> Done
         </span>
       ) : (

@@ -108,7 +108,7 @@ export function GoalPage({
 
   if (!hasPage)
     return (
-      <p className="text-[15px] text-text-2">
+      <p className="text-[16px] text-text-2">
         Create your tip page first. The goal page sits next to it.
       </p>
     )
@@ -188,7 +188,7 @@ export function GoalPage({
             )}
           </Field>
         </div>
-        <p className="text-[14px] leading-snug text-text-2">
+        <p className="text-[15px] leading-snug text-text-2">
           {currencyChange
             ? `Changing to ${d.currency} starts the count again.`
             : `Only tips in ${d.currency || 'this currency'} count. Refunds come off.`}
@@ -236,8 +236,8 @@ function Progress({ goal }: { goal: TipGoal }) {
         <span className="font-display text-[28px] leading-none font-bold tracking-[-0.02em] text-text tabular-nums">
           {money(goal.raised)}
         </span>
-        <span className="text-[15px] text-text-2">of {money(goal.target)}</span>
-        <span className="ml-auto text-[15px] font-semibold text-text tabular-nums">{pct}%</span>
+        <span className="text-[16px] text-text-2">of {money(goal.target)}</span>
+        <span className="ml-auto text-[16px] font-semibold text-text tabular-nums">{pct}%</span>
       </p>
       <div
         role="progressbar"
@@ -249,7 +249,7 @@ function Progress({ goal }: { goal: TipGoal }) {
       >
         <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(pct, 1)}%` }} />
       </div>
-      <p className="mt-2 text-[13.5px] text-text-2">
+      <p className="mt-2 text-[14.5px] text-text-2">
         {goal.tips === 1 ? '1 tip' : `${goal.tips} tips`}
         {goal.ended
           ? ', ended'
@@ -259,7 +259,7 @@ function Progress({ goal }: { goal: TipGoal }) {
       </p>
       {goal.page_url && (
         <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
-          <code translate="no" className="font-mono text-[13.5px] break-all text-text-2">
+          <code translate="no" className="font-mono text-[14.5px] break-all text-text-2">
             {goal.page_url}
           </code>
           <div className="flex flex-wrap gap-2">
@@ -269,7 +269,7 @@ function Progress({ goal }: { goal: TipGoal }) {
             )}
             <a
               {...externalLink(goal.page_url)}
-              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
             >
               Open <ArrowSquareOut size={14} aria-hidden="true" />
               <span className="sr-only">(opens in a new tab)</span>

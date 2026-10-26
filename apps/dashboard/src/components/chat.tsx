@@ -109,7 +109,7 @@ function RoleChips({ roles, mark }: { roles: number; mark?: ChatterMark | undefi
           key={c.label}
           tone={c.tone}
           {...(c.title ? { title: c.title } : {})}
-          className="h-[18px] px-1.5 text-[10.5px]"
+          className="h-[18px] px-1.5 text-[11.5px]"
         >
           {c.label}
         </Badge>
@@ -267,7 +267,7 @@ export const ChatLine = memo(function ChatLine({
           </button>
           <RoleChips roles={a.roles} mark={mark} />
           {held && (
-            <Badge tone="warn" className="h-[18px] px-1.5 text-[10.5px]" title={held}>
+            <Badge tone="warn" className="h-[18px] px-1.5 text-[11.5px]" title={held}>
               Held for review
             </Badge>
           )}
@@ -280,13 +280,13 @@ export const ChatLine = memo(function ChatLine({
         {held && !deleted && actions && (
           <span className="mt-1.5 flex flex-wrap items-center gap-2">
             <HeldButtons event={event} onApprove={actions.approve} onRemove={actions.drop} />
-            <span className="text-[12.5px] text-text-2">{held}</span>
+            <span className="text-[13.5px] text-text-2">{held}</span>
           </span>
         )}
       </div>
       {actions && !deleted && !mine && <LineToolbar actions={actions} event={event} />}
       {!dense && (
-        <time className="mt-[3px] shrink-0 font-mono text-[12px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
+        <time className="mt-[3px] shrink-0 font-mono text-[13px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
           {relativeTime(event.received_at, now)}
         </time>
       )}
@@ -466,7 +466,7 @@ export function ChatScroller({
               setStuck(true)
               setUnseen(0)
             }}
-            className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-surface-1 px-3 py-1.5 text-[12.5px] font-semibold text-text shadow-pop"
+            className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-surface-1 px-3 py-1.5 text-[13.5px] font-semibold text-text shadow-pop"
           >
             <ArrowDown size={14} />
             {unseen > 0 ? `${unseen > 99 ? '99+' : unseen} new` : 'Latest'}
@@ -550,7 +550,7 @@ export function Composer({
       className="flex flex-col gap-2"
     >
       {reply && (
-        <div className="flex items-center gap-2 rounded-control border border-accent-line bg-accent-soft px-2.5 py-1.5 text-[13.5px] text-text-2">
+        <div className="flex items-center gap-2 rounded-control border border-accent-line bg-accent-soft px-2.5 py-1.5 text-[14.5px] text-text-2">
           <ArrowBendUpLeft size={14} className="shrink-0 text-accent-text" />
           <span className="min-w-0 flex-1 truncate">
             Replying to <span className="font-semibold text-text">{reply.name}</span> on{' '}
@@ -829,7 +829,7 @@ export function BanDialog({
     >
       <div className="flex flex-col gap-4">
         {onlyHere ? (
-          <p className="text-[14px] text-text-2">
+          <p className="text-[15px] text-text-2">
             Your PC is off, so this bans on {platform ? PLATFORM_LABEL[platform] : 'this platform'}{' '}
             only.
           </p>
@@ -845,7 +845,7 @@ export function BanDialog({
           />
         )}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="ban-reason" className="text-[13.5px] font-semibold text-text">
+          <label htmlFor="ban-reason" className="text-[14.5px] font-semibold text-text">
             Reason <span className="font-normal text-text-2">(optional, only mods see it)</span>
           </label>
           <input
@@ -954,14 +954,14 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
               ['Timeouts', String(card.timeouts)],
             ].map(([k, v]) => (
               <div key={k} className="rounded-control border border-line bg-surface-2 px-3 py-2">
-                <dt className="text-[12.5px] font-medium text-text-2">{k}</dt>
+                <dt className="text-[13.5px] font-medium text-text-2">{k}</dt>
                 <dd className="mt-0.5 font-mono text-sm text-text tabular-nums">{v}</dd>
               </div>
             ))}
           </dl>
           <div className="flex flex-col gap-2 rounded-control border border-line bg-surface-2 px-3 py-2.5">
             <p className="flex items-baseline justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-text-2">Points</span>
+              <span className="text-[13.5px] font-medium text-text-2">Points</span>
               <span className="font-mono text-sm font-semibold text-text tabular-nums">
                 {pointsLabel(card.points, 'points')}
               </span>
@@ -975,7 +975,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             />
           </div>
           {card.other_identities.length > 0 && (
-            <p className="text-[13.5px] text-text-2">
+            <p className="text-[14.5px] text-text-2">
               Also seen as{' '}
               {card.other_identities.map((o) => (
                 <span key={o.platform} className="font-medium text-text-2">
@@ -985,7 +985,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="viewer-note" className="text-[13.5px] font-semibold text-text">
+            <label htmlFor="viewer-note" className="text-[14.5px] font-semibold text-text">
               Note <span className="font-normal text-text-2">(only you and your mods see it)</span>
             </label>
             <Textarea
@@ -998,7 +998,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13.5px] font-semibold text-text">Time out</span>
+            <span className="text-[14.5px] font-semibold text-text">Time out</span>
             <Button
               variant="secondary"
               aria-label="Time out 1 minute"

@@ -217,7 +217,7 @@ function InfoTabs({
             tabIndex={on ? 0 : -1}
             onClick={() => onTab(t)}
             className={cx(
-              '-mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 px-2.5 text-[13.5px] font-semibold whitespace-nowrap transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              '-mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 px-2.5 text-[14.5px] font-semibold whitespace-nowrap transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               on ? 'border-accent text-text' : 'border-transparent text-text-3 hover:text-text-2',
             )}
           >
@@ -260,7 +260,7 @@ function OwnLines({
   return (
     <ul className="flex flex-col gap-1 border-l-2 border-line pl-3">
       {lines.map(({ p, v }) => (
-        <li key={p} className="flex min-w-0 items-center gap-2 text-[13px] text-text-3">
+        <li key={p} className="flex min-w-0 items-center gap-2 text-[14px] text-text-3">
           <span aria-hidden="true" className="inline-flex shrink-0">
             <PlatformMark platform={p} size={13} />
           </span>
@@ -298,7 +298,7 @@ function UseEverywhere({
   return (
     <button
       type="button"
-      className="self-start text-[13px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      className="self-start text-[14px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
       onClick={onClick}
     >
       Use the everywhere {label}
@@ -427,7 +427,7 @@ function Results({ results }: { results: PlatformResult[] }) {
               )}
             </p>
             {r.error && (
-              <p className="text-[13.5px] break-words text-text-2">
+              <p className="text-[14.5px] break-words text-text-2">
                 {r.error.message}{' '}
                 {r.error.code === 'reconnect_needed' || r.error.code === 'not_connected' ? (
                   <a
@@ -442,7 +442,7 @@ function Results({ results }: { results: PlatformResult[] }) {
               </p>
             )}
             {r.skipped.map((s) => (
-              <p key={s} className="text-[13.5px] text-text-3">
+              <p key={s} className="text-[14.5px] text-text-3">
                 Skipped {s}
               </p>
             ))}
@@ -479,7 +479,7 @@ function PlatformFields({
   const everywhereLanguage = LANGUAGES.find(([c]) => c === everywhere.language)?.[1] ?? ''
   return (
     <>
-      <p className="text-[13.5px] text-text-3">
+      <p className="text-[14.5px] text-text-3">
         Only what’s different on {name}. Empty fields use the Everywhere tab.
       </p>
       <Field
@@ -590,12 +590,12 @@ function PlatformFields({
         )}
       </div>
       {platform === 'youtube' && (
-        <p className="text-[13.5px] text-text-3">
+        <p className="text-[14.5px] text-text-3">
           The description and thumbnail are on the Everywhere tab; only YouTube takes them.
         </p>
       )}
       {platform !== 'youtube' && (
-        <p className="text-[13.5px] text-text-3">
+        <p className="text-[14.5px] text-text-3">
           No thumbnail here: {PLATFORM_LABEL[platform]} doesn’t let apps set one. It takes a picture
           from your stream by itself.
         </p>
@@ -856,7 +856,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             )}
           </div>
           <fieldset>
-            <legend className="text-[13.5px] font-medium text-text-2">Send to</legend>
+            <legend className="text-[14.5px] font-medium text-text-2">Send to</legend>
             <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
               {v.platforms.map((p) => (
                 <Switch
@@ -877,7 +877,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             {v.platforms
               .filter((p) => p.needs)
               .map((p) => (
-                <p key={p.platform} className="mt-2 text-[13.5px] text-text-3">
+                <p key={p.platform} className="mt-2 text-[14.5px] text-text-3">
                   {PLATFORM_LABEL[p.platform]}:{' '}
                   {p.connected ? <Badge tone="warn">Reconnect needed</Badge> : 'Not connected.'}{' '}
                   <a
@@ -890,7 +890,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
               ))}
           </fieldset>
           {err && (
-            <p role="alert" className="text-[13.5px] font-medium text-danger">
+            <p role="alert" className="text-[14.5px] font-medium text-danger">
               {err}
             </p>
           )}
@@ -947,7 +947,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
       <div className="flex flex-col gap-5">
         <Panel title="Presets">
           {v.presets.length === 0 ? (
-            <p className="text-[13.5px] text-text-3">
+            <p className="text-[14.5px] text-text-3">
               Save the form as a preset to fill it in one click.
             </p>
           ) : (
@@ -971,7 +971,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     }}
                   >
                     <span className="block truncate text-sm font-semibold text-text">{p.name}</span>
-                    <span className="block truncate text-[13.5px] text-text-3">
+                    <span className="block truncate text-[14.5px] text-text-3">
                       {summary(p.info)}
                     </span>
                   </button>
@@ -1000,7 +1000,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
         </Panel>
         <Panel title="Last sent">
           {v.history.length === 0 ? (
-            <p className="text-[13.5px] text-text-3">Nothing sent from Ferrocast yet.</p>
+            <p className="text-[14.5px] text-text-3">Nothing sent from Ferrocast yet.</p>
           ) : (
             <ul className="-mx-2 flex flex-col">
               {v.history.slice(0, 5).map((h) => (
@@ -1011,7 +1011,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     onClick={() => setForm(toForm(h.info))}
                   >
                     <span className="block truncate text-sm text-text">{summary(h.info)}</span>
-                    <span className="block text-[13.5px] text-text-3">
+                    <span className="block text-[14.5px] text-text-3">
                       {relativeTime(h.at, now)} · {h.results.filter((r) => r.ok).length} of{' '}
                       {h.results.length} platforms
                     </span>

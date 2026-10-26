@@ -1,5 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowClockwise, ArrowSquareIn, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  ArrowSquareIn,
+  ArrowsClockwise,
+  Broadcast,
+  Cloud,
+  Database,
+  DiscordLogo,
+  DownloadSimple,
+  MusicNotes,
+  PaintBrush,
+  SlidersHorizontal,
+  Sparkle,
+  SpeakerHigh,
+  UploadSimple,
+  UserCircle,
+} from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
   describeError,
@@ -48,17 +64,17 @@ import { useLive } from '../lib/store'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
 const SECTIONS = [
-  ['accounts', 'Accounts'],
-  ['obs', 'OBS'],
-  ['music', 'Music'],
-  ['cloud', 'Cloud mode'],
-  ['tts', 'Text-to-speech'],
-  ['discord', 'Discord'],
-  ['appearance', 'Appearance'],
-  ['data', 'Your data'],
-  ['updates', 'Updates'],
-  ['pro', 'Pro'],
-  ['advanced', 'Advanced'],
+  ['accounts', 'Accounts', UserCircle],
+  ['obs', 'OBS', Broadcast],
+  ['music', 'Music', MusicNotes],
+  ['cloud', 'Cloud mode', Cloud],
+  ['tts', 'Text-to-speech', SpeakerHigh],
+  ['discord', 'Discord', DiscordLogo],
+  ['appearance', 'Appearance', PaintBrush],
+  ['data', 'Your data', Database],
+  ['updates', 'Updates', ArrowsClockwise],
+  ['pro', 'Pro', Sparkle],
+  ['advanced', 'Advanced', SlidersHorizontal],
 ] as const
 
 function Section({
@@ -227,7 +243,7 @@ function Obs() {
         {auto && <span className="text-text-3">Using OBS’s own settings</span>}
       </div>
       {conn && conn.state !== 'connected' && conn.detail && (
-        <p className="mb-4 text-[13.5px] text-text-2">{conn.detail}</p>
+        <p className="mb-4 text-[14.5px] text-text-2">{conn.detail}</p>
       )}
       <ObsAutoDetect
         key={detectKey}
@@ -328,7 +344,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
           />
           <div className="flex flex-col gap-4">
             {!t.enabled && (
-              <p className="text-[13.5px] font-medium text-text-2">
+              <p className="text-[14.5px] font-medium text-text-2">
                 Turn on “Read messages aloud” to change these.
               </p>
             )}
@@ -446,7 +462,7 @@ function Appearance({
     <Section id="appearance" title="Appearance">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13.5px] font-semibold text-text">Theme</span>
+          <span className="text-[14.5px] font-semibold text-text">Theme</span>
           <Segmented
             label="Theme"
             value={settings.theme}
@@ -628,7 +644,7 @@ function Data() {
         ) : !backups.data ? (
           <Skeleton className="mt-3 h-20" />
         ) : backups.data.length === 0 ? (
-          <p className="mt-3 text-[13.5px] text-text-2">
+          <p className="mt-3 text-[14.5px] text-text-2">
             No backups yet. The first one comes soon after start.
           </p>
         ) : (
@@ -639,7 +655,7 @@ function Data() {
                 className="flex items-center gap-3 rounded-control px-2 py-2 hover:bg-surface-2"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
-                  <span className="text-[13.5px] text-text-2">
+                  <span className="text-[14.5px] text-text-2">
                     {new Date(b.created_at).toLocaleString(undefined, {
                       day: 'numeric',
                       month: 'short',
@@ -647,7 +663,7 @@ function Data() {
                       minute: '2-digit',
                     })}
                   </span>
-                  <span className="text-[13.5px] text-text-3">
+                  <span className="text-[14.5px] text-text-3">
                     {BACKUP_REASON[b.reason] ?? BACKUP_REASON.other}
                     {b.version ? ` · v${b.version}` : ''} · {formatBytes(b.bytes)}
                   </span>
@@ -690,7 +706,7 @@ function Data() {
                 <span className="font-mono text-text">{report.media_files}</span>
               </li>
             </ul>
-            <p className="text-[13.5px] text-text-2">
+            <p className="text-[14.5px] text-text-2">
               To undo, restore the “Before an import” backup.
             </p>
           </div>
@@ -784,13 +800,13 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
                   )}
                 </p>
                 <p
-                  className="mt-0.5 text-[13px] text-text-3"
+                  className="mt-0.5 text-[14px] text-text-3"
                   title={u.checked_at ? new Date(u.checked_at).toLocaleString() : undefined}
                 >
                   {u.checking ? 'Checking now…' : checkedLine(u.checked_at, now)}
                 </p>
                 {s.blocked && (newer || s.phase === 'ready') && (
-                  <p className="mt-1 text-[13.5px] font-medium text-warn">
+                  <p className="mt-1 text-[14.5px] font-medium text-warn">
                     You’re live, so it waits until your stream ends.
                   </p>
                 )}
@@ -825,7 +841,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
               </div>
             )}
             {u.can_install === false && (
-              <p className="text-[13.5px] text-text-2">
+              <p className="text-[14.5px] text-text-2">
                 This copy of Ferrocast doesn’t update itself. Get new versions from{' '}
                 <a
                   {...externalLink(DOWNLOAD_PAGE)}
@@ -837,7 +853,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
               </p>
             )}
             {!mayCheck && (
-              <p className="text-[13.5px] text-text-2">
+              <p className="text-[14.5px] text-text-2">
                 Updates are installed on the streaming PC.
               </p>
             )}
@@ -858,7 +874,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
         />
         {u && (
           // The channel follows the installed build: no switch (a beta build also gets stable).
-          <p className="text-[13.5px] text-text-2">
+          <p className="text-[14.5px] text-text-2">
             {u.channel === 'beta' ? (
               <>
                 <span className="font-semibold text-text">Beta version:</span> updates include betas
@@ -923,7 +939,7 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
             description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
           />
           {lanPending && (
-            <p role="status" className="text-[13.5px] font-medium text-warn">
+            <p role="status" className="text-[14.5px] font-medium text-warn">
               Restart Ferrocast to{' '}
               {settings.lan_access ? 'let other devices in' : 'close it to other devices'}.
             </p>
@@ -931,11 +947,11 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
         </div>
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-semibold text-text">Open in another browser</p>
-          <p className="text-[13.5px] text-text-3">One-time link, 2 minutes.</p>
+          <p className="text-[14.5px] text-text-3">One-time link, 2 minutes.</p>
           {link ? (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
-                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[13.5px] text-text-2">
+                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[14.5px] text-text-2">
                   {link.url}
                 </code>
                 <Button
@@ -951,7 +967,7 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
               {lanNote && (
                 <p
                   className={cx(
-                    'text-[13.5px]',
+                    'text-[14.5px]',
                     link.lan?.active ? 'text-text-2' : 'font-medium text-warn',
                   )}
                 >
@@ -999,31 +1015,34 @@ export function Settings({ section }: { section?: string | undefined }) {
   return (
     <div>
       <PageHeader title="Settings" />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
         <nav
           aria-label="Settings sections"
           className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
         >
-          {SECTIONS.filter(([id]) => show(id) && (id !== 'cloud' || !remote)).map(([id, label]) => (
-            <a
-              key={id}
-              href={href({ name: 'settings', section: id })}
-              aria-current={section === id ? 'location' : undefined}
-              className={cx(
-                'shrink-0 rounded-control px-3 py-2 text-[13.5px] font-medium whitespace-nowrap',
-                section === id
-                  ? 'bg-surface-3 text-text'
-                  : 'text-text-3 hover:bg-surface-2 hover:text-text',
-              )}
-            >
-              {label}
-            </a>
-          ))}
+          {SECTIONS.filter(([id]) => show(id) && (id !== 'cloud' || !remote)).map(
+            ([id, label, SectionIcon]) => (
+              <a
+                key={id}
+                href={href({ name: 'settings', section: id })}
+                aria-current={section === id ? 'location' : undefined}
+                className={cx(
+                  'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
+                  section === id
+                    ? 'bg-accent-soft font-bold text-accent-text'
+                    : 'text-text-2 hover:bg-surface-2 hover:text-text',
+                )}
+              >
+                <SectionIcon size={18} weight={section === id ? 'fill' : 'regular'} aria-hidden />
+                {label}
+              </a>
+            ),
+          )}
           {current && (
             <a
               href={href({ name: 'settings', section: 'updates' })}
               data-testid="app-version"
-              className="mt-3 hidden rounded-control px-3 py-1 text-[12.5px] text-text-3 hover:text-text lg:block"
+              className="mt-3 hidden rounded-control px-3 py-1 text-[13.5px] text-text-3 hover:text-text lg:block"
             >
               Version <span className="font-mono tabular-nums">{current}</span>
             </a>

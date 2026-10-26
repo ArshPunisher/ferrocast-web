@@ -107,7 +107,7 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
         <KindTile kind={kind} size={36} />
         <Input
           aria-label="Name"
-          className="h-9! min-w-0 flex-1 border-transparent! bg-transparent! font-display text-[17px]! font-bold hover:border-line-strong!"
+          className="h-9! min-w-0 flex-1 border-transparent! bg-transparent! font-display text-[18px]! font-bold hover:border-line-strong!"
           maxLength={100}
           value={rename}
           onChange={(e) => setRename(e.target.value)}
@@ -141,11 +141,11 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
         )}
         {a && (
           <section aria-label="Sound" className="flex flex-col gap-3">
-            <h3 className="m-0 font-display text-[13px] font-bold text-text-2">Sound</h3>
+            <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">Sound</h3>
             <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
-              <div className="flex items-center justify-between text-[13.5px]">
+              <div className="flex items-center justify-between text-[14.5px]">
                 <span>Volume</span>
-                <span className="font-mono text-[12.5px] text-text-2 tabular-nums">
+                <span className="font-mono text-[13.5px] text-text-2 tabular-nums">
                   {a.muted ? 'Muted' : `${a.volume_db.toFixed(1)} dB`}
                 </span>
               </div>
@@ -178,7 +178,7 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
               </div>
             </div>
             {a.channel ? (
-              <p className="m-0 text-[13px] text-text-3">Plays in every scene.</p>
+              <p className="m-0 text-[14px] text-text-3">Plays in every scene.</p>
             ) : (
               <PlaysIn name={name} />
             )}
@@ -260,7 +260,7 @@ function PlaysIn({ name }: { name: string }) {
   }
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-semibold text-text-2">Plays in</span>
+      <span className="text-[14px] font-semibold text-text-2">Plays in</span>
       <div className="flex flex-wrap gap-1.5">
         {(scenes.data?.scenes ?? []).map((s) => {
           const on = mine.includes(s.name)
@@ -272,7 +272,7 @@ function PlaysIn({ name }: { name: string }) {
               disabled={busy !== null || !uses.data}
               onClick={() => void toggle(s.name, !on)}
               className={cx(
-                'inline-flex h-8 items-center rounded-full border px-3 text-[13px] transition-colors',
+                'inline-flex h-8 items-center rounded-full border px-3 text-[14px] transition-colors',
                 on
                   ? 'border-accent-line bg-accent-soft font-semibold text-accent-text'
                   : 'border-line-strong text-text-2 hover:bg-surface-2',
@@ -319,7 +319,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
   }
   return (
     <section aria-label="Filters" className="flex flex-col gap-2">
-      <h3 className="m-0 flex items-center gap-1 font-display text-[13px] font-bold text-text-2">
+      <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
         {audio ? 'Clean up' : 'Filters'}
         <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
       </h3>
@@ -341,7 +341,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
                 type="button"
                 aria-expanded={open === f.name}
                 onClick={() => setOpen(open === f.name ? null : f.name)}
-                className="min-w-0 flex-1 truncate text-left text-[13.5px] font-semibold"
+                className="min-w-0 flex-1 truncate text-left text-[14.5px] font-semibold"
               >
                 {f.name}
                 {FILTER_LABEL[f.kind] && FILTER_LABEL[f.kind] !== f.name && (
@@ -415,13 +415,13 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
               onClick={() => void add(f.kind, f.label)}
               className="flex flex-col items-start rounded-[8px] px-2.5 py-2 text-left hover:bg-surface-2"
             >
-              <span className="text-[13.5px] font-semibold">{f.label}</span>
-              <span className="text-[12.5px] text-text-3">{f.help}</span>
+              <span className="text-[14.5px] font-semibold">{f.label}</span>
+              <span className="text-[13.5px] text-text-3">{f.help}</span>
             </button>
           ))}
           {more.length > 0 && (
             <details className="rounded-[8px] px-2.5 py-1.5">
-              <summary className="cursor-pointer text-[13px] font-semibold text-accent-text">
+              <summary className="cursor-pointer text-[14px] font-semibold text-accent-text">
                 More filters
               </summary>
               <div className="mt-1 flex flex-col">
@@ -431,7 +431,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
                     type="button"
                     disabled={busy !== null}
                     onClick={() => void add(k.id, k.name || k.id)}
-                    className="rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-surface-2"
+                    className="rounded-[8px] px-2 py-1.5 text-left text-[14px] hover:bg-surface-2"
                   >
                     {k.name || k.id}
                   </button>
@@ -487,7 +487,7 @@ function Settings({ name }: { name: string }) {
   const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload)
   return (
     <section aria-label="All settings" className="flex flex-col gap-2">
-      <h3 className="m-0 font-display text-[13px] font-bold text-text-2">Settings</h3>
+      <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">Settings</h3>
       {loaded.error && !loaded.data ? (
         <LoadError error={loaded.error} onRetry={loaded.reload} />
       ) : !loaded.data ? (

@@ -119,7 +119,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
       >
         <div className="flex items-center justify-between">
           <Wordmark size="sm" />
-          {demo && <span className="text-[12.5px] text-text-3">Demo mode</span>}
+          {demo && <span className="text-[13.5px] text-text-3">Demo mode</span>}
         </div>
         <ol className="mt-8 flex items-center gap-2" aria-label="Setup progress">
           {STEPS.map((s, i) => (
@@ -130,7 +130,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
             >
               <span
                 className={cx(
-                  'inline-flex size-6 items-center justify-center rounded-full text-[12px] font-semibold transition-colors',
+                  'inline-flex size-6 items-center justify-center rounded-full text-[13px] font-semibold transition-colors',
                   i === step
                     ? 'bg-btn-primary text-on-btn-primary'
                     : stepDone(i)
@@ -151,7 +151,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
               </span>
               <span
                 className={cx(
-                  'hidden text-[13px] font-medium sm:inline',
+                  'hidden text-[14px] font-medium sm:inline',
                   i === step ? 'text-text' : 'text-text-3',
                 )}
               >
@@ -181,7 +181,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   <div>
                     <h1
                       id="step-0"
-                      className="font-display text-[28px] font-bold tracking-[-0.03em] text-balance sm:text-[32px]"
+                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
                       Connect where you stream
                     </h1>
@@ -211,7 +211,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       {anyConnected ? 'Continue' : 'Skip for now'}
                     </Button>
                     {!anyConnected && (
-                      <span className="text-[13px] text-text-3">
+                      <span className="text-[14px] text-text-3">
                         You can connect later in Settings.
                       </span>
                     )}
@@ -223,7 +223,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   <div>
                     <h1
                       id="step-1"
-                      className="font-display text-[28px] font-bold tracking-[-0.03em] text-balance sm:text-[32px]"
+                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
                       Pick a look
                     </h1>
@@ -263,10 +263,8 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                             checked={theme === t.id}
                             onChange={() => setTheme(t.id)}
                           />
-                          <span className="text-sm font-semibold text-text">{t.name}</span>
-                          <span className="line-clamp-2 text-[11.5px] leading-snug text-text-3">
-                            {t.description}
-                          </span>
+                          {/* The preview above shows the look; its words are on hover. */}
+                          <span className="text-[15px] font-bold text-text">{t.name}</span>
                         </label>
                       ))}
                     </div>
@@ -296,7 +294,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   <div>
                     <h1
                       id="step-2"
-                      className="font-display text-[28px] font-bold tracking-[-0.03em] text-balance sm:text-[32px]"
+                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
                       Add it to OBS
                     </h1>
@@ -356,7 +354,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       {added ? 'Open my dashboard' : 'I’ll do it later'}
                     </Button>
                   </div>
-                  <p className="text-[13px] text-text-3">
+                  <p className="text-[14px] text-text-3">
                     Coming from StreamElements or Streamlabs?{' '}
                     <button
                       type="button"

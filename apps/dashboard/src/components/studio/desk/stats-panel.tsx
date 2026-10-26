@@ -59,9 +59,9 @@ function useRates(stats: EngineStats | null): Rates {
 function Line({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-t border-line py-2 first:border-t-0">
-      <dt className="text-[13px] text-text-2">{label}</dt>
+      <dt className="text-[14px] text-text-2">{label}</dt>
       <dd
-        className={cx('m-0 font-mono text-[13px] tabular-nums', bad ? 'text-danger' : 'text-text')}
+        className={cx('m-0 font-mono text-[14px] tabular-nums', bad ? 'text-danger' : 'text-text')}
       >
         {value}
       </dd>
@@ -82,11 +82,11 @@ export function StatsDialog({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <Dialog open={open} onClose={onClose} title="Stats" size="md">
       {!e ? (
-        <p className="m-0 text-[13.5px] text-text-2">Start the Studio to see its stats.</p>
+        <p className="m-0 text-[14.5px] text-text-2">Start the Studio to see its stats.</p>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <section aria-label="This computer">
-            <h3 className="m-0 mb-1 text-[13px] font-bold text-text-3">This computer</h3>
+            <h3 className="m-0 mb-1 text-[14px] font-bold text-text-3">This computer</h3>
             <dl className="m-0">
               <Line label="CPU" value={`${e.cpu.toFixed(1)}%`} bad={e.cpu > 80} />
               <Line label="Memory" value={sizeText(e.memory_mb)} />
@@ -98,7 +98,7 @@ export function StatsDialog({ open, onClose }: { open: boolean; onClose: () => v
             </dl>
           </section>
           <section aria-label="Picture">
-            <h3 className="m-0 mb-1 flex items-center gap-1 text-[13px] font-bold text-text-3">
+            <h3 className="m-0 mb-1 flex items-center gap-1 text-[14px] font-bold text-text-3">
               Picture
               <InfoTip label="About missed and skipped frames">
                 Missed: the computer drew a frame late (too much on screen). Skipped: the encoder
@@ -121,7 +121,7 @@ export function StatsDialog({ open, onClose }: { open: boolean; onClose: () => v
             </dl>
           </section>
           <section aria-label="Outputs" className="sm:col-span-2">
-            <h3 className="m-0 mb-1 text-[13px] font-bold text-text-3">Outputs</h3>
+            <h3 className="m-0 mb-1 text-[14px] font-bold text-text-3">Outputs</h3>
             <dl className="m-0">
               <Line
                 label="Stream"

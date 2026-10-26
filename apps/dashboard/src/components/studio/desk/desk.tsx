@@ -455,165 +455,170 @@ function ControlBar({
   const cpu = stats?.engine.cpu
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
-      {lead}
-      <LibraryBar />
-      <span className="hidden flex-1 xl:block" />
-      <button
-        type="button"
-        aria-label="Stream health: open Stats"
-        title="Stats"
-        onClick={() => setShowStats(true)}
-        className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[12.5px] text-text-3 transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-      >
-        <span className="inline-flex items-center gap-1.5" title="Ferrocast's CPU use">
-          <Cpu size={15} aria-hidden />
-          <span className="hidden md:inline">CPU</span>
-          <b className="font-mono font-semibold text-text tabular-nums">
-            {cpu === undefined ? '…' : `${cpu.toFixed(0)}%`}
-          </b>
-        </span>
-        <span className="inline-flex items-center gap-1.5" title="Frames dropped">
-          <WifiHigh size={15} aria-hidden />
-          <span className="hidden md:inline">Dropped</span>
-          <b className="font-mono font-semibold text-text tabular-nums">{stream?.dropped ?? 0}</b>
-        </span>
-        <span className="inline-flex items-center gap-1.5" title="Upload">
-          <Gauge size={15} aria-hidden />
-          <span className="hidden md:inline">Upload</span>
-          <b className="font-mono font-semibold text-text tabular-nums">
-            {kbps === null ? '0.0' : (kbps / 1000).toFixed(1)}&nbsp;Mbps
-          </b>
-        </span>
-        <span className="inline-flex items-center gap-1.5" title="Time live">
-          <Clock size={15} aria-hidden />
-          <b className="font-mono font-semibold text-text tabular-nums">
-            {clock(since ? now - since : 0)}
-          </b>
-        </span>
-      </button>
-      <StatsDialog open={showStats} onClose={() => setShowStats(false)} />
-      {remux && (!remux.done || remux.error) && (
-        <span
-          className={cx('text-[13px] font-semibold', remux.error ? 'text-danger' : 'text-text-2')}
-          aria-live="polite"
+      <div className="flex flex-wrap items-center gap-2.5">
+        {lead}
+        <LibraryBar />
+      </div>
+      {/* Health and the actions stay together: short of room they move down as one, so Go
+          live never ends up on a line of its own. */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+        <button
+          type="button"
+          aria-label="Stream health: open Stats"
+          title="Stats"
+          onClick={() => setShowStats(true)}
+          className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[13.5px] text-text-3 transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
         >
-          {remux.error
-            ? `The MP4 couldn't be made: ${remux.error}`
-            : `Making an MP4… ${Math.round(remux.percent)}%`}
-        </span>
-      )}
-      {stream?.reconnecting && (
-        <span className="text-[13px] font-semibold text-warn" aria-live="polite">
-          Reconnecting…
-        </span>
-      )}
-      {stream?.error && !stream.active && (
-        <span className="text-[13px] font-semibold text-danger" aria-live="polite">
-          {stream.error}
-        </span>
-      )}
-      <span className="flex-1 xl:hidden" />
-      <IconButton
-        label="Studio settings"
-        className="h-10! w-10!"
-        variant="ghost"
-        onClick={() => openSettings()}
-      >
-        <GearSix size={18} />
-      </IconButton>
-      <LayoutMenu onStatus={onStatus} />
-      {recording && (
-        <Button
-          variant="secondary"
-          className="h-10"
-          busy={busy === 'pause'}
-          onClick={pause}
-          aria-pressed={!!rec?.paused}
-        >
-          {rec?.paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
-          <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
-        </Button>
-      )}
-      {replayOn && (
-        <Button
-          variant="secondary"
-          className="h-10"
-          busy={busy === 'save-replay'}
-          onClick={saveReplay}
-        >
-          <ClockCounterClockwise size={15} weight="bold" />
-          <span className="hidden sm:inline">Save replay</span>
-        </Button>
-      )}
-      <IconButton
-        label="Replay buffer and virtual camera"
-        className={cx('h-10! w-10!', (replayOn || camOn) && 'text-accent-text')}
-        variant="ghost"
-        onClick={outputsMenu}
-      >
-        <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'bold'} />
-      </IconButton>
-      {recording && (
+          <span className="inline-flex items-center gap-1.5" title="Ferrocast's CPU use">
+            <Cpu size={15} aria-hidden />
+            <span className="hidden 2xl:inline">CPU</span>
+            <b className="font-mono font-semibold text-text tabular-nums">
+              {cpu === undefined ? '…' : `${cpu.toFixed(0)}%`}
+            </b>
+          </span>
+          <span className="inline-flex items-center gap-1.5" title="Frames dropped">
+            <WifiHigh size={15} aria-hidden />
+            <span className="hidden 2xl:inline">Dropped</span>
+            <b className="font-mono font-semibold text-text tabular-nums">{stream?.dropped ?? 0}</b>
+          </span>
+          <span className="inline-flex items-center gap-1.5" title="Upload">
+            <Gauge size={15} aria-hidden />
+            <span className="hidden 2xl:inline">Upload</span>
+            <b className="font-mono font-semibold text-text tabular-nums">
+              {kbps === null ? '0.0' : (kbps / 1000).toFixed(1)}&nbsp;Mbps
+            </b>
+          </span>
+          <span className="inline-flex items-center gap-1.5" title="Time live">
+            <Clock size={15} aria-hidden />
+            <b className="font-mono font-semibold text-text tabular-nums">
+              {clock(since ? now - since : 0)}
+            </b>
+          </span>
+        </button>
+        <StatsDialog open={showStats} onClose={() => setShowStats(false)} />
+        {remux && (!remux.done || remux.error) && (
+          <span
+            className={cx('text-[14px] font-semibold', remux.error ? 'text-danger' : 'text-text-2')}
+            aria-live="polite"
+          >
+            {remux.error
+              ? `The MP4 couldn't be made: ${remux.error}`
+              : `Making an MP4… ${Math.round(remux.percent)}%`}
+          </span>
+        )}
+        {stream?.reconnecting && (
+          <span className="text-[14px] font-semibold text-warn" aria-live="polite">
+            Reconnecting…
+          </span>
+        )}
+        {stream?.error && !stream.active && (
+          <span className="text-[14px] font-semibold text-danger" aria-live="polite">
+            {stream.error}
+          </span>
+        )}
+        <span className="flex-1 xl:hidden" />
         <IconButton
-          label="Chapter or a new file"
+          label="Studio settings"
           className="h-10! w-10!"
           variant="ghost"
-          onClick={recordMenu}
+          onClick={() => openSettings()}
         >
-          <DotsThree size={18} weight="bold" />
+          <GearSix size={18} />
         </IconButton>
-      )}
-      {menu}
-      <Button
-        variant="secondary"
-        className={cx('h-10', recording && 'text-danger')}
-        busy={busy === 'record'}
-        onClick={pressRecord}
-        title={rec?.file}
-      >
-        {recording ? (
-          <span aria-hidden className="size-2.5 rounded-full bg-danger-fill" />
-        ) : (
-          <RecordIcon size={16} weight="fill" />
+        <LayoutMenu onStatus={onStatus} />
+        {recording && (
+          <Button
+            variant="secondary"
+            className="h-10"
+            busy={busy === 'pause'}
+            onClick={pause}
+            aria-pressed={!!rec?.paused}
+          >
+            {rec?.paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
+            <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
+          </Button>
         )}
-        {recording
-          ? // Time recorded (frames over the frame rate): pauses don't count.
-            `Stop ${clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000).replace(/^00:/, '')}`
-          : 'Record'}
-      </Button>
-      <Button
-        variant={on ? 'danger' : 'primary'}
-        className="h-10 px-5 text-[15px]"
-        busy={busy === 'stream'}
-        disabled={!on && ticked.length === 0}
-        title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
-        onClick={pressStream}
-      >
-        {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
-        {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
-      </Button>
-      <Dialog
-        open={!!asked}
-        onClose={() => setAsk(null)}
-        title={asked?.title ?? ''}
-        description={asked?.text}
-        footer={
-          asked && (
-            <>
-              <Button variant="ghost" onClick={() => setAsk(null)}>
-                {asked.keep}
-              </Button>
-              <Button
-                variant={ask === 'live' ? 'primary' : 'danger'}
-                busy={busy === asked.key}
-                onClick={confirmed}
-              >
-                {asked.yes}
-              </Button>
-            </>
-          )
-        }
-      />
+        {replayOn && (
+          <Button
+            variant="secondary"
+            className="h-10"
+            busy={busy === 'save-replay'}
+            onClick={saveReplay}
+          >
+            <ClockCounterClockwise size={15} weight="bold" />
+            <span className="hidden sm:inline">Save replay</span>
+          </Button>
+        )}
+        <IconButton
+          label="Replay buffer and virtual camera"
+          className={cx('h-10! w-10!', (replayOn || camOn) && 'text-accent-text')}
+          variant="ghost"
+          onClick={outputsMenu}
+        >
+          <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'bold'} />
+        </IconButton>
+        {recording && (
+          <IconButton
+            label="Chapter or a new file"
+            className="h-10! w-10!"
+            variant="ghost"
+            onClick={recordMenu}
+          >
+            <DotsThree size={18} weight="bold" />
+          </IconButton>
+        )}
+        {menu}
+        <Button
+          variant="secondary"
+          className={cx('h-10', recording && 'text-danger')}
+          busy={busy === 'record'}
+          onClick={pressRecord}
+          title={rec?.file}
+        >
+          {recording ? (
+            <span aria-hidden className="size-2.5 rounded-full bg-danger-fill" />
+          ) : (
+            <RecordIcon size={16} weight="fill" />
+          )}
+          {recording
+            ? // Time recorded (frames over the frame rate): pauses don't count.
+              `Stop ${clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000).replace(/^00:/, '')}`
+            : 'Record'}
+        </Button>
+        <Button
+          variant={on ? 'danger' : 'primary'}
+          className="h-10 px-5 text-[16px]"
+          busy={busy === 'stream'}
+          disabled={!on && ticked.length === 0}
+          title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
+          onClick={pressStream}
+        >
+          {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
+          {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
+        </Button>
+        <Dialog
+          open={!!asked}
+          onClose={() => setAsk(null)}
+          title={asked?.title ?? ''}
+          description={asked?.text}
+          footer={
+            asked && (
+              <>
+                <Button variant="ghost" onClick={() => setAsk(null)}>
+                  {asked.keep}
+                </Button>
+                <Button
+                  variant={ask === 'live' ? 'primary' : 'danger'}
+                  busy={busy === asked.key}
+                  onClick={confirmed}
+                >
+                  {asked.yes}
+                </Button>
+              </>
+            )
+          }
+        />
+      </div>
     </div>
   )
 }
@@ -698,7 +703,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
     }
   }
   const item =
-    'flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[13.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
+    'flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
   return (
     <div className="relative">
       <Button
@@ -731,7 +736,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
             }
           }}
         >
-          <span className="px-2.5 pt-1.5 pb-1 text-[11.5px] font-bold text-text-3">Layout</span>
+          <span className="px-2.5 pt-1.5 pb-1 text-[12.5px] font-bold text-text-3">Layout</span>
           <div className="grid grid-cols-3 gap-1.5 p-1">
             {(Object.keys(PRESET_NAMES) as Preset[]).map((p) => (
               <button
@@ -741,7 +746,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
                 aria-checked={layout.preset === p}
                 onClick={() => setLayout((l) => fromPreset(l, p))}
                 className={cx(
-                  'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[12px] hover:bg-surface-3',
+                  'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[13px] hover:bg-surface-3',
                   layout.preset === p && 'border-arc bg-accent-soft text-accent-text',
                 )}
               >
@@ -751,7 +756,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
             ))}
           </div>
           <hr className="mx-1 my-1 border-line" />
-          <span className="px-2.5 pt-1 pb-1 text-[11.5px] font-bold text-text-3">Panels</span>
+          <span className="px-2.5 pt-1 pb-1 text-[12.5px] font-bold text-text-3">Panels</span>
           {[...BUILT_INS, ...layout.webs.map((d) => d.id)].map((id: DockId) => {
             const shown = placed(layout, id) && !layout.hidden.includes(id)
             return (

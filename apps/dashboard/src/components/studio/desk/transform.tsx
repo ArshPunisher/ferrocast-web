@@ -81,7 +81,7 @@ function Num({
   const [text, setText] = useState<string | null>(null)
   return (
     <label className={cx('flex min-w-0 flex-col gap-1', disabled && 'opacity-50')}>
-      <span className="text-[12px] font-bold text-text-2">{label}</span>
+      <span className="text-[13px] font-bold text-text-2">{label}</span>
       <span className="flex h-9 items-center rounded-control border border-line-strong bg-inset pr-2.5 focus-within:border-accent-text focus-within:shadow-[0_0_0_3px_var(--fc-accent-soft)]">
         <input
           type="text"
@@ -100,9 +100,9 @@ function Num({
               onChange(n)
           }}
           onBlur={() => setText(null)}
-          className="h-full w-full min-w-0 bg-transparent pl-2.5 text-[14px] font-semibold text-text tabular-nums outline-none"
+          className="h-full w-full min-w-0 bg-transparent pl-2.5 text-[15px] font-semibold text-text tabular-nums outline-none"
         />
-        <span aria-hidden className="text-[12px] font-semibold text-text-3">
+        <span aria-hidden className="text-[13px] font-semibold text-text-3">
           {unit}
         </span>
       </span>
@@ -167,7 +167,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-2.5 rounded-[12px] border border-line bg-surface-2 p-3.5">
-      <h3 className="m-0 flex items-center gap-2 font-display text-[14px] font-extrabold text-text">
+      <h3 className="m-0 flex items-center gap-2 font-display text-[15px] font-extrabold text-text">
         <Icon size={17} weight="bold" className="text-accent-text" aria-hidden />
         {title}
         {tip && <InfoTip label={`About ${title.toLowerCase()}`}>{tip}</InfoTip>}
@@ -270,14 +270,14 @@ function Editor({
           </div>
           <div className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-bold text-text-2">Anchor point</span>
+              <span className="text-[13px] font-bold text-text-2">Anchor point</span>
               <PointPicker
                 label="Anchor point"
                 value={t.alignment}
                 onChange={(alignment) => set({ alignment })}
               />
             </div>
-            <p className="m-0 text-[12.5px] font-medium text-text-3">
+            <p className="m-0 text-[13.5px] font-medium text-text-3">
               The point of it that sits at X, Y and that it turns around.
             </p>
           </div>
@@ -338,7 +338,7 @@ function Editor({
               onChange={(h) => resize(keep ? h * ratio : size.w, h)}
             />
           </div>
-          <p className="m-0 text-[12.5px] font-medium text-text-3 tabular-nums">
+          <p className="m-0 text-[13.5px] font-medium text-text-3 tabular-nums">
             Its own size: {t.width}×{t.height}
           </p>
         </Section>
@@ -384,9 +384,9 @@ function Editor({
           tip="A box the item is fitted into, so it keeps a fixed size whatever the source sends."
         >
           <label className="flex flex-col gap-1">
-            <span className="text-[12px] font-bold text-text-2">Kind</span>
+            <span className="text-[13px] font-bold text-text-2">Kind</span>
             <Select
-              className="h-9! text-[14px]"
+              className="h-9! text-[15px]"
               value={t.bounds}
               onChange={(e) => {
                 const bounds = e.target.value as EngineBounds
@@ -427,7 +427,7 @@ function Editor({
           </div>
           <div className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-bold text-text-2">Inside the box</span>
+              <span className="text-[13px] font-bold text-text-2">Inside the box</span>
               <PointPicker
                 label="Where it sits inside the box"
                 value={t.bounds_alignment}

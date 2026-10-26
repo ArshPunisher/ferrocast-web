@@ -62,10 +62,10 @@ function NotSignedIn({ view }: { view: AccountView }) {
         className="flex flex-col items-start gap-3 rounded-[16px] border border-line bg-surface-1 p-5"
       >
         <SpinnerGap size={24} className="text-accent-text motion-safe:animate-spin" aria-hidden />
-        <h1 className="font-display text-[24px] leading-tight font-bold tracking-[-0.02em] text-text">
+        <h1 className="font-display text-[24px] leading-tight font-extrabold tracking-[-0.02em] text-text">
           Finish signing in in your browser
         </h1>
-        <p className="text-[14.5px] text-text-2">This page updates by itself once you’re done.</p>
+        <p className="text-[15.5px] text-text-2">This page updates by itself once you’re done.</p>
         <Button variant="ghost" onClick={() => void cancelSignIn()}>
           Cancel
         </Button>
@@ -74,16 +74,16 @@ function NotSignedIn({ view }: { view: AccountView }) {
   return (
     <section className="flex flex-col items-start gap-3 rounded-[16px] border border-line bg-surface-1 p-5">
       <LogoMark size={40} />
-      <h1 className="font-display text-[24px] leading-tight font-bold tracking-[-0.02em] text-text">
+      <h1 className="font-display text-[24px] leading-tight font-extrabold tracking-[-0.02em] text-text">
         {view.state === 'disabled' ? 'This account is turned off' : 'Your Ferrocast account'}
       </h1>
-      <p className="max-w-[58ch] text-[14.5px] text-text-2">
+      <p className="max-w-[58ch] text-[15.5px] text-text-2">
         {view.state === 'disabled'
           ? (view.error?.hint ?? 'Write to support@clearcraftlabs.com and we’ll sort it out.')
           : 'Optional. Keeps Pro on every PC and opens your dashboard on the web.'}
       </p>
       {view.error && view.state !== 'disabled' && (
-        <p role="alert" className="text-[13.5px] text-danger">
+        <p role="alert" className="text-[14.5px] text-danger">
           {view.error.message} {view.error.hint}
         </p>
       )}
@@ -150,11 +150,11 @@ function SignedIn({ view }: { view: AccountView }) {
           gap={pro ? 'var(--fc-plate-gap)' : undefined}
         />
         <div className="relative min-w-0">
-          <h1 className="truncate font-display text-[24px] leading-tight font-bold tracking-[-0.02em]">
+          <h1 className="truncate font-display text-[24px] leading-tight font-extrabold tracking-[-0.02em]">
             {name}
           </h1>
           <p
-            className={`mt-1 truncate text-[13.5px] ${pro ? 'text-[var(--fc-plate-text-2)]' : 'text-text-2'}`}
+            className={`mt-1 truncate text-[14.5px] ${pro ? 'text-[var(--fc-plate-text-2)]' : 'text-text-2'}`}
           >
             {view.account?.email}
           </p>
@@ -163,17 +163,17 @@ function SignedIn({ view }: { view: AccountView }) {
           {pro ? (
             <>
               <ProChrome />
-              <small className="text-[12.5px] text-[var(--fc-plate-text-2)]">
+              <small className="text-[13.5px] text-[var(--fc-plate-text-2)]">
                 {planName}
                 {when && `, ${when}`}
               </small>
             </>
           ) : (
             <>
-              <small className="text-[12.5px] text-text-2">Free plan</small>
+              <small className="text-[13.5px] text-text-2">Free plan</small>
               <a
                 href={href({ name: 'plans' })}
-                className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 <Sparkle size={15} aria-hidden />
                 See Pro plans
@@ -198,7 +198,7 @@ function SignedIn({ view }: { view: AccountView }) {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
-        <span className="inline-flex items-center gap-1.5 text-[12.5px] text-text-3">
+        <span className="inline-flex items-center gap-1.5 text-[13.5px] text-text-3">
           {view.account?.providers?.includes('google') ? (
             <>
               <GoogleLogo size={14} aria-hidden /> Signed in with Google
@@ -246,27 +246,27 @@ function Billing({
     })
   return (
     <section aria-labelledby="acct-billing" className="flex flex-col gap-3">
-      <h2 id="acct-billing" className="text-[15px] font-bold text-text">
+      <h2 id="acct-billing" className="text-[16px] font-bold text-text">
         Plan and billing
       </h2>
       <div className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface-1 p-4">
         <dl className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3.5">
           <div>
-            <dt className="text-[12.5px] text-text-3">Plan</dt>
-            <dd className="text-[14.5px] font-semibold text-text">
+            <dt className="text-[13.5px] text-text-3">Plan</dt>
+            <dd className="text-[15.5px] font-semibold text-text">
               {planName === 'Pro' ? 'Pro' : `Pro, ${planName.toLowerCase()}`}
             </dd>
           </div>
           <div>
-            <dt className="text-[12.5px] text-text-3">{renews ? 'Renews' : 'Ends'}</dt>
-            <dd className="text-[14.5px] font-semibold text-text">
+            <dt className="text-[13.5px] text-text-3">{renews ? 'Renews' : 'Ends'}</dt>
+            <dd className="text-[15.5px] font-semibold text-text">
               {ends ? day(ends) : 'Not set'}
             </dd>
           </div>
           {pcs !== null && (
             <div>
-              <dt className="text-[12.5px] text-text-3">PCs signed in</dt>
-              <dd className="text-[14.5px] font-semibold text-text">{pcs}</dd>
+              <dt className="text-[13.5px] text-text-3">PCs signed in</dt>
+              <dd className="text-[15.5px] font-semibold text-text">{pcs}</dd>
             </div>
           )}
         </dl>
@@ -288,7 +288,7 @@ function Billing({
             )}
           </div>
         ) : (
-          <p className="text-[13px] text-text-3">
+          <p className="text-[14px] text-text-3">
             {web
               ? 'Manage billing from the Ferrocast app on your PC.'
               : 'Billing is managed on the PC that bought Pro.'}
@@ -301,8 +301,8 @@ function Billing({
             <Receipt size={18} aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
-            <b className="block text-[14px] font-semibold text-text">Receipts</b>
-            <small className="block text-[12.5px] text-text-3">
+            <b className="block text-[15px] font-semibold text-text">Receipts</b>
+            <small className="block text-[13.5px] text-text-3">
               Razorpay emails each one. All of them are on the billing page.
             </small>
           </span>
@@ -407,13 +407,13 @@ function Devices() {
 
   return (
     <section aria-labelledby="acct-devices" className="flex flex-col gap-3">
-      <h2 id="acct-devices" className="text-[15px] font-bold text-text">
+      <h2 id="acct-devices" className="text-[16px] font-bold text-text">
         Devices
       </h2>
       {err ? (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-3 rounded-[14px] border border-danger/30 bg-danger-soft p-4 text-[13.5px] text-text"
+          className="flex flex-wrap items-center gap-3 rounded-[14px] border border-danger/30 bg-danger-soft p-4 text-[14.5px] text-text"
         >
           {err}
           <Button size="sm" onClick={load}>
@@ -432,16 +432,16 @@ function Devices() {
                   <Icon size={18} aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[14px] font-semibold text-text">
+                  <b className="block truncate text-[15px] font-semibold text-text">
                     {s.label || (s.kind === 'app' ? 'Ferrocast app' : 'Web browser')}
                   </b>
-                  <small className="block text-[12.5px] text-text-3">
+                  <small className="block text-[13.5px] text-text-3">
                     {s.kind === 'app' ? 'Ferrocast app' : 'Web dashboard'}
                     {!s.current && `, last used ${usedAgo(s.last_used_at)}`}
                   </small>
                 </span>
                 {s.current ? (
-                  <span className="shrink-0 rounded-full bg-ok-soft px-[7px] py-1 font-mono text-[11px] leading-none font-semibold whitespace-nowrap text-ok">
+                  <span className="shrink-0 rounded-full bg-ok-soft px-[7px] py-1 font-mono text-[12px] leading-none font-semibold whitespace-nowrap text-ok">
                     This device
                   </span>
                 ) : (

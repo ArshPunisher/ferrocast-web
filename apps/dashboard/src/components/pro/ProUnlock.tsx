@@ -82,7 +82,7 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
         >
           You’re <span className="fc-metal">Pro</span>
         </h2>
-        <p id="fc-unlock-text" className="text-[14.5px] text-text-2">
+        <p id="fc-unlock-text" className="text-[15.5px] text-text-2">
           Thank you for backing Ferrocast. This is now on:
         </p>
         <ul className="mt-1 grid w-full gap-2 text-left">
@@ -92,7 +92,7 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: reduce ? 0 : 0.52 + i * 0.055, ease }}
-              className="flex items-center gap-2.5 rounded-[10px] bg-surface-2 px-2.5 py-2 text-[14px]"
+              className="flex items-center gap-2.5 rounded-[10px] bg-surface-2 px-2.5 py-2 text-[15px]"
             >
               <f.icon size={18} className="shrink-0 text-accent-text" aria-hidden />
               {f.text}

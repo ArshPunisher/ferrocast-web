@@ -26,10 +26,11 @@
   --fc-line: #252a31;
   --fc-line-strong: #343a44;
 
-  /* Text. All pass WCAG AA on --fc-bg and --fc-surface-2. */
+  /* Text. All pass WCAG AA on --fc-bg and --fc-surface-2; the quieter two stay close to the
+     main one so nothing reads faint (owner, 26 Oct). */
   --fc-text: #eef0f4;
-  --fc-text-2: #c3c8d1;
-  --fc-text-3: #9aa1ac;
+  --fc-text-2: #d5d9e0;
+  --fc-text-3: #aeb4be;
 
   /* The Spark mark's own colours (logo, brand art). */
   --fc-brand-molten: #ffa424;
@@ -119,8 +120,8 @@
   --fc-line: #dfe2e8;
   --fc-line-strong: #c9ced7;
   --fc-text: #0e1014;
-  --fc-text-2: #343a45;
-  --fc-text-3: #4f5662;
+  --fc-text-2: #222832;
+  --fc-text-3: #3c434e;
   /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
      fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface). */
   --fc-accent: #cf7400;
@@ -132,9 +133,9 @@
   --fc-accent-soft: rgb(8 136 184 / 0.1);
   --fc-accent-line: rgb(8 136 184 / 0.38);
   --fc-ok: #0a6b46;
-  --fc-ok-soft: rgb(17 134 90 / 0.1);
+  --fc-ok-soft: rgb(17 160 100 / 0.13);
   --fc-warn: #946200;
-  --fc-warn-soft: rgb(148 98 0 / 0.1);
+  --fc-warn-soft: rgb(255 176 32 / 0.18);
   --fc-danger: #c42339;
   --fc-danger-fill: #c42339;
   --fc-danger-soft: rgb(196 35 57 / 0.09);
@@ -169,8 +170,8 @@
     --fc-line: #dfe2e8;
     --fc-line-strong: #c9ced7;
     --fc-text: #0e1014;
-    --fc-text-2: #343a45;
-    --fc-text-3: #4f5662;
+    --fc-text-2: #222832;
+    --fc-text-3: #3c434e;
     --fc-accent: #cf7400;
     --fc-accent-strong: #e08a1a;
     --fc-on-accent: #0a0600;
@@ -180,9 +181,9 @@
     --fc-accent-soft: rgb(8 136 184 / 0.1);
     --fc-accent-line: rgb(8 136 184 / 0.38);
     --fc-ok: #0a6b46;
-    --fc-ok-soft: rgb(17 134 90 / 0.1);
+    --fc-ok-soft: rgb(17 160 100 / 0.13);
     --fc-warn: #946200;
-    --fc-warn-soft: rgb(148 98 0 / 0.1);
+    --fc-warn-soft: rgb(255 176 32 / 0.18);
     --fc-danger: #c42339;
     --fc-danger-fill: #c42339;
     --fc-danger-soft: rgb(196 35 57 / 0.09);

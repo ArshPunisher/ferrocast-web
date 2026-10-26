@@ -153,13 +153,13 @@ function Tile({
         <div className="flex items-center gap-2">
           <h3
             id={titleId}
-            className="min-w-0 flex-1 truncate font-display text-base font-semibold tracking-tight"
+            className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold tracking-tight"
           >
             {design.name}
           </h3>
           {design.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[13.5px] leading-snug text-text-3">
+        <p className="line-clamp-2 text-[14.5px] leading-snug text-text-3">
           {design.kind !== 'alert' && (
             <span className="font-medium text-text-2">{KIND_NAME[design.kind]}. </span>
           )}
@@ -167,7 +167,7 @@ function Tile({
             (design.origin.from ? `From ${design.origin.from}.` : 'Your own design.')}
         </p>
         {active && (
-          <p className="text-[13px] font-medium text-accent-text">Plays your alerts now</p>
+          <p className="text-[14px] font-medium text-accent-text">Plays your alerts now</p>
         )}
       </div>
       <div className="mt-auto flex gap-2 px-3.5 pt-2.5 pb-3.5">
@@ -190,7 +190,7 @@ function Tile({
           <>
             <a
               href={href({ name: 'designer', id: design.id })}
-              className="fc-press inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13.5px] font-semibold text-text hover:border-text-3"
+              className="fc-press inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text hover:border-text-3"
             >
               <PaintBrushBroad size={14} />
               Edit
@@ -338,7 +338,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
           : 'Search my designs'
   const chip = (on: boolean) =>
     cx(
-      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium',
+      'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[14px] font-medium',
       on
         ? 'border-accent-line bg-accent-soft text-text'
         : 'border-line text-text-2 hover:border-line-strong hover:text-text',
@@ -389,14 +389,14 @@ export function Designs({ tab }: { tab: GalleryTab }) {
               href={href({ name: 'designs', ...(t.id === 'themes' ? {} : { tab: t.id }) })}
               aria-current={tab === t.id ? 'page' : undefined}
               className={cx(
-                'inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-[14px] font-semibold transition-colors',
+                'inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-[15px] font-semibold transition-colors',
                 tab === t.id
                   ? 'border-accent text-text'
                   : 'border-transparent text-text-3 hover:text-text',
               )}
             >
               {t.label}
-              <span className="font-mono text-[12.5px] font-medium text-text-3">{count(t.id)}</span>
+              <span className="font-mono text-[13.5px] font-medium text-text-3">{count(t.id)}</span>
             </a>
           ))}
         </nav>
@@ -464,7 +464,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
       </div>
       {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
         <div className="mb-5 flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-[13px] text-text-3">Preview as</span>
+          <span className="shrink-0 text-[14px] text-text-3">Preview as</span>
           <div
             role="group"
             aria-label="Preview as"
@@ -524,7 +524,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
             />
           )}
           {tab === 'themes' && (
-            <h2 className="mb-3 font-display text-lg font-semibold tracking-tight">
+            <h2 className="mb-3 font-display text-lg font-extrabold tracking-tight">
               {filtered ? 'Matching themes' : 'All themes'}
             </h2>
           )}

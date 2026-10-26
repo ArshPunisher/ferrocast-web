@@ -149,7 +149,7 @@ export function InfoTip({
             style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0 }}
             className={cx(
               'fixed z-[1000] max-w-[min(300px,calc(100vw-16px))] rounded-[10px] border border-line bg-surface-1 px-3 py-2',
-              'text-[13px] leading-snug font-normal tracking-normal text-pretty text-text-2 shadow-pop',
+              'text-[14px] leading-snug font-normal tracking-normal text-pretty text-text-2 shadow-pop',
               'motion-safe:animate-[fc-tip_120ms_ease-out]',
             )}
           >

@@ -51,10 +51,10 @@ function useInView<T extends Element>(ratio = 0.6) {
 function Tags({ design, className }: { design: Design; className?: string }) {
   return (
     <span className={cx('flex flex-wrap items-center gap-1.5', className)}>
-      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[12.5px] font-semibold text-text-2">
+      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[13.5px] font-semibold text-text-2">
         {STYLE_LABEL[design.tags.style]}
       </span>
-      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[12.5px] font-semibold text-text-2">
+      <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[13.5px] font-semibold text-text-2">
         {MOTION_LABEL[design.tags.motion]}
       </span>
     </span>
@@ -85,7 +85,7 @@ export function FeaturedThemes({
   return (
     <section aria-labelledby="featured-themes" className="mb-8">
       <div className="mb-3 flex items-center gap-2">
-        <h2 id="featured-themes" className="font-display text-lg font-semibold tracking-tight">
+        <h2 id="featured-themes" className="font-display text-lg font-extrabold tracking-tight">
           Featured
         </h2>
         <span className="flex-1" />
@@ -156,10 +156,10 @@ function FeaturedCard({
       {/* Under the picture, not on it: every scene has its own text near the bottom. */}
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
-          <h3 id={titleId} className="truncate font-display text-lg font-bold tracking-tight">
+          <h3 id={titleId} className="truncate font-display text-lg font-extrabold tracking-tight">
             {theme.name}
           </h3>
-          <p className="truncate text-[13.5px] font-medium text-text-3">{bundleLine(theme)}</p>
+          <p className="truncate text-[14.5px] font-medium text-text-3">{bundleLine(theme)}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="secondary" icon={<Play size={13} />} onClick={onOpen}>
@@ -205,7 +205,7 @@ export function ThemeCard({
         <ScenePreview design={theme} live={hover} lazy />
         {/* A solid chip, no backdrop blur: on Linux WebKit (the desktop webview) one blurred
             chip per card over a live scene stalled painting and ate memory without limit. */}
-        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/75 px-2.5 py-1 font-mono text-[12px] font-semibold text-white">
+        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/75 px-2.5 py-1 font-mono text-[13px] font-semibold text-white">
           {bundleLine(theme)}
         </span>
         {isNew && (
@@ -218,13 +218,13 @@ export function ThemeCard({
         <div className="flex items-center gap-2">
           <h3
             id={titleId}
-            className="min-w-0 flex-1 truncate font-display text-base font-semibold tracking-tight"
+            className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold tracking-tight"
           >
             {theme.name}
           </h3>
           {theme.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[13.5px] leading-snug text-text-3">{theme.description}</p>
+        <p className="line-clamp-2 text-[14.5px] leading-snug text-text-3">{theme.description}</p>
         <Tags design={theme} />
       </div>
       <div className="mt-auto flex gap-2 px-3.5 pt-3 pb-3.5">
@@ -297,7 +297,7 @@ export function ThemeSheet({
       description={theme.description}
       footer={
         <>
-          <span className="mr-auto hidden text-[13px] text-text-3 sm:block">
+          <span className="mr-auto hidden text-[14px] text-text-3 sm:block">
             {bundleLine(theme)}
             {alertDesign ? `, alert style ${alertDesign.name}` : ''}
           </span>
@@ -348,7 +348,7 @@ export function ThemeSheet({
                   <span className="block aspect-video animate-pulse bg-surface-3" />
                 )}
               </span>
-              <span className="truncate px-0.5 text-[12.5px] font-semibold text-text">
+              <span className="truncate px-0.5 text-[13.5px] font-semibold text-text">
                 {v.label}
               </span>
             </button>

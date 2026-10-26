@@ -112,7 +112,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
                 aria-current={page === p.id ? 'page' : undefined}
                 onClick={() => setPage(p.id)}
                 className={cx(
-                  'flex h-9 shrink-0 items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13.5px] whitespace-nowrap hover:bg-surface-2',
+                  'flex h-9 shrink-0 items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[14.5px] whitespace-nowrap hover:bg-surface-2',
                   page === p.id &&
                     'bg-accent-soft font-semibold text-accent-text hover:bg-accent-soft',
                 )}
@@ -162,7 +162,7 @@ interface PageProps {
 
 function Heading({ children, info }: { children: ReactNode; info?: string }) {
   return (
-    <h3 className="m-0 flex items-center gap-1 font-display text-[16px] font-bold tracking-tight">
+    <h3 className="m-0 flex items-center gap-1 font-display text-[17px] font-extrabold tracking-tight">
       {children}
       {info && <InfoTip label={`About ${String(children).toLowerCase()}`}>{info}</InfoTip>}
     </h3>
@@ -193,9 +193,9 @@ function Choice({
         on && 'border-arc bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-arc)] hover:border-arc',
       )}
     >
-      <b className="font-display text-[15px]">{title}</b>
-      {sub && <span className="font-mono text-[12.5px] text-text-2 tabular-nums">{sub}</span>}
-      {note && <span className="text-[12.5px] text-text-3">{note}</span>}
+      <b className="font-display text-[16px]">{title}</b>
+      {sub && <span className="font-mono text-[13.5px] text-text-2 tabular-nums">{sub}</span>}
+      {note && <span className="text-[13.5px] text-text-3">{note}</span>}
     </button>
   )
 }
@@ -214,10 +214,10 @@ function Row({
 }) {
   return (
     <div className="grid grid-cols-1 items-center gap-2 border-t border-line py-2.5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
-      <div className="flex items-center gap-1 text-[13.5px]">
+      <div className="flex items-center gap-1 text-[14.5px]">
         <span>
           {label}
-          {sub && <span className="block text-[12px] text-text-3">{sub}</span>}
+          {sub && <span className="block text-[13px] text-text-3">{sub}</span>}
         </span>
         {info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
       </div>
@@ -263,7 +263,7 @@ function NumberBox({
           else setText(String(value))
         }}
       />
-      {unit && <span className="text-[13px] text-text-3">{unit}</span>}
+      {unit && <span className="text-[14px] text-text-3">{unit}</span>}
     </span>
   )
 }
@@ -362,7 +362,7 @@ export function EncoderOptions({
       open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
-      <summary className="cursor-pointer px-3 py-2 text-[13px] font-semibold text-accent-text">
+      <summary className="cursor-pointer px-3 py-2 text-[14px] font-semibold text-accent-text">
         Every option of this encoder{changed ? ` (${changed} changed)` : ''}
       </summary>
       <div className="flex flex-col gap-3 border-t border-line p-3">
@@ -420,7 +420,7 @@ function StreamPage({ s, set }: PageProps) {
         })}
       </div>
       {!preset && (
-        <p className="m-0 text-[13px] text-text-3">
+        <p className="m-0 text-[14px] text-text-3">
           Your own: {sent[1]}p at {(s.video_kbps / 1000).toFixed(1)} Mbps.
         </p>
       )}
@@ -442,7 +442,7 @@ function StreamPage({ s, set }: PageProps) {
         />
       </div>
       <details className="rounded-control border border-line">
-        <summary className="cursor-pointer px-3.5 py-2.5 text-[13.5px] font-semibold text-accent-text">
+        <summary className="cursor-pointer px-3.5 py-2.5 text-[14.5px] font-semibold text-accent-text">
           More options
         </summary>
         <div className="border-t border-line px-3.5 py-1">
@@ -974,7 +974,7 @@ function RecordPage({ s, set }: PageProps) {
             name="record_muxer"
             autoComplete="off"
             spellCheck={false}
-            className="font-mono text-[12.5px]"
+            className="font-mono text-[13.5px]"
             placeholder="movflags=+faststart"
             value={muxer}
             onChange={(e) => setMuxer(e.target.value)}
@@ -1006,7 +1006,7 @@ function RecordPage({ s, set }: PageProps) {
             name="record_name"
             autoComplete="off"
             spellCheck={false}
-            className="font-mono text-[12.5px]"
+            className="font-mono text-[13.5px]"
             value={namePattern}
             onChange={(e) => setNamePattern(e.target.value)}
             onBlur={() => {
@@ -1068,7 +1068,7 @@ function RecordPage({ s, set }: PageProps) {
                   aria-label={`Track ${t}`}
                   disabled={on && tracks.length === 1}
                   className={cx(
-                    'grid size-9 touch-manipulation place-items-center rounded-[6px] border text-[12px] font-bold tabular-nums transition-colors active:scale-[0.96] disabled:opacity-60 sm:size-7',
+                    'grid size-9 touch-manipulation place-items-center rounded-[6px] border text-[13px] font-bold tabular-nums transition-colors active:scale-[0.96] disabled:opacity-60 sm:size-7',
                     on
                       ? 'border-accent/60 bg-accent/20 text-text'
                       : 'border-line bg-surface-2 text-text-3 hover:border-line-strong',
@@ -1116,7 +1116,7 @@ function RecordPage({ s, set }: PageProps) {
           <RemuxButton />
         </Row>
         {needsHelper && (
-          <p className="m-0 pt-1 text-[12.5px] text-text-3">
+          <p className="m-0 pt-1 text-[13.5px] text-text-3">
             {FORMAT_LABEL[s.record_format]} uses OBS&apos;s own recording helper, so OBS needs to
             stay installed.
           </p>
@@ -1166,7 +1166,7 @@ function KeyCapture({ onKeys, onCancel }: { onKeys: (k: string) => void; onCance
   }, [onKeys, onCancel])
   return (
     <span
-      className="inline-flex h-8 items-center rounded-[8px] border border-arc bg-accent-soft px-2.5 text-[12.5px] font-semibold text-accent-text"
+      className="inline-flex h-8 items-center rounded-[8px] border border-arc bg-accent-soft px-2.5 text-[13.5px] font-semibold text-accent-text"
       aria-live="polite"
     >
       Press keys…
@@ -1347,13 +1347,13 @@ function KeysPage({ s, set }: PageProps) {
         .filter((g) => g.actions.length > 0)
         .map((g) => (
           <section key={g.title} aria-label={g.title} className="flex flex-col">
-            <h4 className="m-0 mb-1 text-[12.5px] font-bold text-text-3">{g.title}</h4>
+            <h4 className="m-0 mb-1 text-[13.5px] font-bold text-text-3">{g.title}</h4>
             {g.actions.map((a) => {
               const keys = s.hotkeys[a.id]
               return (
                 <div
                   key={a.id}
-                  className="flex min-h-11 items-center gap-2 border-t border-line text-[13.5px]"
+                  className="flex min-h-11 items-center gap-2 border-t border-line text-[14.5px]"
                 >
                   <span className="min-w-0 flex-1 truncate" title={a.label}>
                     {a.label}
@@ -1364,11 +1364,11 @@ function KeysPage({ s, set }: PageProps) {
                       onCancel={() => setListening(null)}
                     />
                   ) : keys ? (
-                    <kbd className="inline-flex h-7 items-center rounded-[8px] border border-line-strong bg-inset px-2 font-mono text-[12.5px] font-semibold shadow-[0_1px_0_var(--fc-line-strong)]">
+                    <kbd className="inline-flex h-7 items-center rounded-[8px] border border-line-strong bg-inset px-2 font-mono text-[13.5px] font-semibold shadow-[0_1px_0_var(--fc-line-strong)]">
                       {pretty(keys)}
                     </kbd>
                   ) : (
-                    <span className="text-[13px] text-text-3">None</span>
+                    <span className="text-[14px] text-text-3">None</span>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => setListening(a.id)}>
                     {keys ? 'Change' : 'Set'}
@@ -1389,7 +1389,7 @@ function KeysPage({ s, set }: PageProps) {
           </section>
         ))}
       {q && groups.every((g) => g.actions.every((a) => !a.label.toLowerCase().includes(q))) && (
-        <p className="m-0 text-[13px] text-text-3">No shortcut matches “{query}”.</p>
+        <p className="m-0 text-[14px] text-text-3">No shortcut matches “{query}”.</p>
       )}
     </>
   )

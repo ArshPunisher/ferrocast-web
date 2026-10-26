@@ -58,7 +58,7 @@ function ListPanel<T>({
   return (
     <Panel title={title} actions={rows.length ? <Badge>{formatCount(rows.length)}</Badge> : null}>
       {rows.length === 0 ? (
-        <p className="text-[13.5px] text-text-3">{empty}</p>
+        <p className="text-[14.5px] text-text-3">{empty}</p>
       ) : (
         <ul
           // Long lists scroll: focusable so keyboard users can scroll them too.
@@ -74,7 +74,7 @@ function ListPanel<T>({
                 className="flex items-center justify-between gap-3 rounded-control px-2 py-1.5"
               >
                 <Who {...r.who} />
-                <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+                <span className="shrink-0 font-mono text-[14px] text-text-2 tabular-nums">
                   {r.detail}
                 </span>
               </li>
@@ -126,7 +126,7 @@ function RecapBody({ r }: { r: RecapData }) {
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map(([k, v]) => (
           <div key={k} className="rounded-panel border border-line bg-surface-1 px-4 py-3">
-            <dt className="text-[12.5px] text-text-3">{k}</dt>
+            <dt className="text-[13.5px] text-text-3">{k}</dt>
             <dd
               className="mt-0.5 truncate font-mono text-xl font-semibold tracking-tight text-text tabular-nums"
               title={v}
@@ -152,7 +152,7 @@ function RecapBody({ r }: { r: RecapData }) {
       >
         <p
           dir="auto"
-          className="rounded-control bg-surface-2 px-4 py-3 text-[15px] leading-relaxed text-text"
+          className="rounded-control bg-surface-2 px-4 py-3 text-[16px] leading-relaxed text-text"
         >
           {tameText(text)}
         </p>

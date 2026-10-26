@@ -165,12 +165,12 @@ export function ViewersChart({
             />
           )}
         </svg>
-        <span className="pointer-events-none absolute top-0 left-0 -translate-y-1/2 rounded-full bg-surface-1 pr-1.5 font-mono text-[11.5px] text-text-3 tabular-nums">
+        <span className="pointer-events-none absolute top-0 left-0 -translate-y-1/2 rounded-full bg-surface-1 pr-1.5 font-mono text-[12.5px] text-text-3 tabular-nums">
           {formatCount(max)}
         </span>
       </div>
       <figcaption
-        className="mt-2 flex justify-between font-mono text-[11.5px] text-text-3 tabular-nums"
+        className="mt-2 flex justify-between font-mono text-[12.5px] text-text-3 tabular-nums"
         aria-hidden="true"
       >
         <span>{shortDate(from)}</span>
@@ -232,7 +232,7 @@ export function WeeklyBars({ weeks }: { weeks: HistoryWeek[] }) {
         })}
       </svg>
       <figcaption
-        className="mt-2 flex justify-between font-mono text-[11.5px] text-text-3 tabular-nums"
+        className="mt-2 flex justify-between font-mono text-[12.5px] text-text-3 tabular-nums"
         aria-hidden="true"
       >
         <span>{weeks[0] ? shortDate(weeks[0].week_start) : ''}</span>

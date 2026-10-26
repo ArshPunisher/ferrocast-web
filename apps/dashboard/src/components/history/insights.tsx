@@ -129,7 +129,7 @@ export function PerStream({
         className="self-start"
       />
       {metric === 'tips' && !currency ? (
-        <p className="text-[13.5px] text-text-3">No tips in this range.</p>
+        <p className="text-[14.5px] text-text-3">No tips in this range.</p>
       ) : (
         <>
           <div className="relative">
@@ -188,12 +188,12 @@ export function PerStream({
                 )
               })}
             </svg>
-            <span className="pointer-events-none absolute top-0 left-0 -translate-y-1/2 rounded-full bg-surface-1 pr-1.5 font-mono text-[11.5px] text-text-3 tabular-nums">
+            <span className="pointer-events-none absolute top-0 left-0 -translate-y-1/2 rounded-full bg-surface-1 pr-1.5 font-mono text-[12.5px] text-text-3 tabular-nums">
               {show(metric, max, currency)}
             </span>
           </div>
           <figcaption
-            className="flex justify-between font-mono text-[11.5px] text-text-3 tabular-nums"
+            className="flex justify-between font-mono text-[12.5px] text-text-3 tabular-nums"
             aria-hidden="true"
           >
             <span>{list[0] ? shortDate(list[0].started_at) : ''}</span>
@@ -252,19 +252,19 @@ export function StreamDetail({ stream }: { stream: HistoryStream }) {
     <div className="flex flex-col gap-4" data-testid="stream-detail">
       <div className="flex min-w-0 items-center gap-2.5">
         <PlatformMark platform={stream.platform} size={16} />
-        <p className="min-w-0 truncate text-[15px] font-semibold text-text" dir="auto">
+        <p className="min-w-0 truncate text-[16px] font-semibold text-text" dir="auto">
           {stream.title ? tameText(stream.title) : PLATFORM_LABEL[stream.platform]}
         </p>
-        <span className="shrink-0 font-mono text-[12.5px] text-text-3 tabular-nums">
+        <span className="shrink-0 font-mono text-[13.5px] text-text-3 tabular-nums">
           {shortDate(stream.started_at)}
         </span>
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 lg:grid-cols-7">
         {numbers.map(([k, v]) => (
           <div key={k} className="min-w-0">
-            <dt className="text-[12.5px] text-text-3">{k}</dt>
+            <dt className="text-[13.5px] text-text-3">{k}</dt>
             <dd
-              className="truncate font-mono text-[15px] font-semibold text-text tabular-nums"
+              className="truncate font-mono text-[16px] font-semibold text-text tabular-nums"
               title={v}
             >
               {v}
@@ -277,7 +277,7 @@ export function StreamDetail({ stream }: { stream: HistoryStream }) {
       ) : res.loading && !res.data ? (
         <Skeleton className="h-40" />
       ) : samples.length < 2 ? (
-        <p className="flex items-center gap-2 text-[13.5px] text-text-3">
+        <p className="flex items-center gap-2 text-[14.5px] text-text-3">
           <ChartLine size={16} aria-hidden /> No viewer counts were saved during this stream.
         </p>
       ) : (
@@ -326,7 +326,7 @@ export function StreamDetail({ stream }: { stream: HistoryStream }) {
             ))}
           </svg>
           <figcaption
-            className="mt-2 flex justify-between font-mono text-[11.5px] text-text-3 tabular-nums"
+            className="mt-2 flex justify-between font-mono text-[12.5px] text-text-3 tabular-nums"
             aria-hidden="true"
           >
             <span>{clock(first)}</span>
@@ -353,7 +353,7 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
   const shade = (v: number) => (v ? 0.18 + 0.82 * (v / top) : 0)
   return (
     <figure className="m-0 flex flex-col gap-3">
-      <p className="text-[14px] text-text-2" data-testid="best-slot">
+      <p className="text-[15px] text-text-2" data-testid="best-slot">
         {best ? (
           <>
             Streams that start on <b className="text-text">{WEEKDAYS[best.day]}</b> from{' '}
@@ -384,7 +384,7 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
             <span
               key={b}
               aria-hidden="true"
-              className="pb-1 text-center font-mono text-[11px] text-text-3 tabular-nums"
+              className="pb-1 text-center font-mono text-[12px] text-text-3 tabular-nums"
             >
               {String(b).padStart(2, '0')}
             </span>
@@ -393,7 +393,7 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
             <div key={d} className="contents">
               <span
                 aria-hidden="true"
-                className="pr-2 text-[12px] leading-7 font-medium text-text-3"
+                className="pr-2 text-[13px] leading-7 font-medium text-text-3"
               >
                 {d}
               </span>
@@ -429,7 +429,7 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
           ))}
         </div>
       </div>
-      <figcaption className="flex items-center gap-2 text-[12px] text-text-3">
+      <figcaption className="flex items-center gap-2 text-[13px] text-text-3">
         <span>Fewer viewers</span>
         <span
           aria-hidden="true"
@@ -458,25 +458,25 @@ type Row = { platform: Parameters<typeof PlatformMark>[0]['platform']; name: str
 function List({ title, rows, empty }: { title: string; rows: Row[]; empty: string }) {
   return (
     <div className="min-w-0">
-      <h4 className="mb-2 text-[13px] font-semibold text-text-3">{title}</h4>
+      <h4 className="mb-2 text-[14px] font-semibold text-text-3">{title}</h4>
       {rows.length === 0 ? (
-        <p className="text-[13.5px] text-text-3">{empty}</p>
+        <p className="text-[14.5px] text-text-3">{empty}</p>
       ) : (
         <ol className="flex flex-col gap-1.5">
           {rows.slice(0, 5).map((r, i) => (
             <li key={`${r.platform}:${r.name}:${i}`} className="flex min-w-0 items-center gap-2.5">
-              <span className="w-4 shrink-0 text-right font-mono text-[12px] text-text-3 tabular-nums">
+              <span className="w-4 shrink-0 text-right font-mono text-[13px] text-text-3 tabular-nums">
                 {i + 1}
               </span>
               <PlatformMark platform={r.platform} size={14} />
               <span
-                className="min-w-0 flex-1 truncate text-[14px] font-medium text-text"
+                className="min-w-0 flex-1 truncate text-[15px] font-medium text-text"
                 dir="auto"
                 title={r.name}
               >
                 {tameText(r.name)}
               </span>
-              <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+              <span className="shrink-0 font-mono text-[14px] text-text-2 tabular-nums">
                 {r.value}
               </span>
             </li>

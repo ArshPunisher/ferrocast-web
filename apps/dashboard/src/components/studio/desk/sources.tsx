@@ -493,7 +493,7 @@ export function SourcesDock() {
             autoFocus
             data-autofocus
             aria-label={`New name for ${item.name}`}
-            className="h-8! text-[13.5px]"
+            className="h-8! text-[14.5px]"
             maxLength={100}
             value={naming.value}
             onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
@@ -512,7 +512,7 @@ export function SourcesDock() {
           open(e, item.name, itemMenu(item))
         }}
         className={cx(
-          'group flex min-h-10 items-center gap-1 rounded-[9px] pr-1 text-[13.5px] transition-colors hover:bg-surface-2',
+          'group flex min-h-10 items-center gap-1 rounded-[9px] pr-1 text-[14.5px] transition-colors hover:bg-surface-2',
           child ? 'pl-7' : 'pl-1',
           on &&
             'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft',
@@ -557,7 +557,7 @@ export function SourcesDock() {
             {item.name}
           </span>
           {item.blend !== 'normal' && (
-            <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-px text-[11px] font-bold text-text-2">
+            <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-px text-[12px] font-bold text-text-2">
               {BLEND_LABEL[item.blend]}
             </span>
           )}
@@ -592,7 +592,7 @@ export function SourcesDock() {
       <DockHeader
         id="sources"
         info={
-          <span className="truncate rounded-full bg-accent-soft px-2 py-0.5 text-[11.5px] font-bold text-accent-text">
+          <span className="truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text">
             {scene}
           </span>
         }
@@ -611,7 +611,7 @@ export function SourcesDock() {
         ) : !list ? (
           <Skeleton className="h-28" />
         ) : list.length === 0 ? (
-          <p className="m-0 p-2.5 text-[13.5px] font-medium text-text-2">
+          <p className="m-0 p-2.5 text-[14.5px] font-medium text-text-2">
             Empty. Press <Plus size={12} weight="bold" className="inline align-[-1px]" /> to add
             your camera, screen or a game.
           </p>

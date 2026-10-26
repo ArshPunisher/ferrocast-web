@@ -60,7 +60,7 @@ export function StreamControl() {
     })
   if (first.error && !health)
     return (
-      <p className="flex items-center gap-2 text-[13.5px] text-text-2">
+      <p className="flex items-center gap-2 text-[14.5px] text-text-2">
         <Broadcast size={16} className="shrink-0 text-text-3" aria-hidden="true" />
         Open OBS to start or stop streaming from here.
       </p>
@@ -154,7 +154,7 @@ export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Pre
         <StatusIcon status={c.status} className="mt-0.5" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-text">{c.label}</p>
-          <p className="text-[13.5px] break-words text-text-2">{c.detail}</p>
+          <p className="text-[14.5px] break-words text-text-2">{c.detail}</p>
         </div>
       </div>
       {c.fix && (
@@ -174,7 +174,7 @@ export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Pre
           ) : (
             <a
               href={c.fix.href}
-              className="-ml-2 inline-block rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2 sm:ml-0"
+              className="-ml-2 inline-block rounded-control px-2 py-1 text-[14.5px] font-semibold text-accent-text hover:bg-surface-2 sm:ml-0"
             >
               {c.fix.label}
             </a>
@@ -195,7 +195,7 @@ export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Pre
       )}
       {fine.length > 0 && (
         <details className="rounded-control" open={issues.length === 0}>
-          <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-2 text-[13.5px] font-medium text-text-2 hover:text-text">
+          <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-2 text-[14.5px] font-medium text-text-2 hover:text-text">
             <StatusIcon status="ok" />
             {fine.length} {fine.length === 1 ? 'check' : 'checks'} passed
           </summary>
@@ -267,7 +267,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
       ) : (
         <>
           {!pf.ready && (
-            <p role="status" className="mb-2 text-[13.5px] font-medium text-text-2">
+            <p role="status" className="mb-2 text-[14.5px] font-medium text-text-2">
               Fix the red items, or start anyway.
             </p>
           )}
@@ -317,7 +317,7 @@ export function ShowPanel() {
                   <span className="min-w-0">
                     <span className="font-medium text-text">{s.label}</span>
                     {s.detail && (
-                      <span className="block text-[13.5px] break-words text-text-2">
+                      <span className="block text-[14.5px] break-words text-text-2">
                         {s.detail}
                       </span>
                     )}
@@ -424,7 +424,7 @@ export function PreflightPanel() {
         </Button>
       }
     >
-      <p className="mb-2 text-[13.5px] text-text-2">
+      <p className="mb-2 text-[14.5px] text-text-2">
         What could go wrong at go-live, with the fix.
       </p>
       {pf.error ? (
@@ -556,7 +556,7 @@ export function ShowSettings({
           {sceneSelect('Ending scene', 'ending_scene')}
         </div>
         {!scenes && (
-          <p className="text-[13.5px] text-text-2">Open OBS to pick scenes from a list.</p>
+          <p className="text-[14.5px] text-text-2">Open OBS to pick scenes from a list.</p>
         )}
         {c.countdown_s > 0 && <AtZeroSettings c={c} set={set} err={err} />}
         <div className="flex flex-col gap-3">
@@ -625,14 +625,14 @@ export function ShowSettings({
         </div>
         {audio.length > 0 && (
           <fieldset>
-            <legend className="text-[13.5px] font-medium text-text-2">
+            <legend className="text-[14.5px] font-medium text-text-2">
               Check these mics aren’t muted
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {audio.map((i) => (
                 <label
                   key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2"
                 >
                   <input
                     type="checkbox"
@@ -648,14 +648,14 @@ export function ShowSettings({
         )}
         {cams.length > 0 && (
           <fieldset>
-            <legend className="text-[13.5px] font-medium text-text-2">
+            <legend className="text-[14.5px] font-medium text-text-2">
               Check these cameras are shown
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {cams.map((i) => (
                 <label
                   key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[13.5px] text-text-2"
+                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2"
                 >
                   <input
                     type="checkbox"
@@ -688,7 +688,7 @@ export function ShowSettings({
           )}
         </Field>
         {err && !err.field && (
-          <p role="alert" className="text-[13.5px] font-medium text-danger">
+          <p role="alert" className="text-[14.5px] font-medium text-danger">
             {err.message}
           </p>
         )}
@@ -711,7 +711,7 @@ function AtZeroSettings({
   const put = (patch: Partial<AtZero>) => set({ at_zero: { ...z, ...patch } })
   return (
     <fieldset className="m-0 flex flex-col gap-3 rounded-[12px] border border-line p-3">
-      <legend className="px-1 text-[13.5px] font-semibold text-text">At zero</legend>
+      <legend className="px-1 text-[14.5px] font-semibold text-text">At zero</legend>
       <Switch
         label={c.live_scene ? `Switch OBS to ${c.live_scene}` : 'Switch OBS to the live scene'}
         checked={z.switch}

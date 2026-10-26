@@ -8,6 +8,15 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
+/* Easy to read mid-stream: text a step bigger and bolder than a document's (owner, 26 Oct). */
+@theme {
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.45;
+}
+body {
+  font-weight: 500;
+}
+
 /* Long chat lists stay cheap: offscreen rows skip layout and paint (R-54). */
 .fc-row {
   content-visibility: auto;
@@ -44,8 +53,8 @@ input[type='range'] {
 /* Alerts editor: labels and inputs a step bigger and bolder than the default Field. */
 .fc-label,
 .fc-editor label[for] {
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
   color: var(--fc-text);
 }
 .fc-label {
@@ -56,7 +65,7 @@ input[type='range'] {
     .font-mono,
     .font-display
   ) {
-  font-size: 14.5px;
+  font-size: 15.5px;
 }
 
 /* Pro. The everyday look stays still; only the waiting dot and the one-time unlock move. */

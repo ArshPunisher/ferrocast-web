@@ -47,7 +47,7 @@ export function Community({ section }: { section?: string | undefined }) {
           >
             <h2
               id="community-points-title"
-              className="mb-3 font-display text-lg font-semibold tracking-tight text-text"
+              className="mb-3 font-display text-lg font-extrabold tracking-tight text-text"
             >
               Points
             </h2>

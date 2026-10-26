@@ -56,7 +56,7 @@ export function ProWelcome() {
     >
       <SparkMark size={34} />
       <div className="min-w-0">
-        <h2 id="pro-welcome" className="text-[14.5px] font-semibold text-text">
+        <h2 id="pro-welcome" className="text-[15.5px] font-semibold text-text">
           Pro is on. {steps.length === 3 ? 'Three things' : 'A few things'} worth setting up:
         </h2>
         <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1.5">
@@ -64,7 +64,7 @@ export function ProWelcome() {
             <li key={s.label}>
               <a
                 href={href(s.route)}
-                className="inline-flex items-center gap-1.5 rounded-[6px] text-[13.5px] font-medium text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="inline-flex items-center gap-1.5 rounded-[6px] text-[14.5px] font-medium text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 <s.icon size={16} className="text-accent-text" aria-hidden />
                 {s.label}

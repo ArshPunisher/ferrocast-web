@@ -95,7 +95,7 @@ function WelcomeForm({
         </Field>
       </div>
       {err && err.field !== 'template' && err.field !== 'returning_days' && (
-        <p role="alert" className="text-[13.5px] font-medium text-danger lg:col-span-2">
+        <p role="alert" className="text-[14.5px] font-medium text-danger lg:col-span-2">
           {err.message}
         </p>
       )}

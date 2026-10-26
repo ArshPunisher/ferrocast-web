@@ -221,7 +221,7 @@ export function ScenesDock() {
         autoFocus
         data-autofocus
         aria-label={naming?.from ? `New name for ${naming.from}` : 'New scene name'}
-        className="h-8! text-[13.5px]"
+        className="h-8! text-[14.5px]"
         maxLength={100}
         value={naming?.value ?? ''}
         onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
@@ -333,8 +333,8 @@ export function ScenesDock() {
                     className={cx(
                       'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
                       grid
-                        ? 'flex h-full flex-col justify-between gap-1.5 overflow-hidden rounded-[11px] border border-line bg-surface-2 p-2.5 text-[13px] hover:border-line-strong active:scale-[0.98]'
-                        : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[13.5px] hover:bg-surface-2',
+                        ? 'flex h-full flex-col justify-between gap-1.5 overflow-hidden rounded-[11px] border border-line bg-surface-2 p-2.5 text-[14px] hover:border-line-strong active:scale-[0.98]'
+                        : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[14.5px] hover:bg-surface-2',
                       s.current &&
                         (grid
                           ? 'border-danger bg-danger-soft shadow-[inset_0_0_0_1px_var(--fc-danger)] hover:border-danger'
@@ -354,7 +354,7 @@ export function ScenesDock() {
                             tone={s.current ? 'var(--fc-danger)' : undefined}
                           />
                           {s.current ? (
-                            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-danger">
+                            <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-danger">
                               <span
                                 aria-hidden
                                 className="size-[7px] rounded-full bg-danger-fill"
@@ -362,12 +362,12 @@ export function ScenesDock() {
                               On air
                             </span>
                           ) : s.preview ? (
-                            <span className="text-[10.5px] font-bold text-accent-text">
+                            <span className="text-[11.5px] font-bold text-accent-text">
                               Preview
                             </span>
                           ) : (
                             s.items > 0 && (
-                              <span className="font-mono text-[11px] font-semibold text-text-3 tabular-nums">
+                              <span className="font-mono text-[12px] font-semibold text-text-3 tabular-nums">
                                 {s.items}
                               </span>
                             )
@@ -384,15 +384,15 @@ export function ScenesDock() {
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.preview && !s.current && (
-                          <span className="text-[11px] font-bold text-accent-text">Preview</span>
+                          <span className="text-[12px] font-bold text-accent-text">Preview</span>
                         )}
                         {s.items > 0 && !s.current && (
-                          <span className="font-mono text-[11.5px] font-semibold text-text-3 tabular-nums">
+                          <span className="font-mono text-[12.5px] font-semibold text-text-3 tabular-nums">
                             {s.items}
                           </span>
                         )}
                         {s.current && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-danger">
+                          <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-danger">
                             <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
                             On air
                           </span>

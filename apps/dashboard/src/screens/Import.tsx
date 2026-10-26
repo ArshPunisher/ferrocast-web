@@ -48,7 +48,7 @@ function ErrorNote({ error }: { error: Failure }) {
   return (
     <div
       role="alert"
-      className="flex gap-2.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5 text-[13.5px]"
+      className="flex gap-2.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5 text-[14.5px]"
     >
       <Warning size={18} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
       <div className="min-w-0">
@@ -63,18 +63,18 @@ function Items({ title, items, total }: { title: string; items: ImportItem[]; to
   if (total === 0) return null
   return (
     <details className="group mt-2 rounded-control bg-inset px-3 py-2">
-      <summary className="cursor-pointer text-[13.5px] font-medium text-text-2 select-none hover:text-text">
+      <summary className="cursor-pointer text-[14.5px] font-medium text-text-2 select-none hover:text-text">
         {title} ({n(total)})
       </summary>
       <ul className="mt-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
         {items.map((i, idx) => (
-          <li key={`${i.name}-${idx}`} className="text-[13.5px] leading-snug break-words">
+          <li key={`${i.name}-${idx}`} className="text-[14.5px] leading-snug break-words">
             <span className="font-medium text-text">{i.name}</span>
             <span className="text-text-3">: {i.reason}</span>
           </li>
         ))}
         {total > items.length && (
-          <li className="text-[13.5px] text-text-3">and {n(total - items.length)} more</li>
+          <li className="text-[14.5px] text-text-3">and {n(total - items.length)} more</li>
         )}
       </ul>
     </details>
@@ -86,7 +86,7 @@ function Notes({ notes }: { notes: string[] }) {
   return (
     <ul className="mt-2 flex flex-col gap-1">
       {notes.map((t) => (
-        <li key={t} className="flex gap-2 text-[13.5px] leading-snug text-text-2">
+        <li key={t} className="flex gap-2 text-[14.5px] leading-snug text-text-2">
           <Info size={15} className="mt-0.5 shrink-0 text-text-3" aria-hidden="true" />
           <span className="min-w-0 break-words">{t}</span>
         </li>
@@ -106,7 +106,7 @@ function Count({ value, label, tone }: { value: number; label: string; tone?: 'w
       >
         {n(value)}
       </span>
-      <span className="mt-1 text-[13.5px] font-medium text-text-2">{label}</span>
+      <span className="mt-1 text-[14.5px] font-medium text-text-2">{label}</span>
     </div>
   )
 }
@@ -118,7 +118,7 @@ function NotImportedList({ items }: { items: NotImported[] }) {
       <h3 className="text-sm font-semibold text-text">Not brought over</h3>
       <ul className="mt-2 flex flex-col gap-3">
         {items.map((i) => (
-          <li key={i.what} className="text-[13.5px] leading-relaxed">
+          <li key={i.what} className="text-[14.5px] leading-relaxed">
             <span className="font-medium text-text">
               {i.what}
               {i.count > 0 && <span className="text-text-3"> ({n(i.count)})</span>}
@@ -149,7 +149,7 @@ function FilePick({
   const tooBig = file !== null && file.size > MAX_FILE
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13.5px] font-medium text-text-2">
+      <label htmlFor={id} className="text-[14.5px] font-medium text-text-2">
         {label}
         {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
       </label>
@@ -168,7 +168,7 @@ function FilePick({
         </Button>
         {file && (
           <>
-            <span className="min-w-0 truncate text-[13.5px] text-text-2" title={file.name}>
+            <span className="min-w-0 truncate text-[14.5px] text-text-2" title={file.name}>
               {file.name}
             </span>
             <Button
@@ -185,11 +185,11 @@ function FilePick({
         )}
       </div>
       {tooBig ? (
-        <p role="alert" className="text-[13px] font-medium text-danger">
+        <p role="alert" className="text-[14px] font-medium text-danger">
           That file is over 10 MB, the most Ferrocast reads. Export only the columns you need.
         </p>
       ) : (
-        <p id={`${id}-hint`} className="text-[13px] leading-snug text-text-3">
+        <p id={`${id}-hint`} className="text-[14px] leading-snug text-text-3">
           {hint}
         </p>
       )}
@@ -326,7 +326,7 @@ export function Import({
     <div className="mx-auto max-w-3xl">
       <a
         href={href({ name: 'settings', section: 'data' })}
-        className="mb-3 inline-flex items-center gap-1.5 rounded-control text-[13.5px] font-medium text-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        className="mb-3 inline-flex items-center gap-1.5 rounded-control text-[14.5px] font-medium text-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
       >
         <ArrowLeft size={14} aria-hidden="true" /> Your data
       </a>
@@ -388,7 +388,7 @@ export function Import({
                     {demo && (
                       <button
                         type="button"
-                        className="self-start rounded-control text-[13.5px] font-semibold text-accent-text underline underline-offset-2 hover:no-underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                        className="self-start rounded-control text-[14.5px] font-semibold text-accent-text underline underline-offset-2 hover:no-underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                         onClick={() => setToken(DEMO_SE_TOKEN)}
                       >
                         Use the demo’s sample token
@@ -397,7 +397,7 @@ export function Import({
                   </>
                 ) : (
                   <>
-                    <p className="text-[13.5px] leading-relaxed text-text-2">
+                    <p className="text-[14.5px] leading-relaxed text-text-2">
                       Streamlabs works from files you export. Its commands and timers can’t be
                       exported, so they can’t come over.
                     </p>
@@ -466,11 +466,11 @@ export function Import({
                 id="import-preview-title"
                 ref={previewHeading}
                 tabIndex={-1}
-                className="font-display text-[15px] font-semibold tracking-tight text-text focus:outline-none"
+                className="font-display text-[18px] font-extrabold tracking-tight text-text focus:outline-none"
               >
                 What will come over
               </h2>
-              <p className="mt-0.5 text-[13.5px] text-text-3">
+              <p className="mt-0.5 text-[14.5px] text-text-3">
                 {preview.account
                   ? `From ${preview.account.name} on ${SOURCE_LABEL[preview.source]}${
                       preview.account.platform
@@ -486,7 +486,7 @@ export function Import({
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
                       <h3 className="text-sm font-semibold text-text">{KIND_LABEL[s.kind]}</h3>
                       {s.found === 0 && (
-                        <span className="text-[13.5px] text-text-3">
+                        <span className="text-[14.5px] text-text-3">
                           None found on {SOURCE_LABEL[preview.source]}
                         </span>
                       )}
@@ -531,7 +531,7 @@ export function Import({
               <div className="mt-5 flex flex-col gap-4 border-t border-line pt-4">
                 {conflicts > 0 && (
                   <div className="flex flex-col gap-2">
-                    <span id="conflict-label" className="text-[13.5px] font-medium text-text-2">
+                    <span id="conflict-label" className="text-[14.5px] font-medium text-text-2">
                       {n(conflicts)} {conflicts === 1 ? 'thing is' : 'things are'} already in
                       Ferrocast. Keep or replace them?
                     </span>
@@ -545,7 +545,7 @@ export function Import({
                       ]}
                       className="self-start"
                     />
-                    <p className="text-[13.5px] text-text-3">
+                    <p className="text-[14.5px] text-text-3">
                       {choice === 'keep'
                         ? 'Your Ferrocast versions stay as they are.'
                         : 'The imported versions replace yours. Nothing is deleted.'}
@@ -553,7 +553,7 @@ export function Import({
                   </div>
                 )}
                 {error && <ErrorNote error={error} />}
-                <p className="text-[13.5px] text-text-3">
+                <p className="text-[14.5px] text-text-3">
                   A backup is taken first. Undo it in Settings → Your data.
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -570,7 +570,7 @@ export function Import({
                   </Button>
                 </div>
                 {nothingNew && (
-                  <p className="text-[13.5px] text-text-2">
+                  <p className="text-[14.5px] text-text-2">
                     There’s nothing new to bring over from this {SOURCE_LABEL[preview.source]}{' '}
                     {preview.source === 'streamelements' ? 'account' : 'export'}.
                   </p>
@@ -614,13 +614,13 @@ function Report({
           id="import-report-title"
           ref={headingRef}
           tabIndex={-1}
-          className="font-display text-[15px] font-semibold tracking-tight text-text focus:outline-none"
+          className="font-display text-[18px] font-extrabold tracking-tight text-text focus:outline-none"
         >
           Import finished
         </h2>
         <Badge>{SOURCE_LABEL[report.source]}</Badge>
       </div>
-      <p className="mt-1 text-[13.5px] text-text-3">
+      <p className="mt-1 text-[14.5px] text-text-3">
         A backup was taken first. Undo it in Settings → Your data.
       </p>
       <ul className="mt-4 flex flex-col divide-y divide-line">
@@ -628,7 +628,7 @@ function Report({
           <li key={s.kind} className="py-3 first:pt-0">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h3 className="text-sm font-semibold text-text">{KIND_LABEL[s.kind]}</h3>
-              <span className="text-[13.5px] text-text-2">{line(s)}</span>
+              <span className="text-[14.5px] text-text-2">{line(s)}</span>
             </div>
             <Items
               title="Need a match, not paid automatically"

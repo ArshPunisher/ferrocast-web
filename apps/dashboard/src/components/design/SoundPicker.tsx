@@ -88,10 +88,10 @@ export function SoundPicker({
   let lastGroup: string | null = null
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={`${base}-label`} className="text-[13.5px] font-semibold text-text">
+      <span id={`${base}-label`} className="text-[14.5px] font-semibold text-text">
         {label}
       </span>
-      <p id={`${base}-hint`} className="text-[13px] leading-snug text-text-3">
+      <p id={`${base}-hint`} className="text-[14px] leading-snug text-text-3">
         Arrow keys or hover to hear one. Enter or click to pick it.
       </p>
       <div
@@ -118,7 +118,7 @@ export function SoundPicker({
               {header && (
                 <div
                   role="presentation"
-                  className="px-3 pt-3 pb-1.5 font-mono text-[11.5px] font-semibold tracking-[0.04em] text-text-3 uppercase"
+                  className="px-3 pt-3 pb-1.5 font-mono text-[12.5px] font-semibold tracking-[0.04em] text-text-3 uppercase"
                 >
                   {header}
                 </div>
@@ -147,11 +147,11 @@ export function SoundPicker({
                 )}
               >
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-medium text-text">
+                  <span className="block text-[15px] font-medium text-text">
                     {SOUND_LABEL[o.id]}
                   </span>
                   {o.id !== 'none' && (
-                    <small className="block text-[12.5px] text-text-3">{SOUND_USE[o.id]}</small>
+                    <small className="block text-[13.5px] text-text-3">{SOUND_USE[o.id]}</small>
                   )}
                 </span>
                 <span className="flex items-center gap-2">

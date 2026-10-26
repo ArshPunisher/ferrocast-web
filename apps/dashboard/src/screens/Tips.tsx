@@ -566,7 +566,7 @@ export function Tips() {
               </Field>
               {pageError && !serverField && <ErrorNote problem={pageError} />}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-[13.5px] text-text-2">
+                <p className="text-[14.5px] text-text-2">
                   {live && handle !== saved.handle && !problems.handle
                     ? `New link: ${linkBase}${handle}`
                     : live
@@ -707,7 +707,7 @@ function ErrorNote({ problem }: { problem: Problem }) {
       className="flex gap-2.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2.5"
     >
       <Warning size={16} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
-      <div className="min-w-0 text-[13.5px] leading-snug">
+      <div className="min-w-0 text-[14.5px] leading-snug">
         <p className="font-semibold text-text">{problem.message}</p>
         {problem.hint && <p className="mt-0.5 text-text-2">{problem.hint}</p>}
       </div>
@@ -740,19 +740,19 @@ function CopyButton({ text, label, what }: { text: string; label: string; what: 
 }
 
 const linkButton =
-  'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[13px] font-semibold whitespace-nowrap text-text transition-[border-color,transform] duration-150 hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none'
+  'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14px] font-semibold whitespace-nowrap text-text transition-[border-color,transform] duration-150 hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none'
 
 function PageLink({ url }: { url: string }) {
   return (
     <div className="rounded-[12px] border border-accent-line bg-accent-soft p-3.5">
-      <p className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
+      <p className="flex items-center gap-2 text-[14.5px] font-semibold text-text">
         <Check size={14} weight="bold" className="text-ok" aria-hidden="true" />
         Your tip page is up
       </p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <code
           translate="no"
-          className="min-w-0 flex-1 font-mono text-[13.5px] break-all text-text-2 sm:truncate"
+          className="min-w-0 flex-1 font-mono text-[14.5px] break-all text-text-2 sm:truncate"
           title={url}
         >
           {url}
@@ -765,7 +765,7 @@ function PageLink({ url }: { url: string }) {
           </a>
         </div>
       </div>
-      <p className="mt-2 text-[13.5px] text-text-2">Put it in your panels and a !tip command.</p>
+      <p className="mt-2 text-[14.5px] text-text-2">Put it in your panels and a !tip command.</p>
     </div>
   )
 }
@@ -813,7 +813,7 @@ function ProviderRow({
           )}
           {state?.test_mode && <Badge tone="warn">Test mode</Badge>}
         </span>
-        <span className="mt-0.5 block text-[13.5px] text-text-2">{g.blurb}</span>
+        <span className="mt-0.5 block text-[14.5px] text-text-2">{g.blurb}</span>
       </span>
     </>
   )
@@ -835,7 +835,7 @@ function ProviderRow({
           className="fc-press flex w-full items-center gap-3 rounded-[12px] p-3.5 text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
           {head}
-          <span className="inline-flex shrink-0 items-center gap-1 text-[13.5px] font-semibold text-accent-text">
+          <span className="inline-flex shrink-0 items-center gap-1 text-[14.5px] font-semibold text-accent-text">
             <span className="hidden sm:inline">{open ? 'Close' : on ? 'Edit' : 'Set up'}</span>
             <span className="sr-only sm:hidden">{open ? 'Close' : on ? 'Edit' : 'Set up'}</span>
             <CaretDown
@@ -890,7 +890,7 @@ function Step({
       <span
         aria-hidden="true"
         className={cx(
-          'relative z-[1] inline-flex size-7 shrink-0 items-center justify-center rounded-full border text-[12.5px] font-bold transition-colors duration-200',
+          'relative z-[1] inline-flex size-7 shrink-0 items-center justify-center rounded-full border text-[13.5px] font-bold transition-colors duration-200',
           done ? 'border-ok/50 bg-ok-soft text-ok' : 'border-line-strong bg-surface-1 text-text-2',
         )}
       >
@@ -1045,21 +1045,21 @@ function ProviderSetup({
           </Field>
           <a
             {...externalLink(g.createUrl)}
-            className="mt-2 inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent-text hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-[14.5px] font-semibold text-accent-text hover:underline"
           >
             No page yet? {g.createLabel} <ArrowSquareOut size={13} aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         </Step>
         <Step n={2} done={secretOk && hasSecret} title={`Add this webhook in ${name}`}>
-          <p className="text-[13.5px] leading-relaxed text-text-2">{g.webhookHow}</p>
+          <p className="text-[14.5px] leading-relaxed text-text-2">{g.webhookHow}</p>
           {g.events.length > 0 && (
             <ul aria-label="Events to tick" className="mt-2 flex flex-wrap gap-1.5">
               {g.events.map((e) => (
                 <li
                   key={e}
                   translate="no"
-                  className="rounded-full border border-line bg-inset px-2 py-0.5 font-mono text-[12.5px] text-text-2"
+                  className="rounded-full border border-line bg-inset px-2 py-0.5 font-mono text-[13.5px] text-text-2"
                 >
                   {e}
                 </li>
@@ -1069,7 +1069,7 @@ function ProviderSetup({
           <div className="mt-3 flex flex-col gap-2.5 rounded-control border border-line-strong bg-inset p-3">
             <code
               translate="no"
-              className="font-mono text-[13.5px] leading-relaxed break-all text-text"
+              className="font-mono text-[14.5px] leading-relaxed break-all text-text"
             >
               {webhook}
             </code>
@@ -1109,7 +1109,7 @@ function ProviderSetup({
           ) : (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3 rounded-control border border-line bg-inset py-1.5 pr-1.5 pl-3">
-                <span className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-text">
+                <span className="inline-flex items-center gap-2 text-[14.5px] font-semibold text-text">
                   <Lock size={14} aria-hidden="true" className="text-ok" />
                   {g.secretLabel} saved
                 </span>
@@ -1125,7 +1125,7 @@ function ProviderSetup({
                 </Button>
               </div>
               {fieldError('secret') && (
-                <p role="alert" className="text-[13px] font-medium text-danger">
+                <p role="alert" className="text-[14px] font-medium text-danger">
                   {fieldError('secret')}
                 </p>
               )}
@@ -1135,7 +1135,7 @@ function ProviderSetup({
       </ol>
 
       <details ref={advancedRef} className="group mt-4 rounded-control border border-line">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-control px-3 py-2.5 text-[13.5px] font-semibold text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-control px-3 py-2.5 text-[14.5px] font-semibold text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
           More options
           <CaretDown
             size={14}
@@ -1253,7 +1253,7 @@ function Preview({
               : null
           }
         />
-        <figcaption className="mt-2 text-[13.5px] text-text-2">
+        <figcaption className="mt-2 text-[14.5px] text-text-2">
           {brand
             ? 'Your public page, in your colours.'
             : 'Your public page. No ads, trackers or branding.'}
@@ -1287,7 +1287,7 @@ function Safety() {
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text">{title}</p>
-              <p className="mt-0.5 text-[13.5px] leading-snug text-text-2">{text}</p>
+              <p className="mt-0.5 text-[14.5px] leading-snug text-text-2">{text}</p>
             </div>
           </li>
         ))}

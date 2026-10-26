@@ -127,10 +127,10 @@ export function MusicSettings() {
         )}
       </Field>
       {inputs.data && list.length === 0 && (
-        <p className="-mt-2 text-[13px] text-text-3">Connect OBS to pick a source.</p>
+        <p className="-mt-2 text-[14px] text-text-3">Connect OBS to pick a source.</p>
       )}
       <div className="flex flex-col gap-1.5">
-        <span className="text-[13.5px] font-medium text-text-2">Song from</span>
+        <span className="text-[14.5px] font-medium text-text-2">Song from</span>
         <Segmented<SongSource>
           label="Song from"
           size="sm"
@@ -152,7 +152,7 @@ export function MusicSettings() {
           }}
         />
         {song === 'player' && (
-          <p className="text-[13px] text-text-3">
+          <p className="text-[14px] text-text-3">
             Spotify or Music on a Mac, any player on Windows.
           </p>
         )}
@@ -189,12 +189,12 @@ export function MusicSettings() {
         </form>
       )}
       {view.song_problem && config.song !== 'off' && (
-        <p className="text-[13px] text-warn" role="status">
+        <p className="text-[14px] text-warn" role="status">
           {view.song_problem}
         </p>
       )}
       {!now.playing && (config.beat_input || config.song !== 'off') && (
-        <p className="text-[13px] text-text-3">Music pieces stay hidden until something plays.</p>
+        <p className="text-[14px] text-text-3">Music pieces stay hidden until something plays.</p>
       )}
     </div>
   )
@@ -207,7 +207,7 @@ function NowPlaying({ view }: { view: MusicView }) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-inset px-3 py-2.5">
       <Badge tone={now.playing ? 'ok' : 'neutral'}>{now.playing ? 'Playing' : 'Quiet'}</Badge>
-      <span className="min-w-0 flex-1 truncate text-[13.5px] text-text" title={song || undefined}>
+      <span className="min-w-0 flex-1 truncate text-[14.5px] text-text" title={song || undefined}>
         {song || (now.playing ? 'No song name' : 'Nothing playing')}
       </span>
       <span

@@ -64,7 +64,7 @@ export function YoutubeCloud() {
         <YoutubeLogo size={18} className="text-youtube" aria-hidden />
         <h2
           id="yt-cloud-title"
-          className="font-display text-base font-bold tracking-tight text-text"
+          className="font-display text-[18px] font-extrabold tracking-tight text-text"
         >
           YouTube from the cloud
         </h2>
@@ -77,11 +77,11 @@ export function YoutubeCloud() {
       ) : !v ? (
         <Skeleton className="h-20" />
       ) : !v.available ? (
-        <p className="text-[13.5px] text-text-2">
+        <p className="text-[14.5px] text-text-2">
           Not set up on Ferrocast&rsquo;s servers yet. YouTube keeps working in the app on your PC.
         </p>
       ) : !v.pro ? (
-        <p className="text-[13.5px] text-text-2">
+        <p className="text-[14.5px] text-text-2">
           Your YouTube chat and bot keep running with your PC off, or with no PC at all. Part of
           Pro.{' '}
           <a
@@ -93,7 +93,7 @@ export function YoutubeCloud() {
         </p>
       ) : !v.channel ? (
         <div className="flex flex-col items-start gap-2">
-          <p className="text-[13.5px] text-text-2">
+          <p className="text-[14.5px] text-text-2">
             Connect your channel and the cloud bot reads and answers your YouTube live chat from
             Ferrocast&rsquo;s servers, no PC needed.
           </p>
@@ -108,14 +108,14 @@ export function YoutubeCloud() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="flex min-w-0 items-center gap-2 text-[14px] text-text">
+          <p className="flex min-w-0 items-center gap-2 text-[15px] text-text">
             <b className="min-w-0 truncate font-semibold" dir="auto">
               {v.channel.title ?? 'Your channel'}
             </b>
             {v.channel.live && <Badge tone="danger">Live</Badge>}
           </p>
           {v.channel.error && (
-            <div role="status" className="rounded-control bg-warn-soft px-3 py-2 text-[13.5px]">
+            <div role="status" className="rounded-control bg-warn-soft px-3 py-2 text-[14.5px]">
               <p className="font-semibold text-warn">{v.channel.error.message}</p>
               {v.channel.error.hint && <p className="text-text-2">{v.channel.error.hint}</p>}
             </div>
@@ -128,7 +128,7 @@ export function YoutubeCloud() {
             onChange={(on) => void act('bot', () => web.youtubeBot(on))}
           />
           {v.quota && (
-            <p className="font-mono text-[12.5px] text-text-3 tabular-nums">
+            <p className="font-mono text-[13.5px] text-text-3 tabular-nums">
               {formatCount(v.quota.used)} of {formatCount(v.quota.limit)} YouTube units used today
               {v.quota.fair_share ? ', shared fairly with other streamers on a busy day' : ''}. Back
               to zero at {at(v.quota.reset_at)}.
@@ -140,7 +140,7 @@ export function YoutubeCloud() {
               aria-label="Disconnect YouTube"
               className="flex flex-wrap items-center gap-2"
             >
-              <span className="text-[13.5px] text-text-2">
+              <span className="text-[14.5px] text-text-2">
                 The cloud bot stops on YouTube and Google forgets the sign-in.
               </span>
               <Button

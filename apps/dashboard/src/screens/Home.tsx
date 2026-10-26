@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChartLineUp, CopySimple, Pause, Play, SkipForward } from '@phosphor-icons/react'
+import {
+  ChartLineUp,
+  CopySimple,
+  CurrencyCircleDollar,
+  Diamond,
+  Eye,
+  Heart,
+  Pause,
+  Play,
+  Star,
+  TrendUp,
+  type Icon,
+} from '@phosphor-icons/react'
 import { formatCount, formatMoney, type Actor, type SessionStats } from '@ferrocast/api'
-import { Button, EmptyState, Skeleton, copyText, toast } from '@ferrocast/ui'
+import { Button, EmptyState, IconButton, Skeleton, copyText, toast } from '@ferrocast/ui'
 import { Panel } from '../components/Panel'
 import { EventRow } from '../components/EventRow'
 import { QueuePanel, TestAlertMenu, TtsApprovals } from '../components/alerts-live'
@@ -29,14 +41,20 @@ function duration(ms: number): string {
 function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
   const viewers = useLive((s) => s.viewers)
   const total = (viewers.twitch ?? 0) + (viewers.youtube ?? 0) + (viewers.kick ?? 0)
-  const tiles: [string, string][] = stats
+  // Each number has its own colour and icon, so the eye finds it without reading.
+  const tiles: [string, string, Icon, string][] = stats
     ? [
-        ['Watching now', formatCount(total)],
-        ['Peak', formatCount(Math.max(stats.peak_viewers, total))],
-        ['Follows', formatCount(stats.follows)],
-        ['Subs', formatCount(stats.subs)],
-        ['Tips', stats.tips.length ? stats.tips.map(formatMoney).join(' + ') : '0'],
-        ['Bits', formatCount(stats.bits)],
+        ['Watching now', formatCount(total), Eye, 'var(--fc-danger)'],
+        ['Peak', formatCount(Math.max(stats.peak_viewers, total)), TrendUp, 'var(--fc-arc)'],
+        ['Follows', formatCount(stats.follows), Heart, 'var(--fc-youtube)'],
+        ['Subs', formatCount(stats.subs), Star, 'var(--fc-twitch)'],
+        [
+          'Tips',
+          stats.tips.length ? stats.tips.map(formatMoney).join(' + ') : '0',
+          CurrencyCircleDollar,
+          'var(--fc-ok)',
+        ],
+        ['Bits', formatCount(stats.bits), Diamond, 'var(--fc-tips)'],
       ]
     : []
   return (
@@ -44,7 +62,7 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
       title="This stream"
       actions={
         stats?.live && stats.started_at ? (
-          <span className="font-mono text-[13.5px] font-medium text-text-2 tabular-nums">
+          <span className="font-mono text-[14.5px] font-medium text-text-2 tabular-nums">
             live {duration(now - stats.started_at)}
           </span>
         ) : null
@@ -58,11 +76,18 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
         </div>
       ) : (
         <dl className="grid grid-cols-2 gap-x-2 gap-y-2">
-          {tiles.map(([k, v]) => (
-            <div key={k} className="rounded-[12px] bg-surface-2 px-3 py-2.5">
-              <dt className="text-[12.5px] font-medium text-text-2">{k}</dt>
+          {tiles.map(([k, v, TileIcon, tone]) => (
+            <div
+              key={k}
+              className="rounded-[12px] px-3 py-2.5"
+              style={{ background: `color-mix(in srgb, ${tone} 9%, var(--fc-surface-2))` }}
+            >
+              <dt className="flex items-center gap-1.5 text-[14px] font-semibold text-text-2">
+                <TileIcon size={16} weight="fill" style={{ color: tone }} aria-hidden />
+                {k}
+              </dt>
               <dd
-                className="mt-0.5 truncate font-mono text-[19px] font-semibold tracking-tight text-text tabular-nums"
+                className="mt-0.5 truncate font-mono text-[22px] font-bold tracking-tight text-text tabular-nums"
                 title={v}
               >
                 {v}
@@ -123,10 +148,9 @@ export function Home() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="font-display text-[26px] font-bold tracking-[-0.03em] text-text sm:text-3xl">
+          <h1 className="font-display text-[26px] font-extrabold tracking-[-0.03em] text-text sm:text-3xl">
             {stats.data?.live ? 'You’re live' : 'Ready when you are'}
           </h1>
-          <p className="mt-1 text-[15px] text-text-2">Everything for this stream, on one screen.</p>
         </div>
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           <StartShowButton />
@@ -148,29 +172,22 @@ export function Home() {
           >
             {paused ? 'Resume alerts' : 'Pause alerts'}
           </Button>
-          <Button
-            icon={<SkipForward size={16} weight="fill" />}
-            disabled={!queue?.playing}
-            busy={busy === 'skip'}
-            onClick={() =>
-              void run('skip', async () => {
-                const q = await client.queueSkip()
-                setQueue(q)
-                return q
-              })
-            }
+          {/* Less used: icons, named on hover (Skip lives in the alert queue). */}
+          <IconButton
+            variant="secondary"
+            label="Copy overlay URL"
+            disabled={!main}
+            onClick={() => void copyUrl()}
           >
-            Skip alert
-          </Button>
-          <Button icon={<CopySimple size={16} />} disabled={!main} onClick={() => void copyUrl()}>
-            Copy overlay URL
-          </Button>
+            <CopySimple size={18} />
+          </IconButton>
           <a
             href={href({ name: 'recap' })}
-            className="fc-press inline-flex h-10 shrink-0 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            aria-label="Stream recap"
+            title="Stream recap"
+            className="fc-press inline-flex size-10 shrink-0 items-center justify-center rounded-control border border-line-strong bg-surface-3 text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
-            <ChartLineUp size={16} />
-            Stream recap
+            <ChartLineUp size={18} />
           </a>
         </div>
       </div>
@@ -190,11 +207,12 @@ export function Home() {
         <Panel
           title="Recent events"
           className="lg:col-span-7 lg:h-[clamp(24rem,55vh,40rem)]"
+          scrolls
           bodyClassName="fc-scroll max-h-[28rem] overflow-x-hidden overflow-y-auto overscroll-contain lg:max-h-none"
           actions={
             <a
               href={href({ name: 'chat' })}
-              className="rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2"
+              className="rounded-control px-2 py-1 text-[14.5px] font-semibold text-accent-text hover:bg-surface-2"
             >
               All events
             </a>
@@ -221,7 +239,7 @@ export function Home() {
           actions={
             <a
               href={href({ name: 'chat' })}
-              className="rounded-control px-2 py-1 text-[13.5px] font-semibold text-accent-text hover:bg-surface-2"
+              className="rounded-control px-2 py-1 text-[14.5px] font-semibold text-accent-text hover:bg-surface-2"
             >
               Open chat
             </a>

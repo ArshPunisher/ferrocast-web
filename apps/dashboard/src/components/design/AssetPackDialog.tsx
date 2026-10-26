@@ -198,7 +198,7 @@ export function AssetPackDialog({
           <b className="text-sm text-text">
             {busy === 'read' ? 'Reading…' : rows.length ? packName : 'Drop a zip or files here'}
           </b>
-          <span className="text-[12.5px] text-text-3">
+          <span className="text-[13.5px] text-text-3">
             or choose them. PNG, JPEG, GIF, WebP, WebM, MP4, MP3, OGG, WAV.
           </span>
           <input
@@ -214,14 +214,14 @@ export function AssetPackDialog({
           />
         </label>
         {error && (
-          <p role="alert" className="text-[13px] font-medium text-danger">
+          <p role="alert" className="text-[14px] font-medium text-danger">
             {error}
           </p>
         )}
         {rows.length > 0 && (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium text-text-2">
+              <label className="flex flex-col gap-1.5 text-[14px] font-medium text-text-2">
                 Name
                 <input
                   value={packName}
@@ -230,7 +230,7 @@ export function AssetPackDialog({
                   className="h-10 rounded-control border border-line-strong bg-inset px-3 text-sm text-text focus:border-accent-text focus:outline-none"
                 />
               </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-medium text-text-2">
+              <label className="flex flex-col gap-1.5 text-[14px] font-medium text-text-2">
                 Style to start from
                 <Select value={base} onChange={(e) => setBase(e.target.value)}>
                   {(designs.data ?? []).map((d) => (
@@ -242,9 +242,9 @@ export function AssetPackDialog({
               </label>
             </div>
             <div className="overflow-x-auto rounded-[12px] border border-line">
-              <table className="w-full text-left text-[13px]">
+              <table className="w-full text-left text-[14px]">
                 <caption className="sr-only">Files and what they become</caption>
-                <thead className="bg-surface-2 text-[12px] text-text-3">
+                <thead className="bg-surface-2 text-[13px] text-text-3">
                   <tr>
                     <th scope="col" className="px-3 py-2 font-semibold">
                       Files
@@ -259,7 +259,7 @@ export function AssetPackDialog({
                     const files = [r.visual, r.sound].filter(Boolean).map((f) => f?.name)
                     return (
                       <tr key={r.id} className="border-t border-line">
-                        <td className="px-3 py-2 font-mono text-[12px] break-all text-text-2">
+                        <td className="px-3 py-2 font-mono text-[13px] break-all text-text-2">
                           {files.join(' + ')}
                         </td>
                         <td className="px-3 py-2">
@@ -289,7 +289,7 @@ export function AssetPackDialog({
               </table>
             </div>
             {skipped.length > 0 && (
-              <details className="text-[12.5px] text-text-3">
+              <details className="text-[13.5px] text-text-3">
                 <summary className="cursor-pointer">{skipped.length} left out</summary>
                 <ul className="mt-1 list-disc pl-5">
                   {skipped.slice(0, 50).map((s) => (
@@ -298,7 +298,7 @@ export function AssetPackDialog({
                 </ul>
               </details>
             )}
-            <p className="text-[12.5px] text-text-3">
+            <p className="text-[13.5px] text-text-3">
               Files from a paid pack stay on this computer. Check the pack’s licence before you
               share a design made from it.
             </p>

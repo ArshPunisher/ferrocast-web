@@ -163,7 +163,7 @@ function InsertVarMenu({
       )}
       items={list.map((v) => ({
         key: v,
-        label: <span className="font-mono text-[13px]">{`{${v}}`}</span>,
+        label: <span className="font-mono text-[14px]">{`{${v}}`}</span>,
         ...(vars[v] ? { hint: short(vars[v]) } : {}),
         onSelect: () => onPick(v),
       }))}
@@ -453,7 +453,7 @@ function Section({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-4 border-t border-line pt-5">
       <div className="-my-1 flex min-h-8 items-center justify-between gap-3">
-        <h3 id={id} className="font-display text-base font-bold tracking-tight text-text">
+        <h3 id={id} className="font-display text-[18px] font-extrabold tracking-tight text-text">
           {title}
         </h3>
         {action}
@@ -631,7 +631,7 @@ function VariationEditor({
             aria-hidden="true"
             className="text-text-3 transition-transform duration-200 group-open:rotate-180"
           />
-          <span className="ml-auto truncate text-[13px] font-medium text-text-3">
+          <span className="ml-auto truncate text-[14px] font-medium text-text-3">
             {isDefault ? 'Read aloud, custom CSS' : 'Read aloud, CSS, priority'}
           </span>
         </summary>
@@ -648,7 +648,7 @@ function VariationEditor({
                 {...p}
                 rows={4}
                 spellCheck={false}
-                className="font-mono text-[12.5px]"
+                className="font-mono text-[13.5px]"
                 placeholder=".fc-alert-title { letter-spacing: 0.02em }"
                 value={v.css}
                 maxLength={20000}
@@ -808,7 +808,7 @@ function RuleEditor({
                         }
                         onClick={() => togglePlatform(p)}
                         className={cx(
-                          'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                          'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                           on
                             ? 'border-accent-line bg-accent-soft text-text'
                             : 'border-line text-text-3 line-through decoration-text-3/60 hover:text-text-2',
@@ -824,7 +824,7 @@ function RuleEditor({
                 (kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms).map((p) => (
                   <span
                     key={p}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[12.5px] font-semibold text-text-2"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[13.5px] font-semibold text-text-2"
                   >
                     <PlatformMark platform={p} size={12} />
                     {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
@@ -850,7 +850,7 @@ function RuleEditor({
                   aria-selected={i === vi}
                   onClick={() => setVi(i)}
                   className={cx(
-                    'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3.5 text-[13px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                    'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3.5 text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                     i === vi
                       ? 'border-accent-line bg-accent-soft text-text'
                       : 'border-line text-text-2 hover:border-line-strong hover:text-text',
@@ -863,7 +863,7 @@ function RuleEditor({
             <button
               type="button"
               onClick={addVariation}
-              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[13px] font-semibold text-text-2 hover:border-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[14px] font-semibold text-text-2 hover:border-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
             >
               <Plus size={14} aria-hidden="true" />
               Add a look
@@ -907,7 +907,7 @@ function RuleEditor({
             >
               <p
                 className={cx(
-                  'min-w-0 flex-1 text-[13.5px]',
+                  'min-w-0 flex-1 text-[14.5px]',
                   error ? 'font-semibold text-danger' : 'font-medium text-text-2',
                 )}
                 role={error ? 'alert' : undefined}
@@ -966,7 +966,7 @@ function RuleEditor({
               Mute
             </Button>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-[13px] text-text-3">
+            <span className="inline-flex items-center gap-1.5 text-[14px] text-text-3">
               <SpeakerSlash size={15} aria-hidden="true" /> No sound
             </span>
           )}
@@ -988,7 +988,7 @@ function RuleEditor({
           </Button>
         </div>
         {design && (
-          <p className="text-[13.5px] leading-snug text-text-2">
+          <p className="text-[14.5px] leading-snug text-text-2">
             Alerts play with your alert design,{' '}
             <a
               href={href({ name: 'designer', id: design.id })}
@@ -1063,10 +1063,10 @@ function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string 
             href={href({ name: 'alerts', rule: r.id })}
             aria-current={active ? 'page' : undefined}
             className={cx(
-              'fc-press relative flex h-11 shrink-0 items-center gap-2.5 rounded-full border pr-4 pl-3.5 text-[15px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150',
+              'fc-press relative flex h-11 shrink-0 items-center gap-2.5 rounded-full border pr-4 pl-3.5 text-[16px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none xl:w-full xl:pr-3.5',
               active
-                ? 'border-line-strong bg-surface-1 text-text shadow-1'
+                ? 'border-accent-line bg-surface-1 text-text shadow-1'
                 : 'border-line text-text-2 hover:bg-surface-2 hover:text-text xl:border-transparent',
             )}
           >
@@ -1074,12 +1074,17 @@ function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string 
               size={19}
               weight={active ? 'fill' : 'regular'}
               aria-hidden="true"
-              className={cx('shrink-0', active ? 'text-accent-text' : 'text-text-3')}
+              className={cx('shrink-0', active || r.enabled ? 'text-accent-text' : 'text-text-3')}
             />
             <span className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}>
               {r.name}
             </span>
-            <span className="ml-auto pl-1 text-[12px] font-semibold text-text-3">
+            <span
+              className={cx(
+                'ml-auto pl-1 text-[13px] font-bold',
+                r.enabled ? 'text-ok' : 'text-text-3',
+              )}
+            >
               <span className="sr-only">, </span>
               {status}
             </span>
@@ -1120,14 +1125,14 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
         }
       />
       {queue?.paused && (
-        <p className="mb-4 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[13.5px] font-medium text-warn">
+        <p className="mb-4 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14.5px] font-medium text-warn">
           Alerts are paused. Resume them from Home.
         </p>
       )}
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
       ) : rules.loading && !rules.data ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[212px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5">
           <div className="flex gap-2 overflow-hidden xl:flex-col xl:gap-1">
             {Array.from({ length: 8 }, (_, i) => (
               <Skeleton key={i} className="h-11 w-32 shrink-0 rounded-full xl:w-full" />
@@ -1141,7 +1146,7 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           Reset to the defaults in Settings → Data, or import from StreamElements or Streamlabs.
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[212px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:items-start xl:gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:items-start xl:gap-5">
           <RuleList list={list} selectedId={selected.id} />
           <RuleEditor
             rule={selected}

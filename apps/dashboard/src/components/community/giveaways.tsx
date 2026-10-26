@@ -116,7 +116,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
         onChange={setSubs}
       />
       {err && !['prize', 'keyword', 'cost'].includes(err.field ?? '') && (
-        <p role="alert" className="text-[13.5px] text-danger">
+        <p role="alert" className="text-[14.5px] text-danger">
           {err.message}
         </p>
       )}
@@ -149,7 +149,7 @@ function WinnerCard({ g }: { g: GiveawayView }) {
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <p className="text-[12.5px] font-semibold text-accent-text">
+            <p className="text-[13.5px] font-semibold text-accent-text">
               {g.winners.length > 1 ? `Winner (draw ${g.winners.length})` : 'Winner'}
             </p>
             <p className="flex min-w-0 items-center gap-2">
@@ -212,7 +212,7 @@ export function GiveawayPanel() {
             <p dir="auto" className="font-display text-lg font-semibold tracking-tight text-text">
               {tameText(g.prize)}
             </p>
-            <p className="mt-0.5 text-[13.5px] text-text-3">
+            <p className="mt-0.5 text-[14.5px] text-text-3">
               <span translate="no" className="font-mono text-text-2">
                 {g.keyword}
               </span>{' '}
@@ -227,7 +227,7 @@ export function GiveawayPanel() {
               ['Tickets', formatCount(g.tickets)],
             ].map(([k, v]) => (
               <div key={k} className="rounded-[12px] bg-surface-2 px-3 py-2">
-                <dt className="text-[12.5px] font-medium text-text-2">{k}</dt>
+                <dt className="text-[13.5px] font-medium text-text-2">{k}</dt>
                 <dd
                   className="font-mono text-lg font-semibold text-text tabular-nums"
                   aria-live="polite"
@@ -240,14 +240,14 @@ export function GiveawayPanel() {
           <WinnerCard g={g} />
           {g.entrants.length > 0 && (
             <details className="group">
-              <summary className="cursor-pointer text-[13.5px] font-medium text-text-2 select-none hover:text-text">
+              <summary className="cursor-pointer text-[14.5px] font-medium text-text-2 select-none hover:text-text">
                 Who entered
               </summary>
               <ul className="fc-scroll mt-2 flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
                 {g.entrants.slice(0, 200).map((e) => (
                   <li
                     key={`${e.platform}:${e.user_id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[13.5px] text-text-2"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[14.5px] text-text-2"
                     title={`${PLATFORM_LABEL[e.platform]}${e.tickets > 1 ? ', 2 entries' : ''}`}
                   >
                     <PlatformMark platform={e.platform} size={11} />
@@ -255,13 +255,13 @@ export function GiveawayPanel() {
                       {tameText(e.display_name)}
                     </span>
                     {e.tickets > 1 && (
-                      <span className="font-mono text-[12.5px] text-text-3">×2</span>
+                      <span className="font-mono text-[13.5px] text-text-3">×2</span>
                     )}
                   </li>
                 ))}
               </ul>
               {g.entries > 200 && (
-                <p className="mt-1.5 text-[13.5px] text-text-3">
+                <p className="mt-1.5 text-[14.5px] text-text-3">
                   And {formatCount(g.entries - 200)} more.
                 </p>
               )}

@@ -144,7 +144,7 @@ export function Timeline({
   const seg = (cls: string, from: number, len: number, label: string) => (
     <div
       className={cx(
-        'absolute inset-y-0 flex items-center overflow-hidden rounded-[6px] px-2 font-mono text-[12px] font-semibold whitespace-nowrap',
+        'absolute inset-y-0 flex items-center overflow-hidden rounded-[6px] px-2 font-mono text-[13px] font-semibold whitespace-nowrap',
         cls,
       )}
       style={{ left: pct(from), width: pct(len) }}
@@ -244,7 +244,7 @@ export function Timeline({
       onPointerUp={onUp}
       onPointerCancel={onUp}
     >
-      <div className="mb-1.5 flex items-center gap-3 text-[13px] text-text-3">
+      <div className="mb-1.5 flex items-center gap-3 text-[14px] text-text-3">
         <b className="font-semibold text-text">Timeline</b>
         <span>
           {(total / 1000).toFixed(1)} s total
@@ -260,7 +260,7 @@ export function Timeline({
       </div>
       <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 sm:grid-cols-[64px_minmax(0,1fr)]">
         <span />
-        <div className="relative h-4 font-mono text-[10.5px] text-text-3">
+        <div className="relative h-4 font-mono text-[11.5px] text-text-3">
           {ruler.map((s) => (
             <span
               key={s}
@@ -273,7 +273,7 @@ export function Timeline({
         </div>
         {rows.map(([label, content], i) => (
           <div key={label} className="contents">
-            <span className="font-mono text-[12px] leading-[22px] font-semibold text-text-3">
+            <span className="font-mono text-[13px] leading-[22px] font-semibold text-text-3">
               {label}
             </span>
             <div

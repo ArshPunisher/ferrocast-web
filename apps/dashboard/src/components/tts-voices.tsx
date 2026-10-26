@@ -131,7 +131,7 @@ export function TtsVoicePicker({ systemVoice, voices, disabled, onSystemVoice }:
       {heard?.notice && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[14px] text-warn"
+          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[15px] text-warn"
         >
           <WarningCircle size={18} weight="bold" className="mt-px shrink-0" aria-hidden="true" />
           <span>{heard.notice} You heard this PC’s voice instead.</span>
@@ -169,7 +169,7 @@ export function TtsVoicePicker({ systemVoice, voices, disabled, onSystemVoice }:
           className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface-2 px-4 py-3"
           data-testid="tts-pro-line"
         >
-          <span className="text-[15px] font-semibold text-text">Ferrocast voices</span>
+          <span className="text-[16px] font-semibold text-text">Ferrocast voices</span>
           <ProChip />
           <p className="basis-full text-sm text-text-2">
             Natural Hindi and Indian English voices. {PRO_LINE}{' '}
@@ -198,17 +198,17 @@ function CloudCard({ view }: { view: TtsCloudView }) {
       data-testid="tts-cloud"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">
+        <span className="font-display text-[18px] font-bold tracking-[-0.02em] text-text">
           Ferrocast voices
         </span>
         <ProChip />
       </div>
-      <p className="max-w-[60ch] text-[14.5px] leading-relaxed text-text-2">
+      <p className="max-w-[60ch] text-[15.5px] leading-relaxed text-text-2">
         Natural Hindi and Indian English voices. Only messages that pass your rules are sent.
       </p>
       {u && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[15px] font-semibold text-text tabular-nums" data-testid="tts-usage">
+          <p className="text-[16px] font-semibold text-text tabular-nums" data-testid="tts-usage">
             {cloudUsageLine(u)}
           </p>
           <div
@@ -224,13 +224,13 @@ function CloudCard({ view }: { view: TtsCloudView }) {
               style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }}
             />
           </div>
-          {resetDay && <p className="text-[13px] text-text-3">Starts again on {resetDay}.</p>}
+          {resetDay && <p className="text-[14px] text-text-3">Starts again on {resetDay}.</p>}
         </div>
       )}
       {(view.resting || view.fallback) && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[14px] text-warn"
+          className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2 text-[15px] text-warn"
         >
           <WarningCircle size={18} weight="bold" className="mt-px shrink-0" aria-hidden="true" />
           <span>

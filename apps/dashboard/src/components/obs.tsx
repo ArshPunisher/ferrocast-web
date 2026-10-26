@@ -19,7 +19,7 @@ export function SecretUrl({ url, className }: { url: string; className?: string 
     >
       <code
         className={cx(
-          'min-w-0 flex-1 truncate font-mono text-[12.5px] text-text-2 transition-[filter] duration-200',
+          'min-w-0 flex-1 truncate font-mono text-[13.5px] text-text-2 transition-[filter] duration-200',
           !shown && 'fc-blur-url',
         )}
         aria-hidden={!shown}
@@ -84,7 +84,7 @@ export function ObsGuide({
     >
       <ol className="flex flex-col gap-3">
         <li className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[12px] font-semibold text-accent-text">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[13px] font-semibold text-accent-text">
             1
           </span>
           <div className="min-w-0 flex-1">
@@ -101,7 +101,7 @@ export function ObsGuide({
           </div>
         </li>
         <li className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[12px] font-semibold text-accent-text">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[13px] font-semibold text-accent-text">
             2
           </span>
           <p className="text-sm text-text-2">
@@ -110,7 +110,7 @@ export function ObsGuide({
           </p>
         </li>
         <li className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[12px] font-semibold text-accent-text">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-[13px] font-semibold text-accent-text">
             3
           </span>
           <p className="text-sm text-text-2">
@@ -119,7 +119,7 @@ export function ObsGuide({
           </p>
         </li>
       </ol>
-      <p className="mt-4 rounded-control bg-surface-2 px-3 py-2 text-[12.5px] text-text-3">
+      <p className="mt-4 rounded-control bg-surface-2 px-3 py-2 text-[13.5px] text-text-3">
         Next time, connect OBS in Settings and it’s one click: turn on Tools → WebSocket Server
         Settings in OBS.
       </p>

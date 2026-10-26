@@ -65,7 +65,7 @@ function ScreenAccess() {
         <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface-1 text-warn">
           <ShieldWarning size={20} weight="fill" aria-hidden />
         </span>
-        <p className="m-0 flex flex-1 items-center gap-1 text-[14.5px] font-bold text-text">
+        <p className="m-0 flex flex-1 items-center gap-1 text-[15.5px] font-bold text-text">
           Allow Screen Recording
           <InfoTip label="Why it asks again">
             Each Ferrocast update is new to macOS, so a switch that looks on can belong to an older
@@ -73,7 +73,7 @@ function ScreenAccess() {
           </InfoTip>
         </p>
       </div>
-      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13.5px] font-semibold text-text-2">
+      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[14.5px] font-semibold text-text-2">
         <li>Press Ask again, then Open System Settings.</li>
         <li>Switch Ferrocast on.</li>
         <li>Press Reopen.</li>
@@ -181,7 +181,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
             if (!shown.length) return null
             return (
               <div key={g.label} className="flex gap-1 sm:flex-col sm:gap-px">
-                <h3 className="m-0 hidden px-2.5 pt-3 pb-1 text-[11px] font-extrabold tracking-wide text-text-2 uppercase sm:block">
+                <h3 className="m-0 hidden px-2.5 pt-3 pb-1 text-[12px] font-extrabold tracking-wide text-text-2 uppercase sm:block">
                   {g.label}
                 </h3>
                 {shown.map((c) => {
@@ -193,7 +193,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
                       aria-current={on ? 'true' : undefined}
                       onClick={() => setPick(c.entry.key)}
                       className={cx(
-                        'flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
+                        'flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2 text-left text-[14.5px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
                         on &&
                           'bg-surface-3 shadow-[inset_0_0_0_1px_var(--fc-line-strong)] hover:bg-surface-3',
                       )}
@@ -314,7 +314,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     >
       {NEEDS_SCREEN.has(c.entry.key) && <ScreenAccess />}
       {dev && dev.choices.every((l) => !l.trim()) && (
-        <p className="m-0 rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[14px] font-semibold text-text-2">
+        <p className="m-0 rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[15px] font-semibold text-text-2">
           {NEEDS_SCREEN.has(c.entry.key)
             ? 'Nothing to pick. Open the window you want, or allow Screen Recording.'
             : 'Nothing to pick. Plug it in, then open this again.'}
@@ -322,7 +322,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )}
       {dev && dev.choices.some((l) => l.trim()) && (
         <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-          <legend className="mb-3 font-display text-[15px] font-extrabold text-text">
+          <legend className="mb-3 font-display text-[16px] font-extrabold text-text">
             Pick one
           </legend>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
@@ -348,7 +348,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
                   </span>
                   <span className="flex items-center gap-2 px-3 py-2.5">
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">
+                    <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-text">
                       {label}
                     </span>
                     {on && (
@@ -369,13 +369,13 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )}
       {c.entry.overlays && (
         <div className="flex flex-col gap-2.5">
-          <h4 className="m-0 font-display text-[15px] font-extrabold text-text">Pick an overlay</h4>
+          <h4 className="m-0 font-display text-[16px] font-extrabold text-text">Pick an overlay</h4>
           {overlays.error && !overlays.data ? (
             <LoadError error={overlays.error} onRetry={overlays.reload} />
           ) : !overlays.data ? (
             <Skeleton className="h-24" />
           ) : overlays.data.length === 0 ? (
-            <p className="m-0 text-[13.5px] text-text-2">
+            <p className="m-0 text-[14.5px] text-text-2">
               No overlays yet. Make one in Overlays, then add it here.
             </p>
           ) : (
@@ -390,8 +390,8 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                 >
                   <KindTile icon={Icon} tone={c.tone} size={34} />
                   <span className="min-w-0">
-                    <b className="block truncate text-[13.5px] text-text">{o.name}</b>
-                    <span className="block font-mono text-[12px] text-text-3 tabular-nums">
+                    <b className="block truncate text-[14.5px] text-text">{o.name}</b>
+                    <span className="block font-mono text-[13px] text-text-3 tabular-nums">
                       {o.width}×{o.height}
                     </span>
                   </span>
@@ -403,7 +403,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )}
       {reuse.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <h4 className="m-0 font-display text-[15px] font-extrabold text-text">
+          <h4 className="m-0 font-display text-[16px] font-extrabold text-text">
             {isScene ? 'Show a scene inside this one' : 'Or use one you already have'}
           </h4>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
@@ -422,8 +422,8 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <KindTile icon={Icon} tone={c.tone} size={34} />
                   )}
                   <span className="min-w-0">
-                    <b className="block truncate text-[13.5px] text-text">{r.name}</b>
-                    <span className="block truncate text-[12px] text-text-3">{r.where}</span>
+                    <b className="block truncate text-[14.5px] text-text">{r.name}</b>
+                    <span className="block truncate text-[13px] text-text-3">{r.where}</span>
                   </span>
                 </button>
               )
@@ -435,7 +435,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         <>
           {!dev && (
             <details className="group rounded-control border border-line" open={!c.entry.device}>
-              <summary className="cursor-pointer list-none px-3 py-2.5 text-[13.5px] font-semibold text-accent-text">
+              <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-accent-text">
                 Settings
               </summary>
               <div className="border-t border-line p-3">

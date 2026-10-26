@@ -44,7 +44,7 @@ export function ChatDock() {
             aria-pressed={!hideBots}
             onClick={() => setHideBots((v) => !v)}
             className={cx(
-              'h-7 rounded-full border px-2.5 text-[12.5px] font-semibold',
+              'h-7 rounded-full border px-2.5 text-[13.5px] font-semibold',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               hideBots ? 'border-line text-text-3 hover:bg-surface-2' : 'border-arc text-text',
             )}

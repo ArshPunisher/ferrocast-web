@@ -77,7 +77,14 @@ export function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
   return (
     <span
       className="grid shrink-0 place-items-center rounded-[8px] bg-surface-3"
-      style={{ width: size, height: size }}
+      // A light wash of the platform's own colour, so each row is known at a glance.
+      style={{
+        width: size,
+        height: size,
+        ...(kind !== 'custom' && {
+          background: `color-mix(in srgb, var(--fc-${kind}) 14%, var(--fc-surface-1))`,
+        }),
+      }}
       aria-hidden
     >
       {kind === 'custom' ? (
@@ -233,14 +240,14 @@ export function LiveCard({
           {canvas === 'main' ? 'Live on your platforms' : 'Vertical stream live'}
         </h2>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex h-7 items-center gap-2 rounded-full bg-[#c42339] px-3 font-mono text-[12px] font-extrabold tracking-[0.06em] text-white">
+          <span className="inline-flex h-7 items-center gap-2 rounded-full bg-[#c42339] px-3 font-mono text-[13px] font-extrabold tracking-[0.06em] text-white">
             <span className="size-[7px] rounded-full bg-white" aria-hidden />
             LIVE
           </span>
           {Number.isFinite(since) && (
-            <b className="font-display text-[17px] tabular-nums">{elapsed(now - since)}</b>
+            <b className="font-display text-[18px] tabular-nums">{elapsed(now - since)}</b>
           )}
-          <span className="text-[13px] text-text-3">
+          <span className="text-[14px] text-text-3">
             {live.length} of {on.length} live{paused > 0 ? ` · ${paused} paused` : ''} · {mbps(out)}{' '}
             going out
           </span>
@@ -263,7 +270,7 @@ export function LiveCard({
                 <div className="min-w-0">
                   <span
                     className={cx(
-                      'flex items-center gap-1.5 text-[13.5px] font-bold',
+                      'flex items-center gap-1.5 text-[14.5px] font-bold',
                       h.tone === 'ok' && 'text-ok',
                       h.tone === 'warn' && 'text-warn',
                       h.tone === 'bad' && 'text-danger',
@@ -281,9 +288,9 @@ export function LiveCard({
                       {d.name}: {h.label}
                     </span>
                   </span>
-                  {h.detail && <p className="m-0 text-[12.5px] text-text-3">{h.detail}</p>}
+                  {h.detail && <p className="m-0 text-[13.5px] text-text-3">{h.detail}</p>}
                   {d.health?.state === 'paused' && d.health.until_ms > now && (
-                    <p className="m-0 text-[12.5px] text-text-3 tabular-nums">
+                    <p className="m-0 text-[13.5px] text-text-3 tabular-nums">
                       Back in {waitText(d.health.until_ms - now)} at the earliest.
                     </p>
                   )}
@@ -320,7 +327,7 @@ export function LiveCard({
             <div
               key={c.id}
               role="status"
-              className="grid grid-cols-[16px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-[10px] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[13px] text-text-2 sm:grid-cols-[16px_minmax(0,1fr)_auto]"
+              className="grid grid-cols-[16px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-[10px] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[14px] text-text-2 sm:grid-cols-[16px_minmax(0,1fr)_auto]"
             >
               <Warning size={16} weight="fill" className="shrink-0 text-warn" aria-hidden />
               <span className="min-w-0">
@@ -338,7 +345,7 @@ export function LiveCard({
             </div>
           )
         })}
-        <p className="m-0 text-[12.5px] text-text-3">
+        <p className="m-0 text-[13.5px] text-text-3">
           Adding or removing a platform below doesn’t end the stream.
         </p>
       </div>
@@ -449,8 +456,15 @@ export function Platforms({
           : 'Drag to set what pauses first if your upload struggles: the bottom one.'
       }
       actions={
-        <Button size="sm" icon={<Plus size={15} />} onClick={() => setAdding(true)}>
-          Add a destination
+        <Button
+          size="sm"
+          icon={<Plus size={15} />}
+          aria-label="Add a destination"
+          onClick={() => setAdding(true)}
+        >
+          {/* Short on a phone, so the panel's name keeps its room. */}
+          <span className="sm:hidden">Add</span>
+          <span className="hidden sm:inline">Add a destination</span>
         </Button>
       }
     >
@@ -485,7 +499,7 @@ export function Platforms({
               <Logo kind={d.kind} />
               <RowText d={d} />
               <div className="flex items-center gap-3">
-                <span className="hidden text-right font-mono text-[12px] leading-tight text-text-2 sm:block">
+                <span className="hidden text-right font-mono text-[13px] leading-tight text-text-2 sm:block">
                   {!d.enabled
                     ? ''
                     : d.health?.state === 'paused'
@@ -513,7 +527,7 @@ export function Platforms({
             </li>
           ))}
         </ul>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14.5px]">
           <b className="font-semibold">{goingTo(merged)}.</b>
           {ticked.length > 0 && <span className="text-text-3">Needs {mbps(need)} upload.</span>}
           {(vertical || twitchShared) && (
@@ -574,8 +588,8 @@ export function RowText({ d }: { d: DestinationView }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   return (
     <div className="min-w-0">
-      <b className={cx('block truncate text-[14px]', !d.enabled && 'text-text-2')}>{d.name}</b>
-      <span className="block truncate text-[12.5px] text-text-3">
+      <b className={cx('block truncate text-[15px]', !d.enabled && 'text-text-2')}>{d.name}</b>
+      <span className="block truncate text-[13.5px] text-text-3">
         {d.kind === 'custom' ? (
           d.direct ? (
             <>
@@ -591,25 +605,26 @@ export function RowText({ d }: { d: DestinationView }) {
             <LockSimple size={12} aria-label="kept safe" />
           </span>
         ) : (
-          <>
-            Not connected.{' '}
+          <span className="inline-flex items-center gap-2">
+            Not connected
             <a
-              className="font-semibold text-accent-text hover:underline"
+              className="inline-flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-[13px] font-bold text-accent-text ring-1 ring-accent-line hover:bg-accent-line/30"
               href={href({ name: 'settings', section: 'accounts' })}
+              aria-label={`Connect ${platform}`}
             >
-              Connect {platform}
+              Connect
             </a>
-          </>
+          </span>
         )}
       </span>
       {d.enabled && d.kind === 'kick' && (
-        <span className="block text-[12.5px] text-warn">
+        <span className="block text-[13.5px] text-warn">
           Kick Partners: turn on multistreaming in Kick first.
         </span>
       )}
-      {d.blocked && <span className="block text-[12.5px] text-danger">{d.blocked}</span>}
+      {d.blocked && <span className="block text-[13.5px] text-danger">{d.blocked}</span>}
       {d.rules.map((r) => (
-        <span key={r} className="block text-[12.5px] text-warn">
+        <span key={r} className="block text-[13.5px] text-warn">
           {r}
         </span>
       ))}
@@ -622,7 +637,7 @@ function Note({ children, warn }: { children: React.ReactNode; warn?: boolean })
   return (
     <p
       className={cx(
-        'm-0 flex items-start gap-2.5 rounded-[10px] border px-3 py-2.5 text-[13px] text-text-2',
+        'm-0 flex items-start gap-2.5 rounded-[10px] border px-3 py-2.5 text-[14px] text-text-2',
         warn ? 'border-transparent bg-warn-soft' : 'border-line bg-surface-2',
       )}
     >
@@ -757,7 +772,7 @@ function AddDestination({
               inputMode="url"
               autoComplete="off"
               spellCheck={false}
-              className="font-mono text-[13px]"
+              className="font-mono text-[14px]"
             />
           )}
         </Field>
@@ -776,7 +791,7 @@ function AddDestination({
                 onChange={(e) => setKey(e.target.value)}
                 autoComplete="off"
                 spellCheck={false}
-                className="min-w-0 flex-1 font-mono text-[13px]"
+                className="min-w-0 flex-1 font-mono text-[14px]"
               />
               <Button size="md" onClick={() => setShow((s) => !s)} aria-pressed={show}>
                 {show ? 'Hide' : 'Show'}
@@ -785,7 +800,7 @@ function AddDestination({
           )}
         </Field>
         {err?.field === 'form' && (
-          <p role="alert" className="m-0 text-[13px] text-danger">
+          <p role="alert" className="m-0 text-[14px] text-danger">
             {err.message}
           </p>
         )}
@@ -823,7 +838,7 @@ function AitumNote({ names, onOk }: { names: string[]; onOk: () => void }) {
   return (
     <section
       aria-label="Aitum Multistream"
-      className="flex flex-col gap-3 rounded-[14px] border border-warn/30 bg-warn-soft p-4 text-[13.5px] text-text-2"
+      className="flex flex-col gap-3 rounded-[14px] border border-warn/30 bg-warn-soft p-4 text-[14.5px] text-text-2"
     >
       <p className="m-0 flex gap-2.5">
         <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-warn" aria-hidden />
@@ -881,7 +896,7 @@ function Setup({
       <Panel title="OBS" id="golive-setup">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
           <CheckCircle size={18} weight="fill" className="text-ok" aria-hidden />
-          <span className="text-[13.5px] font-semibold">OBS sends to Ferrocast</span>
+          <span className="text-[14.5px] font-semibold">OBS sends to Ferrocast</span>
           {obs.before && (
             <Button
               size="sm"
@@ -910,7 +925,7 @@ function Setup({
           {obs.connected ? null : (
             <>
               <a
-                className="text-[13.5px] font-semibold text-accent-text hover:underline"
+                className="text-[14.5px] font-semibold text-accent-text hover:underline"
                 href={href({ name: 'settings', section: 'obs' })}
               >
                 OBS settings
@@ -984,16 +999,18 @@ function Step({
     <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 border-t border-line py-3 first:border-t-0 first:pt-0.5">
       <span
         className={cx(
-          'grid size-[26px] place-items-center rounded-full border font-mono text-[12.5px] font-bold',
-          done ? 'border-ok bg-ok text-white' : 'border-line-strong text-text-2',
+          'grid size-7 place-items-center rounded-full border font-mono text-[14px] font-extrabold',
+          done
+            ? 'border-ok bg-ok text-white'
+            : 'border-accent-line bg-accent-soft text-accent-text',
         )}
         aria-hidden
       >
         {done ? <CheckCircle size={16} weight="bold" /> : n}
       </span>
-      <div className="flex min-w-0 flex-col gap-2 text-[13px] text-text-2 [&_p]:m-0">
+      <div className="flex min-w-0 flex-col gap-2 text-[14px] text-text-2 [&_p]:m-0">
         <span className="flex items-center gap-1">
-          <b className="text-[14px] text-text">
+          <b className="text-[15px] text-text">
             {title}
             <span className="sr-only">{done ? ' (done)' : ''}</span>
           </b>
@@ -1026,7 +1043,7 @@ export function ByHand({ vertical = false }: { vertical?: boolean }) {
     )
   return (
     <details
-      className="mt-3 text-[13px] text-text-2"
+      className="mt-3 text-[14px] text-text-2"
       onToggle={(e) => {
         if ((e.target as HTMLDetailsElement).open && !ingest)
           void run('ingest', () => api.ingest()).then((i) => i && setIngest(i))
@@ -1064,8 +1081,8 @@ export function ByHand({ vertical = false }: { vertical?: boolean }) {
 function CopyRow({ label, value, onCopy }: { label: string; value: string; onCopy: () => void }) {
   return (
     <div className="flex items-center gap-2 rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5">
-      <span className="w-20 shrink-0 text-[12px] text-text-3">{label}</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-text">{value}</code>
+      <span className="w-20 shrink-0 text-[13px] text-text-3">{label}</span>
+      <code className="min-w-0 flex-1 truncate font-mono text-[13.5px] text-text">{value}</code>
       <IconButton label={`Copy ${label.toLowerCase()}`} size="sm" onClick={onCopy}>
         <Copy size={15} />
       </IconButton>
@@ -1094,7 +1111,7 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
     >
       {!u ? (
         <div className="flex flex-col items-start gap-3">
-          <p className="m-0 text-[13.5px] text-text-2">
+          <p className="m-0 text-[14.5px] text-text-2">
             Every platform is a full copy of your stream on your own internet. Test once before you
             go live: Ferrocast checks your speed and how far each platform’s server is, and says
             what fits.
@@ -1106,9 +1123,9 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
       ) : (
         <div className="flex flex-col gap-3" aria-live="polite">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13.5px]">
+            <table className="w-full border-collapse text-[14.5px]">
               <thead>
-                <tr className="text-left font-mono text-[11px] text-text-3 [&>th]:border-b [&>th]:border-line [&>th]:px-2.5 [&>th]:py-2 [&>th]:font-semibold">
+                <tr className="text-left font-mono text-[12px] text-text-3 [&>th]:border-b [&>th]:border-line [&>th]:px-2.5 [&>th]:py-2 [&>th]:font-semibold">
                   <th scope="col">Platform</th>
                   <th scope="col">Delay</th>
                   <th scope="col">Needs</th>
@@ -1143,7 +1160,7 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
               </tbody>
             </table>
           </div>
-          <p className="m-0 text-[12.5px] text-text-3">
+          <p className="m-0 text-[13.5px] text-text-3">
             Speed {mbps(u.verdict.upload_kbps)},{' '}
             {u.measured_by === 'twitch'
               ? 'measured through Twitch’s test mode'
@@ -1152,7 +1169,7 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
           </p>
           <p
             className={cx(
-              'm-0 font-display text-[15px] font-bold leading-snug',
+              'm-0 font-display text-[16px] font-bold leading-snug',
               u.verdict.fits ? 'text-text' : 'text-warn',
             )}
           >
@@ -1175,7 +1192,7 @@ export function GoingToLine() {
   return (
     <a
       href={href({ name: 'studio', section: 'golive' })}
-      className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-surface-1 px-3 py-1.5 text-[13px] font-semibold text-text hover:border-text-3"
+      className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-surface-1 px-3 py-1.5 text-[14px] font-semibold text-text hover:border-text-3"
     >
       <Broadcast size={15} aria-hidden />
       {n === 0

@@ -111,7 +111,7 @@ export function Branding({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-[15px] font-bold text-text">Colours</h3>
+        <h3 className="text-[16px] font-bold text-text">Colours</h3>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {FIELDS.map((f) => (
             <ColourField
@@ -136,14 +136,14 @@ export function Branding({
               className="flex gap-2.5 rounded-control border border-accent-line bg-accent-soft px-3 py-2.5"
             >
               <Info size={18} className="mt-0.5 shrink-0 text-accent-text" aria-hidden="true" />
-              <div className="text-[14px] leading-snug text-text">
+              <div className="text-[15px] leading-snug text-text">
                 {changes.map((c) => (
                   <p key={c.field}>
                     <span className="font-semibold">
                       {c.field === 'text' ? 'Text' : 'Accent'} is hard to read.
                     </span>{' '}
                     We’ll use{' '}
-                    <span className="inline-flex items-center gap-1 font-mono text-[13px]">
+                    <span className="inline-flex items-center gap-1 font-mono text-[14px]">
                       <span
                         aria-hidden="true"
                         className="inline-block size-3 rounded-full border border-line-strong"
@@ -159,7 +159,7 @@ export function Branding({
           ) : (
             <p
               data-testid="contrast-note"
-              className="flex items-center gap-1.5 text-[14px] font-semibold text-ok"
+              className="flex items-center gap-1.5 text-[15px] font-semibold text-ok"
             >
               <Check size={15} weight="bold" aria-hidden="true" /> Easy to read
             </p>
@@ -191,7 +191,7 @@ export function Branding({
       </div>
 
       <div className="border-t border-line pt-5">
-        <h3 className="text-[15px] font-bold text-text">Pictures</h3>
+        <h3 className="text-[16px] font-bold text-text">Pictures</h3>
         <HeaderPreview brand={brand} colours={current} />
         <div className="grid gap-3 sm:grid-cols-2">
           <ImageSlot kind="avatar" url={brand.avatar_url} onSaved={onSaved} brand={brand} />
@@ -220,7 +220,7 @@ function ColourField({
   const id = useId()
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-[14px] font-semibold text-text">
+      <label htmlFor={id} className="text-[15px] font-semibold text-text">
         {label}
       </label>
       <div className="flex gap-2">
@@ -244,7 +244,7 @@ function ColourField({
       </div>
       <p
         className={cx(
-          'text-[13px] leading-snug',
+          'text-[14px] leading-snug',
           invalid ? 'font-semibold text-danger' : 'text-text-3',
         )}
       >
@@ -269,7 +269,7 @@ function HeaderPreview({ brand, colours }: { brand: TipBrand; colours: TipColour
           <img src={brand.banner_url} alt="Your banner" className="size-full object-cover" />
         ) : (
           <span
-            className="grid size-full place-items-center text-[13px] font-medium"
+            className="grid size-full place-items-center text-[14px] font-medium"
             style={{ color: colours.text, opacity: 0.7 }}
           >
             No banner yet
@@ -288,7 +288,7 @@ function HeaderPreview({ brand, colours }: { brand: TipBrand; colours: TipColour
           </span>
         )}
       </div>
-      <figcaption className="absolute top-2.5 right-2.5 rounded-full bg-[rgb(10_11_13/0.62)] px-2 py-1 font-mono text-[11px] leading-none font-semibold text-[#eef0f4]">
+      <figcaption className="absolute top-2.5 right-2.5 rounded-full bg-[rgb(10_11_13/0.62)] px-2 py-1 font-mono text-[12px] leading-none font-semibold text-[#eef0f4]">
         How tippers see it
       </figcaption>
     </figure>
@@ -350,8 +350,8 @@ function ImageSlot({
       data-testid={`slot-${kind}`}
     >
       <div className="min-w-0">
-        <p className="text-[14px] font-semibold text-text">{label}</p>
-        <p className="text-[13px] text-text-3">
+        <p className="text-[15px] font-semibold text-text">{label}</p>
+        <p className="text-[14px] text-text-3">
           {kind === 'avatar' ? 'Square, up to 1 MB.' : '3:1, up to 3 MB.'} PNG, JPEG or WebP.
         </p>
         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -392,7 +392,7 @@ function ImageSlot({
           <p
             id={errId}
             role="alert"
-            className="mt-2 flex gap-1.5 text-[13.5px] leading-snug font-semibold text-danger"
+            className="mt-2 flex gap-1.5 text-[14.5px] leading-snug font-semibold text-danger"
           >
             <Warning size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>

@@ -117,13 +117,13 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
               />
             )}
             <fieldset className="m-0 border-0 p-0">
-              <legend className="mb-2 text-[13.5px] font-semibold text-text">Layout</legend>
+              <legend className="mb-2 text-[14.5px] font-semibold text-text">Layout</legend>
               <div className="flex flex-wrap gap-2">
                 {LAYOUTS.map((l) => (
                   <label
                     key={l.value}
                     className={cx(
-                      'flex w-[84px] cursor-pointer flex-col items-center gap-1.5 rounded-[10px] p-1.5 text-center text-[12px] font-semibold',
+                      'flex w-[84px] cursor-pointer flex-col items-center gap-1.5 rounded-[10px] p-1.5 text-center text-[13px] font-semibold',
                       'has-[:focus-visible]:shadow-[var(--fc-focus)]',
                       draft.layout === l.value ? 'text-text' : 'text-text-3 hover:text-text-2',
                     )}
@@ -152,7 +152,7 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
             ) : (
               <Skeleton className="aspect-[9/16] w-[120px]" />
             )}
-            <span className="text-[12px] text-text-3">What phones see</span>
+            <span className="text-[13px] text-text-3">What phones see</span>
           </div>
         </div>
         {mode === 'advanced' && picture.data && (
@@ -164,7 +164,7 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
           />
         )}
         {problem && (
-          <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+          <p role="alert" className="m-0 text-[14px] font-semibold text-danger">
             {problem.replace(/^\w+:\s*/, '')}
           </p>
         )}
@@ -197,7 +197,7 @@ function CutStatus({ cut }: { cut: CutView }) {
   const f = cut.ffmpeg
   if (f.state === 'downloading')
     return (
-      <span className="inline-flex items-center gap-2 text-[13px] text-text-2" role="status">
+      <span className="inline-flex items-center gap-2 text-[14px] text-text-2" role="status">
         Getting ffmpeg, once ({f.percent}%)
         <span className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3" aria-hidden>
           <span className="block h-full bg-arc" style={{ width: `${f.percent}%` }} />
@@ -206,7 +206,7 @@ function CutStatus({ cut }: { cut: CutView }) {
     )
   if (f.state === 'failed' || f.state === 'missing')
     return (
-      <span className="inline-flex flex-wrap items-center gap-2 text-[13px] text-warn">
+      <span className="inline-flex flex-wrap items-center gap-2 text-[14px] text-warn">
         <Warning size={15} weight="fill" aria-hidden />
         {f.state === 'failed' ? f.reason : 'Cutting needs ffmpeg (about 25 MB, fetched once).'}
         <Button
@@ -220,34 +220,34 @@ function CutStatus({ cut }: { cut: CutView }) {
     )
   if (f.state === 'unsupported')
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-warn">
+      <span className="inline-flex items-center gap-1.5 text-[14px] text-warn">
         <Warning size={15} weight="fill" aria-hidden />
         Install ffmpeg from ffmpeg.org; Ferrocast can’t fetch it for this computer.
       </span>
     )
   if (!s)
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-text-3">
+      <span className="inline-flex items-center gap-1.5 text-[14px] text-text-3">
         <Info size={15} aria-hidden />
         Tick a place on the left for it to start.
       </span>
     )
   if (s.state === 'running')
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-ok">
+      <span className="inline-flex items-center gap-1.5 text-[14px] text-ok">
         <CheckCircle size={15} weight="fill" aria-hidden />
         Making the vertical picture on {s.on}.
       </span>
     )
   if (s.state === 'failed')
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-danger">
+      <span className="inline-flex items-center gap-1.5 text-[14px] text-danger">
         <Warning size={15} weight="fill" aria-hidden />
         {s.reason} It tries again by itself.
       </span>
     )
   return (
-    <span className="text-[13px] text-text-3">
+    <span className="text-[14px] text-text-3">
       {s.state === 'starting' ? 'Starting…' : 'Starts when OBS streams.'}
     </span>
   )
@@ -351,7 +351,7 @@ function Frame({
           {slot !== null && <Trimmed k={kept(box, slot, ratio)} />}
           <span
             className={cx(
-              'absolute top-0 left-0 rounded-br-[5px] px-1.5 py-0.5 text-[11px] font-bold text-white',
+              'absolute top-0 left-0 rounded-br-[5px] px-1.5 py-0.5 text-[12px] font-bold text-white',
               part === 'camera' ? 'bg-[#b35900]' : 'bg-[#05678c]',
             )}
           >
@@ -504,7 +504,7 @@ function Numbers({
       [part]: { ...cut[part], [k]: v / (k === 'x' || k === 'w' ? width : height) },
     })
   const num = (label: string, value: number, set: (n: number) => void, unit: string) => (
-    <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+    <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
       {label}
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block w-24">
@@ -525,7 +525,7 @@ function Numbers({
     <div className="grid grid-cols-1 gap-4 border-t border-line pt-4 sm:grid-cols-2">
       {parts.map((part) => (
         <fieldset key={part} className="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend className={cx('mb-1 text-[13px] font-bold', 'text-text')}>
+          <legend className={cx('mb-1 text-[14px] font-bold', 'text-text')}>
             {PART_LABEL[part]} box ({width} × {height} picture)
           </legend>
           {num(`${PART_LABEL[part]} left`, px(part, 'x'), (n) => setPx(part, 'x', n), 'px')}
@@ -535,7 +535,7 @@ function Numbers({
         </fieldset>
       ))}
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className="mb-1 text-[13px] font-bold text-text">Output</legend>
+        <legend className="mb-1 text-[14px] font-bold text-text">Output</legend>
         {cut.layout === 'camera_top' &&
           num(
             'Camera’s share of the height',
@@ -543,7 +543,7 @@ function Numbers({
             (n) => onChange({ ...cut, camera_share: n }),
             '%',
           )}
-        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+        <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Size
           <span className="inline-block w-56">
             <Select
@@ -562,7 +562,7 @@ function Numbers({
             </Select>
           </span>
         </label>
-        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+        <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Frame rate
           <span className="inline-block w-56">
             <Select
@@ -576,7 +576,7 @@ function Numbers({
           </span>
         </label>
         {num('Bitrate', cut.kbps, (n) => onChange({ ...cut, kbps: n }), 'kbps')}
-        <label className="flex items-center justify-between gap-3 text-[13px] text-text-2">
+        <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Encoder
           <span className="inline-block w-56">
             <Select
@@ -591,7 +591,7 @@ function Numbers({
             </Select>
           </span>
         </label>
-        <p className="m-0 text-[12.5px] text-text-3">
+        <p className="m-0 text-[13.5px] text-text-3">
           A keyframe every 2 s, as the platforms want.
         </p>
       </fieldset>

@@ -25,9 +25,9 @@ const variants: Record<Variant, string> = {
 }
 
 const sizes: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[13.5px] gap-1.5',
+  sm: 'h-8 px-3 text-[14.5px] gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-5 text-[15px] gap-2.5',
+  lg: 'h-12 px-5 text-[16px] gap-2.5',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -195,7 +195,7 @@ export function Field({
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
       <div className="flex min-h-6 items-center gap-1">
-        <label htmlFor={id} className="text-[13.5px] font-semibold text-text">
+        <label htmlFor={id} className="text-[14.5px] font-semibold text-text">
           {label}
           {optional && <span className="ml-1.5 font-normal text-text-3">optional</span>}
         </label>
@@ -203,12 +203,12 @@ export function Field({
       </div>
       {children(props)}
       {hint && hintVisible && !error && (
-        <p id={hintId} className="text-[13px] leading-snug text-text-3">
+        <p id={hintId} className="text-[14px] leading-snug text-text-3">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errId} role="alert" className="text-[13px] leading-snug font-semibold text-danger">
+        <p id={errId} role="alert" className="text-[14px] leading-snug font-semibold text-danger">
           {error}
         </p>
       )}
@@ -217,7 +217,7 @@ export function Field({
 }
 
 const inputBase =
-  'w-full rounded-control border border-line-strong bg-inset px-3 text-[14.5px] text-text placeholder:text-text-3 ' +
+  'w-full rounded-control border border-line-strong bg-inset px-3 text-[15.5px] text-text placeholder:text-text-3 ' +
   'transition-[border-color,box-shadow] duration-150 hover:border-text-3 ' +
   'focus:border-accent-text focus:shadow-[0_0_0_3px_var(--fc-accent-soft)] focus:outline-none ' +
   'aria-[invalid=true]:border-danger disabled:opacity-50'
@@ -290,12 +290,13 @@ export function Segmented<T extends string>({
             key={o.value}
             title={o.title}
             className={cx(
-              'relative cursor-pointer rounded-[8px] font-medium whitespace-nowrap transition-colors duration-150',
+              'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
-              size === 'sm' ? 'px-2.5 py-1 text-[12.5px]' : 'px-3.5 py-1.5 text-[13px]',
+              size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',
+              // The picked one is plain to see: Arc and bold on a raised chip.
               on
-                ? 'bg-surface-3 text-text shadow-[var(--fc-shadow-1)]'
-                : 'text-text-3 hover:text-text-2',
+                ? 'bg-surface-1 font-bold text-accent-text shadow-[var(--fc-shadow-1)] ring-1 ring-accent-line'
+                : 'text-text-2 hover:bg-surface-3 hover:text-text',
             )}
           >
             <input
@@ -339,7 +340,7 @@ export function Badge({
     <span
       title={title}
       className={cx(
-        'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[11.5px] font-semibold whitespace-nowrap',
+        'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[12.5px] font-semibold whitespace-nowrap',
         tones[tone],
         className,
       )}
@@ -360,7 +361,7 @@ export function ProBadge() {
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[6px] border border-line-strong border-b-2 bg-surface-2 px-1.5 font-mono text-[11px] font-medium text-text-2">
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[6px] border border-line-strong border-b-2 bg-surface-2 px-1.5 font-mono text-[12px] font-medium text-text-2">
       {children}
     </kbd>
   )

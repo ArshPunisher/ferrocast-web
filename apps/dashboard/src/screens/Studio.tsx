@@ -14,6 +14,7 @@ import { StreamInfoEditor } from '../components/studio/stream-info'
 import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
 import { ThemeInObsCard } from '../components/design/theme-obs'
+import { useWidePage } from '../lib/wide'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -29,6 +30,8 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   const info = useResource(() => studio.streamInfo(), [studio])
   const scenes = useResource(() => studio.obsScenes(), [studio])
   const switcher = useResource(() => studio.switcher(), [studio])
+  // Every tab uses the window's full width, so switching tabs (or Ferrocast / OBS) never jumps.
+  useWidePage()
   return (
     <div>
       <PageHeader

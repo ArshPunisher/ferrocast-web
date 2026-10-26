@@ -176,10 +176,10 @@ function TurnOn({ busy, onEnable }: { busy: boolean; onEnable: () => void }) {
             className="text-accent-text"
             aria-hidden="true"
           />
-          <h2 className="font-display text-xl font-bold tracking-[-0.02em] text-text sm:text-2xl">
+          <h2 className="font-display text-xl font-extrabold tracking-[-0.02em] text-text sm:text-2xl">
             Run Ferrocast without your PC
           </h2>
-          <p className="max-w-[60ch] text-[15px] leading-relaxed text-text-2">
+          <p className="max-w-[60ch] text-[16px] leading-relaxed text-text-2">
             Your overlays come from Ferrocast’s servers, so they work in OBS on any computer, and
             your alerts keep playing with the app closed. You get a Starter overlay and the usual
             alert rules to begin with.
@@ -220,7 +220,7 @@ function On({
             className="mt-0.5 shrink-0 text-warn"
             aria-hidden="true"
           />
-          <div className="text-[14.5px] leading-snug">
+          <div className="text-[15.5px] leading-snug">
             <p className="font-semibold text-text">Cloud mode was asleep.</p>
             <p className="text-text-2">
               It wasn’t used for {s.limits.sleep_after_days} days. Opening the dashboard wakes it,
@@ -317,9 +317,9 @@ function ChannelRow({
             {channel && !channel.error && <Badge tone="ok">Connected</Badge>}
             {channel?.error && <Badge tone="warn">Needs you</Badge>}
           </p>
-          <p className="mt-0.5 text-[13.5px] break-words text-text-2">{line}</p>
+          <p className="mt-0.5 text-[14.5px] break-words text-text-2">{line}</p>
           {channel?.error?.hint && (
-            <p className="mt-0.5 text-[13px] text-text-3">{channel.error.hint}</p>
+            <p className="mt-0.5 text-[14px] text-text-3">{channel.error.hint}</p>
           )}
         </div>
       </div>
@@ -327,7 +327,7 @@ function ChannelRow({
         {youtube === 'pro_needed' && !channel ? (
           <a
             href={href({ name: 'plans' })}
-            className="fc-press inline-flex h-8 items-center gap-1 rounded-control px-2 text-[13px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="fc-press inline-flex h-8 items-center gap-1 rounded-control px-2 text-[14px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             See Pro
             <ArrowRight size={14} weight="bold" aria-hidden="true" />
@@ -377,7 +377,7 @@ function Step({
       <span
         aria-hidden="true"
         className={cx(
-          'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-semibold',
+          'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[13px] font-semibold',
           done ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-text-3',
         )}
       >
@@ -388,13 +388,13 @@ function Step({
           {title}
           {done && <span className="sr-only"> (done)</span>}
         </p>
-        <p className="mt-0.5 text-[13.5px] text-text-2">{children}</p>
+        <p className="mt-0.5 text-[14.5px] text-text-2">{children}</p>
       </div>
       {to && (
         <a
           href={to}
           aria-label={`Open: ${title}`}
-          className="fc-press inline-flex h-8 shrink-0 items-center gap-1 rounded-control px-2 text-[13px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          className="fc-press inline-flex h-8 shrink-0 items-center gap-1 rounded-control px-2 text-[14px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
           Open
           <ArrowRight size={14} weight="bold" aria-hidden="true" />
@@ -417,7 +417,7 @@ function Usage({ s }: { s: CloudSummary }) {
     <Panel title="Free limits">
       <div className="flex flex-col gap-4">
         <div>
-          <div className="flex items-baseline justify-between gap-3 text-[13.5px]">
+          <div className="flex items-baseline justify-between gap-3 text-[14.5px]">
             <span className="font-semibold text-text">Media</span>
             <span className="font-mono text-text-2 tabular-nums">
               {cloudBytes(u.bytes)} of {cloudBytes(u.bytes_limit)}
@@ -433,22 +433,22 @@ function Usage({ s }: { s: CloudSummary }) {
           >
             <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
           </div>
-          <p className="mt-1.5 text-[12.5px] text-text-3">
+          <p className="mt-1.5 text-[13.5px] text-text-3">
             Up to {cloudBytes(s.limits.file_bytes)} a file: pictures, sounds and short videos.
           </p>
         </div>
         <dl className="grid grid-cols-3 gap-3">
           {counts.map(([label, n, max]) => (
             <div key={label} className="rounded-control bg-surface-2 px-3 py-2">
-              <dt className="text-[12px] text-text-3">{label}</dt>
-              <dd className="font-mono text-[15px] font-semibold text-text tabular-nums">
+              <dt className="text-[13px] text-text-3">{label}</dt>
+              <dd className="font-mono text-[16px] font-semibold text-text tabular-nums">
                 {n}
-                <span className="text-[12px] font-normal text-text-3"> / {max}</span>
+                <span className="text-[13px] font-normal text-text-3"> / {max}</span>
               </dd>
             </div>
           ))}
         </dl>
-        <p className="text-[12.5px] leading-relaxed text-text-3">
+        <p className="text-[13.5px] leading-relaxed text-text-3">
           Unused for {s.limits.sleep_after_days} days, cloud mode sleeps until you sign in again.
           Overlays open in OBS count as use.
         </p>
@@ -460,7 +460,7 @@ function Usage({ s }: { s: CloudSummary }) {
 function StaysInApp() {
   return (
     <Panel title="Stays in the app">
-      <ul className="flex flex-col gap-1.5 text-[13.5px] text-text-2">
+      <ul className="flex flex-col gap-1.5 text-[14.5px] text-text-2">
         {STAYS_IN_APP.map((t) => (
           <li key={t} className="flex gap-2">
             <Desktop size={15} className="mt-0.5 shrink-0 text-text-3" aria-hidden="true" />

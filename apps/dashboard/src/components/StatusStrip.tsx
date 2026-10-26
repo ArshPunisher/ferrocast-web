@@ -93,7 +93,7 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
               }
               title={title}
               className={cx(
-                'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[13px] font-medium transition-colors',
+                'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[14px] font-medium transition-colors',
                 attention
                   ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
                   : 'border-line bg-surface-1 text-text-2 hover:border-line-strong',
@@ -141,7 +141,7 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
       })}
       {socket !== 'open' && (
         <li className="shrink-0" role="status">
-          <span className="flex h-8 items-center gap-2 rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[13px] font-medium text-warn">
+          <span className="flex h-8 items-center gap-2 rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[14px] font-medium text-warn">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-warn" />
             {socket === 'retrying' ? 'Reconnecting to Ferrocast…' : 'Connecting…'}
           </span>

@@ -79,12 +79,12 @@ export function AdvancedAudio({ focus, onClose }: { focus: string | null; onClos
       ) : !list.data ? (
         <Skeleton className="h-40" />
       ) : list.data.length === 0 ? (
-        <p className="m-0 text-[13.5px] font-medium text-text-2">No sound here yet.</p>
+        <p className="m-0 text-[14.5px] font-medium text-text-2">No sound here yet.</p>
       ) : (
         <div className="flex flex-col gap-2 lg:gap-0">
           <div
             aria-hidden
-            className="hidden grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] gap-3 border-b border-line px-2 pb-2 text-[12px] font-bold text-text-3 lg:grid"
+            className="hidden grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] gap-3 border-b border-line px-2 pb-2 text-[13px] font-bold text-text-3 lg:grid"
           >
             <span>Sound</span>
             <span>Volume</span>
@@ -136,7 +136,7 @@ function SoundRow({
     else setSync(String(a.sync_ms ?? 0))
   }
   const cell = 'flex items-center gap-2 lg:block'
-  const small = 'w-[72px] shrink-0 whitespace-nowrap text-[12px] font-bold text-text-3 lg:hidden'
+  const small = 'w-[72px] shrink-0 whitespace-nowrap text-[13px] font-bold text-text-3 lg:hidden'
   return (
     <div
       id={rowId(a.name)}
@@ -146,7 +146,7 @@ function SoundRow({
       )}
     >
       <span
-        className="truncate text-[13.5px] font-semibold text-text sm:col-span-2 lg:col-span-1"
+        className="truncate text-[14.5px] font-semibold text-text sm:col-span-2 lg:col-span-1"
         title={a.name}
       >
         {a.name}
@@ -158,7 +158,7 @@ function SoundRow({
           inputMode="decimal"
           name="volume_db"
           autoComplete="off"
-          className="h-8! w-20 text-[13px] tabular-nums"
+          className="h-8! w-20 text-[14px] tabular-nums"
           value={volume}
           onChange={(e) => setVolume(e.target.value)}
           onBlur={commitVolume}
@@ -190,7 +190,7 @@ function SoundRow({
             onChange={(e) => onChange({ balance: Number(e.target.value) })}
             onDoubleClick={() => onChange({ balance: 0.5 })}
           />
-          <span className="w-14 flex-none text-right text-[12px] font-semibold text-text-2 tabular-nums">
+          <span className="w-14 flex-none text-right text-[13px] font-semibold text-text-2 tabular-nums">
             {balanceLabel(a.balance ?? 0.5)}
           </span>
         </span>
@@ -202,7 +202,7 @@ function SoundRow({
           inputMode="numeric"
           name="sync_ms"
           autoComplete="off"
-          className="h-8! w-24 text-[13px] tabular-nums"
+          className="h-8! w-24 text-[14px] tabular-nums"
           value={sync}
           onChange={(e) => setSync(e.target.value)}
           onBlur={commitSync}
@@ -213,7 +213,7 @@ function SoundRow({
         <span className={small}>Hear it</span>
         <Select
           aria-label={`Who hears ${a.name}`}
-          className="h-8! w-full text-[13px]"
+          className="h-8! w-full text-[14px]"
           value={a.monitor}
           onChange={(e) => onChange({ monitor: e.target.value as EngineMonitor })}
         >
@@ -236,7 +236,7 @@ function SoundRow({
                 aria-pressed={on}
                 aria-label={`Track ${t}`}
                 className={cx(
-                  'grid size-9 touch-manipulation place-items-center lg:size-7 rounded-[6px] border text-[12px] font-bold tabular-nums transition-colors active:scale-[0.96]',
+                  'grid size-9 touch-manipulation place-items-center lg:size-7 rounded-[6px] border text-[13px] font-bold tabular-nums transition-colors active:scale-[0.96]',
                   on
                     ? 'border-accent/60 bg-accent/20 text-text'
                     : 'border-line bg-surface-2 text-text-3 hover:border-line-strong',

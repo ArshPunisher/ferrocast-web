@@ -97,8 +97,8 @@ function CloudLoadError({ error, onRetry }: { error: unknown; onRetry: () => voi
       role="alert"
       className="flex flex-col items-start gap-2 rounded-panel border border-danger/30 bg-danger-soft p-4"
     >
-      <p className="text-[15px] font-semibold text-text">{d.message}</p>
-      <p className="text-[14px] text-text-2">{d.hint ?? 'Try again in a moment.'}</p>
+      <p className="text-[16px] font-semibold text-text">{d.message}</p>
+      <p className="text-[15px] text-text-2">{d.hint ?? 'Try again in a moment.'}</p>
       <Button size="sm" icon={<ArrowsClockwise size={16} />} onClick={onRetry} className="mt-1">
         Try again
       </Button>
@@ -197,9 +197,9 @@ function Loaded({
             >
               {duty.title}
             </p>
-            <p className="mt-1 text-[14.5px] leading-snug text-text-2">{duty.detail}</p>
+            <p className="mt-1 text-[15.5px] leading-snug text-text-2">{duty.detail}</p>
             {v.enabled && (
-              <p className="mt-1 text-[13.5px] text-text-3" data-testid="cloud-bot-last-reply">
+              <p className="mt-1 text-[14.5px] text-text-3" data-testid="cloud-bot-last-reply">
                 {lastReplyLine(last)}
               </p>
             )}
@@ -219,7 +219,7 @@ function Loaded({
       </div>
 
       {toggleErr && (
-        <p role="alert" className="text-[14px] font-semibold text-danger">
+        <p role="alert" className="text-[15px] font-semibold text-danger">
           {toggleErr}
         </p>
       )}
@@ -242,7 +242,7 @@ function Loaded({
         ))}
       </ul>
 
-      <p className="text-[13px] leading-relaxed text-text-3">
+      <p className="text-[14px] leading-relaxed text-text-3">
         Your commands, counters, timers and auto-replies, up to {v.limits.messages_per_minute}{' '}
         messages a minute per channel. Chat is never stored.
         {v.pc_code && (
@@ -277,7 +277,7 @@ function Notice({
     <p
       role={tone === 'danger' ? 'alert' : 'status'}
       className={cx(
-        'flex items-start gap-2 rounded-control px-3 py-2.5 text-[14px]',
+        'flex items-start gap-2 rounded-control px-3 py-2.5 text-[15px]',
         tone === 'warn' ? 'bg-warn-soft text-warn' : 'bg-danger-soft text-danger',
       )}
     >
@@ -318,10 +318,10 @@ function ModerationOptIn({
       <div className="flex min-w-0 items-start gap-2.5">
         <ShieldCheck size={20} weight="bold" className="mt-0.5 shrink-0 text-text-3" aria-hidden />
         <div className="min-w-0">
-          <p className="text-[14.5px] font-semibold text-text">
+          <p className="text-[15.5px] font-semibold text-text">
             Let the cloud bot moderate when this PC is off
           </p>
-          <p className="text-[13.5px] text-text-2" translate="no">
+          <p className="text-[14.5px] text-text-2" translate="no">
             {youtube
               ? c.moderation
                 ? 'On. Deletes from a phone any time, bans and timeouts while you’re live. Each uses 50 units.'
@@ -337,7 +337,7 @@ function ModerationOptIn({
       {c.moderation ? (
         <Badge tone="ok">On</Badge>
       ) : phone ? (
-        <span className="text-[13px] text-text-3">Turn it on at the PC</span>
+        <span className="text-[14px] text-text-3">Turn it on at the PC</span>
       ) : (
         showButton && (
           <Button size="sm" busy={busy} onClick={onTurnOn} className="shrink-0">
@@ -468,19 +468,19 @@ function PlatformRow({
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-display text-[17px] font-bold tracking-tight text-text">{label}</p>
+              <p className="font-display text-[18px] font-bold tracking-tight text-text">{label}</p>
               {platform === 'youtube' && <Badge tone="neutral">Beta</Badge>}
               {badge}
             </div>
-            <p className="truncate text-[14px] text-text-2" translate="no">
+            <p className="truncate text-[15px] text-text-2" translate="no">
               {c ? who(c) : available ? 'Not connected' : 'Not set up on Ferrocast’s servers yet'}
             </p>
             {c?.state === 'ready' && (
-              <p className="text-[13px] text-text-3">{lastReplyLine(c.last_reply_at)}</p>
+              <p className="text-[14px] text-text-3">{lastReplyLine(c.last_reply_at)}</p>
             )}
             {c?.quota && (
               <p
-                className="text-[13px] text-text-3 tabular-nums"
+                className="text-[14px] text-text-3 tabular-nums"
                 data-testid={`cloud-bot-${platform}-quota`}
               >
                 {quotaLine(c.quota)}
@@ -531,7 +531,7 @@ function PlatformRow({
         />
       )}
       {c?.state === 'needs_channel' && !phone && (
-        <p className="text-[14px] text-text-2">
+        <p className="text-[15px] text-text-2">
           Now sign in with your channel account on Twitch so {c.bot?.login ?? 'the bot'} may speak
           there. The same account twice is fine.
         </p>
@@ -571,7 +571,7 @@ function PlatformRow({
             >
               Check now
             </Button>
-            <span className="text-[13px] text-text-3">
+            <span className="text-[14px] text-text-3">
               While you’re offline, Ferrocast looks less often. Going live on Twitch or Kick wakes
               it.
             </span>
@@ -585,18 +585,18 @@ function PlatformRow({
         />
       )}
       {platform === 'youtube' && !c && available && !phone && (
-        <p className="text-[13.5px] text-text-3">
+        <p className="text-[14.5px] text-text-3">
           Sign in with the Google account of the channel this PC is connected to. YouTube gives the
           cloud bot a daily budget, so it may pause until midnight Pacific time.
         </p>
       )}
       {c && dropLine(c) && (
-        <p className="text-[13.5px] text-text-3" data-testid={`cloud-bot-${platform}-drop`}>
+        <p className="text-[14.5px] text-text-3" data-testid={`cloud-bot-${platform}-drop`}>
           {dropLine(c)}
         </p>
       )}
       {err && (
-        <p role="alert" className="text-[14px] font-semibold text-danger">
+        <p role="alert" className="text-[15px] font-semibold text-danger">
           {err}
         </p>
       )}
@@ -608,14 +608,14 @@ function PlatformRow({
           {/* Opened by the streamer's own click: a tab opened after a request is blocked. */}
           <a
             {...externalLink(link.auth_url)}
-            className="fc-press inline-flex h-10 items-center gap-2 rounded-control bg-btn-primary px-4 text-[14px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
+            className="fc-press inline-flex h-10 items-center gap-2 rounded-control bg-btn-primary px-4 text-[15px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
           >
             Open {label} <ArrowSquareOut size={16} aria-hidden />
           </a>
           <Button icon={<ArrowsClockwise size={16} />} onClick={reload}>
             Check again
           </Button>
-          <span className="text-[13px] text-text-3">The link works for 10 minutes.</span>
+          <span className="text-[14px] text-text-3">The link works for 10 minutes.</span>
         </div>
       )}
 
@@ -644,7 +644,7 @@ function PlatformRow({
         }
       >
         {leaveErr && (
-          <p role="alert" className="text-[14px] font-semibold text-danger">
+          <p role="alert" className="text-[15px] font-semibold text-danger">
             {leaveErr}
           </p>
         )}

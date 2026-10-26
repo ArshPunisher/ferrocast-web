@@ -112,10 +112,10 @@ export function UpdateNavItem({ onOpen, roomy = false }: { onOpen?: () => void; 
               className={cx('shrink-0', s.phase === 'failed' ? 'text-warn' : 'text-accent-text')}
             />
             <span className="min-w-0">
-              <b className="block truncate text-[13.5px] leading-tight font-semibold text-text">
+              <b className="block truncate text-[14.5px] leading-tight font-semibold text-text">
                 {title}
               </b>
-              <small className="block truncate font-mono text-[12px] text-text-2 tabular-nums">
+              <small className="block truncate font-mono text-[13px] text-text-2 tabular-nums">
                 {detail}
               </small>
             </span>
@@ -148,7 +148,7 @@ function Notes({ u }: { u: UpdateInfo }) {
   const blocks = parseNotes(u.notes)
   return (
     <section aria-labelledby="update-notes" className="flex flex-col gap-2">
-      <h3 id="update-notes" className="text-[13.5px] font-semibold text-text">
+      <h3 id="update-notes" className="text-[14.5px] font-semibold text-text">
         What’s new
       </h3>
       {blocks.length === 0 ? (
@@ -171,7 +171,7 @@ function Notes({ u }: { u: UpdateInfo }) {
       {u.notes_url && (
         <a
           {...externalLink(u.notes_url)}
-          className="inline-flex w-fit items-center gap-1.5 text-[13.5px] font-semibold text-accent-text hover:underline"
+          className="inline-flex w-fit items-center gap-1.5 text-[14.5px] font-semibold text-accent-text hover:underline"
         >
           Release page on GitHub
           <ArrowSquareOut size={14} aria-hidden />
@@ -191,7 +191,7 @@ function InstallState({ u, s }: { u: UpdateInfo; s: UpdateSummary }) {
           <span className="font-semibold text-text" aria-live="polite">
             Downloading
           </span>
-          <span className="font-mono text-[13px] text-text-2 tabular-nums">
+          <span className="font-mono text-[14px] text-text-2 tabular-nums">
             {i.total
               ? `${formatBytes(i.downloaded)} of ${formatBytes(i.total)} · ${s.percent ?? 0}%`
               : formatBytes(i.downloaded)}
@@ -206,7 +206,7 @@ function InstallState({ u, s }: { u: UpdateInfo; s: UpdateSummary }) {
         >
           <Progress percent={s.percent} />
         </div>
-        <p className="text-[13.5px] text-text-3">
+        <p className="text-[14.5px] text-text-3">
           Ferrocast keeps running while it downloads. Nothing changes until you restart.
         </p>
       </div>
@@ -281,11 +281,11 @@ export function UpdateDialogHost() {
 
   let footer: ReactNode
   if (!mayInstall) {
-    footer = <p className="mr-auto text-[13.5px] text-text-2">Update from the streaming PC.</p>
+    footer = <p className="mr-auto text-[14.5px] text-text-2">Update from the streaming PC.</p>
   } else if (!s.canInstall) {
     footer = (
       <>
-        <p className="mr-auto text-[13.5px] text-text-2">This copy can’t update itself.</p>
+        <p className="mr-auto text-[14.5px] text-text-2">This copy can’t update itself.</p>
         <a
           {...externalLink(DOWNLOAD_PAGE)}
           className="fc-press inline-flex h-10 items-center gap-2 rounded-control bg-btn-primary px-4 text-sm font-semibold text-on-btn-primary hover:bg-btn-primary-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
@@ -299,7 +299,7 @@ export function UpdateDialogHost() {
     footer = (
       <>
         {s.blocked && (
-          <p className="mr-auto text-[13.5px] font-medium text-warn">
+          <p className="mr-auto text-[14.5px] font-medium text-warn">
             You’re live. Restart after your stream.
           </p>
         )}
@@ -327,7 +327,7 @@ export function UpdateDialogHost() {
     footer = (
       <>
         {s.blocked && (
-          <p className="mr-auto text-[13.5px] font-medium text-warn">
+          <p className="mr-auto text-[14.5px] font-medium text-warn">
             You’re live, so it waits until your stream ends.
           </p>
         )}
@@ -359,7 +359,7 @@ export function UpdateDialogHost() {
       onClose={() => setOpen(false)}
       title={title}
       description={
-        <span className="font-mono text-[13px] tabular-nums">
+        <span className="font-mono text-[14px] tabular-nums">
           You have {u.current}
           {published ? ` · ${published}` : ''}
         </span>

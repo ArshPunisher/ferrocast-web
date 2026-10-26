@@ -55,7 +55,7 @@ function NumberIn({
           onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))}
         />
       </span>
-      {unit && <span className="text-[13px] text-text-3">{unit}</span>}
+      {unit && <span className="text-[14px] text-text-3">{unit}</span>}
     </span>
   )
 }
@@ -63,7 +63,7 @@ function NumberIn({
 function Problem({ text }: { text: string | null }) {
   if (!text) return null
   return (
-    <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+    <p role="alert" className="m-0 text-[14px] font-semibold text-danger">
       {text.replace(/^[\w.]+:\s*/, '')}
     </p>
   )
@@ -88,7 +88,7 @@ export function ProtectionRule({ view, onSaved }: { view: GoLiveView; onSaved: (
     }).then((x) => x && onSaved())
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-line bg-surface-2 p-3">
-      <p className="m-0 text-[13.5px] leading-[2.4] text-text-2">
+      <p className="m-0 text-[14.5px] leading-[2.4] text-text-2">
         Pause a platform when one gets under{' '}
         <NumberIn
           label="Slow share"
@@ -142,7 +142,7 @@ export function ProtectionRule({ view, onSaved }: { view: GoLiveView; onSaved: (
         />
         .
       </p>
-      <p className="m-0 text-[12.5px] text-text-3">Never pauses the last platform live.</p>
+      <p className="m-0 text-[13.5px] text-text-3">Never pauses the last platform live.</p>
       <Problem text={dirty ? problem : null} />
       <div className="flex flex-wrap gap-2">
         <Button
@@ -220,7 +220,7 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
               aria-selected={t.id === tab}
               onClick={() => setTab(t.id)}
               className={cx(
-                '-mb-px h-10 shrink-0 border-b-2 px-2.5 text-[13.5px] font-semibold whitespace-nowrap focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                '-mb-px h-10 shrink-0 border-b-2 px-2.5 text-[14.5px] font-semibold whitespace-nowrap focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                 t.id === tab
                   ? 'border-accent text-text'
                   : 'border-transparent text-text-3 hover:text-text-2',
@@ -350,8 +350,8 @@ function Row({ label, hint, children }: { label: string; hint: string; children:
   return (
     <div className="grid grid-cols-1 items-center gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">
-        <p className="m-0 text-[13.5px] font-semibold text-text">{label}</p>
-        <p className="m-0 text-[12.5px] text-text-3">{hint}</p>
+        <p className="m-0 text-[14.5px] font-semibold text-text">{label}</p>
+        <p className="m-0 text-[13.5px] text-text-3">{hint}</p>
       </div>
       <div>{children}</div>
     </div>

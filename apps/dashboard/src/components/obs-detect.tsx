@@ -29,7 +29,7 @@ export function ObsAutoDetect({
       <MagicWand size={22} className="shrink-0 text-accent-text" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-text">Found OBS on this computer</p>
-        <p className="mt-0.5 text-[13px] text-text-2">
+        <p className="mt-0.5 text-[14px] text-text-2">
           Port {d.port}, {d.has_password ? 'password included' : 'no password needed'}. These differ
           from the details below; Ferrocast can use OBS’s instead.
         </p>

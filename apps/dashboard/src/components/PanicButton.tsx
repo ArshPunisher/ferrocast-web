@@ -82,7 +82,7 @@ export function PanicButton() {
           : `Panic mode: lock chat down on every platform (${keys})`
       }
       className={cx(
-        'fc-press inline-flex h-9 shrink-0 items-center gap-2 rounded-control px-3 text-[13px] font-semibold whitespace-nowrap transition-colors',
+        'fc-press inline-flex h-9 shrink-0 items-center gap-2 rounded-control px-3 text-[14px] font-semibold whitespace-nowrap transition-colors',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
         on
           ? 'bg-danger-fill text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]'
@@ -93,7 +93,7 @@ export function PanicButton() {
       <span>{on ? 'Panic on' : 'Panic'}</span>
       <span
         className={cx(
-          'hidden font-mono text-[11px] font-medium xl:inline',
+          'hidden font-mono text-[12px] font-medium xl:inline',
           on ? 'text-white' : 'text-text-3',
         )}
       >

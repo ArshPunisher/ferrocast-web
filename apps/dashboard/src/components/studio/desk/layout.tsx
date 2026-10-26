@@ -547,7 +547,7 @@ export function DockWorkspace({
           {!layout.float[drag.id] && (
             <div
               aria-hidden
-              className="pointer-events-none fixed z-50 inline-flex items-center gap-2 rounded-control border border-accent-line bg-surface-3 px-3 py-2 font-display text-[13px] font-bold shadow-pop"
+              className="pointer-events-none fixed z-50 inline-flex items-center gap-2 rounded-control border border-accent-line bg-surface-3 px-3 py-2 font-display text-[14px] font-bold shadow-pop"
               style={{ left: drag.x + 12, top: drag.y + 12 }}
             >
               <DotsSixVertical size={14} /> {dockName(layout, drag.id)}
@@ -721,7 +721,7 @@ export function DockHeader({
           <DotsSixVertical size={15} />
         </span>
       )}
-      <h2 className="truncate font-display text-[14.5px] font-extrabold tracking-tight text-text">
+      <h2 className="truncate font-display text-[17px] font-extrabold tracking-tight text-text">
         {title ?? dockName(layout, id)}
       </h2>
       {info}
@@ -765,7 +765,7 @@ function DockMenu({ id }: { id: DockId }) {
     btn.current?.focus()
   }
   const item =
-    'flex h-9 w-full items-center rounded-[8px] px-2.5 text-left text-[13.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
+    'flex h-9 w-full items-center rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
   const moves: [Region, string][] = [
     ['left', 'Move to the left'],
     ['bottom', 'Move to the bottom'],

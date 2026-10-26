@@ -81,7 +81,7 @@ function CounterDialog({
       footer={
         <>
           {err && !['name', 'command', 'reply'].includes(err.field ?? '') && (
-            <p role="alert" className="mr-auto text-[13.5px] text-danger">
+            <p role="alert" className="mr-auto text-[14.5px] text-danger">
               {err.message}
             </p>
           )}
@@ -203,12 +203,12 @@ export function CountersPanel() {
                   <p className="truncate text-sm font-semibold text-text">
                     {c.name.replace(/_/g, ' ')}{' '}
                     {c.command && (
-                      <span className="font-mono text-[12.5px] font-normal text-text-3">
+                      <span className="font-mono text-[13.5px] font-normal text-text-3">
                         {c.command}
                       </span>
                     )}
                   </p>
-                  <p className="truncate font-mono text-[12.5px] text-text-3">{`{count:${c.name}}`}</p>
+                  <p className="truncate font-mono text-[13.5px] text-text-3">{`{count:${c.name}}`}</p>
                 </div>
                 <IconButton
                   size="sm"
@@ -317,7 +317,7 @@ export function QuotesPanel() {
       ) : !quotes ? (
         <Skeleton className="h-24" />
       ) : quotes.length === 0 ? (
-        <p className="text-[13.5px] text-text-3">No quotes yet.</p>
+        <p className="text-[14.5px] text-text-3">No quotes yet.</p>
       ) : (
         <ul className="-mx-2 flex max-h-80 flex-col overflow-y-auto">
           {quotes.map((q: Quote) => (
@@ -325,7 +325,7 @@ export function QuotesPanel() {
               key={q.id}
               className="flex items-start gap-2 rounded-control px-2 py-2 hover:bg-surface-2"
             >
-              <span className="w-9 shrink-0 font-mono text-[13.5px] text-text-3">#{q.id}</span>
+              <span className="w-9 shrink-0 font-mono text-[14.5px] text-text-3">#{q.id}</span>
               {editing?.id === q.id ? (
                 <form
                   className="flex min-w-0 flex-1 gap-2"
@@ -357,7 +357,7 @@ export function QuotesPanel() {
                 <>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm break-words text-text">“{q.text}”</p>
-                    <p className="text-[12.5px] text-text-3">{q.added_by}</p>
+                    <p className="text-[13.5px] text-text-3">{q.added_by}</p>
                   </div>
                   <IconButton
                     size="sm"

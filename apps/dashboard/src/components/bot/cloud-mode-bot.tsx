@@ -56,7 +56,7 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
               className="shrink-0 text-accent-text"
               aria-hidden="true"
             />
-            <p className="min-w-0 flex-1 text-[14px] text-text-2">
+            <p className="min-w-0 flex-1 text-[15px] text-text-2">
               {ready.length === 0 ? (
                 <>
                   Connect a channel on the{' '}
@@ -91,12 +91,12 @@ export function CloudModeBotPanel({ className }: { className?: string }) {
             />
           </div>
           {yt?.channel && !yt.follows_this_page && (
-            <p className="text-[13px] text-text-2" data-testid="cloud-bot-youtube-pc">
+            <p className="text-[14px] text-text-2" data-testid="cloud-bot-youtube-pc">
               On YouTube the bot uses the commands from the Ferrocast app on your PC. Change them
               there.
             </p>
           )}
-          <p className="text-[12.5px] text-text-3">
+          <p className="text-[13.5px] text-text-3">
             If the Ferrocast app on your PC is signed in to this account with its bot on, the cloud
             waits, so the two never answer twice.
           </p>

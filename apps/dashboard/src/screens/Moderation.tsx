@@ -98,7 +98,7 @@ function PanicCard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-1">
-            <h2 id="panic-title" className="font-display text-lg font-semibold tracking-tight">
+            <h2 id="panic-title" className="font-display text-lg font-extrabold tracking-tight">
               Panic mode {on && <Badge tone="danger">On</Badge>}
             </h2>
             <InfoTip>
@@ -107,7 +107,7 @@ function PanicCard() {
             </InfoTip>
           </div>
           <p
-            className="mt-2 flex flex-wrap items-center gap-1.5 text-[13.5px] font-medium text-text-2"
+            className="mt-2 flex flex-wrap items-center gap-1.5 text-[14.5px] font-medium text-text-2"
             title="Works in this window and anywhere on the computer running Ferrocast."
           >
             Shortcut <Kbd>Ctrl</Kbd>
@@ -223,7 +223,7 @@ function BanList() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
-            className="h-8 w-36 rounded-control border border-line bg-inset pr-2 pl-8 text-[13.5px] text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none sm:w-48"
+            className="h-8 w-36 rounded-control border border-line bg-inset pr-2 pl-8 text-[14.5px] text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none sm:w-48"
           />
         </div>
       }
@@ -257,7 +257,7 @@ function BanList() {
                     </span>
                     {b.everywhere && <Badge tone="accent">Every platform</Badge>}
                   </p>
-                  <p className="mt-0.5 truncate text-[13.5px] text-text-3">
+                  <p className="mt-0.5 truncate text-[14.5px] text-text-3">
                     {b.reason ?? 'No reason given'} ·{' '}
                     {new Date(b.banned_at).toLocaleDateString(undefined, {
                       day: 'numeric',
@@ -266,7 +266,7 @@ function BanList() {
                     {b.by ? ` · by ${b.by}` : ''}
                   </p>
                   {b.offline && (
-                    <p className="mt-0.5 text-[13px] font-medium text-text-2">
+                    <p className="mt-0.5 text-[14px] font-medium text-text-2">
                       From your phone while the PC was off
                     </p>
                   )}
@@ -527,13 +527,13 @@ function OfflineModeration() {
   return (
     <Panel id="mod-offline" title="Moderate from chat">
       <div className="flex flex-col items-start gap-4">
-        <p className="max-w-[55ch] text-[16px] leading-relaxed font-medium text-text">
+        <p className="max-w-[55ch] text-[17px] leading-relaxed font-medium text-text">
           Ban, time out and delete messages right on the chat lines. The cloud bot does it for you
           while your PC is off.
         </p>
         <a
           href={href({ name: 'chat' })}
-          className="fc-press inline-flex h-11 items-center rounded-control bg-btn-primary px-5 text-[15px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
+          className="fc-press inline-flex h-11 items-center rounded-control bg-btn-primary px-5 text-[16px] font-semibold text-on-btn-primary hover:bg-btn-primary-hover"
         >
           Open chat
         </a>

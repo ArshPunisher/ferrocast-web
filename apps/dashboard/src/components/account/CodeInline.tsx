@@ -62,7 +62,7 @@ export function CodeInline({
         void submit()
       }}
     >
-      <label htmlFor={id} className="text-[13.5px] font-semibold text-text">
+      <label htmlFor={id} className="text-[14.5px] font-semibold text-text">
         Have a code?
       </label>
       <div className="flex gap-2">
@@ -87,7 +87,7 @@ export function CodeInline({
         </Button>
       </div>
       {err && (
-        <p id={`${id}-err`} role="alert" className="text-[13px] text-danger">
+        <p id={`${id}-err`} role="alert" className="text-[14px] text-danger">
           {err}
         </p>
       )}

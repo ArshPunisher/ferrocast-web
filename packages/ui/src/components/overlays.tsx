@@ -236,12 +236,12 @@ export function Toaster() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium break-words text-text">{t.message}</p>
               {t.hint && (
-                <p className="mt-0.5 text-[13px] leading-snug break-words text-text-3">{t.hint}</p>
+                <p className="mt-0.5 text-[14px] leading-snug break-words text-text-3">{t.hint}</p>
               )}
               {t.action && (
                 <button
                   type="button"
-                  className="mt-1.5 text-[13px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
+                  className="mt-1.5 text-[14px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
                   onClick={() => {
                     t.action?.run()
                     dismissToast(t.id)

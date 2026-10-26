@@ -308,7 +308,7 @@ function PointsSettings({
           )}
         </Field>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-[13.5px] font-medium text-text-2">
+          <legend className="mb-1.5 text-[14.5px] font-medium text-text-2">
             For chatting while live
           </legend>
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 text-sm text-text-2">
@@ -331,7 +331,7 @@ function PointsSettings({
             <span aria-hidden="true">min</span>
           </div>
           {(errFor('per_interval') ?? errFor('interval_min')) && (
-            <p role="alert" className="text-[13.5px] font-medium text-danger">
+            <p role="alert" className="text-[14.5px] font-medium text-danger">
               {errFor('per_interval') ?? errFor('interval_min')}
             </p>
           )}
@@ -344,7 +344,7 @@ function PointsSettings({
           ))}
         </div>
         {err && !err.field && (
-          <p role="alert" className="text-[13.5px] text-danger">
+          <p role="alert" className="text-[14.5px] text-danger">
             {err.message}
           </p>
         )}
