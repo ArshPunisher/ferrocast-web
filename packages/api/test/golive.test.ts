@@ -61,8 +61,18 @@ describe('demo: Go live everywhere', () => {
       'youtube_vertical',
     ])
     expect((await refusal(api.saveOrder([{ id: 'kick', enabled: true }]))).status).toBe(400)
-    const bad = await refusal(api.addCustom('Backup', 'https://x.com/live', 'k'))
-    expect(bad.message).toContain('rtmp:// or rtmps://')
+    const bad = await refusal(api.addCustom('Backup', 'ftp://x.com/live', 'k'))
+    expect(bad.message).toContain('rtmp://')
+    // SRT, RIST and WebRTC: the key may be empty; main picture only; shown as direct.
+    const srt = await api.addCustom('Studio SRT', 'srt://10.0.0.5:9000?latency=200', '')
+    expect(srt.url).toBe('srt://10.0.0.5:9000?latency=200')
+    expect(
+      (await refusal(api.addCustom('V', 'srt://10.0.0.5:9000', '', 'vertical'))).message,
+    ).toContain('main picture')
+    expect((await refusal(api.addCustom('Empty', 'rtmp://x.com/live', ''))).status).toBe(400)
+    const row = (await api.view()).destinations.find((d) => d.id === srt.id)
+    expect(row).toMatchObject({ direct: 'srt', account: '10.0.0.5:9000' })
+    await api.removeCustom(srt.id)
     expect((await refusal(api.addCustom('Backup', 'rtmp://x.com', 'k'))).message).toContain(
       'after the host',
     )

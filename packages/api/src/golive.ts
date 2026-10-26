@@ -56,6 +56,23 @@ export interface DestinationView {
   blocked: string | null
   /** The platform's rules this stream breaks, in words. */
   rules: string[]
+  /** Sent straight from the Ferrocast Studio by this protocol; absent for RTMP. */
+  direct?: DirectKind
+}
+
+/** Servers the Ferrocast Studio sends to itself (not through the RTMP forwarders). */
+export type DirectKind = 'srt' | 'rist' | 'whip'
+
+/** The protocol a server address asks for, or null for RTMP (as the engine's `direct_kind`). */
+export function directKind(url: string): DirectKind | null {
+  const u = url.trim().toLowerCase()
+  if (u.startsWith('srt://')) return 'srt'
+  if (u.startsWith('rist://')) return 'rist'
+  // Plain http only on this computer (a local WHIP server): a token never crosses the
+  // network unencrypted.
+  const local = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])([:/]|$)/.test(u)
+  if (u.startsWith('https://') || local) return 'whip'
+  return null
 }
 
 export interface UploadRow {

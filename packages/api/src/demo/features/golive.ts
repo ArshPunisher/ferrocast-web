@@ -3,7 +3,7 @@
 // lines while the pretend OBS streams. Same routes, shapes, error codes and messages as API.md
 // §4 "Go live everywhere".
 
-import { checkAdvanced, checkCut } from '../../golive'
+import { checkAdvanced, checkCut, directKind } from '../../golive'
 import type {
   Advanced,
   AitumOutput,
@@ -312,6 +312,7 @@ export class DemoGoLive {
         health: this.health(d, now),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
         rules: d.enabled ? this.rules(d.kind, vertical ? vs : s, vertical) : [],
+        ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),
       }
     })
   }
@@ -514,7 +515,14 @@ export class DemoGoLive {
       throw new HttpError(400, 'invalid', 'name: 1 to 40 characters.')
     const problem = urlProblem(url)
     if (problem) throw new HttpError(400, 'invalid', `url: ${problem}`)
-    if (!key || key.length > 512 || /\s/.test(key))
+    const direct = directKind(url)
+    if (direct && b.canvas === 'vertical')
+      throw new HttpError(
+        400,
+        'invalid',
+        'canvas: SRT, RIST and WebRTC send the main picture only.',
+      )
+    if ((!key && !direct) || key.length > 512 || /\s/.test(key))
       throw new HttpError(
         400,
         'invalid',
@@ -526,7 +534,7 @@ export class DemoGoLive {
       id: `c_${(++this.seq).toString(16).padStart(12, '0')}`,
       kind: 'custom',
       name,
-      url: url.replace(/\/+$/, ''),
+      url: direct ? url : url.replace(/\/+$/, ''),
       enabled: true,
       ...(b.canvas === 'vertical' ? { canvas: 'vertical' as const } : {}),
     }
@@ -742,12 +750,22 @@ export class DemoGoLive {
 }
 
 function hostOf(url: string): string | null {
+  if (directKind(url)) {
+    const host = url.trim().split('://')[1]?.split(/[/?]/)[0]
+    return host ? host.slice(0, 80) : null
+  }
   const m = /^rtmps?:\/\/([^/:]+)/i.exec(url)
   return m?.[1]?.toLowerCase() ?? null
 }
 
 function urlProblem(url: string): string | null {
-  if (!/^rtmps?:\/\//i.test(url)) return 'The server address must start with rtmp:// or rtmps://.'
+  if (directKind(url)) {
+    if (/[\s]/.test(url) || !hostOf(url) || hostOf(url)?.includes('@') || url.length > 512)
+      return 'a whole address like srt://host:port, rist://host:port or https://host/whip, without a user name.'
+    return null
+  }
+  if (!/^rtmps?:\/\//i.test(url))
+    return 'The server address must start with rtmp://, rtmps://, srt://, rist:// or https:// (WebRTC).'
   if (/[\s#@]/.test(url)) return 'The server address can’t contain a user name, spaces or a #.'
   const rest = url.replace(/^rtmps?:\/\//i, '')
   const [host, ...app] = rest.split('/')
