@@ -59,7 +59,16 @@ function OptionField({
   const label = o.label || o.key
   const hint = o.help || undefined
   const off = disabled || !onChange || !o.enabled
-  const v = values[o.key]
+  // A key OBS left unset reads as zero, false or "" there (obs_data_get_*): show it the same.
+  const raw = values[o.key]
+  const v =
+    raw !== undefined
+      ? raw
+      : o.kind === 'int' || o.kind === 'float'
+        ? 0
+        : o.kind === 'list'
+          ? o.values.find((x) => x === 0 || x === '' || x === false)
+          : undefined
   const set = (next: unknown) => onChange?.(o.key, next)
   switch (o.kind) {
     case 'bool':
@@ -96,13 +105,24 @@ function OptionField({
         </Field>
       )
     }
-    case 'group':
+    case 'group': {
+      // A checkable group is off until switched on; its options wait until then.
+      const on = !o.checkable || v === true
       return (
         <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
-          <legend className="px-1 text-[13px] font-semibold">{label}</legend>
-          <OptionsForm opts={o.group} values={values} onChange={onChange} disabled={disabled} />
+          <legend className="px-1 text-[13px] font-semibold">
+            {o.checkable ? (
+              <Switch label={label} checked={on} onChange={set} disabled={off} />
+            ) : (
+              label
+            )}
+          </legend>
+          {on && (
+            <OptionsForm opts={o.group} values={values} onChange={onChange} disabled={disabled} />
+          )}
         </fieldset>
       )
+    }
     case 'button':
       return (
         <Button type="button" variant="secondary" disabled className="self-start">

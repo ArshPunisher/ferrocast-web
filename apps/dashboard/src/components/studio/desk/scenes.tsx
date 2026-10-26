@@ -161,7 +161,10 @@ export function ScenesDock() {
           { sep: true },
           ...Object.entries(TRANSITIONS).map(([kind, label]) => ({
             label:
-              kind === 'cut_transition' ? label : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
+              // Cut has no length; a stinger lasts as long as its video.
+              kind === 'cut_transition' || kind === 'obs_stinger_transition'
+                ? label
+                : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
             checked: t?.kind === kind,
             onSelect: () =>
               setT({ kind, ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms }),

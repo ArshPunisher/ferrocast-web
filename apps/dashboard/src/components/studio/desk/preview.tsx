@@ -5,17 +5,20 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import {
   ArrowUUpLeft,
   ArrowUUpRight,
+  GearSix,
   Play,
   ProjectorScreen,
   SquaresFour,
   X,
 } from '@phosphor-icons/react'
-import { type EngineItem, type PreviewRect } from '@ferrocast/api'
-import { Button, IconButton, InfoTip, Input, Select } from '@ferrocast/ui'
+import { type EngineItem, type EngineSettings, type PreviewRect } from '@ferrocast/api'
+import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton } from '@ferrocast/ui'
+import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
-import { useAction } from '../../../lib/hooks'
+import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
 import { projectorItem, useContextMenu } from './menu'
+import { OptionsForm } from './options'
 import {
   MOVE,
   boxOf,
@@ -351,7 +354,17 @@ export const TRANSITIONS: Record<string, string> = {
   slide_transition: 'Slide',
   fade_to_color_transition: 'Fade to colour',
   wipe_transition: 'Wipe',
+  obs_stinger_transition: 'Stinger',
 }
+
+/** Transitions with settings of their own (a direction, a colour, an image, a video). */
+const HAS_SETTINGS = new Set([
+  'swipe_transition',
+  'slide_transition',
+  'fade_to_color_transition',
+  'wipe_transition',
+  'obs_stinger_transition',
+])
 
 /** Under the picture: the scene on air and the transition between scenes. */
 export function StageBar() {
@@ -387,6 +400,7 @@ export function StageBar() {
   }
   const t = scenes.data?.transition
   const [ms, setMs] = useState<number | null>(null)
+  const [tuning, setTuning] = useState<string | null>(null)
   const kindsOn = (kinds.data?.transitions ?? []).filter((k) => TRANSITIONS[k.id])
   const set = async (kind: string, dur: number) => {
     const ok = await run('transition', async () => {
@@ -426,7 +440,17 @@ export function StageBar() {
               </option>
             ))}
           </Select>
-          {t.kind !== 'cut_transition' && (
+          {HAS_SETTINGS.has(t.kind) && (
+            <IconButton
+              size="sm"
+              label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
+              onClick={() => setTuning(t.kind)}
+            >
+              <GearSix size={16} weight="bold" />
+            </IconButton>
+          )}
+          {/* A stinger lasts as long as its video. */}
+          {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
             <>
               <Input
                 aria-label="Transition length in milliseconds"
@@ -478,6 +502,50 @@ export function StageBar() {
         </IconButton>
       )}
       {menu}
+      <TransitionSettingsDialog kind={tuning} onClose={() => setTuning(null)} />
     </div>
+  )
+}
+
+/** A transition's own settings (OBS's Transition Properties), applied as they change. */
+function TransitionSettingsDialog({ kind, onClose }: { kind: string | null; onClose: () => void }) {
+  return (
+    <Dialog
+      open={kind !== null}
+      onClose={onClose}
+      title={`${kind ? (TRANSITIONS[kind] ?? kind) : 'Transition'} settings`}
+      footer={
+        <Button variant="primary" onClick={onClose}>
+          Done
+        </Button>
+      }
+    >
+      {kind && <TransitionSettingsForm key={kind} kind={kind} />}
+    </Dialog>
+  )
+}
+
+function TransitionSettingsForm({ kind }: { kind: string }) {
+  const { api } = useDesk()
+  const { run } = useAction()
+  const loaded = useResource(
+    () => Promise.all([api.options(kind), api.defaults(kind), api.transitionSettings(kind)]),
+    [api, kind],
+  )
+  const [values, setValues] = useState<EngineSettings | null>(null)
+  if (loaded.error && !loaded.data)
+    return <LoadError error={loaded.error} onRetry={loaded.reload} />
+  if (!loaded.data) return <Skeleton className="h-40" />
+  const [opts, defaults, saved] = loaded.data
+  const shown = values ?? { ...defaults, ...saved }
+  return (
+    <OptionsForm
+      opts={opts}
+      values={shown}
+      onChange={(key, value) => {
+        setValues({ ...shown, [key]: value })
+        void run('transition', () => api.setTransitionSettings(kind, { [key]: value }))
+      }}
+    />
   )
 }
