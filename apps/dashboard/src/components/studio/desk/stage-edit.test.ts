@@ -55,6 +55,22 @@ describe('dragging', () => {
     expect(drag(plain, MOVE, { x: -94, y: 0 }, opts).x).toBe(6)
   })
 
+  it('snaps only to what the settings ask for', () => {
+    const none = { screen: false, center: false, others: [] }
+    // Screen edges off: no pull to 0.
+    expect(drag(plain, MOVE, { x: -94, y: 0 }, { canvas, snap: 10, to: none }).x).toBe(6)
+    // Middle on, edges off.
+    const mid = { canvas, snap: 10, to: { ...none, center: true } }
+    expect(drag(plain, MOVE, { x: 657, y: 0 }, mid).x).toBe(760)
+    expect(drag(plain, MOVE, { x: -94, y: 0 }, mid).x).toBe(6)
+    // Another source's right edge (at 1000) catches this one's left edge.
+    const other: Frame = [200, 0, 0, 200, 800, 400]
+    const near = { canvas, snap: 10, to: { ...none, others: [other] } }
+    expect(drag(plain, MOVE, { x: 906, y: 0 }, near).x).toBe(1000)
+    // Its top (400) lines up with this one's top.
+    expect(drag(plain, MOVE, { x: 0, y: 355 }, near).y).toBe(400)
+  })
+
   it('resizes from the far corner keeping the shape, or freely with Shift', () => {
     expect(drag(plain, { u: 1, v: 1 }, { x: 400, y: 0 }, opts)).toEqual({
       x: 100,

@@ -474,8 +474,9 @@ interface Held {
  * lets clicks through, so this box gets them.
  */
 function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
-  const { api, scene, items, selected, select, edit, stats, setTransforming } = useDesk()
+  const { api, scene, items, selected, select, edit, stats, setTransforming, prefs } = useDesk()
   const { run } = useAction()
+  const p = prefs.data
   const canvas = stats?.canvas ?? null
   const held = useRef<Held | null>(null)
   const sending = useRef<{ busy: boolean; next: (Box & { save: boolean; id: number }) | null }>({
@@ -504,7 +505,10 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       p: { x: (e.clientX - r.left - f.ox) / f.scale, y: (e.clientY - r.top - f.oy) / f.scale },
       // Handles are 10 screen pixels; a little more is easier to grab.
       reach: 9 / f.scale,
-      snap: 8 / f.scale,
+      // Three screen pixels before a press becomes a drag.
+      still: 3 / f.scale,
+      // OBS's Snapping: how near (screen pixels), off when switched off.
+      snap: p?.snapping === false ? 0 : (p?.snap_px ?? 10) / f.scale,
     }
   }
 
@@ -588,13 +592,21 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         return
       }
       const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
-      // Three screen pixels before a press becomes a drag.
-      if (!h.moved && Math.hypot(d.x, d.y) < w.snap * (3 / 8)) return
+      if (!h.moved && Math.hypot(d.x, d.y) < w.still) return
       h.moved = true
       const b = drag(h.from, h.grip, d, {
         free: e.shiftKey,
         canvas,
+        // Alt (Option) held: no snapping this once, as in OBS.
         snap: e.altKey ? 0 : w.snap,
+        to: {
+          screen: p?.snap_screen ?? true,
+          center: p?.snap_center ?? false,
+          others:
+            (p?.snap_sources ?? false)
+              ? list.flatMap((i) => (i.id !== h.id && i.visible && i.frame ? [i.frame] : []))
+              : [],
+        },
       })
       h.last = b
       send(h.id, b, false)

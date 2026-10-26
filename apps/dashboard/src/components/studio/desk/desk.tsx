@@ -119,6 +119,7 @@ function Running({
   const items = useResource(() => (scene ? api.items(scene) : Promise.resolve([])), [api, scene])
   const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
   const kinds = useResource(() => api.kinds(), [api])
+  const prefs = useResource(() => api.studioSettings(), [api])
   // Projectors are the app's own windows: no displays to offer in a plain browser.
   const screens = useResource(() => (inDesktopApp() ? api.screens() : Promise.resolve([])), [api])
   const [selected, select] = useState<number | null>(null)
@@ -170,6 +171,7 @@ function Running({
     items,
     audio,
     kinds,
+    prefs,
     refresh,
     selected,
     select,

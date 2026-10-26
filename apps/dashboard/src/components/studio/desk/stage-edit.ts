@@ -83,12 +83,24 @@ export function boxOf(f: Frame): Box {
   return { x: f[4], y: f[5], w: len(f[0], f[1]), h: len(f[2], f[3]) }
 }
 
+/** What a moved box snaps to (OBS's Snapping settings). */
+export interface SnapTo {
+  /** The canvas's edges. */
+  screen: boolean
+  /** The canvas's middle lines. */
+  center: boolean
+  /** Other sources' edges. */
+  others: Frame[]
+}
+
 export interface DragOpts {
   /** Corner handles keep the shape unless this is set (Shift held). */
   free?: boolean
   canvas: { width: number; height: number }
-  /** How near an edge or the middle of the canvas snaps, canvas pixels (0 for none). */
+  /** How near snaps, canvas pixels (0 for none). */
   snap: number
+  /** The canvas's edges and middle when not given. */
+  to?: SnapTo
 }
 
 /**
@@ -142,15 +154,41 @@ export function drag(f: Frame, g: Grip, d: Pt, o: DragOpts): Box {
   return { x, y, w: nu, h: nv }
 }
 
-/** How far to nudge a moved box so its edge or middle lands on the canvas's. */
+/** The box's bounds on the canvas (turned boxes included). */
+function bounds(f: Frame, d: Pt = { x: 0, y: 0 }) {
+  const pts = [at(f, 0, 0), at(f, 1, 0), at(f, 1, 1), at(f, 0, 1)]
+  const xs = pts.map((p) => p.x + d.x)
+  const ys = pts.map((p) => p.y + d.y)
+  return {
+    left: Math.min(...xs),
+    right: Math.max(...xs),
+    top: Math.min(...ys),
+    bottom: Math.max(...ys),
+  }
+}
+
+/** How far to nudge a moved box so its edge or middle lands on a line it snaps to. */
 function snapMove(f: Frame, d: Pt, o: DragOpts): Pt {
   if (o.snap <= 0) return { x: 0, y: 0 }
-  const pts = [at(f, 0, 0), at(f, 1, 0), at(f, 1, 1), at(f, 0, 1)].map((p) => ({
-    x: p.x + d.x,
-    y: p.y + d.y,
-  }))
-  const xs = pts.map((p) => p.x)
-  const ys = pts.map((p) => p.y)
+  const to = o.to ?? { screen: true, center: true, others: [] }
+  const { left, right, top, bottom } = bounds(f, d)
+  const { width: W, height: H } = o.canvas
+  const lx: number[] = []
+  const ly: number[] = []
+  if (to.screen) {
+    lx.push(0, W)
+    ly.push(0, H)
+  }
+  if (to.center) {
+    lx.push(W / 2)
+    ly.push(H / 2)
+  }
+  for (const other of to.others) {
+    // Edge to edge, both sides: beside it or lined up with it.
+    const b = bounds(other)
+    lx.push(b.left, b.right)
+    ly.push(b.top, b.bottom)
+  }
   const best = (vals: number[], lines: number[]) => {
     let out = 0
     let gap = o.snap
@@ -163,14 +201,9 @@ function snapMove(f: Frame, d: Pt, o: DragOpts): Pt {
       }
     return out
   }
-  const left = Math.min(...xs)
-  const right = Math.max(...xs)
-  const top = Math.min(...ys)
-  const bottom = Math.max(...ys)
-  const { width: W, height: H } = o.canvas
   return {
-    x: best([left, right, (left + right) / 2], [0, W, W / 2]),
-    y: best([top, bottom, (top + bottom) / 2], [0, H, H / 2]),
+    x: best([left, right, (left + right) / 2], lx),
+    y: best([top, bottom, (top + bottom) / 2], ly),
   }
 }
 

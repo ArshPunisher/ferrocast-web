@@ -421,6 +421,21 @@ export interface StudioSettings {
   multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
   multiview_labels?: boolean
   multiview_safe_areas?: boolean
+  /** Snapping in the preview (OBS's): on, how near (screen pixels), and to what. */
+  snapping?: boolean
+  snap_px?: number
+  snap_screen?: boolean
+  snap_sources?: boolean
+  snap_center?: boolean
+  /** Asked "are you sure?" first. */
+  confirm_go_live?: boolean
+  confirm_end_stream?: boolean
+  confirm_stop_record?: boolean
+  /** Recording and the replay buffer start with the stream; they stop with it unless kept. */
+  record_when_streaming?: boolean
+  keep_recording?: boolean
+  replay_when_streaming?: boolean
+  keep_replay?: boolean
 }
 
 export interface EngineRecordStats {
@@ -779,7 +794,13 @@ export function studioEngineApi(c: FerroClient) {
       c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),
     /** Starts or stops streaming the Studio into this PC's Go live. */
     stream: (on: boolean) =>
-      c.request<EngineStreamStats | null>('POST', '/api/v1/studio/engine/stream', { on }),
+      // `also`: what was set to start or stop with the stream but didn't, in words. Ending
+      // answers null, or only `{ also }`.
+      c.request<(EngineStreamStats & { also?: string }) | null>(
+        'POST',
+        '/api/v1/studio/engine/stream',
+        { on },
+      ),
     streamStats: () => c.request<EngineStreamStats | null>('GET', '/api/v1/studio/engine/stream'),
     /** Puts the live preview over the box, or takes it away (null). */
     /** The preview over the page's box; in Studio Mode, what's on air over `program`. */

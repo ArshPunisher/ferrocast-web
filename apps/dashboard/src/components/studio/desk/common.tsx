@@ -33,6 +33,7 @@ import {
   type EngineScreen,
   type EngineStats,
   type EngineTransform,
+  type StudioSettings,
 } from '@ferrocast/api'
 import { useClient, type Resource } from '../../../lib/hooks'
 
@@ -51,6 +52,8 @@ export interface Desk {
   items: Resource<EngineItem[]>
   audio: Resource<EngineAudio[]>
   kinds: Resource<EngineKinds>
+  /** Studio settings, for what the desk itself honours (snapping, the "are you sure?"s). */
+  prefs: Resource<StudioSettings>
   /** Reads scenes, sources and sounds again after a change. */
   refresh: () => void
   selected: number | null
