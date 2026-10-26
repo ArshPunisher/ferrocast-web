@@ -7,7 +7,7 @@ import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
 import { historyMenu, tbarEnd } from './preview'
 import { balanceLabel } from './advanced-audio'
-import { previewName } from './settings'
+import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
 
@@ -270,5 +270,34 @@ describe('missing files', () => {
     )
     expect(baseName('/a/b/logo.png')).toBe('logo.png')
     expect(baseName('C:\\x\\y.mp4')).toBe('y.mp4')
+  })
+})
+
+describe('shortcuts', () => {
+  it('offers every action OBS has, named for each scene, source, sound, filter and video', () => {
+    const groups = shortcutGroups(
+      [{ name: 'Gameplay' }],
+      [{ scene: 'Gameplay', source: 'Camera' }],
+      ['Mic'],
+      [{ source: 'Mic', filter: 'Gate' }],
+      ['Intro'],
+      ['Cut', 'Fade 0.3s'],
+    )
+    const ids = groups.flatMap((g) => g.actions.map((a) => a.id))
+    for (const id of [
+      'go_live',
+      'split_record',
+      'transition',
+      'quick:2',
+      'scene:Gameplay',
+      'show:Gameplay\nCamera',
+      'hide:Gameplay\nCamera',
+      'push_to_mute:Mic',
+      'filter:Mic\nGate',
+      'media_restart:Intro',
+      'undo',
+    ])
+      expect(ids).toContain(id)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 })

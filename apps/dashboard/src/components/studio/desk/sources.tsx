@@ -28,6 +28,10 @@ import {
   FlipHorizontal,
   FlipVertical,
   FilmReel,
+  Play,
+  SkipBack,
+  SkipForward,
+  Stop,
   FrameCorners,
   Funnel,
   ImageSquare,
@@ -291,6 +295,42 @@ export function SourcesDock() {
         onSelect: () => void act(item, `blend_${b}`),
       })),
     },
+    ...(item.media
+      ? ([
+          {
+            label: 'Play or pause',
+            icon: Play,
+            onSelect: () => void run('media', () => api.media(item.name, 'play_pause')),
+          },
+          {
+            label: 'Media',
+            icon: FilmReel,
+            items: [
+              {
+                label: 'Restart',
+                icon: ArrowCounterClockwise,
+                onSelect: () => void run('media', () => api.media(item.name, 'restart')),
+              },
+              {
+                label: 'Stop',
+                icon: Stop,
+                onSelect: () => void run('media', () => api.media(item.name, 'stop')),
+              },
+              {
+                label: 'Next',
+                icon: SkipForward,
+                onSelect: () => void run('media', () => api.media(item.name, 'next')),
+              },
+              {
+                label: 'Previous',
+                icon: SkipBack,
+                onSelect: () => void run('media', () => api.media(item.name, 'previous')),
+              },
+            ],
+          },
+          { sep: true },
+        ] satisfies MenuItem[])
+      : []),
     ...(item.deinterlace != null
       ? ([
           {

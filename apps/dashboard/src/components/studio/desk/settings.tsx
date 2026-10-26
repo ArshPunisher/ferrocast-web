@@ -35,6 +35,7 @@ import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 import { OptionsForm } from './options'
+import { TRANSITIONS } from './preview'
 
 export type Page = 'stream' | 'audio' | 'picture' | 'record' | 'keys' | 'advanced'
 
@@ -1093,10 +1094,16 @@ function KeyCapture({ onKeys, onCancel }: { onKeys: (k: string) => void; onCance
   )
 }
 
-function KeysPage({ s, set }: PageProps) {
-  const { scenes, audio } = useDesk()
-  const [listening, setListening] = useState<string | null>(null)
-  const groups: { title: string; actions: { id: string; label: string }[] }[] = [
+/** Every shortcut action, grouped as OBS's Hotkeys page is. */
+export function shortcutGroups(
+  scenes: { name: string }[],
+  items: { scene: string; source: string }[],
+  sounds: string[],
+  filters: { source: string; filter: string }[],
+  media: string[],
+  quick: string[],
+): { title: string; actions: { id: string; label: string }[] }[] {
+  return [
     {
       title: 'Streaming',
       actions: [
@@ -1109,28 +1116,122 @@ function KeysPage({ s, set }: PageProps) {
       actions: [
         { id: 'record', label: 'Start or stop recording' },
         { id: 'pause_record', label: 'Pause or resume recording' },
+        { id: 'split_record', label: 'Start a new file' },
+        { id: 'chapter', label: 'Add a chapter' },
         { id: 'replay', label: 'Replay buffer on or off' },
         { id: 'save_replay', label: 'Save replay' },
         { id: 'virtualcam', label: 'Virtual camera on or off' },
+        { id: 'screenshot', label: 'Screenshot of what’s on air' },
+      ],
+    },
+    {
+      title: 'Studio Mode',
+      actions: [
+        { id: 'studio_mode', label: 'Studio Mode on or off' },
+        { id: 'transition', label: 'Transition' },
+        { id: 'swap_scenes', label: 'Swap preview and on air' },
+        { id: 'fade_to_black', label: 'Fade to black' },
+        ...quick.map((q, i) => ({ id: `quick:${i + 1}`, label: `Quick transition: ${q}` })),
       ],
     },
     {
       title: 'Scenes',
-      actions: (scenes.data?.scenes ?? []).map((x) => ({ id: `scene:${x.name}`, label: x.name })),
+      actions: scenes.map((x) => ({ id: `scene:${x.name}`, label: x.name })),
+    },
+    {
+      title: 'Show and hide',
+      actions: items.flatMap((x) => [
+        { id: `show:${x.scene}\n${x.source}`, label: `Show ${x.source} in ${x.scene}` },
+        { id: `hide:${x.scene}\n${x.source}`, label: `Hide ${x.source} in ${x.scene}` },
+      ]),
     },
     {
       title: 'Sound',
-      actions: (audio.data ?? []).flatMap((a) => [
-        { id: `mute:${a.name}`, label: `Mute or unmute ${a.name}` },
-        { id: `push_to_talk:${a.name}`, label: `Push to talk: ${a.name}` },
+      actions: sounds.flatMap((n) => [
+        { id: `mute:${n}`, label: `Mute or unmute ${n}` },
+        { id: `push_to_talk:${n}`, label: `Push to talk: ${n}` },
+        { id: `push_to_mute:${n}`, label: `Push to mute: ${n}` },
       ]),
     },
+    {
+      title: 'Filters',
+      actions: filters.map((f) => ({
+        id: `filter:${f.source}\n${f.filter}`,
+        label: `${f.filter} on ${f.source}, on or off`,
+      })),
+    },
+    {
+      title: 'Media',
+      actions: media.flatMap((n) => [
+        { id: `media_play_pause:${n}`, label: `Play or pause ${n}` },
+        { id: `media_restart:${n}`, label: `Restart ${n}` },
+        { id: `media_stop:${n}`, label: `Stop ${n}` },
+        { id: `media_next:${n}`, label: `Next in ${n}` },
+        { id: `media_previous:${n}`, label: `Previous in ${n}` },
+      ]),
+    },
+    {
+      title: 'Editing',
+      actions: [
+        { id: 'undo', label: 'Undo' },
+        { id: 'redo', label: 'Redo' },
+      ],
+    },
   ]
+}
+
+function KeysPage({ s, set }: PageProps) {
+  const { api, scenes, audio } = useDesk()
+  const [listening, setListening] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  // Every scene's sources, filters and media: what OBS lists on its Hotkeys page.
+  const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
+  const extra = useResource(async () => {
+    const list = names ? names.split('\n') : []
+    const per = await Promise.all(
+      list.map(async (scene) => ({ scene, items: await api.items(scene) })),
+    )
+    const items = per.flatMap((p) =>
+      p.items
+        .flatMap((i) => [i, ...i.children])
+        .map((i) => ({ scene: p.scene, source: i.name, media: !!i.media })),
+    )
+    const sources = [...new Set(items.map((i) => i.source))]
+    const filters = (
+      await Promise.all(
+        sources.map(async (source) =>
+          (await api.filters(source).catch(() => [])).map((f) => ({ source, filter: f.name })),
+        ),
+      )
+    ).flat()
+    return {
+      items,
+      filters,
+      media: [...new Set(items.filter((i) => i.media).map((i) => i.source))],
+    }
+  }, [api, names])
+  const groups = shortcutGroups(
+    scenes.data?.scenes ?? [],
+    extra.data?.items ?? [],
+    (audio.data ?? []).map((a) => a.name),
+    extra.data?.filters ?? [],
+    extra.data?.media ?? [],
+    (scenes.data?.quick ?? []).map(
+      (q) => `${TRANSITIONS[q.kind] ?? q.kind}${q.ms ? ` ${q.ms / 1000}s` : ''}`,
+    ),
+  )
+  const q = query.trim().toLowerCase()
+  const labelOf = (id: string) =>
+    groups.flatMap((g) => g.actions).find((a) => a.id === id)?.label ?? id
   const setKey = (id: string, keys: string | null) => {
     const next = { ...s.hotkeys }
     if (keys) {
-      // One action per keys.
-      for (const [k, v] of Object.entries(next)) if (v === keys) delete next[k]
+      // One action per keys: a key taken from another action says so.
+      for (const [k, v] of Object.entries(next))
+        if (v === keys && k !== id) {
+          delete next[k]
+          toast({ tone: 'warn', message: `${pretty(keys)} moved from “${labelOf(k)}”.` })
+        }
       next[id] = keys
     } else delete next[id]
     set({ hotkeys: next })
@@ -1138,10 +1239,31 @@ function KeysPage({ s, set }: PageProps) {
   }
   return (
     <>
-      <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held. On a Mac keyboard, hold fn with F1 to F12.">
+      <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held; push to mute is the other way round. On a Mac keyboard, hold fn with F1 to F12.">
         Shortcuts
       </Heading>
+      <Input
+        type="search"
+        aria-label="Search shortcuts"
+        name="shortcut-search"
+        autoComplete="off"
+        placeholder="Search shortcuts…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       {groups
+        .map((g) => ({
+          ...g,
+          actions: g.actions.filter(
+            (a) =>
+              !q ||
+              a.label.toLowerCase().includes(q) ||
+              g.title.toLowerCase().includes(q) ||
+              pretty(s.hotkeys[a.id] ?? '')
+                .toLowerCase()
+                .includes(q),
+          ),
+        }))
         .filter((g) => g.actions.length > 0)
         .map((g) => (
           <section key={g.title} aria-label={g.title} className="flex flex-col">
@@ -1153,7 +1275,9 @@ function KeysPage({ s, set }: PageProps) {
                   key={a.id}
                   className="flex min-h-11 items-center gap-2 border-t border-line text-[13.5px]"
                 >
-                  <span className="min-w-0 flex-1 truncate">{a.label}</span>
+                  <span className="min-w-0 flex-1 truncate" title={a.label}>
+                    {a.label}
+                  </span>
                   {listening === a.id ? (
                     <KeyCapture
                       onKeys={(k) => setKey(a.id, k)}
@@ -1184,6 +1308,9 @@ function KeysPage({ s, set }: PageProps) {
             })}
           </section>
         ))}
+      {q && groups.every((g) => g.actions.every((a) => !a.label.toLowerCase().includes(q))) && (
+        <p className="m-0 text-[13px] text-text-3">No shortcut matches “{query}”.</p>
+      )}
     </>
   )
 }
