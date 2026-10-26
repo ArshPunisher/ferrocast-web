@@ -9,6 +9,7 @@ import {
   DotsThree,
   Eye,
   EyeSlash,
+  Faders,
   Funnel,
   GearSix,
   Headphones,
@@ -28,6 +29,7 @@ import { done, useAction, useResource } from '../../../lib/hooks'
 import { KindTile, useDesk, type EngineApi } from './common'
 import { DockHeader } from './layout'
 import { filterItems, useContextMenu, type MenuItem } from './menu'
+import { AdvancedAudio } from './advanced-audio'
 
 /** The fader is cubic like OBS's: halfway is about -18 dB, the top is 0 dB. */
 export const toDb = (pos: number): number =>
@@ -528,6 +530,8 @@ export function AudioDock() {
   const [all, setAll] = useState(false)
   const [prefs, setPrefs] = usePrefs()
   const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
+  // Advanced audio: open on one sound's name, or '' for all.
+  const [advanced, setAdvanced] = useState<string | null>(null)
   const { open, menu } = useContextMenu()
   const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
   // Every scene's sounds, each once: the global devices first, then in scene order.
@@ -607,6 +611,12 @@ export function AudioDock() {
       },
       { label: 'Filters', icon: Funnel, onSelect: () => edit(a.name) },
       { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(a.name) },
+      {
+        label: 'Advanced audio',
+        icon: Faders,
+        hint: 'Balance, sync, tracks',
+        onSelect: () => setAdvanced(a.name),
+      },
       ...filterItems(a.name, {
         ...desk,
         paste: (from) =>
@@ -670,6 +680,7 @@ export function AudioDock() {
           open(e, 'Audio', [
             { label: 'Add sound', icon: Plus, onSelect: () => setAdding('mic') },
             unhideAll,
+            { label: 'Advanced audio', icon: Faders, onSelect: () => setAdvanced('') },
             { label: 'Audio settings', icon: GearSix, onSelect: () => openSettings('audio') },
           ])
         }
@@ -709,6 +720,14 @@ export function AudioDock() {
         <IconButton
           size="sm"
           variant="ghost"
+          label="Advanced audio: balance, sync, mono, tracks"
+          onClick={() => setAdvanced('')}
+        >
+          <Faders size={15} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="sm"
+          variant="ghost"
           label="Audio settings"
           onClick={() => openSettings('audio')}
         >
@@ -716,6 +735,7 @@ export function AudioDock() {
         </IconButton>
       </footer>
       {menu}
+      <AdvancedAudio focus={advanced} onClose={() => setAdvanced(null)} />
       <Dialog
         open={naming !== null}
         onClose={() => setNaming(null)}
