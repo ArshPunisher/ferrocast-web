@@ -657,6 +657,17 @@ function AudioPage({ s, set }: PageProps) {
             onChange={(true_peak) => set({ true_peak })}
           />
         </Row>
+        <Row
+          label="Low latency sound"
+          info="Sound waits at most 20 ms for a late device instead of up to a second, so it stays in sync with you. A device that keeps running late may crackle. Applies after a restart."
+        >
+          <Switch
+            label="Low latency sound"
+            hideLabel
+            checked={!!s.low_latency_audio}
+            onChange={(low_latency_audio) => set({ low_latency_audio })}
+          />
+        </Row>
       </div>
       <Heading info="Heard in every scene, as OBS's global audio devices. Changes apply at once.">
         Everywhere

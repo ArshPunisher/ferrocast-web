@@ -417,6 +417,8 @@ export interface StudioSettings {
   speakers?: '2.1' | '4.0' | '4.1' | '5.1' | '7.1' | null
   /** Meters read true peak instead of sample peak. */
   true_peak?: boolean
+  /** OBS's Low Latency Audio Buffering (after a restart). */
+  low_latency_audio?: boolean
   /** Multiviews: what's on air above, below, left or right of the scenes, or scenes only. */
   multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
   multiview_labels?: boolean
