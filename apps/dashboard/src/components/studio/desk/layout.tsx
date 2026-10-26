@@ -290,17 +290,26 @@ export function DockWorkspace({
     })
   }, [])
 
-  // Fills the window below where it starts.
+  // Fills the window below where it starts, down to the page's own gap at the bottom: the
+  // page doesn't scroll and no space is left over. Followed when the bar above changes height.
   useLayoutEffect(() => {
     const el = ws.current
     if (!el || narrow) return
     const fit = () => {
       const top = el.getBoundingClientRect().top + window.scrollY
-      setHeight(Math.max(560, window.innerHeight - top - 20))
+      const main = el.closest('main')
+      const gap = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 20
+      setHeight(Math.max(420, Math.floor(window.innerHeight - top - gap)))
     }
     fit()
     window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    const ro = new ResizeObserver(fit)
+    if (el.parentElement) ro.observe(el.parentElement)
+    for (const s of [...(el.parentElement?.children ?? [])]) if (s !== el) ro.observe(s)
+    return () => {
+      window.removeEventListener('resize', fit)
+      ro.disconnect()
+    }
   }, [narrow])
 
   const [drag, setDrag] = useState<{ id: DockId; x: number; y: number; t: Target | null } | null>(
@@ -492,7 +501,13 @@ export function DockWorkspace({
     })
     const size: CSSProperties =
       region === 'bottom'
-        ? { height: layout.bh, flex: 'none' }
+        ? // On a short window the panels below give way, so the picture keeps about half.
+          {
+            height: height
+              ? Math.min(layout.bh, Math.max(120, Math.round(height * 0.45)))
+              : layout.bh,
+            flex: 'none',
+          }
         : { width: region === 'left' ? layout.lw : layout.rw, flex: 'none' }
     return (
       <div className={cx('flex min-h-0 min-w-0', vertical ? 'flex-col' : 'flex-row')} style={size}>

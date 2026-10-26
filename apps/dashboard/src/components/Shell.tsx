@@ -558,8 +558,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           id="main"
           tabIndex={-1}
           className={cx(
-            'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7 lg:pb-12',
-            wide ? 'max-w-none' : 'max-w-[1400px]',
+            'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7',
+            // Full-width screens (the Studio's desk fills the window) keep a small gap below.
+            wide ? 'max-w-none lg:pb-5' : 'max-w-[1400px] lg:pb-12',
           )}
         >
           {children}

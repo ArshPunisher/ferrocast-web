@@ -469,19 +469,25 @@ function ControlBar({
           onClick={() => setShowStats(true)}
           className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[13.5px] text-text-3 transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
         >
-          <span className="inline-flex items-center gap-1.5" title="Ferrocast's CPU use">
+          <span className="hidden items-center gap-1.5 xl:inline-flex" title="Ferrocast's CPU use">
             <Cpu size={15} aria-hidden />
             <span className="hidden 2xl:inline">CPU</span>
             <b className="font-mono font-semibold text-text tabular-nums">
               {cpu === undefined ? '…' : `${cpu.toFixed(0)}%`}
             </b>
           </span>
-          <span className="inline-flex items-center gap-1.5" title="Frames dropped">
+          <span
+            className={cx(
+              'items-center gap-1.5',
+              (stream?.dropped ?? 0) > 0 ? 'inline-flex text-warn' : 'hidden xl:inline-flex',
+            )}
+            title="Frames dropped"
+          >
             <WifiHigh size={15} aria-hidden />
             <span className="hidden 2xl:inline">Dropped</span>
             <b className="font-mono font-semibold text-text tabular-nums">{stream?.dropped ?? 0}</b>
           </span>
-          <span className="inline-flex items-center gap-1.5" title="Upload">
+          <span className="hidden items-center gap-1.5 xl:inline-flex" title="Upload">
             <Gauge size={15} aria-hidden />
             <span className="hidden 2xl:inline">Upload</span>
             <b className="font-mono font-semibold text-text tabular-nums">
@@ -516,16 +522,33 @@ function ControlBar({
             {stream.error}
           </span>
         )}
-        <span className="flex-1 xl:hidden" />
-        <IconButton
-          label="Studio settings"
-          className="h-10! w-10!"
-          variant="ghost"
-          onClick={() => openSettings()}
+        {/* Settings, the layout and the extra outputs: one quiet group of icons. */}
+        <div
+          role="group"
+          aria-label="Studio tools"
+          className="flex h-10 items-stretch divide-x divide-line rounded-control border border-line bg-surface-1"
         >
-          <GearSix size={18} />
-        </IconButton>
-        <LayoutMenu onStatus={onStatus} />
+          <button
+            type="button"
+            aria-label="Studio settings"
+            title="Studio settings"
+            className={cx(TOOL, 'rounded-l-[inherit]')}
+            onClick={() => openSettings()}
+          >
+            <GearSix size={18} />
+          </button>
+          <LayoutMenu onStatus={onStatus} />
+          <button
+            type="button"
+            aria-label="Replay buffer and virtual camera"
+            title="Replay buffer and virtual camera"
+            aria-pressed={replayOn || camOn}
+            className={cx(TOOL, 'rounded-r-[inherit]', (replayOn || camOn) && 'text-accent-text')}
+            onClick={outputsMenu}
+          >
+            <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'regular'} />
+          </button>
+        </div>
         {recording && (
           <Button
             variant="secondary"
@@ -549,14 +572,6 @@ function ControlBar({
             <span className="hidden sm:inline">Save replay</span>
           </Button>
         )}
-        <IconButton
-          label="Replay buffer and virtual camera"
-          className={cx('h-10! w-10!', (replayOn || camOn) && 'text-accent-text')}
-          variant="ghost"
-          onClick={outputsMenu}
-        >
-          <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'bold'} />
-        </IconButton>
         {recording && (
           <IconButton
             label="Chapter or a new file"
@@ -666,6 +681,10 @@ function Mini({ p }: { p: Preset }) {
 }
 
 /** Presets, which panels show, lock, reset, and turning the Studio off. */
+/** An icon in the desk's tool group: square, no frame of its own (the group has it). */
+const TOOL =
+  'grid h-full w-10 place-items-center text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:relative focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none'
+
 function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void }) {
   const api = useEngine()
   const { layout, setLayout } = useLayout()
@@ -706,16 +725,18 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
     'flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
   return (
     <div className="relative">
-      <Button
+      <button
         ref={btn}
-        variant="secondary"
-        className="h-10"
+        type="button"
+        aria-label="Layout"
+        title="Layout"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
+        className={cx(TOOL, open && 'bg-surface-3 text-text')}
       >
-        <LayoutIcon size={16} /> <span className="hidden sm:inline">Layout</span>
-      </Button>
+        <LayoutIcon size={18} />
+      </button>
       {open && (
         <div
           ref={menu}

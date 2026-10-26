@@ -201,14 +201,15 @@ export function LibraryBar() {
             variant="secondary"
             aria-haspopup="menu"
             aria-label={`${WORDS[kind].one}: ${name}`}
-            title={`${WORDS[kind].one[0]?.toUpperCase()}${WORDS[kind].one.slice(1)}`}
+            title={`${WORDS[kind].one[0]?.toUpperCase()}${WORDS[kind].one.slice(1)}: ${name}`}
             busy={busy === `switch:${kind}`}
             disabled={!shelf}
             onClick={(e) => shelf && open(e, WORDS[kind].one, items(kind, shelf))}
             className="h-10 max-w-[170px] 2xl:max-w-[240px]"
           >
             <Icon size={16} weight="bold" className="shrink-0 text-accent-text" aria-hidden />
-            <span className="min-w-0 truncate">{name}</span>
+            {/* The name shows on wide screens; smaller ones keep the bar on one line. */}
+            <span className="hidden min-w-0 truncate xl:inline">{name}</span>
             <CaretDown size={13} weight="bold" className="shrink-0 text-text-3" aria-hidden />
           </Button>
         )
