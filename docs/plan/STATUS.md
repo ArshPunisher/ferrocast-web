@@ -1,5 +1,12 @@
 # Status
 
+## 26 Oct 2026, midday (the owner's first test)
+
+- Preview editing: click picks a source (in step with Sources), drag moves with snapping (Alt: off), handles resize (corners keep the shape, Shift: free), arrows nudge, double-click opens settings (`desk/stage-edit.ts`, tested).
+- File fields have Browse and come first in settings; editable lists (a Slideshow's pictures) can be added to and removed from.
+- Window or game with nothing to pick says why; a Screen Recording card asks macOS again and reopens Ferrocast.
+- The page under an open dialog no longer scrolls.
+
 ## 26 Oct 2026, night (the Studio desk, round 3)
 
 - One + to add, aligned panel edges, the Studio uses the whole window, a screen-sized Add with a clear pick, right-click menus for scenes, sources and sounds, a new mixer (rows or columns, peak line, clip light), Import from OBS, Interact and Reload for web pages, and darker, bolder text with colour per kind. Two old e2e tests were updated to match last round's hidden internal codes.
