@@ -130,6 +130,22 @@ function Running({
   }, [reloadScenes, reloadItems, reloadAudio])
   // Another scene: nothing picked in it yet.
   useEffect(() => select(null), [scene])
+  // ⌘Z and ⇧⌘Z (Ctrl on Windows) undo and redo changes to sources, outside text fields.
+  const { run: runUndo } = useAction()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"], dialog[open]')) return
+      e.preventDefault()
+      const redo = e.shiftKey
+      void runUndo('undo', () => (redo ? api.redo() : api.undo()), {
+        success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),
+      }).then((r) => r && refresh())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [api, refresh, runUndo])
   // A switch made elsewhere (a shortcut, a click in a multiview) shows up in the stats first.
   const onAir = stats?.scene
   useEffect(() => {

@@ -2,7 +2,14 @@
 // OBS's preview) and, under it, the scene on air and how scenes change.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { Play, ProjectorScreen, SquaresFour, X } from '@phosphor-icons/react'
+import {
+  ArrowUUpLeft,
+  ArrowUUpRight,
+  Play,
+  ProjectorScreen,
+  SquaresFour,
+  X,
+} from '@phosphor-icons/react'
 import { type EngineItem, type PreviewRect } from '@ferrocast/api'
 import { Button, IconButton, InfoTip, Input, Select } from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
@@ -348,10 +355,15 @@ export const TRANSITIONS: Record<string, string> = {
 
 /** Under the picture: the scene on air and the transition between scenes. */
 export function StageBar() {
-  const { api, scenes, scene, kinds, stats, openSettings, screens } = useDesk()
+  const { api, scenes, scene, kinds, stats, openSettings, screens, refresh } = useDesk()
   const c = stats?.canvas
   const { run } = useAction()
   const { open, menu } = useContextMenu()
+  const history = stats?.history
+  const step = (redo: boolean) =>
+    void run('undo', () => (redo ? api.redo() : api.undo()), {
+      success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),
+    }).then((r) => r && refresh())
   const show = (what: 'program' | 'multiview', screen: number | undefined) =>
     void run('projector', () =>
       api.projector({ what, ...(screen === undefined ? {} : { screen }) }),
@@ -442,6 +454,24 @@ export function StageBar() {
           </InfoTip>
         </div>
       )}
+      <span className="flex items-center">
+        <IconButton
+          size="sm"
+          label={history?.undo ? `Undo ${history.undo} (⌘Z)` : 'Nothing to undo'}
+          disabled={!history?.undo}
+          onClick={() => step(false)}
+        >
+          <ArrowUUpLeft size={16} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="sm"
+          label={history?.redo ? `Redo ${history.redo} (⇧⌘Z)` : 'Nothing to redo'}
+          disabled={!history?.redo}
+          onClick={() => step(true)}
+        >
+          <ArrowUUpRight size={16} weight="bold" />
+        </IconButton>
+      </span>
       {inDesktopApp() && (
         <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
           <ProjectorScreen size={17} weight="bold" />
