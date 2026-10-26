@@ -688,7 +688,7 @@ function EverywhereDevices() {
         const cur = now.data?.find((d) => d[0] === slot.ch)
         const value = !cur ? 'off' : slot.kind === 'mic' ? String(cur[1] ?? 'default') : 'on'
         return (
-          <Row key={slot.ch} label={cur ? cur[2] : slot.label} sub={cur ? undefined : 'Off'}>
+          <Row key={slot.ch} label={cur ? cur[2] : slot.label}>
             <Select
               aria-label={`${slot.label}, heard everywhere`}
               value={value}
