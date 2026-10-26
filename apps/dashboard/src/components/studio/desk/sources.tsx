@@ -143,6 +143,27 @@ export function SourcesDock() {
     })
     if (ok) refresh()
   }
+  const pasteCopy = async () => {
+    if (!clip) return
+    const ok = await run('paste', () => done(api.pasteCopy(scene, clip)), {
+      success: `Pasted a copy of ${clip}.`,
+    })
+    if (ok) refresh()
+  }
+  // Groups in this scene, and which group (if any) an item is in.
+  const groups = (list ?? []).filter((i) => i.group)
+  const parentOf = (id: number) => groups.find((g) => g.children.some((c) => c.id === id)) ?? null
+  const freeName = (base: string) => {
+    const taken = new Set(flat.map((i) => i.name))
+    if (!taken.has(base)) return base
+    let n = 2
+    while (taken.has(`${base} ${n}`)) n++
+    return `${base} ${n}`
+  }
+  const grouping = (fn: () => Promise<unknown>, ok?: string) =>
+    void run('group', () => done(fn()), ok ? { success: ok } : undefined).then(
+      (r) => r && refresh(),
+    )
   const pasteFilters = (to: string) => (from: string) =>
     void run('filters', () => done(api.pasteFilters(to, from)), {
       success: `Filters pasted onto ${to}.`,
@@ -392,6 +413,42 @@ export function SourcesDock() {
           ),
         ]
       : []),
+    item.group
+      ? {
+          label: 'Ungroup',
+          icon: Stack,
+          onSelect: () => grouping(() => api.ungroup(scene, item.id), `${item.name} taken apart.`),
+        }
+      : {
+          label: 'Group',
+          icon: Stack,
+          items: [
+            {
+              label: 'Into a new group',
+              icon: Plus,
+              onSelect: () =>
+                grouping(async () => {
+                  const g = await api.addGroup(scene, freeName('Group'))
+                  await api.setGroup(scene, item.id, g.id)
+                }),
+            },
+            ...(groups.length ? [{ sep: true as const }] : []),
+            ...groups.map((g) => ({
+              label: `Into ${g.name}`,
+              checked: parentOf(item.id)?.id === g.id,
+              onSelect: () => grouping(() => api.setGroup(scene, item.id, g.id)),
+            })),
+            ...(parentOf(item.id)
+              ? [
+                  { sep: true as const },
+                  {
+                    label: 'Out of the group',
+                    onSelect: () => grouping(() => api.setGroup(scene, item.id, null)),
+                  },
+                ]
+              : []),
+          ],
+        },
     { label: 'Copy', icon: CopySimple, onSelect: () => setClip(item.name) },
     { label: 'Duplicate', icon: Copy, onSelect: () => void act(item, 'duplicate') },
     ...filterItems(item.name, { ...desk, paste: pasteFilters(item.name) }),
@@ -401,10 +458,22 @@ export function SourcesDock() {
   const emptyMenu: MenuItem[] = [
     { label: 'Add a source', icon: Plus, onSelect: () => setAdding('') },
     {
+      label: 'Add a group',
+      icon: Stack,
+      onSelect: () => grouping(() => api.addGroup(scene, freeName('Group')), 'Group added.'),
+    },
+    { sep: true },
+    {
       label: clip ? `Paste ${clip}` : 'Paste',
       icon: ClipboardText,
       disabled: !clip || flat.some((i) => i.name === clip),
       onSelect: () => void paste(),
+    },
+    {
+      label: clip ? `Paste a copy of ${clip}` : 'Paste a copy',
+      icon: Copy,
+      disabled: !clip,
+      onSelect: () => void pasteCopy(),
     },
   ]
 

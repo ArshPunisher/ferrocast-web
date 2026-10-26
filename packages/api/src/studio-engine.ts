@@ -800,6 +800,25 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    /** A new, empty group on top of a scene. */
+    addGroup: (scene: string, name: string) =>
+      c.request<EngineItem>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
+        group: name,
+      }),
+    /** A new, independent copy of a source on top of a scene (OBS's Paste (Duplicate)). */
+    pasteCopy: (scene: string, name: string) =>
+      c.request<EngineItem>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
+        existing: name,
+        copy: true,
+      }),
+    /** Into a group of the scene, or out of its group (null). */
+    setGroup: (scene: string, id: number, group: number | null) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/group`, {
+        group,
+      }),
+    /** Takes a group apart; its sources stay in the scene. */
+    ungroup: (scene: string, id: number) =>
+      c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/ungroup`, {}),
     /** A video, playlist or slideshow's play controls (or, with nothing, where it is). */
     media: (name: string, what?: EngineMediaAct, seekMs?: number) =>
       c.request<EngineMedia>('POST', `/api/v1/studio/engine/sources/${enc(name)}/media`, {
