@@ -69,6 +69,25 @@ export function useLevels(api: EngineApi, names: string[]): Record<string, Engin
   return levels
 }
 
+/** How fast a meter falls after a peak, as OBS's Meter Decay Rate: dB per second. */
+export const DECAY = { fast: 23.53, medium: 11.76, slow: 8.57 } as const
+export type Decay = keyof typeof DECAY
+
+/** A meter's shown level: up at once, down no faster than `rate` dB/s. */
+export function decayed(prev: number, next: number, rate: number, dtMs: number): number {
+  if (next >= prev) return next
+  return Math.max(next, prev - (rate * dtMs) / 1000)
+}
+
+/** The peaks shown, falling at `rate` (OBS's decay; fast is close to raw). */
+function useDecayed(peaks: number[], rate: number): number[] {
+  const s = useRef<{ v: number[]; at: number }>({ v: [-100, -100], at: Date.now() })
+  const now = Date.now()
+  const dt = now - s.current.at
+  s.current = { v: peaks.map((p, i) => decayed(s.current.v[i] ?? -100, p, rate, dt)), at: now }
+  return s.current.v
+}
+
 /** The highest recent peak per side (held 1.5 s, then falling), and a clip light that stays
  * on 2 s after a peak at 0 dB. */
 function useHold(level: EngineLevel | undefined): { hold: number[]; clip: boolean } {
@@ -193,6 +212,7 @@ export function Meter({
   vertical,
   locked,
   scale,
+  decay = DECAY.fast,
 }: {
   level: EngineLevel | undefined
   muted: boolean
@@ -203,11 +223,13 @@ export function Meter({
   vertical?: boolean
   locked?: boolean
   scale?: boolean
+  /** dB per second the bar falls at. */
+  decay?: number
 }) {
   const [pos, setPos] = useState<number | null>(null)
   const shown = pos ?? toPos(volumeDb)
   const last = useRef(0)
-  const peaks = level?.peak ?? [-100, -100]
+  const peaks = useDecayed(level?.peak ?? [-100, -100], decay)
   const { hold, clip } = useHold(level)
   const move = (p: number, end: boolean) => {
     // Sent as it moves, at most every 80 ms; the last value always goes.
@@ -334,6 +356,10 @@ interface Prefs {
   vertical: boolean
   locked: string[]
   hidden: string[]
+  /** How fast meters fall (OBS's decay rate). */
+  decay: Decay
+  /** Only sounds making sound now (OBS's "active" filter). */
+  activeOnly: boolean
 }
 const PREFS_KEY = 'fc-studio-mixer'
 function loadPrefs(): Prefs {
@@ -343,9 +369,11 @@ function loadPrefs(): Prefs {
       vertical: !!v?.vertical,
       locked: Array.isArray(v?.locked) ? v.locked : [],
       hidden: Array.isArray(v?.hidden) ? v.hidden : [],
+      decay: v?.decay === 'medium' || v?.decay === 'slow' ? v.decay : 'fast',
+      activeOnly: !!v?.activeOnly,
     }
   } catch {
-    return { vertical: false, locked: [], hidden: [] }
+    return { vertical: false, locked: [], hidden: [], decay: 'fast', activeOnly: false }
   }
 }
 function usePrefs(): [Prefs, (f: (p: Prefs) => Prefs) => void] {
@@ -377,6 +405,7 @@ interface ChannelProps {
   locked: boolean
   onAudio: (patch: AudioPatch) => void
   onMenu: (e: React.MouseEvent) => void
+  decay: number
 }
 
 function MuteButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
@@ -415,7 +444,7 @@ function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
 const dbText = (a: EngineAudio) =>
   a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : `${a.volume_db.toFixed(1)} dB`
 
-function Row({ a, level, locked, onAudio, onMenu }: ChannelProps) {
+function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
   return (
     <div
       onContextMenu={onMenu}
@@ -457,6 +486,7 @@ function Row({ a, level, locked, onAudio, onMenu }: ChannelProps) {
             volumeDb={a.volume_db}
             label={`${a.name} volume`}
             locked={locked}
+            decay={decay}
             scale
             onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
           />
@@ -470,7 +500,7 @@ function Row({ a, level, locked, onAudio, onMenu }: ChannelProps) {
   )
 }
 
-function Strip({ a, level, locked, onAudio, onMenu }: ChannelProps) {
+function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
   return (
     <div
       onContextMenu={onMenu}
@@ -510,6 +540,7 @@ function Strip({ a, level, locked, onAudio, onMenu }: ChannelProps) {
         volumeDb={a.volume_db}
         label={`${a.name} volume`}
         locked={locked}
+        decay={decay}
         onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
       />
       <div className="flex items-center">
@@ -542,7 +573,9 @@ export function AudioDock() {
     return lists.flat().filter((a) => !seen.has(a.name) && seen.add(a.name))
   }, [api, all, names, audio.data])
   const list = all ? every.data : audio.data
-  const shown = list?.filter((a) => !prefs.hidden.includes(a.name))
+  const shown = list?.filter(
+    (a) => !prefs.hidden.includes(a.name) && (!prefs.activeOnly || a.active !== false),
+  )
   const hiddenHere = (list?.length ?? 0) - (shown?.length ?? 0)
   const levels = useLevels(api, shown?.map((a) => a.name) ?? [])
 
@@ -632,6 +665,7 @@ export function AudioDock() {
     locked: prefs.locked.includes(a.name),
     onAudio: (p) => setAudio(a.name, p),
     onMenu: (e) => open(e, a.name, channelMenu(a)),
+    decay: DECAY[prefs.decay],
   })
   const error = all ? every.error : audio.error
 
@@ -681,6 +715,19 @@ export function AudioDock() {
             { label: 'Add sound', icon: Plus, onSelect: () => setAdding('mic') },
             unhideAll,
             { label: 'Advanced audio', icon: Faders, onSelect: () => setAdvanced('') },
+            {
+              label: 'Only sounds making sound',
+              checked: prefs.activeOnly,
+              onSelect: () => setPrefs((p) => ({ ...p, activeOnly: !p.activeOnly })),
+            },
+            {
+              label: 'Meters fall',
+              items: (['fast', 'medium', 'slow'] as const).map((d) => ({
+                label: d === 'fast' ? 'Fast' : d === 'medium' ? 'Medium' : 'Slow',
+                checked: prefs.decay === d,
+                onSelect: () => setPrefs((p) => ({ ...p, decay: d })),
+              })),
+            },
             { label: 'Audio settings', icon: GearSix, onSelect: () => openSettings('audio') },
           ])
         }

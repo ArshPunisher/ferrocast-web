@@ -622,6 +622,19 @@ function AudioPage({ s, set }: PageProps) {
           </Select>
         </Row>
       </div>
+      <div className="flex flex-col">
+        <Row
+          label="True peak meters"
+          info="Catches peaks between samples (OBS's True Peak), a little more work for the computer."
+        >
+          <Switch
+            label="True peak meters"
+            hideLabel
+            checked={!!s.true_peak}
+            onChange={(true_peak) => set({ true_peak })}
+          />
+        </Row>
+      </div>
       <Heading info="Heard in every scene, as OBS's global audio devices. Changes apply at once.">
         Everywhere
       </Heading>

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Meter, meterPct, toDb, toPos } from './mixer'
+import { DECAY, Meter, decayed, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
@@ -299,5 +299,16 @@ describe('shortcuts', () => {
     ])
       expect(ids).toContain(id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('meter decay', () => {
+  it('rises at once and falls no faster than the rate', () => {
+    expect(decayed(-40, -10, DECAY.slow, 100)).toBe(-10)
+    // Slow: 8.57 dB/s, so 100 ms falls 0.857 dB.
+    expect(decayed(-10, -60, DECAY.slow, 100)).toBeCloseTo(-10.857, 3)
+    expect(decayed(-10, -60, DECAY.fast, 1000)).toBeCloseTo(-33.53, 2)
+    // Never below the new level.
+    expect(decayed(-10, -12, DECAY.fast, 1000)).toBe(-12)
   })
 })

@@ -274,6 +274,8 @@ export interface EngineAudio {
   mono?: boolean
   /** The audio tracks (1 to 6) it's mixed into. */
   tracks?: number[]
+  /** Making sound now (a playing file, an open device). */
+  active?: boolean
 }
 
 /** What to change in a sound's mixer settings (anything left out stays). */
@@ -398,6 +400,8 @@ export interface StudioSettings {
   replay_format?: 'mp4' | 'mkv' | 'mov' | 'flv' | 'ts'
   /** A surround layout instead of `stereo` (after a restart); null follows `stereo`. */
   speakers?: '2.1' | '4.0' | '4.1' | '5.1' | '7.1' | null
+  /** Meters read true peak instead of sample peak. */
+  true_peak?: boolean
 }
 
 export interface EngineRecordStats {
