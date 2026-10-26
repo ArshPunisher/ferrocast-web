@@ -65,6 +65,8 @@ export interface EngineOption {
   path?: 'file' | 'save' | 'folder' | 'files' | ''
   /** A path's file types, as OBS writes them: `Image Files (*.png *.jpg);;All Files (*.*)`. */
   filter?: string
+  /** A group with its own on/off switch (its key holds true or false). */
+  checkable?: boolean
 }
 
 /** OBS's own settings for a source (the keys OBS saves in its scene collections). */
@@ -490,6 +492,14 @@ export function studioEngineApi(c: FerroClient) {
         `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/transform`,
         t,
       ),
+    /** A transition kind's own settings (only what was set). */
+    transitionSettings: (kind: string) =>
+      c.request<EngineSettings>('GET', `/api/v1/studio/engine/transitions/${enc(kind)}/settings`),
+    /** Changes only the keys sent; the transition on air takes them at once. */
+    setTransitionSettings: (kind: string, settings: EngineSettings) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/transitions/${enc(kind)}/settings`, {
+        settings,
+      }),
     /** Undoes the newest change to sources → what it was, and what's next each way. */
     undo: () =>
       c.request<{ done: string | null; undo: string | null; redo: string | null }>(
