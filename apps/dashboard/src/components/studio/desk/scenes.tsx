@@ -69,6 +69,7 @@ export function ScenesDock() {
   const [importing, setImporting] = useState(false)
   const [grid, setGrid] = useGrid()
   const list = scenes.data?.scenes
+  const studio = !!scenes.data?.preview
   const current = scenes.data?.current ?? ''
   const names = list?.map((s) => s.name) ?? []
   const at = names.indexOf(current)
@@ -292,7 +293,9 @@ export function ScenesDock() {
                 ? 'grid auto-rows-[84px] grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-1.5'
                 : 'flex flex-col gap-px',
             )}
-            aria-label="Scenes, click to go on air"
+            aria-label={
+              studio ? 'Scenes, click to show in the preview' : 'Scenes, click to go on air'
+            }
           >
             {list.map((s, i) => (
               <li key={s.name} className="min-w-0">
@@ -304,7 +307,10 @@ export function ScenesDock() {
                     aria-current={s.current ? 'true' : undefined}
                     title={grid ? s.name : undefined}
                     onClick={() =>
-                      !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
+                      // Studio Mode: a click shows it in the preview; Transition sends it on air.
+                      studio
+                        ? !s.preview && void act(`pv:${s.name}`, () => api.setPreview(s.name))
+                        : !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
                     }
                     onDoubleClick={() => setNaming({ from: s.name, value: s.name })}
                     onContextMenu={(e) => {
@@ -323,6 +329,10 @@ export function ScenesDock() {
                         (grid
                           ? 'border-danger bg-danger-soft shadow-[inset_0_0_0_1px_var(--fc-danger)] hover:border-danger'
                           : 'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft'),
+                      // Studio Mode's preview: the accent ring (on air keeps its red).
+                      s.preview &&
+                        !s.current &&
+                        'border-accent-text shadow-[inset_0_0_0_1.5px_var(--fc-accent-text)]',
                     )}
                   >
                     {grid ? (
@@ -340,6 +350,10 @@ export function ScenesDock() {
                                 className="size-[7px] rounded-full bg-danger-fill"
                               />
                               On air
+                            </span>
+                          ) : s.preview ? (
+                            <span className="text-[10.5px] font-bold text-accent-text">
+                              Preview
                             </span>
                           ) : (
                             s.items > 0 && (
@@ -359,6 +373,9 @@ export function ScenesDock() {
                           tone={s.current ? 'var(--fc-danger)' : undefined}
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        {s.preview && !s.current && (
+                          <span className="text-[11px] font-bold text-accent-text">Preview</span>
+                        )}
                         {s.items > 0 && !s.current && (
                           <span className="font-mono text-[11.5px] font-semibold text-text-3 tabular-nums">
                             {s.items}

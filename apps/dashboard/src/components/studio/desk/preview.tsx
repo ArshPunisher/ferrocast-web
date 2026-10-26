@@ -4,18 +4,27 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import {
   ArrowUUpLeft,
+  ArrowFatRight,
   ArrowUUpRight,
+  Columns,
   GearSix,
+  Plus,
+  Trash,
   Play,
   ProjectorScreen,
   SquaresFour,
   X,
 } from '@phosphor-icons/react'
-import { type EngineItem, type EngineSettings, type PreviewRect } from '@ferrocast/api'
-import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton } from '@ferrocast/ui'
+import {
+  type EngineItem,
+  type EngineSettings,
+  type EngineTransition,
+  type PreviewRect,
+} from '@ferrocast/api'
+import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
-import { useAction, useResource } from '../../../lib/hooks'
+import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
 import { projectorItem, useContextMenu } from './menu'
 import { OptionsForm } from './options'
@@ -46,31 +55,40 @@ function covered(r: DOMRect): boolean {
   return false
 }
 
-/** Where the live picture goes: the app draws a native view exactly over this box. */
+/** Where the live picture goes: the app draws a native view exactly over this box. In Studio
+ * Mode there are two: the preview being edited, and what's on air, with the ways to switch
+ * between them in the middle. */
 export function PreviewBox({ running }: { running: boolean }) {
   const api = useEngine()
+  const { scenes } = useDesk()
+  const studio = !!scenes.data?.preview
   const ref = useRef<HTMLDivElement>(null)
+  const programRef = useRef<HTMLDivElement>(null)
   const desktop = inDesktopApp()
   useEffect(() => {
     const el = ref.current
     if (!running || !desktop || !el) return
     let raf = 0
     let last = ''
-    const send = () => {
-      raf = 0
-      const r = el.getBoundingClientRect()
+    const place = (box: HTMLElement | null): PreviewRect | null => {
+      if (!box) return null
+      const r = box.getBoundingClientRect()
       // Hidden while partly under the top bar, off the window or under a menu or panel.
       const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
       const inView = r.top >= bar && r.bottom <= window.innerHeight && r.width > 1 && r.height > 1
-      const rect: PreviewRect | null =
-        inView && !covered(r)
-          ? { x: r.left, y: r.top, w: r.width, h: r.height, vh: window.innerHeight }
-          : null
+      return inView && !covered(r)
+        ? { x: r.left, y: r.top, w: r.width, h: r.height, vh: window.innerHeight }
+        : null
+    }
+    const send = () => {
+      raf = 0
+      const rect = place(el)
+      const program = studio ? place(programRef.current) : null
       // The window's height is part of it: the native side places the view from the bottom.
-      const key = JSON.stringify([rect, window.innerHeight])
+      const key = JSON.stringify([rect, program, window.innerHeight])
       if (key === last) return
       last = key
-      void api.preview(rect).catch(() => {
+      void api.preview(rect, program).catch(() => {
         // Not placed: the next change (or the same one) tries again.
         if (last === key) last = ''
       })
@@ -81,6 +99,7 @@ export function PreviewBox({ running }: { running: boolean }) {
     schedule()
     const ro = new ResizeObserver(schedule)
     ro.observe(el)
+    if (programRef.current) ro.observe(programRef.current)
     const mo = new MutationObserver(schedule)
     // Dialogs open by an attribute; floating panels say where they are in data-pos.
     mo.observe(document.body, {
@@ -97,21 +116,124 @@ export function PreviewBox({ running }: { running: boolean }) {
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener('resize', schedule)
-      void api.preview(null).catch(() => undefined)
+      void api.preview(null, null).catch(() => undefined)
     }
-  }, [api, running, desktop])
+  }, [api, running, desktop, studio])
   const editing = useStageEdit(ref, running && desktop)
-  // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
-  return (
-    <div className="grid min-h-0 flex-1 place-items-center bg-inset p-3 [container-type:size]">
-      <div
-        ref={ref}
-        aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
-        className="grid aspect-video w-[min(100cqw,100cqh*16/9)] touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent"
-        {...editing}
-      >
-        {!desktop && 'The live picture shows in the Ferrocast app.'}
+  const screen =
+    'grid aspect-video touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[13px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent'
+  if (!studio)
+    // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
+    return (
+      <div className="grid min-h-0 flex-1 place-items-center bg-inset p-3 [container-type:size]">
+        <div
+          ref={ref}
+          aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
+          className={cx(screen, 'w-[min(100cqw,100cqh*16/9)]')}
+          {...editing}
+        >
+          {!desktop && 'The live picture shows in the Ferrocast app.'}
+        </div>
       </div>
+    )
+  // Studio Mode: two 16:9 boxes side by side with the switch between them.
+  const half = 'w-[min(calc((100cqw-150px)/2),calc((100cqh-30px)*16/9))]'
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center gap-3 bg-inset p-3 [container-type:size]">
+      <figure className="m-0 flex flex-col gap-1.5">
+        <figcaption className="flex items-center gap-1.5 text-[12px] font-bold text-text-2">
+          <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
+          Preview: {scenes.data?.preview}
+        </figcaption>
+        <div
+          ref={ref}
+          aria-label="Studio Mode preview: edit here, then send it on air. Click a source to pick it, drag to move it, drag a handle to resize it."
+          className={cx(screen, half)}
+          {...editing}
+        >
+          {!desktop && 'The live picture shows in the Ferrocast app.'}
+        </div>
+      </figure>
+      <SwitchColumn />
+      <figure className="m-0 flex flex-col gap-1.5">
+        <figcaption className="flex items-center gap-1.5 text-[12px] font-bold text-danger">
+          <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
+          On air: {scenes.data?.current}
+        </figcaption>
+        <div ref={programRef} aria-label="What's on air" className={cx(screen, half)} />
+      </figure>
+    </div>
+  )
+}
+
+/** Studio Mode's middle: Transition (the scene's own way in, or the Studio's), and OBS's quick
+ * transitions, each one click. Right-click one to remove it; + adds one. */
+function SwitchColumn() {
+  const { api, scenes, refresh } = useDesk()
+  const { run, busy } = useAction()
+  const { open, menu } = useContextMenu()
+  const quick = scenes.data?.quick ?? []
+  const label = (t: EngineTransition) =>
+    t.kind === 'cut_transition' || t.kind === 'obs_stinger_transition'
+      ? (TRANSITIONS[t.kind] ?? t.kind)
+      : `${TRANSITIONS[t.kind] ?? t.kind} ${(t.ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })}s`
+  const go = (q?: EngineTransition) =>
+    void run('go', () => done(api.transitionNow(q))).then((ok) => ok && refresh())
+  const save = (list: EngineTransition[]) =>
+    void run('quick', () => done(api.setQuickTransitions(list))).then((ok) => ok && refresh())
+  const adding = (e: React.MouseEvent) =>
+    open(
+      e,
+      'Add a quick transition',
+      Object.entries(TRANSITIONS).flatMap(([kind, name]) =>
+        kind === 'cut_transition' || kind === 'obs_stinger_transition'
+          ? [{ label: name, onSelect: () => save([...quick, { kind, ms: 0 }]) }]
+          : [300, 500, 1000].map((ms) => ({
+              label: `${name} ${ms / 1000}s`,
+              onSelect: () => save([...quick, { kind, ms }]),
+            })),
+      ),
+    )
+  return (
+    <div className="flex w-[126px] flex-none flex-col items-stretch gap-1.5 self-center">
+      <Button variant="primary" busy={busy === 'go'} onClick={() => go()}>
+        <ArrowFatRight size={16} weight="fill" /> Transition
+      </Button>
+      <span className="mt-1 text-center text-[11px] font-bold tracking-wide text-text-3 uppercase">
+        Quick
+      </span>
+      {quick.map((q, i) => (
+        <Button
+          key={`${q.kind}-${q.ms}-${i}`}
+          variant="secondary"
+          size="sm"
+          title="Right-click to remove"
+          onClick={() => go(q)}
+          onContextMenu={(e) =>
+            open(e, label(q), [
+              {
+                label: 'Remove',
+                icon: Trash,
+                danger: true,
+                onSelect: () => save(quick.filter((_, j) => j !== i)),
+              },
+            ])
+          }
+        >
+          {label(q)}
+        </Button>
+      ))}
+      {quick.length < 10 && (
+        <IconButton
+          size="sm"
+          label="Add a quick transition"
+          className="self-center"
+          onClick={adding}
+        >
+          <Plus size={15} weight="bold" />
+        </IconButton>
+      )}
+      {menu}
     </div>
   )
 }
@@ -478,6 +600,23 @@ export function StageBar() {
           </InfoTip>
         </div>
       )}
+      <IconButton
+        size="sm"
+        label={
+          scenes.data?.preview
+            ? 'Leave Studio Mode'
+            : 'Studio Mode: edit a scene before it goes on air'
+        }
+        aria-pressed={!!scenes.data?.preview}
+        className={cx(scenes.data?.preview && 'bg-accent-soft text-accent-text')}
+        onClick={() =>
+          void run('studio', () => done(api.studioMode(!scenes.data?.preview))).then(
+            (ok) => ok && refresh(),
+          )
+        }
+      >
+        <Columns size={17} weight="bold" />
+      </IconButton>
       <span className="flex items-center">
         <IconButton
           size="sm"

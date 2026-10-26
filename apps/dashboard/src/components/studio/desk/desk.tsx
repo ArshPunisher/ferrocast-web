@@ -106,7 +106,8 @@ function Running({
 }) {
   const api = useEngine()
   const scenes = useResource(() => api.scenes(), [api])
-  const scene = scenes.data?.current ?? ''
+  // The scene the panels edit: Studio Mode's preview, else the one on air.
+  const scene = scenes.data?.preview ?? scenes.data?.current ?? ''
   const items = useResource(() => (scene ? api.items(scene) : Promise.resolve([])), [api, scene])
   const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
   const kinds = useResource(() => api.kinds(), [api])
@@ -150,9 +151,10 @@ function Running({
   }, [api, refresh, runUndo])
   // A switch made elsewhere (a shortcut, a click in a multiview) shows up in the stats first.
   const onAir = stats?.scene
+  const shownOnAir = scenes.data?.current
   useEffect(() => {
-    if (onAir && scene && onAir !== scene) refresh()
-  }, [onAir, scene, refresh])
+    if (onAir && shownOnAir && onAir !== shownOnAir) refresh()
+  }, [onAir, shownOnAir, refresh])
   const desk: Desk = {
     api,
     scenes,
