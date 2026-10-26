@@ -70,6 +70,14 @@ summary {
   }
 }
 
+/* While a dialog is open the page under it stays put (scrolling only moves the dialog). */
+html:has(.fc-dialog[open]) {
+  overflow: hidden;
+}
+.fc-dialog {
+  overscroll-behavior: contain;
+}
+
 .fc-dialog::backdrop {
   background: rgb(4 5 8 / 0.62);
 }
