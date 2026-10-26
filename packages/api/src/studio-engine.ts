@@ -769,6 +769,9 @@ export function studioEngineApi(c: FerroClient) {
       device
         ? c.request<void>('PUT', `/api/v1/studio/engine/channels/${channel}`, device)
         : c.request<void>('DELETE', `/api/v1/studio/engine/channels/${channel}`),
+    /** Opens a web page in a window of its own in the app (a web panel the page won't frame). */
+    webWindow: (name: string, url: string) =>
+      c.request<{ ok: true }>('POST', '/api/v1/studio/engine/web-window', { name, url }),
     studioSettings: () => c.request<StudioSettings>('GET', '/api/v1/studio/engine/settings'),
     /** Saves and applies them → what needs a restart or didn't apply, in words (or null). */
     setStudioSettings: (s: StudioSettings) =>

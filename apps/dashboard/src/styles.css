@@ -229,3 +229,8 @@ input[type='range'] {
 .fc-fader:focus-visible::-moz-range-thumb {
   box-shadow: var(--fc-focus);
 }
+
+/* A web panel's page would take the pointer from a panel being dragged or a divider. */
+body[data-dock-drag] iframe {
+  pointer-events: none;
+}

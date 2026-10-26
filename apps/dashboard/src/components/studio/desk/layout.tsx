@@ -1,7 +1,8 @@
 // The Studio's dock layout (2.1): panels sit flush around the preview like OBS's docks. Drag a
 // divider to resize, drag a panel by its title to move it (beside another panel, to an edge,
 // or out to float), and pick a preset, hide panels or lock the layout from the Layout menu.
-// Kept per browser (localStorage); phones get the preview and one panel at a time.
+// Kept per browser (localStorage); phones get the preview and one panel at a time. Web panels
+// (OBS's Custom Browser Docks) are the user's own pages, kept with the layout.
 
 import {
   createContext,
@@ -20,17 +21,32 @@ import { DotsSixVertical, DotsThree } from '@phosphor-icons/react'
 import { IconButton, Segmented, cx } from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
 
-export type DockId = 'scenes' | 'sources' | 'audio' | 'golive'
+export type BuiltIn = 'scenes' | 'sources' | 'audio' | 'golive' | 'chat' | 'events'
+/** A built-in panel, or a web panel (`web:` and its own id). */
+export type DockId = BuiltIn | `web:${string}`
 export type Region = 'left' | 'right' | 'bottom'
 export type Preset = 'classic' | 'side' | 'wide'
 
-export const DOCK_NAMES: Record<DockId, string> = {
+export const DOCK_NAMES: Record<BuiltIn, string> = {
   scenes: 'Scenes',
   sources: 'Sources',
   audio: 'Audio',
   golive: 'Go live to',
+  chat: 'Chat',
+  events: 'Events',
 }
-const DOCKS = Object.keys(DOCK_NAMES) as DockId[]
+export const BUILT_INS = Object.keys(DOCK_NAMES) as BuiltIn[]
+/** Panels new since a layout was saved start hidden; these are hidden in a fresh one too. */
+const OFF_AT_FIRST: BuiltIn[] = ['chat', 'events']
+
+/** A web page as a panel: a name and its address. */
+export interface WebDock {
+  id: `web:${string}`
+  name: string
+  url: string
+}
+
+export const isWeb = (id: string): id is `web:${string}` => id.startsWith('web:')
 
 interface Float {
   x: number
@@ -49,8 +65,10 @@ export interface Layout {
   bh: number
   float: Partial<Record<DockId, Float>>
   hidden: DockId[]
-  /** Each panel's share of its row or column. */
-  w: Record<DockId, number>
+  /** Each panel's share of its row or column (1 when not set). */
+  w: Partial<Record<DockId, number>>
+  /** The web panels there are (each also placed or hidden like any panel). */
+  webs: WebDock[]
   preset: Preset | null
   locked: boolean
   /** The panel shown on a phone. */
@@ -81,8 +99,9 @@ export function fresh(p: Preset): Layout {
   return {
     ...structuredClone(PRESETS[p]),
     float: {},
-    hidden: [],
+    hidden: [...OFF_AT_FIRST],
     w: { scenes: 1, sources: 1.3, audio: 1.7, golive: 1 },
+    webs: [],
     preset: p,
     locked: false,
     mob: 'scenes',
@@ -91,17 +110,87 @@ export function fresh(p: Preset): Layout {
 
 const KEY = 'fc-studio-layout'
 
-/** A saved layout, if it still names exactly the panels there are. */
+/** A saved layout, cleaned: panels it doesn't know start hidden, ones gone are dropped. */
+export function revive(v: Partial<Layout> | null): Layout {
+  if (!v || !Array.isArray(v.left) || !Array.isArray(v.right) || !Array.isArray(v.bottom))
+    return fresh('side')
+  const webs = (Array.isArray(v.webs) ? v.webs : []).filter(
+    (d) => d && isWeb(d.id) && typeof d.name === 'string' && typeof d.url === 'string',
+  )
+  const known = new Set<string>([...BUILT_INS, ...webs.map((d) => d.id)])
+  const keep = (ids: DockId[] | undefined) => (ids ?? []).filter((d) => known.has(d))
+  const float = Object.fromEntries(
+    Object.entries(v.float ?? {}).filter(([d]) => known.has(d)),
+  ) as Layout['float']
+  const l: Layout = {
+    ...fresh('side'),
+    ...v,
+    left: keep(v.left),
+    right: keep(v.right),
+    bottom: keep(v.bottom),
+    hidden: keep(v.hidden),
+    float,
+    w: { ...v.w },
+    webs,
+  }
+  for (const d of BUILT_INS) if (!placed(l, d) && !l.hidden.includes(d)) l.hidden.push(d)
+  return l
+}
+
 function load(): Layout {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Layout | null
-    if (!v || !Array.isArray(v.left) || !Array.isArray(v.right) || !Array.isArray(v.bottom))
-      return fresh('side')
-    const placed = [...v.left, ...v.right, ...v.bottom, ...Object.keys(v.float ?? {})]
-    const ok = DOCKS.every((d) => placed.includes(d) || v.hidden?.includes(d))
-    return ok ? { ...fresh('side'), ...v } : fresh('side')
+    return revive(JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Layout> | null)
   } catch {
     return fresh('side')
+  }
+}
+
+/** In a row, a column or floating. */
+export const placed = (l: Layout, id: DockId): boolean => !!regionOf(l, id) || !!l.float[id]
+
+/** Showing: placed and not hidden. */
+export const showing = (l: Layout): DockId[] =>
+  [...BUILT_INS, ...l.webs.map((d) => d.id)].filter((d) => placed(l, d) && !l.hidden.includes(d))
+
+/** A panel's name. */
+export function dockName(l: Pick<Layout, 'webs'>, id: DockId): string {
+  return isWeb(id) ? (l.webs.find((d) => d.id === id)?.name ?? 'Web page') : DOCK_NAMES[id]
+}
+
+/** A layout picked from the presets keeps the web panels (hidden) and the rest of the choices. */
+export function fromPreset(l: Layout, p: Preset): Layout {
+  return {
+    ...fresh(p),
+    locked: l.locked,
+    mob: l.mob,
+    webs: l.webs,
+    hidden: [...OFF_AT_FIRST, ...l.webs.map((d) => d.id)],
+  }
+}
+
+/** Where a panel shown again goes: the side column (chat and web pages are tall), else the
+ * bottom row. */
+function home(l: Layout): Region {
+  const shown = (r: Region) => l[r].some((d) => !l.hidden.includes(d))
+  return shown('right') ? 'right' : shown('left') ? 'left' : 'bottom'
+}
+
+/** Adds a web panel beside the others, or changes one already there. */
+export function putWeb(l: Layout, d: WebDock): Layout {
+  if (l.webs.some((x) => x.id === d.id))
+    return { ...l, webs: l.webs.map((x) => (x.id === d.id ? d : x)) }
+  const r = home(l)
+  return { ...l, webs: [...l.webs, d], [r]: [...l[r], d.id], preset: null }
+}
+
+export function removeWeb(l: Layout, id: DockId): Layout {
+  const w = { ...l.w }
+  delete w[id]
+  return {
+    ...without(l, id),
+    webs: l.webs.filter((d) => d.id !== id),
+    hidden: l.hidden.filter((d) => d !== id),
+    w,
   }
 }
 
@@ -167,11 +256,10 @@ export function popOut(l: Layout, id: DockId, at: { x: number; y: number }): Lay
 }
 
 export function toggle(l: Layout, id: DockId): Layout {
-  if (l.hidden.includes(id)) {
+  if (l.hidden.includes(id) || !placed(l, id)) {
     const shown = { ...l, hidden: l.hidden.filter((x) => x !== id), preset: null }
-    return regionOf(shown, id) || shown.float[id]
-      ? shown
-      : { ...shown, bottom: [...shown.bottom, id] }
+    const r = home(l)
+    return placed(shown, id) ? shown : { ...shown, [r]: [...shown[r], id] }
   }
   return { ...l, hidden: [...l.hidden, id], preset: null }
 }
@@ -187,7 +275,8 @@ export function DockWorkspace({
 }: {
   top?: ReactNode
   stage: ReactNode
-  docks: Record<DockId, ReactNode>
+  /** Each panel's content. */
+  docks: (id: DockId) => ReactNode
 }) {
   const [layout, setRaw] = useState<Layout>(load)
   const narrow = useMediaQuery('(max-width: 899px)')
@@ -340,7 +429,7 @@ export function DockWorkspace({
   const api: LayoutApi = { layout, setLayout, grab, narrow }
 
   if (narrow) {
-    const shown = DOCKS.filter((d) => !layout.hidden.includes(d))
+    const shown = showing(layout)
     const cur = shown.includes(layout.mob) ? layout.mob : (shown[0] ?? 'scenes')
     return (
       <Ctx.Provider value={api}>
@@ -361,11 +450,11 @@ export function DockWorkspace({
               label="Panel"
               className="mx-3 my-3 max-w-full overflow-x-auto"
               value={cur}
-              options={shown.map((d) => ({ value: d, label: DOCK_NAMES[d] }))}
+              options={shown.map((d) => ({ value: d, label: dockName(layout, d) }))}
               onChange={(d) => setLayout((l) => ({ ...l, mob: d }))}
             />
           )}
-          <div className="flex min-h-[320px] flex-col border-t border-line">{docks[cur]}</div>
+          <div className="flex min-h-[320px] flex-col border-t border-line">{docks(cur)}</div>
         </div>
       </Ctx.Provider>
     )
@@ -383,7 +472,7 @@ export function DockWorkspace({
           <Divider
             key={`split-${prev}-${id}`}
             dir={vertical ? 'row' : 'col'}
-            label={`Resize ${DOCK_NAMES[prev]} and ${DOCK_NAMES[id]}`}
+            label={`Resize ${dockName(layout, prev)} and ${dockName(layout, id)}`}
             between={[prev, id]}
           />,
         )
@@ -395,9 +484,9 @@ export function DockWorkspace({
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
             drag?.id === id && 'opacity-40',
           )}
-          style={{ flex: `${layout.w[id]} 1 0` }}
+          style={{ flex: `${layout.w[id] ?? 1} 1 0` }}
         >
-          {docks[id]}
+          {docks(id)}
         </div>,
       )
     })
@@ -443,7 +532,7 @@ export function DockWorkspace({
       </div>
       {floats.map(([id, f]) => (
         <FloatingDock key={id} id={id} f={f}>
-          {docks[id]}
+          {docks(id)}
         </FloatingDock>
       ))}
       {drag && (
@@ -461,7 +550,7 @@ export function DockWorkspace({
               className="pointer-events-none fixed z-50 inline-flex items-center gap-2 rounded-control border border-accent-line bg-surface-3 px-3 py-2 font-display text-[13px] font-bold shadow-pop"
               style={{ left: drag.x + 12, top: drag.y + 12 }}
             >
-              <DotsSixVertical size={14} /> {DOCK_NAMES[drag.id]}
+              <DotsSixVertical size={14} /> {dockName(layout, drag.id)}
             </div>
           )}
         </>
@@ -472,7 +561,7 @@ export function DockWorkspace({
 
 /** A panel popped out of the layout: moved by its title, resized by its corner. */
 function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: ReactNode }) {
-  const { setLayout } = useLayout()
+  const { setLayout, layout } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = ref.current
@@ -496,7 +585,7 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
       data-over-preview
       data-pos={`${f.x},${f.y},${f.w},${f.h}`}
       role="region"
-      aria-label={`${DOCK_NAMES[id]} (floating)`}
+      aria-label={`${dockName(layout, id)} (floating)`}
       className="fixed z-30 flex min-h-40 min-w-56 resize flex-col overflow-hidden rounded-panel border border-line-strong bg-surface-1 shadow-pop"
       style={{ left: f.x, top: f.y, width: f.w, height: f.h }}
     >
@@ -538,7 +627,7 @@ function Divider({
         const sa = dir === 'col' ? A.offsetWidth : A.offsetHeight
         const sb = dir === 'col' ? B.offsetWidth : B.offsetHeight
         const na = clamp(sa + (dir === 'col' ? dx : dy), 110, sa + sb - 110)
-        const tot = l.w[a] + l.w[b]
+        const tot = (l.w[a] ?? 1) + (l.w[b] ?? 1)
         const wa = (tot * na) / (sa + sb)
         return { ...l, w: { ...l.w, [a]: wa, [b]: tot - wa } }
       })
@@ -633,7 +722,7 @@ export function DockHeader({
         </span>
       )}
       <h2 className="truncate font-display text-[14.5px] font-extrabold tracking-tight text-text">
-        {title ?? DOCK_NAMES[id]}
+        {title ?? dockName(layout, id)}
       </h2>
       {info}
       <span className="flex-1" />
@@ -688,7 +777,7 @@ function DockMenu({ id }: { id: DockId }) {
         ref={btn}
         size="sm"
         variant="ghost"
-        label={`${DOCK_NAMES[id]} panel: move, pop out or hide`}
+        label={`${dockName(layout, id)} panel: move, pop out or hide`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -699,7 +788,7 @@ function DockMenu({ id }: { id: DockId }) {
         <div
           ref={menu}
           role="menu"
-          aria-label={`${DOCK_NAMES[id]} panel`}
+          aria-label={`${dockName(layout, id)} panel`}
           className="absolute right-0 z-50 mt-1 flex w-52 flex-col gap-px rounded-control border border-line-strong bg-surface-2 p-1.5 shadow-pop"
         >
           {moves
@@ -741,6 +830,16 @@ function DockMenu({ id }: { id: DockId }) {
           >
             Hide this panel
           </button>
+          {isWeb(id) && (
+            <button
+              type="button"
+              role="menuitem"
+              className={cx(item, 'text-danger')}
+              onClick={() => pick((l) => removeWeb(l, id))}
+            >
+              Remove this web panel
+            </button>
+          )}
         </div>
       )}
     </div>

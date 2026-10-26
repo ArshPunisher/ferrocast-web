@@ -18,6 +18,7 @@ import {
   LockSimpleOpen,
   Pause,
   Play,
+  Plus,
   Power,
   Record as RecordIcon,
   ClockCounterClockwise,
@@ -44,7 +45,20 @@ import { useWidePage } from '../../../lib/wide'
 import { AddSourceDialog } from './add-source'
 import { DeskProvider, useDesk, useEngine, type Desk } from './common'
 import { GoLiveDock } from './golive-dock'
-import { DOCK_NAMES, DockWorkspace, fresh, useLayout, type DockId, type Preset } from './layout'
+import {
+  BUILT_INS,
+  DockWorkspace,
+  dockName,
+  fromPreset,
+  isWeb,
+  placed,
+  toggle as toggleDock,
+  useLayout,
+  type DockId,
+  type Preset,
+} from './layout'
+import { ChatDock, EventsDock } from './chat-dock'
+import { WebDockDialog, WebDockSlot } from './web-dock'
 import { AudioDock } from './mixer'
 import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
@@ -196,11 +210,16 @@ function Running({
     setTransformClip,
     openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
   }
-  const docks: Record<DockId, React.ReactNode> = {
-    scenes: <ScenesDock />,
-    sources: <SourcesDock />,
-    audio: <AudioDock />,
-    golive: <GoLiveDock res={res} view={view} />,
+  const docks = (id: DockId): React.ReactNode => {
+    if (isWeb(id)) return <WebDockSlot id={id} />
+    return {
+      scenes: <ScenesDock />,
+      sources: <SourcesDock />,
+      audio: <AudioDock />,
+      golive: <GoLiveDock res={res} view={view} />,
+      chat: <ChatDock />,
+      events: <EventsDock />,
+    }[id]
   }
   return (
     <DeskProvider value={desk}>
@@ -646,6 +665,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
   const api = useEngine()
   const { layout, setLayout } = useLayout()
   const [open, setOpen] = useState(false)
+  const [addingWeb, setAddingWeb] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -719,7 +739,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
                 type="button"
                 role="menuitemradio"
                 aria-checked={layout.preset === p}
-                onClick={() => setLayout((l) => ({ ...fresh(p), locked: l.locked, mob: l.mob }))}
+                onClick={() => setLayout((l) => fromPreset(l, p))}
                 className={cx(
                   'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[12px] hover:bg-surface-3',
                   layout.preset === p && 'border-arc bg-accent-soft text-accent-text',
@@ -732,8 +752,8 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
           </div>
           <hr className="mx-1 my-1 border-line" />
           <span className="px-2.5 pt-1 pb-1 text-[11.5px] font-bold text-text-3">Panels</span>
-          {(Object.keys(DOCK_NAMES) as DockId[]).map((id) => {
-            const shown = !layout.hidden.includes(id)
+          {[...BUILT_INS, ...layout.webs.map((d) => d.id)].map((id: DockId) => {
+            const shown = placed(layout, id) && !layout.hidden.includes(id)
             return (
               <button
                 key={id}
@@ -741,29 +761,28 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
                 role="menuitemcheckbox"
                 aria-checked={shown}
                 className={item}
-                onClick={() =>
-                  setLayout((l) => {
-                    if (!l.hidden.includes(id))
-                      return { ...l, hidden: [...l.hidden, id], preset: null }
-                    const n = { ...l, hidden: l.hidden.filter((x) => x !== id), preset: null }
-                    const placed =
-                      n.left.includes(id) ||
-                      n.right.includes(id) ||
-                      n.bottom.includes(id) ||
-                      n.float[id]
-                    return placed ? n : { ...n, bottom: [...n.bottom, id] }
-                  })
-                }
+                onClick={() => setLayout((l) => toggleDock(l, id))}
               >
                 {shown ? (
                   <CheckSquare size={17} weight="fill" className="text-accent-text" aria-hidden />
                 ) : (
                   <Square size={17} className="text-text-3" aria-hidden />
                 )}
-                {DOCK_NAMES[id]}
+                <span className="truncate">{dockName(layout, id)}</span>
               </button>
             )
           })}
+          <button
+            type="button"
+            role="menuitem"
+            className={item}
+            onClick={() => {
+              setOpen(false)
+              setAddingWeb(true)
+            }}
+          >
+            <Plus size={17} aria-hidden /> Add a web panel…
+          </button>
           <hr className="mx-1 my-1 border-line" />
           <button
             type="button"
@@ -783,7 +802,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
             type="button"
             role="menuitem"
             className={item}
-            onClick={() => setLayout((l) => ({ ...fresh('side'), mob: l.mob }))}
+            onClick={() => setLayout((l) => ({ ...fromPreset(l, 'side'), locked: false }))}
           >
             <ArrowCounterClockwise size={17} aria-hidden /> Reset layout
           </button>
@@ -798,6 +817,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
           </button>
         </div>
       )}
+      <WebDockDialog open={addingWeb} onClose={() => setAddingWeb(false)} />
     </div>
   )
 }
