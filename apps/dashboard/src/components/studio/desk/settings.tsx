@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Broadcast,
+  GearSix,
   Keyboard,
   Monitor,
   Record,
@@ -37,7 +38,7 @@ import { useDesk } from './common'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
 
-export type Page = 'stream' | 'audio' | 'picture' | 'record' | 'keys' | 'advanced'
+export type Page = 'stream' | 'audio' | 'picture' | 'record' | 'keys' | 'general' | 'advanced'
 
 const PAGES: { id: Page; label: string; icon: typeof Broadcast }[] = [
   { id: 'stream', label: 'Stream quality', icon: Broadcast },
@@ -45,6 +46,7 @@ const PAGES: { id: Page; label: string; icon: typeof Broadcast }[] = [
   { id: 'picture', label: 'Picture', icon: Monitor },
   { id: 'record', label: 'Recording', icon: Record },
   { id: 'keys', label: 'Shortcuts', icon: Keyboard },
+  { id: 'general', label: 'General', icon: GearSix },
   { id: 'advanced', label: 'Advanced', icon: SlidersHorizontal },
 ]
 
@@ -65,7 +67,7 @@ export function SettingsDialog({
 }
 
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
-  const { api } = useDesk()
+  const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
   const [page, setPage] = useState<Page>(start)
   const [draft, setDraft] = useState<StudioSettings | null>(null)
@@ -83,6 +85,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     try {
       const r = await api.setStudioSettings(draft)
       loaded.set(r.settings)
+      prefs.set(r.settings)
       setDraft(r.settings)
       toast(
         r.restart
@@ -130,6 +133,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
           {page === 'picture' && <PicturePage s={draft} set={set} />}
           {page === 'record' && <RecordPage s={draft} set={set} />}
           {page === 'keys' && <KeysPage s={draft} set={set} />}
+          {page === 'general' && <GeneralPage s={draft} set={set} />}
           {page === 'advanced' && <AdvancedPage s={draft} set={set} />}
         </div>
       </div>
@@ -228,6 +232,7 @@ function NumberBox({
   min,
   max,
   unit,
+  disabled,
   onChange,
 }: {
   label: string
@@ -235,6 +240,7 @@ function NumberBox({
   min: number
   max: number
   unit?: string
+  disabled?: boolean
   onChange: (n: number) => void
 }) {
   const [text, setText] = useState(String(value))
@@ -248,6 +254,7 @@ function NumberBox({
         min={min}
         max={max}
         value={text}
+        disabled={disabled}
         className="w-24! text-right tabular-nums"
         onChange={(e) => setText(e.target.value)}
         onBlur={() => {
@@ -1384,6 +1391,85 @@ function KeysPage({ s, set }: PageProps) {
       {q && groups.every((g) => g.actions.every((a) => !a.label.toLowerCase().includes(q))) && (
         <p className="m-0 text-[13px] text-text-3">No shortcut matches “{query}”.</p>
       )}
+    </>
+  )
+}
+
+/** OBS's General settings that apply here: snapping in the preview, and asking first. */
+function GeneralPage({ s, set }: PageProps) {
+  const snapping = s.snapping ?? true
+  const toggle = (label: string, checked: boolean, on: (v: boolean) => void, off = false) => (
+    <Row label={label}>
+      <Switch label={label} hideLabel checked={checked} disabled={off} onChange={on} />
+    </Row>
+  )
+  return (
+    <>
+      <Heading info="Moving a source in the preview pulls it into line when it comes near. Hold Alt (Option) while moving to place it freely.">
+        Snapping
+      </Heading>
+      <div className="flex flex-col">
+        {toggle('Snap sources into line', snapping, (v) => set({ snapping: v }))}
+        <Row label="How near">
+          <NumberBox
+            label="How near, in screen pixels"
+            value={s.snap_px ?? 10}
+            min={1}
+            max={50}
+            unit="px"
+            disabled={!snapping}
+            onChange={(snap_px) => set({ snap_px })}
+          />
+        </Row>
+        {toggle(
+          'To the edges of the screen',
+          s.snap_screen ?? true,
+          (v) => set({ snap_screen: v }),
+          !snapping,
+        )}
+        {toggle('To other sources', !!s.snap_sources, (v) => set({ snap_sources: v }), !snapping)}
+        {toggle(
+          'To the middle of the screen',
+          !!s.snap_center,
+          (v) => set({ snap_center: v }),
+          !snapping,
+        )}
+      </div>
+      <Heading info="What starts when you go live. Ending the stream stops it too, unless kept going.">
+        With the stream
+      </Heading>
+      <div className="flex flex-col">
+        {toggle('Record while live', !!s.record_when_streaming, (v) =>
+          set({ record_when_streaming: v }),
+        )}
+        {toggle(
+          'Keep recording after the stream ends',
+          !!s.keep_recording,
+          (v) => set({ keep_recording: v }),
+          !s.record_when_streaming,
+        )}
+        {toggle('Replay buffer while live', !!s.replay_when_streaming, (v) =>
+          set({ replay_when_streaming: v }),
+        )}
+        {toggle(
+          'Keep the buffer after the stream ends',
+          !!s.keep_replay,
+          (v) => set({ keep_replay: v }),
+          !s.replay_when_streaming,
+        )}
+      </div>
+      <Heading info="An “are you sure?” first, so a stray click doesn’t start or end anything.">
+        Ask first
+      </Heading>
+      <div className="flex flex-col">
+        {toggle('Before going live', !!s.confirm_go_live, (v) => set({ confirm_go_live: v }))}
+        {toggle('Before ending the stream', s.confirm_end_stream ?? true, (v) =>
+          set({ confirm_end_stream: v }),
+        )}
+        {toggle('Before stopping a recording', !!s.confirm_stop_record, (v) =>
+          set({ confirm_stop_record: v }),
+        )}
+      </div>
     </>
   )
 }

@@ -29,12 +29,14 @@ import {
 } from '@phosphor-icons/react'
 import {
   describeError,
+  goingTo,
   onCanvas,
   type EngineStats,
   type GoLiveView,
   type StudioEngineStatus,
+  type StudioSettings,
 } from '@ferrocast/api'
-import { Button, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
+import { Button, Dialog, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
@@ -242,6 +244,20 @@ function clock(ms: number): string {
     .join(':')
 }
 
+/**
+ * Whether pressing the stream or record button (`on`: running now) asks first, by the General
+ * settings: ending the stream does unless switched off, as in OBS.
+ */
+export function asksFirst(
+  what: 'stream' | 'record',
+  on: boolean,
+  p: StudioSettings | null | undefined,
+): 'live' | 'end' | 'record' | null {
+  if (what === 'record') return on && p?.confirm_stop_record ? 'record' : null
+  if (on) return (p?.confirm_end_stream ?? true) ? 'end' : null
+  return p?.confirm_go_live ? 'live' : null
+}
+
 /** The stream's health, the Layout menu, and Go live. */
 function ControlBar({
   view,
@@ -253,7 +269,7 @@ function ControlBar({
   onStatus: (s: StudioEngineStatus) => void
 }) {
   const api = useEngine()
-  const { stats, setStats, openSettings } = useDesk()
+  const { stats, setStats, openSettings, prefs } = useDesk()
   const { busy, run } = useAction()
   const last = useRef<{ bytes: number; at: number } | null>(null)
   const [kbps, setKbps] = useState<number | null>(null)
@@ -296,11 +312,20 @@ function ControlBar({
     const v = await run('stream', () => api.stream(!on), {
       success: () => (on ? 'Stream ended.' : null),
     })
+    const ending = on
+    if (v?.also)
+      toast({
+        tone: 'warn',
+        message: ending
+          ? 'Ended, but not everything stopped.'
+          : 'Live, but not everything started.',
+        hint: v.also,
+      })
     if (v !== undefined) {
       last.current = null
       setKbps(null)
-      // Shown at once, not on the next read.
-      if (stats) setStats({ ...stats, stream: v })
+      // Shown at once, not on the next read (ending answers with no stream).
+      if (stats) setStats({ ...stats, stream: ending ? null : v })
     }
   }
   const record = async () => {
@@ -309,6 +334,53 @@ function ControlBar({
     })
     if (v !== undefined && stats) setStats({ ...stats, record: v })
   }
+  // OBS's General › "Show confirmation dialog when…": ending is asked by default.
+  const [ask, setAsk] = useState<'live' | 'end' | 'record' | null>(null)
+  const pressStream = () => {
+    const a = asksFirst('stream', on, prefs.data)
+    if (a) setAsk(a)
+    else void toggle()
+  }
+  const pressRecord = () => {
+    const a = asksFirst('record', recording, prefs.data)
+    if (a) setAsk(a)
+    else void record()
+  }
+  const confirmed = () => {
+    // The stream or recording may have changed while the dialog was open: then do nothing.
+    const stale =
+      (ask === 'end' && !on) || (ask === 'live' && on) || (ask === 'record' && !recording)
+    if (stale) {
+      setAsk(null)
+      return
+    }
+    const go = ask === 'record' ? record() : toggle()
+    void go.finally(() => setAsk(null))
+  }
+  const ASK = {
+    live: {
+      title: 'Go live now?',
+      text: `${goingTo(ticked)}.`,
+      keep: 'Not yet',
+      yes: 'Go live',
+      key: 'stream',
+    },
+    end: {
+      title: 'End the stream?',
+      text: 'It ends for everyone watching.',
+      keep: 'Keep streaming',
+      yes: 'End stream',
+      key: 'stream',
+    },
+    record: {
+      title: 'Stop recording?',
+      text: 'The file is saved and closed.',
+      keep: 'Keep recording',
+      yes: 'Stop recording',
+      key: 'record',
+    },
+  } as const
+  const asked = ask ? ASK[ask] : null
   const pause = () => void run('pause', () => api.pauseRecord(!rec?.paused))
   const { open: openMenu, menu } = useContextMenu()
   const recordMenu = (e: React.MouseEvent) =>
@@ -477,7 +549,7 @@ function ControlBar({
         variant="secondary"
         className={cx('h-10', recording && 'text-danger')}
         busy={busy === 'record'}
-        onClick={() => void record()}
+        onClick={pressRecord}
         title={rec?.file}
       >
         {recording ? (
@@ -496,11 +568,33 @@ function ControlBar({
         busy={busy === 'stream'}
         disabled={!on && ticked.length === 0}
         title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
-        onClick={() => void toggle()}
+        onClick={pressStream}
       >
         {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
         {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
       </Button>
+      <Dialog
+        open={!!asked}
+        onClose={() => setAsk(null)}
+        title={asked?.title ?? ''}
+        description={asked?.text}
+        footer={
+          asked && (
+            <>
+              <Button variant="ghost" onClick={() => setAsk(null)}>
+                {asked.keep}
+              </Button>
+              <Button
+                variant={ask === 'live' ? 'primary' : 'danger'}
+                busy={busy === asked.key}
+                onClick={confirmed}
+              >
+                {asked.yes}
+              </Button>
+            </>
+          )
+        }
+      />
     </div>
   )
 }

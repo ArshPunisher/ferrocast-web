@@ -10,6 +10,7 @@ import { balanceLabel } from './advanced-audio'
 import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
+import { asksFirst } from './desk'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -312,5 +313,20 @@ describe('meter decay', () => {
     expect(decayed(-10, -60, DECAY.fast, 1000)).toBeCloseTo(-33.53, 2)
     // Never below the new level.
     expect(decayed(-10, -12, DECAY.fast, 1000)).toBe(-12)
+  })
+})
+
+describe('asking first', () => {
+  it('asks before ending a stream by default, and the rest only when switched on', () => {
+    expect(asksFirst('stream', true, null)).toBe('end')
+    expect(asksFirst('stream', false, null)).toBeNull()
+    expect(asksFirst('record', true, null)).toBeNull()
+    const all = { confirm_go_live: true, confirm_end_stream: false, confirm_stop_record: true }
+    const p = all as Parameters<typeof asksFirst>[2]
+    expect(asksFirst('stream', false, p)).toBe('live')
+    expect(asksFirst('stream', true, p)).toBeNull()
+    expect(asksFirst('record', true, p)).toBe('record')
+    // Starting a recording never asks.
+    expect(asksFirst('record', false, p)).toBeNull()
   })
 })
