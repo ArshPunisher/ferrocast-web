@@ -272,7 +272,11 @@ export function ScenesDock() {
               icon: Plus,
               onSelect: () => setNaming({ from: null, value: freeName('Scene', names) }),
             },
-            { label: 'Import from OBS', icon: DownloadSimple, onSelect: () => setImporting(true) },
+            {
+              label: 'Import from OBS or Streamlabs',
+              icon: DownloadSimple,
+              onSelect: () => setImporting(true),
+            },
             { sep: true },
             {
               label: 'Grid mode',

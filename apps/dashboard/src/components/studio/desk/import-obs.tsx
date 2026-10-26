@@ -1,18 +1,20 @@
-// "Import from OBS": pick one of OBS's scene collections on this computer to use in the
-// Studio. The Studio's own scenes are kept in a file first; OBS's Browser sources become Web
-// page sources on a Mac.
+// "Import": pick one of OBS's or Streamlabs Desktop's scene collections on this computer to
+// use in the Studio, as a new scene collection. Browser sources (and Streamlabs' widgets)
+// become Web page sources on a Mac; a Windows collection's devices come in to be picked again.
 
 import { useState } from 'react'
 import { CardsThree, CheckCircle, DownloadSimple } from '@phosphor-icons/react'
 import { type EngineObsCollection } from '@ferrocast/api'
-import { Button, Dialog, InfoTip, Skeleton, cx, toast } from '@ferrocast/ui'
+import { Button, Dialog, InfoTip, Segmented, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 
+type From = 'obs' | 'streamlabs'
+
 export function ImportObsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} onClose={onClose} size="lg" title="Import from OBS">
+    <Dialog open={open} onClose={onClose} size="lg" title="Import scenes">
       {open && <Picker onDone={onClose} />}
     </Dialog>
   )
@@ -20,12 +22,18 @@ export function ImportObsDialog({ open, onClose }: { open: boolean; onClose: () 
 
 function Picker({ onDone }: { onDone: () => void }) {
   const { api, refresh, bumpLibrary } = useDesk()
-  const list = useResource(() => api.obsCollections(), [api])
+  const [from, setFrom] = useState<From>('obs')
+  const list = useResource(
+    () => (from === 'obs' ? api.obsCollections() : api.streamlabsCollections()),
+    [api, from],
+  )
   const { run, busy } = useAction()
   const [pick, setPick] = useState<EngineObsCollection | null>(null)
   const go = async () => {
     if (!pick) return
-    const r = await run('import', () => api.importObs(pick.id))
+    const r = await run('import', () =>
+      from === 'obs' ? api.importObs(pick.id) : api.importStreamlabs(pick.id),
+    )
     if (!r) return
     refresh()
     bumpLibrary()
@@ -42,16 +50,49 @@ function Picker({ onDone }: { onDone: () => void }) {
       ...(extra.length ? { hint: `${extra.join('. ')}.` } : {}),
     })
   }
-  if (list.error && !list.data) return <LoadError error={list.error} onRetry={list.reload} />
-  if (!list.data) return <Skeleton className="h-40" />
+  const switcher = (
+    <Segmented
+      label="Import from"
+      value={from}
+      onChange={(f) => {
+        setFrom(f)
+        setPick(null)
+      }}
+      options={[
+        { value: 'obs', label: 'OBS' },
+        { value: 'streamlabs', label: 'Streamlabs' },
+      ]}
+      className="self-start"
+    />
+  )
+  if (list.error && !list.data)
+    return (
+      <div className="flex flex-col gap-4">
+        {switcher}
+        <LoadError error={list.error} onRetry={list.reload} />
+      </div>
+    )
+  if (!list.data)
+    return (
+      <div className="flex flex-col gap-4">
+        {switcher}
+        <Skeleton className="h-40" />
+      </div>
+    )
   if (list.data.length === 0)
     return (
-      <p className="m-0 text-[14px] font-medium text-text-2">
-        No OBS scene collections on this computer.
-      </p>
+      <div className="flex flex-col gap-4">
+        {switcher}
+        <p className="m-0 text-[15px] font-medium text-text-2">
+          {from === 'obs'
+            ? 'No OBS scene collections on this computer.'
+            : 'No Streamlabs scene collections on this computer.'}
+        </p>
+      </div>
     )
   return (
     <div className="flex flex-col gap-4">
+      {switcher}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
         {list.data.map((c) => {
           const on = pick?.id === c.id
@@ -75,8 +116,8 @@ function Picker({ onDone }: { onDone: () => void }) {
                 <CardsThree size={22} weight="bold" />
               </span>
               <span className="min-w-0 flex-1">
-                <b className="block truncate text-[14px] text-text">{c.name}</b>
-                <span className="block text-[12.5px] font-medium text-text-2">
+                <b className="block truncate text-[15px] text-text">{c.name}</b>
+                <span className="block text-[13.5px] font-medium text-text-2">
                   {c.scenes} scenes · {c.sources} sources
                 </span>
               </span>
@@ -86,11 +127,12 @@ function Picker({ onDone }: { onDone: () => void }) {
         })}
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
-        <span className="mr-auto flex items-center gap-1 text-[13px] font-semibold text-text-2">
+        <span className="mr-auto flex items-center gap-1 text-[14px] font-semibold text-text-2">
           Adds it as a new scene collection
           <InfoTip label="About importing">
             Your Studio scenes stay as they are; switch back any time from the collection button at
-            the top. OBS's own files aren't changed.
+            the top. The other app's files aren't changed. From a Windows PC, cameras, windows and
+            sound devices come in empty: pick them again.
           </InfoTip>
         </span>
         <Button

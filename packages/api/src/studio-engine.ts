@@ -647,6 +647,14 @@ export function studioEngineApi(c: FerroClient) {
     /** OBS's scene collections on this computer. */
     obsCollections: () =>
       c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/obs-collections'),
+    /** Streamlabs Desktop's scene collections on this computer. */
+    streamlabsCollections: () =>
+      c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/streamlabs-collections'),
+    /** Adds one of Streamlabs' collections as a new scene collection. */
+    importStreamlabs: (id: string) =>
+      c.request<EngineImportReport>('POST', '/api/v1/studio/engine/streamlabs-collections/import', {
+        id,
+      }),
     /** Replaces the Studio's scenes with one of OBS's collections (the old ones are kept). */
     importObs: (id: string) =>
       c.request<EngineImportReport>('POST', '/api/v1/studio/engine/obs-collections/import', {
