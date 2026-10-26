@@ -24,6 +24,7 @@ import {
   aitumClashes,
   andList,
   describeError,
+  directKind,
   goliveApi,
   goingTo,
   healthText,
@@ -31,6 +32,7 @@ import {
   onCanvas,
   type Canvas,
   type DestinationView,
+  type DirectKind,
   type GoLiveView,
   type Service,
   type UploadCheck,
@@ -575,7 +577,13 @@ export function RowText({ d }: { d: DestinationView }) {
       <b className={cx('block truncate text-[14px]', !d.enabled && 'text-text-2')}>{d.name}</b>
       <span className="block truncate text-[12.5px] text-text-3">
         {d.kind === 'custom' ? (
-          <>{d.account ?? 'Your own server'} · video only</>
+          d.direct ? (
+            <>
+              {d.account ?? 'Your own server'} · {DIRECT_NAMES[d.direct]} from the Studio
+            </>
+          ) : (
+            <>{d.account ?? 'Your own server'} · video only</>
+          )
         ) : d.connected ? (
           <span className="inline-flex items-center gap-1">
             {d.account ?? platform} ·{' '}
@@ -631,6 +639,15 @@ function Note({ children, warn }: { children: React.ReactNode; warn?: boolean })
 
 // ---------------------------------------------------------------- 7: a server of your own
 
+const DIRECT_NAMES: Record<DirectKind, string> = { srt: 'SRT', rist: 'RIST', whip: 'WebRTC' }
+
+/** What the key is called for each kind of server. */
+const KEY_LABEL: Record<DirectKind, string> = {
+  srt: 'Stream ID (optional)',
+  rist: 'Passphrase (optional)',
+  whip: 'Bearer token (optional)',
+}
+
 function AddDestination({
   open,
   onClose,
@@ -649,6 +666,7 @@ function AddDestination({
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
+  const direct = directKind(url)
   const submit = () => {
     setErr(null)
     void run(
@@ -685,7 +703,12 @@ function AddDestination({
           <Button
             variant="primary"
             busy={busy === 'add'}
-            disabled={!name.trim() || !url.trim() || !key.trim()}
+            disabled={
+              !name.trim() ||
+              !url.trim() ||
+              (!direct && !key.trim()) ||
+              (!!direct && canvas === 'vertical')
+            }
             onClick={submit}
           >
             Add server
@@ -715,8 +738,14 @@ function AddDestination({
         </Field>
         <Field
           label="Server"
-          hint="Starts with rtmp:// or rtmps://. The place you stream to gives you this."
-          error={err?.field === 'url' ? err.message : null}
+          hint="rtmp://, rtmps://, srt://, rist:// or a WebRTC (WHIP) https:// address. The place you stream to gives you this."
+          error={
+            err?.field === 'url'
+              ? err.message
+              : direct && canvas === 'vertical'
+                ? `${DIRECT_NAMES[direct]} sends the main picture only. Add it under the main stream.`
+                : null
+          }
         >
           {(a) => (
             <Input
@@ -733,7 +762,7 @@ function AddDestination({
           )}
         </Field>
         <Field
-          label="Stream key"
+          label={direct ? KEY_LABEL[direct] : 'Stream key'}
           hint="Kept in your computer’s keychain, never sent to Ferrocast’s servers."
           error={err?.field === 'key' ? err.message : null}
         >
@@ -763,6 +792,13 @@ function AddDestination({
         <Note>
           <b>Video only.</b> Chat, alerts and the title don’t reach this one; Ferrocast just sends
           the stream there.
+          {direct && canvas === 'main' && (
+            <>
+              {' '}
+              {DIRECT_NAMES[direct]} goes straight from the Ferrocast Studio, so it sends when you
+              go live with the Ferrocast picture.
+            </>
+          )}
         </Note>
       </form>
     </Dialog>
