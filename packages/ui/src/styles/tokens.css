@@ -127,11 +127,12 @@
   --fc-text-2: #222832;
   --fc-text-3: #3c434e;
   /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
-     fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface). */
+     fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface; Molten
+     text also over an 18% Molten wash, the selected item in the sidebars). */
   --fc-accent: #cf7400;
   --fc-accent-strong: #e08a1a;
   --fc-on-accent: #0a0600;
-  --fc-molten-text: #9a5400;
+  --fc-molten-text: #8a4a00;
   --fc-arc: #0888b8;
   --fc-accent-text: #05678c;
   --fc-accent-soft: rgb(8 136 184 / 0.1);
@@ -182,7 +183,7 @@
     --fc-accent: #cf7400;
     --fc-accent-strong: #e08a1a;
     --fc-on-accent: #0a0600;
-    --fc-molten-text: #9a5400;
+    --fc-molten-text: #8a4a00;
     --fc-arc: #0888b8;
     --fc-accent-text: #05678c;
     --fc-accent-soft: rgb(8 136 184 / 0.1);

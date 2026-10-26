@@ -233,8 +233,9 @@ function NavLink({
       className={cx(
         'fc-press group relative flex h-10 items-center gap-3 rounded-control px-3 text-[15px] font-semibold transition-colors duration-150',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+        // The current page is plain to see: a Molten wash, a bar at its edge, bold Molten text.
         active
-          ? 'bg-accent-soft font-bold text-accent-text'
+          ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
           : 'text-text-2 hover:bg-surface-2 hover:text-text',
       )}
     >
@@ -247,7 +248,7 @@ function NavLink({
       <Icon
         size={19}
         weight={active ? 'fill' : 'regular'}
-        className={active ? 'text-accent-text' : ''}
+        className={active ? 'text-[var(--fc-molten-text)]' : ''}
       />
       {item.label}
     </a>
@@ -590,7 +591,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                   <Icon
                     size={22}
                     weight={active ? 'fill' : 'regular'}
-                    className={active ? 'text-accent-text' : ''}
+                    className={active ? 'text-[var(--fc-molten-text)]' : ''}
                   />
                   {i.label === 'Moderation' ? 'Mod' : i.label}
                 </a>

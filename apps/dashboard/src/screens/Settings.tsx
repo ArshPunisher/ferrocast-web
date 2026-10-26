@@ -61,6 +61,7 @@ import { TtsVoicePicker } from '../components/tts-voices'
 import { RemoteDevices } from '../components/remote'
 import { MusicSettings } from '../components/music-settings'
 import { useLive } from '../lib/store'
+import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
 const SECTIONS = [
@@ -90,7 +91,8 @@ function Section({
 }) {
   return (
     <div id={`settings-${id}`} className="scroll-mt-20">
-      <Panel title={title} description={description} id={`s-${id}`}>
+      {/* Inside, layouts follow the section's own width (it can be one of two columns). */}
+      <Panel title={title} description={description} id={`s-${id}`} bodyClassName="@container">
         {children}
       </Panel>
     </div>
@@ -254,7 +256,7 @@ function Obs() {
         }}
       />
       <form
-        className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]"
+        className="grid grid-cols-1 gap-3 @md:grid-cols-[1fr_120px]"
         onSubmit={(e) => {
           e.preventDefault()
           void save()
@@ -367,7 +369,7 @@ function Tts({ currency }: { currency?: string | undefined }) {
               disabled={!t.enabled}
               onSystemVoice={(voice) => save({ ...t, voice })}
             />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
               <Field
                 label="Minimum amount"
                 hint={
@@ -560,7 +562,7 @@ function Data() {
       title="Your data"
       description="Everything is stored on this computer. Take it with you any time."
     >
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 @xl:grid-cols-2">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold text-text">Export everything</h3>
@@ -654,7 +656,7 @@ function Data() {
                 key={b.id}
                 className="flex items-center gap-3 rounded-control px-2 py-2 hover:bg-surface-2"
               >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 @md:flex-row @md:items-baseline @md:gap-2">
                   <span className="text-[14.5px] text-text-2">
                     {new Date(b.created_at).toLocaleString(undefined, {
                       day: 'numeric',
@@ -779,7 +781,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
       <div className="flex flex-col gap-4">
         {u ? (
           <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-3.5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
               <div className="min-w-0 flex-1 text-sm text-text-2">
                 <p data-testid="update-status" aria-live="polite">
                   {newer || s.phase !== 'idle' ? (
@@ -994,6 +996,8 @@ export function Settings({ section }: { section?: string | undefined }) {
   const client = useClient()
   const res = useResource((c) => c.settings())
   const { run } = useAction()
+  // The window's full width, as the Studio and Community.
+  useWidePage()
   useEffect(() => {
     if (section && res.data)
       document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
@@ -1015,7 +1019,7 @@ export function Settings({ section }: { section?: string | undefined }) {
   return (
     <div>
       <PageHeader title="Settings" />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)]">
         <nav
           aria-label="Settings sections"
           className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
@@ -1029,7 +1033,7 @@ export function Settings({ section }: { section?: string | undefined }) {
                 className={cx(
                   'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
                   section === id
-                    ? 'bg-accent-soft font-bold text-accent-text'
+                    ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
                     : 'text-text-2 hover:bg-surface-2 hover:text-text',
                 )}
               >
@@ -1048,7 +1052,8 @@ export function Settings({ section }: { section?: string | undefined }) {
             </a>
           )}
         </nav>
-        <div className="flex min-w-0 flex-col gap-5">
+        {/* One column up to big screens; there, two (sections never split across them). */}
+        <div className="flex min-w-0 flex-col gap-5 2xl:block 2xl:columns-2 2xl:gap-x-5 [&>*]:break-inside-avoid 2xl:[&>*]:mb-5">
           {show('accounts') && <Accounts />}
           {show('obs') && <Obs />}
           {show('music') && (

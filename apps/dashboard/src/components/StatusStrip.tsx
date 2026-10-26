@@ -113,7 +113,12 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
               )}
               <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
               {!compact && (tone !== 'ok' || name === 'obs') && (
-                <span className={tone === 'ok' ? 'text-text-2' : 'text-text-3'}>{label}</span>
+                // "Connected" is plain from the green dot: on smaller screens only problems say so.
+                <span
+                  className={cx(tone === 'ok' ? 'hidden text-text-2 xl:inline' : 'text-text-3')}
+                >
+                  {label}
+                </span>
               )}
               {!compact && late && (
                 <span
@@ -131,8 +136,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
               )}
               {!compact && v !== undefined && (
                 <span aria-hidden="true" className="text-text-3">
-                  <span className="font-mono tabular-nums">{formatCount(v)}</span>{' '}
-                  {v === 1 ? 'viewer' : 'viewers'}
+                  <span className="font-mono tabular-nums">{formatCount(v)}</span>
+                  {/* The word fits on wide screens; the count alone keeps the bar on one line. */}
+                  <span className="hidden xl:inline"> {v === 1 ? 'viewer' : 'viewers'}</span>
                 </span>
               )}
             </a>
