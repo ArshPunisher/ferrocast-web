@@ -166,6 +166,18 @@ export interface EngineItem {
   /** For video from a device or file: how it's deinterlaced; null for other sources. */
   deinterlace?: EngineDeinterlace | null
   top_field_first?: boolean
+  /** A video, playlist or slideshow with play controls. */
+  media?: boolean
+}
+
+export type EngineMediaAct =
+  'play' | 'pause' | 'play_pause' | 'restart' | 'stop' | 'next' | 'previous'
+
+/** Where a video, playlist or slideshow is. */
+export interface EngineMedia {
+  state: 'none' | 'playing' | 'opening' | 'buffering' | 'paused' | 'stopped' | 'ended' | 'error'
+  time_ms: number
+  duration_ms: number
 }
 
 export const ENGINE_BLENDS = [
@@ -765,6 +777,12 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    /** A video, playlist or slideshow's play controls (or, with nothing, where it is). */
+    media: (name: string, what?: EngineMediaAct, seekMs?: number) =>
+      c.request<EngineMedia>('POST', `/api/v1/studio/engine/sources/${enc(name)}/media`, {
+        ...(what ? { do: what } : {}),
+        ...(seekMs !== undefined ? { seek_ms: seekMs } : {}),
+      }),
     /** Files sources use that aren't on this computer. */
     missingFiles: () =>
       c.request<EngineMissingFile[]>('GET', '/api/v1/studio/engine/missing-files'),
