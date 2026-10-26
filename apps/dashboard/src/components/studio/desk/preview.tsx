@@ -1,12 +1,21 @@
 // The stage: the live picture (a native view the app draws over this box, letterboxed like
 // OBS's preview) and, under it, the scene on air and how scenes change.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 import {
   ArrowUUpLeft,
   ArrowFatRight,
   ArrowUUpRight,
   ArrowsLeftRight,
+  BoundingBox,
   ClockCounterClockwise,
   Columns,
   DotsThree,
@@ -35,11 +44,13 @@ import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OptionsForm } from './options'
 import {
   MOVE,
+  at,
   boxOf,
   cursorFor,
   drag,
   fit,
   gripAt,
+  inside,
   pick,
   type Box,
   type Frame,
@@ -48,7 +59,64 @@ import {
 } from './stage-edit'
 
 /** True while something sits over the box: the native view can't be covered, so it hides. */
-function covered(r: DOMRect): boolean {
+/** The app's view is this much bigger than the box on every side (points): room for the
+ * outline and handles of a source at the canvas's edge, as OBS's preview has. */
+const EDGE = 10
+
+/** How far the preview can zoom out: all of the canvas, then smaller to see what's off it. */
+export const ZOOMS = [1, 0.75, 0.5] as const
+
+/** The preview's zoom and whether every source shows its outline, kept for this viewer. */
+interface PreviewView {
+  zoom: number
+  frames: boolean
+}
+const VIEW_KEY = 'fc-preview-view'
+const viewSubs = new Set<() => void>()
+let view: PreviewView = readView()
+
+function readView(): PreviewView {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as Partial<PreviewView> | null
+    if (v && ZOOMS.some((z) => z === v.zoom) && typeof v.frames === 'boolean')
+      return { zoom: v.zoom as number, frames: v.frames }
+  } catch {
+    // Storage off (a private window): the defaults.
+  }
+  return { zoom: 1, frames: true }
+}
+
+export function usePreviewView(): [PreviewView, (next: Partial<PreviewView>) => void] {
+  const v = useSyncExternalStore(
+    (cb) => {
+      viewSubs.add(cb)
+      return () => viewSubs.delete(cb)
+    },
+    () => view,
+  )
+  const set = (next: Partial<PreviewView>) => {
+    view = { ...view, ...next }
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify(view))
+    } catch {
+      // Not kept; still applies now.
+    }
+    for (const cb of viewSubs) cb()
+  }
+  return [v, set]
+}
+
+/** An element's background as 0xRRGGBB (what the app paints round the canvas). */
+function bgOf(el: Element | null): number | undefined {
+  if (!el) return undefined
+  const m = getComputedStyle(el).backgroundColor.match(/\d+(\.\d+)?/g)
+  if (!m || m.length < 3) return undefined
+  const [r, g, b] = m.map(Number)
+  return ((r ?? 0) << 16) | ((g ?? 0) << 8) | (b ?? 0)
+}
+
+function covered(box: DOMRect, edge = EDGE): boolean {
+  const r = new DOMRect(box.x - edge, box.y - edge, box.width + 2 * edge, box.height + 2 * edge)
   if (document.body.dataset.dockDrag) return true
   if (document.querySelector('dialog[open]')) return true
   for (const el of document.querySelectorAll(
@@ -60,7 +128,7 @@ function covered(r: DOMRect): boolean {
   return false
 }
 
-/** Where the live picture goes: the app draws a native view exactly over this box. In Studio
+/** Where the live picture goes: the app draws it exactly on this box (its view reaches EDGE past it for handles). In Studio
  * Mode there are two: the preview being edited, and what's on air, with the ways to switch
  * between them in the middle. */
 export function PreviewBox({ running }: { running: boolean }) {
@@ -68,8 +136,10 @@ export function PreviewBox({ running }: { running: boolean }) {
   const { scenes } = useDesk()
   const studio = !!scenes.data?.preview
   const ref = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const programRef = useRef<HTMLDivElement>(null)
   const desktop = inDesktopApp()
+  const [pv] = usePreviewView()
   useEffect(() => {
     const el = ref.current
     if (!running || !desktop || !el) return
@@ -80,14 +150,44 @@ export function PreviewBox({ running }: { running: boolean }) {
       const r = box.getBoundingClientRect()
       // Hidden while partly under the top bar, off the window or under a menu or panel.
       const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
-      const inView = r.top >= bar && r.bottom <= window.innerHeight && r.width > 1 && r.height > 1
+      const inView =
+        r.top - EDGE >= bar && r.bottom + EDGE <= window.innerHeight && r.width > 1 && r.height > 1
+      const bg = bgOf(box.closest('[data-stage-bg]'))
       return inView && !covered(r)
-        ? { x: r.left, y: r.top, w: r.width, h: r.height, vh: window.innerHeight }
+        ? {
+            x: r.left,
+            y: r.top,
+            w: r.width,
+            h: r.height,
+            vh: window.innerHeight,
+            ...(bg === undefined ? {} : { bg }),
+          }
+        : null
+    }
+    // Without Studio Mode the app's view covers the whole stage and draws the canvas where its
+    // box is, so the outlines of what's off the canvas show round it (zoomed out, more of it).
+    const placeStage = (stage: HTMLElement | null, box: HTMLElement): PreviewRect | null => {
+      if (!stage) return null
+      const s = stage.getBoundingClientRect()
+      const c = box.getBoundingClientRect()
+      const bg = bgOf(stage)
+      const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
+      const inView = s.top >= bar && s.bottom <= window.innerHeight && c.width > 1 && c.height > 1
+      return inView && !covered(s, 0)
+        ? {
+            x: s.left,
+            y: s.top,
+            w: s.width,
+            h: s.height,
+            vh: window.innerHeight,
+            canvas: { x: c.left - s.left, y: c.top - s.top, w: c.width, h: c.height },
+            ...(bg === undefined ? {} : { bg }),
+          }
         : null
     }
     const send = () => {
       raf = 0
-      const rect = place(el)
+      const rect = studio ? place(el) : placeStage(stageRef.current, el)
       const program = studio ? place(programRef.current) : null
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, window.innerHeight])
@@ -104,6 +204,7 @@ export function PreviewBox({ running }: { running: boolean }) {
     schedule()
     const ro = new ResizeObserver(schedule)
     ro.observe(el)
+    if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
     const mo = new MutationObserver(schedule)
     // Dialogs open by an attribute; floating panels say where they are in data-pos.
@@ -112,6 +213,11 @@ export function PreviewBox({ running }: { running: boolean }) {
       subtree: true,
       attributes: true,
       attributeFilter: ['open', 'data-dock-drag', 'data-pos'],
+    })
+    // A theme change repaints the stage round the canvas.
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     window.addEventListener('resize', schedule)
@@ -128,24 +234,34 @@ export function PreviewBox({ running }: { running: boolean }) {
   const screen =
     'grid aspect-video touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent'
   if (!studio)
-    // The canvas is an exact 16:9 box fitted inside the stage, with room around it (no bars).
+    // The canvas is an exact 16:9 box fitted inside the stage (smaller when zoomed out), with
+    // room around it for what's off the canvas. The whole stage takes clicks: a handle can be
+    // grabbed outside the canvas.
     return (
-      <div className="grid min-h-0 flex-1 place-items-center bg-inset p-3 [container-type:size]">
+      <div
+        ref={stageRef}
+        aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
+        data-stage-bg
+        className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+        {...editing}
+      >
         <div
           ref={ref}
-          aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
-          className={cx(screen, 'w-[min(100cqw,100cqh*16/9)]')}
-          {...editing}
+          style={{ '--fc-zoom': pv.zoom } as CSSProperties}
+          className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
         >
           {!desktop && 'The live picture shows in the Ferrocast app.'}
         </div>
       </div>
     )
   // Studio Mode: two 16:9 boxes side by side with the switch between them.
-  const half = 'w-[min(calc((100cqw-150px)/2),calc((100cqh-30px)*16/9))]'
+  const half = 'w-[min(calc((100cqw-150px)/2),calc((100cqh-36px)*16/9))]'
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center gap-3 bg-inset p-3 [container-type:size]">
-      <figure className="m-0 flex flex-col gap-1.5">
+    <div
+      data-stage-bg
+      className="flex min-h-0 flex-1 items-center justify-center gap-3 bg-[var(--fc-stage)] p-3 [container-type:size]"
+    >
+      <figure className="m-0 flex flex-col gap-3">
         <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-text-2">
           <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
           Preview: {scenes.data?.preview}
@@ -160,7 +276,7 @@ export function PreviewBox({ running }: { running: boolean }) {
         </div>
       </figure>
       <SwitchColumn />
-      <figure className="m-0 flex flex-col gap-1.5">
+      <figure className="m-0 flex flex-col gap-3">
         <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-danger">
           <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
           On air: {scenes.data?.current}
@@ -478,17 +594,22 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
   const { run } = useAction()
   const p = prefs.data
   const canvas = stats?.canvas ?? null
+  const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
   const sending = useRef<{ busy: boolean; next: (Box & { save: boolean; id: number }) | null }>({
     busy: false,
     next: null,
   })
 
-  // The engine outlines whatever is picked here or in the Sources panel.
+  // The engine outlines whatever is picked here or in the Sources panel (and, with frames on,
+  // every source in its own colour).
   useEffect(() => {
     if (!on) return
-    void api.select(selected === null ? null : { scene, id: selected }).catch(() => undefined)
-  }, [api, on, scene, selected])
+    const pickNone = selected === null && !pv.frames
+    void api
+      .select(pickNone ? null : { scene, id: selected, frames: pv.frames })
+      .catch(() => undefined)
+  }, [api, on, scene, selected, pv.frames])
   useEffect(() => {
     if (!on) return
     return () => void api.select(null).catch(() => undefined)
@@ -557,6 +678,9 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       let grip: Grip | null = null
       if (current?.frame && current.visible) {
         grip = gripAt(current.frame, w.p, w.reach)
+        // As in OBS, a press inside the picked source keeps it, even under another one: a
+        // source behind a full-screen camera can still be moved.
+        if (!grip && inside(current.frame, w.p)) grip = MOVE
         if (grip) target = current
       }
       if (!target) {
@@ -587,7 +711,13 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         // The cursor says what a press would do.
         const f = frameOf(selected)
         const g = f ? gripAt(f, w.p, w.reach) : null
-        const over = g ? cursorFor(f as Frame, g) : pick(list, w.p) ? 'pointer' : ''
+        const over = g
+          ? cursorFor(f as Frame, g)
+          : f && inside(f, w.p)
+            ? 'move'
+            : pick(list, w.p)
+              ? 'pointer'
+              : ''
         e.currentTarget.style.cursor = over
         return
       }
@@ -718,6 +848,93 @@ const HAS_SETTINGS = new Set([
 ])
 
 /** Under the picture: the scene on air and the transition between scenes. */
+/** True when frame `a` covers all of frame `b` that's on the canvas (`w` × `h`): what's off
+ * the canvas isn't seen anyway. */
+export function covers(a: Frame, b: Frame, w: number, h: number): boolean {
+  const clamp = (n: number, hi: number) => Math.min(Math.max(n, 0), hi)
+  const corners: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ]
+  return corners.every(([u, v]) => {
+    const p = at(b, u, v)
+    return inside(a, { x: clamp(p.x, w), y: clamp(p.y, h) })
+  })
+}
+
+/** The preview's zoom and frames switch, and a note when the picked source is hidden behind
+ * another (it still moves; its outline shows where it is). */
+function ViewControls() {
+  const { api, scene, scenes, items, selected, refresh, stats } = useDesk()
+  const { run } = useAction()
+  const [pv, setPv] = usePreviewView()
+  const c = stats?.canvas
+  const list = items.data ?? []
+  const idx = list.findIndex((i) => i.id === selected)
+  const it = idx >= 0 ? list[idx] : undefined
+  const cover =
+    it?.frame && it.visible && c
+      ? list
+          .slice(0, idx)
+          .find(
+            (o) => o.visible && o.frame && covers(o.frame, it.frame as Frame, c.width, c.height),
+          )
+      : undefined
+  return (
+    <>
+      {it && cover && (
+        <span className="flex min-w-0 items-center gap-2 rounded-full bg-warn-soft py-0.5 pr-1 pl-3 text-[13px] font-semibold text-warn">
+          <span className="truncate">Behind {cover.name}</span>
+          <button
+            type="button"
+            onClick={() =>
+              void run('order', () => done(api.itemOrder(scene, it.id, 0))).then(
+                (ok) => ok && refresh(),
+              )
+            }
+            className="rounded-full bg-surface-1 px-2 py-0.5 text-[12.5px] font-bold text-text hover:bg-surface-2"
+          >
+            Bring to front
+          </button>
+        </span>
+      )}
+      {!scenes.data?.preview && (
+        <div
+          role="group"
+          aria-label="Zoom"
+          className="flex items-center rounded-full bg-surface-3 p-0.5"
+        >
+          {ZOOMS.map((z) => (
+            <button
+              key={z}
+              type="button"
+              aria-pressed={pv.zoom === z}
+              onClick={() => setPv({ zoom: z })}
+              className={cx(
+                'rounded-full px-2 py-0.5 font-mono text-[12.5px] font-semibold tabular-nums',
+                pv.zoom === z ? 'bg-surface-1 text-text shadow-sm' : 'text-text-3 hover:text-text',
+              )}
+            >
+              {z === 1 ? 'Fit' : `${z * 100}%`}
+            </button>
+          ))}
+        </div>
+      )}
+      <IconButton
+        size="sm"
+        label={pv.frames ? 'Hide source outlines' : 'Show every source’s outline'}
+        aria-pressed={pv.frames}
+        className={cx(pv.frames && 'bg-accent-soft text-accent-text')}
+        onClick={() => setPv({ frames: !pv.frames })}
+      >
+        <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} />
+      </IconButton>
+    </>
+  )
+}
+
 export function StageBar() {
   const { api, scenes, scene, kinds, stats, openSettings, screens, refresh } = useDesk()
   const c = stats?.canvas
@@ -793,26 +1010,29 @@ export function StageBar() {
     if (ok) scenes.reload()
   }
   return (
-    <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-surface-1 px-3 py-2 text-[14px] text-text-3">
-      <span className="font-display text-[16px] font-bold text-text">{scene}</span>
+    <div className="flex flex-none flex-wrap items-center gap-x-2 gap-y-2 border-t border-line bg-surface-1 px-2.5 py-2 text-[14px] text-text-3 xl:gap-x-3 xl:px-3">
+      {/* The Scenes panel shows what's on air; here the name fits on wide screens. */}
+      <span className="hidden font-display text-[16px] font-bold text-text xl:inline">{scene}</span>
       {c && (
         <button
           type="button"
           title="Change the picture size"
           onClick={() => openSettings('picture')}
-          className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text"
+          className="hidden rounded-full xl:inline-block bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text"
         >
           {c.width}×{c.height} · {c.fps}&nbsp;fps
         </button>
       )}
+      <ViewControls />
       <span className="flex-1" />
       {t && (
         <div className="flex items-center gap-2">
-          <label htmlFor="studio-transition" className="hidden sm:inline">
+          <label htmlFor="studio-transition" className="hidden 2xl:inline">
             Switch with
           </label>
           <Select
             id="studio-transition"
+            aria-label="Switch with"
             className="h-8! w-auto! py-0! text-[14px]"
             value={t.kind}
             onChange={(e) => void set(e.target.value, t.ms)}
@@ -834,7 +1054,7 @@ export function StageBar() {
           )}
           {/* A stinger lasts as long as its video. */}
           {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
-            <>
+            <span className="flex items-center gap-2">
               <Input
                 aria-label="Transition length in milliseconds"
                 type="number"
@@ -854,11 +1074,13 @@ export function StageBar() {
                 }}
               />
               <span aria-hidden>ms</span>
-            </>
+            </span>
           )}
-          <InfoTip label="About switching scenes">
-            How the picture changes when you click another scene.
-          </InfoTip>
+          <span className="hidden xl:contents">
+            <InfoTip label="About switching scenes">
+              How the picture changes when you click another scene.
+            </InfoTip>
+          </span>
         </div>
       )}
       <IconButton

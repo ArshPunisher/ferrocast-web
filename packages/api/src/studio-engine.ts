@@ -533,6 +533,22 @@ export type EngineProjector =
   | { what: 'program' | 'multiview'; screen?: number; on_top?: boolean }
   | { what: 'source'; name: string; screen?: number; on_top?: boolean }
 
+/** The colour of a source's outline in the preview, by its item id: the app draws the same. */
+export const FRAME_COLORS = [
+  '#ff5a1f',
+  '#33d4ff',
+  '#a3e635',
+  '#f472b6',
+  '#facc15',
+  '#a78bfa',
+  '#2dd4bf',
+  '#60a5fa',
+] as const
+
+export function frameColor(id: number): string {
+  return FRAME_COLORS[((id % 8) + 8) % 8] as string
+}
+
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {
   x: number
@@ -541,6 +557,11 @@ export interface PreviewRect {
   h: number
   /** The page's visible height (`window.innerHeight`): where its top is inside the window. */
   vh?: number
+  /** Where the canvas is inside the box (CSS pixels from its top-left). The box is then the
+   * whole stage, and outlines of what's off the canvas show round it. */
+  canvas?: { x: number; y: number; w: number; h: number }
+  /** The page's colour round the canvas (0xRRGGBB), so the app's stage matches the theme. */
+  bg?: number
 }
 
 export function studioEngineApi(c: FerroClient) {
@@ -741,8 +762,9 @@ export function studioEngineApi(c: FerroClient) {
     /** Every step Undo and Redo can take, newest first. */
     history: () =>
       c.request<{ undo: string[]; redo: string[] }>('GET', '/api/v1/studio/engine/history'),
-    /** Outlines an item in the preview, or nothing. */
-    select: (pick: { scene: string; id: number } | null) =>
+    /** Outlines an item in the preview, or nothing; with `frames`, every source of the scene
+     * gets a thin outline in its own colour too (`frameColor`). */
+    select: (pick: { scene: string; id: number | null; frames?: boolean } | null) =>
       c.request<void>(
         'PUT',
         '/api/v1/studio/engine/preview/selection',
@@ -863,6 +885,11 @@ export function studioEngineApi(c: FerroClient) {
         group,
       }),
     /** Takes a group apart; its sources stay in the scene. */
+    /** Moves a source to place `to` in its list (0 is the top: on top of everything). */
+    itemOrder: (scene: string, id: number, to: number) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/order`, {
+        to,
+      }),
     ungroup: (scene: string, id: number) =>
       c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/ungroup`, {}),
     /** A video, playlist or slideshow's play controls (or, with nothing, where it is). */
@@ -885,11 +912,6 @@ export function studioEngineApi(c: FerroClient) {
         to,
       }),
     /** Looks for the missing files by name in a folder → each found path's new place. */
-    /** Moves a source to place `to` in its list (0 is the top: on top of everything). */
-    itemOrder: (scene: string, id: number, to: number) =>
-      c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/order`, {
-        to,
-      }),
     findMissing: (folder: string) =>
       c.request<{ found: Record<string, string> }>(
         'POST',
