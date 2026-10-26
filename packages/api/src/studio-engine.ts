@@ -326,6 +326,13 @@ export interface EngineTransform {
   height: number
 }
 
+/** Scene collections or profiles: which is in use, and all of them. */
+export interface EngineShelf {
+  current: string
+  list: { id: string; name: string }[]
+}
+export type EngineShelfKind = 'collections' | 'profiles'
+
 /** A display a full-screen projector can go on. */
 export interface EngineScreen {
   index: number
@@ -500,6 +507,31 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('PUT', `/api/v1/studio/engine/transitions/${enc(kind)}/settings`, {
         settings,
       }),
+    /** Scene collections or profiles. */
+    shelf: (kind: EngineShelfKind) =>
+      c.request<EngineShelf>('GET', `/api/v1/studio/engine/library/${kind}`),
+    /** A new one (empty, or a copy of the one in use), switched to. */
+    newShelf: (kind: EngineShelfKind, name: string, copy = false) =>
+      c.request<{ id: string }>('POST', `/api/v1/studio/engine/library/${kind}`, { name, copy }),
+    switchShelf: (kind: EngineShelfKind, id: string) =>
+      c.request<{ id: string }>('PUT', `/api/v1/studio/engine/library/${kind}/current`, { id }),
+    renameShelf: (kind: EngineShelfKind, id: string, name: string) =>
+      c.request<void>('POST', `/api/v1/studio/engine/library/${kind}/${enc(id)}/rename`, { name }),
+    removeShelf: (kind: EngineShelfKind, id: string) =>
+      c.request<void>('DELETE', `/api/v1/studio/engine/library/${kind}/${enc(id)}`),
+    /** The file (a collection as OBS writes it, or a profile's settings). */
+    exportShelf: (kind: EngineShelfKind, id: string) =>
+      c.request<Record<string, unknown>>(
+        'GET',
+        `/api/v1/studio/engine/library/${kind}/${enc(id)}/export`,
+      ),
+    /** A scene collection file as a new collection, switched to → what came in. */
+    importCollection: (name: string, doc: unknown) =>
+      c.request<EngineImportReport & { id: string }>(
+        'POST',
+        '/api/v1/studio/engine/library/collections/import',
+        { name, doc },
+      ),
     /** Undoes the newest change to sources → what it was, and what's next each way. */
     undo: () =>
       c.request<{ done: string | null; undo: string | null; redo: string | null }>(
