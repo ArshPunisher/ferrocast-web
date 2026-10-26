@@ -11,6 +11,7 @@ import {
   ArrowsOut,
   ArrowsOutSimple,
   Camera,
+  CornersOut,
   CaretDown,
   CaretDoubleDown,
   CaretDoubleUp,
@@ -26,6 +27,7 @@ import {
   Faders,
   FlipHorizontal,
   FlipVertical,
+  FilmReel,
   FrameCorners,
   Funnel,
   ImageSquare,
@@ -35,12 +37,16 @@ import {
   Plus,
   Stack,
   SlidersHorizontal,
+  Sparkle,
   Trash,
 } from '@phosphor-icons/react'
 import {
   ENGINE_BLENDS,
+  ENGINE_DEINTERLACE,
   ENGINE_SCALE_FILTERS,
+  type EngineDeinterlace,
   type EngineItem,
+  type EngineTransition,
   type EngineItemEdit,
   type EngineProjector,
 } from '@ferrocast/api'
@@ -51,6 +57,7 @@ import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
+import { TRANSITIONS } from './preview'
 
 const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
   off: 'Off',
@@ -60,6 +67,32 @@ const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
   lanczos: 'Sharpest',
   area: 'Best for shrinking',
 }
+
+const DEINTERLACE_LABEL: Record<EngineDeinterlace, string> = {
+  off: 'Off',
+  discard: 'Discard',
+  retro: 'Retro',
+  blend: 'Blend',
+  blend_2x: 'Blend 2x',
+  linear: 'Linear',
+  linear_2x: 'Linear 2x',
+  yadif: 'Yadif',
+  yadif_2x: 'Yadif 2x',
+}
+
+/** The ways in (or out) a source can have when it's shown (or hidden), as in OBS. */
+const ITEM_TRANSITIONS: EngineTransition[] = Object.keys(TRANSITIONS)
+  .filter((k) => k !== 'cut_transition')
+  .flatMap((kind) =>
+    kind === 'obs_stinger_transition'
+      ? [{ kind, ms: 0 }]
+      : [300, 500, 1000].map((ms) => ({ kind, ms })),
+  )
+
+const transitionLabel = (t: EngineTransition) =>
+  t.kind === 'obs_stinger_transition'
+    ? (TRANSITIONS[t.kind] ?? t.kind)
+    : `${TRANSITIONS[t.kind] ?? t.kind} ${t.ms / 1000}s`
 
 const BLEND_LABEL: Record<(typeof ENGINE_BLENDS)[number], string> = {
   normal: 'Normal',
@@ -114,6 +147,37 @@ export function SourcesDock() {
   const web = (item: EngineItem, what: 'interact' | 'reload') =>
     void run(`web:${item.id}`, () => done(api.web(item.name, what)))
   const project = (p: EngineProjector) => void run('projector', () => api.projector(p))
+  const withRefresh = (key: string, f: () => Promise<unknown>) =>
+    void run(key, () => done(f())).then((ok) => ok && refresh())
+  const itemTransition = (item: EngineItem, show: boolean): MenuItem => {
+    const now = show ? item.show_transition : item.hide_transition
+    const set = (t: EngineTransition | null) =>
+      withRefresh('item-transition', () => api.setItemTransition(scene, item.id, show, t))
+    return {
+      label: show ? 'Show transition' : 'Hide transition',
+      icon: Sparkle,
+      items: [
+        { label: 'None (at once)', checked: !now, onSelect: () => set(null) },
+        { sep: true },
+        ...ITEM_TRANSITIONS.map((t) => ({
+          label: transitionLabel(t),
+          checked: !!now && now.kind === t.kind && (t.ms === 0 || now.ms === t.ms),
+          onSelect: () => set(t),
+        })),
+      ],
+    }
+  }
+  // OBS's "Resize output (source size)": the canvas takes this source's size.
+  const fitCanvas = (item: EngineItem) =>
+    void run(
+      'canvas',
+      async () => {
+        const [t, s] = await Promise.all([api.transform(scene, item.id), api.studioSettings()])
+        if (!t.width || !t.height) throw new Error(`${item.name} has no size yet.`)
+        return api.setStudioSettings({ ...s, width: t.width, height: t.height })
+      },
+      { success: (r) => r?.restart ?? 'The canvas now matches this source.' },
+    ).then((r) => r && refresh())
   const itemMenu = (item: EngineItem): MenuItem[] => [
     ...(item.kind === 'ferrocast_web'
       ? ([
@@ -227,6 +291,37 @@ export function SourcesDock() {
         onSelect: () => void act(item, `blend_${b}`),
       })),
     },
+    ...(item.deinterlace != null
+      ? ([
+          {
+            label: 'Deinterlacing',
+            icon: FilmReel,
+            items: [
+              ...ENGINE_DEINTERLACE.map((m) => ({
+                label: DEINTERLACE_LABEL[m],
+                checked: item.deinterlace === m,
+                onSelect: () =>
+                  withRefresh('deinterlace', () =>
+                    api.setDeinterlace(item.name, m, item.top_field_first ?? true),
+                  ),
+              })),
+              { sep: true },
+              ...[true, false].map((top) => ({
+                label: top ? 'Top field first' : 'Bottom field first',
+                checked: (item.top_field_first ?? true) === top,
+                disabled: item.deinterlace === 'off',
+                onSelect: () =>
+                  withRefresh('deinterlace', () =>
+                    api.setDeinterlace(item.name, item.deinterlace ?? 'off', top),
+                  ),
+              })),
+            ],
+          },
+        ] satisfies MenuItem[])
+      : []),
+    itemTransition(item, true),
+    itemTransition(item, false),
+    { label: 'Resize canvas to this source', icon: CornersOut, onSelect: () => fitCanvas(item) },
     { sep: true },
     {
       label: 'Screenshot',
