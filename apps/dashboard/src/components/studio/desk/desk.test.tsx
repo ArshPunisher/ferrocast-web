@@ -7,6 +7,7 @@ import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
 import { historyMenu, tbarEnd } from './preview'
 import { balanceLabel } from './advanced-audio'
+import { previewName } from './settings'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -219,5 +220,17 @@ describe('advanced audio', () => {
     expect(balanceLabel(0.3)).toBe('L 40%')
     expect(balanceLabel(1)).toBe('R 100%')
     expect(balanceLabel(0.501)).toBe('Centre')
+  })
+})
+
+describe('recording names', () => {
+  it('fills OBS’s name pattern like OBS does', () => {
+    const at = new Date(2026, 9, 7, 9, 5, 3)
+    const s = { fps: 60, width: 1920, height: 1080 }
+    expect(previewName('%CCYY-%MM-%DD %hh-%mm-%ss', s, at)).toBe('2026-10-07 09-05-03')
+    expect(previewName('Show %YY%MM%DD %FPS %CRES 100%%', s, at)).toBe(
+      'Show 261007 60 1920x1080 100%',
+    )
+    expect(previewName('%unknown stays', s, at)).toBe('%unknown stays')
   })
 })

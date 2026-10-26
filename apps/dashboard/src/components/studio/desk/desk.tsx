@@ -9,6 +9,8 @@ import {
   CheckSquare,
   Clock,
   Cpu,
+  DotsThree,
+  FilmSlate,
   Gauge,
   GearSix,
   Layout as LayoutIcon,
@@ -18,6 +20,7 @@ import {
   Play,
   Power,
   Record as RecordIcon,
+  Scissors,
   Square,
   WifiHigh,
   X,
@@ -44,6 +47,7 @@ import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { LibraryBar } from './library'
+import { useContextMenu } from './menu'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
 
@@ -295,6 +299,27 @@ function ControlBar({
     if (v !== undefined && stats) setStats({ ...stats, record: v })
   }
   const pause = () => void run('pause', () => api.pauseRecord(!rec?.paused))
+  const { open: openMenu, menu } = useContextMenu()
+  const recordMenu = (e: React.MouseEvent) =>
+    openMenu(e, 'Recording', [
+      {
+        label: 'Add a chapter here',
+        icon: FilmSlate,
+        // Only MP4 and MOV keep chapters.
+        disabled: !/\.(mp4|mov)$/i.test(rec?.file ?? ''),
+        onSelect: () =>
+          void run('chapter', () => api.recordChapter(), { success: 'Chapter marked.' }),
+      },
+      {
+        label: 'Start a new file now',
+        icon: Scissors,
+        onSelect: () =>
+          void run('split', () => api.recordSplit(), {
+            success: 'The recording goes on in a new file.',
+          }),
+      },
+    ])
+  const remux = stats?.remux ?? null
   const cpu = stats?.engine.cpu
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
@@ -331,6 +356,16 @@ function ControlBar({
           </b>
         </span>
       </div>
+      {remux && (!remux.done || remux.error) && (
+        <span
+          className={cx('text-[13px] font-semibold', remux.error ? 'text-danger' : 'text-text-2')}
+          aria-live="polite"
+        >
+          {remux.error
+            ? `The MP4 couldn't be made: ${remux.error}`
+            : `Making an MP4… ${Math.round(remux.percent)}%`}
+        </span>
+      )}
       {stream?.reconnecting && (
         <span className="text-[13px] font-semibold text-warn" aria-live="polite">
           Reconnecting…
@@ -363,6 +398,17 @@ function ControlBar({
           <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
         </Button>
       )}
+      {recording && (
+        <IconButton
+          label="Chapter or a new file"
+          className="h-10! w-10!"
+          variant="ghost"
+          onClick={recordMenu}
+        >
+          <DotsThree size={18} weight="bold" />
+        </IconButton>
+      )}
+      {menu}
       <Button
         variant="secondary"
         className={cx('h-10', recording && 'text-danger')}

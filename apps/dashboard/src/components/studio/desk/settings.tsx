@@ -12,7 +12,12 @@ import {
   SpeakerHigh,
   X,
 } from '@phosphor-icons/react'
-import { describeError, type StudioSettings } from '@ferrocast/api'
+import {
+  ENGINE_RECORD_FORMATS,
+  describeError,
+  type EngineRecordFormat,
+  type StudioSettings,
+} from '@ferrocast/api'
 import {
   Button,
   Dialog,
@@ -29,6 +34,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
+import { OptionsForm } from './options'
 
 export type Page = 'stream' | 'audio' | 'picture' | 'record' | 'keys' | 'advanced'
 
@@ -266,6 +272,113 @@ const PRESETS = [
   { id: 'max', title: 'Max', kbps: 12000, scale: null, note: 'YouTube only' },
 ] as const
 
+const HARDWARE_H264 = 'com.apple.videotoolbox.videoencoder.ave.avc'
+
+/** The encoder used: the one picked, else the Mac's hardware H.264 or x264. */
+function effectiveEncoder(picked: string | null, encoder: StudioSettings['encoder']): string {
+  return picked ?? (encoder === 'hardware' ? HARDWARE_H264 : 'obs_x264')
+}
+
+/** What the plain controls set on the encoder, shown under its own options. */
+function baseOptions(s: StudioSettings): Record<string, unknown> {
+  return {
+    bitrate: s.video_kbps,
+    rate_control: s.vbr ? 'VBR' : 'CBR',
+    keyint_sec: s.keyframe_s,
+    profile: s.profile,
+    bframes: s.bframes,
+  }
+}
+
+/** Every video encoder on this computer, or "picked for you". */
+function EncoderSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string | null
+  onChange: (id: string | null) => void
+}) {
+  const { kinds } = useDesk()
+  // Video encoders only (OBS lists sound ones alongside).
+  const list = kinds.data?.encoders.filter((e) => !/aac|opus|pcm|alac|flac|audio/i.test(e.id)) ?? []
+  return (
+    <Select
+      aria-label={label}
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value || null)}
+    >
+      <option value="">Picked for you</option>
+      {list.map((e) => (
+        <option key={e.id} value={e.id}>
+          {e.name}
+        </option>
+      ))}
+      {value && !list.some((e) => e.id === value) && (
+        <option value={value}>{value} (not here)</option>
+      )}
+    </Select>
+  )
+}
+
+/**
+ * OBS's Advanced output options for one encoder (preset, tune, lookahead, x264 options, GPU…),
+ * drawn from what the encoder describes. Only changed keys are kept; they win over the plain
+ * controls above.
+ */
+export function EncoderOptions({
+  id,
+  base,
+  settings,
+  onChange,
+}: {
+  id: string
+  base: Record<string, unknown>
+  settings: Record<string, unknown>
+  onChange: (next: Record<string, unknown>) => void
+}) {
+  const { api } = useDesk()
+  const [open, setOpen] = useState(false)
+  const merged = useMemo(() => ({ ...base, ...settings }), [base, settings])
+  const key = JSON.stringify(merged)
+  const got = useResource(
+    () => (open ? api.encoderOptions(id, merged) : Promise.resolve(null)),
+
+    [api, id, open, key],
+  )
+  const changed = Object.keys(settings).length
+  return (
+    <details
+      className="my-1 rounded-control border border-line"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer px-3 py-2 text-[13px] font-semibold text-accent-text">
+        Every option of this encoder{changed ? ` (${changed} changed)` : ''}
+      </summary>
+      <div className="flex flex-col gap-3 border-t border-line p-3">
+        {got.error && !got.data ? (
+          <LoadError error={got.error} onRetry={got.reload} />
+        ) : !got.data ? (
+          <Skeleton className="h-32" />
+        ) : (
+          <OptionsForm
+            opts={got.data.options}
+            values={{ ...got.data.values, ...merged }}
+            onChange={(k, v) => onChange({ ...settings, [k]: v })}
+          />
+        )}
+        {changed > 0 && (
+          <Button size="sm" variant="ghost" className="self-start" onClick={() => onChange({})}>
+            Back to the plain settings
+          </Button>
+        )}
+      </div>
+    </details>
+  )
+}
+
 function StreamPage({ s, set }: PageProps) {
   const sent = s.scale ?? [s.width, s.height]
   const preset = PRESETS.find(
@@ -408,6 +521,19 @@ function StreamPage({ s, set }: PageProps) {
                 ))}
             </Select>
           </Row>
+          <Row label="Encoder" info="One you pick here wins over the choice above (HEVC, AV1…).">
+            <EncoderSelect
+              label="Encoder"
+              value={s.video_encoder ?? null}
+              onChange={(video_encoder) => set({ video_encoder, encoder_settings: {} })}
+            />
+          </Row>
+          <EncoderOptions
+            id={effectiveEncoder(s.video_encoder ?? null, s.encoder)}
+            base={baseOptions(s)}
+            settings={s.encoder_settings ?? {}}
+            onChange={(encoder_settings) => set({ encoder_settings })}
+          />
           <Row label="Audio quality">
             <Select
               aria-label="Audio quality"
@@ -533,19 +659,83 @@ function PicturePage({ s, set }: PageProps) {
   )
 }
 
+const FORMAT_LABEL: Record<EngineRecordFormat, string> = {
+  mp4: 'MP4 (safe if the Mac stops)',
+  mov: 'MOV (safe if the Mac stops)',
+  fmp4: 'Fragmented MP4',
+  fmov: 'Fragmented MOV',
+  mkv: 'MKV',
+  flv: 'FLV',
+  ts: 'MPEG-TS',
+}
+
+/** OBS's name pattern with today's date, for a preview (the common specifiers). */
+export function previewName(
+  pattern: string,
+  s: Pick<StudioSettings, 'fps' | 'width' | 'height'>,
+  at = new Date(),
+): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  const map: Record<string, string> = {
+    '%CCYY': String(at.getFullYear()),
+    '%YY': p(at.getFullYear() % 100),
+    '%MM': p(at.getMonth() + 1),
+    '%DD': p(at.getDate()),
+    '%hh': p(at.getHours()),
+    '%mm': p(at.getMinutes()),
+    '%ss': p(at.getSeconds()),
+    '%FPS': String(s.fps),
+    '%CRES': `${s.width}x${s.height}`,
+    '%%': '%',
+  }
+  return pattern.replace(/%CCYY|%YY|%MM|%DD|%hh|%mm|%ss|%FPS|%CRES|%%/g, (m) => map[m] ?? m)
+}
+
+/** OBS's Remux: pick a recording, an MP4 is made beside it (progress shows in the Studio). */
+function RemuxButton() {
+  const { api } = useDesk()
+  const [busy, setBusy] = useState(false)
+  const pick = async () => {
+    setBusy(true)
+    try {
+      const got = await api.pickFile('file', 'Recordings (*.mkv *.flv *.ts *.mov *.mp4)')
+      if (!got.path) return
+      const r = await api.remux(got.path)
+      toast({ tone: 'ok', message: 'Making an MP4.', hint: r.to })
+    } catch (e) {
+      const d = describeError(e)
+      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Button size="sm" busy={busy} onClick={() => void pick()}>
+      Pick a file…
+    </Button>
+  )
+}
+
 function RecordPage({ s, set }: PageProps) {
+  const ext =
+    s.record_format === 'fmp4' ? 'mp4' : s.record_format === 'fmov' ? 'mov' : s.record_format
+  const pattern = s.record_name ?? '%CCYY-%MM-%DD %hh-%mm-%ss'
+  const spaces = s.record_spaces ?? true
   const name = useMemo(() => {
-    const d = new Date()
-    const p = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}.${s.record_format}`
-  }, [s.record_format])
+    const n = previewName(pattern, s)
+    return `${spaces ? n : n.replace(/ /g, '_')}.${ext}`
+  }, [pattern, spaces, ext, s])
   const [folder, setFolder] = useState(s.record_folder ?? '')
+  const [namePattern, setNamePattern] = useState(pattern)
   // Follows the draft (Undo changes, or a value the engine saved).
   useEffect(() => setFolder(s.record_folder ?? ''), [s.record_folder])
+  useEffect(() => setNamePattern(pattern), [pattern])
+  const tracks = s.record_tracks ?? [1]
+  const needsHelper = ['mkv', 'flv', 'ts', 'fmp4', 'fmov'].includes(s.record_format)
   return (
     <>
       <Heading>Quality</Heading>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <Choice
           on={s.record_quality === 'stream'}
           title="Same as stream"
@@ -555,34 +745,70 @@ function RecordPage({ s, set }: PageProps) {
         <Choice
           on={s.record_quality === 'high'}
           title="High"
-          note="For editing; bigger files"
+          note="For editing"
           onPick={() => set({ record_quality: 'high' })}
         />
         <Choice
           on={s.record_quality === 'lossless'}
           title="Lossless"
-          note="Huge files, heavy on CPU"
+          note="Huge files"
           onPick={() => set({ record_quality: 'lossless' })}
         />
+        <Choice
+          on={s.record_quality === 'custom'}
+          title="Your own"
+          note="Any encoder"
+          onPick={() => set({ record_quality: 'custom' })}
+        />
       </div>
+      {s.record_quality === 'custom' && (
+        <div className="flex flex-col">
+          <Row label="Encoder">
+            <EncoderSelect
+              label="Recording encoder"
+              value={s.record_encoder ?? null}
+              onChange={(record_encoder) => set({ record_encoder, record_encoder_settings: {} })}
+            />
+          </Row>
+          <EncoderOptions
+            id={effectiveEncoder(s.record_encoder ?? null, s.encoder)}
+            base={baseOptions(s)}
+            settings={s.record_encoder_settings ?? {}}
+            onChange={(record_encoder_settings) => set({ record_encoder_settings })}
+          />
+        </div>
+      )}
       <div className="flex flex-col">
         <Row
           label="File type"
-          info="Both stay playable if the app or the Mac stops while recording."
+          info="MP4 and MOV stay playable if the app or the Mac stops while recording. MKV, FLV and TS use OBS's own helper and can become MP4 when the recording ends."
         >
-          <Segmented
-            label="File type"
+          <Select
+            aria-label="File type"
             value={s.record_format}
-            options={[
-              { value: 'mp4', label: 'MP4' },
-              { value: 'mov', label: 'MOV' },
-            ]}
-            onChange={(record_format) => set({ record_format })}
-          />
+            onChange={(e) => set({ record_format: e.target.value as EngineRecordFormat })}
+          >
+            {ENGINE_RECORD_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {FORMAT_LABEL[f]}
+              </option>
+            ))}
+          </Select>
         </Row>
+        {['mkv', 'flv', 'ts'].includes(s.record_format) && (
+          <Row label="Make an MP4 when it ends" sub="The original is kept">
+            <Switch
+              label="Make an MP4 when it ends"
+              hideLabel
+              checked={s.record_remux ?? true}
+              onChange={(record_remux) => set({ record_remux })}
+            />
+          </Row>
+        )}
         <Row label="Save to" sub={s.record_folder ? undefined : 'Movies › Ferrocast'}>
           <Input
             aria-label="Recordings folder"
+            name="record_folder"
             placeholder="/Users/you/Movies/Ferrocast…"
             autoComplete="off"
             spellCheck={false}
@@ -591,11 +817,106 @@ function RecordPage({ s, set }: PageProps) {
             onBlur={() => set({ record_folder: folder.trim() ? folder.trim() : null })}
           />
         </Row>
-        <Row label="File names">
-          <span className="font-mono text-[12.5px] text-text-2" translate="no">
-            {name}
+        <Row
+          label="File names"
+          sub={name}
+          info="%CCYY year, %MM month, %DD day, %hh %mm %ss the time, %FPS frame rate, %CRES picture size."
+        >
+          <Input
+            aria-label="File name pattern"
+            name="record_name"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono text-[12.5px]"
+            value={namePattern}
+            onChange={(e) => setNamePattern(e.target.value)}
+            onBlur={() => {
+              const next = namePattern.trim() || '%CCYY-%MM-%DD %hh-%mm-%ss'
+              // Unchanged: no draft change (nothing to save).
+              if (next !== pattern) set({ record_name: next })
+              else setNamePattern(next)
+            }}
+          />
+        </Row>
+        <Row label="Spaces in names">
+          <Switch
+            label="Spaces in names"
+            hideLabel
+            checked={spaces}
+            onChange={(record_spaces) => set({ record_spaces })}
+          />
+        </Row>
+        <Row label="Replace a file of the same name" sub="Off: “(2)” is added">
+          <Switch
+            label="Replace a file of the same name"
+            hideLabel
+            checked={s.record_overwrite ?? false}
+            onChange={(record_overwrite) => set({ record_overwrite })}
+          />
+        </Row>
+        <Row label="New file every" sub="0: one file">
+          <NumberBox
+            label="New file every minutes"
+            value={s.record_split_minutes ?? 0}
+            min={0}
+            max={1440}
+            unit="min"
+            onChange={(record_split_minutes) => set({ record_split_minutes })}
+          />
+        </Row>
+        <Row label="Or every" sub="0: no size limit">
+          <NumberBox
+            label="New file every megabytes"
+            value={s.record_split_mb ?? 0}
+            min={0}
+            max={1000000}
+            unit="MB"
+            onChange={(record_split_mb) => set({ record_split_mb })}
+          />
+        </Row>
+        <Row
+          label="Audio tracks"
+          info="Track 1 is what the stream hears. Pick which sounds go on which track in Advanced audio."
+        >
+          <span className="flex gap-1" role="group" aria-label="Audio tracks in recordings">
+            {[1, 2, 3, 4, 5, 6].map((t) => {
+              const on = tracks.includes(t)
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`Track ${t}`}
+                  disabled={on && tracks.length === 1}
+                  className={cx(
+                    'grid size-9 touch-manipulation place-items-center rounded-[6px] border text-[12px] font-bold tabular-nums transition-colors active:scale-[0.96] disabled:opacity-60 sm:size-7',
+                    on
+                      ? 'border-accent/60 bg-accent/20 text-text'
+                      : 'border-line bg-surface-2 text-text-3 hover:border-line-strong',
+                  )}
+                  onClick={() =>
+                    set({
+                      record_tracks: on
+                        ? tracks.filter((x) => x !== t)
+                        : [...tracks, t].sort((x, y) => x - y),
+                    })
+                  }
+                >
+                  {t}
+                </button>
+              )
+            })}
           </span>
         </Row>
+        <Row label="Remux a recording" sub="An MKV, FLV or TS into MP4, without encoding again">
+          <RemuxButton />
+        </Row>
+        {needsHelper && (
+          <p className="m-0 pt-1 text-[12.5px] text-text-3">
+            {FORMAT_LABEL[s.record_format]} uses OBS&apos;s own recording helper, so OBS needs to
+            stay installed.
+          </p>
+        )}
       </div>
     </>
   )
