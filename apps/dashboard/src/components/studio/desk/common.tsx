@@ -30,6 +30,7 @@ import {
   type EngineItem,
   type EngineKinds,
   type EngineScenes,
+  type EngineScreen,
   type EngineStats,
 } from '@ferrocast/api'
 import { useClient, type Resource } from '../../../lib/hooks'
@@ -68,6 +69,8 @@ export interface Desk {
   /** The source whose filters were copied, to paste onto another. */
   filterClip: string | null
   setFilterClip: (name: string | null) => void
+  /** The displays a full-screen projector can go on (empty outside the app). */
+  screens: Resource<EngineScreen[]>
   /** Opens Studio settings, at a page ("stream", "audio", "picture", "record", "keys",
    * "advanced"). */
   openSettings: (page?: string) => void

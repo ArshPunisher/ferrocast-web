@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Meter, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
-import { filterItems, type MenuItem } from './menu'
+import { filterItems, projectorItem, type MenuItem } from './menu'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -103,5 +103,28 @@ describe('copy and paste filters', () => {
     expect(other[1]?.disabled).toBe(false)
     other[1]?.onSelect?.()
     expect(paste).toHaveBeenCalledWith('Cam')
+  })
+})
+
+describe('projectors', () => {
+  it('offers a window, then full screen on each display', () => {
+    const show = vi.fn()
+    const screens = [
+      { index: 0, name: 'Studio Display', width: 2560, height: 1440, main: true },
+      { index: 1, name: 'BenQ', width: 1920, height: 1080, main: false },
+    ]
+    const item = projectorItem('Projector', screens, show) as Entry
+    const sub = (item.items ?? []).filter((m): m is Entry => !('sep' in m))
+    expect(sub.map((m) => m.label)).toEqual([
+      'In a window',
+      'Full screen on Studio Display (main)',
+      'Full screen on BenQ',
+    ])
+    sub[0]?.onSelect?.()
+    sub[2]?.onSelect?.()
+    expect(show.mock.calls).toEqual([[undefined], [1]])
+    // No displays known yet: just the window.
+    const none = projectorItem('Projector', null, show) as Entry
+    expect(none.items).toHaveLength(1)
   })
 })

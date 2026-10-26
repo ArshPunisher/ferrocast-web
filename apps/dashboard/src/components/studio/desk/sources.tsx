@@ -42,13 +42,15 @@ import {
   ENGINE_SCALE_FILTERS,
   type EngineItem,
   type EngineItemEdit,
+  type EngineProjector,
 } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
+import { inDesktopApp } from '../../../lib/external'
 import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
-import { filterItems, useContextMenu, type MenuItem } from './menu'
+import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 
 const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
   off: 'Off',
@@ -111,6 +113,7 @@ export function SourcesDock() {
 
   const web = (item: EngineItem, what: 'interact' | 'reload') =>
     void run(`web:${item.id}`, () => done(api.web(item.name, what)))
+  const project = (p: EngineProjector) => void run('projector', () => api.projector(p))
   const itemMenu = (item: EngineItem): MenuItem[] => [
     ...(item.kind === 'ferrocast_web'
       ? ([
@@ -206,6 +209,17 @@ export function SourcesDock() {
           success: 'Screenshot saved with your recordings.',
         }),
     },
+    ...(inDesktopApp()
+      ? [
+          projectorItem('Projector', desk.screens.data, (screen) =>
+            project({
+              what: 'source',
+              name: item.name,
+              ...(screen === undefined ? {} : { screen }),
+            }),
+          ),
+        ]
+      : []),
     { label: 'Copy', icon: CopySimple, onSelect: () => setClip(item.name) },
     { label: 'Duplicate', icon: Copy, onSelect: () => void act(item, 'duplicate') },
     ...filterItems(item.name, { ...desk, paste: pasteFilters(item.name) }),
@@ -252,6 +266,7 @@ export function SourcesDock() {
       <div
         onContextMenu={(e) => {
           select(item.id)
+          desk.screens.reload()
           open(e, item.name, itemMenu(item))
         }}
         className={cx(

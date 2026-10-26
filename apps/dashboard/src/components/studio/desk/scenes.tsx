@@ -13,25 +13,50 @@ import {
   Copy,
   DownloadSimple,
   Funnel,
+  ListBullets,
   PencilSimple,
   Plus,
+  SquaresFour,
   Stack,
   Trash,
 } from '@phosphor-icons/react'
 import { type EngineScene, type EngineTransition } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
+import { inDesktopApp } from '../../../lib/external'
 import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { ImportObsDialog } from './import-obs'
 import { TRANSITIONS } from './preview'
-import { filterItems, useContextMenu, type MenuItem } from './menu'
+import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 
 /** A name not used yet: "Scene 2", "Scene 3"… */
 function freeName(base: string, taken: string[]): string {
   if (!taken.includes(base)) return base
   for (let i = 2; ; i++) if (!taken.includes(`${base} ${i}`)) return `${base} ${i}`
+}
+
+const GRID_KEY = 'fc-studio-scenes-grid'
+
+/** OBS's Grid Mode for scenes, remembered on this computer. */
+function useGrid(): [boolean, (on: boolean) => void] {
+  const [grid, setGrid] = useState(() => {
+    try {
+      return localStorage.getItem(GRID_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const set = (on: boolean) => {
+    setGrid(on)
+    try {
+      localStorage.setItem(GRID_KEY, on ? '1' : '0')
+    } catch {
+      // Not kept (private window): it still works until the page reloads.
+    }
+  }
+  return [grid, set]
 }
 
 export function ScenesDock() {
@@ -42,6 +67,7 @@ export function ScenesDock() {
   const [naming, setNaming] = useState<{ from: string | null; value: string } | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [grid, setGrid] = useGrid()
   const list = scenes.data?.scenes
   const current = scenes.data?.current ?? ''
   const names = list?.map((s) => s.name) ?? []
@@ -143,6 +169,22 @@ export function ScenesDock() {
         ],
       },
       { label: 'Screenshot', icon: Camera, onSelect: () => shoot(name) },
+      ...(inDesktopApp()
+        ? [
+            projectorItem(
+              'Projector',
+              desk.screens.data,
+              (screen) =>
+                void run('projector', () =>
+                  api.projector({
+                    what: 'source',
+                    name,
+                    ...(screen === undefined ? {} : { screen }),
+                  }),
+                ),
+            ),
+          ]
+        : []),
       { label: 'Filters', icon: Funnel, onSelect: () => edit(name) },
       ...filterItems(name, {
         ...desk,
@@ -191,6 +233,17 @@ export function ScenesDock() {
         id="scenes"
         actions={
           <>
+            <IconButton
+              size="sm"
+              label={grid ? 'Show scenes as a list' : 'Show scenes as a grid'}
+              onClick={() => setGrid(!grid)}
+            >
+              {grid ? (
+                <ListBullets size={16} weight="bold" />
+              ) : (
+                <SquaresFour size={16} weight="bold" />
+              )}
+            </IconButton>
             <IconButton size="sm" label="Import scenes from OBS" onClick={() => setImporting(true)}>
               <DownloadSimple size={16} weight="bold" />
             </IconButton>
@@ -214,6 +267,13 @@ export function ScenesDock() {
               onSelect: () => setNaming({ from: null, value: freeName('Scene', names) }),
             },
             { label: 'Import from OBS', icon: DownloadSimple, onSelect: () => setImporting(true) },
+            { sep: true },
+            {
+              label: 'Grid mode',
+              icon: SquaresFour,
+              checked: grid,
+              onSelect: () => setGrid(!grid),
+            },
           ])
         }
       >
@@ -222,7 +282,14 @@ export function ScenesDock() {
         ) : !list ? (
           <Skeleton className="h-28" />
         ) : (
-          <ul className="flex flex-col gap-px" aria-label="Scenes, click to go on air">
+          <ul
+            className={cx(
+              grid
+                ? 'grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-1.5'
+                : 'flex flex-col gap-px',
+            )}
+            aria-label="Scenes, click to go on air"
+          >
             {list.map((s, i) => (
               <li key={s.name}>
                 {naming?.from === s.name ? (
@@ -231,36 +298,75 @@ export function ScenesDock() {
                   <button
                     type="button"
                     aria-current={s.current ? 'true' : undefined}
+                    title={grid ? s.name : undefined}
                     onClick={() =>
                       !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
                     }
                     onDoubleClick={() => setNaming({ from: s.name, value: s.name })}
-                    onContextMenu={(e) => open(e, s.name, sceneMenu(s, i))}
+                    onContextMenu={(e) => {
+                      desk.screens.reload()
+                      open(e, s.name, sceneMenu(s, i))
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'F2') setNaming({ from: s.name, value: s.name })
                     }}
                     className={cx(
-                      'flex min-h-10 w-full items-center gap-2.5 rounded-[9px] px-1.5 text-left text-[13.5px] font-semibold text-text transition-colors hover:bg-surface-2',
+                      'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
+                      grid
+                        ? 'flex min-h-[72px] flex-col justify-between gap-2 rounded-[11px] border border-line bg-surface-2 p-2.5 text-[13px] hover:border-line-strong active:scale-[0.98]'
+                        : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[13.5px] hover:bg-surface-2',
                       s.current &&
-                        'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft',
+                        (grid
+                          ? 'border-danger bg-danger-soft shadow-[inset_0_0_0_1px_var(--fc-danger)] hover:border-danger'
+                          : 'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft'),
                     )}
                   >
-                    <KindTile
-                      kind="scene"
-                      size={26}
-                      tone={s.current ? 'var(--fc-danger)' : undefined}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                    {s.items > 0 && !s.current && (
-                      <span className="font-mono text-[11.5px] font-semibold text-text-3 tabular-nums">
-                        {s.items}
-                      </span>
-                    )}
-                    {s.current && (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-danger">
-                        <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
-                        On air
-                      </span>
+                    {grid ? (
+                      <>
+                        <span className="flex items-center justify-between gap-2">
+                          <KindTile
+                            kind="scene"
+                            size={24}
+                            tone={s.current ? 'var(--fc-danger)' : undefined}
+                          />
+                          {s.current ? (
+                            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-danger">
+                              <span
+                                aria-hidden
+                                className="size-[7px] rounded-full bg-danger-fill"
+                              />
+                              On air
+                            </span>
+                          ) : (
+                            s.items > 0 && (
+                              <span className="font-mono text-[11px] font-semibold text-text-3 tabular-nums">
+                                {s.items}
+                              </span>
+                            )
+                          )}
+                        </span>
+                        <span className="line-clamp-2 leading-snug break-words">{s.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <KindTile
+                          kind="scene"
+                          size={26}
+                          tone={s.current ? 'var(--fc-danger)' : undefined}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        {s.items > 0 && !s.current && (
+                          <span className="font-mono text-[11.5px] font-semibold text-text-3 tabular-nums">
+                            {s.items}
+                          </span>
+                        )}
+                        {s.current && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-danger">
+                            <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
+                            On air
+                          </span>
+                        )}
+                      </>
                     )}
                   </button>
                 )}

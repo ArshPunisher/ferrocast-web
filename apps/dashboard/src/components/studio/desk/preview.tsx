@@ -2,12 +2,13 @@
 // OBS's preview) and, under it, the scene on air and how scenes change.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { Play } from '@phosphor-icons/react'
+import { Play, ProjectorScreen, SquaresFour, X } from '@phosphor-icons/react'
 import { type EngineItem, type PreviewRect } from '@ferrocast/api'
-import { Button, InfoTip, Input, Select } from '@ferrocast/ui'
+import { Button, IconButton, InfoTip, Input, Select } from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
+import { projectorItem, useContextMenu } from './menu'
 import {
   MOVE,
   boxOf,
@@ -338,9 +339,31 @@ export const TRANSITIONS: Record<string, string> = {
 
 /** Under the picture: the scene on air and the transition between scenes. */
 export function StageBar() {
-  const { api, scenes, scene, kinds, stats, openSettings } = useDesk()
+  const { api, scenes, scene, kinds, stats, openSettings, screens } = useDesk()
   const c = stats?.canvas
   const { run } = useAction()
+  const { open, menu } = useContextMenu()
+  const show = (what: 'program' | 'multiview', screen: number | undefined) =>
+    void run('projector', () =>
+      api.projector({ what, ...(screen === undefined ? {} : { screen }) }),
+    )
+  const projectors = (e: React.MouseEvent) => {
+    // A display plugged in since shows next time.
+    screens.reload()
+    open(e, 'Projectors', [
+      projectorItem('On air', screens.data, (sc) => show('program', sc)),
+      {
+        ...projectorItem('Multiview', screens.data, (sc) => show('multiview', sc)),
+        icon: SquaresFour,
+      },
+      { sep: true },
+      {
+        label: 'Close all projectors',
+        icon: X,
+        onSelect: () => void run('projector', () => api.closeProjectors()),
+      },
+    ])
+  }
   const t = scenes.data?.transition
   const [ms, setMs] = useState<number | null>(null)
   const kindsOn = (kinds.data?.transitions ?? []).filter((k) => TRANSITIONS[k.id])
@@ -410,6 +433,12 @@ export function StageBar() {
           </InfoTip>
         </div>
       )}
+      {inDesktopApp() && (
+        <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
+          <ProjectorScreen size={17} weight="bold" />
+        </IconButton>
+      )}
+      {menu}
     </div>
   )
 }

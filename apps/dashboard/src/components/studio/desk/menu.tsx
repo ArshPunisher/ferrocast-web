@@ -13,7 +13,17 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { CaretRight, Check, ClipboardText, CopySimple, type Icon } from '@phosphor-icons/react'
+import {
+  AppWindow,
+  CaretRight,
+  Check,
+  ClipboardText,
+  CopySimple,
+  Monitor,
+  ProjectorScreen,
+  type Icon,
+} from '@phosphor-icons/react'
+import { type EngineScreen } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
 
 export type MenuItem =
@@ -293,4 +303,28 @@ export function filterItems(
       onSelect: () => d.filterClip && d.paste(d.filterClip),
     },
   ]
+}
+
+/**
+ * OBS's projector for a scene, source, what's on air or the multiview: in a window, or full
+ * screen on one of the displays. Only in the Ferrocast app (the windows are its own).
+ */
+export function projectorItem(
+  label: string,
+  screens: EngineScreen[] | null,
+  show: (screen: number | undefined) => void,
+): MenuItem {
+  return {
+    label,
+    icon: ProjectorScreen,
+    items: [
+      { label: 'In a window', icon: AppWindow, onSelect: () => show(undefined) },
+      ...(screens?.length ? [{ sep: true } as const] : []),
+      ...(screens ?? []).map((s) => ({
+        label: `Full screen on ${s.name}${s.main ? ' (main)' : ''}`,
+        icon: Monitor,
+        onSelect: () => show(s.index),
+      })),
+    ],
+  }
 }

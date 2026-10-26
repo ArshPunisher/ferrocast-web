@@ -31,6 +31,7 @@ import {
 } from '@ferrocast/api'
 import { Button, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
+import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { AddSourceDialog } from './add-source'
@@ -107,6 +108,8 @@ function Running({
   const items = useResource(() => (scene ? api.items(scene) : Promise.resolve([])), [api, scene])
   const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
   const kinds = useResource(() => api.kinds(), [api])
+  // Projectors are the app's own windows: no displays to offer in a plain browser.
+  const screens = useResource(() => (inDesktopApp() ? api.screens() : Promise.resolve([])), [api])
   const [selected, select] = useState<number | null>(null)
   const [editing, edit] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
@@ -124,6 +127,11 @@ function Running({
   }, [reloadScenes, reloadItems, reloadAudio])
   // Another scene: nothing picked in it yet.
   useEffect(() => select(null), [scene])
+  // A switch made elsewhere (a shortcut, a click in a multiview) shows up in the stats first.
+  const onAir = stats?.scene
+  useEffect(() => {
+    if (onAir && scene && onAir !== scene) refresh()
+  }, [onAir, scene, refresh])
   const desk: Desk = {
     api,
     scenes,
@@ -144,6 +152,7 @@ function Running({
     setClip,
     filterClip,
     setFilterClip,
+    screens,
     openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
   }
   const docks: Record<DockId, React.ReactNode> = {
