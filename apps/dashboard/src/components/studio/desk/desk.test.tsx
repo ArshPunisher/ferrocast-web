@@ -12,6 +12,7 @@ import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
 import { asksFirst } from './desk'
 import { levelOf, visibleLines } from './log-viewer'
+import { recommend } from './auto-config'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -350,3 +351,25 @@ describe('the log', () => {
   })
 })
 
+describe('set up for me', () => {
+  const canvas: [number, number] = [1920, 1080]
+  it('gives a fast upload to one platform full 1080p60 within Twitch’s limit', () => {
+    const r = recommend({ upload_kbps: 40000, platforms: ['twitch'], fps: 60, canvas })
+    expect(r).toMatchObject({ video_kbps: 6000, scale: null, fps: 60 })
+  })
+  it('shares the upload between the platforms on', () => {
+    const r = recommend({ upload_kbps: 12000, platforms: ['twitch', 'youtube'], fps: 60, canvas })
+    // 12 Mbps × 0.75 / 2 = 4.5 Mbps each: 720p60.
+    expect(r).toMatchObject({ video_kbps: 4500, scale: [1280, 720], fps: 60 })
+    expect(r.why).toMatch(/shared by 2 platforms/)
+  })
+  it('drops to 30 fps rather than a blocky 60 on a slow upload, and says so', () => {
+    const r = recommend({ upload_kbps: 3000, platforms: ['youtube'], fps: 60, canvas })
+    expect(r).toMatchObject({ video_kbps: 2000, scale: [854, 480], fps: 30 })
+    expect(r.why).toMatch(/wired connection/)
+  })
+  it('keeps Kick under 8 Mbps and never sends bigger than the canvas', () => {
+    const r = recommend({ upload_kbps: 100000, platforms: ['kick'], fps: 30, canvas: [1280, 720] })
+    expect(r).toMatchObject({ video_kbps: 8000, scale: null, fps: 30 })
+  })
+})

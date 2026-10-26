@@ -10,6 +10,7 @@ import {
   Monitor,
   Record,
   SlidersHorizontal,
+  Sparkle,
   SpeakerHigh,
   X,
 } from '@phosphor-icons/react'
@@ -35,6 +36,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
+import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
@@ -389,6 +391,7 @@ export function EncoderOptions({
 }
 
 function StreamPage({ s, set }: PageProps) {
+  const [wizard, setWizard] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
   const preset = PRESETS.find(
     (p) =>
@@ -397,6 +400,18 @@ function StreamPage({ s, set }: PageProps) {
   )
   return (
     <>
+      <button
+        type="button"
+        onClick={() => setWizard(true)}
+        className="fc-press flex items-center gap-3 rounded-panel border border-accent-line bg-accent-soft px-4 py-3 text-left hover:border-arc focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      >
+        <Sparkle size={22} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
+        <span className="flex flex-col">
+          <b className="font-display text-[16px] text-text">Set up for me</b>
+          <span className="text-[13.5px] text-text-2">Tests your upload and picks for you.</span>
+        </span>
+      </button>
+      <AutoConfigDialog open={wizard} onClose={() => setWizard(false)} s={s} onApply={set} />
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>
