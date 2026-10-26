@@ -154,6 +154,8 @@ export interface EngineItem {
   blend: EngineBlend
   /** How it's scaled. */
   scale_filter: EngineScaleFilter
+  /** Blending with sRGB off (OBS's older blending method). */
+  srgb_off?: boolean
   /**
    * Where it is on the canvas, in pixels: `[sideX.x, sideX.y, sideY.x, sideY.y, corner.x,
    * corner.y]`. A point (u, v) of its box (each 0 to 1) is at `corner + u·sideX + v·sideY`.
@@ -226,6 +228,8 @@ export type EngineItemEdit =
   /** A copy of the source just above it. */
   | 'duplicate'
   | `blend_${EngineBlend}`
+  | 'blend_method_default'
+  | 'blend_method_srgb_off'
   | `scale_${EngineScaleFilter}`
 
 export interface NewEngineSource {
@@ -322,7 +326,16 @@ export interface EngineStreamStats {
 
 /** How the Studio streams, records and runs (every field has a default). */
 /** Recording formats: crash-safe MP4 and MOV, fragmented ones, and MKV, FLV and TS. */
-export const ENGINE_RECORD_FORMATS = ['mp4', 'mov', 'fmp4', 'fmov', 'mkv', 'flv', 'ts'] as const
+export const ENGINE_RECORD_FORMATS = [
+  'mp4',
+  'mov',
+  'fmp4',
+  'fmov',
+  'mkv',
+  'flv',
+  'ts',
+  'hls',
+] as const
 export type EngineRecordFormat = (typeof ENGINE_RECORD_FORMATS)[number]
 
 /** How the last remux went. */
@@ -394,6 +407,8 @@ export interface StudioSettings {
   record_tracks?: number[]
   /** MKV, FLV and TS become MP4 when the recording ends. */
   record_remux?: boolean
+  /** ffmpeg muxer settings of your own (key=value, space apart). */
+  record_muxer?: string
   /** The replay buffer keeps the last this many seconds (5 to 21600), at most this many MB. */
   replay_seconds?: number
   replay_mb?: number

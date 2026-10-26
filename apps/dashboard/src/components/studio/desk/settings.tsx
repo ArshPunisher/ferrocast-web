@@ -817,6 +817,7 @@ const FORMAT_LABEL: Record<EngineRecordFormat, string> = {
   mkv: 'MKV',
   flv: 'FLV',
   ts: 'MPEG-TS',
+  hls: 'HLS (playlist and segments)',
 }
 
 /** OBS's name pattern with today's date, for a preview (the common specifiers). */
@@ -880,8 +881,10 @@ function RecordPage({ s, set }: PageProps) {
   // Follows the draft (Undo changes, or a value the engine saved).
   useEffect(() => setFolder(s.record_folder ?? ''), [s.record_folder])
   useEffect(() => setNamePattern(pattern), [pattern])
+  const [muxer, setMuxer] = useState(s.record_muxer ?? '')
+  useEffect(() => setMuxer(s.record_muxer ?? ''), [s.record_muxer])
   const tracks = s.record_tracks ?? [1]
-  const needsHelper = ['mkv', 'flv', 'ts', 'fmp4', 'fmov'].includes(s.record_format)
+  const needsHelper = ['mkv', 'flv', 'ts', 'fmp4', 'fmov', 'hls'].includes(s.record_format)
   return (
     <>
       <Heading>Quality</Heading>
@@ -955,6 +958,25 @@ function RecordPage({ s, set }: PageProps) {
             />
           </Row>
         )}
+        <Row
+          label="Muxer settings"
+          info="ffmpeg's own key=value settings for the file, space apart (OBS's Custom Muxer Settings). Leave empty unless you know you need them."
+        >
+          <Input
+            aria-label="Muxer settings"
+            name="record_muxer"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono text-[12.5px]"
+            placeholder="movflags=+faststart"
+            value={muxer}
+            onChange={(e) => setMuxer(e.target.value)}
+            onBlur={() => {
+              const v = muxer.trim()
+              if (v !== (s.record_muxer ?? '')) set({ record_muxer: v })
+            }}
+          />
+        </Row>
         <Row label="Save to" sub={s.record_folder ? undefined : 'Movies › Ferrocast'}>
           <Input
             aria-label="Recordings folder"

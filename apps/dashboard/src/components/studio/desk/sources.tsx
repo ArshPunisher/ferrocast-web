@@ -289,11 +289,20 @@ export function SourcesDock() {
     {
       label: 'Blending',
       icon: Faders,
-      items: ENGINE_BLENDS.map((b) => ({
-        label: BLEND_LABEL[b],
-        checked: item.blend === b,
-        onSelect: () => void act(item, `blend_${b}`),
-      })),
+      items: [
+        ...ENGINE_BLENDS.map((b) => ({
+          label: BLEND_LABEL[b],
+          checked: item.blend === b,
+          onSelect: () => void act(item, `blend_${b}`),
+        })),
+        { sep: true as const },
+        {
+          label: 'sRGB off (older blending)',
+          checked: !!item.srgb_off,
+          onSelect: () =>
+            void act(item, item.srgb_off ? 'blend_method_default' : 'blend_method_srgb_off'),
+        },
+      ],
     },
     ...(item.media
       ? ([
