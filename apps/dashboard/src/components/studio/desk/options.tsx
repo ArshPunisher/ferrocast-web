@@ -2,8 +2,13 @@
 // from its type (switch, list, number, colour, font, text, file). Used where a kind has no
 // purpose-built panel, and under "All settings" where it has one.
 
+import { useState } from 'react'
+import { FolderOpen, Plus, Trash } from '@phosphor-icons/react'
 import { type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Field, Input, Select, Switch } from '@ferrocast/ui'
+import { Button, Field, IconButton, Input, Select, Switch } from '@ferrocast/ui'
+import { inDesktopApp } from '../../../lib/external'
+import { useAction } from '../../../lib/hooks'
+import { useEngine } from './common'
 
 interface FormProps {
   opts: EngineOption[]
@@ -14,7 +19,10 @@ interface FormProps {
 
 /** One generic form for any kind: every option OBS describes, drawn from its type. */
 export function OptionsForm({ opts, values, onChange, disabled }: FormProps) {
-  const shown = opts.filter((o) => o.visible)
+  // Files come first: they're what a picture, video or slideshow needs before anything else.
+  const isFile = (o: EngineOption) =>
+    o.kind === 'path' || (o.kind === 'editable_list' && o.path === 'files')
+  const shown = opts.filter((o) => o.visible).sort((a, b) => Number(isFile(b)) - Number(isFile(a)))
   if (shown.length === 0) return <p className="text-[13px] text-text-3">No options.</p>
   return (
     <div className="flex flex-col gap-3">
@@ -207,8 +215,11 @@ function OptionField({
         </fieldset>
       )
     }
-    case 'text':
     case 'path':
+      return <PathField o={o} label={label} hint={hint} value={v} off={off} set={set} />
+    case 'editable_list':
+      return <ListField o={o} label={label} hint={hint} value={v} off={off} set={set} />
+    case 'text':
       return (
         <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
           {(p) => (
@@ -217,19 +228,166 @@ function OptionField({
               disabled={off}
               value={typeof v === 'string' ? v : ''}
               autoComplete="off"
-              spellCheck={o.kind === 'text'}
-              placeholder={o.kind === 'path' ? 'A file on this computer' : undefined}
+              spellCheck
               onChange={(e) => set(e.target.value)}
             />
           )}
         </Field>
       )
     default:
-      // editable_list, frame_rate and the rest: shown, edited in a later step.
+      // frame_rate and the rest: shown, edited in a later step.
       return (
         <Field label={label} hint="Not editable here yet." hintVisible={false}>
           {(p) => <Input {...p} disabled value={v === undefined ? '' : JSON.stringify(v)} />}
         </Field>
       )
   }
+}
+
+interface FieldProps {
+  o: EngineOption
+  label: string
+  hint: string | undefined
+  value: unknown
+  off: boolean
+  set: (v: unknown) => void
+}
+
+/** A file or folder: its path, and Browse for the computer's own file dialog (in the app). */
+function PathField({ o, label, hint, value, off, set }: FieldProps) {
+  const api = useEngine()
+  const { busy, run } = useAction()
+  const kind = o.path === 'save' || o.path === 'folder' ? o.path : 'file'
+  const browse = async () => {
+    const r = await run('browse', () => api.pickFile(kind, o.filter ?? ''))
+    if (r?.path) set(r.path)
+  }
+  return (
+    <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+      {(p) => (
+        <div className="flex items-center gap-2">
+          <Input
+            {...p}
+            disabled={off}
+            value={typeof value === 'string' ? value : ''}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={
+              kind === 'folder' ? 'A folder on this computer' : 'A file on this computer'
+            }
+            onChange={(e) => set(e.target.value)}
+          />
+          {inDesktopApp() && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={off}
+              busy={busy === 'browse'}
+              onClick={() => void browse()}
+              className="shrink-0"
+            >
+              <FolderOpen size={16} weight="bold" /> Browse
+            </Button>
+          )}
+        </div>
+      )}
+    </Field>
+  )
+}
+
+type Entry = { value: string; hidden?: boolean; selected?: boolean }
+
+/** OBS's editable list (a Slideshow's pictures, a list of words): add, remove, reorder. */
+function ListField({ o, label, hint, value, off, set }: FieldProps) {
+  const api = useEngine()
+  const { busy, run } = useAction()
+  const [typed, setTyped] = useState('')
+  const list: Entry[] = Array.isArray(value)
+    ? value
+        .filter((e): e is Entry => !!e && typeof (e as Entry).value === 'string')
+        .map((e) => ({ value: e.value, hidden: !!e.hidden, selected: false }))
+    : []
+  const files = o.path === 'files'
+  const add = (vals: string[]) => {
+    const fresh = vals.map((v) => v.trim()).filter((v) => v && !list.some((e) => e.value === v))
+    if (fresh.length)
+      set([...list, ...fresh.map((v) => ({ value: v, hidden: false, selected: false }))])
+  }
+  const browse = async () => {
+    const r = await run('browse', () => api.pickFiles(o.filter ?? ''))
+    if (r?.path) add(r.path)
+  }
+  const name = (v: string) => (files ? (v.split(/[\\/]/).pop() ?? v) : v)
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1.5 text-[13px] font-semibold text-text">{label}</legend>
+      {hint && <p className="m-0 text-[12.5px] text-text-3">{hint}</p>}
+      {list.length > 0 ? (
+        <ol className="m-0 flex list-none flex-col divide-y divide-line rounded-control border border-line p-0">
+          {list.map((e, i) => (
+            <li key={`${i}-${e.value}`} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
+              <span className="w-5 shrink-0 text-right text-[12px] font-semibold text-text-3 tabular-nums">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium" title={e.value}>
+                {name(e.value)}
+              </span>
+              <IconButton
+                label={`Remove ${name(e.value)}`}
+                size="sm"
+                disabled={off}
+                onClick={() => set(list.filter((_, j) => j !== i))}
+              >
+                <Trash size={15} />
+              </IconButton>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="m-0 rounded-control border border-dashed border-line px-3 py-4 text-center text-[13px] font-medium text-text-3">
+          {files ? 'No files yet.' : 'Nothing yet.'}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <Input
+          aria-label={files ? `Add a file path or address to ${label}` : `Add to ${label}`}
+          disabled={off}
+          value={typed}
+          autoComplete="off"
+          spellCheck={!files}
+          placeholder={files ? 'Paste a path' : 'Type and press Enter'}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add([typed])
+              setTyped('')
+            }
+          }}
+        />
+        <IconButton
+          label="Add"
+          disabled={off || !typed.trim()}
+          onClick={() => {
+            add([typed])
+            setTyped('')
+          }}
+        >
+          <Plus size={16} weight="bold" />
+        </IconButton>
+        {files && inDesktopApp() && (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={off}
+            busy={busy === 'browse'}
+            onClick={() => void browse()}
+            className="shrink-0"
+          >
+            <FolderOpen size={16} weight="bold" /> Add files
+          </Button>
+        )}
+      </div>
+    </fieldset>
+  )
 }

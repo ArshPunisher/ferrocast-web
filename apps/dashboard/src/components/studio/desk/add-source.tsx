@@ -3,10 +3,17 @@
 // scene; sound devices can play in every scene. Every other kind OBS has is under "More".
 
 import { useMemo, useState } from 'react'
-import { CheckCircle, Cube, MagnifyingGlass } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  CheckCircle,
+  Cube,
+  MagnifyingGlass,
+  ShieldWarning,
+} from '@phosphor-icons/react'
 import { type EngineKind, type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Dialog, Field, Input, Skeleton, Switch, cx } from '@ferrocast/ui'
+import { Button, Dialog, Field, InfoTip, Input, Skeleton, Switch, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
+import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource } from '../../../lib/hooks'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, pickKind, useDesk, type KindEntry } from './common'
 import { OptionsForm } from './options'
@@ -35,6 +42,69 @@ function deviceOption(opts: EngineOption[], keys: string[] | undefined): EngineO
 }
 
 const SOUND = new Set(['mic', 'desktop', 'app'])
+
+/** Kinds that need macOS's Screen Recording switch (screens, windows, and their sound). */
+const NEEDS_SCREEN = new Set(['screen', 'window', 'desktop', 'app'])
+
+/**
+ * Screen Recording is off for this Ferrocast: ask macOS again (forgetting an older build's
+ * answer, which System Settings can still show switched on), then open Ferrocast again.
+ */
+function ScreenAccess() {
+  const { api } = useDesk()
+  const { busy, run } = useAction()
+  const access = useResource(() => api.screenAccess(), [api])
+  const [asked, setAsked] = useState(false)
+  if (!inDesktopApp() || access.data?.granted !== false) return null
+  return (
+    <div
+      role="status"
+      className="flex flex-col gap-3 rounded-[12px] border border-[color-mix(in_oklab,var(--fc-warn)_45%,transparent)] bg-warn-soft p-4"
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface-1 text-warn">
+          <ShieldWarning size={20} weight="fill" aria-hidden />
+        </span>
+        <p className="m-0 flex flex-1 items-center gap-1 text-[14.5px] font-bold text-text">
+          Allow Screen Recording
+          <InfoTip label="Why it asks again">
+            Each Ferrocast update is new to macOS, so a switch that looks on can belong to an older
+            one.
+          </InfoTip>
+        </p>
+      </div>
+      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13.5px] font-semibold text-text-2">
+        <li>Press Ask again, then Open System Settings.</li>
+        <li>Switch Ferrocast on.</li>
+        <li>Press Reopen.</li>
+      </ol>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant={asked ? 'secondary' : 'primary'}
+          busy={busy === 'ask'}
+          onClick={() =>
+            void run('ask', () => api.fixScreenAccess()).then((r) => {
+              if (!r) return
+              setAsked(true)
+              if (r.granted) access.reload()
+            })
+          }
+        >
+          <ShieldWarning size={16} weight="bold" /> Ask again
+        </Button>
+        <Button
+          type="button"
+          variant={asked ? 'primary' : 'secondary'}
+          busy={busy === 'restart'}
+          onClick={() => void run('restart', () => api.restart())}
+        >
+          <ArrowClockwise size={16} weight="bold" /> Reopen Ferrocast
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export function AddSourceDialog() {
   const { adding, setAdding, scene } = useDesk()
@@ -242,7 +312,15 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         void add()
       }}
     >
-      {dev && (
+      {NEEDS_SCREEN.has(c.entry.key) && <ScreenAccess />}
+      {dev && dev.choices.every((l) => !l.trim()) && (
+        <p className="m-0 rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[14px] font-semibold text-text-2">
+          {NEEDS_SCREEN.has(c.entry.key)
+            ? 'Nothing to pick. Open the window you want, or allow Screen Recording.'
+            : 'Nothing to pick. Plug it in, then open this again.'}
+        </p>
+      )}
+      {dev && dev.choices.some((l) => l.trim()) && (
         <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
           <legend className="mb-3 font-display text-[15px] font-extrabold text-text">
             Pick one
