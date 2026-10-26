@@ -74,12 +74,11 @@ test.describe('go live everywhere', () => {
     await page.getByRole('button', { name: 'Add a destination' }).click()
     const dialog = page.getByRole('dialog', { name: 'Add a destination' })
     await dialog.getByLabel('Name').fill('Backup PC')
-    await dialog.getByLabel('Server').fill('https://example.com/live')
+    // https:// is a WebRTC server now (2.1), so a scheme nothing speaks is the wrong one.
+    await dialog.getByLabel('Server').fill('ftp://example.com/live')
     await dialog.getByLabel('Stream key', { exact: true }).fill('abc123')
     await dialog.getByRole('button', { name: 'Add server' }).click()
-    await expect(
-      dialog.getByText('The server address must start with rtmp:// or rtmps://.'),
-    ).toBeVisible()
+    await expect(dialog.getByText(/must start with rtmp:\/\/, rtmps:\/\//)).toBeVisible()
     await dialog.getByLabel('Server').fill('rtmp://backup.local/live')
     await dialog.getByRole('button', { name: 'Add server' }).click()
     await expect(page.getByText('Backup PC added.')).toBeVisible()
