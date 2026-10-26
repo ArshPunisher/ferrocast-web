@@ -307,6 +307,19 @@ export interface EngineStreamStats {
 }
 
 /** How the Studio streams, records and runs (every field has a default). */
+/** Recording formats: crash-safe MP4 and MOV, fragmented ones, and MKV, FLV and TS. */
+export const ENGINE_RECORD_FORMATS = ['mp4', 'mov', 'fmp4', 'fmov', 'mkv', 'flv', 'ts'] as const
+export type EngineRecordFormat = (typeof ENGINE_RECORD_FORMATS)[number]
+
+/** How the last remux went. */
+export interface EngineRemux {
+  from: string
+  to: string
+  percent: number
+  done: boolean
+  error: string | null
+}
+
 export interface StudioSettings {
   /** "hardware" (the Mac's H.264) or "software" (x264). */
   encoder: 'hardware' | 'software'
@@ -324,8 +337,8 @@ export interface StudioSettings {
   fps: number
   /** null: Movies/Ferrocast. */
   record_folder: string | null
-  record_format: 'mp4' | 'mov'
-  record_quality: 'stream' | 'high' | 'lossless'
+  record_format: EngineRecordFormat
+  record_quality: 'stream' | 'high' | 'lossless' | 'custom'
   reconnect: boolean
   reconnect_every_s: number
   reconnect_tries: number
@@ -337,6 +350,24 @@ export interface StudioSettings {
   /** action (go_live, end_stream, record, pause_record, scene:<name>, mute:<sound>,
    * push_to_talk:<sound>) → keys ("CmdOrCtrl+Shift+L"). */
   hotkeys: Record<string, string>
+  /** A particular video encoder (an id from `kinds().encoders`) instead of `encoder`'s pick. */
+  video_encoder?: string | null
+  /** That encoder's own options (OBS's keys), applied over the ones above. */
+  encoder_settings?: Record<string, unknown>
+  /** The recording's encoder when `record_quality` is "custom", and its options. */
+  record_encoder?: string | null
+  record_encoder_settings?: Record<string, unknown>
+  /** OBS's file name pattern (`%CCYY-%MM-%DD %hh-%mm-%ss`…). */
+  record_name?: string
+  record_spaces?: boolean
+  record_overwrite?: boolean
+  /** A new file every this many minutes or megabytes (0: never). */
+  record_split_minutes?: number
+  record_split_mb?: number
+  /** Audio tracks (1 to 6) the recording keeps. */
+  record_tracks?: number[]
+  /** MKV, FLV and TS become MP4 when the recording ends. */
+  record_remux?: boolean
 }
 
 export interface EngineRecordStats {
@@ -365,6 +396,8 @@ export interface EngineStats {
   scene?: string | null
   /** What Undo and Redo would do now (labels), or null. */
   history?: { undo: string | null; redo: string | null }
+  /** The last remux (Remux, or MKV made into MP4 after recording), or null. */
+  remux?: EngineRemux | null
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
@@ -706,6 +739,21 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    /** The recording goes on in a new file. */
+    recordSplit: () => c.request<void>('POST', '/api/v1/studio/engine/record/split', {}),
+    /** A chapter marker here (MP4, MOV); empty names it by number. */
+    recordChapter: (name = '') =>
+      c.request<void>('POST', '/api/v1/studio/engine/record/chapter', { name }),
+    /** Makes an MP4 beside a recording, in the background (progress in stats). */
+    remux: (file: string) =>
+      c.request<{ to: string }>('POST', '/api/v1/studio/engine/remux', { file }),
+    /** An encoder's own options for these settings, and its values with defaults. */
+    encoderOptions: (id: string, settings: Record<string, unknown>) =>
+      c.request<{ options: EngineOption[]; values: EngineSettings }>(
+        'POST',
+        `/api/v1/studio/engine/encoders/${enc(id)}/options`,
+        { settings },
+      ),
     setStudioOptions: (options: EngineStudioOptions) =>
       c.request<void>('PUT', '/api/v1/studio/engine/studio-mode/options', options),
     /** Swaps the preview and what's on air, with a cut. */
