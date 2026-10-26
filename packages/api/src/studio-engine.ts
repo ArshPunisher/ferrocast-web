@@ -312,6 +312,18 @@ export const ENGINE_RECORD_FORMATS = ['mp4', 'mov', 'fmp4', 'fmov', 'mkv', 'flv'
 export type EngineRecordFormat = (typeof ENGINE_RECORD_FORMATS)[number]
 
 /** How the last remux went. */
+/** A file a source, filter or transition uses that isn't on this computer. */
+export interface EngineMissingFile {
+  /** The source or filter's name; "" for a transition (its kind is `kind`). */
+  source: string
+  /** For a filter: the source it's on. */
+  parent: string | null
+  kind: string
+  key: string
+  label: string
+  path: string
+}
+
 export interface EngineRemux {
   from: string
   to: string
@@ -372,6 +384,8 @@ export interface StudioSettings {
   replay_seconds?: number
   replay_mb?: number
   replay_format?: 'mp4' | 'mkv' | 'mov' | 'flv' | 'ts'
+  /** A surround layout instead of `stereo` (after a restart); null follows `stereo`. */
+  speakers?: '2.1' | '4.0' | '4.1' | '5.1' | '7.1' | null
 }
 
 export interface EngineRecordStats {
@@ -392,6 +406,9 @@ export interface EngineStats {
     lagged: number
     frames: number
     memory_mb: number
+    /** Frames the encoders skipped (encoding lag), and all given to them. */
+    skipped?: number
+    encoded?: number
   }
   canvas: { width: number; height: number; fps: number }
   stream: EngineStreamStats | null
@@ -405,6 +422,8 @@ export interface EngineStats {
   /** The replay buffer when on: the last file saved, or why it stopped. */
   replay?: { active: boolean; last: string | null; error: string | null } | null
   virtualcam?: { active: boolean } | null
+  /** Free space where recordings go, MB. */
+  disk_free_mb?: number
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
@@ -746,6 +765,26 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    /** Files sources use that aren't on this computer. */
+    missingFiles: () =>
+      c.request<EngineMissingFile[]>('GET', '/api/v1/studio/engine/missing-files'),
+    /** Points a missing file's setting at `to`, or clears it (`to` empty). */
+    replaceFile: (m: EngineMissingFile, to: string) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/missing-files', {
+        source: m.source,
+        parent: m.parent,
+        kind: m.kind,
+        key: m.key,
+        path: m.path,
+        to,
+      }),
+    /** Looks for the missing files by name in a folder → each found path's new place. */
+    findMissing: (folder: string) =>
+      c.request<{ found: Record<string, string> }>(
+        'POST',
+        '/api/v1/studio/engine/missing-files/search',
+        { folder },
+      ),
     /** OBS's replay buffer on or off. */
     replay: (on: boolean) =>
       c.request<{ active: boolean }>('POST', '/api/v1/studio/engine/replay', { on }),
