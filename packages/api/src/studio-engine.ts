@@ -61,6 +61,10 @@ export interface EngineOption {
   /** The value saved for each choice, in the same order. */
   values: (string | number | boolean)[]
   group: EngineOption[]
+  /** A path's kind (open a file, save one, a folder); "files" for a list of files. */
+  path?: 'file' | 'save' | 'folder' | 'files' | ''
+  /** A path's file types, as OBS writes them: `Image Files (*.png *.jpg);;All Files (*.*)`. */
+  filter?: string
 }
 
 /** OBS's own settings for a source (the keys OBS saves in its scene collections). */
@@ -103,6 +107,11 @@ export interface EngineItem {
   blend: EngineBlend
   /** How it's scaled. */
   scale_filter: EngineScaleFilter
+  /**
+   * Where it is on the canvas, in pixels: `[sideX.x, sideX.y, sideY.x, sideY.y, corner.x,
+   * corner.y]`. A point (u, v) of its box (each 0 to 1) is at `corner + u·sideX + v·sideY`.
+   */
+  frame?: [number, number, number, number, number, number]
   children: EngineItem[]
 }
 
@@ -407,6 +416,47 @@ export function studioEngineApi(c: FerroClient) {
       c.request<EngineImportReport>('POST', '/api/v1/studio/engine/obs-collections/import', {
         id,
       }),
+    /**
+     * Moves and sizes an item from the preview: its box's first corner to (x, y), its sides
+     * w and h long (canvas pixels). `save` at the end of a drag → the item as it is now.
+     */
+    setItemBox: (
+      scene: string,
+      id: number,
+      box: { x: number; y: number; w: number; h: number; save?: boolean },
+    ) =>
+      c.request<EngineItem>(
+        'PUT',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/box`,
+        box,
+      ),
+    /** Outlines an item in the preview, or nothing. */
+    select: (pick: { scene: string; id: number } | null) =>
+      c.request<void>(
+        'PUT',
+        '/api/v1/studio/engine/preview/selection',
+        pick ?? { scene: null, id: null },
+      ),
+    /** A file dialog on the computer Ferrocast runs on → the path, or null if cancelled. */
+    pickFile: (kind: 'file' | 'save' | 'folder', filter = '') =>
+      c.request<{ path: string | null }>('POST', '/api/v1/studio/engine/pick-file', {
+        kind,
+        filter,
+      }),
+    /** Several files at once → their paths, or null if cancelled. */
+    pickFiles: (filter = '') =>
+      c.request<{ path: string[] | null }>('POST', '/api/v1/studio/engine/pick-file', {
+        kind: 'files',
+        filter,
+      }),
+    /** macOS's Screen Recording switch for Ferrocast (as it was when Ferrocast opened). */
+    screenAccess: () =>
+      c.request<{ granted: boolean }>('GET', '/api/v1/studio/engine/screen-access'),
+    /** Asks macOS again, forgetting what it said to an older Ferrocast. */
+    fixScreenAccess: () =>
+      c.request<{ granted: boolean }>('POST', '/api/v1/studio/engine/screen-access/fix', {}),
+    /** Quits and opens Ferrocast again (refused while streaming or recording). */
+    restart: () => c.request<void>('POST', '/api/v1/studio/engine/restart', {}),
     /** Copies every filter of `from` onto `name`. */
     pasteFilters: (name: string, from: string) =>
       c.request<void>('POST', `/api/v1/studio/engine/sources/${enc(name)}/paste-filters`, {
