@@ -289,7 +289,24 @@ export interface EngineStats {
   canvas: { width: number; height: number; fps: number }
   stream: EngineStreamStats | null
   record: EngineRecordStats | null
+  /** The scene on air (switches made elsewhere show up here first). */
+  scene?: string | null
 }
+
+/** A display a full-screen projector can go on. */
+export interface EngineScreen {
+  index: number
+  name: string
+  width: number
+  height: number
+  /** The one with the menu bar. */
+  main: boolean
+}
+
+/** What a projector shows: what's on air, one scene or source, or every scene. */
+export type EngineProjector =
+  | { what: 'program' | 'multiview'; screen?: number }
+  | { what: 'source'; name: string; screen?: number }
 
 /** A box in the dashboard window (CSS pixels from its top-left corner). */
 export interface PreviewRect {
@@ -455,6 +472,12 @@ export function studioEngineApi(c: FerroClient) {
     /** Asks macOS again, forgetting what it said to an older Ferrocast. */
     fixScreenAccess: () =>
       c.request<{ granted: boolean }>('POST', '/api/v1/studio/engine/screen-access/fix', {}),
+    /** Opens a projector window, or full screen on a display (`screen` from `screens`). */
+    projector: (p: EngineProjector) =>
+      c.request<{ id: number }>('POST', '/api/v1/studio/engine/projectors', p),
+    closeProjectors: () => c.request<void>('DELETE', '/api/v1/studio/engine/projectors'),
+    /** The displays a full-screen projector can go on. */
+    screens: () => c.request<EngineScreen[]>('GET', '/api/v1/studio/engine/screens'),
     /** Quits and opens Ferrocast again (refused while streaming or recording). */
     restart: () => c.request<void>('POST', '/api/v1/studio/engine/restart', {}),
     /** Copies every filter of `from` onto `name`. */
