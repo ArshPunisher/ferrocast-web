@@ -79,6 +79,8 @@ export interface EngineScene {
   items: number
   /** On air. */
   current: boolean
+  /** In Studio Mode's preview (what goes on air next). */
+  preview?: boolean
   /** Its own transition (OBS's Transition Override), or null for the Studio's. */
   transition: EngineTransition | null
 }
@@ -93,6 +95,10 @@ export interface EngineScenes {
   scenes: EngineScene[]
   current: string
   transition: EngineTransition
+  /** Studio Mode's preview scene (what goes on air next), or null when Studio Mode is off. */
+  preview?: string | null
+  /** OBS's quick transitions: one-click ways to send the preview on air. */
+  quick?: EngineTransition[]
 }
 
 /** A source in a scene, top first. A group lists its own items. */
@@ -615,7 +621,23 @@ export function studioEngineApi(c: FerroClient) {
       c.request<EngineStreamStats | null>('POST', '/api/v1/studio/engine/stream', { on }),
     streamStats: () => c.request<EngineStreamStats | null>('GET', '/api/v1/studio/engine/stream'),
     /** Puts the live preview over the box, or takes it away (null). */
-    preview: (rect: PreviewRect | null) =>
-      c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect }),
+    /** The preview over the page's box; in Studio Mode, what's on air over `program`. */
+    preview: (rect: PreviewRect | null, program: PreviewRect | null = null) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect, program }),
+    /** Studio Mode on (its preview starts as what's on air) or off. */
+    studioMode: (on: boolean) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/studio-mode', { on }),
+    /** The scene Studio Mode's preview shows. */
+    setPreview: (scene: string) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/studio-mode/preview', { scene }),
+    /** Sends the preview on air (with a quick transition, or as a click on it would). */
+    transitionNow: (quick?: EngineTransition) =>
+      c.request<void>(
+        'POST',
+        '/api/v1/studio/engine/studio-mode/transition',
+        quick ? { quick } : {},
+      ),
+    setQuickTransitions: (list: EngineTransition[]) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
   }
 }
