@@ -468,13 +468,17 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         {locked && (
           <LockSimple size={13} weight="bold" className="text-text-3" aria-label="Locked" />
         )}
+        {/* The fader's setting, not the sound: 0 dB is full volume, as in OBS. The bar below
+            shows how loud it is. */}
         <span
+          title="Volume: 0 dB is full (unchanged). The bar shows how loud it is."
           className={cx(
-            'w-[68px] shrink-0 text-right font-mono text-[13.5px] font-bold tabular-nums',
+            'flex shrink-0 items-baseline justify-end gap-1 text-right font-mono text-[13.5px] font-bold tabular-nums',
             a.muted ? 'text-danger' : 'text-text',
           )}
         >
-          {dbText(a)}
+          {!a.muted && <span className="font-sans text-[12px] font-semibold text-text-3">Vol</span>}
+          <span className="w-[60px]">{dbText(a)}</span>
         </span>
       </div>
       <div className="mt-1 flex items-start gap-0.5">
