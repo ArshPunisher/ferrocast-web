@@ -598,19 +598,117 @@ function AudioPage({ s, set }: PageProps) {
             onChange={(v) => set({ sample_rate: Number(v) as StudioSettings['sample_rate'] })}
           />
         </Row>
-        <Row label="Channels">
-          <Segmented
-            label="Channels"
-            value={s.stereo ? 'stereo' : 'mono'}
-            options={[
-              { value: 'mono', label: 'Mono' },
-              { value: 'stereo', label: 'Stereo' },
-            ]}
-            onChange={(v) => set({ stereo: v === 'stereo' })}
-          />
+        <Row
+          label="Channels"
+          info="Surround needs a surround player on the other end; most streams are stereo."
+        >
+          <Select
+            aria-label="Channels"
+            value={s.speakers ?? (s.stereo ? 'stereo' : 'mono')}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === 'mono' || v === 'stereo') set({ stereo: v === 'stereo', speakers: null })
+              else set({ stereo: true, speakers: v as NonNullable<StudioSettings['speakers']> })
+            }}
+          >
+            <option value="mono">Mono</option>
+            <option value="stereo">Stereo</option>
+            <option value="2.1">2.1</option>
+            <option value="4.0">4.0</option>
+            <option value="4.1">4.1</option>
+            <option value="5.1">5.1</option>
+            <option value="7.1">7.1</option>
+          </Select>
         </Row>
       </div>
+      <Heading info="Heard in every scene, as OBS's global audio devices. Changes apply at once.">
+        Everywhere
+      </Heading>
+      <EverywhereDevices />
     </>
+  )
+}
+
+/** The six sounds heard in every scene: desktop sound 1 and 2, mics 1 to 4. */
+const SLOTS = [
+  { ch: 1, label: 'Desktop sound', kind: 'desktop' as const },
+  { ch: 2, label: 'Desktop sound 2', kind: 'desktop' as const },
+  { ch: 3, label: 'Mic', kind: 'mic' as const },
+  { ch: 4, label: 'Mic 2', kind: 'mic' as const },
+  { ch: 5, label: 'Mic 3', kind: 'mic' as const },
+  { ch: 6, label: 'Mic 4', kind: 'mic' as const },
+]
+
+function EverywhereDevices() {
+  const { api, scene, kinds, refresh } = useDesk()
+  const [busy, setBusy] = useState<number | null>(null)
+  const have = (ids: string[]) =>
+    ids.find((k) => kinds.data?.inputs.some((i) => i.id === k)) ?? null
+  const micKind = have(['coreaudio_input_capture', 'wasapi_input_capture'])
+  const deskKind = have(['sck_audio_capture', 'wasapi_output_capture'])
+  const now = useResource(async () => {
+    const list = await api.audio(scene)
+    const on = list.filter((a) => a.channel !== null)
+    const devices = await Promise.all(
+      on.map(async (a) => [a.channel, (await api.settings(a.name)).device_id, a.name] as const),
+    )
+    return devices
+  }, [api, scene])
+  const mics = useResource(
+    () => (micKind ? api.options(micKind) : Promise.resolve([])),
+    [api, micKind],
+  )
+  const devOpt = mics.data?.find((o) => o.key === 'device_id')
+  const set = async (slot: (typeof SLOTS)[number], value: string) => {
+    setBusy(slot.ch)
+    try {
+      const kind = slot.kind === 'mic' ? micKind : deskKind
+      if (value === 'off' || !kind) await api.setChannel(slot.ch, null)
+      else
+        await api.setChannel(slot.ch, {
+          kind,
+          name: slot.label,
+          // Desktop sound on macOS is ScreenCaptureKit's type 0 (the whole computer).
+          settings: slot.kind === 'mic' ? { device_id: value } : { type: 0 },
+        })
+      now.reload()
+      refresh()
+    } catch (e) {
+      const d = describeError(e)
+      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    } finally {
+      setBusy(null)
+    }
+  }
+  if (!now.data) return <Skeleton className="h-40" />
+  return (
+    <div className="flex flex-col">
+      {SLOTS.map((slot) => {
+        const cur = now.data?.find((d) => d[0] === slot.ch)
+        const value = !cur ? 'off' : slot.kind === 'mic' ? String(cur[1] ?? 'default') : 'on'
+        return (
+          <Row key={slot.ch} label={cur ? cur[2] : slot.label} sub={cur ? undefined : 'Off'}>
+            <Select
+              aria-label={`${slot.label}, heard everywhere`}
+              value={value}
+              disabled={busy === slot.ch}
+              onChange={(e) => void set(slot, e.target.value)}
+            >
+              <option value="off">Off</option>
+              {slot.kind === 'desktop' ? (
+                <option value="on">The computer&apos;s sound</option>
+              ) : (
+                (devOpt?.values ?? ['default']).map((v, i) => (
+                  <option key={String(v)} value={String(v)}>
+                    {devOpt?.choices[i] ?? 'Default'}
+                  </option>
+                ))
+              )}
+            </Select>
+          </Row>
+        )
+      })}
+    </div>
   )
 }
 

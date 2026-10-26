@@ -50,6 +50,8 @@ import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
+import { StatsDialog } from './stats-panel'
+import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
 
@@ -199,7 +201,12 @@ function Running({
   return (
     <DeskProvider value={desk}>
       <DockWorkspace
-        top={<ControlBar view={view} lead={lead} onStatus={onStatus} />}
+        top={
+          <>
+            <ControlBar view={view} lead={lead} onStatus={onStatus} />
+            <MissingFiles />
+          </>
+        }
         stage={
           <>
             <PreviewBox running />
@@ -322,6 +329,7 @@ function ControlBar({
       },
     ])
   const remux = stats?.remux ?? null
+  const [showStats, setShowStats] = useState(false)
   const replayOn = !!stats?.replay?.active
   const camOn = !!stats?.virtualcam?.active
   const outputsMenu = (e: React.MouseEvent) =>
@@ -357,9 +365,12 @@ function ControlBar({
       {lead}
       <LibraryBar />
       <span className="hidden flex-1 xl:block" />
-      <div
-        aria-label="Stream health"
-        className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[12.5px] text-text-3"
+      <button
+        type="button"
+        aria-label="Stream health: open Stats"
+        title="Stats"
+        onClick={() => setShowStats(true)}
+        className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[12.5px] text-text-3 transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
       >
         <span className="inline-flex items-center gap-1.5" title="Ferrocast's CPU use">
           <Cpu size={15} aria-hidden />
@@ -386,7 +397,8 @@ function ControlBar({
             {clock(since ? now - since : 0)}
           </b>
         </span>
-      </div>
+      </button>
+      <StatsDialog open={showStats} onClose={() => setShowStats(false)} />
       {remux && (!remux.done || remux.error) && (
         <span
           className={cx('text-[13px] font-semibold', remux.error ? 'text-danger' : 'text-text-2')}

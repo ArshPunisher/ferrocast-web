@@ -8,6 +8,8 @@ import { fileName } from './library'
 import { historyMenu, tbarEnd } from './preview'
 import { balanceLabel } from './advanced-audio'
 import { previewName } from './settings'
+import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
+import { fileName as baseName, ownerText } from './missing-files'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -232,5 +234,41 @@ describe('recording names', () => {
       'Show 261007 60 1920x1080 100%',
     )
     expect(previewName('%unknown stays', s, at)).toBe('%unknown stays')
+  })
+})
+
+describe('stats', () => {
+  it('works out bitrate, sizes, shares and how long a disk lasts', () => {
+    expect(kbpsBetween(0, 750_000, 1000)).toBe(6000)
+    expect(kbpsBetween(500, 100, 1000)).toBe(0)
+    expect(kbpsBetween(0, 100, 0)).toBe(0)
+    expect(sizeText(850)).toBe('850 MB')
+    expect(sizeText(2048)).toBe('2.0 GB')
+    expect(share(3, 3000)).toBe('3 (0.1%)')
+    expect(share(0, 0)).toBe('0 (0.0%)')
+    // 10 GB at 6 Mbps: about 3 h 58 min.
+    expect(lastsFor(10 * 1024, 6000)).toBe('about 3 h 58 min')
+    expect(lastsFor(100, 6000)).toBe('about 2 min')
+    expect(lastsFor(100, 0)).toBeNull()
+  })
+})
+
+describe('missing files', () => {
+  it('names who uses a file and the file', () => {
+    const m = {
+      source: 'Logo',
+      parent: null,
+      kind: 'image_source',
+      key: 'file',
+      label: 'Image File',
+      path: '/a/b/logo.png',
+    }
+    expect(ownerText(m)).toBe('Logo')
+    expect(ownerText({ ...m, source: 'Mask', parent: 'Logo' })).toBe('Mask on Logo')
+    expect(ownerText({ ...m, source: '', kind: 'obs_stinger_transition' })).toBe(
+      'stinger transition',
+    )
+    expect(baseName('/a/b/logo.png')).toBe('logo.png')
+    expect(baseName('C:\\x\\y.mp4')).toBe('y.mp4')
   })
 })
