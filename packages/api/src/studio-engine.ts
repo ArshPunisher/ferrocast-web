@@ -291,6 +291,8 @@ export interface EngineStats {
   record: EngineRecordStats | null
   /** The scene on air (switches made elsewhere show up here first). */
   scene?: string | null
+  /** What Undo and Redo would do now (labels), or null. */
+  history?: { undo: string | null; redo: string | null }
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
@@ -487,6 +489,19 @@ export function studioEngineApi(c: FerroClient) {
         'PUT',
         `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/transform`,
         t,
+      ),
+    /** Undoes the newest change to sources → what it was, and what's next each way. */
+    undo: () =>
+      c.request<{ done: string | null; undo: string | null; redo: string | null }>(
+        'POST',
+        '/api/v1/studio/engine/undo',
+        {},
+      ),
+    redo: () =>
+      c.request<{ done: string | null; undo: string | null; redo: string | null }>(
+        'POST',
+        '/api/v1/studio/engine/redo',
+        {},
       ),
     /** Outlines an item in the preview, or nothing. */
     select: (pick: { scene: string; id: number } | null) =>
