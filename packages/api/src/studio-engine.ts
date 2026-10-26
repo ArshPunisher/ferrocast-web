@@ -368,6 +368,10 @@ export interface StudioSettings {
   record_tracks?: number[]
   /** MKV, FLV and TS become MP4 when the recording ends. */
   record_remux?: boolean
+  /** The replay buffer keeps the last this many seconds (5 to 21600), at most this many MB. */
+  replay_seconds?: number
+  replay_mb?: number
+  replay_format?: 'mp4' | 'mkv' | 'mov' | 'flv' | 'ts'
 }
 
 export interface EngineRecordStats {
@@ -398,6 +402,9 @@ export interface EngineStats {
   history?: { undo: string | null; redo: string | null }
   /** The last remux (Remux, or MKV made into MP4 after recording), or null. */
   remux?: EngineRemux | null
+  /** The replay buffer when on: the last file saved, or why it stopped. */
+  replay?: { active: boolean; last: string | null; error: string | null } | null
+  virtualcam?: { active: boolean } | null
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
@@ -739,6 +746,18 @@ export function studioEngineApi(c: FerroClient) {
       ),
     setQuickTransitions: (list: EngineTransition[]) =>
       c.request<void>('PUT', '/api/v1/studio/engine/quick-transitions', { list }),
+    /** OBS's replay buffer on or off. */
+    replay: (on: boolean) =>
+      c.request<{ active: boolean }>('POST', '/api/v1/studio/engine/replay', { on }),
+    /** Saves the replay buffer's last seconds to a file. */
+    saveReplay: () =>
+      c.request<{ file: string | null }>('POST', '/api/v1/studio/engine/replay/save', {}),
+    /** The virtual camera on (what's on air, or one scene or source) or off. */
+    virtualCamera: (on: boolean, source?: string) =>
+      c.request<{ active: boolean }>('POST', '/api/v1/studio/engine/virtualcam', {
+        on,
+        ...(source ? { source } : {}),
+      }),
     /** The recording goes on in a new file. */
     recordSplit: () => c.request<void>('POST', '/api/v1/studio/engine/record/split', {}),
     /** A chapter marker here (MP4, MOV); empty names it by number. */
