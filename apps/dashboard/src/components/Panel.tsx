@@ -12,6 +12,8 @@ export function Panel({
   as: Tag = 'section',
   description,
   scrolls,
+  icon,
+  tone = 'var(--fc-arc)',
 }: {
   title?: ReactNode
   actions?: ReactNode
@@ -23,6 +25,9 @@ export function Panel({
   description?: ReactNode
   /** The body scrolls inside the panel: it takes keyboard focus so arrows can scroll it. */
   scrolls?: boolean
+  /** An icon before the title, in a chip of `tone` (a colour that says what the panel is). */
+  icon?: ReactNode
+  tone?: string
 }) {
   const headingId = id ? `${id}-title` : undefined
   return (
@@ -37,6 +42,15 @@ export function Panel({
       {(title || actions) && (
         <header className="flex min-h-12 items-center justify-between gap-3 px-4 pt-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-1">
+            {icon && (
+              <span
+                aria-hidden="true"
+                className="mr-2 grid size-9 shrink-0 place-items-center rounded-[11px] text-[20px]"
+                style={{ color: tone, background: `color-mix(in srgb, ${tone} 13%, transparent)` }}
+              >
+                {icon}
+              </span>
+            )}
             {title && (
               <h2
                 id={headingId}

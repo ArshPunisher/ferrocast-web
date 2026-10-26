@@ -126,6 +126,90 @@ export function Dialog({
   )
 }
 
+export interface SheetProps {
+  open: boolean
+  onClose: () => void
+  title: string
+  /** Stays put above the scrolling body (a search, filters). */
+  tools?: ReactNode
+  children?: ReactNode
+  footer?: ReactNode
+}
+
+/**
+ * A side panel from the right, full height: a long list to look through or a form to edit,
+ * without leaving the page. Native <dialog> like Dialog (focus trap, Escape, inert page).
+ */
+export function Sheet({ open, onClose, title, tools, children, footer }: SheetProps) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const reduce = useReducedMotion()
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    if (open && !d.open) {
+      d.showModal()
+      d.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    }
+    if (!open && d.open) d.close()
+  }, [open])
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    const onCancel = (e: Event) => {
+      e.preventDefault()
+      onClose()
+    }
+    d.addEventListener('cancel', onCancel)
+    return () => d.removeEventListener('cancel', onCancel)
+  }, [onClose])
+  return (
+    <dialog
+      ref={ref}
+      aria-label={title}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+      className="fc-dialog m-0 h-dvh max-h-none w-screen max-w-none bg-transparent p-0 text-text backdrop:bg-[rgb(4_5_8/0.5)]"
+    >
+      {open && (
+        <div className="pointer-events-none flex h-full w-full justify-end">
+          <motion.div
+            initial={reduce ? false : { x: 32, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+            className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+          >
+            <div className="flex items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
+              <h2 className="min-w-0 flex-1 truncate font-display text-xl font-extrabold tracking-tight text-text">
+                {title}
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="fc-press inline-flex size-9 shrink-0 items-center justify-center rounded-control border border-line-strong text-text-2 hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {tools && (
+              <div className="flex-none border-b border-line px-5 py-3.5 sm:px-6">{tools}</div>
+            )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+              {children}
+            </div>
+            {footer && (
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2 px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6">
+                {footer}
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </dialog>
+  )
+}
+
 // ------------------------------------------------------------------ toasts
 
 export type ToastTone = 'info' | 'ok' | 'warn' | 'error'

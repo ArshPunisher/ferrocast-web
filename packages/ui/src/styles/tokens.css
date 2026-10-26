@@ -77,6 +77,10 @@
   --fc-tips: #f2b84b;
 
   /* Liquid metal. */
+  /* Leaderboard crowns. */
+  --fc-gold: #f5c542;
+  --fc-silver: #c3cad6;
+  --fc-bronze: #d08a52;
   --fc-chrome: linear-gradient(
     180deg,
     #f4f6fa 0%,
@@ -148,6 +152,9 @@
   --fc-chrome: linear-gradient(
     180deg,
     #ffffff 0%,
+  --fc-gold: #a87a00;
+  --fc-silver: #5f6a7a;
+  --fc-bronze: #9a5a2a;
     #d9dee6 34%,
     #7b8391 60%,
     #2a3038 82%,
@@ -198,6 +205,9 @@
       #ffffff 0%,
       #d9dee6 34%,
       #7b8391 60%,
+    --fc-gold: #a87a00;
+    --fc-silver: #5f6a7a;
+    --fc-bronze: #9a5a2a;
       #2a3038 82%,
       #4a515c 100%
     );
