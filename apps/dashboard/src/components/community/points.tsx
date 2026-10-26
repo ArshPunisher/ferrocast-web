@@ -1,5 +1,19 @@
-import { useState } from 'react'
-import { Coins, Minus, Plus } from '@phosphor-icons/react'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  ArrowRight,
+  ChatCircleDots,
+  Coins,
+  Crown,
+  CurrencyCircleDollar,
+  GearSix,
+  Heart,
+  MagnifyingGlass,
+  Minus,
+  Plus,
+  Star,
+  Sword,
+  Trophy,
+} from '@phosphor-icons/react'
 import {
   POINTS_LIMITS,
   PLATFORM_LABEL,
@@ -13,12 +27,13 @@ import {
 import {
   Button,
   Dialog,
-  EmptyState,
   Field,
   Input,
   PlatformMark,
+  Sheet,
   Skeleton,
   Switch,
+  cx,
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
@@ -121,14 +136,172 @@ export function PointsAdjuster({
   )
 }
 
-function Leaderboard({ name }: { name: string }) {
-  const board = useResource((c) => c.leaderboard(20))
+const MEDAL = ['var(--fc-gold)', 'var(--fc-silver)', 'var(--fc-bronze)']
+
+/** One person on the board: rank (a crown for the top three), face, name, points. */
+function Row({ e, onPick, name }: { e: LeaderboardEntry; onPick: () => void; name: string }) {
+  const letter =
+    e.display_name
+      .replace(/[^\p{L}\p{N}]/gu, '')
+      .charAt(0)
+      .toUpperCase() || '?'
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onPick}
+        title={`${e.display_name} · ${PLATFORM_LABEL[e.platform]}`}
+        className="fc-press grid h-12 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-control px-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      >
+        <span className="grid place-items-center font-mono text-[15px] font-bold text-text-3 tabular-nums">
+          {e.rank <= 3 ? (
+            <Crown
+              size={20}
+              weight="fill"
+              style={{ color: MEDAL[e.rank - 1] }}
+              aria-label={`${e.rank}`}
+            />
+          ) : (
+            e.rank
+          )}
+        </span>
+        <span className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid size-8 shrink-0 place-items-center rounded-full font-display text-[13px] font-extrabold text-white"
+            style={{ background: `var(--fc-${e.platform})` }}
+          >
+            {letter}
+          </span>
+          <span dir="auto" className="truncate font-bold text-text">
+            {tameText(e.display_name)}
+          </span>
+        </span>
+        <span className="font-mono text-[15.5px] font-bold text-text tabular-nums">
+          {formatCount(e.points)}
+        </span>
+        <span className="sr-only">. Change {name}</span>
+      </button>
+    </li>
+  )
+}
+
+/** The adjuster for one person, over the board or the full list. */
+function Adjust({
+  editing,
+  setEditing,
+  name,
+  onChanged,
+}: {
+  editing: LeaderboardEntry | null
+  setEditing: (e: LeaderboardEntry | null) => void
+  name: string
+  onChanged: () => void
+}) {
+  return (
+    <Dialog
+      open={editing !== null}
+      onClose={() => setEditing(null)}
+      size="sm"
+      title={editing ? tameText(editing.display_name) : 'Points'}
+      description={
+        editing ? (
+          <span className="inline-flex items-center gap-1.5">
+            <PlatformMark platform={editing.platform} size={13} />
+            {PLATFORM_LABEL[editing.platform]} · {pointsLabel(editing.points, name)}
+          </span>
+        ) : null
+      }
+    >
+      {editing && (
+        <div className="pb-2">
+          <PointsAdjuster
+            platform={editing.platform}
+            userId={editing.user_id}
+            name={name}
+            points={editing.points}
+            onChange={(points) => {
+              setEditing({ ...editing, points })
+              onChanged()
+            }}
+          />
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
+/** The top 100 with a search, in a side panel. */
+function AllViewers({ open, onClose, name }: { open: boolean; onClose: () => void; name: string }) {
+  const board = useResource((c) => (open ? c.leaderboard(100) : Promise.resolve([])), [open])
+  const [q, setQ] = useState('')
   const [editing, setEditing] = useState<LeaderboardEntry | null>(null)
-  const max = board.data?.[0]?.points ?? 0
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const all = board.data ?? []
+    return needle ? all.filter((e) => e.display_name.toLowerCase().includes(needle)) : all
+  }, [board.data, q])
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Top 100 viewers"
+      tools={
+        <label className="relative block">
+          <MagnifyingGlass
+            size={17}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-text-3"
+          />
+          <Input
+            aria-label="Find a viewer"
+            placeholder="Find a viewer…"
+            className="pl-10"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+      }
+    >
+      {board.error ? (
+        <LoadError error={board.error} onRetry={board.reload} />
+      ) : !board.data ? (
+        <Skeleton className="h-80" />
+      ) : shown.length === 0 ? (
+        <p className="text-[15px] font-medium text-text-2">Nobody by that name.</p>
+      ) : (
+        <ol className="flex flex-col divide-y divide-line" aria-label={`Top 100 by ${name}`}>
+          {shown.map((e) => (
+            <Row
+              key={`${e.platform}:${e.user_id}`}
+              e={e}
+              name={name}
+              onPick={() => setEditing(e)}
+            />
+          ))}
+        </ol>
+      )}
+      <Adjust editing={editing} setEditing={setEditing} name={name} onChanged={board.reload} />
+    </Sheet>
+  )
+}
+
+/** On the card: the top 10, in two columns where there's room. */
+const ON_CARD = 10
+
+function Leaderboard({ name }: { name: string }) {
+  const board = useResource((c) => c.leaderboard(ON_CARD))
+  const [editing, setEditing] = useState<LeaderboardEntry | null>(null)
+  const [all, setAll] = useState(false)
+  const rows = board.data ?? []
   return (
     <Panel
-      title="Leaderboard"
-      description={`Top 20 by ${name}. Linked accounts share one balance.`}
+      title="Top viewers"
+      icon={<Trophy weight="fill" />}
+      tone="var(--fc-tips)"
+      className="h-full"
+      bodyClassName="flex flex-col"
+      description={`By ${name}. Linked accounts share one balance; click someone to change theirs.`}
       actions={
         <Button
           size="sm"
@@ -148,79 +321,41 @@ function Leaderboard({ name }: { name: string }) {
             <Skeleton key={i} className="h-11" />
           ))}
         </div>
-      ) : board.data.length === 0 ? (
-        <EmptyState compact title="Nobody has points yet">
-          Viewers earn {name} by chatting live, following, subbing, tipping and raiding.
-        </EmptyState>
+      ) : rows.length === 0 ? (
+        <p className="text-[15px] font-medium text-text-2">
+          Nobody has {name} yet. Viewers earn them by chatting live, following, subbing, tipping and
+          raiding.
+        </p>
       ) : (
-        <ol className="-mx-2 flex flex-col" aria-label={`Leaderboard by ${name}`}>
-          {board.data.map((e) => (
-            <li key={`${e.platform}:${e.user_id}`}>
-              <button
-                type="button"
-                onClick={() => setEditing(e)}
-                className="fc-press grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-control px-2 py-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-              >
-                <span
-                  className={
-                    e.rank <= 3
-                      ? 'font-mono text-sm font-bold text-accent-text tabular-nums'
-                      : 'font-mono text-sm text-text-3 tabular-nums'
-                  }
-                >
-                  {e.rank}
-                </span>
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <PlatformMark platform={e.platform} size={13} />
-                    <span dir="auto" className="truncate text-sm font-semibold text-text">
-                      {tameText(e.display_name)}
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="block h-1 origin-left rounded-full bg-accent/70"
-                    style={{ transform: `scaleX(${max > 0 ? Math.max(0.03, e.points / max) : 0})` }}
-                  />
-                </span>
-                <span className="font-mono text-sm font-semibold text-text tabular-nums">
-                  {formatCount(e.points)}
-                </span>
-                <span className="sr-only">. Change {name}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <div className="flex flex-1 flex-col gap-2">
+          {/* One list, read in order; two columns where there's room. */}
+          <ol
+            className="gap-x-8 md:columns-2 [&>li]:break-inside-avoid [&>li]:border-b [&>li]:border-line"
+            aria-label={`Leaderboard by ${name}`}
+          >
+            {rows.map((e) => (
+              <Row
+                key={`${e.platform}:${e.user_id}`}
+                e={e}
+                name={name}
+                onPick={() => setEditing(e)}
+              />
+            ))}
+          </ol>
+          {rows.length >= ON_CARD && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-auto self-start text-accent-text!"
+              onClick={() => setAll(true)}
+            >
+              See the top 100 <ArrowRight size={14} weight="bold" />
+            </Button>
+          )}
+        </div>
       )}
-      <Dialog
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        size="sm"
-        title={editing ? tameText(editing.display_name) : 'Points'}
-        description={
-          editing ? (
-            <span className="inline-flex items-center gap-1.5">
-              <PlatformMark platform={editing.platform} size={13} />
-              {PLATFORM_LABEL[editing.platform]} · {pointsLabel(editing.points, name)}
-            </span>
-          ) : null
-        }
-      >
-        {editing && (
-          <div className="pb-2">
-            <PointsAdjuster
-              platform={editing.platform}
-              userId={editing.user_id}
-              name={name}
-              points={editing.points}
-              onChange={(points) => {
-                setEditing({ ...editing, points })
-                board.reload()
-              }}
-            />
-          </div>
-        )}
-      </Dialog>
+      <Adjust editing={editing} setEditing={setEditing} name={name} onChanged={board.reload} />
+      <AllViewers open={all} onClose={() => setAll(false)} name={name} />
     </Panel>
   )
 }
@@ -273,7 +408,7 @@ function PointsSettings({
   )
   const errFor = (k: string) => (err?.field === k ? err.message : null)
   return (
-    <Panel title="Earning">
+    <div>
       <form
         className="flex flex-col gap-5"
         onSubmit={(e) => {
@@ -359,25 +494,87 @@ function PointsSettings({
           </Button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/** How points are earned, in a line of chips; Edit opens the form in a side panel. */
+function PointsCard({ cfg, onSaved }: { cfg: LoyaltyConfig; onSaved: (c: LoyaltyConfig) => void }) {
+  const [editing, setEditing] = useState(false)
+  const chips: [ReactNode, string, string][] = [
+    [
+      <ChatCircleDots key="c" weight="fill" />,
+      `${formatCount(cfg.per_interval)} / ${cfg.interval_min} min`,
+      'For chatting',
+    ],
+    [<Heart key="h" weight="fill" />, formatCount(cfg.follow_bonus), 'Per follow'],
+    [<Star key="s" weight="fill" />, formatCount(cfg.sub_bonus), 'Per sub'],
+    [<CurrencyCircleDollar key="t" weight="fill" />, formatCount(cfg.tip_bonus), 'Per tip'],
+    [<Sword key="r" weight="fill" />, formatCount(cfg.raid_bonus), 'Per raid'],
+  ]
+  return (
+    <Panel
+      title={cfg.name.charAt(0).toUpperCase() + cfg.name.slice(1)}
+      icon={<Coins weight="fill" />}
+      tone="var(--fc-tips)"
+      actions={
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<GearSix size={15} />}
+          onClick={() => setEditing(true)}
+        >
+          Edit
+        </Button>
+      }
+    >
+      {cfg.enabled ? (
+        <ul className="flex flex-wrap gap-2" aria-label="How viewers earn">
+          {chips.map(([icon, value, label]) => (
+            <li
+              key={label}
+              title={label}
+              className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-line bg-surface-2 px-3 font-semibold text-text"
+            >
+              <span aria-hidden="true" className="text-[var(--fc-tips)]">
+                {icon}
+              </span>
+              <span className="sr-only">{label}: </span>
+              <span className="tabular-nums">{value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[15px] font-medium text-text-2">Off: viewers don’t earn {cfg.name}.</p>
+      )}
+      <Sheet open={editing} onClose={() => setEditing(false)} title={`Earning ${cfg.name}`}>
+        <PointsSettings cfg={cfg} onSaved={onSaved} />
+      </Sheet>
     </Panel>
   )
 }
 
 /** Points: the leaderboard and how they're earned. */
-export function PointsSection() {
+export function PointsSection({ beside }: { beside?: ReactNode }) {
   const cfg = useResource((c) => c.loyalty())
   if (cfg.error) return <LoadError error={cfg.error} onRetry={cfg.reload} />
   if (!cfg.data)
     return (
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2" aria-busy="true">
+      <div
+        className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+        aria-busy="true"
+      >
         <Skeleton className="h-80" />
         <Skeleton className="h-80" />
       </div>
     )
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <Leaderboard name={cfg.data.name} />
-      <PointsSettings cfg={cfg.data} onSaved={(c) => cfg.set(c)} />
+      <div className={cx('flex flex-col gap-5', '[&>:last-child]:flex-1')}>
+        <PointsCard cfg={cfg.data} onSaved={(c) => cfg.set(c)} />
+        {beside}
+      </div>
     </div>
   )
 }

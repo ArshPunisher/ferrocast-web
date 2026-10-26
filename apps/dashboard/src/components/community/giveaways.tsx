@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowsClockwise, Confetti, HandPalm, Trophy } from '@phosphor-icons/react'
+import {
+  ArrowsClockwise,
+  Confetti,
+  Gift,
+  HandPalm,
+  MagnifyingGlass,
+  Trophy,
+} from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
   POINTS_LIMITS,
@@ -18,6 +25,7 @@ import {
   Field,
   Input,
   PlatformMark,
+  Sheet,
   Skeleton,
   Switch,
   toast,
@@ -64,7 +72,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
   const errFor = (f: string) => (err?.field === f ? err.message : null)
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex flex-1 flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault()
         void start()
@@ -81,7 +89,7 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
           />
         )}
       </Field>
-      <div className={cloud ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-2 gap-4'}>
+      <div className={cloud ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-2 gap-3'}>
         <Field label="Keyword" error={errFor('keyword')}>
           {(p) => (
             <Input
@@ -120,7 +128,13 @@ function NewGiveaway({ onStarted }: { onStarted: (g: GiveawayView) => void }) {
           {err.message}
         </p>
       )}
-      <Button type="submit" variant="primary" busy={busy} className="self-start">
+      <Button
+        type="submit"
+        variant="primary"
+        busy={busy}
+        icon={<Gift size={16} weight="fill" />}
+        className="mt-auto self-end"
+      >
         Start giveaway
       </Button>
     </form>
@@ -165,6 +179,99 @@ function WinnerCard({ g }: { g: GiveawayView }) {
   )
 }
 
+/** A small avatar: the name's first letter on its platform's colour. */
+function Face({
+  name,
+  platform,
+}: {
+  name: string
+  platform: GiveawayView['entrants'][number]['platform']
+}) {
+  const letter =
+    name
+      .replace(/[^\p{L}\p{N}]/gu, '')
+      .charAt(0)
+      .toUpperCase() || '?'
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-surface-1 font-display text-[13px] font-extrabold text-white"
+      style={{ background: `var(--fc-${platform})` }}
+    >
+      {letter}
+    </span>
+  )
+}
+
+/** Everyone who entered, with a search: the list in a side panel, never a tiny scroll box. */
+function EntriesSheet({
+  g,
+  open,
+  onClose,
+}: {
+  g: GiveawayView
+  open: boolean
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return needle
+      ? g.entrants.filter((e) => e.display_name.toLowerCase().includes(needle))
+      : g.entrants
+  }, [g.entrants, q])
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`Entries · ${formatCount(g.entries)}`}
+      tools={
+        <label className="relative block">
+          <MagnifyingGlass
+            size={17}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-text-3"
+          />
+          <Input
+            aria-label="Find someone who entered"
+            placeholder="Find someone…"
+            className="pl-10"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+      }
+    >
+      {shown.length === 0 ? (
+        <p className="text-[15px] font-medium text-text-2">Nobody by that name.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line" aria-label="Who entered">
+          {shown.map((e) => (
+            <li
+              key={`${e.platform}:${e.user_id}`}
+              className="flex h-12 items-center gap-3"
+              title={PLATFORM_LABEL[e.platform]}
+            >
+              <Face name={e.display_name} platform={e.platform} />
+              <span dir="auto" className="min-w-0 flex-1 truncate font-bold text-text">
+                {tameText(e.display_name)}
+              </span>
+              <span className="text-[14px] font-semibold text-text-3">
+                {e.tickets > 1 ? '2 entries' : '1 entry'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {g.entries > g.entrants.length && (
+        <p className="mt-3 text-[14.5px] text-text-3">
+          And {formatCount(g.entries - g.entrants.length)} more.
+        </p>
+      )}
+    </Sheet>
+  )
+}
+
 /** Giveaways: start, watch entries come in, draw (and redraw) a winner. */
 export function GiveawayPanel() {
   const client = useClient()
@@ -174,6 +281,7 @@ export function GiveawayPanel() {
   const [shown, setShown] = useState<GiveawayView | null>(null)
   const [composing, setComposing] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [seeing, setSeeing] = useState(false)
   useEffect(() => {
     if (initial.data) setShown(initial.data)
   }, [initial.data])
@@ -186,6 +294,10 @@ export function GiveawayPanel() {
   return (
     <Panel
       title="Giveaway"
+      icon={<Gift weight="fill" />}
+      tone="var(--fc-accent)"
+      className="h-full"
+      bodyClassName="flex flex-col"
       description="Viewers enter by typing a keyword in chat, on any platform."
       actions={
         g && !g.ended ? (
@@ -207,13 +319,17 @@ export function GiveawayPanel() {
           }}
         />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-1 flex-col gap-3.5">
           <div>
-            <p dir="auto" className="font-display text-lg font-semibold tracking-tight text-text">
+            <p
+              dir="auto"
+              title={g.prize}
+              className="truncate font-display text-[17px] font-bold tracking-tight text-text"
+            >
               {tameText(g.prize)}
             </p>
-            <p className="mt-0.5 text-[14.5px] text-text-3">
-              <span translate="no" className="font-mono text-text-2">
+            <p className="mt-0.5 text-[14.5px] font-medium text-text-2">
+              <span translate="no" className="font-mono font-bold text-[var(--fc-molten-text)]">
                 {g.keyword}
               </span>{' '}
               to enter
@@ -221,15 +337,16 @@ export function GiveawayPanel() {
               {g.subscriber_bonus ? ' · subs get 2 entries' : ''}
             </p>
           </div>
-          <dl className="grid grid-cols-2 gap-2">
+          {/* The count, big and centred; the latest faces under it. */}
+          <dl className="my-auto flex justify-center gap-10 py-2 text-center">
             {[
               ['Entries', formatCount(g.entries)],
               ['Tickets', formatCount(g.tickets)],
             ].map(([k, v]) => (
-              <div key={k} className="rounded-[12px] bg-surface-2 px-3 py-2">
-                <dt className="text-[13.5px] font-medium text-text-2">{k}</dt>
+              <div key={k} className="flex flex-col-reverse items-center">
+                <dt className="text-[14px] font-semibold text-text-3">{k}</dt>
                 <dd
-                  className="font-mono text-lg font-semibold text-text tabular-nums"
+                  className="font-display text-[44px] leading-none font-extrabold tracking-tight text-text tabular-nums"
                   aria-live="polite"
                 >
                   {v}
@@ -237,42 +354,42 @@ export function GiveawayPanel() {
               </div>
             ))}
           </dl>
-          <WinnerCard g={g} />
           {g.entrants.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-[14.5px] font-medium text-text-2 select-none hover:text-text">
-                Who entered
-              </summary>
-              <ul className="fc-scroll mt-2 flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-                {g.entrants.slice(0, 200).map((e) => (
-                  <li
-                    key={`${e.platform}:${e.user_id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[14.5px] text-text-2"
-                    title={`${PLATFORM_LABEL[e.platform]}${e.tickets > 1 ? ', 2 entries' : ''}`}
-                  >
-                    <PlatformMark platform={e.platform} size={11} />
-                    <span dir="auto" className="max-w-[16ch] truncate">
-                      {tameText(e.display_name)}
+            <button
+              type="button"
+              onClick={() => setSeeing(true)}
+              className="fc-press mx-auto flex max-w-full items-center gap-2.5 rounded-control px-2 py-1 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <span className="flex">
+                {g.entrants
+                  .slice(-5)
+                  .reverse()
+                  .map((e, i) => (
+                    <span key={`${e.platform}:${e.user_id}`} className={i > 0 ? '-ml-2' : ''}>
+                      <Face name={e.display_name} platform={e.platform} />
                     </span>
-                    {e.tickets > 1 && (
-                      <span className="font-mono text-[13.5px] text-text-3">×2</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {g.entries > 200 && (
-                <p className="mt-1.5 text-[14.5px] text-text-3">
-                  And {formatCount(g.entries - 200)} more.
-                </p>
-              )}
-            </details>
+                  ))}
+              </span>
+              <span className="min-w-0 truncate text-[14.5px] font-semibold text-text-2">
+                {tameText(g.entrants.at(-1)?.display_name ?? '')}
+                {g.entries > 1 ? ` and ${formatCount(g.entries - 1)} more` : ''}
+              </span>
+              <span className="shrink-0 text-[14.5px] font-bold text-accent-text">See all</span>
+            </button>
           )}
+          <WinnerCard g={g} />
           {g.entries === 0 && g.open && (
             <EmptyState compact title="Waiting for entries">
               It’s been posted in chat. Entries show up here as they come in.
             </EmptyState>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-auto flex flex-wrap items-center justify-end gap-2">
+            {!g.ended && (
+              <Button variant="danger-ghost" onClick={() => setConfirmCancel(true)}>
+                Cancel
+              </Button>
+            )}
+            <span className="flex-1" />
             {g.ended ? (
               <Button
                 variant="primary"
@@ -283,6 +400,17 @@ export function GiveawayPanel() {
               </Button>
             ) : g.winners.length === 0 ? (
               <>
+                {g.open && (
+                  <Button
+                    variant="ghost"
+                    icon={<HandPalm size={15} />}
+                    aria-label="Close entries"
+                    busy={busy === 'close'}
+                    onClick={() => act('close', () => client.closeGiveaway(), 'Entries closed.')}
+                  >
+                    Close
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   icon={<Trophy size={15} weight="fill" />}
@@ -292,15 +420,6 @@ export function GiveawayPanel() {
                 >
                   Draw winner
                 </Button>
-                {g.open && (
-                  <Button
-                    icon={<HandPalm size={15} />}
-                    busy={busy === 'close'}
-                    onClick={() => act('close', () => client.closeGiveaway(), 'Entries closed.')}
-                  >
-                    Close entries
-                  </Button>
-                )}
               </>
             ) : (
               <>
@@ -321,14 +440,10 @@ export function GiveawayPanel() {
                 </Button>
               </>
             )}
-            {!g.ended && (
-              <Button variant="danger-ghost" onClick={() => setConfirmCancel(true)}>
-                Cancel
-              </Button>
-            )}
           </div>
         </div>
       )}
+      {g && <EntriesSheet g={g} open={seeing} onClose={() => setSeeing(false)} />}
       <Dialog
         open={confirmCancel}
         onClose={() => setConfirmCancel(false)}

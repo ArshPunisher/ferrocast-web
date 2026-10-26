@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowCounterClockwise, Plus, Stop, X } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, ChartBar, Plus, Stop, X } from '@phosphor-icons/react'
 import {
   POLL_LIMITS,
   fieldError,
@@ -74,7 +74,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
   }
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex flex-1 flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault()
         void start()
@@ -86,7 +86,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
             {...p}
             value={question}
             maxLength={POLL_LIMITS.question}
-            placeholder="Which map next…"
+            placeholder="Ask chat, e.g. Which map next…"
             onChange={(e) => setQuestion(e.target.value)}
           />
         )}
@@ -111,7 +111,7 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
           <div key={i} className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="w-14 shrink-0 font-mono text-[14.5px] whitespace-nowrap text-text-3"
+              className="w-16 shrink-0 font-mono text-[14.5px] font-bold whitespace-nowrap text-[var(--fc-twitch)]"
             >
               !vote {i + 1}
             </span>
@@ -152,25 +152,24 @@ function NewPoll({ onStarted, last }: { onStarted: (p: PollView) => void; last: 
           </Button>
         )}
       </fieldset>
-      <div className="flex flex-col gap-1.5">
-        <span id="poll-len" className="text-[14.5px] font-medium text-text-2">
-          How long
-        </span>
+      {err && err.field !== 'question' && err.field !== 'options' && (
+        <p role="alert" className="text-[14.5px] text-danger">
+          {err.message}
+        </p>
+      )}
+      {/* How long and Start on one line, at the bottom of the card. */}
+      <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
         <Segmented
           label="How long"
           value={duration as (typeof DURATIONS)[number]['value']}
           onChange={setDuration}
           options={DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
         />
+        <span className="flex-1" />
+        <Button type="submit" variant="primary" busy={busy}>
+          Start poll
+        </Button>
       </div>
-      {err && err.field !== 'question' && err.field !== 'options' && (
-        <p role="alert" className="text-[14.5px] text-danger">
-          {err.message}
-        </p>
-      )}
-      <Button type="submit" variant="primary" busy={busy} className="self-start">
-        Start poll
-      </Button>
     </form>
   )
 }
@@ -179,30 +178,45 @@ function Results({ poll }: { poll: PollView }) {
   const reduce = useReducedMotion()
   const leaders = new Set(poll.leaders)
   return (
-    <ol className="flex flex-col gap-3" aria-label="Results">
+    <ol className="flex flex-col gap-2" aria-label="Results">
       {poll.options.map((o, i) => {
         const share = poll.total > 0 ? o.votes / poll.total : 0
-        const lead = poll.closed && leaders.has(i)
+        const top = leaders.has(i)
+        const lead = poll.closed && top
         return (
-          <li key={i} className={cx('flex flex-col gap-1.5', poll.closed && !lead && 'opacity-60')}>
-            <div className="flex items-baseline gap-2 text-sm">
-              <span className="w-5 shrink-0 font-mono text-[14.5px] text-text-3">{i + 1}</span>
-              <span dir="auto" className="min-w-0 flex-1 truncate font-semibold text-text">
-                {tameText(o.text)}
+          <li
+            key={i}
+            title={o.text}
+            className={cx(
+              'relative flex items-center gap-3 overflow-hidden rounded-[11px] bg-surface-2 px-3.5 py-2.5',
+              poll.closed && !lead && 'opacity-60',
+            )}
+          >
+            {/* The share fills the answer's own row (no separate grey track). */}
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 w-full origin-left"
+              style={{
+                background: `color-mix(in srgb, var(--fc-twitch) ${top ? 28 : 16}%, transparent)`,
+              }}
+              initial={false}
+              animate={{ scaleX: share }}
+              transition={reduce ? { duration: 0 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            />
+            <span className="relative w-5 shrink-0 font-mono text-[14.5px] font-bold text-[var(--fc-twitch)]">
+              {i + 1}
+            </span>
+            <span dir="auto" className="relative min-w-0 flex-1 truncate font-bold text-text">
+              {tameText(o.text)}
+            </span>
+            {lead && (
+              <span className="relative">
+                <Badge tone="accent">Winner</Badge>
               </span>
-              {lead && <Badge tone="accent">Winner</Badge>}
-              <span className="shrink-0 font-mono text-[14.5px] text-text-2 tabular-nums">
-                {formatCount(o.votes)} · {Math.round(share * 100)}%
-              </span>
-            </div>
-            <div className="ml-7 h-2 overflow-hidden rounded-full bg-surface-3">
-              <motion.div
-                className="h-full origin-left rounded-full bg-accent"
-                initial={false}
-                animate={{ scaleX: share }}
-                transition={reduce ? { duration: 0 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </div>
+            )}
+            <span className="relative shrink-0 font-mono text-[14.5px] font-semibold text-text tabular-nums">
+              {Math.round(share * 100)}%
+            </span>
           </li>
         )
       })}
@@ -232,14 +246,23 @@ export function PollPanel() {
   return (
     <Panel
       title="Poll"
+      icon={<ChartBar weight="fill" />}
+      tone="var(--fc-twitch)"
+      className="h-full"
+      bodyClassName="flex flex-col"
       description="Viewers vote in chat with !vote 1, on every platform."
       actions={
-        poll && open ? (
-          <span
-            className="font-mono text-sm font-semibold text-accent-text tabular-nums"
-            aria-label="Time left"
-          >
-            {clock(poll.ends_at - now)}
+        poll ? (
+          <span className="flex items-center gap-2">
+            {open && (
+              <span
+                className="font-mono text-[15px] font-bold text-text tabular-nums"
+                aria-label="Time left"
+              >
+                {clock(poll.ends_at - now)}
+              </span>
+            )}
+            <Badge tone={open ? 'danger' : 'neutral'}>{open ? 'Live' : 'Closed'}</Badge>
           </span>
         ) : null
       }
@@ -249,19 +272,20 @@ export function PollPanel() {
       ) : initial.loading && !shown ? (
         <Skeleton className="h-56" />
       ) : poll ? (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <p dir="auto" className="font-display text-lg font-semibold tracking-tight text-text">
-              {tameText(poll.question)}
-            </p>
-            <Badge tone={open ? 'ok' : 'neutral'}>{open ? 'Live' : 'Closed'}</Badge>
-          </div>
+        <div className="flex flex-1 flex-col gap-3.5">
+          <p
+            dir="auto"
+            title={poll.question}
+            className="font-display text-[17px] font-bold tracking-tight break-words text-text"
+          >
+            {tameText(poll.question)}
+          </p>
           <Results poll={poll} />
-          <p className="text-[14.5px] text-text-3" aria-live="polite">
+          <p className="text-[14.5px] font-semibold text-text-2" aria-live="polite">
             {formatCount(poll.total)} {poll.total === 1 ? 'vote' : 'votes'}
             {open ? '' : '. The result was posted to chat.'}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-auto flex flex-wrap justify-end gap-2">
             {open ? (
               <Button
                 variant="primary"

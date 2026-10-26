@@ -3,7 +3,7 @@
 // mode (ferrocast docs/CLOUD.md §7.1); overlays show a goal through a Goal widget.
 
 import { useEffect, useId, useState } from 'react'
-import { Minus, Plus, Target, Trash } from '@phosphor-icons/react'
+import { ArrowRight, Minus, Plus, Target, Trash } from '@phosphor-icons/react'
 import {
   exponent,
   fieldError,
@@ -13,16 +13,7 @@ import {
   type Goal,
   type GoalKind,
 } from '@ferrocast/api'
-import {
-  Button,
-  Dialog,
-  EmptyState,
-  Field,
-  IconButton,
-  Input,
-  Select,
-  Skeleton,
-} from '@ferrocast/ui'
+import { Button, Dialog, Field, IconButton, Input, Select, Sheet, Skeleton } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
@@ -180,14 +171,14 @@ function GoalRow({
         </p>
       </div>
       <div
-        className="h-2 overflow-hidden rounded-full bg-surface-3"
+        className="h-2.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--fc-ok)_14%,transparent)]"
         role="progressbar"
         aria-labelledby={id}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
       >
-        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
       </div>
       <div className="flex items-center gap-1">
         <IconButton
@@ -217,6 +208,43 @@ function GoalRow({
   )
 }
 
+/** A goal on the card: its name, how far, a bar. Changes happen in the side panel. */
+function GoalLine({ g }: { g: Goal }) {
+  const id = useId()
+  const pct =
+    g.target > 0 ? Math.min(100, Math.round((Math.max(0, g.current) / g.target) * 100)) : 0
+  return (
+    <li className="flex flex-col gap-1.5" data-testid="goal-line">
+      <div className="flex items-baseline gap-3">
+        <span
+          id={id}
+          dir="auto"
+          title={g.title}
+          className="min-w-0 flex-1 truncate font-bold text-text"
+        >
+          {tameText(g.title)}
+        </span>
+        <span className="shrink-0 font-mono text-[14.5px] font-semibold text-text tabular-nums">
+          {amount(g, g.current)} <span className="text-text-3">/ {amount(g, g.target)}</span>
+        </span>
+      </div>
+      <div
+        className="h-2.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--fc-ok)_14%,transparent)]"
+        role="progressbar"
+        aria-labelledby={id}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+      >
+        <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
+      </div>
+    </li>
+  )
+}
+
+/** Goals on the card: the first three. */
+const ON_CARD = 3
+
 export function GoalsPanel() {
   const client = useClient()
   const res = useResource((c) => c.goals())
@@ -224,6 +252,7 @@ export function GoalsPanel() {
   const { run, busy } = useAction()
   const [adding, setAdding] = useState(false)
   const [leaving, setLeaving] = useState<Goal | null>(null)
+  const [managing, setManaging] = useState(false)
   // Progress moves as events arrive (`goals` frames).
   useEffect(() => {
     if (live) res.set(live)
@@ -234,14 +263,21 @@ export function GoalsPanel() {
   return (
     <Panel
       title="Goals"
+      icon={<Target weight="fill" />}
+      tone="var(--fc-ok)"
+      className="h-full"
+      bodyClassName="flex flex-col"
       description="Show one on stream with a Goal widget in an overlay."
       actions={
-        goals && goals.length > 0 && !adding ? (
+        goals && goals.length > 0 ? (
           <Button
             size="sm"
             variant="secondary"
             icon={<Plus size={14} />}
-            onClick={() => setAdding(true)}
+            onClick={() => {
+              setAdding(true)
+              setManaging(true)
+            }}
           >
             New goal
           </Button>
@@ -252,9 +288,51 @@ export function GoalsPanel() {
         <LoadError error={res.error} onRetry={res.reload} />
       ) : !goals ? (
         <Skeleton className="h-40" />
+      ) : goals.length === 0 ? (
+        <div className="flex flex-1 flex-col gap-4">
+          <p className="text-[15px] font-medium text-text-2">
+            No goals yet. They count follows, subs, Bits or tips as they arrive.
+          </p>
+          <Button
+            variant="primary"
+            icon={<Target size={16} />}
+            className="mt-auto self-end"
+            onClick={() => {
+              setAdding(true)
+              setManaging(true)
+            }}
+          >
+            Make a goal
+          </Button>
+        </div>
       ) : (
+        <div className="flex flex-1 flex-col gap-4">
+          <ul className="flex flex-col gap-4" aria-label="Goals">
+            {goals.slice(0, ON_CARD).map((g) => (
+              <GoalLine key={g.id} g={g} />
+            ))}
+          </ul>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-auto self-start text-accent-text!"
+            onClick={() => setManaging(true)}
+          >
+            {goals.length > ON_CARD ? `See all ${goals.length}` : 'Change goals'}
+            <ArrowRight size={14} weight="bold" />
+          </Button>
+        </div>
+      )}
+      <Sheet
+        open={managing}
+        onClose={() => {
+          setManaging(false)
+          setAdding(false)
+        }}
+        title="Goals"
+      >
         <div className="flex flex-col gap-4">
-          {adding && (
+          {adding ? (
             <NewGoal
               onCancel={() => setAdding(false)}
               onCreated={(g) => {
@@ -262,26 +340,18 @@ export function GoalsPanel() {
                 setAdding(false)
               }}
             />
-          )}
-          {goals.length === 0 && !adding ? (
-            <EmptyState
-              compact
-              title="No goals yet"
-              action={
-                <Button
-                  variant="primary"
-                  icon={<Target size={16} />}
-                  onClick={() => setAdding(true)}
-                >
-                  Make a goal
-                </Button>
-              }
-            >
-              A goal counts follows, subs, Bits or tips as they arrive, so chat can see how close
-              you are.
-            </EmptyState>
           ) : (
-            <ul className="-my-3 flex flex-col divide-y divide-line">
+            <Button
+              variant="secondary"
+              icon={<Plus size={15} />}
+              className="self-start"
+              onClick={() => setAdding(true)}
+            >
+              New goal
+            </Button>
+          )}
+          {goals && goals.length > 0 && (
+            <ul className="flex flex-col divide-y divide-line">
               {goals.map((g) => (
                 <GoalRow
                   key={g.id}
@@ -298,7 +368,7 @@ export function GoalsPanel() {
             </ul>
           )}
         </div>
-      )}
+      </Sheet>
       <Dialog
         open={leaving !== null}
         onClose={() => setLeaving(null)}

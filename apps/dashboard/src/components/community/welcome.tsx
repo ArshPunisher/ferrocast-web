@@ -1,15 +1,20 @@
 import { useState } from 'react'
+import { GearSix, HandWaving } from '@phosphor-icons/react'
 import { fieldError, type WelcomeConfig } from '@ferrocast/api'
-import { Button, Field, Input, Skeleton, Switch, Textarea, toast } from '@ferrocast/ui'
+import { Button, Field, Input, Sheet, Skeleton, Switch, Textarea, toast } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useClient, useResource } from '../../lib/hooks'
 
+/** `toggles`: the two switches (on the card, saved at once); `details`: the message and the
+ * days (in the side panel, with Save). */
 function WelcomeForm({
   cfg,
   onSaved,
+  part,
 }: {
   cfg: WelcomeConfig
   onSaved: (c: WelcomeConfig) => void
+  part: 'toggles' | 'details'
 }) {
   const client = useClient()
   const [draft, setDraft] = useState(cfg)
@@ -30,15 +35,9 @@ function WelcomeForm({
       setBusy(null)
     }
   }
-  return (
-    <form
-      className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-x-8"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void save({ template: draft.template, returning_days: draft.returning_days }, 'form')
-      }}
-    >
-      <div className="flex flex-col gap-5">
+  if (part === 'toggles')
+    return (
+      <div className="flex flex-col gap-4">
         <Switch
           label="Welcome first-time chatters in chat"
           description="At most once every 10 seconds, never during panic mode."
@@ -46,6 +45,29 @@ function WelcomeForm({
           disabled={busy === 'enabled'}
           onChange={(enabled) => void save({ enabled }, 'enabled')}
         />
+        <Switch
+          label={`Mark people who come back after ${cfg.returning_days} days`}
+          description="Their message gets a “Back after N days” badge in chat."
+          checked={cfg.returning_badge}
+          disabled={busy === 'returning'}
+          onChange={(returning_badge) => void save({ returning_badge }, 'returning')}
+        />
+        {err && (
+          <p role="alert" className="text-[14.5px] font-medium text-danger">
+            {err.message}
+          </p>
+        )}
+      </div>
+    )
+  return (
+    <form
+      className="flex flex-col gap-5"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save({ template: draft.template, returning_days: draft.returning_days }, 'form')
+      }}
+    >
+      <div className="flex flex-col gap-5">
         <Field
           label="Welcome message"
           hint="Use {user} and {platform}."
@@ -63,13 +85,6 @@ function WelcomeForm({
         </Field>
       </div>
       <div className="flex flex-col gap-5">
-        <Switch
-          label="Mark people who come back"
-          description="Their message gets a “Back after N days” badge in chat."
-          checked={cfg.returning_badge}
-          disabled={busy === 'returning'}
-          onChange={(returning_badge) => void save({ returning_badge }, 'returning')}
-        />
         <Field
           label="Counts as back after"
           hint="7 to 365 days without chatting."
@@ -95,11 +110,11 @@ function WelcomeForm({
         </Field>
       </div>
       {err && err.field !== 'template' && err.field !== 'returning_days' && (
-        <p role="alert" className="text-[14.5px] font-medium text-danger lg:col-span-2">
+        <p role="alert" className="text-[14.5px] font-medium text-danger">
           {err.message}
         </p>
       )}
-      <div className="flex justify-end lg:col-span-2">
+      <div className="flex justify-end">
         <Button type="submit" variant="primary" busy={busy === 'form'} disabled={!dirty}>
           Save
         </Button>
@@ -111,14 +126,44 @@ function WelcomeForm({
 /** First-time chatters: they're always marked in chat; the welcome is optional. */
 export function WelcomePanel() {
   const cfg = useResource((c) => c.welcome())
+  const [editing, setEditing] = useState(false)
   return (
-    <Panel title="New faces" description="First-ever messages are highlighted in chat.">
+    <Panel
+      id="community-welcome"
+      title="New faces"
+      icon={<HandWaving weight="fill" />}
+      tone="var(--fc-arc)"
+      className="h-full scroll-mt-20"
+      description="First-ever messages are highlighted in chat."
+      actions={
+        cfg.data ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<GearSix size={15} />}
+            onClick={() => setEditing(true)}
+          >
+            Edit
+          </Button>
+        ) : null
+      }
+    >
       {cfg.error ? (
         <LoadError error={cfg.error} onRetry={cfg.reload} />
       ) : !cfg.data ? (
-        <Skeleton className="h-64" />
+        <Skeleton className="h-28" />
       ) : (
-        <WelcomeForm cfg={cfg.data} onSaved={(c) => cfg.set(c)} />
+        <>
+          <WelcomeForm cfg={cfg.data} onSaved={(c) => cfg.set(c)} part="toggles" />
+          <Sheet open={editing} onClose={() => setEditing(false)} title="New faces">
+            <WelcomeForm
+              key={editing ? 'open' : 'shut'}
+              cfg={cfg.data}
+              onSaved={(c) => cfg.set(c)}
+              part="details"
+            />
+          </Sheet>
+        </>
       )}
     </Panel>
   )

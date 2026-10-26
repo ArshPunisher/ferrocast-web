@@ -172,8 +172,13 @@ test.describe('community: giveaway', () => {
 })
 
 test.describe('community: points', () => {
+  // Earning settings live behind Edit on the Points card (a side panel, 27 Oct).
+  const editEarning = (page: Page) =>
+    page.locator('#community-points').getByRole('button', { name: 'Edit' }).first().click()
+
   test('save the earning settings', async ({ page }) => {
     await open(page, 'community/points')
+    await editEarning(page)
     await page.getByLabel('Per follow').fill('75')
     await page.getByRole('button', { name: 'Save', exact: true }).first().click()
     await expect(page.getByText('Points settings saved.')).toBeVisible()
@@ -182,6 +187,7 @@ test.describe('community: points', () => {
 
   test('bad earning settings are explained under the field', async ({ page }) => {
     await open(page, 'community/points')
+    await editEarning(page)
     const name = page.getByLabel('Name', { exact: true })
     const save = page.locator('#community-points').getByRole('button', { name: 'Save' })
     await name.fill('')
@@ -259,6 +265,8 @@ test.describe('community: new faces', () => {
   test('save the welcome, and bad values are explained', async ({ page }) => {
     await open(page, 'community/welcome')
     const w = page.locator('#community-welcome')
+    // The message and the days live behind Edit (a side panel, 27 Oct).
+    await w.getByRole('button', { name: 'Edit' }).click()
     const msg = w.getByLabel('Welcome message')
     await msg.fill('')
     await w.getByRole('button', { name: 'Save' }).click()
@@ -442,7 +450,12 @@ test.describe('overlay editor: poll and giveaway widgets', () => {
 
 test('goals: nudge one by hand, make one, delete one', async ({ page }) => {
   await open(page, 'community')
-  const goals = page.locator('#community-goals')
+  // The card shows the first few; changing them happens in the side panel.
+  await page
+    .locator('#community-goals')
+    .getByRole('button', { name: /See all|Change goals/ })
+    .click()
+  const goals = page.getByRole('dialog', { name: 'Goals' })
   const subs = goals.getByTestId('goal-row').filter({ hasText: 'Sub goal: new mic' })
   await expect(subs).toContainText('38')
   await subs.getByRole('button', { name: 'Add 1 to Sub goal: new mic' }).click()
@@ -457,6 +470,9 @@ test('goals: nudge one by hand, make one, delete one', async ({ page }) => {
   await expect(made).toBeVisible()
 
   await made.getByRole('button', { name: 'Delete 100 followers' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete goal' }).click()
+  await page
+    .getByRole('dialog', { name: /Delete/ })
+    .getByRole('button', { name: 'Delete goal' })
+    .click()
   await expect(made).toHaveCount(0)
 })
