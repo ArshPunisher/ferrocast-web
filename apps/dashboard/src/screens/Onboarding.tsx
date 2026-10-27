@@ -252,7 +252,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                           className={cx(
                             'flex cursor-pointer flex-col gap-0.5 rounded-[12px] border px-3 py-2.5 transition-colors has-[:focus-visible]:shadow-[var(--fc-focus)]',
                             theme === t.id
-                              ? 'border-accent-line bg-accent-soft'
+                              ? 'fc-picked border-transparent'
                               : 'border-line hover:border-line-strong',
                           )}
                         >

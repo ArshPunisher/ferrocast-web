@@ -243,26 +243,48 @@ function MenuList({
               }
             }}
             className={cx(
-              'flex h-8 cursor-default items-center gap-2.5 rounded-[7px] px-2 text-[14px] font-semibold outline-none select-none',
+              'group flex h-8 cursor-default items-center gap-2.5 rounded-[7px] px-2 text-[14px] font-semibold outline-none select-none',
+              // The row under the pointer: a solid fill like the system's menus, the same
+              // colour as everything picked (an open sub-menu's row keeps it).
               e.disabled
                 ? 'text-text-3 opacity-60'
                 : e.danger
-                  ? 'text-danger focus:bg-danger-soft'
-                  : 'text-text focus:bg-surface-3',
+                  ? 'text-danger focus:bg-danger-fill focus:text-white'
+                  : 'text-text focus:bg-pick focus:text-on-pick aria-expanded:bg-pick aria-expanded:text-on-pick',
             )}
           >
             <span className="grid size-4 shrink-0 place-items-center">
               {e.checked ? (
-                <Check size={14} weight="bold" className="text-accent-text" />
+                <Check
+                  size={14}
+                  weight="bold"
+                  className="text-accent-text group-focus:text-inherit group-aria-expanded:text-inherit"
+                />
               ) : Ic ? (
-                <Ic size={15} weight="bold" className={e.danger ? '' : 'text-text-2'} />
+                <Ic
+                  size={15}
+                  weight="bold"
+                  className={
+                    e.danger
+                      ? ''
+                      : 'text-text-2 group-focus:text-inherit group-aria-expanded:text-inherit'
+                  }
+                />
               ) : null}
             </span>
             <span className="min-w-0 flex-1 truncate">{e.label}</span>
             {e.hint && (
-              <span className="font-mono text-[12px] font-medium text-text-3">{e.hint}</span>
+              <span className="font-mono text-[12px] font-medium text-text-3 group-focus:text-inherit">
+                {e.hint}
+              </span>
             )}
-            {hasSub && <CaretRight size={12} weight="bold" className="text-text-3" />}
+            {hasSub && (
+              <CaretRight
+                size={12}
+                weight="bold"
+                className="text-text-3 group-focus:text-inherit group-aria-expanded:text-inherit"
+              />
+            )}
           </div>
         )
       })}

@@ -101,7 +101,7 @@ function Big({
       className={cx(
         'fc-press flex flex-col items-start gap-2 rounded-panel border-2 p-4 text-left transition-colors',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-        on ? 'border-arc bg-accent-soft' : 'border-line hover:border-line-strong',
+        on ? 'fc-picked border-transparent' : 'border-line hover:border-line-strong',
       )}
     >
       <span

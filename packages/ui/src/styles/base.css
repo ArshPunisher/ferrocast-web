@@ -121,3 +121,53 @@ html:has(.fc-dialog[open]) {
     scroll-behavior: auto !important;
   }
 }
+
+/* What's picked (a source, a scene, a segmented choice): one solid colour everywhere, never
+   a faint tint (owner's pick D1 Graphite: dark grey in light mode, light grey in dark). Text
+   colours inside it follow, so labels stay readable on the fill. */
+.fc-picked {
+  background-color: var(--fc-pick);
+  color: var(--fc-on-pick);
+}
+.fc-picked:hover {
+  background-color: var(--fc-pick-hover);
+}
+.fc-picked
+  :is(
+    .text-text,
+    .text-text-2,
+    .text-text-3,
+    .text-danger,
+    .text-accent-text,
+    .text-ok,
+    .text-warn
+  ) {
+  color: inherit;
+}
+/* A kind's coloured tile in a picked row: its tint would sink into the fill, so it takes the
+   row's text colour (set inline, hence !important). */
+.fc-picked [data-kind-tile] {
+  color: var(--fc-on-pick) !important;
+  background: color-mix(in srgb, var(--fc-on-pick) 18%, transparent) !important;
+}
+/* Key caps on a picked fill take its text colour. */
+.fc-picked kbd {
+  color: inherit !important;
+  background: color-mix(in srgb, var(--fc-on-pick) 14%, transparent) !important;
+  border-color: color-mix(in srgb, var(--fc-on-pick) 35%, transparent) !important;
+}
+/* Buttons inside a picked row (fold, eye, lock, more): a wash of the row's text colour on
+   hover, never the page's light hover fill (a white square on the dark row). */
+.fc-picked :is(button, [role='button'], a):not(.fc-picked):hover {
+  background-color: color-mix(in srgb, var(--fc-on-pick) 16%, transparent);
+  color: var(--fc-on-pick);
+}
+
+/* Every scrolling box is positioned, so what's absolutely placed inside it (screen-reader
+   labels, badges) is held by it: otherwise they hang below it and make the dialog or page
+   round it scroll too. In the base layer: a `fixed` or `absolute` utility still wins. */
+@layer base {
+  :where(.overflow-auto, .overflow-y-auto, .overflow-x-auto, .overflow-scroll) {
+    position: relative;
+  }
+}

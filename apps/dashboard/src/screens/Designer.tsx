@@ -455,7 +455,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
           className={cx(
             'fc-press inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[14px] font-medium',
             i === index
-              ? 'border-accent-line bg-accent-soft text-text'
+              ? 'fc-picked border-transparent'
               : 'border-line text-text-2 hover:border-line-strong',
           )}
         >
@@ -1047,7 +1047,7 @@ function GuidedView({
               className={cx(
                 'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[14.5px] font-medium',
                 k === ev
-                  ? 'border-accent-line bg-accent-soft text-text'
+                  ? 'fc-picked border-transparent'
                   : 'border-line text-text-2 hover:border-line-strong',
                 !draft.content.events[k] && 'border-dashed',
               )}

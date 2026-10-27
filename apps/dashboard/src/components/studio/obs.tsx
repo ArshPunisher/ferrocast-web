@@ -174,7 +174,7 @@ export function ScenesPanel({
                     'fc-press flex min-h-14 flex-col items-start justify-center gap-0.5 rounded-control border px-3 py-2 text-left transition-colors',
                     'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                     on
-                      ? 'border-accent-line bg-accent-soft'
+                      ? 'fc-picked border-transparent'
                       : 'border-line bg-surface-2 hover:border-line-strong',
                   )}
                 >

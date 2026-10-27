@@ -278,7 +278,7 @@ export function Overlays() {
                 className={cx(
                   'flex cursor-pointer gap-3 rounded-[12px] border p-3 transition-colors has-[:focus-visible]:shadow-[var(--fc-focus)]',
                   preset === p.value
-                    ? 'border-accent-line bg-accent-soft'
+                    ? 'fc-picked border-transparent'
                     : 'border-line hover:border-line-strong',
                 )}
               >

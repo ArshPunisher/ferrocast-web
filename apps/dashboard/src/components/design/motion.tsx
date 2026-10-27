@@ -203,7 +203,7 @@ function SimpleChips<T extends string>({
             className={cx(
               'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[14px] font-medium focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               v === value
-                ? 'border-accent-line bg-accent-soft text-text'
+                ? 'fc-picked border-transparent'
                 : 'border-line text-text-2 hover:border-line-strong',
             )}
           >
@@ -798,7 +798,7 @@ export function MotionSection({
                     className={cx(
                       'fc-press inline-flex h-[34px] min-w-[38px] items-center justify-center rounded-[9px] border px-2.5 text-[14.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                       m.direction === d
-                        ? 'border-accent-line bg-accent-soft text-text'
+                        ? 'fc-picked border-transparent'
                         : 'border-line-strong bg-surface-2 text-text-2',
                     )}
                   >

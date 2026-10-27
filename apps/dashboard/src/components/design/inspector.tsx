@@ -219,7 +219,7 @@ export function Tiles<T extends string>({
             className={cx(
               'fc-press flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[12px] border px-2 py-2 text-center text-[14px] font-medium',
               o.value === value
-                ? 'border-accent-line bg-accent-soft text-text'
+                ? 'fc-picked border-transparent'
                 : 'border-line bg-surface-2 text-text-2 hover:border-line-strong',
             )}
           >
@@ -259,7 +259,7 @@ export function Chips<T extends string>({
             className={cx(
               'fc-press inline-flex h-8 items-center rounded-full border px-3 text-[14px] font-medium',
               o.value === value
-                ? 'border-accent-line bg-accent-soft text-text'
+                ? 'fc-picked border-transparent'
                 : 'border-line text-text-2 hover:border-line-strong',
             )}
           >
@@ -611,7 +611,7 @@ export function TextSection({ look, set, advanced }: SectionProps) {
               className={cx(
                 'fc-press flex flex-col items-start gap-0.5 rounded-[12px] border px-3 py-2 text-left',
                 look.font.family === f
-                  ? 'border-accent-line bg-accent-soft'
+                  ? 'fc-picked border-transparent'
                   : 'border-line bg-surface-2 hover:border-line-strong',
               )}
             >

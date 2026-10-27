@@ -340,7 +340,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
     cx(
       'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[14px] font-medium',
       on
-        ? 'border-accent-line bg-accent-soft text-text'
+        ? 'fc-picked border-transparent'
         : 'border-line text-text-2 hover:border-line-strong hover:text-text',
     )
 

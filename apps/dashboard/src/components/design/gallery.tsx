@@ -333,7 +333,7 @@ export function ThemeSheet({
               className={cx(
                 'fc-press flex w-[124px] shrink-0 flex-col gap-1.5 rounded-[10px] border p-1.5 text-left sm:w-auto sm:min-w-0',
                 current === v.key
-                  ? 'border-accent-line bg-accent-soft'
+                  ? 'fc-picked border-transparent'
                   : 'border-line hover:border-line-strong',
               )}
             >

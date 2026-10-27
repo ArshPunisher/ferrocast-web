@@ -207,17 +207,21 @@ export function Menu({
                         it.onSelect()
                       }}
                       className={cx(
-                        'flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[15px] font-semibold',
+                        'group flex w-full gap-2.5 rounded-[8px] px-2.5 text-left text-[15px] font-semibold',
                         it.description ? 'items-start py-2.5' : 'items-center py-2',
-                        'focus-visible:bg-surface-3 focus-visible:outline-none disabled:opacity-40',
+                        'focus-visible:outline-none disabled:opacity-40',
+                        // Under the pointer: a solid fill, as in the Studio's menus.
                         it.danger
-                          ? 'text-danger hover:bg-danger-soft focus-visible:bg-danger-soft'
-                          : 'text-text hover:bg-surface-3',
+                          ? 'text-danger enabled:hover:bg-danger-fill enabled:hover:text-white focus-visible:bg-danger-fill focus-visible:text-white'
+                          : 'text-text enabled:hover:bg-pick enabled:hover:text-on-pick focus-visible:bg-pick focus-visible:text-on-pick',
                       )}
                     >
                       {it.icon && (
                         <span
-                          className={cx('shrink-0 text-text-3', it.description ? 'mt-0.5' : null)}
+                          className={cx(
+                            'shrink-0 text-text-3 group-enabled:group-hover:text-inherit group-focus-visible:text-inherit',
+                            it.description ? 'mt-0.5' : null,
+                          )}
                         >
                           {it.icon}
                         </span>
@@ -225,13 +229,15 @@ export function Menu({
                       <span className="min-w-0 flex-1">
                         <span className="block">{it.label}</span>
                         {it.description && (
-                          <span className="mt-0.5 block text-[13.5px] font-normal leading-snug text-text-3">
+                          <span className="mt-0.5 block text-[13.5px] font-normal leading-snug text-text-3 group-enabled:group-hover:text-inherit group-focus-visible:text-inherit">
                             {it.description}
                           </span>
                         )}
                       </span>
                       {it.hint && (
-                        <span className="shrink-0 text-[13px] text-text-3">{it.hint}</span>
+                        <span className="shrink-0 text-[13px] text-text-3 group-enabled:group-hover:text-inherit group-focus-visible:text-inherit">
+                          {it.hint}
+                        </span>
                       )}
                     </button>
                   </li>

@@ -194,8 +194,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
                       onClick={() => setPick(c.entry.key)}
                       className={cx(
                         'flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2 text-left text-[14.5px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
-                        on &&
-                          'bg-surface-3 shadow-[inset_0_0_0_1px_var(--fc-line-strong)] hover:bg-surface-3',
+                        on && 'fc-picked',
                       )}
                     >
                       <KindTile icon={c.entry.icon} tone={c.tone} size={26} />

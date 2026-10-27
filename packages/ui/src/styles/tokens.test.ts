@@ -57,3 +57,21 @@ describe('primary button tokens', () => {
       expect(contrast(m[1] as string, text)).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+describe('what is picked (D1 Graphite)', () => {
+  // Each theme block sets the pick and its text together: every pair reads well (AAA).
+  const blocks = [
+    ...css.matchAll(
+      /--fc-pick:\s*(#[0-9a-f]{6});[\s\S]*?--fc-pick-hover:\s*(#[0-9a-f]{6});[\s\S]*?--fc-on-pick:\s*(#[0-9a-f]{6});/gi,
+    ),
+  ]
+  it('is set for dark and both light blocks', () => {
+    expect(blocks.length).toBe(3)
+  })
+  it('its text clears 7:1 on the fill and on hover', () => {
+    for (const [, fill, hover, text] of blocks) {
+      expect(contrast(fill as string, text as string)).toBeGreaterThanOrEqual(7)
+      expect(contrast(hover as string, text as string)).toBeGreaterThanOrEqual(7)
+    }
+  })
+})

@@ -144,14 +144,16 @@ export function Switch({
         className={cx(
           'relative mt-0.5 h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
           'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-40',
-          checked ? 'border-arc bg-arc' : 'border-line-strong bg-surface-3',
+          checked ? 'border-arc bg-arc' : 'border-transparent bg-line-strong',
         )}
       >
         <span
           aria-hidden="true"
           className={cx(
             'absolute top-[3px] left-[3px] size-4 rounded-full shadow-sm transition-transform duration-200 ease-[var(--fc-ease-out)]',
-            checked ? 'translate-x-4 bg-surface-1' : 'translate-x-0 bg-text-3',
+            // A white knob both ways, as the system's own switches.
+            'bg-white',
+            checked ? 'translate-x-4' : 'translate-x-0',
           )}
         />
       </button>
@@ -277,6 +279,8 @@ export function Segmented<T extends string>({
   className,
 }: SegmentedProps<T>) {
   const name = useId()
+  // One option is no choice (a platform filter with one platform connected): nothing to show.
+  if (options.length < 2) return null
   return (
     <div
       role="radiogroup"
@@ -293,9 +297,9 @@ export function Segmented<T extends string>({
               'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',
-              // The picked one is plain to see: Arc and bold on a raised chip.
+              // The picked one is plain to see: the solid pick colour, bold.
               on
-                ? 'bg-surface-1 font-bold text-accent-text shadow-[var(--fc-shadow-1)] ring-1 ring-accent-line'
+                ? 'fc-picked font-bold shadow-[var(--fc-shadow-1)]'
                 : 'text-text-2 hover:bg-surface-3 hover:text-text',
             )}
           >

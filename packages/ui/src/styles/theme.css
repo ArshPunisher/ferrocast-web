@@ -28,6 +28,9 @@
   --color-warn-soft: var(--fc-warn-soft);
   --color-danger: var(--fc-danger);
   --color-danger-fill: var(--fc-danger-fill);
+  --color-pick: var(--fc-pick);
+  --color-pick-hover: var(--fc-pick-hover);
+  --color-on-pick: var(--fc-on-pick);
   --color-danger-soft: var(--fc-danger-soft);
   --color-twitch: var(--fc-twitch);
   --color-youtube: var(--fc-youtube);

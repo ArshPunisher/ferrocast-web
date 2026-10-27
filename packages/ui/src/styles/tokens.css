@@ -54,6 +54,11 @@
   --fc-btn-primary: #b35900;
   --fc-btn-primary-hover: #9e4f00;
   --fc-on-btn-primary: #ffffff;
+  /* What's picked (D1 Graphite, owner's pick 27 Oct): a solid light grey in dark mode, not
+     glaring white (13.8:1 with its text), like OBS and DaVinci. */
+  --fc-pick: #d9dde4;
+  --fc-pick-hover: #eef0f4;
+  --fc-on-pick: #101216;
 
   /* Arc: links, icons, focus rings, selection and info highlights. --fc-arc is the bright
      fill/graphic value, --fc-accent-text the text value (7.2:1+ on every surface, also
@@ -117,6 +122,10 @@
 }
 
 :root[data-theme='light'] {
+  /* Picked: solid dark grey, not black (owner, 27 Oct); white text 8:1. */
+  --fc-pick: #4b515b;
+  --fc-pick-hover: #3c424b;
+  --fc-on-pick: #ffffff;
   color-scheme: light;
   --fc-bg: #f2f3f6;
   --fc-surface-1: #ffffff;
@@ -173,6 +182,10 @@
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']):not([data-theme='light']) {
+    /* Picked: solid dark grey, not black (owner, 27 Oct); white text 8:1. */
+    --fc-pick: #4b515b;
+    --fc-pick-hover: #3c424b;
+    --fc-on-pick: #ffffff;
     color-scheme: light;
     --fc-bg: #f2f3f6;
     --fc-surface-1: #ffffff;

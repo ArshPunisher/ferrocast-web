@@ -852,7 +852,7 @@ function RuleEditor({
                   className={cx(
                     'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3.5 text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                     i === vi
-                      ? 'border-accent-line bg-accent-soft text-text'
+                      ? 'fc-picked border-transparent'
                       : 'border-line text-text-2 hover:border-line-strong hover:text-text',
                   )}
                 >
@@ -1066,7 +1066,7 @@ function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string 
               'fc-press relative flex h-11 shrink-0 items-center gap-2.5 rounded-full border pr-4 pl-3.5 text-[16px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none xl:w-full xl:pr-3.5',
               active
-                ? 'border-accent-line bg-surface-1 text-text shadow-1'
+                ? 'fc-picked border-transparent'
                 : 'border-line text-text-2 hover:bg-surface-2 hover:text-text xl:border-transparent',
             )}
           >

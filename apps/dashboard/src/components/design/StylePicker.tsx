@@ -57,9 +57,7 @@ function StyleTile({
       }}
       className={cx(
         'fc-press flex flex-col gap-1.5 rounded-[12px] border p-1.5 text-left text-[14px] font-semibold text-text',
-        on
-          ? 'border-accent-line bg-accent-soft'
-          : 'border-line bg-surface-2 hover:border-line-strong',
+        on ? 'fc-picked border-transparent' : 'border-line bg-surface-2 hover:border-line-strong',
       )}
     >
       <span className="pointer-events-none block overflow-hidden rounded-[8px]">
