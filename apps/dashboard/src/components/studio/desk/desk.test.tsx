@@ -384,6 +384,7 @@ describe('what lies over the preview', () => {
     document.body.innerHTML = ''
     const menu = document.createElement('div')
     menu.setAttribute('role', 'menu')
+    menu.style.borderTopLeftRadius = '10px'
     place(menu, 300, 150, 200, 400)
     const panel = document.createElement('aside')
     panel.dataset.overPreview = ''
@@ -392,8 +393,8 @@ describe('what lies over the preview', () => {
     away.setAttribute('role', 'listbox')
     place(away, 0, 700, 50, 50)
     expect(overPreview(new DOMRect(100, 100, 1000, 500), 0)).toEqual([
-      { x: 200, y: 50, w: 200, h: 400 },
-      { x: 800, y: -100, w: 440, h: 800 },
+      { x: 200, y: 50, w: 200, h: 400, r: 10 },
+      { x: 800, y: -100, w: 440, h: 800, r: 0 },
     ])
   })
   it('a modal dialog counts by its panel, not its full-window box', () => {

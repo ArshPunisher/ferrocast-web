@@ -48,6 +48,7 @@ import {
   boxOf,
   cursorFor,
   drag,
+  addsToPick,
   cropDrag,
   fit,
   gripAt,
@@ -116,7 +117,7 @@ function bgOf(el: Element | null): number | undefined {
   return ((r ?? 0) << 16) | ((g ?? 0) << 8) | (b ?? 0)
 }
 
-type Hole = { x: number; y: number; w: number; h: number }
+type Hole = { x: number; y: number; w: number; h: number; r: number }
 
 /** What can lie over the preview: menus, lists and panels (dialogs mark theirs). */
 const OVER = '[role="menu"], [role="listbox"], [data-over-preview]'
@@ -138,8 +139,11 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
     if (el instanceof HTMLDialogElement) continue
     const b = el.getBoundingClientRect()
     if (b.width < 1 || b.height < 1) continue
-    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom)
-      holes.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height })
+    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) {
+      // Its rounded corners too, so the picture shows round them, not a square of the page.
+      const rad = Math.min(200, parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0)
+      holes.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad })
+    }
   }
   return holes.length > MAX_HOLES ? null : holes
 }
@@ -200,6 +204,9 @@ export function PreviewBox({ running }: { running: boolean }) {
             h: s.height,
             vh: window.innerHeight,
             canvas: { x: c.left - s.left, y: c.top - s.top, w: c.width, h: c.height },
+            // The rule the stage fits the canvas by (its padding, the zoom), so the app can
+            // follow a window resize itself before the page lays out again.
+            fit: { pad: parseFloat(getComputedStyle(stage).paddingTop) || 0, zoom: pv.zoom },
             ...(bg === undefined ? {} : { bg }),
             ...(holes.length ? { holes } : {}),
           }
@@ -207,15 +214,38 @@ export function PreviewBox({ running }: { running: boolean }) {
     }
     let again = 0
     let alive = true
+    // While the window is being resized the page lays out a frame or two after AppKit has
+    // resized the window, so boxes sent then would trail it and the picture would stutter.
+    // The app follows the resize itself (the stage keeps its distance from the window's edges
+    // and the canvas is fitted by the same rule as here); the page only says where things
+    // ended up once the resize settles.
+    let resizing = 0
     const send = () => {
       raf = 0
       if (!alive) return
-      const rect = studio ? place(el) : placeStage(stageRef.current, el)
-      const program = studio ? place(programRef.current) : null
-      // While a menu or panel is open, look again shortly: one sliding in or away changes no
-      // attribute the observers below see.
       window.clearTimeout(again)
-      if (document.querySelector(OVER)) again = window.setTimeout(schedule, 120)
+      if (performance.now() < resizing) {
+        again = window.setTimeout(
+          () => {
+            // Sent even if it looks the same as before: the app moved it meanwhile.
+            last = ''
+            schedule()
+          },
+          resizing - performance.now() + 16,
+        )
+        return
+      }
+      let rect = studio ? place(el) : placeStage(stageRef.current, el)
+      let program = studio ? place(programRef.current) : null
+      // Under a dialog the page is dimmed by its backdrop (rgb(4 5 8 / 0.62)): the app draws
+      // the same over the picture.
+      if (document.querySelector('dialog[open]')) {
+        rect = rect && { ...rect, shade: 0.62 }
+        program = program && { ...program, shade: 0.62 }
+      }
+      // While a menu or panel is open, follow it every frame: one sliding in or away changes
+      // no attribute the observers below see.
+      if (document.querySelector(OVER)) schedule()
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, window.innerHeight])
       if (key === last) return
@@ -250,7 +280,11 @@ export function PreviewBox({ running }: { running: boolean }) {
       attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
-    window.addEventListener('resize', schedule)
+    const onResize = () => {
+      resizing = performance.now() + 180
+      schedule()
+    }
+    window.addEventListener('resize', onResize)
     return () => {
       alive = false
       cancelAnimationFrame(raf)
@@ -258,13 +292,17 @@ export function PreviewBox({ running }: { running: boolean }) {
       ro.disconnect()
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
-      window.removeEventListener('resize', schedule)
+      window.removeEventListener('resize', onResize)
       void api.preview(null, null).catch(() => undefined)
     }
-  }, [api, running, desktop, studio])
+  }, [api, running, desktop, studio, pv.zoom])
   const editing = useStageEdit(ref, running && desktop)
-  const screen =
-    'grid aspect-video touch-none place-items-center rounded-[10px] bg-[#0a0b0d] p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent'
+  const screen = cx(
+    // Square like the picture the app draws on it. In the app the picture covers it, so it's
+    // left clear: if the page lags the window for a moment, the stage shows, never a black box.
+    'grid aspect-video touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
+    desktop && running ? 'bg-transparent' : 'bg-[#0a0b0d]',
+  )
   if (!studio)
     // The canvas is an exact 16:9 box fitted inside the stage (smaller when zoomed out), with
     // room around it for what's off the canvas. The whole stage takes clicks: a handle can be
@@ -638,12 +676,16 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     stats,
     setTransforming,
     prefs,
+    itemMenu,
   } = useDesk()
   const { run } = useAction()
   const p = prefs.data
   const canvas = stats?.canvas ?? null
   const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
+  // Every source's outline shows while the pointer is over the preview (as OBS's hover
+  // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
+  const [over, setOver] = useState(false)
   const sending = useRef<{ busy: boolean; next: Map<number, Job> }>({
     busy: false,
     next: new Map(),
@@ -654,12 +696,13 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
   const alsoKey = also.join(',')
   useEffect(() => {
     if (!on) return
-    const pickNone = selected === null && !pv.frames
+    const frames = pv.frames && over
+    const pickNone = selected === null && !frames
     const more = alsoKey ? alsoKey.split(',').map(Number) : []
     void api
-      .select(pickNone ? null : { scene, id: selected, frames: pv.frames, also: more })
+      .select(pickNone ? null : { scene, id: selected, frames, also: more })
       .catch(() => undefined)
-  }, [api, on, scene, selected, alsoKey, pv.frames])
+  }, [api, on, scene, selected, alsoKey, pv.frames, over])
   useEffect(() => {
     if (!on) return
     return () => void api.select(null).catch(() => undefined)
@@ -748,13 +791,30 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
   if (!on || !canvas) return {}
   return {
     tabIndex: 0,
+    onPointerEnter: () => setOver(true),
+    onPointerLeave: () => {
+      if (!held.current) setOver(false)
+    },
+    // Right-click: the Sources panel's menu for what's under the pointer, as in OBS (never the
+    // web view's own Reload / Inspect menu).
+    onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const w = where(e)
+      if (!w) return
+      const current = flat.find((i) => i.id === selected)
+      const target =
+        (current?.frame && current.visible && inside(current.frame, w.p) ? current : null) ??
+        flat.find((i) => also.includes(i.id) && i.visible && i.frame && inside(i.frame, w.p)) ??
+        pick(list, w.p)
+      itemMenu.current?.(e, target?.id ?? null)
+    },
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return
       const w = where(e)
       if (!w) return
       ref.current?.focus({ preventScroll: true })
       // ⌘-click (Ctrl on Windows) picks or unpicks one more, as in OBS.
-      if (e.metaKey || e.ctrlKey) {
+      if (addsToPick(e)) {
         const t = pick(list, w.p)
         if (t) pickMore(t.id, 'toggle')
         return
@@ -1058,7 +1118,7 @@ function ViewControls() {
               onClick={() => setPv({ zoom: z })}
               className={cx(
                 'rounded-full px-2 py-0.5 font-mono text-[12.5px] font-semibold tabular-nums',
-                pv.zoom === z ? 'bg-surface-1 text-text shadow-sm' : 'text-text-3 hover:text-text',
+                pv.zoom === z ? 'fc-picked shadow-sm' : 'text-text-3 hover:text-text',
               )}
             >
               {z === 1 ? 'Fit' : `${z * 100}%`}
@@ -1070,7 +1130,7 @@ function ViewControls() {
         size="sm"
         label={pv.frames ? 'Hide source outlines' : 'Show every source’s outline'}
         aria-pressed={pv.frames}
-        className={cx(pv.frames && 'bg-accent-soft text-accent-text')}
+        className={cx(pv.frames && 'fc-picked')}
         onClick={() => setPv({ frames: !pv.frames })}
       >
         <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} />
@@ -1154,124 +1214,133 @@ export function StageBar() {
     if (ok) scenes.reload()
   }
   return (
-    <div className="flex flex-none flex-wrap items-center gap-x-2 gap-y-2 border-t border-line bg-surface-1 px-2.5 py-2 text-[14px] text-text-3 xl:gap-x-3 xl:px-3">
-      {/* The Scenes panel shows what's on air; here the name fits on wide screens. */}
-      <span className="hidden font-display text-[16px] font-bold text-text xl:inline">{scene}</span>
-      {c && (
-        <button
-          type="button"
-          title="Change the picture size"
-          onClick={() => openSettings('picture')}
-          className="hidden rounded-full xl:inline-block bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text"
-        >
-          {c.width}×{c.height} · {c.fps}&nbsp;fps
-        </button>
-      )}
-      <ViewControls />
-      <span className="flex-1" />
-      {t && (
-        <div className="flex items-center gap-2">
-          <label htmlFor="studio-transition" className="hidden 2xl:inline">
-            Switch with
-          </label>
-          <Select
-            id="studio-transition"
-            aria-label="Switch with"
-            className="h-8! w-auto! py-0! text-[14px]"
-            value={t.kind}
-            onChange={(e) => void set(e.target.value, t.ms)}
+    // Parts show by the bar's own width (not the window's), so it stays on one line: the
+    // name and the picture size only where there's room for them.
+    <div className="@container flex-none border-t border-line bg-surface-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2.5 py-2 text-[14px] text-text-3 @[900px]:gap-x-3 @[900px]:px-3">
+        {/* The Scenes panel shows what's on air; here the name fits on wide screens. */}
+        <span className="hidden font-display text-[16px] font-bold text-text @[1120px]:inline">
+          {scene}
+        </span>
+        {c && (
+          <button
+            type="button"
+            title="Change the picture size"
+            onClick={() => openSettings('picture')}
+            className="hidden rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text @[1040px]:inline-block"
           >
-            {(kindsOn.length ? kindsOn : [{ id: t.kind, name: t.kind }]).map((k) => (
-              <option key={k.id} value={k.id}>
-                {TRANSITIONS[k.id] ?? k.name}
-              </option>
-            ))}
-          </Select>
-          {HAS_SETTINGS.has(t.kind) && (
-            <IconButton
-              size="sm"
-              label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
-              onClick={() => setTuning(t.kind)}
+            {c.width}×{c.height} · {c.fps}&nbsp;fps
+          </button>
+        )}
+        <ViewControls />
+        <span className="flex-1" />
+        {t && (
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="studio-transition"
+              className="hidden whitespace-nowrap @[1240px]:inline"
             >
-              <GearSix size={16} weight="bold" />
-            </IconButton>
-          )}
-          {/* A stinger lasts as long as its video. */}
-          {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
-            <span className="flex items-center gap-2">
-              <Input
-                aria-label="Transition length in milliseconds"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={20000}
-                step={50}
-                className="h-8! w-20! py-0! text-right text-[14px] tabular-nums"
-                value={ms ?? t.ms}
-                onChange={(e) =>
-                  setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
-                }
-                onBlur={() => {
-                  if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
-                    void set(t.kind, Math.round(ms))
-                  setMs(null)
-                }}
-              />
-              <span aria-hidden>ms</span>
+              Switch with
+            </label>
+            <Select
+              id="studio-transition"
+              aria-label="Switch with"
+              className="h-8! w-auto! py-0! text-[14px]"
+              value={t.kind}
+              onChange={(e) => void set(e.target.value, t.ms)}
+            >
+              {(kindsOn.length ? kindsOn : [{ id: t.kind, name: t.kind }]).map((k) => (
+                <option key={k.id} value={k.id}>
+                  {TRANSITIONS[k.id] ?? k.name}
+                </option>
+              ))}
+            </Select>
+            {HAS_SETTINGS.has(t.kind) && (
+              <IconButton
+                size="sm"
+                label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
+                onClick={() => setTuning(t.kind)}
+              >
+                <GearSix size={16} weight="bold" />
+              </IconButton>
+            )}
+            {/* A stinger lasts as long as its video. */}
+            {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
+              <span className="flex items-center gap-2">
+                <Input
+                  aria-label="Transition length in milliseconds"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={20000}
+                  step={50}
+                  className="h-8! w-20! py-0! text-right text-[14px] tabular-nums"
+                  value={ms ?? t.ms}
+                  onChange={(e) =>
+                    setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
+                  }
+                  onBlur={() => {
+                    if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
+                      void set(t.kind, Math.round(ms))
+                    setMs(null)
+                  }}
+                />
+                <span aria-hidden>ms</span>
+              </span>
+            )}
+            <span className="hidden @[960px]:contents">
+              <InfoTip label="About switching scenes">
+                How the picture changes when you click another scene.
+              </InfoTip>
             </span>
-          )}
-          <span className="hidden xl:contents">
-            <InfoTip label="About switching scenes">
-              How the picture changes when you click another scene.
-            </InfoTip>
-          </span>
-        </div>
-      )}
-      <IconButton
-        size="sm"
-        label={
-          scenes.data?.preview
-            ? 'Leave Studio Mode'
-            : 'Studio Mode: edit a scene before it goes on air'
-        }
-        aria-pressed={!!scenes.data?.preview}
-        className={cx(scenes.data?.preview && 'bg-accent-soft text-accent-text')}
-        onClick={() =>
-          void run('studio', () => done(api.studioMode(!scenes.data?.preview))).then(
-            (ok) => ok && refresh(),
-          )
-        }
-      >
-        <Columns size={17} weight="bold" />
-      </IconButton>
-      <span className="flex items-center">
+          </div>
+        )}
         <IconButton
           size="sm"
-          label={history?.undo ? `Undo ${history.undo} (⌘Z)` : 'Nothing to undo'}
-          disabled={!history?.undo}
-          onClick={() => step(false)}
+          label={
+            scenes.data?.preview
+              ? 'Leave Studio Mode'
+              : 'Studio Mode: edit a scene before it goes on air'
+          }
+          aria-pressed={!!scenes.data?.preview}
+          className={cx(scenes.data?.preview && 'fc-picked')}
+          onClick={() =>
+            void run('studio', () => done(api.studioMode(!scenes.data?.preview))).then(
+              (ok) => ok && refresh(),
+            )
+          }
         >
-          <ArrowUUpLeft size={16} weight="bold" />
+          <Columns size={17} weight="bold" />
         </IconButton>
-        <IconButton
-          size="sm"
-          label={history?.redo ? `Redo ${history.redo} (⇧⌘Z)` : 'Nothing to redo'}
-          disabled={!history?.redo}
-          onClick={() => step(true)}
-        >
-          <ArrowUUpRight size={16} weight="bold" />
-        </IconButton>
-        <IconButton size="sm" label="History: step back to any change" onClick={historyList}>
-          <ClockCounterClockwise size={16} weight="bold" />
-        </IconButton>
-      </span>
-      {inDesktopApp() && (
-        <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
-          <ProjectorScreen size={17} weight="bold" />
-        </IconButton>
-      )}
-      {menu}
-      <TransitionSettingsDialog kind={tuning} onClose={() => setTuning(null)} />
+        <span className="flex items-center">
+          <IconButton
+            size="sm"
+            label={history?.undo ? `Undo ${history.undo} (⌘Z)` : 'Nothing to undo'}
+            disabled={!history?.undo}
+            onClick={() => step(false)}
+          >
+            <ArrowUUpLeft size={16} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={history?.redo ? `Redo ${history.redo} (⇧⌘Z)` : 'Nothing to redo'}
+            disabled={!history?.redo}
+            onClick={() => step(true)}
+          >
+            <ArrowUUpRight size={16} weight="bold" />
+          </IconButton>
+          <IconButton size="sm" label="History: step back to any change" onClick={historyList}>
+            <ClockCounterClockwise size={16} weight="bold" />
+          </IconButton>
+        </span>
+        {inDesktopApp() && (
+          <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
+            <ProjectorScreen size={17} weight="bold" />
+          </IconButton>
+        )}
+        {menu}
+        <TransitionSettingsDialog kind={tuning} onClose={() => setTuning(null)} />
+      </div>
     </div>
   )
 }

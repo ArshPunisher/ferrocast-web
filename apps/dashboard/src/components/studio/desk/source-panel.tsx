@@ -410,6 +410,21 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
   const list = useResource(() => api.filters(name), [api, name])
   const [open, setOpen] = useState<string | null>(null)
   const [picking, setPicking] = useState(false)
+  // An open filter's settings, or the list of filters to add, fold away on a click anywhere
+  // else (a menu or list it opened doesn't count).
+  const openCard = useRef<HTMLDivElement>(null)
+  const pickList = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (open === null && !picking) return
+    const away = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t || t.closest('[data-fc-menu], [role="listbox"], [role="menu"]')) return
+      if (open !== null && !openCard.current?.contains(t)) setOpen(null)
+      if (picking && !pickList.current?.contains(t)) setPicking(false)
+    }
+    document.addEventListener('pointerdown', away, true)
+    return () => document.removeEventListener('pointerdown', away, true)
+  }, [open, picking])
   // A filter's trash asks once more (its settings go with it).
   const [sure, setSure] = useState<string | null>(null)
   const have = new Set(kinds.data?.filters.map((k) => k.id))
@@ -447,6 +462,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
         list.data.map((f, i) => (
           <div
             key={f.name}
+            ref={open === f.name ? openCard : undefined}
             className={cx(
               'rounded-control border border-line bg-surface-2',
               !f.enabled && 'opacity-70',
@@ -519,6 +535,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
       )}
       {picking ? (
         <div
+          ref={pickList}
           className="flex flex-col gap-1 rounded-control border border-line p-1.5"
           role="group"
           aria-label="Add a filter"

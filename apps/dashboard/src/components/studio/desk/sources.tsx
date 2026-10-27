@@ -3,7 +3,7 @@
 // fit it, open its settings or remove it; right-click for everything else OBS's menu has
 // (transform, order, blending, copy, filters, rename).
 
-import { useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -62,6 +62,7 @@ import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
+import { addsToPick } from './stage-edit'
 import { TRANSITIONS } from './preview'
 
 const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
@@ -595,6 +596,23 @@ export function SourcesDock() {
       },
     ]
   }
+  // The preview's right-click opens these same menus (registered on every render, so it
+  // always sees the current list and pick).
+  useEffect(() => {
+    desk.itemMenu.current = (e, id) => {
+      const item = id === null ? null : flat.find((i) => i.id === id)
+      if (!item) return open(e, `Sources in ${scene}`, emptyMenu)
+      const many = [selected, ...also].filter((x): x is number => x !== null)
+      if (many.length > 1 && many.includes(item.id)) {
+        const picked = flat.filter((i) => many.includes(i.id))
+        return open(e, `${picked.length} sources`, manyMenu(picked))
+      }
+      select(item.id)
+      desk.screens.reload()
+      open(e, item.name, itemMenu(item))
+    }
+  })
+  useEffect(() => () => void (desk.itemMenu.current = null), [desk.itemMenu])
   const emptyMenu: MenuItem[] = [
     { label: 'Add a source', icon: Plus, onSelect: () => setAdding('') },
     {
@@ -677,8 +695,7 @@ export function SourcesDock() {
           // Its place in the list while it's carried: a dashed outline.
           dragging === item.id &&
             'bg-transparent opacity-50 outline-2 -outline-offset-2 outline-line-strong outline-dashed',
-          on &&
-            'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft',
+          on && 'fc-picked',
         )}
       >
         {marker && (
@@ -715,7 +732,7 @@ export function SourcesDock() {
           aria-pressed={on}
           onClick={(e) => {
             // ⌘-click (Ctrl on Windows) picks one more, Shift-click a run of them, as in OBS.
-            if (e.metaKey || e.ctrlKey) pickMore(item.id, 'toggle')
+            if (addsToPick(e)) pickMore(item.id, 'toggle')
             else if (e.shiftKey)
               pickMore(
                 item.id,
@@ -812,6 +829,10 @@ export function SourcesDock() {
         ref={listRef}
         className="min-h-0 flex-1 overflow-y-auto p-1.5"
         onContextMenu={(e) => open(e, `Sources in ${scene}`, emptyMenu)}
+        // A click on the list's empty space picks nothing, as in OBS.
+        onPointerDown={(e) => {
+          if (e.button === 0 && !(e.target as HTMLElement).closest('[data-item-id]')) select(null)
+        }}
       >
         {items.error && !list ? (
           <LoadError error={items.error} onRetry={items.reload} />

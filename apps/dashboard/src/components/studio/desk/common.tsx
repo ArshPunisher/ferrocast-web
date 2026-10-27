@@ -64,6 +64,9 @@ export interface Desk {
   /** ⌘-click: picks or unpicks `id` beside the others. Shift-click: picks every source in
    * `order` from the picked one to `id`. */
   pickMore: (id: number, how: 'toggle' | 'range', order?: number[]) => void
+  /** The Sources panel's right-click menu for a source (or the empty list, null), so a
+   * right-click on the preview opens the same one, as in OBS. */
+  itemMenu: { current: ((e: React.MouseEvent, id: number | null) => void) | null }
   /** The source whose settings are open. */
   editing: string | null
   edit: (name: string | null) => void
@@ -289,6 +292,7 @@ export function KindTile({
   return (
     <span
       aria-hidden
+      data-kind-tile
       className="grid shrink-0 place-items-center rounded-[8px]"
       style={{
         width: size,

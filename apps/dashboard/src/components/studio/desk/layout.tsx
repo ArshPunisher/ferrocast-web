@@ -272,9 +272,12 @@ export function DockWorkspace({
   top,
   stage,
   docks,
+  foot,
 }: {
   top?: ReactNode
   stage: ReactNode
+  /** A bar along the bottom of the whole layout (the status bar). */
+  foot?: ReactNode
   /** Each panel's content. */
   docks: (id: DockId) => ReactNode
 }) {
@@ -464,6 +467,7 @@ export function DockWorkspace({
             />
           )}
           <div className="flex min-h-[320px] flex-col border-t border-line">{docks(cur)}</div>
+          {foot}
         </div>
       </Ctx.Provider>
     )
@@ -528,22 +532,25 @@ export function DockWorkspace({
       <div
         ref={ws}
         aria-label="Studio layout"
-        className="flex overflow-hidden rounded-panel border border-line bg-surface-1"
+        className="flex flex-col overflow-hidden rounded-panel border border-line bg-surface-1"
         style={height ? { height } : undefined}
       >
-        {left}
-        {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div data-stage className="flex min-h-[140px] min-w-0 flex-1 flex-col">
-            {stage}
+        <div className="flex min-h-0 flex-1">
+          {left}
+          {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div data-stage className="flex min-h-[140px] min-w-0 flex-1 flex-col">
+              {stage}
+            </div>
+            {bottom && (
+              <Divider dir="row" edge="bottom" label="Resize the preview and the panels below" />
+            )}
+            {bottom}
           </div>
-          {bottom && (
-            <Divider dir="row" edge="bottom" label="Resize the preview and the panels below" />
-          )}
-          {bottom}
+          {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
+          {right}
         </div>
-        {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
-        {right}
+        {foot}
       </div>
       {floats.map(([id, f]) => (
         <FloatingDock key={id} id={id} f={f}>
@@ -736,12 +743,16 @@ export function DockHeader({
           <DotsSixVertical size={15} />
         </span>
       )}
-      <h2 className="truncate font-display text-[17px] font-extrabold tracking-tight text-text">
+      {/* A short name stays whole (a long one, a web panel's, is cut at two thirds); on a
+          narrow panel the buttons scroll sideways instead of squeezing it to "S…". */}
+      <h2 className="max-w-[65%] shrink-0 truncate font-display text-[17px] font-extrabold tracking-tight text-text">
         {title ?? dockName(layout, id)}
       </h2>
       {info}
-      <span className="flex-1" />
-      {actions}
+      <span className="min-w-0 flex-1" />
+      <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+        {actions}
+      </div>
       {!narrow && <DockMenu id={id} />}
     </header>
   )
@@ -780,7 +791,7 @@ function DockMenu({ id }: { id: DockId }) {
     btn.current?.focus()
   }
   const item =
-    'flex h-9 w-full items-center rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-none'
+    'flex h-9 w-full items-center rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-pick hover:text-on-pick focus-visible:bg-pick focus-visible:text-on-pick focus-visible:outline-none'
   const moves: [Region, string][] = [
     ['left', 'Move to the left'],
     ['bottom', 'Move to the bottom'],

@@ -7,11 +7,8 @@ import {
   ArrowCounterClockwise,
   Broadcast,
   CheckSquare,
-  Clock,
-  Cpu,
   DotsThree,
   FilmSlate,
-  Gauge,
   GearSix,
   Layout as LayoutIcon,
   LockSimple,
@@ -25,7 +22,6 @@ import {
   Scissors,
   VideoCamera,
   Square,
-  WifiHigh,
   X,
 } from '@phosphor-icons/react'
 import {
@@ -66,7 +62,7 @@ import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
-import { StatsDialog } from './stats-panel'
+import { StatusBar, clock, useHealth, type Health } from './status-bar'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
@@ -167,8 +163,10 @@ function Running({
     [],
   )
   const [editing, edit] = useState<string | null>(null)
+  const itemMenu = useRef<((e: React.MouseEvent, id: number | null) => void) | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)
+  const health = useHealth(setStats)
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
@@ -220,6 +218,7 @@ function Running({
     select,
     also: picked.also,
     pickMore,
+    itemMenu,
     editing,
     edit,
     adding,
@@ -255,7 +254,7 @@ function Running({
       <DockWorkspace
         top={
           <>
-            <ControlBar view={view} lead={lead} onStatus={onStatus} />
+            <ControlBar view={view} lead={lead} onStatus={onStatus} health={health} />
             <MissingFiles />
           </>
         }
@@ -266,6 +265,7 @@ function Running({
           </>
         }
         docks={docks}
+        foot={<StatusBar health={health} />}
       />
       <AddSourceDialog />
       <SettingsDialog
@@ -283,13 +283,6 @@ function Running({
       />
     </DeskProvider>
   )
-}
-
-function clock(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  return [s / 3600, (s / 60) % 60, s % 60]
-    .map((n) => String(Math.floor(n)).padStart(2, '0'))
-    .join(':')
 }
 
 /**
@@ -311,45 +304,16 @@ function ControlBar({
   view,
   lead,
   onStatus,
+  health,
 }: {
   view: GoLiveView | null
   lead?: React.ReactNode
   onStatus: (s: StudioEngineStatus) => void
+  health: Health
 }) {
   const api = useEngine()
   const { stats, setStats, openSettings, prefs } = useDesk()
   const { busy, run } = useAction()
-  const last = useRef<{ bytes: number; at: number } | null>(null)
-  const [kbps, setKbps] = useState<number | null>(null)
-  const [since, setSince] = useState<number | null>(null)
-  const [now, setNow] = useState(Date.now())
-  // One read a second: the engine, the stream and the recording.
-  useEffect(() => {
-    let alive = true
-    const read = async () => {
-      try {
-        const v = await api.stats()
-        if (!alive) return
-        setStats(v)
-        const t = Date.now()
-        setNow(t)
-        const st = v.stream
-        if (st && last.current && t > last.current.at) {
-          setKbps(Math.round(((st.bytes - last.current.bytes) * 8) / (t - last.current.at)))
-        } else if (!st) setKbps(null)
-        last.current = st ? { bytes: st.bytes, at: t } : null
-        setSince((x) => (st?.active ? (x ?? t) : null))
-      } catch {
-        // The next read tries again.
-      }
-    }
-    void read()
-    const t = setInterval(() => void read(), 1000)
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
-  }, [api, setStats])
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
   // A stream exists until stopped; while connecting it isn't active yet but is on.
@@ -370,8 +334,7 @@ function ControlBar({
         hint: v.also,
       })
     if (v !== undefined) {
-      last.current = null
-      setKbps(null)
+      health.reset()
       // Shown at once, not on the next read (ending answers with no stream).
       if (stats) setStats({ ...stats, stream: ending ? null : v })
     }
@@ -450,8 +413,6 @@ function ControlBar({
           }),
       },
     ])
-  const remux = stats?.remux ?? null
-  const [showStats, setShowStats] = useState(false)
   const replayOn = !!stats?.replay?.active
   const camOn = !!stats?.virtualcam?.active
   const outputsMenu = (e: React.MouseEvent) =>
@@ -481,7 +442,6 @@ function ControlBar({
     void run('save-replay', () => api.saveReplay(), {
       success: 'Replay saved with your recordings.',
     })
-  const cpu = stats?.engine.cpu
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2.5">
       <div className="flex flex-wrap items-center gap-2.5">
@@ -491,61 +451,6 @@ function ControlBar({
       {/* Health and the actions stay together: short of room they move down as one, so Go
           live never ends up on a line of its own. */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
-        <button
-          type="button"
-          aria-label="Stream health: open Stats"
-          title="Stats"
-          onClick={() => setShowStats(true)}
-          className="flex h-10 items-center gap-4 rounded-control border border-line bg-surface-1 px-3.5 text-[13.5px] text-text-3 transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-        >
-          <span className="hidden items-center gap-1.5 xl:inline-flex" title="Ferrocast's CPU use">
-            <Cpu size={15} aria-hidden />
-            <span className="hidden 2xl:inline">CPU</span>
-            <b className="font-mono font-semibold text-text tabular-nums">
-              {cpu === undefined ? '…' : `${cpu.toFixed(0)}%`}
-            </b>
-          </span>
-          <span
-            className={cx(
-              'items-center gap-1.5',
-              (stream?.dropped ?? 0) > 0 ? 'inline-flex text-warn' : 'hidden xl:inline-flex',
-            )}
-            title="Frames dropped"
-          >
-            <WifiHigh size={15} aria-hidden />
-            <span className="hidden 2xl:inline">Dropped</span>
-            <b className="font-mono font-semibold text-text tabular-nums">{stream?.dropped ?? 0}</b>
-          </span>
-          <span className="hidden items-center gap-1.5 xl:inline-flex" title="Upload">
-            <Gauge size={15} aria-hidden />
-            <span className="hidden 2xl:inline">Upload</span>
-            <b className="font-mono font-semibold text-text tabular-nums">
-              {kbps === null ? '0.0' : (kbps / 1000).toFixed(1)}&nbsp;Mbps
-            </b>
-          </span>
-          <span className="inline-flex items-center gap-1.5" title="Time live">
-            <Clock size={15} aria-hidden />
-            <b className="font-mono font-semibold text-text tabular-nums">
-              {clock(since ? now - since : 0)}
-            </b>
-          </span>
-        </button>
-        <StatsDialog open={showStats} onClose={() => setShowStats(false)} />
-        {remux && (!remux.done || remux.error) && (
-          <span
-            className={cx('text-[14px] font-semibold', remux.error ? 'text-danger' : 'text-text-2')}
-            aria-live="polite"
-          >
-            {remux.error
-              ? `The MP4 couldn't be made: ${remux.error}`
-              : `Making an MP4… ${Math.round(remux.percent)}%`}
-          </span>
-        )}
-        {stream?.reconnecting && (
-          <span className="text-[14px] font-semibold text-warn" aria-live="polite">
-            Reconnecting…
-          </span>
-        )}
         {stream?.error && !stream.active && (
           <span className="text-[14px] font-semibold text-danger" aria-live="polite">
             {stream.error}
@@ -797,7 +702,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
                 onClick={() => setLayout((l) => fromPreset(l, p))}
                 className={cx(
                   'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[13px] hover:bg-surface-3',
-                  layout.preset === p && 'border-arc bg-accent-soft text-accent-text',
+                  layout.preset === p && 'fc-picked border-transparent',
                 )}
               >
                 <Mini p={p} />

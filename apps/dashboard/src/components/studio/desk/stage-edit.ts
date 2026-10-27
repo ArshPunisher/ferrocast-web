@@ -229,6 +229,13 @@ export function fit(
   }
 }
 
+/** The "pick one more" modifier: ⌘ on a Mac (where Ctrl-click is a right-click), Ctrl
+ * elsewhere, as OBS does. */
+export function addsToPick(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+  return mac ? e.metaKey : e.ctrlKey
+}
+
 /** A source's crop (its own pixels from each side) and full size. */
 export interface Crop {
   left: number
