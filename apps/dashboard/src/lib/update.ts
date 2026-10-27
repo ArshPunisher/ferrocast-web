@@ -77,31 +77,51 @@ export type NotesBlock = { kind: 'list'; items: string[] } | { kind: 'text'; tex
 
 /**
  * The release notes (plain text from the feed, untrusted): "- " or "* " lines are list
- * items, indented lines continue the item above, other lines are paragraphs. Rendered as
- * text only, never HTML.
+ * items, indented lines continue the item above, and lines that follow each other make one
+ * paragraph (the changelog wraps its lines; a blank line starts a new paragraph). Rendered
+ * as text only, never HTML.
  */
 export function parseNotes(raw: unknown): NotesBlock[] {
   if (typeof raw !== 'string' || !raw) return []
   const out: NotesBlock[] = []
+  let gap = true
   for (const line of raw.replace(/\r\n?/g, '\n').split('\n')) {
     const bullet = /^\s{0,3}[-*]\s+(.*)$/.exec(line)
     const last = out[out.length - 1]
     if (bullet) {
+      gap = false
       const item = (bullet[1] ?? '').trim()
       if (!item) continue
       if (last?.kind === 'list') last.items.push(item)
       else out.push({ kind: 'list', items: [item] })
     } else if (!line.trim()) {
-      continue
-    } else if (/^\s+/.test(line) && last?.kind === 'list') {
+      gap = true
+    } else if (/^\s+/.test(line) && last?.kind === 'list' && !gap) {
       last.items[last.items.length - 1] += ` ${line.trim()}`
     } else {
       // A heading marker is noise in plain text.
+      const heading = /^#+\s/.test(line)
       const text = line.replace(/^#+\s*/, '').trim()
-      if (text) out.push({ kind: 'text', text })
+      if (!text) continue
+      if (!heading && !gap && last?.kind === 'text') last.text += ` ${text}`
+      else out.push({ kind: 'text', text })
+      // A heading stands alone.
+      gap = heading
     }
   }
   return out
+}
+
+/** Splits `**bold**` out of a line of notes, for rendering as text (never HTML). */
+export function emphasis(text: string): { text: string; strong: boolean }[] {
+  return text
+    .split(/(\*\*[^*]+\*\*)/)
+    .filter(Boolean)
+    .map((part) =>
+      /^\*\*[^*]+\*\*$/.test(part)
+        ? { text: part.slice(2, -2), strong: true }
+        : { text: part, strong: false },
+    )
 }
 
 /** How often the update state is re-read when no frame came (live changes, older engines). */

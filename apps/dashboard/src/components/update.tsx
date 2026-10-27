@@ -17,6 +17,7 @@ import {
   DOWNLOAD_PAGE,
   refreshUpdate,
   formatBytes,
+  emphasis,
   parseNotes,
   publishedLine,
   summarize,
@@ -144,6 +145,18 @@ function Problem({ problem }: { problem: UpdateProblem }) {
   )
 }
 
+function Emphasis({ text }: { text: string }) {
+  return emphasis(text).map((p, i) =>
+    p.strong ? (
+      <strong key={i} className="font-semibold text-text">
+        {p.text}
+      </strong>
+    ) : (
+      p.text
+    ),
+  )
+}
+
 function Notes({ u }: { u: UpdateInfo }) {
   const blocks = parseNotes(u.notes)
   return (
@@ -154,16 +167,20 @@ function Notes({ u }: { u: UpdateInfo }) {
       {blocks.length === 0 ? (
         <p className="text-sm text-text-2">This release has no notes here.</p>
       ) : (
-        <div className="flex max-h-[38dvh] flex-col gap-2 overflow-y-auto rounded-[12px] border border-line bg-surface-2 p-3.5 text-sm leading-relaxed [overflow-wrap:anywhere] text-text-2">
+        <div className="flex max-h-[38dvh] flex-col gap-2 overflow-y-auto overscroll-contain rounded-[12px] border border-line bg-surface-2 p-3.5 text-sm leading-relaxed [overflow-wrap:anywhere] text-text-2">
           {blocks.map((b, i) =>
             b.kind === 'list' ? (
               <ul key={i} className="flex list-disc flex-col gap-1.5 pl-5 marker:text-text-3">
                 {b.items.map((item, j) => (
-                  <li key={j}>{item}</li>
+                  <li key={j}>
+                    <Emphasis text={item} />
+                  </li>
                 ))}
               </ul>
             ) : (
-              <p key={i}>{b.text}</p>
+              <p key={i}>
+                <Emphasis text={b.text} />
+              </p>
             ),
           )}
         </div>

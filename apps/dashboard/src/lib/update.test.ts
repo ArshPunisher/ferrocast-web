@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { UpdateInfo } from '@ferrocast/api'
-import { checkedLine, formatBytes, parseNotes, publishedLine, summarize } from './update'
+import { checkedLine, emphasis, formatBytes, parseNotes, publishedLine, summarize } from './update'
 
 const base: UpdateInfo = {
   current: '1.0.0',
@@ -77,6 +77,25 @@ describe('parseNotes (untrusted text, never HTML)', () => {
       { kind: 'list', items: ['Faster alerts on Kick', 'Fixes'] },
       { kind: 'text', text: 'Thanks for testing.' },
     ])
+  })
+  it('joins wrapped lines into one paragraph', () => {
+    expect(
+      parseNotes(
+        '**New.** One line\nwraps here.\n\nNext para.\n- item\n  more\n\nAfter list\nwraps.',
+      ),
+    ).toEqual([
+      { kind: 'text', text: '**New.** One line wraps here.' },
+      { kind: 'text', text: 'Next para.' },
+      { kind: 'list', items: ['item more'] },
+      { kind: 'text', text: 'After list wraps.' },
+    ])
+  })
+  it('splits bold out as text', () => {
+    expect(emphasis('**The Studio.** Now <b>here</b>')).toEqual([
+      { text: 'The Studio.', strong: true },
+      { text: ' Now <b>here</b>', strong: false },
+    ])
+    expect(emphasis('a ** b')).toEqual([{ text: 'a ** b', strong: false }])
   })
   it('keeps markup as plain text', () => {
     expect(parseNotes('- <img src=x onerror=alert(1)>')).toEqual([
