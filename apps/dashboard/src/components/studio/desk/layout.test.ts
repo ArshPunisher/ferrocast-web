@@ -117,3 +117,13 @@ describe('web panel addresses', () => {
     expect(nameFrom('nonsense')).toBe('Web page')
   })
 })
+
+describe('panel sizes saved before the divider fix', () => {
+  it('an old save keeps at most the default height below; a new one is kept as dragged', () => {
+    const base = fresh('side')
+    const old = { ...base, bh: 640 }
+    expect(revive(old).bh).toBe(base.bh)
+    expect(revive({ ...base, bh: 640, sizes: 2 }).bh).toBe(640)
+    expect(revive({ ...base, bh: 150 }).bh).toBe(150)
+  })
+})

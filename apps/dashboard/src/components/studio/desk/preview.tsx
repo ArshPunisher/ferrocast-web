@@ -384,7 +384,7 @@ export function PreviewBox({ running }: { running: boolean }) {
         ref={stageRef}
         aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
         data-stage-bg
-        className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+        className="grid min-h-16 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         {...editing}
       >
         <div
@@ -401,7 +401,7 @@ export function PreviewBox({ running }: { running: boolean }) {
   return (
     <div
       data-stage-bg
-      className="flex min-h-0 flex-1 items-center justify-center gap-3 bg-[var(--fc-stage)] p-3 [container-type:size]"
+      className="flex min-h-16 flex-1 items-center justify-center gap-3 bg-[var(--fc-stage)] p-3 [container-type:size]"
     >
       <figure className="m-0 flex flex-col gap-3">
         <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-text-2">

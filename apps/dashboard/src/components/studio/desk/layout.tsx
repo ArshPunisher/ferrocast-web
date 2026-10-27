@@ -73,6 +73,8 @@ export interface Layout {
   locked: boolean
   /** The panel shown on a phone. */
   mob: DockId
+  /** 2: sizes saved since the panels' height follows the divider exactly (27 Oct). */
+  sizes?: 2
 }
 
 const PRESETS: Record<Preset, Pick<Layout, 'left' | 'right' | 'bottom' | 'lw' | 'rw' | 'bh'>> = {
@@ -132,7 +134,12 @@ export function revive(v: Partial<Layout> | null): Layout {
     float,
     w: { ...v.w },
     webs,
+    sizes: 2,
   }
+  // Before 27 Oct the panels below showed at most 45% of the space, while a drag up kept
+  // raising the height saved: honoured now, it would open with a tiny preview. Older saves
+  // keep at most the default height once.
+  if (v.sizes !== 2) l.bh = Math.min(l.bh, fresh('side').bh)
   for (const d of BUILT_INS) if (!placed(l, d) && !l.hidden.includes(d)) l.hidden.push(d)
   return l
 }
@@ -503,16 +510,16 @@ export function DockWorkspace({
         </div>,
       )
     })
+    // The size dragged to; when the window is too small for it, the panels give way (they
+    // shrink, the picture and its bar keep their minimum) without forgetting it.
     const size: CSSProperties =
       region === 'bottom'
-        ? // On a short window the panels below give way, so the picture keeps about half.
-          {
-            height: height
-              ? Math.min(layout.bh, Math.max(120, Math.round(height * 0.45)))
-              : layout.bh,
-            flex: 'none',
+        ? { height: layout.bh, flex: '0 1 auto', minHeight: MIN_PANEL_H }
+        : {
+            width: region === 'left' ? layout.lw : layout.rw,
+            flex: '0 1 auto',
+            minWidth: MIN_PANEL_W,
           }
-        : { width: region === 'left' ? layout.lw : layout.rw, flex: 'none' }
     return (
       <div className={cx('flex min-h-0 min-w-0', vertical ? 'flex-col' : 'flex-row')} style={size}>
         {out}
@@ -537,8 +544,9 @@ export function DockWorkspace({
       >
         {left}
         {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div data-stage className="flex min-h-[140px] min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: MIN_STAGE_W }}>
+          {/* Its least height is the picture's minimum plus its bar (min-height: auto). */}
+          <div data-stage className="flex min-w-0 flex-1 flex-col">
             {stage}
           </div>
           {bottom && (
@@ -628,44 +636,60 @@ function Divider({
   const { layout, setLayout } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(false)
-  const by = useCallback(
-    (dx: number, dy: number) => {
-      const ws = ref.current?.closest('[aria-label="Studio layout"]')?.getBoundingClientRect()
+  // The sizes on screen either side (fractional pixels), taken when a drag starts: the
+  // divider is then placed from the total distance moved, so it stays under the pointer.
+  // (Sizes re-read and rounded at every step lagged it a few pixels; saved sizes the window
+  // couldn't fit made a dead zone at the start of a drag.)
+  const measure = useCallback((): Sizes | null => {
+    const prev = ref.current?.previousElementSibling as HTMLElement | null
+    const next = ref.current?.nextElementSibling as HTMLElement | null
+    if (!prev || !next) return null
+    const a = prev.getBoundingClientRect()
+    const b = next.getBoundingClientRect()
+    const bar = (prev.lastElementChild as HTMLElement | null)?.getBoundingClientRect().height ?? 0
+    return { a: dir === 'col' ? a.width : a.height, b: dir === 'col' ? b.width : b.height, bar }
+  }, [dir])
+  const place = useCallback(
+    (dx: number, dy: number, m: Sizes) => {
+      const d = dir === 'col' ? dx : dy
       setLayout((l) => {
+        // The other side keeps its minimum: the stage 240 px wide, the picture a strip
+        // above its bar.
         if (edge === 'left')
-          return { ...l, lw: clamp(l.lw + dx, 200, (ws?.width ?? 1400) - 420), preset: null }
+          return { ...l, lw: clamp(m.a + d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W), preset: null }
         if (edge === 'right')
-          return { ...l, rw: clamp(l.rw - dx, 220, (ws?.width ?? 1400) - 420), preset: null }
+          return { ...l, rw: clamp(m.b - d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W), preset: null }
         if (edge === 'bottom')
-          return { ...l, bh: clamp(l.bh - dy, 120, (ws?.height ?? 800) - 180), preset: null }
+          return {
+            ...l,
+            bh: clamp(m.b - d, MIN_PANEL_H, m.b + (m.a - m.bar) - MIN_PICTURE),
+            preset: null,
+          }
         if (!between) return l
         const [a, b] = between
-        const A = ref.current?.previousElementSibling as HTMLElement | null
-        const B = ref.current?.nextElementSibling as HTMLElement | null
-        if (!A || !B) return l
-        const sa = dir === 'col' ? A.offsetWidth : A.offsetHeight
-        const sb = dir === 'col' ? B.offsetWidth : B.offsetHeight
-        const na = clamp(sa + (dir === 'col' ? dx : dy), 110, sa + sb - 110)
+        const na = clamp(m.a + d, 110, m.a + m.b - 110)
         const tot = (l.w[a] ?? 1) + (l.w[b] ?? 1)
-        const wa = (tot * na) / (sa + sb)
+        const wa = (tot * na) / (m.a + m.b)
         return { ...l, w: { ...l.w, [a]: wa, [b]: tot - wa } }
       })
     },
     [between, dir, edge, setLayout],
   )
+  const by = (dx: number, dy: number) => {
+    const m = measure()
+    if (m) place(dx, dy, m)
+  }
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (layout.locked) return
+    const start = measure()
+    if (!start) return
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     setActive(true)
-    let x = e.clientX
-    let y = e.clientY
+    const x0 = e.clientX
+    const y0 = e.clientY
     const el = e.currentTarget
-    const move = (m: PointerEvent) => {
-      by(m.clientX - x, m.clientY - y)
-      x = m.clientX
-      y = m.clientY
-    }
+    const move = (m: PointerEvent) => place(m.clientX - x0, m.clientY - y0, start)
     const up = () => {
       setActive(false)
       el.removeEventListener('pointermove', move)
@@ -704,6 +728,23 @@ function Divider({
       )}
     />
   )
+}
+
+/**
+ * The smallest a part can be dragged to, as OBS's splitters: the picture down to a strip (its
+ * bar stays whole), a panel to its title and a little of its list. The window's own size
+ * squeezes the panels only when they no longer fit, never the drag.
+ */
+const MIN_PICTURE = 64
+const MIN_PANEL_H = 110
+const MIN_PANEL_W = 180
+const MIN_STAGE_W = 240
+
+/** A divider's two sides along its axis, and (for the one under the preview) the bar. */
+interface Sizes {
+  a: number
+  b: number
+  bar: number
 }
 
 function clamp(v: number, lo: number, hi: number): number {
