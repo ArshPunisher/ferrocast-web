@@ -129,9 +129,6 @@ html:has(.fc-dialog[open]) {
   background-color: var(--fc-pick);
   color: var(--fc-on-pick);
 }
-.fc-picked:hover {
-  background-color: var(--fc-pick-hover);
-}
 .fc-picked
   :is(
     .text-text,
@@ -156,11 +153,14 @@ html:has(.fc-dialog[open]) {
   background: color-mix(in srgb, var(--fc-on-pick) 14%, transparent) !important;
   border-color: color-mix(in srgb, var(--fc-on-pick) 35%, transparent) !important;
 }
-/* Buttons inside a picked row (fold, eye, lock, more): a wash of the row's text colour on
-   hover, never the page's light hover fill (a white square on the dark row). */
-.fc-picked :is(button, [role='button'], a):not(.fc-picked):hover {
-  background-color: color-mix(in srgb, var(--fc-on-pick) 16%, transparent);
+/* A picked row keeps one colour under the pointer (owner, 27 Oct). Only its small icon
+   buttons (fold, eye, lock, more) show a hover, on themselves: a wash of the row's text
+   colour, never the page's light fill (a white square on the dark row). */
+.fc-picked [data-icon-button] {
   color: var(--fc-on-pick);
+}
+.fc-picked [data-icon-button]:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--fc-on-pick) 16%, transparent);
 }
 
 /* Every scrolling box is positioned, so what's absolutely placed inside it (screen-reader

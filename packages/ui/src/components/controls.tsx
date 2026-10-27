@@ -86,6 +86,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       type={type ?? 'button'}
       aria-label={label}
       title={label}
+      data-icon-button
       className={cx(
         'fc-press inline-flex shrink-0 items-center justify-center rounded-control',
         'transition-[background-color,color,transform] duration-150 ease-out',
