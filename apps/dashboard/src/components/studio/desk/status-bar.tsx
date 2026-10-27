@@ -1,6 +1,7 @@
-// The window's status bar, like OBS's: along the very bottom of the app on every page while
-// the Studio runs. Messages on the left; on the right the stream and recording times, CPU,
-// frame rate, dropped frames and upload. A click on those opens Stats.
+// The window's status bar, like OBS's: along the bottom of the app, beside the sidebar (which
+// keeps the full height), on every page while the Studio runs. Messages on the left; on the
+// right the stream and recording times, CPU, frame rate, dropped frames and upload. A click on
+// those opens Stats.
 
 import { useEffect, useMemo, useState } from 'react'
 import { studioEngineApi } from '@ferrocast/api'
@@ -85,7 +86,7 @@ export function StudioStatusBar() {
   return (
     <footer
       aria-label="Studio status"
-      className="fixed inset-x-0 bottom-0 z-40 hidden items-stretch border-t border-line bg-surface-1 text-[12.5px] lg:flex"
+      className="fixed right-0 bottom-0 left-60 z-40 hidden items-stretch border-t border-line bg-surface-1 text-[12.5px] lg:flex"
       style={{ height: STATUS_BAR_PX }}
     >
       <span

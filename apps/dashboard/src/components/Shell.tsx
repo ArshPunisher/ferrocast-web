@@ -415,7 +415,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed top-0 bottom-[var(--fc-statusbar,0px)] left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
         {isPro && (
           <motion.span
             // Remounts when the unlock closes, so the new `initial` draws it down once.
