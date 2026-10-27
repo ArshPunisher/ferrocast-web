@@ -56,15 +56,40 @@ export function FileDrop() {
   const { api, scene, refresh } = useDesk()
   const [over, setOver] = useState<number | null>(null)
   useEffect(() => {
+    // The hint goes when the drag events stop: a drag that leaves without saying so (macOS
+    // doesn't always) mustn't leave it on screen.
+    let quiet = 0
+    // The files being dragged (how many make sources), kept until the drag leaves or drops,
+    // so a drag held still past the timeout shows the hint again when it moves.
+    let dragging: number | null = null
+    const show = (n: number | null) => setOver(n)
+    const stillThere = () => {
+      window.clearTimeout(quiet)
+      quiet = window.setTimeout(() => show(null), 1000)
+    }
     const on = (e: Event) => {
       const d = (e as CustomEvent<DropDetail>).detail
       if (d.kind === 'enter') {
-        const n = (d.paths ?? []).filter((p) => sourceFor(p)).length
-        setOver(n)
-      } else if (d.kind === 'leave') setOver(null)
-      else if (d.kind === 'drop') {
-        setOver(null)
-        void add(d.paths ?? [])
+        // Only a drag carrying files: dragging text or a panel inside the page also comes
+        // through the window, with no files.
+        if (!d.paths?.length) return
+        dragging = d.paths.filter((p) => sourceFor(p)).length
+        show(dragging)
+        stillThere()
+      } else if (d.kind === 'over') {
+        if (dragging !== null) {
+          show(dragging)
+          stillThere()
+        }
+      } else if (d.kind === 'leave') {
+        window.clearTimeout(quiet)
+        dragging = null
+        show(null)
+      } else if (d.kind === 'drop') {
+        window.clearTimeout(quiet)
+        dragging = null
+        show(null)
+        if (d.paths?.length) void add(d.paths)
       }
     }
     const add = async (paths: string[]) => {
@@ -102,7 +127,10 @@ export function FileDrop() {
         })
     }
     window.addEventListener('ferrocast:drop', on)
-    return () => window.removeEventListener('ferrocast:drop', on)
+    return () => {
+      window.clearTimeout(quiet)
+      window.removeEventListener('ferrocast:drop', on)
+    }
   }, [api, scene, refresh])
   if (over === null) return null
   return (
