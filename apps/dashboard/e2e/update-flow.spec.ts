@@ -24,6 +24,8 @@ test('sidebar update: notes, progress, restart; blocked while live', async ({ pa
   await expect(card.getByTestId('update-status')).toContainText('is out')
   await expect(card).toContainText('Last checked just now')
   await card.getByRole('button', { name: 'See what’s new' }).click()
+  // The page behind the dialog can't scroll (the app's WebKit scrolls it otherwise).
+  expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('hidden')
   await page.getByRole('button', { name: 'Update now' }).click()
   await expect(page.getByRole('progressbar', { name: 'Download' })).toBeVisible()
   await expect(page.locator('aside').getByTestId('update-nav')).toContainText('Downloading')
@@ -31,6 +33,9 @@ test('sidebar update: notes, progress, restart; blocked while live', async ({ pa
   await expect(restart).toBeEnabled({ timeout: 15_000 })
   await restart.click()
   await expect(page.locator('aside').getByTestId('update-nav')).toHaveCount(0, { timeout: 5_000 })
+  // Closing the dialog gives the page its scrolling back.
+  await page.keyboard.press('Escape')
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.overflow)).toBe('')
 })
 
 test('phone: the update is in More, and the dialog fits 375 px', async ({ page }) => {

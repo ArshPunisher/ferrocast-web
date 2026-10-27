@@ -16,6 +16,31 @@ export interface DialogProps {
   sheetOnMobile?: boolean
 }
 
+/** Open dialogs; the page under them doesn't scroll while any is open. */
+let scrollLocks = 0
+let savedScroll: { overflow: string; gutter: string } | null = null
+
+/** Stops the page behind a dialog scrolling (wheel and touch scroll chain to it otherwise). */
+function lockPageScroll(): () => void {
+  const root = document.documentElement
+  if (scrollLocks++ === 0) {
+    savedScroll = { overflow: root.style.overflow, gutter: root.style.scrollbarGutter }
+    // Keeps the scrollbar's space, so the page doesn't shift sideways.
+    if (root.scrollHeight > root.clientHeight) root.style.scrollbarGutter = 'stable'
+    root.style.overflow = 'hidden'
+  }
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    if (--scrollLocks === 0 && savedScroll) {
+      root.style.overflow = savedScroll.overflow
+      root.style.scrollbarGutter = savedScroll.gutter
+      savedScroll = null
+    }
+  }
+}
+
 /**
  * Native <dialog> (focus trap, Escape, inert background for free) with a short scale-in.
  * Opens from the centre: dialogs are not anchored to a trigger.
@@ -43,6 +68,7 @@ export function Dialog({
     }
     if (!open && d.open) d.close()
   }, [open])
+  useEffect(() => (open ? lockPageScroll() : undefined), [open])
   useEffect(() => {
     const d = ref.current
     if (!d) return
