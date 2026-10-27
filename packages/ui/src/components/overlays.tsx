@@ -339,7 +339,7 @@ export function Toaster() {
   return (
     <section
       aria-label="Notifications"
-      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[70] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-4 sm:bottom-4 sm:left-auto sm:items-end"
+      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[70] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-4 sm:bottom-[calc(1rem+var(--fc-statusbar,0px))] sm:left-auto sm:items-end"
     >
       <AnimatePresence initial={false}>
         {list.map((t) => (

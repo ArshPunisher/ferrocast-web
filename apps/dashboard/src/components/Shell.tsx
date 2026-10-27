@@ -34,7 +34,7 @@ import {
 import { href, useRoute, type Route } from '../lib/router'
 import { isLimited, useLive } from '../lib/store'
 import { isCloud } from '../lib/boot'
-import { useClient } from '../lib/hooks'
+import { useClient, useMediaQuery } from '../lib/hooks'
 import { PRO_UNLOCKED_EVENT, accountInitials, proPlanLine, useProStatus } from '../lib/pro-status'
 import { ProUnlock } from './pro/ProUnlock'
 import { StatusStrip } from './StatusStrip'
@@ -45,6 +45,7 @@ import { AccountAvatar, SidebarAccount } from './account/parts'
 import { useAccount } from '../lib/account-status'
 import { useUpdateWatch } from '../lib/update'
 import { useIsWide } from '../lib/wide'
+import { StudioStatusBar } from './studio/desk/status-bar'
 
 type NavItem = {
   route: Route
@@ -373,6 +374,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const seamDraw = useSeamDraw()
   // The PC is off and the cloud bot stands in: chat, bans and history only (M10).
   const limited = isLimited(remote)
+  // The Studio's status bar along the window's bottom, as in OBS: on a computer-sized window
+  // of this PC's own dashboard (not a phone through Ferrocast's servers).
+  const desk = useMediaQuery('(min-width: 1024px)')
   const cloud = isCloud(conn)
   const nav = NAV.filter(
     (i) =>
@@ -411,7 +415,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
+      <aside className="fixed top-0 bottom-[var(--fc-statusbar,0px)] left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
         {isPro && (
           <motion.span
             // Remounts when the unlock closes, so the new `initial` draws it down once.
@@ -560,7 +564,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           className={cx(
             'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7',
             // Full-width screens (the Studio's desk fills the window) keep a small gap below.
-            wide ? 'max-w-none lg:pb-5' : 'max-w-[1400px] lg:pb-12',
+            wide
+              ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
+              : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
           )}
         >
           {children}
@@ -627,6 +633,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         </ul>
       </nav>
 
+      {desk && !remote && <StudioStatusBar />}
       {!remote && <ProUnlock pro={proView} />}
       <UpdateDialogHost />
 

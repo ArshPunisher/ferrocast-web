@@ -62,7 +62,8 @@ import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
-import { StatusBar, clock, useHealth, type Health } from './status-bar'
+import { clock } from './status-bar'
+import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
@@ -166,7 +167,12 @@ function Running({
   const itemMenu = useRef<((e: React.MouseEvent, id: number | null) => void) | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)
-  const health = useHealth(setStats)
+  // The engine's stats, read once a second for the whole window (the status bar along the
+  // bottom reads the same); actions here update them at once, the next read takes over.
+  const reading = useEngineReading(api.stats)
+  useEffect(() => {
+    if (reading.stats) setStats(reading.stats)
+  }, [reading.stats])
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
@@ -254,7 +260,7 @@ function Running({
       <DockWorkspace
         top={
           <>
-            <ControlBar view={view} lead={lead} onStatus={onStatus} health={health} />
+            <ControlBar view={view} lead={lead} onStatus={onStatus} />
             <MissingFiles />
           </>
         }
@@ -265,7 +271,6 @@ function Running({
           </>
         }
         docks={docks}
-        foot={<StatusBar health={health} />}
       />
       <AddSourceDialog />
       <SettingsDialog
@@ -304,12 +309,10 @@ function ControlBar({
   view,
   lead,
   onStatus,
-  health,
 }: {
   view: GoLiveView | null
   lead?: React.ReactNode
   onStatus: (s: StudioEngineStatus) => void
-  health: Health
 }) {
   const api = useEngine()
   const { stats, setStats, openSettings, prefs } = useDesk()
@@ -334,7 +337,7 @@ function ControlBar({
         hint: v.also,
       })
     if (v !== undefined) {
-      health.reset()
+      resetUploadRate()
       // Shown at once, not on the next read (ending answers with no stream).
       if (stats) setStats({ ...stats, stream: ending ? null : v })
     }

@@ -4,7 +4,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { type EngineStats } from '@ferrocast/api'
 import { Dialog, InfoTip, cx } from '@ferrocast/ui'
-import { useDesk } from './common'
 
 /** Kbps between two byte counts `ms` apart (0 when it went back: a new stream or file). */
 export function kbpsBetween(before: number, after: number, ms: number): number {
@@ -69,8 +68,15 @@ function Line({ label, value, bad }: { label: string; value: string; bad?: boole
   )
 }
 
-export function StatsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { stats } = useDesk()
+export function StatsDialog({
+  open,
+  onClose,
+  stats,
+}: {
+  open: boolean
+  onClose: () => void
+  stats: EngineStats | null
+}) {
   const rates = useRates(stats)
   const e = stats?.engine
   const stream = stats?.stream ?? null

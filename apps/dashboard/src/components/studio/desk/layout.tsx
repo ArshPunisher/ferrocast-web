@@ -272,12 +272,9 @@ export function DockWorkspace({
   top,
   stage,
   docks,
-  foot,
 }: {
   top?: ReactNode
   stage: ReactNode
-  /** A bar along the bottom of the whole layout (the status bar). */
-  foot?: ReactNode
   /** Each panel's content. */
   docks: (id: DockId) => ReactNode
 }) {
@@ -309,9 +306,13 @@ export function DockWorkspace({
     const ro = new ResizeObserver(fit)
     if (el.parentElement) ro.observe(el.parentElement)
     for (const s of [...(el.parentElement?.children ?? [])]) if (s !== el) ro.observe(s)
+    // The window's status bar coming or going changes the room below (--fc-statusbar).
+    const mo = new MutationObserver(fit)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
     return () => {
       window.removeEventListener('resize', fit)
       ro.disconnect()
+      mo.disconnect()
     }
   }, [narrow])
 
@@ -467,7 +468,6 @@ export function DockWorkspace({
             />
           )}
           <div className="flex min-h-[320px] flex-col border-t border-line">{docks(cur)}</div>
-          {foot}
         </div>
       </Ctx.Provider>
     )
@@ -532,25 +532,22 @@ export function DockWorkspace({
       <div
         ref={ws}
         aria-label="Studio layout"
-        className="flex flex-col overflow-hidden rounded-panel border border-line bg-surface-1"
+        className="flex overflow-hidden rounded-panel border border-line bg-surface-1"
         style={height ? { height } : undefined}
       >
-        <div className="flex min-h-0 flex-1">
-          {left}
-          {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div data-stage className="flex min-h-[140px] min-w-0 flex-1 flex-col">
-              {stage}
-            </div>
-            {bottom && (
-              <Divider dir="row" edge="bottom" label="Resize the preview and the panels below" />
-            )}
-            {bottom}
+        {left}
+        {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div data-stage className="flex min-h-[140px] min-w-0 flex-1 flex-col">
+            {stage}
           </div>
-          {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
-          {right}
+          {bottom && (
+            <Divider dir="row" edge="bottom" label="Resize the preview and the panels below" />
+          )}
+          {bottom}
         </div>
-        {foot}
+        {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
+        {right}
       </div>
       {floats.map(([id, f]) => (
         <FloatingDock key={id} id={id} f={f}>
