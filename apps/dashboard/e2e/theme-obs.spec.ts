@@ -14,6 +14,8 @@ async function useFirstTheme(page: Page) {
 async function serious(page: Page) {
   const r = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    // Overlay previews are the stream's own art, animating (checked in the overlays package).
+    .exclude('[data-overlay-preview]')
     .analyze()
   return r.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')

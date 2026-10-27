@@ -155,7 +155,10 @@ test.describe('gallery', () => {
     expect(await deepCount(page, '.fa-spark, .al-spikes'), 'the copy has no Ferrocast mark').toBe(0)
   })
 
-  test('using a theme makes one overlay per scene', async ({ page }) => {
+  test('using a theme makes one overlay per scene', async ({ page, browserName }) => {
+    // The gallery behind the dialog plays every theme's preview; Linux WebKit in CI draws
+    // without a GPU (a frame every few seconds there), so it gets the slow test's time.
+    test.slow(browserName === 'webkit', 'animated previews under a dialog, no GPU in CI')
     await open(page, 'designs')
     await tile(page, 'Forge').getByRole('button', { name: 'Use theme' }).click()
     const dialog = page.getByRole('dialog', { name: 'Use Forge' })
@@ -404,7 +407,10 @@ test.describe('layout editor layers', () => {
     await expect(w).toHaveAccessibleName(/at 0, \d+, 800 by \d+/)
   })
 
-  test('an overlay from a built-in keeps its mark layer', async ({ page }) => {
+  test('an overlay from a built-in keeps its mark layer', async ({ page, browserName }) => {
+    // The gallery behind the dialog plays every theme's preview; Linux WebKit in CI draws
+    // without a GPU (a frame every few seconds there), so it gets the slow test's time.
+    test.slow(browserName === 'webkit', 'animated previews under a dialog, no GPU in CI')
     await open(page, 'designs')
     await tile(page, 'Arcade night').getByRole('button', { name: 'Use' }).click()
     const use = page.getByRole('dialog', { name: 'Use Arcade night' })
