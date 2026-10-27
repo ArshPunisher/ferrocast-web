@@ -60,15 +60,20 @@ export function Dialog({
   sheetOnMobile = true,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   useEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) {
       d.showModal()
-      // Opening a dialog moves focus to its first button; a field marked for it gets it back
-      // (React's autoFocus runs while the dialog is still closed, so it can't).
-      d.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+      // Opening a dialog moves focus to its first button, which then shows a focus ring on
+      // Close though nothing was typed. A field marked for it gets focus (React's autoFocus
+      // runs while the dialog is still closed, so it can't); else the panel itself, so Tab
+      // starts at the top and nothing is ringed.
+      const field = d.querySelector<HTMLElement>('[data-autofocus]')
+      if (field) field.focus()
+      else panel.current?.focus({ preventScroll: true })
     }
     if (!open && d.open) d.close()
   }, [open])
@@ -114,13 +119,15 @@ export function Dialog({
           )}
         >
           <motion.div
+            ref={panel}
+            tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
             initial={reduce ? false : { opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className={cx(
-              'pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop',
+              'pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop outline-none',
               sheetOnMobile ? 'rounded-t-[20px] sm:rounded-panel' : 'mx-4 rounded-panel',
               width,
             )}
@@ -179,13 +186,17 @@ export interface SheetProps {
  */
 export function Sheet({ open, onClose, title, tools, children, footer }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   useEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) {
       d.showModal()
-      d.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+      // As Dialog: a marked field, else the panel (no ring on its first button).
+      const field = d.querySelector<HTMLElement>('[data-autofocus]')
+      if (field) field.focus()
+      else panel.current?.focus({ preventScroll: true })
     }
     if (!open && d.open) d.close()
   }, [open])
@@ -211,12 +222,14 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
       {open && (
         <div className="pointer-events-none flex h-full w-full justify-end">
           <motion.div
+            ref={panel}
+            tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
             initial={reduce ? false : { x: 32, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
-            className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+            className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop outline-none"
           >
             <div className="flex items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
               <h2 className="min-w-0 flex-1 truncate font-display text-xl font-extrabold tracking-tight text-text">
