@@ -1016,6 +1016,27 @@ export function Settings({ section }: { section?: string | undefined }) {
   const remote = useLive((s) => s.remote)
   const current = useLive((s) => s.update?.current)
   const show = (id: string) => !remote || !OWNER_HIDDEN_SETTINGS.includes(id)
+  // The section being read: the list beside follows the scroll, so one is always marked.
+  const [seen, setSeen] = useState<string | null>(null)
+  useEffect(() => {
+    if (!res.data) return
+    const els = SECTIONS.map(([id]) => document.getElementById(`settings-${id}`)).filter(
+      (e): e is HTMLElement => !!e,
+    )
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        if (top) setSeen(top.target.id.replace(/^settings-/, ''))
+      },
+      // The band just under the top bar.
+      { rootMargin: '-90px 0px -65% 0px' },
+    )
+    for (const e of els) io.observe(e)
+    return () => io.disconnect()
+  }, [res.data])
+  const at = seen ?? section ?? SECTIONS[0]?.[0]
   return (
     <div>
       <PageHeader title="Settings" />
@@ -1029,15 +1050,15 @@ export function Settings({ section }: { section?: string | undefined }) {
               <a
                 key={id}
                 href={href({ name: 'settings', section: id })}
-                aria-current={section === id ? 'location' : undefined}
+                aria-current={at === id ? 'location' : undefined}
                 className={cx(
                   'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
-                  section === id
+                  at === id
                     ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
                     : 'text-text-2 hover:bg-surface-2 hover:text-text',
                 )}
               >
-                <SectionIcon size={18} weight={section === id ? 'fill' : 'regular'} aria-hidden />
+                <SectionIcon size={18} weight={at === id ? 'fill' : 'regular'} aria-hidden />
                 {label}
               </a>
             ),
