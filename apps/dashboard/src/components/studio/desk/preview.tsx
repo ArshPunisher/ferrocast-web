@@ -312,7 +312,26 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (!raf) raf = requestAnimationFrame(send)
     }
     schedule()
-    const ro = new ResizeObserver(schedule)
+    // The stage resized again soon after the last time: something is being dragged (a
+    // divider between panels, a panel's edge, the window). Then it's a resize like the
+    // window's: the still shows, as libobs only redraws at the next frame and a growing view
+    // shows black strips until then (owner's recording). A single change stays live.
+    let changed = 0
+    const sizes = new WeakMap<Element, string>()
+    const ro = new ResizeObserver((entries) => {
+      // Every entry is recorded (not stopping at the first change), so each keeps its size.
+      let moved = false
+      for (const e of entries) {
+        const key = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`
+        const was = sizes.get(e.target)
+        sizes.set(e.target, key)
+        if (was !== undefined && was !== key) moved = true
+      }
+      const now = performance.now()
+      if (moved && now - changed < 120) resize()
+      else schedule()
+      if (moved) changed = now
+    })
     ro.observe(el)
     if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
@@ -330,11 +349,12 @@ export function PreviewBox({ running }: { running: boolean }) {
       attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
-    const onResize = () => {
+    const resize = () => {
       if (!frozen) freeze()
       resizing = performance.now() + 180
       schedule()
     }
+    const onResize = resize
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
