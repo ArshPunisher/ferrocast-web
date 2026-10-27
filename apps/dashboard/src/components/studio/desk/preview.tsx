@@ -58,7 +58,6 @@ import {
   type Pt,
 } from './stage-edit'
 
-/** True while something sits over the box: the native view can't be covered, so it hides. */
 /** The app's view is this much bigger than the box on every side (points): room for the
  * outline and handles of a source at the canvas's edge, as OBS's preview has. */
 const EDGE = 10
@@ -115,17 +114,32 @@ function bgOf(el: Element | null): number | undefined {
   return ((r ?? 0) << 16) | ((g ?? 0) << 8) | (b ?? 0)
 }
 
-function covered(box: DOMRect, edge = EDGE): boolean {
+type Hole = { x: number; y: number; w: number; h: number }
+
+/** What can lie over the preview: menus, lists and panels (dialogs mark theirs). */
+const OVER = '[role="menu"], [role="listbox"], [data-over-preview]'
+
+/** The most holes the app takes; more than that and the picture hides instead. */
+const MAX_HOLES = 16
+
+/**
+ * What lies over the box: the app's view can't be drawn under the page, so it leaves its
+ * picture out where menus and panels are (`holes`, from the box's top left) and they show
+ * there. Null: hide it all (a panel being dragged, or too much over it).
+ */
+export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
   const r = new DOMRect(box.x - edge, box.y - edge, box.width + 2 * edge, box.height + 2 * edge)
-  if (document.body.dataset.dockDrag) return true
-  if (document.querySelector('dialog[open]')) return true
-  for (const el of document.querySelectorAll(
-    '[role="menu"], [role="listbox"], [data-over-preview]',
-  )) {
+  if (document.body.dataset.dockDrag) return null
+  const holes: Hole[] = []
+  for (const el of document.querySelectorAll(OVER)) {
+    // A modal dialog's own box is the whole window; its panel says it's over the preview.
+    if (el instanceof HTMLDialogElement) continue
     const b = el.getBoundingClientRect()
-    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) return true
+    if (b.width < 1 || b.height < 1) continue
+    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom)
+      holes.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height })
   }
-  return false
+  return holes.length > MAX_HOLES ? null : holes
 }
 
 /** Where the live picture goes: the app draws it exactly on this box (its view reaches EDGE past it for handles). In Studio
@@ -153,7 +167,8 @@ export function PreviewBox({ running }: { running: boolean }) {
       const inView =
         r.top - EDGE >= bar && r.bottom + EDGE <= window.innerHeight && r.width > 1 && r.height > 1
       const bg = bgOf(box.closest('[data-stage-bg]'))
-      return inView && !covered(r)
+      const holes = inView ? overPreview(r) : null
+      return holes
         ? {
             x: r.left,
             y: r.top,
@@ -161,6 +176,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             h: r.height,
             vh: window.innerHeight,
             ...(bg === undefined ? {} : { bg }),
+            ...(holes.length ? { holes } : {}),
           }
         : null
     }
@@ -173,7 +189,8 @@ export function PreviewBox({ running }: { running: boolean }) {
       const bg = bgOf(stage)
       const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
       const inView = s.top >= bar && s.bottom <= window.innerHeight && c.width > 1 && c.height > 1
-      return inView && !covered(s, 0)
+      const holes = inView ? overPreview(s, 0) : null
+      return holes
         ? {
             x: s.left,
             y: s.top,
@@ -182,20 +199,31 @@ export function PreviewBox({ running }: { running: boolean }) {
             vh: window.innerHeight,
             canvas: { x: c.left - s.left, y: c.top - s.top, w: c.width, h: c.height },
             ...(bg === undefined ? {} : { bg }),
+            ...(holes.length ? { holes } : {}),
           }
         : null
     }
+    let again = 0
+    let alive = true
     const send = () => {
       raf = 0
+      if (!alive) return
       const rect = studio ? place(el) : placeStage(stageRef.current, el)
       const program = studio ? place(programRef.current) : null
+      // While a menu or panel is open, look again shortly: one sliding in or away changes no
+      // attribute the observers below see.
+      window.clearTimeout(again)
+      if (document.querySelector(OVER)) again = window.setTimeout(schedule, 120)
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, window.innerHeight])
       if (key === last) return
       last = key
       void api.preview(rect, program).catch(() => {
-        // Not placed: the next change (or the same one) tries again.
+        // Not placed: try again shortly, and on the next change.
+        if (!alive) return
         if (last === key) last = ''
+        window.clearTimeout(again)
+        again = window.setTimeout(schedule, 500)
       })
     }
     const schedule = () => {
@@ -222,7 +250,9 @@ export function PreviewBox({ running }: { running: boolean }) {
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     window.addEventListener('resize', schedule)
     return () => {
+      alive = false
       cancelAnimationFrame(raf)
+      window.clearTimeout(again)
       ro.disconnect()
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })

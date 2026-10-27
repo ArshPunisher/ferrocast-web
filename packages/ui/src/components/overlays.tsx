@@ -108,6 +108,8 @@ export function Dialog({
           )}
         >
           <motion.div
+            // The Studio's live picture leaves itself out under this panel.
+            data-over-preview
             initial={reduce ? false : { opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
@@ -200,6 +202,8 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
       {open && (
         <div className="pointer-events-none flex h-full w-full justify-end">
           <motion.div
+            // The Studio's live picture leaves itself out under this panel.
+            data-over-preview
             initial={reduce ? false : { x: 32, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
@@ -331,6 +335,8 @@ export function Toaster() {
       <AnimatePresence initial={false}>
         {list.map((t) => (
           <motion.div
+            // The Studio's live picture leaves itself out under this panel.
+            data-over-preview
             key={t.key ?? t.id}
             layout={!reduce}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.97 }}

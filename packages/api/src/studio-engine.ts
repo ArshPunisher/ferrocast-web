@@ -562,6 +562,9 @@ export interface PreviewRect {
   canvas?: { x: number; y: number; w: number; h: number }
   /** The page's colour round the canvas (0xRRGGBB), so the app's stage matches the theme. */
   bg?: number
+  /** Where the page's menus and panels lie over the box (CSS pixels from its top-left), at
+   * most 16: the app leaves its picture out there so they show, instead of hiding it all. */
+  holes?: { x: number; y: number; w: number; h: number }[]
 }
 
 export function studioEngineApi(c: FerroClient) {

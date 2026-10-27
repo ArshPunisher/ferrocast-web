@@ -5,7 +5,7 @@ import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
-import { historyMenu, tbarEnd } from './preview'
+import { historyMenu, overPreview, tbarEnd } from './preview'
 import { balanceLabel } from './advanced-audio'
 import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
@@ -371,5 +371,50 @@ describe('set up for me', () => {
   it('keeps Kick under 8 Mbps and never sends bigger than the canvas', () => {
     const r = recommend({ upload_kbps: 100000, platforms: ['kick'], fps: 30, canvas: [1280, 720] })
     expect(r).toMatchObject({ video_kbps: 8000, scale: null, fps: 30 })
+  })
+})
+
+describe('what lies over the preview', () => {
+  const place = (el: HTMLElement, x: number, y: number, w: number, h: number) => {
+    el.getBoundingClientRect = () => new DOMRect(x, y, w, h)
+    document.body.append(el)
+    return el
+  }
+  it('menus and panels become holes from the box, the rest of it still shows', () => {
+    document.body.innerHTML = ''
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    place(menu, 300, 150, 200, 400)
+    const panel = document.createElement('aside')
+    panel.dataset.overPreview = ''
+    place(panel, 900, 0, 440, 800)
+    const away = document.createElement('div')
+    away.setAttribute('role', 'listbox')
+    place(away, 0, 700, 50, 50)
+    expect(overPreview(new DOMRect(100, 100, 1000, 500), 0)).toEqual([
+      { x: 200, y: 50, w: 200, h: 400 },
+      { x: 800, y: -100, w: 440, h: 800 },
+    ])
+  })
+  it('a modal dialog counts by its panel, not its full-window box', () => {
+    document.body.innerHTML = ''
+    const dialog = document.createElement('dialog')
+    dialog.dataset.overPreview = ''
+    place(dialog, 0, 0, 2000, 1200)
+    expect(overPreview(new DOMRect(100, 100, 1000, 500), 0)).toEqual([])
+  })
+  it('nothing over it: no holes; a panel being dragged or too many: hidden', () => {
+    document.body.innerHTML = ''
+    expect(overPreview(new DOMRect(0, 0, 100, 100))).toEqual([])
+    for (let i = 0; i < 17; i++) {
+      const m = document.createElement('div')
+      m.setAttribute('role', 'menu')
+      place(m, i, i, 10, 10)
+    }
+    expect(overPreview(new DOMRect(0, 0, 100, 100))).toBeNull()
+    document.body.innerHTML = ''
+    document.body.dataset.dockDrag = '1'
+    expect(overPreview(new DOMRect(0, 0, 100, 100))).toBeNull()
+    delete document.body.dataset.dockDrag
   })
 })
