@@ -1,7 +1,7 @@
 // The Scenes panel: click one to put it on air (through the transition), double-click to
 // rename; add, copy, move up or down, remove.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowsLeftRight,
   Broadcast,
@@ -29,6 +29,7 @@ import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { ImportObsDialog } from './import-obs'
 import { TRANSITIONS } from './preview'
+import { pretty } from './settings'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 
 /** A name not used yet: "Scene 2", "Scene 3"… */
@@ -59,6 +60,42 @@ function useGrid(): [boolean, (on: boolean) => void] {
   return [grid, set]
 }
 
+/** How often each scene's picture in the grid is drawn again. */
+const THUMB_MS = 2500
+
+/**
+ * Each scene's picture for the grid (PNG data URLs), drawn again every few seconds while the
+ * grid is on screen and the window is visible, one scene at a time, as OBS's multiview.
+ * Only in the app: from a phone they'd go through the relay.
+ */
+function useSceneThumbs(names: string[], on: boolean): Record<string, string> {
+  const { api } = useDesk()
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const key = names.join('\n')
+  useEffect(() => {
+    if (!on || !inDesktopApp() || !key) return
+    let alive = true
+    let timer = 0
+    const list = key.split('\n')
+    const round = async () => {
+      if (document.visibilityState === 'visible') {
+        for (const name of list) {
+          if (!alive) return
+          const t = await api.thumbnail(name, 256).catch(() => null)
+          if (alive && t) setThumbs((m) => (m[name] === t.image ? m : { ...m, [name]: t.image }))
+        }
+      }
+      if (alive) timer = window.setTimeout(() => void round(), THUMB_MS)
+    }
+    void round()
+    return () => {
+      alive = false
+      window.clearTimeout(timer)
+    }
+  }, [api, on, key])
+  return thumbs
+}
+
 export function ScenesDock() {
   const desk = useDesk()
   const { api, scenes, refresh, edit } = desk
@@ -69,6 +106,8 @@ export function ScenesDock() {
   const [importing, setImporting] = useState(false)
   const [grid, setGrid] = useGrid()
   const list = scenes.data?.scenes
+  const thumbs = useSceneThumbs(list?.map((s) => s.name) ?? [], grid)
+  const keys = desk.prefs.data?.hotkeys ?? {}
   const studio = !!scenes.data?.preview
   const current = scenes.data?.current ?? ''
   const names = list?.map((s) => s.name) ?? []
@@ -295,7 +334,7 @@ export function ScenesDock() {
           <ul
             className={cx(
               grid
-                ? 'grid auto-rows-[84px] grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-1.5'
+                ? 'grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-1.5'
                 : 'flex flex-col gap-px',
             )}
             aria-label={
@@ -337,47 +376,61 @@ export function ScenesDock() {
                     className={cx(
                       'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
                       grid
-                        ? 'flex h-full flex-col justify-between gap-1.5 overflow-hidden rounded-[11px] border border-line bg-surface-2 p-2.5 text-[14px] hover:border-line-strong active:scale-[0.98]'
+                        ? 'grid gap-1 rounded-[10px] border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
                         : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[14.5px] hover:bg-surface-2',
-                      s.current &&
-                        (grid
-                          ? 'border-danger bg-danger-soft shadow-[inset_0_0_0_1px_var(--fc-danger)] hover:border-danger'
-                          : 'bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-accent-line)] hover:bg-accent-soft'),
-                      // Studio Mode's preview: the accent ring (on air keeps its red).
-                      s.preview &&
+                      // What's picked: on air, or Studio Mode's preview being edited.
+                      (studio ? s.preview : s.current) && 'fc-picked border-transparent',
+                      // Studio Mode's preview in the list: the accent ring (on air keeps its red).
+                      !grid &&
+                        s.preview &&
                         !s.current &&
-                        'border-accent-text shadow-[inset_0_0_0_1.5px_var(--fc-accent-text)]',
+                        'shadow-[inset_0_0_0_1.5px_var(--fc-accent-text)]',
                     )}
                   >
                     {grid ? (
                       <>
-                        <span className="flex items-center justify-between gap-2">
-                          <KindTile
-                            kind="scene"
-                            size={24}
-                            tone={s.current ? 'var(--fc-danger)' : undefined}
-                          />
-                          {s.current ? (
-                            <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-danger">
-                              <span
-                                aria-hidden
-                                className="size-[7px] rounded-full bg-danger-fill"
-                              />
-                              On air
-                            </span>
-                          ) : s.preview ? (
-                            <span className="text-[11.5px] font-bold text-accent-text">
-                              Preview
-                            </span>
+                        {/* The scene's picture, as OBS's multiview: red ring and LIVE on air,
+                            Arc and PREVIEW for Studio Mode's preview. */}
+                        <span
+                          className={cx(
+                            'relative block aspect-video overflow-hidden rounded-[7px] bg-[#0a0b0d]',
+                            s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
+                            s.preview &&
+                              !s.current &&
+                              'shadow-[inset_0_0_0_2px_var(--fc-accent-text)]',
+                          )}
+                        >
+                          {thumbs[s.name] ? (
+                            <img
+                              src={thumbs[s.name]}
+                              alt=""
+                              className="size-full object-cover"
+                              draggable={false}
+                            />
                           ) : (
-                            s.items > 0 && (
-                              <span className="font-mono text-[12px] font-semibold text-text-3 tabular-nums">
-                                {s.items}
-                              </span>
-                            )
+                            <span className="grid size-full place-items-center">
+                              <KindTile kind="scene" size={26} />
+                            </span>
+                          )}
+                          {(s.current || s.preview) && (
+                            <span
+                              className={cx(
+                                'absolute top-1.5 left-1.5 rounded-[4px] px-1.5 py-[3px] font-mono text-[10px] leading-none font-extrabold tracking-[0.06em] text-white',
+                                s.current ? 'bg-[#d61f35]' : 'bg-[#0a6f8f]',
+                              )}
+                            >
+                              {s.current ? 'LIVE' : 'PREVIEW'}
+                            </span>
                           )}
                         </span>
-                        <span className="line-clamp-2 leading-[1.25] break-words">{s.name}</span>
+                        <span className="flex min-w-0 items-center gap-1.5 px-1 pb-0.5">
+                          <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                          {keys[`scene:${s.name}`] && (
+                            <kbd className="shrink-0 rounded-[5px] border border-current/25 px-1 py-px font-mono text-[11px] font-bold opacity-80">
+                              {pretty(keys[`scene:${s.name}`] as string)}
+                            </kbd>
+                          )}
+                        </span>
                       </>
                     ) : (
                       <>
