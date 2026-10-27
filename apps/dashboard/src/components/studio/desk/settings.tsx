@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  CheckCircle,
   Broadcast,
   GearSix,
   Keyboard,
@@ -63,7 +64,7 @@ export function SettingsDialog({
   start?: Page | undefined
 }) {
   return (
-    <Dialog open={open} onClose={onClose} size="lg" title="Studio settings">
+    <Dialog open={open} onClose={onClose} size="wide" flush title="Studio settings">
       {open && <Settings start={start ?? 'stream'} onClose={onClose} />}
     </Dialog>
   )
@@ -79,8 +80,12 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     if (loaded.data && !draft) setDraft(loaded.data)
   }, [loaded.data, draft])
   if (loaded.error && !loaded.data)
-    return <LoadError error={loaded.error} onRetry={loaded.reload} />
-  if (!draft || !loaded.data) return <Skeleton className="h-96" />
+    return (
+      <div className="p-6">
+        <LoadError error={loaded.error} onRetry={loaded.reload} />
+      </div>
+    )
+  if (!draft || !loaded.data) return <Skeleton className="m-6 h-96" />
   const set = (patch: Partial<StudioSettings>) => setDraft((d) => (d ? { ...d, ...patch } : d))
   const changed = JSON.stringify(draft) !== JSON.stringify(loaded.data)
   const save = async () => {
@@ -102,35 +107,44 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
       setSaving(false)
     }
   }
+  const here = PAGES.find((p) => p.id === page)
   return (
-    <div className="-mx-1 flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:grid sm:grid-cols-[190px_minmax(0,1fr)]">
-        <nav aria-label="Settings" className="flex gap-1 overflow-x-auto sm:flex-col">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-line">
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+        {/* The pages: a side list like the system's settings (a strip on phones). */}
+        <nav
+          aria-label="Settings"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-surface-2 p-2 sm:w-[220px] sm:flex-col sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-3"
+        >
           {PAGES.map((p) => {
             const Icon = p.icon
+            const on = page === p.id
             return (
               <button
                 key={p.id}
                 type="button"
-                aria-current={page === p.id ? 'page' : undefined}
+                aria-current={on ? 'page' : undefined}
                 onClick={() => setPage(p.id)}
                 className={cx(
-                  'flex h-9 shrink-0 items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[14.5px] whitespace-nowrap hover:bg-surface-2',
-                  page === p.id &&
-                    'bg-accent-soft font-semibold text-accent-text hover:bg-accent-soft',
+                  'flex h-10 shrink-0 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] font-semibold whitespace-nowrap transition-colors',
+                  on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
                 )}
               >
-                <Icon
-                  size={17}
-                  aria-hidden
-                  className={page === p.id ? 'text-accent-text' : 'text-text-3'}
-                />
+                <Icon size={18} weight={on ? 'fill' : 'regular'} aria-hidden />
                 {p.label}
               </button>
             )
           })}
         </nav>
-        <div className="flex min-h-[420px] min-w-0 flex-col gap-5">
+        <div
+          key={page}
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
+        >
+          {here && (
+            <h3 className="m-0 hidden font-display text-[22px] font-extrabold tracking-tight sm:block">
+              {here.label}
+            </h3>
+          )}
           {page === 'stream' && <StreamPage s={draft} set={set} />}
           {page === 'audio' && <AudioPage s={draft} set={set} />}
           {page === 'picture' && <PicturePage s={draft} set={set} />}
@@ -140,12 +154,15 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
           {page === 'advanced' && <AdvancedPage s={draft} set={set} />}
         </div>
       </div>
-      <div className="flex items-center gap-2 border-t border-line pt-4">
-        {changed && (
-          <Button variant="ghost" onClick={() => setDraft(loaded.data)}>
-            Undo changes
-          </Button>
-        )}
+      <div className="flex items-center gap-2 border-t border-line bg-surface-2 px-5 py-3 sm:px-6">
+        {changed ? (
+          <>
+            <span className="text-[14px] font-semibold text-warn">Not saved yet</span>
+            <Button variant="ghost" onClick={() => setDraft(loaded.data)}>
+              Undo changes
+            </Button>
+          </>
+        ) : null}
         <span className="flex-1" />
         <Button variant="ghost" onClick={onClose}>
           Close
@@ -192,11 +209,17 @@ function Choice({
       aria-pressed={on}
       onClick={onPick}
       className={cx(
-        'relative flex min-w-0 flex-col items-start gap-0.5 rounded-control border border-line-strong bg-surface-2 px-3.5 py-3 text-left transition-colors hover:border-text-3',
-        on && 'border-arc bg-accent-soft shadow-[inset_0_0_0_1px_var(--fc-arc)] hover:border-arc',
+        'relative flex min-w-0 flex-col items-start gap-0.5 rounded-control border px-3.5 py-3 text-left transition-colors',
+        // Picked: the same solid fill as every other pick (owner, 27 Oct), with a tick.
+        on
+          ? 'fc-picked border-transparent'
+          : 'border-line-strong bg-surface-2 hover:border-text-3 hover:bg-surface-3',
       )}
     >
-      <b className="font-display text-[16px]">{title}</b>
+      {on && (
+        <CheckCircle size={18} weight="fill" aria-hidden className="absolute top-2.5 right-2.5" />
+      )}
+      <b className="pr-6 font-display text-[16px]">{title}</b>
       {sub && <span className="font-mono text-[13.5px] text-text-2 tabular-nums">{sub}</span>}
       {note && <span className="text-[13.5px] text-text-3">{note}</span>}
     </button>
@@ -266,7 +289,8 @@ function NumberBox({
           else setText(String(value))
         }}
       />
-      {unit && <span className="text-[14px] text-text-3">{unit}</span>}
+      {/* A steady width, so boxes with different units line up. */}
+      {unit && <span className="w-10 shrink-0 text-[14px] text-text-3">{unit}</span>}
     </span>
   )
 }
@@ -1154,7 +1178,7 @@ function RecordPage({ s, set }: PageProps) {
 }
 
 /** "CmdOrCtrl+Shift+KeyL" → "⌘⇧L". */
-function pretty(keys: string): string {
+export function pretty(keys: string): string {
   const sym: Record<string, string> = {
     Cmd: '⌘',
     Super: '⌘',
@@ -1347,7 +1371,7 @@ function KeysPage({ s, set }: PageProps) {
   return (
     <>
       <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held; push to mute is the other way round. On a Mac keyboard, hold fn with F1 to F12.">
-        Shortcuts
+        How they work
       </Heading>
       <Input
         type="search"
@@ -1503,6 +1527,10 @@ function GeneralPage({ s, set }: PageProps) {
 
 function AdvancedPage({ s, set }: PageProps) {
   const [logOpen, setLogOpen] = useState(false)
+  const { api } = useDesk()
+  // A choice only on a Mac, where the engine reports which way it draws.
+  const engine = useResource(() => api.status(), [api])
+  const mac = engine.data?.renderer === 'opengl' || engine.data?.renderer === 'metal'
   return (
     <>
       <Heading info="What the app and OBS's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
@@ -1516,6 +1544,25 @@ function AdvancedPage({ s, set }: PageProps) {
         </Row>
       </div>
       <LogDialog open={logOpen} onClose={() => setLogOpen(false)} />
+      {mac && (
+        <>
+          <Heading>Drawing</Heading>
+          <div className="flex flex-col">
+            <Row
+              label="Smooth window resizing"
+              sub="Draws with Metal"
+              info="Metal is the Mac's newer way to draw, so the picture follows the window without a dark edge while you resize it. OBS still starts with OpenGL. Applies after a restart."
+            >
+              <Switch
+                label="Smooth window resizing"
+                hideLabel
+                checked={s.renderer === 'metal'}
+                onChange={(on) => set({ renderer: on ? 'metal' : 'opengl' })}
+              />
+            </Row>
+          </div>
+        </>
+      )}
       <Heading>If the connection drops</Heading>
       <div className="flex flex-col">
         <Row label="Reconnect by itself">

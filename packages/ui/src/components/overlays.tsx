@@ -11,7 +11,10 @@ export interface DialogProps {
   children?: ReactNode
   footer?: ReactNode
   /** `xl`: most of the screen (a big picker), its body filling the height. */
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  /** `wide`: a settings window (wide, a steady height so pages don't jump). */
+  size?: 'sm' | 'md' | 'lg' | 'wide' | 'xl'
+  /** The content lays itself out edge to edge and scrolls its own parts. */
+  flush?: boolean
   /** Bottom sheet on phones, centred card above 640 px. */
   sheetOnMobile?: boolean
 }
@@ -53,6 +56,7 @@ export function Dialog({
   children,
   footer,
   size = 'md',
+  flush = false,
   sheetOnMobile = true,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -84,9 +88,11 @@ export function Dialog({
       ? 'sm:max-w-md'
       : size === 'lg'
         ? 'sm:max-w-3xl'
-        : size === 'xl'
-          ? 'sm:max-w-[min(1280px,92vw)] sm:h-[min(860px,88dvh)]'
-          : 'sm:max-w-xl'
+        : size === 'wide'
+          ? 'sm:max-w-[min(1080px,94vw)] sm:h-[min(780px,90dvh)]'
+          : size === 'xl'
+            ? 'sm:max-w-[min(1280px,92vw)] sm:h-[min(860px,88dvh)]'
+            : 'sm:max-w-xl'
   return (
     <dialog
       ref={ref}
@@ -137,11 +143,14 @@ export function Dialog({
                 <X size={18} />
               </button>
             </div>
-            {children && (
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 sm:px-6">
-                {children}
-              </div>
-            )}
+            {children &&
+              (flush ? (
+                <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
+              ) : (
+                <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 sm:px-6">
+                  {children}
+                </div>
+              ))}
             {footer && (
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2 px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6">
                 {footer}
@@ -225,7 +234,7 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
             {tools && (
               <div className="flex-none border-b border-line px-5 py-3.5 sm:px-6">{tools}</div>
             )}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
               {children}
             </div>
             {footer && (

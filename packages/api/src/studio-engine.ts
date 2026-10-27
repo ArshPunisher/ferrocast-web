@@ -423,6 +423,8 @@ export interface StudioSettings {
   true_peak?: boolean
   /** OBS's Low Latency Audio Buffering (after a restart). */
   low_latency_audio?: boolean
+  /** How the picture is drawn on a Mac: OBS's default OpenGL, or Metal (smooth resizing). After a restart. */
+  renderer?: 'opengl' | 'metal'
   /** Multiviews: what's on air above, below, left or right of the scenes, or scenes only. */
   multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
   multiview_labels?: boolean
@@ -564,7 +566,16 @@ export interface PreviewRect {
   bg?: number
   /** Where the page's menus and panels lie over the box (CSS pixels from its top-left), at
    * most 16: the app leaves its picture out there so they show, instead of hiding it all. */
-  holes?: { x: number; y: number; w: number; h: number }[]
+  /** How the canvas is fitted in the box (padding in points, zoom), for following resizes. */
+  fit?: { pad: number; zoom: number }
+  /** Menus and panels over the box, with their corner radius (`r`). */
+  holes?: { x: number; y: number; w: number; h: number; r?: number }[]
+  /** How much of the picture shows, 0 to 1 (missing: all): dimmed under a dialog's
+   * backdrop, hidden while the window is resized. */
+  opacity?: number
+  /** A dark layer the app draws over the picture, 0 to 1: a dialog's backdrop dims it as it
+   * dims the page round it. */
+  shade?: number
 }
 
 export function studioEngineApi(c: FerroClient) {
@@ -893,6 +904,13 @@ export function studioEngineApi(c: FerroClient) {
       c.request<EngineItem>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
         group: name,
       }),
+    /** A small picture of a scene as it looks now, `w` pixels wide (64 to 640) → a PNG data
+     * URL (the Scenes grid's tiles, as OBS's multiview). */
+    thumbnail: (scene: string, w = 256) =>
+      c.request<{ image: string }>(
+        'GET',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/thumbnail?w=${w}`,
+      ),
     /** A new group holding these sources of the scene, each where it is on screen (OBS's
      * Group Selected Items) → the group. */
     groupItems: (scene: string, ids: number[], name: string) =>
