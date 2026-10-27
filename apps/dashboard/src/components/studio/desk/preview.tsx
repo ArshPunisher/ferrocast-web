@@ -160,6 +160,10 @@ export function PreviewBox({ running }: { running: boolean }) {
   const programRef = useRef<HTMLDivElement>(null)
   const desktop = inDesktopApp()
   const [pv] = usePreviewView()
+  // The scenes shown, for the still during a window resize (read there, not a reason to
+  // place the picture again).
+  const shown = useRef({ current: '', preview: '' })
+  shown.current = { current: scenes.data?.current ?? '', preview: scenes.data?.preview ?? '' }
   useEffect(() => {
     const el = ref.current
     if (!running || !desktop || !el) return
@@ -204,9 +208,6 @@ export function PreviewBox({ running }: { running: boolean }) {
             h: s.height,
             vh: window.innerHeight,
             canvas: { x: c.left - s.left, y: c.top - s.top, w: c.width, h: c.height },
-            // The rule the stage fits the canvas by (its padding, the zoom), so the app can
-            // follow a window resize itself before the page lays out again.
-            fit: { pad: parseFloat(getComputedStyle(stage).paddingTop) || 0, zoom: pv.zoom },
             ...(bg === undefined ? {} : { bg }),
             ...(holes.length ? { holes } : {}),
           }
@@ -214,12 +215,51 @@ export function PreviewBox({ running }: { running: boolean }) {
     }
     let again = 0
     let alive = true
-    // While the window is being resized the page lays out a frame or two after AppKit has
-    // resized the window, so boxes sent then would trail it and the picture would stutter.
-    // The app follows the resize itself (the stage keeps its distance from the window's edges
-    // and the canvas is fitted by the same rule as here); the page only says where things
-    // ended up once the resize settles.
+    // Resizing the window: the web page lays out and paints a beat after the window itself,
+    // and nothing native can follow what it paints (the owner's recording: a picture that
+    // follows the window spills over the panels while the page catches up; one that trails
+    // the page stutters; a hidden one leaves a black box). So for the resize the page shows a
+    // still of the picture in the canvas's own box, part of the page and so always in step
+    // with it, and the live picture comes back where things ended up once it settles.
     let resizing = 0
+    let frozen = 0
+    let still: [PreviewRect | null, PreviewRect | null] = [null, null]
+    const boxes = () => [el, studio ? programRef.current : null] as const
+    const unfreeze = () => {
+      frozen = 0
+      for (const b of boxes()) if (b) b.style.backgroundImage = ''
+    }
+    const freeze = () => {
+      const token = (frozen = performance.now())
+      const names = studio
+        ? [shown.current.preview, shown.current.current]
+        : [shown.current.current, null]
+      const hide = () => {
+        // Only while still resizing: once it settled the live picture is placed again, and
+        // a still that came late must not hide it (CodeRabbit).
+        if (frozen !== token || !alive || performance.now() >= resizing) return
+        const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
+        last = JSON.stringify(['still', still])
+        void api.preview(off(still[0]), off(still[1])).catch(() => undefined)
+      }
+      void Promise.all(
+        boxes().map(async (b, i) => {
+          const name = names[i]
+          if (!b || !name) return
+          const w = Math.min(640, Math.max(64, Math.round(b.clientWidth * devicePixelRatio)))
+          const { image } = await api.thumbnail(name, w)
+          const img = new Image()
+          img.src = image
+          await img.decode()
+          if (frozen !== token) return
+          b.style.backgroundImage = `url("${image}")`
+          b.style.backgroundSize = '100% 100%'
+        }),
+      )
+        .catch(() => undefined)
+        // Hidden once the still is painted (or without one, if it couldn't be made).
+        .then(() => requestAnimationFrame(hide))
+    }
     const send = () => {
       raf = 0
       if (!alive) return
@@ -227,7 +267,6 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (performance.now() < resizing) {
         again = window.setTimeout(
           () => {
-            // Sent even if it looks the same as before: the app moved it meanwhile.
             last = ''
             schedule()
           },
@@ -248,15 +287,26 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (document.querySelector(OVER)) schedule()
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, window.innerHeight])
-      if (key === last) return
+      still = [rect, program]
+      if (key === last) {
+        if (frozen) unfreeze()
+        return
+      }
       last = key
-      void api.preview(rect, program).catch(() => {
-        // Not placed: try again shortly, and on the next change.
-        if (!alive) return
-        if (last === key) last = ''
-        window.clearTimeout(again)
-        again = window.setTimeout(schedule, 500)
-      })
+      const thawing = frozen
+      void api
+        .preview(rect, program)
+        .then(() => {
+          // The live picture is back in place: the still goes a moment later, under it.
+          if (thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
+        })
+        .catch(() => {
+          // Not placed: try again shortly, and on the next change.
+          if (!alive) return
+          if (last === key) last = ''
+          window.clearTimeout(again)
+          again = window.setTimeout(schedule, 500)
+        })
     }
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(send)
@@ -281,6 +331,7 @@ export function PreviewBox({ running }: { running: boolean }) {
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     const onResize = () => {
+      if (!frozen) freeze()
       resizing = performance.now() + 180
       schedule()
     }
@@ -293,9 +344,10 @@ export function PreviewBox({ running }: { running: boolean }) {
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener('resize', onResize)
+      unfreeze()
       void api.preview(null, null).catch(() => undefined)
     }
-  }, [api, running, desktop, studio, pv.zoom])
+  }, [api, running, desktop, studio])
   const editing = useStageEdit(ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's

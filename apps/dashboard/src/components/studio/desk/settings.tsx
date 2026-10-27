@@ -1527,10 +1527,6 @@ function GeneralPage({ s, set }: PageProps) {
 
 function AdvancedPage({ s, set }: PageProps) {
   const [logOpen, setLogOpen] = useState(false)
-  const { api } = useDesk()
-  // A choice only on a Mac, where the engine reports which way it draws.
-  const engine = useResource(() => api.status(), [api])
-  const mac = engine.data?.renderer === 'opengl' || engine.data?.renderer === 'metal'
   return (
     <>
       <Heading info="What the app and OBS's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
@@ -1544,25 +1540,6 @@ function AdvancedPage({ s, set }: PageProps) {
         </Row>
       </div>
       <LogDialog open={logOpen} onClose={() => setLogOpen(false)} />
-      {mac && (
-        <>
-          <Heading>Drawing</Heading>
-          <div className="flex flex-col">
-            <Row
-              label="Smooth window resizing"
-              sub="Draws with Metal"
-              info="Metal is the Mac's newer way to draw, so the picture follows the window without a dark edge while you resize it. OBS still starts with OpenGL. Applies after a restart."
-            >
-              <Switch
-                label="Smooth window resizing"
-                hideLabel
-                checked={s.renderer === 'metal'}
-                onChange={(on) => set({ renderer: on ? 'metal' : 'opengl' })}
-              />
-            </Row>
-          </div>
-        </>
-      )}
       <Heading>If the connection drops</Heading>
       <div className="flex flex-col">
         <Row label="Reconnect by itself">

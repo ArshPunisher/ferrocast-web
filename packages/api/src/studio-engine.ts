@@ -423,8 +423,6 @@ export interface StudioSettings {
   true_peak?: boolean
   /** OBS's Low Latency Audio Buffering (after a restart). */
   low_latency_audio?: boolean
-  /** How the picture is drawn on a Mac: OBS's default OpenGL, or Metal (smooth resizing). After a restart. */
-  renderer?: 'opengl' | 'metal'
   /** Multiviews: what's on air above, below, left or right of the scenes, or scenes only. */
   multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
   multiview_labels?: boolean
@@ -566,8 +564,6 @@ export interface PreviewRect {
   bg?: number
   /** Where the page's menus and panels lie over the box (CSS pixels from its top-left), at
    * most 16: the app leaves its picture out there so they show, instead of hiding it all. */
-  /** How the canvas is fitted in the box (padding in points, zoom), for following resizes. */
-  fit?: { pad: number; zoom: number }
   /** Menus and panels over the box, with their corner radius (`r`). */
   holes?: { x: number; y: number; w: number; h: number; r?: number }[]
   /** How much of the picture shows, 0 to 1 (missing: all): dimmed under a dialog's
