@@ -30,6 +30,10 @@ import { COMPANY } from '../data/company'
       stores your chat. <a href="#pro-data">Every item is listed below</a>.
     </li>
     <li>Payment details stay with the payment provider. We never see card or UPI details.</li>
+    <li>
+      Everything we keep is encrypted in transit and at rest.{' '}
+      <a href="#protection">How we protect your data</a>.
+    </li>
     <li>This website has no analytics, no tracking cookies and no third-party scripts.</li>
   </ul>
 
@@ -399,6 +403,63 @@ import { COMPANY } from '../data/company'
     browser, your light or dark theme choice, which never leaves your device. Our hosting provider
     may keep standard server logs (IP address, page, time) for security, for a short period.
   </p>
+
+  <h2 id="protection">How we protect your data</h2>
+  <p>
+    We protect personal and sensitive data, including the data we receive from Google, with these
+    measures:
+  </p>
+  <ul>
+    <li>
+      <strong>Encryption in transit.</strong> Every connection to our website, relay and dashboard
+      uses HTTPS (TLS 1.2 or newer), with HSTS so browsers never fall back to plain HTTP. The app
+      talks to Twitch, YouTube and Kick over HTTPS too.
+    </li>
+    <li>
+      <strong>Encryption at rest.</strong> Sign-in tokens (including Google and YouTube tokens) and
+      email addresses are encrypted with AES-256-GCM before they are saved on the relay. The
+      encryption key is kept apart from the database, so a copy of the database alone cannot be
+      read. The server’s disks are also encrypted by our hosting provider.
+    </li>
+    <li>
+      <strong>No passwords, only hashes.</strong> We never ask for or keep a password. Sign-in
+      links, codes, session tokens and phone sign-ins are stored only as one-way hashes, so they
+      cannot be turned back into a working sign-in.
+    </li>
+    <li>
+      <strong>Tokens on your computer.</strong> When the app runs YouTube from your computer, its
+      tokens stay in your system’s secure storage (Windows Credential Manager, the Linux keyring, or
+      on macOS a file only your user account can open). They never go into the app’s database,
+      exports, backups or logs.
+    </li>
+    <li>
+      <strong>Limited access.</strong> The relay has no open ports to the internet: it is reached
+      only through a Cloudflare Tunnel. Only the ClearCraft Labs owner and our automated deploy can
+      reach the server, both with key-based sign-in. Updates are built and checked automatically
+      before they are deployed.
+    </li>
+    <li>
+      <strong>Least data.</strong> Google sign-in gives us only your email address, name and profile
+      picture. YouTube data is used only for the features you turn on, chat is processed in memory
+      and never stored, and cloud tokens are revoked at Google when you disconnect.
+    </li>
+    <li>
+      <strong>Encrypted backups.</strong> The relay’s nightly backup is encrypted on the server
+      before it is copied to Cloudflare R2, which only ever holds encrypted names and contents. Old
+      backups are deleted after 30 days. Your own cloud backups are encrypted on your PC, and we
+      never have their key.
+    </li>
+    <li>
+      <strong>Logs without content.</strong> Technical logs never contain tokens, chat text, tip
+      messages or contact details, and are deleted after 14 days.
+    </li>
+    <li>
+      <strong>Deletion.</strong> Data is deleted on the schedules in this policy, or sooner when you
+      ask us (see <a href="#rights">Your rights</a>; billing records are kept as the law requires).
+      If we ever learn of a breach that affects your data, we will tell you and the authorities as
+      the law requires.
+    </li>
+  </ul>
 
   <h2>Sharing</h2>
   <p>
