@@ -8,23 +8,10 @@ import { studioEngineApi } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
-import { StatsDialog } from './stats-panel'
+import { StatsDialog, clock, droppedText } from './stats-panel'
 
 /** Its height (px): the sidebar, the page and the Studio's layout leave room for it. */
 export const STATUS_BAR_PX = 28
-
-export function clock(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  return [s / 3600, (s / 60) % 60, s % 60]
-    .map((n) => String(Math.floor(n)).padStart(2, '0'))
-    .join(':')
-}
-
-/** Dropped frames as OBS shows them: the count and its share of all sent. */
-export function droppedText(dropped: number, frames: number): string {
-  const pct = frames > 0 ? (dropped / frames) * 100 : 0
-  return `${dropped} (${pct.toFixed(1)}%)`
-}
 
 function Cell({
   label,
@@ -53,7 +40,8 @@ function Cell({
 export function StudioStatusBar() {
   const client = useClient()
   const api = useMemo(() => studioEngineApi(client), [client])
-  const { stats, kbps, since, at } = useEngineReading(api.stats)
+  const reading = useEngineReading(api.stats)
+  const { stats, kbps, since, at } = reading
   const [open, setOpen] = useState(false)
   const on = !!stats
   // The rest of the window leaves room for it while it shows.
@@ -119,7 +107,7 @@ export function StudioStatusBar() {
         </Cell>
         <Cell label="Upload">{kbps === null ? '0' : kbps.toLocaleString()} kb/s</Cell>
       </button>
-      <StatsDialog open={open} onClose={() => setOpen(false)} stats={stats} />
+      <StatsDialog open={open} onClose={() => setOpen(false)} reading={reading} />
     </footer>
   )
 }

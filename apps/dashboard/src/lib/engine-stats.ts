@@ -14,11 +14,22 @@ export interface EngineReading {
   since: number | null
   /** When it was read (ms). */
   at: number
+  /** The last minute of reads, oldest first: CPU (%) and time to draw a frame (ms). */
+  history: { cpu: number[]; frameMs: number[] }
 }
+
+/** How many reads the history keeps (one a second). */
+export const HISTORY = 60
 
 type Read = () => Promise<EngineStats>
 
-const EMPTY: EngineReading = { stats: null, kbps: null, since: null, at: 0 }
+const EMPTY: EngineReading = {
+  stats: null,
+  kbps: null,
+  since: null,
+  at: 0,
+  history: { cpu: [], frameMs: [] },
+}
 let reading: EngineReading = EMPTY
 let read: Read | null = null
 let timer = 0
@@ -47,7 +58,15 @@ async function tick() {
   else if (!st) kbps = null
   last = st ? { bytes: st.bytes, at: t } : null
   const since = st?.active ? (reading.since ?? t) : null
-  publish({ stats: v, kbps, since, at: t })
+  const keep = (a: number[], x: number | undefined) =>
+    x === undefined ? a : [...a.slice(-(HISTORY - 1)), x]
+  const history = v
+    ? {
+        cpu: keep(reading.history.cpu, v.engine.cpu),
+        frameMs: keep(reading.history.frameMs, v.engine.frame_ms),
+      }
+    : EMPTY.history
+  publish({ stats: v, kbps, since, at: t, history })
 }
 
 function start(r: Read) {
