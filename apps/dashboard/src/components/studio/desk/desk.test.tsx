@@ -11,6 +11,7 @@ import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
 import { asksFirst } from './desk'
+import { sourceFor } from './file-drop'
 import { levelOf, visibleLines } from './log-viewer'
 import { recommend } from './auto-config'
 
@@ -417,5 +418,26 @@ describe('what lies over the preview', () => {
     document.body.dataset.dockDrag = '1'
     expect(overPreview(new DOMRect(0, 0, 100, 100))).toBeNull()
     delete document.body.dataset.dockDrag
+  })
+})
+
+describe('files dropped on the Studio', () => {
+  it('pictures become Image sources, videos and sounds Media Sources, named after the file', () => {
+    expect(sourceFor('/Users/me/Pictures/Logo.PNG')).toEqual({
+      kind: 'image_source',
+      name: 'Logo',
+      settings: { file: '/Users/me/Pictures/Logo.PNG' },
+    })
+    expect(sourceFor('C:\\clips\\intro.final.mp4')).toEqual({
+      kind: 'ffmpeg_source',
+      name: 'intro.final',
+      settings: { local_file: 'C:\\clips\\intro.final.mp4', is_local_file: true },
+    })
+    expect(sourceFor('/a/song.flac')?.kind).toBe('ffmpeg_source')
+    expect(sourceFor('/a/anim.gif')?.kind).toBe('image_source')
+  })
+  it('other files make nothing', () => {
+    expect(sourceFor('/a/notes.txt')).toBeNull()
+    expect(sourceFor('/a/folder')).toBeNull()
   })
 })

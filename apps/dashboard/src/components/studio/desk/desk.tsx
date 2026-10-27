@@ -39,6 +39,7 @@ import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { AddSourceDialog } from './add-source'
+import { FileDrop } from './file-drop'
 import { DeskProvider, useDesk, useEngine, type Desk } from './common'
 import { GoLiveDock } from './golive-dock'
 import {
@@ -273,6 +274,7 @@ function Running({
         docks={docks}
       />
       <AddSourceDialog />
+      <FileDrop />
       <SettingsDialog
         open={settingsAt !== null}
         start={settingsAt ?? undefined}
