@@ -190,7 +190,8 @@ const page: PageMeta = {
     PerformanceNavigationTiming | undefined
   const fresh = !nav || nav.type === 'navigate'
   heading?.focus({ preventScroll: true })
-  if (file && file.startsWith('https://github.com/') && fresh) {
+  // Only the site's own download mirror (/dl/…), never another address.
+  if (file && /^\/dl\/v[^/]+\/[^/]+$/.test(file) && fresh) {
     // A beat for the page to paint first, so the browser's download prompt lands on it.
     window.setTimeout(() => {
       location.assign(file)

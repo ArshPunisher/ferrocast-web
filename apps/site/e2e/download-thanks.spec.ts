@@ -3,10 +3,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 // Clicking a download leads to that file's thank-you page, which starts the real file's
 // download itself and shows how to install it. The real release files are never fetched:
-// GitHub's download URLs answer with a tiny attachment.
+// the mirror's download URLs answer with a tiny attachment.
 
 const fakeDownloads = (page: Page) =>
-  page.context().route('https://github.com/**/releases/download/**', (route) =>
+  page.context().route('**/dl/**', (route) =>
     route.fulfill({
       status: 200,
       headers: {
@@ -61,14 +61,14 @@ test.describe('download thank-you page', () => {
       const link = page.locator(c.link)
       test.skip((await link.count()) === 0, `no ${c.name} file in the published release`)
       const file = await link.getAttribute('data-file')
-      expect(file).toMatch(/^https:\/\/github\.com\/.+\/releases\/download\//)
+      expect(file).toMatch(/^\/dl\/v[^/]+\/[^/]+$/)
       await expect(link).toHaveAttribute('href', `/download/thanks/${c.kind}/`)
 
       const download = page.waitForEvent('download')
       await link.click()
       await expect(page).toHaveURL(new RegExp(`/download/thanks/${c.kind}/$`))
       // The thank-you page starts the very file the button stood for.
-      expect((await download).url()).toBe(file)
+      expect(new URL((await download).url()).pathname).toBe(file)
 
       await expect(heading(page)).toBeVisible()
       await expect(heading(page)).toBeFocused()
@@ -112,7 +112,7 @@ test.describe('download thank-you page', () => {
     // "Download again" still does.
     const retry = page.waitForEvent('download')
     await page.getByRole('link', { name: 'Download again' }).click()
-    expect((await retry).url()).toBe(file)
+    expect(new URL((await retry).url()).pathname).toBe(file)
   })
 
   test('without JavaScript the page still thanks and starts the download', async ({ browser }) => {
@@ -126,7 +126,7 @@ test.describe('download thank-you page', () => {
     const download = page.waitForEvent('download')
     await link.click()
     await expect(heading(page)).toBeVisible()
-    expect((await download).url()).toBe(file)
+    expect(new URL((await download).url()).pathname).toBe(file)
     await context.close()
   })
 

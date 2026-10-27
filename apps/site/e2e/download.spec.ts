@@ -35,7 +35,7 @@ test.describe('download page', () => {
       for (const [href, file] of await downloads.evaluateAll((as) =>
         as.map((a) => [a.getAttribute('href'), a.getAttribute('data-file')]),
       )) {
-        expect(file).toMatch(new RegExp(`^${GH}/releases/download/${tag}`))
+        expect(file).toMatch(new RegExp(`^/dl/${tag}`))
         expect(href).toMatch(/^\/download\/thanks\/(mac|windows|appimage|deb|rpm)\/$/)
       }
     } else {

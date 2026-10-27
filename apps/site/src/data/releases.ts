@@ -55,6 +55,13 @@ const KINDS: { os: BetaOs; label: string; test: (n: string) => boolean }[] = [
 const releaseDownload = (u: unknown): u is string =>
   typeof u === 'string' && u.startsWith(`${COMPANY.github}/releases/download/`)
 
+/**
+ * The same file through the site's Cloudflare mirror (functions/dl): GitHub's downloads can
+ * crawl in some regions. Exported for tests.
+ */
+export const mirrored = (u: string): string =>
+  u.replace(`${COMPANY.github}/releases/download/`, '/dl/')
+
 /** Compares `v1.2.3-beta.4` style tags: numbers numerically, a release above its betas. */
 export function compareVersions(a: string, b: string): number {
   const parse = (t: string) => {
@@ -115,7 +122,7 @@ function pick(data: unknown, prerelease: boolean): BetaRelease | null {
       assets.push({
         os: k.os,
         label: k.label,
-        url: f.browser_download_url as string,
+        url: mirrored(f.browser_download_url as string),
         size: typeof f.size === 'number' ? f.size : 0,
       })
   }

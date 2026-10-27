@@ -10,6 +10,8 @@ test('every internal link and asset resolves', async ({ request }) => {
     for (const m of html.matchAll(/\s(?:href|src|poster|srcset)="([^"]+)"/g)) {
       const raw = m[1] ?? ''
       if (/^(https?:|mailto:|tel:|data:|#)/.test(raw)) continue
+      // Release downloads come from the Cloudflare function (functions/dl), not the build.
+      if (raw.startsWith('/dl/')) continue
       targets.add(raw.split('#')[0]?.split(' ')[0] ?? raw)
     }
   }
