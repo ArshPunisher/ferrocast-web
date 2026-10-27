@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MOVE, boxOf, cursorFor, drag, fit, gripAt, pick, type Frame } from './stage-edit'
+import { MOVE, boxOf, cropDrag, cursorFor, drag, fit, gripAt, pick, type Frame } from './stage-edit'
 
 const canvas = { width: 1920, height: 1080 }
 // A 400×300 box at (100, 50).
@@ -118,5 +118,42 @@ describe('dragging', () => {
 
   it('reads a box back as the engine takes it', () => {
     expect(boxOf(flipped)).toEqual({ x: 500, y: 50, w: 400, h: 300 })
+  })
+})
+
+describe('cropping with Alt (OBS)', () => {
+  // A 1000 x 500 source shown at half size: 500 x 250 on the canvas at (100, 100).
+  const f: Frame = [500, 0, 0, 250, 100, 100]
+  const none = { left: 0, top: 0, right: 0, bottom: 0 }
+  const size = { width: 1000, height: 500 }
+  it('each handle crops its own side, in source pixels', () => {
+    // Right handle 50 canvas pixels in: 100 source pixels off the right.
+    expect(cropDrag(f, { u: 1, v: 0.5 }, { x: -50, y: 0 }, none, size)).toEqual({
+      ...none,
+      right: 100,
+    })
+    // Top-left corner down and right: the left and top go.
+    expect(cropDrag(f, { u: 0, v: 0 }, { x: 25, y: 10 }, none, size)).toEqual({
+      left: 50,
+      top: 20,
+      right: 0,
+      bottom: 0,
+    })
+  })
+  it('dragging back out uncrops, never below nothing', () => {
+    const cut = { ...none, bottom: 100 }
+    // The source now shows 400 px high in 250 canvas px.
+    const g: Frame = [500, 0, 0, 200, 100, 100]
+    expect(cropDrag(g, { u: 0.5, v: 1 }, { x: 0, y: 25 }, cut, size).bottom).toBe(50)
+    expect(cropDrag(g, { u: 0.5, v: 1 }, { x: 0, y: 900 }, cut, size).bottom).toBe(0)
+  })
+  it('always leaves some picture, and moving does nothing', () => {
+    expect(cropDrag(f, { u: 1, v: 0.5 }, { x: -9999, y: 0 }, none, size).right).toBe(998)
+    expect(cropDrag(f, MOVE, { x: 40, y: 40 }, none, size)).toEqual(none)
+  })
+  it('works along a turned source too', () => {
+    // Turned a quarter: its width runs down the canvas.
+    const t: Frame = [0, 500, -250, 0, 400, 100]
+    expect(cropDrag(t, { u: 1, v: 0.5 }, { x: 0, y: -50 }, none, size).right).toBe(100)
   })
 })

@@ -704,6 +704,20 @@ export function studioEngineApi(c: FerroClient) {
         `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/box`,
         box,
       ),
+    /**
+     * Crops an item from the preview (OBS's Alt-drag on a handle): left, top, right, bottom in
+     * the source's own pixels; what's left stays where it is on screen → the item.
+     */
+    setItemCrop: (
+      scene: string,
+      id: number,
+      crop: { left: number; top: number; right: number; bottom: number; save?: boolean },
+    ) =>
+      c.request<EngineItem>(
+        'PUT',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/${id}/crop`,
+        crop,
+      ),
     transform: (scene: string, id: number) =>
       c.request<EngineTransform>(
         'GET',
@@ -765,9 +779,12 @@ export function studioEngineApi(c: FerroClient) {
     /** Every step Undo and Redo can take, newest first. */
     history: () =>
       c.request<{ undo: string[]; redo: string[] }>('GET', '/api/v1/studio/engine/history'),
-    /** Outlines an item in the preview, or nothing; with `frames`, every source of the scene
-     * gets a thin outline in its own colour too (`frameColor`). */
-    select: (pick: { scene: string; id: number | null; frames?: boolean } | null) =>
+    /** Outlines an item in the preview (and `also` these, picked with it), or nothing; with
+     * `frames`, every source of the scene gets a thin outline in its own colour too
+     * (`frameColor`). */
+    select: (
+      pick: { scene: string; id: number | null; frames?: boolean; also?: number[] } | null,
+    ) =>
       c.request<void>(
         'PUT',
         '/api/v1/studio/engine/preview/selection',
@@ -875,6 +892,13 @@ export function studioEngineApi(c: FerroClient) {
     addGroup: (scene: string, name: string) =>
       c.request<EngineItem>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
         group: name,
+      }),
+    /** A new group holding these sources of the scene, each where it is on screen (OBS's
+     * Group Selected Items) → the group. */
+    groupItems: (scene: string, ids: number[], name: string) =>
+      c.request<EngineItem>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/items`, {
+        group: name,
+        items: ids,
       }),
     /** A new, independent copy of a source on top of a scene (OBS's Paste (Duplicate)). */
     pasteCopy: (scene: string, name: string) =>

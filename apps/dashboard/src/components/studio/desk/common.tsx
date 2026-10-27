@@ -57,7 +57,13 @@ export interface Desk {
   /** Reads scenes, sources and sounds again after a change. */
   refresh: () => void
   selected: number | null
+  /** Picks one source (or none), dropping any others picked with it. */
   select: (id: number | null) => void
+  /** More sources picked with `selected` (⌘-click, Shift-click), as OBS's multi-select. */
+  also: number[]
+  /** ⌘-click: picks or unpicks `id` beside the others. Shift-click: picks every source in
+   * `order` from the picked one to `id`. */
+  pickMore: (id: number, how: 'toggle' | 'range', order?: number[]) => void
   /** The source whose settings are open. */
   editing: string | null
   edit: (name: string | null) => void

@@ -138,7 +138,34 @@ function Running({
   const prefs = useResource(() => api.studioSettings(), [api])
   // Projectors are the app's own windows: no displays to offer in a plain browser.
   const screens = useResource(() => (inDesktopApp() ? api.screens() : Promise.resolve([])), [api])
-  const [selected, select] = useState<number | null>(null)
+  const [picked, setPicked] = useState<{ id: number | null; also: number[] }>({
+    id: null,
+    also: [],
+  })
+  const selected = picked.id
+  const select = useCallback((id: number | null) => setPicked({ id, also: [] }), [])
+  const pickMore = useCallback(
+    (id: number, how: 'toggle' | 'range', order: number[] = []) =>
+      setPicked((p) => {
+        if (p.id === null) return { id, also: [] }
+        if (how === 'range') {
+          const a = order.indexOf(p.id)
+          const b = order.indexOf(id)
+          if (a < 0 || b < 0) return { id, also: [] }
+          const span = order.slice(Math.min(a, b), Math.max(a, b) + 1)
+          return { id: p.id, also: span.filter((x) => x !== p.id) }
+        }
+        if (id === p.id) {
+          // The main pick goes: the next one takes its place.
+          const [next = null, ...rest] = p.also
+          return { id: next, also: rest }
+        }
+        return p.also.includes(id)
+          ? { id: p.id, also: p.also.filter((x) => x !== id) }
+          : { id: p.id, also: [...p.also, id] }
+      }),
+    [],
+  )
   const [editing, edit] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)
@@ -157,7 +184,7 @@ function Running({
     reloadAudio()
   }, [reloadScenes, reloadItems, reloadAudio])
   // Another scene: nothing picked in it yet.
-  useEffect(() => select(null), [scene])
+  useEffect(() => select(null), [scene, select])
   // ⌘Z and ⇧⌘Z (Ctrl on Windows) undo and redo changes to sources, outside text fields.
   const { run: runUndo } = useAction()
   useEffect(() => {
@@ -191,6 +218,8 @@ function Running({
     refresh,
     selected,
     select,
+    also: picked.also,
+    pickMore,
     editing,
     edit,
     adding,

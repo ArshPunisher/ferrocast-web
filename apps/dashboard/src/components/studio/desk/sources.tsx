@@ -112,6 +112,7 @@ const BLEND_LABEL: Record<(typeof ENGINE_BLENDS)[number], string> = {
 export function SourcesDock() {
   const desk = useDesk()
   const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
+  const { also, pickMore } = desk
   const { busy, run } = useAction()
   const [closed, setClosed] = useState<Set<number>>(new Set())
   const [removing, setRemoving] = useState<EngineItem | null>(null)
@@ -507,8 +508,9 @@ export function SourcesDock() {
               icon: Plus,
               onSelect: () =>
                 grouping(async () => {
-                  const g = await api.addGroup(scene, freeName('Group'))
-                  await api.setGroup(scene, item.id, g.id)
+                  // Made around it, so it stays where it is (OBS's Group Selected Items).
+                  const g = await api.groupItems(scene, [item.id], freeName('Group'))
+                  select(g.id)
                 }),
             },
             ...(groups.length ? [{ sep: true as const }] : []),
@@ -534,6 +536,65 @@ export function SourcesDock() {
     { sep: true },
     { label: 'Remove', icon: Trash, danger: true, onSelect: () => setRemoving(item) },
   ]
+  // Several picked (⌘- or Shift-click): what OBS offers for a selection.
+  const manyMenu = (picked: EngineItem[]): MenuItem[] => {
+    const loose = picked.every((i) => !i.group && !parentOf(i.id))
+    const each = (key: string, what: (i: EngineItem) => EngineItemEdit) =>
+      withRefresh(key, () => Promise.all(picked.map((i) => api.editItem(scene, i.id, what(i)))))
+    const allHidden = picked.every((i) => !i.visible)
+    const allLocked = picked.every((i) => i.locked)
+    return [
+      {
+        label: 'Group selected items',
+        icon: Stack,
+        disabled: !loose,
+        onSelect: () =>
+          grouping(async () => {
+            const g = await api.groupItems(
+              scene,
+              picked.map((i) => i.id),
+              freeName('Group'),
+            )
+            select(g.id)
+          }, `${picked.length} sources grouped.`),
+      },
+      { sep: true },
+      {
+        label: allHidden ? 'Show all' : 'Hide all',
+        icon: allHidden ? Eye : EyeSlash,
+        onSelect: () => each('hide', () => (allHidden ? 'show' : 'hide')),
+      },
+      {
+        label: allLocked ? 'Unlock all' : 'Lock all',
+        icon: allLocked ? LockSimpleOpen : LockSimple,
+        onSelect: () => each('lock', () => (allLocked ? 'unlock' : 'lock')),
+      },
+      {
+        label: 'Transform',
+        icon: FrameCorners,
+        items: [
+          {
+            label: 'Fit to screen',
+            icon: ArrowsInSimple,
+            onSelect: () => each('fit', () => 'fit'),
+          },
+          { label: 'Centre', icon: Crosshair, onSelect: () => each('center', () => 'center') },
+          { sep: true },
+          {
+            label: 'Flip sideways',
+            icon: FlipHorizontal,
+            onSelect: () => each('flip', () => 'flip_h'),
+          },
+          {
+            label: 'Flip upside down',
+            icon: FlipVertical,
+            onSelect: () => each('flip', () => 'flip_v'),
+          },
+          { label: 'Reset', icon: ArrowsOutSimple, onSelect: () => each('reset', () => 'reset') },
+        ],
+      },
+    ]
+  }
   const emptyMenu: MenuItem[] = [
     { label: 'Add a source', icon: Plus, onSelect: () => setAdding('') },
     {
@@ -558,7 +619,7 @@ export function SourcesDock() {
 
   const row = (item: EngineItem, child = false) => {
     const isOpen = !closed.has(item.id)
-    const on = selected === item.id
+    const on = selected === item.id || also.includes(item.id)
     if (naming?.from === item.name)
       return (
         <form
@@ -600,6 +661,12 @@ export function SourcesDock() {
           if (justDragged.current) e.stopPropagation()
         }}
         onContextMenu={(e) => {
+          const many = [selected, ...also].filter((id): id is number => id !== null)
+          if (many.length > 1 && many.includes(item.id)) {
+            const picked = flat.filter((i) => many.includes(i.id))
+            open(e, `${picked.length} sources`, manyMenu(picked))
+            return
+          }
           select(item.id)
           desk.screens.reload()
           open(e, item.name, itemMenu(item))
@@ -646,7 +713,21 @@ export function SourcesDock() {
         <button
           type="button"
           aria-pressed={on}
-          onClick={() => select(on ? null : item.id)}
+          onClick={(e) => {
+            // ⌘-click (Ctrl on Windows) picks one more, Shift-click a run of them, as in OBS.
+            if (e.metaKey || e.ctrlKey) pickMore(item.id, 'toggle')
+            else if (e.shiftKey)
+              pickMore(
+                item.id,
+                'range',
+                // The rows on show: a folded group's sources aren't picked.
+                (list ?? []).flatMap((g) => [
+                  g.id,
+                  ...(closed.has(g.id) ? [] : g.children.map((c) => c.id)),
+                ]),
+              )
+            else select(on && also.length === 0 ? null : item.id)
+          }}
           onDoubleClick={() => edit(item.name)}
           onKeyDown={(e) => {
             if (e.key === 'F2') setNaming({ from: item.name, value: item.name })

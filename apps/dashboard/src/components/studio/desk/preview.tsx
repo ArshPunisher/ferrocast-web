@@ -48,11 +48,13 @@ import {
   boxOf,
   cursorFor,
   drag,
+  cropDrag,
   fit,
   gripAt,
   inside,
   pick,
   type Box,
+  type Crop,
   type Frame,
   type Grip,
   type Pt,
@@ -417,11 +419,6 @@ function SwitchColumn() {
           <IconButton size="sm" label="Studio Mode options" onClick={optionsMenu}>
             <DotsThree size={16} weight="bold" />
           </IconButton>
-          <InfoTip label="About Studio Mode">
-            Edit the preview, then send it on air. With "Copy the scene on air" on, moving or hiding
-            sources in the preview never touches the stream, even when both show the same scene.
-            Drag the bar to mix by hand; let go near the end to finish, near the start to go back.
-          </InfoTip>
         </div>
         <span className="mt-1 text-center text-[12px] font-bold tracking-wide text-text-3 uppercase">
           Quick
@@ -610,42 +607,67 @@ interface Held {
   /** The pointer moved enough to count as a drag (a click only picks). */
   moved: boolean
   last: Box | null
+  /** Other sources picked with it, moved by the same amount (OBS's multi-select). */
+  others: { id: number; from: Frame }[]
+  /** Alt held on a handle: cropping, from this crop and source size once they're read. */
+  crop: { from: Crop; size: { width: number; height: number } } | null | 'reading'
+  lastCrop: Crop | null
 }
+
+/** What the next request for a source does (the newest replaces an older one). */
+type Job = { box: Box; save: boolean } | { crop: Crop; save: boolean }
 
 /**
  * Pick, move and resize sources in the preview, as in OBS: click picks (the engine outlines
- * it), drag moves, the handles resize (corners keep the shape unless Shift is held), it snaps
- * to the canvas's edges and middle (Alt turns that off), arrows nudge (Shift: 10 pixels) and
- * a double-click opens its settings. The picture is a native view drawn over this box that
- * lets clicks through, so this box gets them.
+ * it), ⌘-click (Ctrl on Windows) picks more, drag moves every picked source, the handles
+ * resize (corners keep the shape unless Shift is held), Alt on a handle crops instead, it
+ * snaps to the canvas's edges unless Alt is held, arrow keys nudge. A source inside a group
+ * moves on its own once picked (in Sources, or by pressing inside it when picked); a click
+ * on it picks its group, as in OBS.
  */
 function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
-  const { api, scene, items, selected, select, edit, stats, setTransforming, prefs } = useDesk()
+  const {
+    api,
+    scene,
+    items,
+    selected,
+    select,
+    also,
+    pickMore,
+    edit,
+    stats,
+    setTransforming,
+    prefs,
+  } = useDesk()
   const { run } = useAction()
   const p = prefs.data
   const canvas = stats?.canvas ?? null
   const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
-  const sending = useRef<{ busy: boolean; next: (Box & { save: boolean; id: number }) | null }>({
+  const sending = useRef<{ busy: boolean; next: Map<number, Job> }>({
     busy: false,
-    next: null,
+    next: new Map(),
   })
 
   // The engine outlines whatever is picked here or in the Sources panel (and, with frames on,
   // every source in its own colour).
+  const alsoKey = also.join(',')
   useEffect(() => {
     if (!on) return
     const pickNone = selected === null && !pv.frames
+    const more = alsoKey ? alsoKey.split(',').map(Number) : []
     void api
-      .select(pickNone ? null : { scene, id: selected, frames: pv.frames })
+      .select(pickNone ? null : { scene, id: selected, frames: pv.frames, also: more })
       .catch(() => undefined)
-  }, [api, on, scene, selected, pv.frames])
+  }, [api, on, scene, selected, alsoKey, pv.frames])
   useEffect(() => {
     if (!on) return
     return () => void api.select(null).catch(() => undefined)
   }, [api, on])
 
   const list = items.data ?? []
+  // Sources inside groups too: a picked one is found, moved and nudged like any other.
+  const flat = list.flatMap((i) => [i, ...i.children])
   const where = (e: { clientX: number; clientY: number }) => {
     const el = ref.current
     if (!el || !canvas) return null
@@ -665,18 +687,27 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
 
   const put = (item: EngineItem) =>
     items.set((prev) =>
-      (prev ?? []).map((i) => (i.id === item.id && item.frame ? { ...i, frame: item.frame } : i)),
+      (prev ?? []).map((i) => {
+        const one = (x: EngineItem) =>
+          x.id === item.id && item.frame ? { ...x, frame: item.frame } : x
+        return { ...one(i), children: i.children.map(one) }
+      }),
     )
 
-  // One change on the way at a time; the newest waits and replaces older ones.
+  // One request on the way at a time; for each source the newest waits and replaces older ones.
   const pump = () => {
     const q = sending.current
-    if (q.busy || !q.next) return
-    const b = q.next
-    q.next = null
+    if (q.busy) return
+    const first = q.next.entries().next()
+    if (first.done) return
+    const [id, job] = first.value
+    q.next.delete(id)
     q.busy = true
-    const go = api.setItemBox(scene, b.id, { x: b.x, y: b.y, w: b.w, h: b.h, save: b.save })
-    const done = b.save ? run('move', () => go) : go.catch(() => undefined)
+    const go =
+      'box' in job
+        ? api.setItemBox(scene, id, { ...job.box, save: job.save })
+        : api.setItemCrop(scene, id, { ...job.crop, save: job.save })
+    const done = job.save ? run('move', () => go) : go.catch(() => undefined)
     void done
       .then((item) => {
         if (item) put(item)
@@ -686,14 +717,33 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         pump()
       })
   }
-  const send = (id: number, b: Box, save: boolean) => {
+  const queue = (id: number, job: Job) => {
     const q = sending.current
     // A save never gets replaced by a later move without one.
-    q.next = { ...b, id, save: save || !!(q.next?.save && q.next.id === id) }
+    const prev = q.next.get(id)
+    q.next.set(id, { ...job, save: job.save || !!prev?.save })
     pump()
   }
+  const send = (id: number, b: Box, save: boolean) => queue(id, { box: b, save })
 
-  const frameOf = (id: number | null) => list.find((i) => i.id === id)?.frame ?? null
+  const frameOf = (id: number | null) => flat.find((i) => i.id === id)?.frame ?? null
+  const pickedIds = [selected, ...also].filter((id): id is number => id !== null)
+
+  // Where every source of the drag goes: the held one by the drag, the others by as much.
+  const moveAll = (h: Held, b: Box, save: boolean) => {
+    send(h.id, b, save)
+    const dx = b.x - h.from[4]
+    const dy = b.y - h.from[5]
+    for (const o of h.others) {
+      const ob = boxOf(o.from)
+      send(o.id, { ...ob, x: ob.x + dx, y: ob.y + dy }, save)
+    }
+  }
+  const finish = (h: Held | null) => {
+    if (!h?.moved) return
+    if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true })
+    else if (h.last) moveAll(h, h.last, true)
+  }
 
   if (!on || !canvas) return {}
   return {
@@ -703,7 +753,13 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       const w = where(e)
       if (!w) return
       ref.current?.focus({ preventScroll: true })
-      const current = list.find((i) => i.id === selected)
+      // ⌘-click (Ctrl on Windows) picks or unpicks one more, as in OBS.
+      if (e.metaKey || e.ctrlKey) {
+        const t = pick(list, w.p)
+        if (t) pickMore(t.id, 'toggle')
+        return
+      }
+      const current = flat.find((i) => i.id === selected)
       let target: EngineItem | null = null
       let grip: Grip | null = null
       if (current?.frame && current.visible) {
@@ -713,6 +769,16 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         if (!grip && inside(current.frame, w.p)) grip = MOVE
         if (grip) target = current
       }
+      // Inside another picked source: drag them all.
+      if (!target) {
+        const other = flat.find(
+          (i) => also.includes(i.id) && i.visible && i.frame && inside(i.frame, w.p),
+        )
+        if (other) {
+          target = other
+          grip = MOVE
+        }
+      }
       if (!target) {
         target = pick(list, w.p)
         grip = MOVE
@@ -721,16 +787,49 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         select(null)
         return
       }
-      if (target.id !== selected) select(target.id)
+      const picked = pickedIds.includes(target.id)
+      if (!picked) select(target.id)
       if (target.locked) return
       e.currentTarget.setPointerCapture(e.pointerId)
-      held.current = {
+      const cropping = e.altKey && grip.u >= 0
+      const h: Held = {
         id: target.id,
         from: target.frame,
         start: w.p,
         grip,
         moved: false,
         last: null,
+        others:
+          picked && grip.u < 0
+            ? flat.flatMap((i) =>
+                i.id !== target.id && pickedIds.includes(i.id) && !i.locked && i.frame
+                  ? [{ id: i.id, from: i.frame }]
+                  : [],
+              )
+            : [],
+        crop: cropping ? 'reading' : null,
+        lastCrop: null,
+      }
+      held.current = h
+      if (cropping) {
+        // The crop and the source's own size, to work the drag out in its pixels.
+        void api
+          .transform(scene, target.id)
+          .then((t) => {
+            if (held.current !== h) return
+            h.crop = {
+              from: {
+                left: t.crop_left,
+                top: t.crop_top,
+                right: t.crop_right,
+                bottom: t.crop_bottom,
+              },
+              size: { width: t.width, height: t.height },
+            }
+          })
+          .catch(() => {
+            if (held.current === h) h.crop = null
+          })
       }
     },
     onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
@@ -742,7 +841,9 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         const f = frameOf(selected)
         const g = f ? gripAt(f, w.p, w.reach) : null
         const over = g
-          ? cursorFor(f as Frame, g)
+          ? e.altKey
+            ? 'crosshair'
+            : cursorFor(f as Frame, g)
           : f && inside(f, w.p)
             ? 'move'
             : pick(list, w.p)
@@ -754,6 +855,13 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
       if (!h.moved && Math.hypot(d.x, d.y) < w.still) return
       h.moved = true
+      if (h.crop) {
+        if (h.crop === 'reading') return
+        const c = cropDrag(h.from, h.grip, d, h.crop.from, h.crop.size)
+        h.lastCrop = c
+        queue(h.id, { crop: c, save: false })
+        return
+      }
       const b = drag(h.from, h.grip, d, {
         free: e.shiftKey,
         canvas,
@@ -764,24 +872,28 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
           center: p?.snap_center ?? false,
           others:
             (p?.snap_sources ?? false)
-              ? list.flatMap((i) => (i.id !== h.id && i.visible && i.frame ? [i.frame] : []))
+              ? flat.flatMap((i) =>
+                  i.id !== h.id && !h.others.some((o) => o.id === i.id) && i.visible && i.frame
+                    ? [i.frame]
+                    : [],
+                )
               : [],
         },
       })
       h.last = b
-      send(h.id, b, false)
+      moveAll(h, b, false)
     },
     onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
       const h = held.current
       held.current = null
       if (e.currentTarget.hasPointerCapture(e.pointerId))
         e.currentTarget.releasePointerCapture(e.pointerId)
-      if (h?.moved && h.last) send(h.id, h.last, true)
+      finish(h)
     },
     onPointerCancel: () => {
       const h = held.current
       held.current = null
-      if (h?.moved && h.last) send(h.id, h.last, true)
+      finish(h)
     },
     onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => {
       const w = where(e)
@@ -795,7 +907,7 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       }
       // ⌘E (Ctrl+E): Edit Transform for the picked source, as in OBS.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
-        const it = list.find((i) => i.id === selected)
+        const it = flat.find((i) => i.id === selected)
         if (it) {
           e.preventDefault()
           setTransforming({ scene, id: it.id, name: it.name })
@@ -809,14 +921,16 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         ArrowUp: { x: 0, y: -step },
         ArrowDown: { x: 0, y: step },
       }[e.key]
-      const it = list.find((i) => i.id === selected)
-      if (!d || !it?.frame || it.locked) return
+      const moving = flat.filter((i) => pickedIds.includes(i.id) && i.frame && !i.locked)
+      if (!d || moving.length === 0) return
       e.preventDefault()
-      const b = boxOf(it.frame)
-      // Moved here at once, so a held key builds on each step before the engine answers.
-      const f = it.frame
-      put({ ...it, frame: [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y] })
-      send(it.id, { ...b, x: b.x + d.x, y: b.y + d.y }, true)
+      for (const it of moving) {
+        const f = it.frame as Frame
+        const b = boxOf(f)
+        // Moved here at once, so a held key builds on each step before the engine answers.
+        put({ ...it, frame: [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y] })
+        send(it.id, { ...b, x: b.x + d.x, y: b.y + d.y }, true)
+      }
     },
   }
 }

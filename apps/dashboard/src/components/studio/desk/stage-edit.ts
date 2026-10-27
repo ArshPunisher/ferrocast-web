@@ -228,3 +228,46 @@ export function fit(
     oy: (box.height - canvas.height * scale) / 2,
   }
 }
+
+/** A source's crop (its own pixels from each side) and full size. */
+export interface Crop {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/**
+ * The crop after dragging grip `g` by `d` (canvas pixels) with Alt held, as OBS's preview
+ * does: the side under the grip moves in or out, the rest of the picture stays put. `size` is
+ * the source's own size. At least 2 pixels stay each way.
+ */
+export function cropDrag(
+  f: Frame,
+  g: Grip,
+  d: Pt,
+  from: Crop,
+  size: { width: number; height: number },
+): Crop {
+  const lu = len(f[0], f[1])
+  const lv = len(f[2], f[3])
+  const seenW = size.width - from.left - from.right
+  const seenH = size.height - from.top - from.bottom
+  if (g.u < 0 || lu === 0 || lv === 0 || seenW <= 0 || seenH <= 0) return { ...from }
+  // Canvas pixels per source pixel along each side.
+  const ku = lu / seenW
+  const kv = lv / seenH
+  const du = (d.x * f[0] + d.y * f[1]) / lu / ku
+  const dv = (d.x * f[2] + d.y * f[3]) / lv / kv
+  let { left, top, right, bottom } = from
+  if (g.u === 0) left = Math.min(Math.max(0, left + du), size.width - right - 2)
+  if (g.u === 1) right = Math.min(Math.max(0, right - du), size.width - left - 2)
+  if (g.v === 0) top = Math.min(Math.max(0, top + dv), size.height - bottom - 2)
+  if (g.v === 1) bottom = Math.min(Math.max(0, bottom - dv), size.height - top - 2)
+  return {
+    left: Math.round(left),
+    top: Math.round(top),
+    right: Math.round(right),
+    bottom: Math.round(bottom),
+  }
+}
