@@ -6,7 +6,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, CheckCircle, DeviceMobile, Info, Plug } from '@phosphor-icons/react'
 import {
-  onCanvas,
   studioEngineApi,
   type GoLiveView,
   type VerticalObs,
@@ -18,7 +17,7 @@ import { useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor, CutPreview, type CutShown } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
-import { ByHand, LiveCard, useGoLive, useMerged } from './golive'
+import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
 
 export function VerticalTab() {
   const api = useGoLive()
@@ -48,7 +47,6 @@ export function VerticalTab() {
     })
   // Owner's pick T1: what phones see on the left, where it comes from and where it goes on
   // the right; cutting's layout editor below when that's the source.
-  const ticked = onCanvas(view.destinations, 'vertical').filter((d) => d.enabled).length
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[auto_minmax(0,1fr)]">
@@ -59,19 +57,9 @@ export function VerticalTab() {
           {view.cut.source === 'cut' && (
             <CutEditor cut={view.cut} onSaved={res.reload} onShown={setShown} />
           )}
-          <p className="m-0 flex items-center gap-2 text-[14.5px] text-text-2">
-            <Info size={16} className="shrink-0 text-accent-text" aria-hidden />
-            <span>
-              Where it goes: Go live’s{' '}
-              <a
-                className="font-semibold text-accent-text hover:underline"
-                href={href({ name: 'studio', section: 'golive' })}
-              >
-                Go live to
-              </a>
-              , under Vertical{ticked > 0 ? ` (${ticked} on)` : ''}.
-            </span>
-          </p>
+          {/* This tab is for OBS streamers (the Studio has its vertical platforms in Go live), so
+              where it goes is here. */}
+          <Platforms view={view} onSaved={res.reload} canvas="vertical" />
         </div>
       </div>
     </div>
