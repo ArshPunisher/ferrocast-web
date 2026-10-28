@@ -3,6 +3,7 @@ import { BrandIcon, PlatformMark, cx } from '@ferrocast/ui'
 import { useLive } from '../lib/store'
 import { href } from '../lib/router'
 import { isCloud } from '../lib/boot'
+import { useUsesObs } from '../lib/picture'
 
 const ORDER = ['twitch', 'youtube', 'kick', 'obs'] as const
 const NAMES: Record<ConnectorName, string> = {
@@ -52,99 +53,104 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
   const golive = useLive((s) => s.studio.golive)
   // Cloud mode has no OBS or relay link (its channels are set up on the Cloud page).
   const cloud = isCloud(useLive((s) => s.conn))
+  // OBS's pill only for those who stream from OBS: with Ferrocast's Studio, "OBS
+  // Disconnected" is noise.
+  const usesObs = useUsesObs()
   if (!connectors) return null
   return (
     <ul
       aria-label="Connections"
       className={cx('flex min-w-0 items-center', compact ? 'gap-1.5' : 'gap-1.5 overflow-x-auto')}
     >
-      {ORDER.filter((name) => connectors[name] !== undefined).map((name) => {
-        const c = connectors[name]
-        const { label, tone } = stateCopy(c)
-        const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
-        // Kick's events come through the relay link: only warn while that link is down.
-        const late =
-          name === 'kick' &&
-          c.state === 'connected' &&
-          connectors.relay !== undefined &&
-          connectors.relay.state !== 'connected'
-        const dest = golive?.live
-          ? golive.destinations.find(
-              (d) => d.kind === name && d.enabled && (d.canvas ?? 'main') === 'main',
-            )
-          : undefined
-        const streamIssue = dest?.blocked
-          ? 'stream can’t start'
-          : dest?.health?.state === 'reconnecting'
-            ? 'stream reconnecting'
-            : dest?.health?.state === 'paused'
-              ? 'stream paused to save upload'
-              : null
-        const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
-        const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
-        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
-        return (
-          <li key={name} className="shrink-0">
-            <a
-              href={
-                cloud
-                  ? href({ name: 'cloud' })
-                  : href({ name: 'settings', section: name === 'obs' ? 'obs' : 'accounts' })
-              }
-              title={title}
-              className={cx(
-                'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[14px] font-medium transition-colors',
-                attention
-                  ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
-                  : 'border-line bg-surface-1 text-text-2 hover:border-line-strong',
-                compact && 'px-2',
-              )}
-            >
-              <span className="sr-only">{title}</span>
-              {name === 'obs' ? (
-                <BrandIcon name="obs" size={13} className="text-text-2" />
-              ) : (
-                <PlatformMark platform={name} size={13} />
-              )}
-              {!compact && (
-                <span aria-hidden="true" className="text-text">
-                  {NAMES[name]}
-                </span>
-              )}
-              <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
-              {!compact && (tone !== 'ok' || name === 'obs') && (
-                // "Connected" is plain from the green dot: on smaller screens only problems say so.
-                <span
-                  className={cx(tone === 'ok' ? 'hidden text-text-2 xl:inline' : 'text-text-3')}
-                >
-                  {label}
-                </span>
-              )}
-              {!compact && late && (
-                <span
-                  className="text-warn"
-                  title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
-                >
-                  delayed
-                </span>
-              )}
-              {streamIssue && (
-                <span className="flex items-center gap-1.5 text-warn" aria-hidden="true">
-                  <span className="size-1.5 rounded-full bg-warn" />
-                  {!compact && streamIssue}
-                </span>
-              )}
-              {!compact && v !== undefined && (
-                <span aria-hidden="true" className="text-text-3">
-                  <span className="font-mono tabular-nums">{formatCount(v)}</span>
-                  {/* The word fits on wide screens; the count alone keeps the bar on one line. */}
-                  <span className="hidden xl:inline"> {v === 1 ? 'viewer' : 'viewers'}</span>
-                </span>
-              )}
-            </a>
-          </li>
-        )
-      })}
+      {ORDER.filter((name) => connectors[name] !== undefined && (name !== 'obs' || usesObs)).map(
+        (name) => {
+          const c = connectors[name]
+          const { label, tone } = stateCopy(c)
+          const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
+          // Kick's events come through the relay link: only warn while that link is down.
+          const late =
+            name === 'kick' &&
+            c.state === 'connected' &&
+            connectors.relay !== undefined &&
+            connectors.relay.state !== 'connected'
+          const dest = golive?.live
+            ? golive.destinations.find(
+                (d) => d.kind === name && d.enabled && (d.canvas ?? 'main') === 'main',
+              )
+            : undefined
+          const streamIssue = dest?.blocked
+            ? 'stream can’t start'
+            : dest?.health?.state === 'reconnecting'
+              ? 'stream reconnecting'
+              : dest?.health?.state === 'paused'
+                ? 'stream paused to save upload'
+                : null
+          const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
+          const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
+          const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
+          return (
+            <li key={name} className="shrink-0">
+              <a
+                href={
+                  cloud
+                    ? href({ name: 'cloud' })
+                    : href({ name: 'settings', section: name === 'obs' ? 'obs' : 'accounts' })
+                }
+                title={title}
+                className={cx(
+                  'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[14px] font-medium transition-colors',
+                  attention
+                    ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
+                    : 'border-line bg-surface-1 text-text-2 hover:border-line-strong',
+                  compact && 'px-2',
+                )}
+              >
+                <span className="sr-only">{title}</span>
+                {name === 'obs' ? (
+                  <BrandIcon name="obs" size={13} className="text-text-2" />
+                ) : (
+                  <PlatformMark platform={name} size={13} />
+                )}
+                {!compact && (
+                  <span aria-hidden="true" className="text-text">
+                    {NAMES[name]}
+                  </span>
+                )}
+                <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
+                {!compact && (tone !== 'ok' || name === 'obs') && (
+                  // "Connected" is plain from the green dot: on smaller screens only problems say so.
+                  <span
+                    className={cx(tone === 'ok' ? 'hidden text-text-2 xl:inline' : 'text-text-3')}
+                  >
+                    {label}
+                  </span>
+                )}
+                {!compact && late && (
+                  <span
+                    className="text-warn"
+                    title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
+                  >
+                    delayed
+                  </span>
+                )}
+                {streamIssue && (
+                  <span className="flex items-center gap-1.5 text-warn" aria-hidden="true">
+                    <span className="size-1.5 rounded-full bg-warn" />
+                    {!compact && streamIssue}
+                  </span>
+                )}
+                {!compact && v !== undefined && (
+                  <span aria-hidden="true" className="text-text-3">
+                    <span className="font-mono tabular-nums">{formatCount(v)}</span>
+                    {/* The word fits on wide screens; the count alone keeps the bar on one line. */}
+                    <span className="hidden xl:inline"> {v === 1 ? 'viewer' : 'viewers'}</span>
+                  </span>
+                )}
+              </a>
+            </li>
+          )
+        },
+      )}
       {socket !== 'open' && (
         <li className="shrink-0" role="status">
           <span className="flex h-8 items-center gap-2 rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[14px] font-medium text-warn">

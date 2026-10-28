@@ -11,6 +11,7 @@ import { LoadError, Panel } from '../Panel'
 import { useAction, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor } from './cut-editor'
+import { useUsesObs } from '../../lib/picture'
 import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
 
 export function VerticalTab() {
@@ -19,6 +20,16 @@ export function VerticalTab() {
   const view = useMerged(res.data)
   const live = !!view?.vertical_live
   const reload = res.reload
+  // The Studio has no second canvas: its vertical picture is always cut from its stream.
+  const usesObs = useUsesObs()
+  const onCanvasSource = view?.cut.source === 'canvas'
+  useEffect(() => {
+    if (usesObs || !onCanvasSource) return
+    void api
+      .setVerticalSource('cut')
+      .then(reload)
+      .catch(() => undefined)
+  }, [usesObs, onCanvasSource, api, reload])
   useEffect(() => {
     if (!live) return
     const t = setInterval(reload, 15_000)
@@ -73,6 +84,9 @@ function Source({
       success: `Aitum Vertical streams to ${before ?? 'its old setting'} again.`,
     }).then((r) => r !== undefined && onVertical(r))
   const source = view.cut.source
+  // With Ferrocast's Studio the vertical picture is cut from its stream; OBS's vertical
+  // canvas is only for those who stream from OBS.
+  const usesObs = useUsesObs()
   const pick = (s: VerticalSource) =>
     s !== source &&
     void run(`source:${s}`, () => api.setVerticalSource(s), {
@@ -87,24 +101,26 @@ function Source({
         <legend className="sr-only">Where the vertical picture comes from</legend>
         <Option
           title="Cut it from your stream"
-          text="Any OBS"
+          text={usesObs ? 'Any OBS' : 'Works with the Studio'}
           info="Mark your camera and game once; Ferrocast stacks them upright. A small camera looks softer when made big."
           checked={source === 'cut'}
           busy={busy === 'source:cut'}
           onPick={() => pick('cut')}
         />
-        <Option
-          title="OBS’s vertical canvas"
-          text="Best quality"
-          info="OBS sends a second, upright stream (Aitum Vertical, or OBS 32’s second canvas)."
-          checked={source === 'canvas'}
-          busy={busy === 'source:canvas'}
-          onPick={() => pick('canvas')}
-          found={v ? 'Aitum Vertical found' : null}
-        />
+        {usesObs && (
+          <Option
+            title="OBS’s vertical canvas"
+            text="Best quality"
+            info="OBS sends a second, upright stream (Aitum Vertical, or OBS 32’s second canvas)."
+            checked={source === 'canvas'}
+            busy={busy === 'source:canvas'}
+            onPick={() => pick('canvas')}
+            found={v ? 'Aitum Vertical found' : null}
+          />
+        )}
       </fieldset>
       <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2">
-        {source === 'cut' ? null : !obs.connected ? (
+        {source === 'cut' || !usesObs ? null : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
             <a
@@ -164,7 +180,7 @@ function Source({
           <p className="m-0 flex items-center gap-2 text-text-3">
             <DeviceMobile size={16} aria-hidden />
             {view.vertical_stats.width ?? '?'} × {view.vertical_stats.height ?? '?'}
-            {view.vertical_stats.fps ? ` at ${view.vertical_stats.fps} fps` : ''} coming in from OBS
+            {view.vertical_stats.fps ? ` at ${view.vertical_stats.fps} fps` : ''} coming in
           </p>
         )}
         {source === 'canvas' && <ByHand vertical />}

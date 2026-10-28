@@ -248,7 +248,7 @@ function CutStatus({ cut }: { cut: CutView }) {
     )
   return (
     <span className="text-[14px] text-text-3">
-      {s.state === 'starting' ? 'Starting…' : 'Starts when OBS streams.'}
+      {s.state === 'starting' ? 'Starting…' : 'Starts when you go live.'}
     </span>
   )
 }
@@ -325,7 +325,7 @@ function Frame({
     >
       <img
         src={image}
-        alt="What’s on air in OBS"
+        alt="What’s on air"
         className="absolute inset-0 size-full"
         draggable={false}
       />

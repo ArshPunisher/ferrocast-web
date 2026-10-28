@@ -58,9 +58,9 @@ import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
+import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useObsHealth } from './obs'
-import { inDesktopApp } from '../../lib/external'
 import { StudioDesk } from './desk/desk'
 
 export function useGoLive() {
@@ -126,7 +126,7 @@ export function GoLiveTab() {
   const res = useResource(() => api.view(), [api])
   const view = useMerged(res.data)
   const [mode, setMode] = useMode('studio')
-  const [picture, setPicture] = usePicture(view)
+  const picture = usePictureSource()
   const live = !!view?.live
   const reload = res.reload
   // While live, OBS's side (Aitum Multistream's outputs) is read again every 15 s.
@@ -153,7 +153,7 @@ export function GoLiveTab() {
         { value: 'ferrocast', label: 'Ferrocast' },
         { value: 'obs', label: 'OBS' },
       ]}
-      onChange={setPicture}
+      onChange={setPictureSource}
     />
   )
   if (picture === 'ferrocast') return <StudioDesk res={res} view={view} lead={pick} />
@@ -192,33 +192,6 @@ export function GoLiveTab() {
       </div>
     </>
   )
-}
-
-type Picture = 'ferrocast' | 'obs'
-const PICTURE_KEY = 'fc-golive-picture'
-
-/** Where the stream's picture comes from: Ferrocast's own Studio, or OBS. Remembered here;
- * the first time, OBS if it already sends to Ferrocast or this isn't the desktop app. */
-function usePicture(view: GoLiveView | null): [Picture, (p: Picture) => void] {
-  const [saved, setSaved] = useState<Picture | null>(() => {
-    try {
-      const v = localStorage.getItem(PICTURE_KEY)
-      return v === 'ferrocast' || v === 'obs' ? v : null
-    } catch {
-      return null
-    }
-  })
-  // The Studio runs only in the desktop app; elsewhere OBS is the way in.
-  const picture: Picture = saved ?? (!inDesktopApp() || view?.obs.points_here ? 'obs' : 'ferrocast')
-  const set = (p: Picture) => {
-    setSaved(p)
-    try {
-      localStorage.setItem(PICTURE_KEY, p)
-    } catch {
-      // Private mode: it lasts this visit.
-    }
-  }
-  return [picture, set]
 }
 
 // ---------------------------------------------------------------- 5A: while live
