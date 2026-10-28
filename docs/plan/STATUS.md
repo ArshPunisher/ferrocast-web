@@ -1,5 +1,12 @@
 # Status
 
+## 28 Oct 2026 (2.1.7: the Studio first, and the vertical picture)
+
+- Studio-first: Start show, BRB, `!scene`, clips, Alt+1…9, overlays (Add to Studio, real previews), themes, onboarding and the music beat use the Studio; OBS wording only where OBS is meant.
+- The vertical picture (owner's V2): side by side with the wide one in Go live, the other dimmed (P2); vertical platforms under Vertical in Go live (G1); no Vertical tab for Studio users (OBS streamers keep theirs, with Where it goes).
+- Redesigns picked by the owner: Show as a run of show (W1), Stream info with per-platform cards and preset chips (S1), Moments as a stream timeline (M1). Square Studio panel corners; the resize stills keep the vertical picture's bars and dimming.
+- YouTube thumbnails up to 50 MB with Make it smaller; the browser tests follow the new screens (1006 pass).
+
 ## 26 Oct 2026, midday (the owner's first test)
 
 - Preview editing: click picks a source (in step with Sources), drag moves with snapping (Alt: off), handles resize (corners keep the shape, Shift: free), arrows nudge, double-click opens settings (`desk/stage-edit.ts`, tested).
@@ -333,3 +340,4 @@
 ## 17 Oct 2026
 
 **Done:** repo, tooling, CI; brand (mark, app icon, favicons) generated from one geometry; design tokens and shared components; `packages/api` with types, client, sockets, core ports and the demo engine.
+
