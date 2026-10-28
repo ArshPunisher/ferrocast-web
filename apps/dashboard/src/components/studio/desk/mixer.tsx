@@ -112,6 +112,9 @@ function useHold(level: EngineLevel | undefined): { hold: number[]; clip: boolea
   return { hold: [...h.current.v], clip: now - h.current.clip < 2000 }
 }
 
+/** The fader's handle across (or up), pixels: w-3 / h-3. */
+const THUMB = 12
+
 /** A volume fader over the meter: drag, click, arrows (1 dB), Page keys (6 dB), Home/End. */
 function Fader({
   pos,
@@ -131,7 +134,11 @@ function Fader({
   const at = (e: PointerEvent) => {
     const r = ref.current?.getBoundingClientRect()
     if (!r) return pos
-    const f = vertical ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width
+    // The handle stays on the bar: its middle runs from half its size in to half its size
+    // short of the end.
+    const f = vertical
+      ? 1 - (e.clientY - r.top - THUMB / 2) / (r.height - THUMB)
+      : (e.clientX - r.left - THUMB / 2) / (r.width - THUMB)
     return Math.max(0, Math.min(1, f))
   }
   const step = (db: number) => {
@@ -191,10 +198,16 @@ function Fader({
         aria-hidden
         className={cx(
           'absolute rounded-[5px] border-2 border-surface-1 bg-text shadow-[0_1px_4px_rgb(0_0_0/0.4)] transition-transform group-active/f:scale-110 motion-reduce:transition-none',
-          vertical ? 'inset-x-0 h-3 -translate-y-1/2' : 'inset-y-0 w-3 -translate-x-1/2',
+          vertical ? 'inset-x-0 h-3' : 'inset-y-0 w-3',
           disabled && 'bg-text-3',
         )}
-        style={vertical ? { top: `${(1 - pos) * 100}%` } : { left: `${pos * 100}%` }}
+        // All of the handle stays on the bar, so at full volume it reaches the bar's end and
+        // nothing of the bar shows past it (owner, 28 Oct).
+        style={
+          vertical
+            ? { top: `calc(${1 - pos} * (100% - ${THUMB}px))` }
+            : { left: `calc(${pos} * (100% - ${THUMB}px))` }
+        }
       />
     </div>
   )
