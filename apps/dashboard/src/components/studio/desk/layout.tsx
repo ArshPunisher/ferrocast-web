@@ -454,10 +454,7 @@ export function DockWorkspace({
     return (
       <Ctx.Provider value={api}>
         {top}
-        <div
-          ref={ws}
-          className="flex flex-col overflow-hidden rounded-panel border border-line bg-surface-1"
-        >
+        <div ref={ws} className="flex flex-col overflow-hidden border border-line bg-surface-1">
           {/* The picture keeps its 16:9 shape here (on wide screens it fits the space). */}
           <div
             data-stage
@@ -539,7 +536,9 @@ export function DockWorkspace({
       <div
         ref={ws}
         aria-label="Studio layout"
-        className="flex overflow-hidden rounded-panel border border-line bg-surface-1"
+        // Square, as OBS's: the live picture is a square native view over the stage, and a
+        // rounded corner beside it looked broken (owner, 28 Oct).
+        className="flex overflow-hidden border border-line bg-surface-1"
         style={height ? { height } : undefined}
       >
         {left}

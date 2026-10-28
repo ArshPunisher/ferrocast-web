@@ -288,6 +288,13 @@ export function PreviewBox({ running }: { running: boolean }) {
       let rect = studio ? place(el) : placeStage(stageRef.current, el)
       let program = studio ? place(programRef.current) : null
       let tallRect = tall && vRef.current ? placeStage(vStageRef.current, vRef.current) : null
+      // The picture not being edited is dimmed (its stage says so in data-dim).
+      const dimmed = (stage: HTMLElement | null, r: PreviewRect | null) =>
+        r && stage?.dataset.dim ? { ...r, opacity: 0.42 } : r
+      if (tall) {
+        rect = dimmed(stageRef.current, rect)
+        tallRect = dimmed(vStageRef.current, tallRect)
+      }
       // Under a dialog the page is dimmed by its backdrop (rgb(4 5 8 / 0.62)): the app draws
       // the same over the picture.
       if (document.querySelector('dialog[open]')) {
@@ -356,7 +363,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['open', 'data-dock-drag', 'data-pos'],
+      attributeFilter: ['open', 'data-dock-drag', 'data-pos', 'data-dim'],
     })
     // A theme change repaints the stage round the canvas.
     mo.observe(document.documentElement, {
@@ -385,6 +392,8 @@ export function PreviewBox({ running }: { running: boolean }) {
   }, [api, running, desktop, studio, tall])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
+  // The picture under the pointer that isn't being edited (it brightens: "click to edit").
+  const [hover, setHover] = useState<'main' | 'vertical' | null>(null)
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
@@ -393,61 +402,76 @@ export function PreviewBox({ running }: { running: boolean }) {
     desktop && running ? 'bg-transparent' : 'bg-[#0a0b0d]',
   )
   if (tall) {
-    // The wide picture and the tall one side by side (as OBS with a vertical canvas): the one
-    // picked is edited by the panels and the pointer; a press on the other picks it.
+    // The wide picture and the tall one side by side (as OBS with a vertical canvas), nothing
+    // above them (owner's pick P2): the one not being edited is dimmed, and brightens under
+    // the pointer; a press on it picks it. The app's view reads the dimming from data-dim.
     const pick = (c: 'main' | 'vertical') => ({
       onPointerDown: (e: React.PointerEvent) => {
         if (e.button !== 0) return
         e.preventDefault()
         setCanvas(c)
+        setHover(null)
       },
+      onPointerEnter: () => setHover(c),
+      onPointerLeave: () => setHover(null),
     })
-    const label = (c: 'main' | 'vertical') =>
-      c === 'main'
-        ? 'Wide picture. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
-        : 'Vertical picture. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
+    const dim = (c: 'main' | 'vertical') =>
+      (onTall ? c === 'main' : c === 'vertical') && hover !== c
+    const label = (c: 'main' | 'vertical', on: boolean) =>
+      `${c === 'main' ? 'Wide' : 'Vertical'} picture. ${
+        on
+          ? 'Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
+          : 'Click to edit it.'
+      }`
+    const stage =
+      'grid min-h-0 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
     return (
-      <div className="flex min-h-16 flex-1 gap-2 bg-[var(--fc-stage)] p-2 [container-type:size]">
-        <PictureColumn
-          name="Wide"
-          on={!onTall}
-          onPick={() => setCanvas('main')}
-          className="min-w-0 flex-1"
+      <div className="flex min-h-16 flex-1 gap-px bg-line [container-type:size]">
+        <div
+          ref={stageRef}
+          role="group"
+          aria-label={label('main', !onTall)}
+          data-stage-bg
+          data-dim={dim('main') ? '1' : undefined}
+          className={cx(stage, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
+          {...(onTall ? pick('main') : editing)}
         >
           <div
-            ref={stageRef}
-            aria-label={onTall ? 'Wide picture. Click to edit it.' : label('main')}
-            data-stage-bg
-            className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
-            {...(onTall ? pick('main') : editing)}
+            ref={ref}
+            style={{ '--fc-zoom': pv.zoom } as CSSProperties}
+            className={cx(
+              screen,
+              'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))] transition-opacity',
+              !desktop && dim('main') && 'opacity-40',
+            )}
           >
-            <div
-              ref={ref}
-              style={{ '--fc-zoom': pv.zoom } as CSSProperties}
-              className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
-            >
-              {!desktop && 'The live picture shows in the Ferrocast app.'}
-            </div>
+            {!desktop && 'The live picture shows in the Ferrocast app.'}
           </div>
-        </PictureColumn>
-        <PictureColumn
-          name="Vertical"
-          on={onTall}
-          onPick={() => setCanvas('vertical')}
-          className="w-[calc((100cqh-48px)*9/16+30px)] max-w-[40%] flex-none"
+        </div>
+        <div
+          ref={vStageRef}
+          role="group"
+          aria-label={label('vertical', onTall)}
+          data-stage-bg
+          data-dim={dim('vertical') ? '1' : undefined}
+          className={cx(
+            stage,
+            'w-[calc(100cqh*9/16+12px)] max-w-[40%] flex-none p-1.5',
+            !onTall && 'cursor-pointer',
+          )}
+          {...(onTall ? editing : pick('vertical'))}
         >
           <div
-            ref={vStageRef}
-            aria-label={onTall ? label('vertical') : 'Vertical picture. Click to edit it.'}
-            data-stage-bg
-            className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
-            {...(onTall ? editing : pick('vertical'))}
+            ref={vRef}
+            className={cx(
+              screen,
+              'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0! transition-opacity',
+              !desktop && dim('vertical') && 'opacity-40',
+            )}
           >
-            <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)]')}>
-              {!desktop && 'The live picture shows in the Ferrocast app.'}
-            </div>
+            {!desktop && 'Vertical'}
           </div>
-        </PictureColumn>
+        </div>
       </div>
     )
   }
@@ -568,47 +592,6 @@ function VerticalToggle() {
         }
       />
     </>
-  )
-}
-
-/** One of the two pictures side by side: its name on a tab that picks it, and its stage. The
- * picked one is ringed (outside the stage, where the app's picture doesn't cover it). */
-function PictureColumn({
-  name,
-  on,
-  onPick,
-  className,
-  children,
-}: {
-  name: string
-  on: boolean
-  onPick: () => void
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section
-      aria-label={`${name} picture`}
-      className={cx(
-        'flex min-h-0 flex-col overflow-hidden rounded-[10px] border-2',
-        on ? 'border-[var(--fc-pick)]' : 'border-transparent',
-        className,
-      )}
-    >
-      <button
-        type="button"
-        aria-pressed={on}
-        onClick={onPick}
-        className={cx(
-          'flex h-7 flex-none items-center gap-1.5 px-2.5 text-left text-[12.5px] font-extrabold',
-          on ? 'fc-picked' : 'text-text-2 hover:text-text',
-        )}
-      >
-        {name}
-        {on && <span className="font-semibold opacity-75">· editing</span>}
-      </button>
-      {children}
-    </section>
   )
 }
 
