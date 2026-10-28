@@ -284,7 +284,7 @@ export class DemoGoLive {
     const max = kind === 'youtube' ? 4000 : 2000
     if (s.keyframe_interval_ms !== null && s.keyframe_interval_ms > max + 250)
       out.push(
-        `${name} needs a keyframe at least every ${max / 1000} s; yours come every ${(s.keyframe_interval_ms / 1000).toFixed(1)} s. Set Keyframe Interval to 2 in OBS (Settings, Output).`,
+        `${name} needs a keyframe at least every ${max / 1000} s; yours come every ${(s.keyframe_interval_ms / 1000).toFixed(1)} s. Set the keyframe interval to 2 s.`,
       )
     return out
   }

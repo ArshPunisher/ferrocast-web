@@ -131,6 +131,8 @@ function Wizard({
   const [step, setStep] = useState<'pick' | 'test' | 'done'>('pick')
   const [check, setCheck] = useState<UploadCheck | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The bitrate picked, changed by hand (empty: the recommendation).
+  const [own, setOwn] = useState<string>('')
   const canvas: [number, number] = [s.width, s.height]
 
   const run = async () => {
@@ -158,12 +160,20 @@ function Wizard({
           canvas,
         })
       : null
+  const on = check ? check.rows.filter((r) => !r.problem) : []
+  const cap = Math.min(12000, ...on.map((r) => CAPS[r.id] ?? 12000))
+  const ownKbps = Number(own)
+  const kbps = rec ? (own && ownKbps >= 500 ? Math.min(ownKbps, 60000) : rec.video_kbps) : 0
+  // Each platform gets its own copy: what the upload carries in all.
+  const total = (kbps + 160) * Math.max(1, on.length)
+  const upload = check?.verdict.upload_kbps ?? 0
   const apply = () => {
     onApply(
       use === 'record'
         ? { fps, encoder: 'hardware', record_quality: 'high' }
         : rec
-          ? { fps: rec.fps, video_kbps: rec.video_kbps, scale: rec.scale, encoder: 'hardware' }
+          ? // The Mac's hardware encoder: the game keeps the CPU and GPU (OBS's advice too).
+            { fps: rec.fps, video_kbps: kbps, scale: rec.scale, encoder: 'hardware' }
           : {},
     )
     onClose()
@@ -191,10 +201,61 @@ function Wizard({
               {rec && ` · ${(rec.video_kbps / 1000).toFixed(1)} Mbps`}
             </b>
             <span className="text-[14px] text-text-2">
-              {use === 'record' ? 'High quality recording, Mac hardware encoder.' : rec?.why}
+              {use === 'record'
+                ? 'High quality recording, Mac hardware encoder.'
+                : `${rec?.why ?? ''} Hardware encoder, so your game keeps the computer.`}
             </span>
           </div>
         </div>
+        {rec && (
+          <div className="flex flex-col gap-3 rounded-panel border border-line p-4">
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[14px]">
+              {on.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-text">{r.name}</span>
+                  <span className="font-mono text-text-2 tabular-nums">
+                    {kbps.toLocaleString()} kbps
+                    {CAPS[r.id] && kbps > CAPS[r.id]! && (
+                      <b className="ml-2 text-warn">over its {CAPS[r.id]!.toLocaleString()}</b>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p
+              className={cx(
+                'm-0 text-[13.5px] font-semibold',
+                total > upload * 0.85 ? 'text-warn' : 'text-text-3',
+              )}
+            >
+              Uses {(total / 1000).toFixed(1)} of your {(upload / 1000).toFixed(1)} Mbps upload
+              {total > upload * 0.85 ? ': too close, your game and the stream may stutter.' : '.'}
+            </p>
+            <label className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-text-2">
+              Video bitrate
+              <input
+                type="number"
+                inputMode="numeric"
+                min={500}
+                max={cap}
+                step={250}
+                value={own || rec.video_kbps}
+                onChange={(e) => setOwn(e.target.value)}
+                className="h-9 w-28 rounded-control border border-line bg-surface-2 px-2.5 text-right font-mono text-text tabular-nums"
+              />
+              kbps
+              {own && (
+                <button
+                  type="button"
+                  onClick={() => setOwn('')}
+                  className="text-[13px] font-bold text-accent-text"
+                >
+                  Back to {rec.video_kbps.toLocaleString()}
+                </button>
+              )}
+            </label>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setStep('pick')}>
             Back

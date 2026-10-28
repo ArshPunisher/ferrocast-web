@@ -20,6 +20,7 @@ import {
   Plug,
   Trash,
   Warning,
+  ArrowSquareOut,
 } from '@phosphor-icons/react'
 import {
   aitumClashes,
@@ -574,7 +575,20 @@ export function Platforms({
   )
 }
 
-export function RowText({ d }: { d: DestinationView }) {
+/** The bitrate a platform's warning asks for ("… to 5,500 kbps or less"), in kbps. */
+export function askedKbps(rule: string): number | null {
+  const m = rule.match(/to ([\d,]+) kbps or less/)
+  return m ? Number(m[1]?.replace(/,/g, '')) : null
+}
+
+export function RowText({
+  d,
+  fixBitrate,
+}: {
+  d: DestinationView
+  /** The Studio streams: a button sets its video bitrate to what the warning asks for. */
+  fixBitrate?: ((kbps: number) => void) | undefined
+}) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   return (
     <div className="min-w-0">
@@ -608,16 +622,36 @@ export function RowText({ d }: { d: DestinationView }) {
         )}
       </span>
       {d.enabled && d.kind === 'kick' && (
-        <span className="block text-[13.5px] text-warn">
-          Kick Partners: turn on multistreaming in Kick first.
-        </span>
+        <a
+          // Kick's Creator Dashboard: Partner Income › Multistreaming (or /multi on in chat).
+          href="https://dashboard.kick.com/"
+          target="_blank"
+          rel="noreferrer"
+          title="Kick Partners must allow multistreaming: Creator Dashboard › Partner Income › Multistreaming, or type /multi on in your chat."
+          className="mt-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-warn underline-offset-2 hover:underline"
+        >
+          Kick Partner? Allow multistreaming
+          <ArrowSquareOut size={12} aria-hidden />
+        </a>
       )}
       {d.blocked && <span className="block text-[13.5px] text-danger">{d.blocked}</span>}
-      {d.rules.map((r) => (
-        <span key={r} className="block text-[13.5px] text-warn">
-          {r}
-        </span>
-      ))}
+      {d.rules.map((r) => {
+        const kbps = fixBitrate ? askedKbps(r) : null
+        return (
+          <span key={r} className="mt-1 block text-[13px] leading-snug text-warn">
+            {r}
+            {kbps !== null && (
+              <button
+                type="button"
+                onClick={() => fixBitrate?.(kbps)}
+                className="ml-1.5 inline-flex h-6 items-center rounded-full bg-warn-soft px-2 align-middle text-[12.5px] font-bold text-text ring-1 ring-warn/40 hover:bg-warn/20"
+              >
+                Use {kbps.toLocaleString()} kbps
+              </button>
+            )}
+          </span>
+        )
+      })}
     </div>
   )
 }

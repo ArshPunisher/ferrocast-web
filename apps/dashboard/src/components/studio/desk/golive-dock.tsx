@@ -2,7 +2,14 @@
 // here; adding, ordering and the rest open Go live's full list.
 
 import { useRef, useState } from 'react'
-import { MAX_STREAM_TITLE, onCanvas, type DestinationView, type GoLiveView } from '@ferrocast/api'
+import {
+  MAX_STREAM_TITLE,
+  onCanvas,
+  type DestinationView,
+  type GoLiveView,
+  type StudioSettings,
+} from '@ferrocast/api'
+import { Gauge } from '@phosphor-icons/react'
 import { Button, Dialog, Input, Skeleton, Switch, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
@@ -10,12 +17,49 @@ import { href } from '../../../lib/router'
 import { useStudio } from '../common'
 import { Logo, Platforms, RowText, useGoLive } from '../golive'
 import { DockHeader } from './layout'
+import { useDesk } from './common'
+import { AutoConfigDialog } from './auto-config'
 
 export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoLiveView | null }) {
   const api = useGoLive()
   const { run, busy } = useAction()
   const [managing, setManaging] = useState(false)
+  const [optimizing, setOptimizing] = useState(false)
+  const desk = useDesk()
+  const applyOptimized = (patch: Partial<StudioSettings>) =>
+    void run('optimize', async () => {
+      const cur = await desk.api.studioSettings()
+      const r = await desk.api.setStudioSettings({ ...cur, ...patch })
+      desk.prefs.set(r.settings)
+      return r
+    }).then((r) => {
+      if (!r) return
+      toast(
+        r.restart
+          ? { tone: 'warn', message: 'Optimized.', hint: r.restart }
+          : { tone: 'ok', message: 'Optimized. The next stream uses these settings.' },
+      )
+    })
   const mine = view ? onCanvas(view.destinations, 'main') : []
+  /** A platform says the video is too much: the Studio's bitrate down to what it asks. */
+  const fixBitrate = (kbps: number) =>
+    void run('bitrate', async () => {
+      const cur = await desk.api.studioSettings()
+      const r = await desk.api.setStudioSettings({ ...cur, video_kbps: kbps })
+      desk.prefs.set(r.settings)
+      return r
+    }).then((r) => {
+      if (!r) return
+      toast(
+        r.restart
+          ? {
+              tone: 'warn',
+              message: `Video bitrate set to ${kbps.toLocaleString()} kbps.`,
+              hint: r.restart,
+            }
+          : { tone: 'ok', message: `Video bitrate set to ${kbps.toLocaleString()} kbps.` },
+      )
+    })
   const toggle = (d: DestinationView, enabled: boolean) => {
     if (!view) return
     // The engine wants every destination, in order, both pictures.
@@ -33,12 +77,30 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   }
   return (
     <section aria-label="Go live to" className="flex min-h-0 flex-1 flex-col">
+      {desk.prefs.data && (
+        <AutoConfigDialog
+          open={optimizing}
+          onClose={() => setOptimizing(false)}
+          s={desk.prefs.data}
+          onApply={applyOptimized}
+        />
+      )}
       <DockHeader
         id="golive"
         actions={
-          <Button size="sm" variant="ghost" onClick={() => setManaging(true)}>
-            Manage
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Test your upload and pick the bitrate for each platform, so the game and the stream both run smooth"
+              onClick={() => setOptimizing(true)}
+            >
+              <Gauge size={15} weight="bold" aria-hidden /> Optimize
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setManaging(true)}>
+              Manage
+            </Button>
+          </>
         }
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -58,11 +120,12 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         ) : (
           <ul className="flex flex-col" aria-label="Platforms">
             {mine.map((d) => (
-              <li key={d.id} className="flex items-center gap-2.5 px-3 py-2.5">
+              <li key={d.id} className="flex items-start gap-2.5 px-3 py-2.5">
                 <Logo kind={d.kind} />
                 <div className="min-w-0 flex-1">
-                  <RowText d={d} />
+                  <RowText d={d} fixBitrate={fixBitrate} />
                 </div>
+                {/* At the top, lined up with the name, however long the notes below. */}
                 <Switch
                   label={`Go live on ${d.name}`}
                   hideLabel
