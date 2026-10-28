@@ -57,13 +57,18 @@ export function InfoTip({
     const b = btn.current?.getBoundingClientRect()
     const t = bubble.current?.getBoundingClientRect()
     if (!b || !t) return
-    const vw = document.documentElement.clientWidth
-    const vh = window.innerHeight
-    const left = Math.min(Math.max(b.left + b.width / 2 - t.width / 2, EDGE), vw - t.width - EDGE)
-    const below = b.bottom + GAP + t.height <= vh - EDGE
-    const top = below ? b.bottom + GAP : Math.max(EDGE, b.top - GAP - t.height)
     // A dialog can be transformed: "fixed" is then relative to it.
     const origin = host && host !== document.body ? host.getBoundingClientRect() : null
+    // Inside a dialog or a panel over the Studio's picture (a side drawer, data-over-preview)
+    // the bubble stays within it: the app draws the live picture over the page, so a bubble
+    // reaching past the drawer's edge is cut off there (owner, 28 Oct).
+    const within = btn.current?.closest('dialog, [data-over-preview]')?.getBoundingClientRect()
+    const lo = (within?.left ?? 0) + EDGE
+    const hi = (within ? within.right : document.documentElement.clientWidth) - t.width - EDGE
+    const vh = window.innerHeight
+    const left = Math.max(lo, Math.min(b.left + b.width / 2 - t.width / 2, hi))
+    const below = b.bottom + GAP + t.height <= vh - EDGE
+    const top = below ? b.bottom + GAP : Math.max(EDGE, b.top - GAP - t.height)
     setPos({ left: left - (origin?.left ?? 0), top: top - (origin?.top ?? 0) })
   }, [open, host])
 
@@ -144,6 +149,8 @@ export function InfoTip({
           <div
             ref={bubble}
             aria-hidden
+            // The Studio's live picture leaves room for it where it overlaps.
+            data-over-preview
             onPointerEnter={show}
             onPointerLeave={() => !pinned && hide()}
             style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0 }}
