@@ -11,11 +11,11 @@ const panel = (page: Page, name: string) =>
 test.describe('studio', () => {
   test('every Studio tab and Home loads', { tag: '@smoke' }, async ({ page }) => {
     for (const [route, heading] of [
-      ['studio/vertical', 'Where it goes'],
+      ['studio/vertical', 'Picture'],
       ['studio/show', 'Go-live checklist'],
       ['studio/info', 'Stream info'],
       ['studio/obs', 'Scenes'],
-      ['studio/moments', 'Markers this stream'],
+      ['studio/moments', 'Moments'],
     ] as const) {
       await open(page, route)
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
@@ -34,7 +34,7 @@ test.describe('studio', () => {
     await expect(page.getByRole('link', { name: /Live in \d+:\d\d/ })).toBeVisible()
     await page.getByRole('link', { name: /Live in/ }).click()
     const show = panel(page, 'Show')
-    await expect(show.getByText('Counting down')).toBeVisible()
+    await expect(show.getByText('Live in')).toBeVisible()
     await expect(show.getByText('"Valorant ranked" sent to')).toHaveCount(0)
     await expect(show.getByText(/Kick: Kick needs a permission/)).toBeVisible()
     await show.getByRole('button', { name: 'Go live now' }).click()
@@ -105,8 +105,8 @@ test.describe('studio', () => {
   test('only Kick ticked: nobody took it, and the reason is shown', async ({ page }) => {
     await open(page, 'studio/info')
     const form = panel(page, 'Stream info')
-    await form.getByRole('switch', { name: 'Twitch' }).click()
-    await form.getByRole('switch', { name: 'YouTube' }).click()
+    await page.getByRole('switch', { name: 'Send to Twitch' }).click()
+    await page.getByRole('switch', { name: 'Send to YouTube' }).click()
     await form.getByRole('button', { name: 'Update everywhere' }).click()
     await expect(form.getByRole('alert')).toHaveText('No platform took the change.')
     await expect(form.getByText(/Kick needs a permission/)).toBeVisible()
@@ -140,7 +140,7 @@ test.describe('studio', () => {
     await expect(show.getByText('OBS is streaming')).toBeVisible()
     // The checklist can press them too, with a delay before stopping.
     const cfg = panel(page, 'Go-live checklist')
-    await cfg.getByRole('switch', { name: 'End show: stop streaming in OBS' }).click()
+    await cfg.getByRole('switch', { name: 'End show: stop streaming' }).click()
     await expect(cfg.getByLabel('Stop after')).toHaveValue('30')
   })
 
@@ -148,10 +148,9 @@ test.describe('studio', () => {
     await open(page, 'studio/info')
     await page.getByLabel('Description').fill('Ranked all night')
     await page.getByRole('button', { name: 'Update everywhere' }).click()
-    await expect(
-      page.getByText('Skipped description: Twitch has no stream description'),
-    ).toBeVisible()
-    await expect(page.getByText(/YouTube updated .*description/)).toBeVisible()
+    await expect(page.getByText(/Twitch doesn.t take/)).toBeVisible()
+    // YouTube's card lists description among what changed.
+    await expect(page.getByLabel('Changed').filter({ hasText: 'description' })).toBeVisible()
     // A GIF isn't a YouTube thumbnail.
     await page.locator('input[type=file][accept*="image/png"]').setInputFiles({
       name: 'party.gif',
@@ -169,8 +168,9 @@ test.describe('studio', () => {
     await form.getByLabel('Preset name').fill('Speedruns')
     await form.getByRole('button', { name: 'Save preset' }).click()
     await expect(page.getByText('Saved “Speedruns”.')).toBeVisible()
-    const presets = panel(page, 'Presets')
-    await presets.getByRole('button', { name: /^Just chatting/ }).click()
+    // Presets are chips over the form.
+    const presets = form.getByRole('list', { name: 'Presets' })
+    await presets.getByRole('button', { name: 'Just chatting', exact: true }).click()
     await expect(form.getByLabel('Title')).toHaveValue('Coffee and chat, ask me anything')
     await presets.getByRole('button', { name: 'Delete Speedruns' }).click()
     await expect(presets.getByText('Speedruns')).toHaveCount(0)
@@ -204,7 +204,7 @@ test.describe('studio', () => {
 
   test('markers: add one and export CSV and text', async ({ page }) => {
     await open(page, 'studio/moments')
-    const m = panel(page, 'Markers this stream')
+    const m = panel(page, 'Moments')
     await expect(m.getByText('GlitchGarden raided with 38 viewers')).toBeVisible()
     await m.getByLabel('Marker label').fill('That clutch')
     await m.getByRole('button', { name: 'Add marker' }).click()

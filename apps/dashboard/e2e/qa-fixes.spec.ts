@@ -124,7 +124,7 @@ test.describe('layout editor', () => {
 
     await home.click()
     await page.getByRole('button', { name: 'Save and leave' }).click()
-    await expect(page.getByText('Overlay saved. OBS updates by itself.')).toBeVisible()
+    await expect(page.getByText('Overlay saved. Your stream updates by itself.')).toBeVisible()
     await expect(page).toHaveURL(/#\/home$/)
 
     await page.goto('./?autoplay=0&latency=0#/overlays/ov-brb')

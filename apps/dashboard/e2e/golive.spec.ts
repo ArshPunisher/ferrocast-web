@@ -185,7 +185,7 @@ test.describe('go live everywhere', () => {
     page,
   }) => {
     await open(page, 'studio/vertical')
-    const source = panel(page, 'Vertical stream')
+    const source = panel(page, 'Picture')
     await expect(source.getByText('Aitum Vertical found')).toBeVisible()
     await source.getByRole('button', { name: 'Point Aitum Vertical at Ferrocast' }).click()
     await expect(page.getByText('Aitum Vertical now streams to Ferrocast.')).toBeVisible()
@@ -200,7 +200,7 @@ test.describe('go live everywhere', () => {
         timeout: 8000,
       },
     )
-    await expect(source.getByText(/1080 × 1920 at 30 fps coming in from OBS/)).toBeVisible()
+    await expect(source.getByText(/1080 × 1920 at 30 fps coming in/)).toBeVisible()
     await page
       .getByRole('radiogroup', { name: 'Studio section' })
       .getByText('Go live', { exact: true })
@@ -214,13 +214,13 @@ test.describe('go live everywhere', () => {
     page,
   }) => {
     await open(page, 'studio/vertical')
-    const source = panel(page, 'Vertical stream')
+    const source = panel(page, 'Picture')
     await source.getByText('Cut it from your stream').click()
     await expect(
       page.getByText('Ferrocast cuts the vertical picture from your stream.'),
     ).toBeVisible()
     const editor = panel(page, 'Vertical layout')
-    await expect(editor.getByRole('img', { name: 'What’s on air in OBS' })).toBeVisible()
+    await expect(editor.getByRole('img', { name: 'What’s on air' })).toBeVisible()
     const camera = editor.getByRole('group', { name: /Camera box/ })
     const before = await camera.evaluate((el) => (el as HTMLElement).style.left)
     await camera.focus()
@@ -248,7 +248,7 @@ test.describe('go live everywhere', () => {
   test('cutting fetches ffmpeg the first time, with progress', async ({ page }) => {
     await open(page, 'studio/vertical')
     await demo(page, '(d) => d.setGoLive({ ffmpeg_missing: true })')
-    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    await panel(page, 'Picture').getByText('Cut it from your stream').click()
     const editor = panel(page, 'Vertical layout')
     await expect(editor.getByText(/Getting ffmpeg, once \(\d+%\)/)).toBeVisible()
     await expect(editor.getByText('Tick a place on the left for it to start.')).toBeVisible({
@@ -290,7 +290,7 @@ test.describe('go live everywhere', () => {
     await expect(page.locator('#golive-advanced')).toBeVisible()
     const section = page.getByRole('radiogroup', { name: 'Studio section' })
     await section.getByText('Vertical', { exact: true }).click()
-    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    await panel(page, 'Picture').getByText('Cut it from your stream').click()
     const editor = panel(page, 'Vertical layout')
     await expect(editor.getByLabel('Camera width')).toHaveValue('461')
     await editor.getByLabel('Bitrate').fill('6000')
@@ -301,7 +301,7 @@ test.describe('go live everywhere', () => {
     await page.getByRole('button', { name: 'Advanced settings' }).click()
     await expect(page.locator('#golive-advanced')).toHaveCount(0)
     await section.getByText('Vertical', { exact: true }).click()
-    await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+    await panel(page, 'Picture').getByText('Cut it from your stream').click()
     await expect(panel(page, 'Vertical layout').getByLabel('Bitrate')).toHaveCount(0)
   })
 
@@ -356,7 +356,7 @@ test.describe('go live everywhere', () => {
         .click()
       await expect(page.getByText('YouTube Shorts live: Live')).toBeVisible({ timeout: 8000 })
       // With the cut editor open too.
-      await panel(page, 'Vertical stream').getByText('Cut it from your stream').click()
+      await panel(page, 'Picture').getByText('Cut it from your stream').click()
       await expect(
         panel(page, 'Vertical layout').getByRole('group', { name: /Game box/ }),
       ).toBeVisible()

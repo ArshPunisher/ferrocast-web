@@ -189,7 +189,9 @@ test.describe('overlays', () => {
     await page.getByRole('button', { name: 'More for Main scene' }).click()
     await page.getByRole('menuitem', { name: /New URL/ }).click()
     await page.getByRole('button', { name: 'Make new URL' }).click()
-    await expect(page.getByText('New URL ready. Update it in OBS.')).toBeVisible()
+    await expect(
+      page.getByText('New URL ready. Paste it into the overlay’s Browser source.'),
+    ).toBeVisible()
   })
 
   test('create an overlay, then name conflicts are explained (409)', async ({ page }) => {
@@ -211,7 +213,7 @@ test.describe('overlays', () => {
     await w.press('Shift+ArrowDown')
     await expect(w).toHaveAccessibleName(/at 568, 120/)
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Overlay saved. OBS updates by itself.')).toBeVisible()
+    await expect(page.getByText('Overlay saved. Your stream updates by itself.')).toBeVisible()
   })
 
   test('layout editor: the live view renders the real overlay', async ({ page }) => {

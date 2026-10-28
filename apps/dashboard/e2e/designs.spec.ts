@@ -394,7 +394,7 @@ test.describe('layout editor layers', () => {
     await page.getByRole('button', { name: 'Undo' }).click()
     await expect(layer).not.toHaveAccessibleName(/Locked/)
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Overlay saved. OBS updates by itself.')).toBeVisible()
+    await expect(page.getByText('Overlay saved. Your stream updates by itself.')).toBeVisible()
   })
 
   test('align buttons move the selected layer to the canvas edges', async ({ page }) => {

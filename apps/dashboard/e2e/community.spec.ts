@@ -443,7 +443,7 @@ test.describe('overlay editor: poll and giveaway widgets', () => {
       ).toBeVisible()
     }
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Overlay saved. OBS updates by itself.')).toBeVisible()
+    await expect(page.getByText('Overlay saved. Your stream updates by itself.')).toBeVisible()
     await expect(page.getByText(/Unsaved layout/)).toBeHidden()
   })
 })
