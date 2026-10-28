@@ -252,17 +252,19 @@ export function ScenesDock() {
 
   const nameInput = (
     <form
-      className="px-1.5 py-1"
+      className={cx('py-1', !grid && 'flex items-center gap-2.5 px-1.5')}
       onSubmit={(e) => {
         e.preventDefault()
         void commitName()
       }}
     >
+      {/* The scene's icon stays while it's named, as in the list (owner, 28 Oct). */}
+      {!grid && <KindTile kind="scene" size={26} />}
       <Input
         autoFocus
         data-autofocus
         aria-label={naming?.from ? `New name for ${naming.from}` : 'New scene name'}
-        className="h-8! text-[14.5px]"
+        className="h-8! min-w-0 flex-1 text-[14.5px]"
         maxLength={100}
         value={naming?.value ?? ''}
         onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
