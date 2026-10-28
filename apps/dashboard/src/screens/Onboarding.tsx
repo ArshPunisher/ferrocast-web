@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, ArrowRight, Check, CopySimple } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Check, CopySimple, Play } from '@phosphor-icons/react'
 import {
   DEFAULT_THEME,
   anySample,
   defaultRules,
   renderAlert,
   selectAlert,
+  studioEngineApi,
   type Overlay,
   type Theme,
 } from '@ferrocast/api'
@@ -17,8 +18,10 @@ import { ObsIcon, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { useLive } from '../lib/store'
 import { go } from '../lib/router'
+import { useUsesObs } from '../lib/picture'
+import { addOverlayToStudio } from '../components/studio/desk/add-to-studio'
 
-const STEPS = ['Connect', 'Pick a look', 'Add to OBS'] as const
+const STEPS = ['Connect', 'Pick a look', 'Add to your stream'] as const
 
 function previewAlert() {
   const e = anySample('subscription')
@@ -49,8 +52,26 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   const overlays = useResource((c) => c.overlays())
   const [theme, setTheme] = useState(DEFAULT_THEME)
   const { run, busy: saving } = useAction()
-  const { add, busy: adding, guide } = useAddToObs()
+  const { add: addObs, busy: addingObs, guide } = useAddToObs()
   const [added, setAdded] = useState(false)
+  // The overlay goes into Ferrocast's Studio (started if it isn't), or OBS for OBS users.
+  const usesObs = useUsesObs()
+  const engine = useMemo(() => studioEngineApi(client), [client])
+  const { run: runStudio, busy: addingStudio } = useAction()
+  const add = (o: Overlay): Promise<boolean> =>
+    usesObs
+      ? addObs(o)
+      : runStudio(
+          'studio',
+          async () => {
+            if (!(await engine.status()).running) await engine.start()
+            const { current } = await engine.scenes()
+            await addOverlayToStudio(engine, o, current)
+            return true
+          },
+          { success: 'Added to the Studio. Open Studio, Go live to see it.' },
+        ).then((ok) => !!ok)
+  const adding = usesObs ? addingObs : addingStudio
   const alert = useMemo(previewAlert, [])
   const bg = useMemo(bgHex, [])
   const anyConnected = (['twitch', 'youtube', 'kick'] as const).some(
@@ -296,23 +317,38 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       id="step-2"
                       className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
-                      Add it to OBS
+                      {usesObs ? 'Add it to OBS' : 'Add it to your Studio'}
                     </h1>
                     <p className="mt-2 text-sm leading-relaxed text-text-2">
-                      Ferrocast puts your overlay into the current OBS scene. If OBS isn’t connected
-                      yet, copy the URL and paste it into a Browser source.
+                      {usesObs
+                        ? 'Ferrocast puts your overlay into the current OBS scene. If OBS isn’t connected yet, copy the URL and paste it into a Browser source.'
+                        : 'Ferrocast starts its Studio and puts your overlay on top of your scene, its alert sounds on.'}
                     </p>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button
                       size="lg"
                       variant="primary"
-                      icon={added ? <Check size={18} weight="bold" /> : <ObsIcon size={18} />}
+                      icon={
+                        added ? (
+                          <Check size={18} weight="bold" />
+                        ) : usesObs ? (
+                          <ObsIcon size={18} />
+                        ) : (
+                          <Play size={18} weight="fill" />
+                        )
+                      }
                       disabled={!main}
                       busy={adding !== null}
                       onClick={() => main && void add(main).then((ok) => ok && setAdded(true))}
                     >
-                      {added ? 'Added to OBS' : 'Add to OBS'}
+                      {added
+                        ? usesObs
+                          ? 'Added to OBS'
+                          : 'Added to the Studio'
+                        : usesObs
+                          ? 'Add to OBS'
+                          : 'Add to the Studio'}
                     </Button>
                     <Button
                       size="lg"
@@ -326,7 +362,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                               ? {
                                   tone: 'ok',
                                   message: 'URL copied.',
-                                  hint: 'In OBS: Sources → + → Browser → paste, 1920 × 1080.',
+                                  hint: 'Add a Browser source, paste it, 1920 × 1080.',
                                 }
                               : { tone: 'error', message: 'Couldn’t copy it.' },
                           ),

@@ -14,6 +14,8 @@ import { Menu } from '../components/Menu'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { go, href } from '../lib/router'
+import { useUsesObs } from '../lib/picture'
+import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
 
 const WIDGET_NAME: Record<string, string> = {
   alerts: 'Alerts',
@@ -22,6 +24,10 @@ const WIDGET_NAME: Record<string, string> = {
   goal: 'Goal',
   label: 'Label',
   viewers: 'Viewers',
+  poll: 'Poll',
+  giveaway: 'Giveaway',
+  // Designs' pictures and shapes: counted, not listed one by one.
+  layer: '',
 }
 
 const PRESETS: { value: OverlayPreset; title: string; body: string }[] = [
@@ -83,6 +89,9 @@ export function Overlays() {
   const overlays = useResource((c) => c.overlays())
   const { run, busy } = useAction()
   const { add, busy: adding, guide } = useAddToObs()
+  // With Ferrocast's Studio an overlay goes into one of its scenes; OBS stays in the menu.
+  const usesObs = useUsesObs()
+  const [toStudio, setToStudio] = useState<Overlay | null>(null)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [preset, setPreset] = useState<OverlayPreset>('alerts_only')
@@ -112,7 +121,11 @@ export function Overlays() {
     <div>
       <PageHeader
         title="Overlays"
-        description="Each overlay is one OBS Browser source. Group widgets to keep OBS light."
+        description={
+          usesObs
+            ? 'Each overlay is one OBS Browser source. Group widgets to keep OBS light.'
+            : 'Each overlay is one Browser source in your scenes. Group widgets to keep it light.'
+        }
         actions={
           <Button
             variant="primary"
@@ -140,8 +153,8 @@ export function Overlays() {
             </Button>
           }
         >
-          An overlay holds your alerts, chat and goals. Add it to OBS once and change it any time
-          from here.
+          An overlay holds your alerts, chat and goals. Add it to {usesObs ? 'OBS' : 'the Studio'}{' '}
+          once and change it any time from here.
         </EmptyState>
       ) : (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -166,7 +179,9 @@ export function Overlays() {
                   </h2>
                   <p className="mt-0.5 truncate text-[14.5px] text-text-2">
                     {o.widgets.length
-                      ? o.widgets.map((w) => WIDGET_NAME[w.kind]).join(', ')
+                      ? [
+                          ...new Set(o.widgets.map((w) => WIDGET_NAME[w.kind]).filter(Boolean)),
+                        ].join(', ') || `${o.widgets.length} widgets`
                       : 'No widgets yet'}
                   </p>
                 </div>
@@ -179,6 +194,16 @@ export function Overlays() {
                     </IconButton>
                   )}
                   items={[
+                    ...(usesObs
+                      ? []
+                      : [
+                          {
+                            key: 'obs',
+                            label: 'Add to OBS',
+                            icon: <ObsIcon size={15} />,
+                            onSelect: () => void add(o),
+                          },
+                        ]),
                     {
                       key: 'edit',
                       label: 'Edit layout',
@@ -209,16 +234,28 @@ export function Overlays() {
               </div>
               <SecretUrl url={o.url} />
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon={<ObsIcon size={14} />}
-                  busy={adding === o.id}
-                  onClick={() => void add(o)}
-                  className="flex-1"
-                >
-                  Add to OBS
-                </Button>
+                {usesObs ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<ObsIcon size={14} />}
+                    busy={adding === o.id}
+                    onClick={() => void add(o)}
+                    className="flex-1"
+                  >
+                    Add to OBS
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<Plus size={14} weight="bold" />}
+                    onClick={() => setToStudio(o)}
+                    className="flex-1"
+                  >
+                    Add to Studio
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={() => go({ name: 'overlay', id: o.id })}
@@ -231,6 +268,8 @@ export function Overlays() {
           ))}
         </ul>
       )}
+
+      <AddToStudioDialog overlay={toStudio} onClose={() => setToStudio(null)} />
 
       <Dialog
         open={creating}
@@ -317,7 +356,7 @@ export function Overlays() {
               onClick={() =>
                 regen &&
                 void run('regen', () => client.regenerateUrl(regen.id), {
-                  success: 'New URL ready. Update it in OBS.',
+                  success: 'New URL ready. Paste it into the overlay’s Browser source.',
                 }).then((o) => {
                   if (o) overlays.set((p) => (p ?? []).map((x) => (x.id === o.id ? o : x)))
                   setRegen(null)

@@ -6,6 +6,8 @@ import { Button, Dialog, IconButton, Skeleton } from '@ferrocast/ui'
 import { LoadError } from '../components/Panel'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
 import { TestAlertMenu } from '../components/alerts-live'
+import { useUsesObs } from '../lib/picture'
+import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
 import { LayoutEditor } from '../components/layout/LayoutEditor'
 import { useHistory, useUndoKeys } from '../lib/history'
 import { useAction, useClient, useResource } from '../lib/hooks'
@@ -26,6 +28,8 @@ export function OverlayEditor({ id }: { id: string }) {
   const liveGiveaway = useLive((s) => s.giveaway)
   const { run, busy } = useAction()
   const { add, busy: adding, guide } = useAddToObs()
+  const usesObs = useUsesObs()
+  const [toStudio, setToStudio] = useState(false)
   const history = useHistory<Overlay | null>(null)
   const draft = history.value
   const setDraft = (o: Overlay) => history.reset(o)
@@ -79,7 +83,7 @@ export function OverlayEditor({ id }: { id: string }) {
   const brandLocked = draft.design?.branded === true
   const saveNow = () =>
     run('save', () => client.saveOverlay(draft), {
-      success: 'Overlay saved. OBS updates by itself.',
+      success: 'Overlay saved. Your stream updates by itself.',
     }).then((o) => {
       if (o) ov.set(o)
       return o
@@ -115,15 +119,21 @@ export function OverlayEditor({ id }: { id: string }) {
           {preview ? 'Hide live view' : 'Live view'}
         </Button>
         <TestAlertMenu size="sm" />
-        <Button
-          size="sm"
-          variant="primary"
-          icon={<ObsIcon size={14} />}
-          busy={adding === draft.id}
-          onClick={() => void add(draft)}
-        >
-          Add to OBS
-        </Button>
+        {usesObs ? (
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<ObsIcon size={14} />}
+            busy={adding === draft.id}
+            onClick={() => void add(draft)}
+          >
+            Add to OBS
+          </Button>
+        ) : (
+          <Button size="sm" variant="primary" onClick={() => setToStudio(true)}>
+            Add to Studio
+          </Button>
+        )}
       </div>
       <SecretUrl url={draft.url} className="max-w-xl" />
       {brandLocked && (
@@ -165,12 +175,13 @@ export function OverlayEditor({ id }: { id: string }) {
         )}
       </AnimatePresence>
       {guide}
+      <AddToStudioDialog overlay={toStudio ? draft : null} onClose={() => setToStudio(false)} />
       <Dialog
         open={leaving.pending !== null}
         onClose={leaving.stay}
         size="sm"
         title="Save your layout first?"
-        description="You moved or changed widgets in this overlay. OBS keeps the old layout until you save."
+        description="You moved or changed widgets in this overlay. Your stream keeps the old layout until you save."
         footer={
           <>
             <Button variant="ghost" onClick={leaving.stay}>
