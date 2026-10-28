@@ -191,7 +191,7 @@ function Source({
     }).then((r) => r && onSource())
   return (
     <Panel title="Picture" description="Where the vertical picture comes from.">
-      <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+      <fieldset className="m-0 grid grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2">
         <legend className="sr-only">Where the vertical picture comes from</legend>
         {!usesObs && (
           <Option
