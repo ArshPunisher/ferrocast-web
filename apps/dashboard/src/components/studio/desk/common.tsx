@@ -47,8 +47,15 @@ export function useEngine(): EngineApi {
 export interface Desk {
   api: EngineApi
   scenes: Resource<EngineScenes>
-  /** The scene on air, which the Sources and Audio panels show. */
+  /** The scene the Sources and Audio panels show: the edited picture's (Studio Mode's
+   * preview, else what's on air). */
   scene: string
+  /** The picture the Scenes, Sources and Audio panels edit (the vertical one while it's on and
+   * picked). */
+  canvas: 'main' | 'vertical'
+  setCanvas: (c: 'main' | 'vertical') => void
+  /** The edited picture's size in pixels (null until the engine says). */
+  size: { width: number; height: number } | null
   items: Resource<EngineItem[]>
   audio: Resource<EngineAudio[]>
   kinds: Resource<EngineKinds>

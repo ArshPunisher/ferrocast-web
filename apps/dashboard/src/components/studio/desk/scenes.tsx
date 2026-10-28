@@ -105,11 +105,13 @@ export function ScenesDock() {
   const [removing, setRemoving] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [grid, setGrid] = useGrid()
-  const list = scenes.data?.scenes
+  // The vertical picture's own scenes while it's the one picked.
+  const tall = desk.canvas === 'vertical' ? (scenes.data?.vertical ?? null) : null
+  const list = tall ? tall.scenes : scenes.data?.scenes
   const thumbs = useSceneThumbs(list?.map((s) => s.name) ?? [], grid)
   const keys = desk.prefs.data?.hotkeys ?? {}
-  const studio = !!scenes.data?.preview
-  const current = scenes.data?.current ?? ''
+  const studio = !tall && !!scenes.data?.preview
+  const current = (tall ? tall.current : scenes.data?.current) ?? ''
   const names = list?.map((s) => s.name) ?? []
   const at = names.indexOf(current)
 
@@ -123,7 +125,7 @@ export function ScenesDock() {
     const value = naming.value.trim()
     if (!value || value === naming.from) return setNaming(null)
     const ok = await act('name', () =>
-      naming.from ? api.rename(naming.from, value) : api.addScene(value),
+      naming.from ? api.rename(naming.from, value) : api.addScene(value, !!tall),
     )
     if (ok) setNaming(null)
   }
@@ -276,6 +278,15 @@ export function ScenesDock() {
     <section aria-label="Scenes" className="flex min-h-0 flex-1 flex-col">
       <DockHeader
         id="scenes"
+        {...(tall
+          ? {
+              info: (
+                <span className="truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text">
+                  Vertical
+                </span>
+              ),
+            }
+          : {})}
         actions={
           <>
             <IconButton
@@ -393,7 +404,8 @@ export function ScenesDock() {
                             Arc and PREVIEW for Studio Mode's preview. */}
                         <span
                           className={cx(
-                            'relative block aspect-video overflow-hidden rounded-[7px] bg-[#0a0b0d]',
+                            'relative block overflow-hidden rounded-[7px] bg-[#0a0b0d]',
+                            tall ? 'mx-auto aspect-[9/16] h-24' : 'aspect-video',
                             s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
                             s.preview &&
                               !s.current &&

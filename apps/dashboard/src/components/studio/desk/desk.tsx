@@ -128,8 +128,17 @@ function Running({
 }) {
   const api = useEngine()
   const scenes = useResource(() => api.scenes(), [api])
-  // The scene the panels edit: Studio Mode's preview, else the one on air.
-  const scene = scenes.data?.preview ?? scenes.data?.current ?? ''
+  // The picture the panels edit: the vertical one only while it's on (and not in Studio Mode,
+  // which is the main picture's).
+  const vertical = scenes.data?.preview ? null : (scenes.data?.vertical ?? null)
+  const [picture, setCanvas] = useState<'main' | 'vertical'>('main')
+  const canvas = picture === 'vertical' && vertical ? 'vertical' : 'main'
+  // The scene the panels edit: the vertical picture's on air, Studio Mode's preview, else the
+  // one on air.
+  const scene =
+    canvas === 'vertical'
+      ? (vertical?.current ?? '')
+      : (scenes.data?.preview ?? scenes.data?.current ?? '')
   const items = useResource(() => (scene ? api.items(scene) : Promise.resolve([])), [api, scene])
   const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
   const kinds = useResource(() => api.kinds(), [api])
@@ -212,10 +221,25 @@ function Running({
   useEffect(() => {
     if (onAir && shownOnAir && onAir !== shownOnAir) refresh()
   }, [onAir, shownOnAir, refresh])
+  // The vertical picture's switches don't show in the stats: while it's on, its scenes are
+  // read again every few seconds, so one switched elsewhere (a shortcut, another window) shows.
+  const hasVertical = !!vertical
+  useEffect(() => {
+    if (!hasVertical) return
+    const t = setInterval(reloadScenes, 3000)
+    return () => clearInterval(t)
+  }, [hasVertical, reloadScenes])
+  const size =
+    canvas === 'vertical' && vertical
+      ? { width: vertical.width, height: vertical.height }
+      : (stats?.canvas ?? null)
   const desk: Desk = {
     api,
     scenes,
     scene,
+    canvas,
+    setCanvas,
+    size,
     items,
     audio,
     kinds,

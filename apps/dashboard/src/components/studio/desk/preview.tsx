@@ -18,6 +18,7 @@ import {
   BoundingBox,
   ClockCounterClockwise,
   Columns,
+  DeviceMobile,
   DotsThree,
   MoonStars,
   GearSix,
@@ -153,17 +154,26 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
  * between them in the middle. */
 export function PreviewBox({ running }: { running: boolean }) {
   const api = useEngine()
-  const { scenes } = useDesk()
+  const { scenes, canvas, setCanvas } = useDesk()
   const studio = !!scenes.data?.preview
+  // The vertical picture beside the main one (not in Studio Mode, which is the main one's).
+  const vertical = studio ? null : (scenes.data?.vertical ?? null)
+  const tall = !!vertical
   const ref = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const programRef = useRef<HTMLDivElement>(null)
+  const vRef = useRef<HTMLDivElement>(null)
+  const vStageRef = useRef<HTMLDivElement>(null)
   const desktop = inDesktopApp()
   const [pv] = usePreviewView()
   // The scenes shown, for the still during a window resize (read there, not a reason to
   // place the picture again).
-  const shown = useRef({ current: '', preview: '' })
-  shown.current = { current: scenes.data?.current ?? '', preview: scenes.data?.preview ?? '' }
+  const shown = useRef({ current: '', preview: '', vertical: '' })
+  shown.current = {
+    current: scenes.data?.current ?? '',
+    preview: scenes.data?.preview ?? '',
+    vertical: vertical?.current ?? '',
+  }
   useEffect(() => {
     const el = ref.current
     if (!running || !desktop || !el) return
@@ -223,8 +233,9 @@ export function PreviewBox({ running }: { running: boolean }) {
     // with it, and the live picture comes back where things ended up once it settles.
     let resizing = 0
     let frozen = 0
-    let still: [PreviewRect | null, PreviewRect | null] = [null, null]
-    const boxes = () => [el, studio ? programRef.current : null] as const
+    let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
+    const boxes = () =>
+      [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
     const unfreeze = () => {
       frozen = 0
       for (const b of boxes()) if (b) b.style.backgroundImage = ''
@@ -232,15 +243,15 @@ export function PreviewBox({ running }: { running: boolean }) {
     const freeze = () => {
       const token = (frozen = performance.now())
       const names = studio
-        ? [shown.current.preview, shown.current.current]
-        : [shown.current.current, null]
+        ? [shown.current.preview, shown.current.current, null]
+        : [shown.current.current, null, shown.current.vertical]
       const hide = () => {
         // Only while still resizing: once it settled the live picture is placed again, and
         // a still that came late must not hide it (CodeRabbit).
         if (frozen !== token || !alive || performance.now() >= resizing) return
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
-        void api.preview(off(still[0]), off(still[1])).catch(() => undefined)
+        void api.preview(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
       }
       void Promise.all(
         boxes().map(async (b, i) => {
@@ -276,18 +287,20 @@ export function PreviewBox({ running }: { running: boolean }) {
       }
       let rect = studio ? place(el) : placeStage(stageRef.current, el)
       let program = studio ? place(programRef.current) : null
+      let tallRect = tall && vRef.current ? placeStage(vStageRef.current, vRef.current) : null
       // Under a dialog the page is dimmed by its backdrop (rgb(4 5 8 / 0.62)): the app draws
       // the same over the picture.
       if (document.querySelector('dialog[open]')) {
         rect = rect && { ...rect, shade: 0.62 }
         program = program && { ...program, shade: 0.62 }
+        tallRect = tallRect && { ...tallRect, shade: 0.62 }
       }
       // While a menu or panel is open, follow it every frame: one sliding in or away changes
       // no attribute the observers below see.
       if (document.querySelector(OVER)) schedule()
       // The window's height is part of it: the native side places the view from the bottom.
-      const key = JSON.stringify([rect, program, window.innerHeight])
-      still = [rect, program]
+      const key = JSON.stringify([rect, program, tallRect, window.innerHeight])
+      still = [rect, program, tallRect]
       if (key === last) {
         if (frozen) unfreeze()
         return
@@ -295,7 +308,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       last = key
       const thawing = frozen
       void api
-        .preview(rect, program)
+        .preview(rect, program, tallRect)
         .then(() => {
           // The live picture is back in place: the still goes a moment later, under it.
           if (thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
@@ -335,6 +348,8 @@ export function PreviewBox({ running }: { running: boolean }) {
     ro.observe(el)
     if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
+    if (vStageRef.current) ro.observe(vStageRef.current)
+    if (vRef.current) ro.observe(vRef.current)
     const mo = new MutationObserver(schedule)
     // Dialogs open by an attribute; floating panels say where they are in data-pos.
     mo.observe(document.body, {
@@ -365,16 +380,77 @@ export function PreviewBox({ running }: { running: boolean }) {
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener('resize', onResize)
       unfreeze()
-      void api.preview(null, null).catch(() => undefined)
+      void api.preview(null, null, null).catch(() => undefined)
     }
-  }, [api, running, desktop, studio])
-  const editing = useStageEdit(ref, running && desktop)
+  }, [api, running, desktop, studio, tall])
+  // The picture being edited takes the pointer; a press on the other one picks it instead.
+  const onTall = tall && canvas === 'vertical'
+  const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
     // left clear: if the page lags the window for a moment, the stage shows, never a black box.
     'grid aspect-video touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
     desktop && running ? 'bg-transparent' : 'bg-[#0a0b0d]',
   )
+  if (tall) {
+    // The wide picture and the tall one side by side (as OBS with a vertical canvas): the one
+    // picked is edited by the panels and the pointer; a press on the other picks it.
+    const pick = (c: 'main' | 'vertical') => ({
+      onPointerDown: (e: React.PointerEvent) => {
+        if (e.button !== 0) return
+        e.preventDefault()
+        setCanvas(c)
+      },
+    })
+    const label = (c: 'main' | 'vertical') =>
+      c === 'main'
+        ? 'Wide picture. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
+        : 'Vertical picture. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
+    return (
+      <div className="flex min-h-16 flex-1 gap-2 bg-[var(--fc-stage)] p-2 [container-type:size]">
+        <PictureColumn
+          name="Wide"
+          on={!onTall}
+          onPick={() => setCanvas('main')}
+          className="min-w-0 flex-1"
+        >
+          <div
+            ref={stageRef}
+            aria-label={onTall ? 'Wide picture. Click to edit it.' : label('main')}
+            data-stage-bg
+            className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+            {...(onTall ? pick('main') : editing)}
+          >
+            <div
+              ref={ref}
+              style={{ '--fc-zoom': pv.zoom } as CSSProperties}
+              className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
+            >
+              {!desktop && 'The live picture shows in the Ferrocast app.'}
+            </div>
+          </div>
+        </PictureColumn>
+        <PictureColumn
+          name="Vertical"
+          on={onTall}
+          onPick={() => setCanvas('vertical')}
+          className="w-[calc((100cqh-48px)*9/16+30px)] max-w-[40%] flex-none"
+        >
+          <div
+            ref={vStageRef}
+            aria-label={onTall ? label('vertical') : 'Vertical picture. Click to edit it.'}
+            data-stage-bg
+            className="grid min-h-0 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+            {...(onTall ? editing : pick('vertical'))}
+          >
+            <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)]')}>
+              {!desktop && 'The live picture shows in the Ferrocast app.'}
+            </div>
+          </div>
+        </PictureColumn>
+      </div>
+    )
+  }
   if (!studio)
     // The canvas is an exact 16:9 box fitted inside the stage (smaller when zoomed out), with
     // room around it for what's off the canvas. The whole stage takes clicks: a handle can be
@@ -426,6 +502,113 @@ export function PreviewBox({ running }: { running: boolean }) {
         <div ref={programRef} aria-label="What's on air" className={cx(screen, half)} />
       </figure>
     </div>
+  )
+}
+
+/** Turns the vertical picture on (a tall canvas with scenes of its own, beside the wide one),
+ * or, when it's on, offers to take it away (its scenes go, so it asks first). */
+function VerticalToggle() {
+  const { api, scenes, refresh, setCanvas } = useDesk()
+  const { run, busy } = useAction()
+  const [removing, setRemoving] = useState(false)
+  const on = !!scenes.data?.vertical
+  // Studio Mode is the main picture's: the vertical one waits until it's off.
+  if (scenes.data?.preview) return null
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-pressed={on}
+        busy={busy === 'vertical'}
+        title={
+          on ? 'Remove the vertical picture' : 'Add a vertical picture for Shorts, TikTok and Reels'
+        }
+        className={cx('gap-1.5', on && 'fc-picked hover:bg-[var(--fc-pick-hover)]')}
+        onClick={() => {
+          if (on) return setRemoving(true)
+          void run('vertical', () => done(api.startVertical('Vertical')), {
+            success: 'Vertical picture added. Click it to edit its scenes and sources.',
+          }).then((ok) => {
+            if (!ok) return
+            setCanvas('vertical')
+            refresh()
+          })
+        }}
+      >
+        <DeviceMobile size={16} weight={on ? 'fill' : 'bold'} />
+        Vertical
+      </Button>
+      <Dialog
+        open={removing}
+        onClose={() => setRemoving(false)}
+        size="sm"
+        title="Remove the vertical picture?"
+        description="Its scenes go. Your sources stay in the wide picture's scenes."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRemoving(false)}>
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              busy={busy === 'vertical-off'}
+              onClick={() =>
+                void run('vertical-off', () => done(api.stopVertical())).then((ok) => {
+                  if (!ok) return
+                  setRemoving(false)
+                  setCanvas('main')
+                  refresh()
+                })
+              }
+            >
+              Remove
+            </Button>
+          </>
+        }
+      />
+    </>
+  )
+}
+
+/** One of the two pictures side by side: its name on a tab that picks it, and its stage. The
+ * picked one is ringed (outside the stage, where the app's picture doesn't cover it). */
+function PictureColumn({
+  name,
+  on,
+  onPick,
+  className,
+  children,
+}: {
+  name: string
+  on: boolean
+  onPick: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      aria-label={`${name} picture`}
+      className={cx(
+        'flex min-h-0 flex-col overflow-hidden rounded-[10px] border-2',
+        on ? 'border-[var(--fc-pick)]' : 'border-transparent',
+        className,
+      )}
+    >
+      <button
+        type="button"
+        aria-pressed={on}
+        onClick={onPick}
+        className={cx(
+          'flex h-7 flex-none items-center gap-1.5 px-2.5 text-left text-[12.5px] font-extrabold',
+          on ? 'fc-picked' : 'text-text-2 hover:text-text',
+        )}
+      >
+        {name}
+        {on && <span className="font-semibold opacity-75">· editing</span>}
+      </button>
+      {children}
+    </section>
   )
 }
 
@@ -745,14 +928,15 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     also,
     pickMore,
     edit,
-    stats,
     setTransforming,
     prefs,
     itemMenu,
+    size,
   } = useDesk()
   const { run } = useAction()
   const p = prefs.data
-  const canvas = stats?.canvas ?? null
+  // The edited picture's size (the vertical one's while it's picked).
+  const canvas = size
   const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
@@ -1143,10 +1327,10 @@ export function covers(a: Frame, b: Frame, w: number, h: number): boolean {
 /** The preview's zoom and frames switch, and a note when the picked source is hidden behind
  * another (it still moves; its outline shows where it is). */
 function ViewControls() {
-  const { api, scene, scenes, items, selected, refresh, stats } = useDesk()
+  const { api, scene, scenes, items, selected, refresh, size } = useDesk()
   const { run } = useAction()
   const [pv, setPv] = usePreviewView()
-  const c = stats?.canvas
+  const c = size
   const list = items.data ?? []
   const idx = list.findIndex((i) => i.id === selected)
   const it = idx >= 0 ? list[idx] : undefined
@@ -1305,6 +1489,7 @@ export function StageBar() {
           </button>
         )}
         <ViewControls />
+        <VerticalToggle />
         <span className="flex-1" />
         {t && (
           <div className="flex items-center gap-2">
