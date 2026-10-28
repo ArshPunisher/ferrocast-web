@@ -2,7 +2,7 @@
 // Camera box and a Game box to drag or resize, the four layouts, and the upright preview built
 // from the same picture. API.md §4 "Cut from the stream".
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { ArrowsClockwise, CheckCircle, Info, Warning } from '@phosphor-icons/react'
 import {
   checkCut,
@@ -60,7 +60,23 @@ function fit(b: CutBox): CutBox {
   return { w, h, x: clamp(b.x, 0, 1 - w), y: clamp(b.y, 0, 1 - h) }
 }
 
-export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void }) {
+/** What phones will see while the layout is edited: the draft and the picture it's cut from. */
+export interface CutShown {
+  cut: CutConfig
+  image: string
+  ratio: number
+}
+
+export function CutEditor({
+  cut,
+  onSaved,
+  onShown,
+}: {
+  cut: CutView
+  onSaved: () => void
+  /** Given: the preview is shown elsewhere (the Vertical tab's phone), not beside the picture. */
+  onShown?: (s: CutShown | null) => void
+}) {
   const api = useGoLive()
   const picture = useResource(() => api.picture(), [api])
   const { run, busy } = useAction()
@@ -78,6 +94,13 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
     void run('save', () => api.setVerticalCut(draft), { success: 'Layout saved.' }).then(
       (r) => r && onSaved(),
     )
+  const image = picture.data?.image
+  const ratio = picture.data ? picture.data.width / Math.max(1, picture.data.height) : 1
+  useEffect(() => {
+    if (!onShown) return
+    onShown(image ? { cut: draft, image, ratio } : null)
+  }, [onShown, draft, image, ratio])
+  useEffect(() => () => onShown?.(null), [onShown])
   // The game first, so the (usually smaller) camera box is on top and can be grabbed.
   const parts: Part[] = draft.layout === 'game_only' ? ['game'] : ['game', 'camera']
   return (
@@ -98,8 +121,13 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[minmax(0,1fr)_120px]">
-          <div className="flex flex-col gap-3">
+        <div
+          className={cx(
+            'grid grid-cols-1 items-start gap-4',
+            !onShown && 'sm:grid-cols-[minmax(0,1fr)_120px]',
+          )}
+        >
+          <div className="flex max-w-[760px] flex-col gap-3">
             {picture.error && !picture.data ? (
               <LoadError error={picture.error} onRetry={picture.reload} />
             ) : !picture.data ? (
@@ -142,9 +170,9 @@ export function CutEditor({ cut, onSaved }: { cut: CutView; onSaved: () => void 
               </div>
             </fieldset>
           </div>
-          <div className="flex flex-col items-center gap-2">
+          <div className={cx('flex flex-col items-center gap-2', onShown && 'hidden')}>
             {picture.data ? (
-              <Preview
+              <CutPreview
                 cut={draft}
                 image={picture.data.image}
                 ratio={picture.data.width / Math.max(1, picture.data.height)}
@@ -405,12 +433,29 @@ function Trimmed({ k }: { k: { x: number; y: number; w: number; h: number } }) {
 }
 
 /** The upright picture, drawn from OBS's picture the way ffmpeg will cut it. */
-function Preview({ cut, image, ratio }: { cut: CutConfig; image: string; ratio: number }) {
-  const W = 120
+/** The cut as phones get it, `width` pixels wide; `bare` without its own phone frame (when it
+ * sits inside one). */
+export function CutPreview({
+  cut,
+  image,
+  ratio,
+  width = 120,
+  bare = false,
+}: {
+  cut: CutConfig
+  image: string
+  ratio: number
+  width?: number
+  bare?: boolean
+}) {
+  const W = width
   const H = (W * 16) / 9
   return (
     <div
-      className="relative overflow-hidden rounded-[14px] border-[3px] border-text bg-surface-3"
+      className={cx(
+        'relative overflow-hidden bg-surface-3',
+        !bare && 'rounded-[14px] border-[3px] border-text',
+      )}
       style={{ width: W, height: H }}
       role="img"
       aria-label="Preview of the vertical picture"

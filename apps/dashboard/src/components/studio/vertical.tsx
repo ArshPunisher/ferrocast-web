@@ -16,7 +16,7 @@ import { Button, InfoTip, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { done, useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
-import { CutEditor } from './cut-editor'
+import { CutEditor, CutPreview, type CutShown } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
 import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
 
@@ -26,6 +26,8 @@ export function VerticalTab() {
   const view = useMerged(res.data)
   const live = !!view?.vertical_live
   const reload = res.reload
+  // The layout being edited, shown in the phone (cutting only).
+  const [shown, setShown] = useState<CutShown | null>(null)
   useEffect(() => {
     if (!live) return
     const t = setInterval(reload, 15_000)
@@ -50,10 +52,13 @@ export function VerticalTab() {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[auto_minmax(0,1fr)]">
-        <Phone view={view} />
+        <Phone view={view} cut={view.cut.source === 'cut' ? shown : null} />
         <div className="flex min-w-0 flex-col gap-5">
           {view.vertical_live && <LiveCard view={view} onSaved={res.reload} canvas="vertical" />}
           <Source view={view} onVertical={setVertical} onSource={res.reload} />
+          {view.cut.source === 'cut' && (
+            <CutEditor cut={view.cut} onSaved={res.reload} onShown={setShown} />
+          )}
           <Platforms view={view} onSaved={res.reload} canvas="vertical" />
           {ticked > 0 && (
             <p className="m-0 flex items-start gap-2.5 rounded-[12px] bg-ok-soft px-3.5 py-3 text-[14.5px] text-text">
@@ -69,14 +74,13 @@ export function VerticalTab() {
           )}
         </div>
       </div>
-      {view.cut.source === 'cut' && <CutEditor cut={view.cut} onSaved={res.reload} />}
     </div>
   )
 }
 
 /** What phones see, in a phone: the Studio's vertical picture (a fresh still every two
  * seconds), or the stream coming in from OBS's canvas; otherwise what to do. */
-function Phone({ view }: { view: GoLiveView }) {
+function Phone({ view, cut }: { view: GoLiveView; cut: CutShown | null }) {
   const client = useClient()
   const engine = useMemo(() => studioEngineApi(client), [client])
   const usesObs = useUsesObs()
@@ -116,14 +120,17 @@ function Phone({ view }: { view: GoLiveView }) {
       ? 'No vertical picture yet'
       : null
     : view.cut.source === 'cut'
-      ? 'Your layout is below'
+      ? cut
+        ? null
+        : 'Loading the picture…'
       : live
         ? null
         : 'Nothing coming in from OBS yet'
   return (
-    <figure className="m-0 flex flex-col items-center gap-2.5 justify-self-center">
+    <figure className="m-0 flex flex-col items-center gap-2.5 justify-self-center md:sticky md:top-4">
       <div className="rounded-[30px] border border-line-strong bg-black p-2 shadow-2">
-        <div className="relative grid aspect-[9/16] h-[min(60vh,420px)] place-items-center overflow-hidden rounded-[22px] bg-[#0a0b0d]">
+        <div className="relative grid aspect-[9/16] h-[420px] place-items-center overflow-hidden rounded-[22px] bg-[#0a0b0d]">
+          {cut && <CutPreview cut={cut.cut} image={cut.image} ratio={cut.ratio} width={236} bare />}
           {studioCanvas && image && !none && (
             <img
               src={image}
@@ -216,7 +223,7 @@ function Source({
           />
         )}
       </fieldset>
-      <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2">
+      <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2 empty:hidden">
         {source === 'canvas' && !usesObs && <StudioVertical />}
         {source === 'cut' || !usesObs ? null : !obs.connected ? (
           <p className="m-0">
