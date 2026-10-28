@@ -7,6 +7,7 @@ import { type ObsHealth, type ObsScenes, type ScenesConfig } from '@ferrocast/ap
 import { Badge, Button, Field, Kbd, Select, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useResource, type Resource } from '../../lib/hooks'
+import { MIC_KIND, type RigInput } from './rig-lists'
 import { useLive } from '../../lib/store'
 import { useStudio } from './common'
 
@@ -252,13 +253,18 @@ export function ScenesPanel({
 
 export function SwitcherSettings({
   scenes,
+  inputs,
+  app,
   cfg,
 }: {
   scenes: ObsScenes | null
+  /** The sounds to offer for "Mute on BRB" (the Studio's or OBS's). */
+  inputs: RigInput[] | null
+  /** "the Studio" or "OBS". */
+  app: string
   cfg: Resource<ScenesConfig>
 }) {
   const studio = useStudio()
-  const inputs = useResource(() => studio.obsInputs().catch(() => []), [studio])
   const { run } = useAction()
   const c = cfg.data
   if (cfg.error) return <LoadError error={cfg.error} onRetry={cfg.reload} />
@@ -276,9 +282,7 @@ export function SwitcherSettings({
   const names = scenes?.scenes.map((s) => s.name) ?? [...new Set([...c.chat_allowed, ...c.hotkeys])]
   const toggle = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
-  const audio = (inputs.data ?? []).filter((i) =>
-    /input_capture|coreaudio|pulse|alsa|jack/.test(i.kind),
-  )
+  const audio = (inputs ?? []).filter((i) => MIC_KIND.test(i.kind))
   return (
     <Panel title="Scene switcher" description="Saved as you change it.">
       <div className="flex flex-col gap-4">
@@ -389,7 +393,7 @@ export function SwitcherSettings({
         )}
         <Switch
           label="Mods can type !clip"
-          description="Saves OBS’s replay buffer, at most every 20 seconds."
+          description={`Saves ${app === 'OBS' ? 'OBS’s' : 'the Studio’s'} replay buffer, at most every 20 seconds.`}
           checked={c.clip_command}
           onChange={(v) => save({ clip_command: v })}
         />

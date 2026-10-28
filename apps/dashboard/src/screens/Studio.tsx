@@ -14,6 +14,8 @@ import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
 import { ThemeInObsCard } from '../components/design/theme-obs'
 import { useWidePage } from '../lib/wide'
+import { useUsesObs } from '../lib/picture'
+import { useRigLists } from '../components/studio/rig-lists'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -26,8 +28,13 @@ const TABS: { value: StudioSection; label: string }[] = [
 
 export function Studio({ section = 'golive' }: { section?: StudioSection | undefined }) {
   const studio = useStudio()
+  // The OBS tab only for those who stream from OBS (Ferrocast's Studio does all of it).
+  const usesObs = useUsesObs()
+  const tabs = usesObs ? TABS : TABS.filter((t) => t.value !== 'obs')
   const info = useResource(() => studio.streamInfo(), [studio])
   const scenes = useResource(() => studio.obsScenes(), [studio])
+  // The Show tab picks from the Studio's scenes and sounds (OBS's when OBS is the source).
+  const rig = useRigLists()
   const switcher = useResource(() => studio.switcher(), [studio])
   // Every tab uses the window's full width, so switching tabs (or Ferrocast / OBS) never jumps.
   useWidePage()
@@ -35,13 +42,17 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
     <div>
       <PageHeader
         title="Studio"
-        description="Go live, set your title everywhere, run OBS, keep the big moments."
+        description={
+          usesObs
+            ? 'Go live, set your title everywhere, run OBS, keep the big moments.'
+            : 'Build your scenes, go live everywhere, set your title, keep the big moments.'
+        }
         beside={
           <Segmented
             label="Studio section"
             className="max-w-full overflow-x-auto"
             value={section === 'engine' ? 'golive' : section}
-            options={TABS}
+            options={tabs}
             onChange={(s) => go({ name: 'studio', section: s })}
           />
         }
@@ -56,7 +67,18 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
             <ShowPanel />
             <PreflightPanel />
           </div>
-          <ShowSettings presets={info.data?.presets ?? []} scenes={scenes.data} />
+          <div className="flex flex-col gap-5">
+            <ShowSettings presets={info.data?.presets ?? []} rig={rig} />
+            {/* BRB, !scene and shortcuts: in the OBS tab for OBS, here for the Studio. */}
+            {!usesObs && (
+              <SwitcherSettings
+                scenes={rig.scenes.data}
+                inputs={rig.inputs.data}
+                app={rig.app}
+                cfg={switcher}
+              />
+            )}
+          </div>
         </div>
       )}
       {section === 'info' && <StreamInfoEditor view={info} />}
@@ -68,7 +90,12 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
           </div>
           <div className="flex flex-col gap-5">
             <ThemeInObsCard />
-            <SwitcherSettings scenes={scenes.data} cfg={switcher} />
+            <SwitcherSettings
+              scenes={scenes.data}
+              inputs={rig.inputs.data}
+              app={rig.app}
+              cfg={switcher}
+            />
           </div>
         </div>
       )}

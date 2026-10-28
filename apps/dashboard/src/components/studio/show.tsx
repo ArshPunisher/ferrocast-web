@@ -1,19 +1,19 @@
 // Start show / End show: the run with its steps, the pre-flight with one-click fixes, the
 // Start dialog Home opens (two clicks to go live), and the checklist settings.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowsClockwise, Broadcast, Play, Stop, Timer as TimerIcon } from '@phosphor-icons/react'
 import {
   AT_ZERO_DEFAULT,
   describeError,
   fieldError,
   type AtZero,
-  type ObsScenes,
   type Preflight,
   type PreflightCheck,
   type ShowConfig,
   type ShowRun,
   type StreamPreset,
+  studioEngineApi,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -28,36 +28,62 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
-import { useAction, useNow, useResource } from '../../lib/hooks'
+import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
+import { useEngineReading } from '../../lib/engine-stats'
+import { useUsesObs } from '../../lib/picture'
 import { useLive } from '../../lib/store'
 import { StatusIcon, clock, useStudio } from './common'
 import { useObsHealth } from './obs'
+import { CAM_KIND, MIC_KIND, type RigLists } from './rig-lists'
 
 const STOP_DELAYS = [0, 10, 30, 60, 120, 300]
 
-/**
- * OBS's Start / Stop Streaming from here. The watcher's 5-second reading keeps it current;
- * stopping asks first, because it ends the stream for everyone watching.
- */
+/** Start / Stop Streaming from the Show panel: the Studio's, or OBS's when OBS is the source. */
 export function StreamControl() {
+  return useUsesObs() ? <ObsStreamControl /> : <StudioStreamControl />
+}
+
+/** The Studio's stream, read from the stats the status bar shares (once a second). */
+function StudioStreamControl() {
+  const client = useClient()
+  const api = useMemo(() => studioEngineApi(client), [client])
+  const { stats } = useEngineReading(api.stats)
+  const { run, busy } = useAction()
+  if (!stats)
+    return (
+      <p className="flex items-center gap-2 text-[14.5px] text-text-2">
+        <Broadcast size={16} className="shrink-0 text-text-3" aria-hidden="true" />
+        Start the Studio in Go live to start or stop streaming from here.
+      </p>
+    )
+  return (
+    <StreamBar
+      app="The Studio"
+      streaming={!!stats.stream?.active}
+      busy={busy === 'stream'}
+      press={(on) =>
+        run('stream', () => api.stream(on), {
+          success: on ? 'You’re live.' : 'Streaming stopped.',
+        }).then((r) => r !== undefined)
+      }
+    />
+  )
+}
+
+/**
+ * OBS's Start / Stop Streaming from here. The watcher's 5-second reading keeps it current.
+ */
+function ObsStreamControl() {
   const studio = useStudio()
   const health = useObsHealth()
   const first = useResource(() => studio.obsStream(), [studio])
   const [mine, setMine] = useState<{ streaming: boolean; at: number } | null>(null)
-  const [confirm, setConfirm] = useState(false)
   const { run, busy } = useAction()
   // The newest of: what the last button press said, and the watcher's reading.
   const streaming =
     mine && (!health || mine.at >= health.at)
       ? mine.streaming
       : (health?.streaming ?? first.data?.streaming)
-  const press = (on: boolean) =>
-    void run('stream', () => studio.setObsStream(on), {
-      success: (r) => (r.streaming ? 'OBS is streaming. You’re live.' : 'OBS stopped streaming.'),
-    }).then((r) => {
-      if (r) setMine({ streaming: r.streaming, at: Date.now() })
-      setConfirm(false)
-    })
   if (first.error && !health)
     return (
       <p className="flex items-center gap-2 text-[14.5px] text-text-2">
@@ -67,13 +93,44 @@ export function StreamControl() {
     )
   if (streaming === undefined) return <Skeleton className="h-10" />
   return (
+    <StreamBar
+      app="OBS"
+      streaming={streaming}
+      busy={busy === 'stream'}
+      press={(on) =>
+        run('stream', () => studio.setObsStream(on), {
+          success: (r) =>
+            r.streaming ? 'OBS is streaming. You’re live.' : 'OBS stopped streaming.',
+        }).then((r) => {
+          if (r) setMine({ streaming: r.streaming, at: Date.now() })
+          return !!r
+        })
+      }
+    />
+  )
+}
+
+/** The streaming line and its button; stopping asks first (it ends the stream for everyone). */
+function StreamBar({
+  app,
+  streaming,
+  busy,
+  press,
+}: {
+  app: string
+  streaming: boolean
+  busy: boolean
+  press: (on: boolean) => Promise<boolean>
+}) {
+  const [confirm, setConfirm] = useState(false)
+  return (
     <div className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface-2 px-3 py-2.5">
       <span className="flex min-w-0 flex-1 items-center gap-2.5 text-sm font-medium text-text">
         <span
           aria-hidden="true"
           className={`size-2.5 shrink-0 rounded-full ${streaming ? 'bg-danger motion-safe:animate-pulse' : 'bg-text-3'}`}
         />
-        <span role="status">{streaming ? 'OBS is streaming' : 'OBS isn’t streaming'}</span>
+        <span role="status">{streaming ? `${app} is streaming` : `${app} isn’t streaming`}</span>
       </span>
       {streaming ? (
         <Button
@@ -88,8 +145,8 @@ export function StreamControl() {
         <Button
           size="sm"
           icon={<Broadcast size={15} />}
-          busy={busy === 'stream'}
-          onClick={() => press(true)}
+          busy={busy}
+          onClick={() => void press(true)}
         >
           Start streaming
         </Button>
@@ -98,13 +155,17 @@ export function StreamControl() {
         open={confirm}
         onClose={() => setConfirm(false)}
         title="Stop streaming?"
-        description="OBS stops sending video, so the stream ends for everyone watching."
+        description="The stream ends for everyone watching."
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(false)}>
               Keep streaming
             </Button>
-            <Button variant="danger" busy={busy === 'stream'} onClick={() => press(false)}>
+            <Button
+              variant="danger"
+              busy={busy}
+              onClick={() => void press(false).then(() => setConfirm(false))}
+            >
               Stop streaming
             </Button>
           </>
@@ -440,16 +501,12 @@ export function PreflightPanel() {
 
 const COUNTDOWNS = [0, 60, 120, 180, 300, 600, 900]
 
-export function ShowSettings({
-  presets,
-  scenes,
-}: {
-  presets: StreamPreset[]
-  scenes: ObsScenes | null
-}) {
+export function ShowSettings({ presets, rig }: { presets: StreamPreset[]; rig: RigLists }) {
   const studio = useStudio()
   const cfg = useResource(() => studio.showConfig(), [studio])
-  const inputs = useResource(() => studio.obsInputs().catch(() => []), [studio])
+  const scenes = rig.scenes.data
+  const inputs = rig.inputs
+  const app = rig.app
   const [draft, setDraft] = useState<ShowConfig | null>(null)
   const [err, setErr] = useState<{ field: string | null; message: string } | null>(null)
   const { run, busy } = useAction()
@@ -477,10 +534,8 @@ export function ShowSettings({
       )}
     </Field>
   )
-  const audio = (inputs.data ?? []).filter((i) =>
-    /input_capture|coreaudio_input|pulse_input|alsa|jack/.test(i.kind),
-  )
-  const cams = (inputs.data ?? []).filter((i) => /dshow|av_capture|v4l2|camera/.test(i.kind))
+  const audio = (inputs.data ?? []).filter((i) => MIC_KIND.test(i.kind))
+  const cams = (inputs.data ?? []).filter((i) => CAM_KIND.test(i.kind))
   const toggleIn = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
   const save = () =>
@@ -556,7 +611,11 @@ export function ShowSettings({
           {sceneSelect('Ending scene', 'ending_scene')}
         </div>
         {!scenes && (
-          <p className="text-[14.5px] text-text-2">Open OBS to pick scenes from a list.</p>
+          <p className="text-[14.5px] text-text-2">
+            {app === 'OBS'
+              ? 'Open OBS to pick scenes from a list.'
+              : 'Start the Studio to pick its scenes from a list.'}
+          </p>
         )}
         {c.countdown_s > 0 && <AtZeroSettings c={c} set={set} err={err} />}
         <div className="flex flex-col gap-3">
@@ -583,13 +642,13 @@ export function ShowSettings({
             onChange={(v) => set({ replay_buffer: v })}
           />
           <Switch
-            label="Start streaming in OBS"
-            description="Presses Start Streaming after the starting scene, so viewers see it during the countdown."
+            label="Start streaming"
+            description="After the starting scene, so viewers see it during the countdown."
             checked={c.start_stream}
             onChange={(v) => set({ start_stream: v })}
           />
           <Switch
-            label="End show: stop streaming in OBS"
+            label="End show: stop streaming"
             description="After the ending scene and the thank-you, so viewers see them first."
             checked={c.stop_stream}
             onChange={(v) => set({ stop_stream: v })}
@@ -713,7 +772,7 @@ function AtZeroSettings({
     <fieldset className="m-0 flex flex-col gap-3 rounded-[12px] border border-line p-3">
       <legend className="px-1 text-[14.5px] font-semibold text-text">At zero</legend>
       <Switch
-        label={c.live_scene ? `Switch OBS to ${c.live_scene}` : 'Switch OBS to the live scene'}
+        label={c.live_scene ? `Switch to ${c.live_scene}` : 'Switch to the live scene'}
         checked={z.switch}
         onChange={(v) => put({ switch: v })}
       />
@@ -724,8 +783,8 @@ function AtZeroSettings({
         onChange={(v) => put({ unmute: v })}
       />
       <Switch
-        label="Start streaming in OBS"
-        description="Only if OBS isn’t streaming yet."
+        label="Start streaming"
+        description="Only if you aren’t streaming yet."
         checked={z.start_stream}
         onChange={(v) => put({ start_stream: v })}
       />

@@ -1,7 +1,7 @@
 // The "Don't miss" lane (Home), stream markers with exports (Studio and the recap), the
 // moments settings, and the global listener for the streamer-only sound and scene hotkeys.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DownloadSimple, PushPin, SpeakerHigh, Trash, X } from '@phosphor-icons/react'
 import {
   describeError,
@@ -10,6 +10,7 @@ import {
   type LaneItem,
   type Marker,
   type MomentsConfig,
+  studioEngineApi,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -25,6 +26,7 @@ import {
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
+import { useUsesObs } from '../../lib/picture'
 import { playMomentSound, saveBlob, useStudio } from './common'
 
 const KIND: Record<string, string> = {
@@ -329,6 +331,13 @@ export function MomentsSettings() {
  */
 export function StudioGlobal() {
   const studio = useStudio()
+  const client = useClient()
+  // Alt+1…9 switch the Studio's scenes, or OBS's when OBS is the source.
+  const usesObs = useUsesObs()
+  const switchTo = useMemo(() => {
+    const engine = studioEngineApi(client)
+    return usesObs ? (scene: string) => studio.switchScene(scene) : engine.setCurrent
+  }, [client, studio, usesObs])
   const added = useLive((s) => s.studio.added)
   const last = useRef<string | null>(null)
   const keys = useRef<string[]>([])
@@ -354,8 +363,7 @@ export function StudioGlobal() {
       const scene = keys.current[n - 1]
       if (!scene) return
       e.preventDefault()
-      studio
-        .switchScene(scene)
+      switchTo(scene)
         .then(() => toast({ tone: 'ok', message: `Switched to ${scene}.` }))
         .catch((err: unknown) => {
           const d = describeError(err)
@@ -376,6 +384,6 @@ export function StudioGlobal() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('focus', onSaved)
     }
-  }, [studio])
+  }, [studio, switchTo])
   return null
 }
