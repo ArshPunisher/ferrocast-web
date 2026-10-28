@@ -32,7 +32,12 @@ export async function addOverlayToStudio(
   const [kinds, sources, scenes] = await Promise.all([api.kinds(), api.sources(), api.scenes()])
   const kind = WEB_KINDS.find((k) => kinds.inputs.some((i) => i.id === k))
   if (!kind) throw new Error('This computer has no Browser source.')
-  const taken = new Set([...sources.map((s) => s.name), ...scenes.scenes.map((s) => s.name)])
+  const taken = new Set([
+    ...sources.map((s) => s.name),
+    ...scenes.scenes.map((s) => s.name),
+    // Names are unique across both pictures.
+    ...(scenes.vertical?.scenes ?? []).map((s) => s.name),
+  ])
   const name = free(overlay.name, taken)
   await done(
     api.addSource(
@@ -104,28 +109,45 @@ function Pick({ overlay, onClose }: { overlay: Overlay; onClose: () => void }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="radiogroup" aria-label="Scene" className="grid grid-cols-2 gap-2">
-        {(scenes.data?.scenes ?? []).map((s) => {
-          const on = s.name === scene
-          return (
-            <button
-              key={s.name}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setPicked(s.name)}
-              className={cx(
-                'flex min-h-11 min-w-0 items-center gap-2.5 rounded-[10px] border px-3 text-left text-[14.5px] font-semibold',
-                on ? 'fc-picked border-transparent' : 'border-line hover:bg-surface-2',
-              )}
+      {[
+        { label: 'Wide', list: scenes.data?.scenes ?? [] },
+        // The vertical picture's scenes too, once it's on: an overlay can go in either.
+        { label: 'Vertical', list: scenes.data?.vertical?.scenes ?? [] },
+      ]
+        .filter((g) => g.list.length > 0)
+        .map((g, _i, groups) => (
+          <div key={g.label} className="flex flex-col gap-2">
+            {groups.length > 1 && (
+              <h3 className="m-0 text-[13px] font-bold text-text-3">{g.label}</h3>
+            )}
+            <div
+              role="radiogroup"
+              aria-label={groups.length > 1 ? `${g.label} scenes` : 'Scene'}
+              className="grid grid-cols-2 gap-2"
             >
-              <CardsThree size={16} aria-hidden className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
-              {on && <Check size={14} weight="bold" aria-hidden />}
-            </button>
-          )
-        })}
-      </div>
+              {g.list.map((s) => {
+                const on = s.name === scene
+                return (
+                  <button
+                    key={s.name}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setPicked(s.name)}
+                    className={cx(
+                      'flex min-h-11 min-w-0 items-center gap-2.5 rounded-[10px] border px-3 text-left text-[14.5px] font-semibold',
+                      on ? 'fc-picked border-transparent' : 'border-line hover:bg-surface-2',
+                    )}
+                  >
+                    <CardsThree size={16} aria-hidden className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                    {on && <Check size={14} weight="bold" aria-hidden />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
           Cancel
