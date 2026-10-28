@@ -2,7 +2,7 @@
 // Start dialog Home opens (two clicks to go live), and the checklist settings.
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowsClockwise, Broadcast, Play, Stop, Timer as TimerIcon } from '@phosphor-icons/react'
+import { ArrowsClockwise, Broadcast, Play, Stop } from '@phosphor-icons/react'
 import {
   AT_ZERO_DEFAULT,
   describeError,
@@ -339,111 +339,236 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
   )
 }
 
-export function ShowPanel() {
+/** The show (owner's pick W1, 28 Oct): a big countdown or "ready" with the buttons, then the
+ * run of show as a timeline: what it did while it runs, what it will do before it starts. */
+export function ShowPanel({ presets = [] }: { presets?: StreamPreset[] }) {
   const studio = useStudio()
   const [show, setShow] = useShow()
+  const cfg = useResource(() => studio.showConfig(), [studio])
   const [starting, setStarting] = useState(false)
   const now = useNow(1000)
   const { run, busy } = useAction()
   const act = (key: string, fn: () => Promise<{ show: ShowRun }>, success: string) =>
     void run(key, fn, { success }).then((r) => r && setShow(r.show))
   const left = show?.countdown_ends_at ? (show.countdown_ends_at - now) / 1000 : null
-  const active = show && show.phase !== 'ended'
+  const active = !!show && show.phase !== 'ended'
+  const counting = show?.phase === 'countdown' && left !== null
   return (
-    <Panel
-      title="Show"
-      description="Start show sets your stream info, shows Starting Soon, counts down, then goes live."
-      actions={show ? <Badge tone={PHASE[show.phase].tone}>{PHASE[show.phase].label}</Badge> : null}
+    <section
+      aria-label="Show"
+      className="flex flex-col gap-4 rounded-panel border border-line bg-surface-1 p-5"
     >
       {show === undefined ? (
-        <Skeleton className="h-28" />
+        <Skeleton className="h-40" />
       ) : (
-        <div className="flex flex-col gap-4">
-          <StreamControl />
-          {show?.phase === 'countdown' && left !== null && (
-            <p
-              className="flex items-center gap-2 font-mono text-3xl font-semibold tabular-nums text-text"
-              aria-live="polite"
-            >
-              <TimerIcon size={26} className="text-accent-text" aria-hidden="true" />
-              {clock(left)}
-              <span className="sr-only">until the live scene</span>
-            </p>
-          )}
-          {show && show.steps.length > 0 && (
-            <ul className="flex flex-col gap-1.5" aria-label="What the show did">
-              {show.steps.map((s) => (
-                <li key={s.id} className="flex items-start gap-2.5 text-sm">
-                  <StatusIcon status={s.status} className="mt-0.5" />
-                  <span className="min-w-0">
-                    <span className="font-medium text-text">{s.label}</span>
-                    {s.detail && (
-                      <span className="block text-[14.5px] break-words text-text-2">
-                        {s.detail}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {!active && (
-              <Button
-                variant="primary"
-                icon={<Play size={15} weight="fill" />}
-                onClick={() => setStarting(true)}
-              >
-                Start show
-              </Button>
-            )}
-            {show?.phase === 'countdown' && (
-              <>
+        <>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <div className="min-w-0 flex-1">
+              {counting ? (
+                <>
+                  <p className="m-0 text-[14px] font-semibold text-text-3">Live in</p>
+                  <p
+                    className="m-0 font-mono text-[44px] leading-none font-bold text-text tabular-nums"
+                    aria-live="polite"
+                  >
+                    {clock(left)}
+                    <span className="sr-only"> until the live scene</span>
+                  </p>
+                </>
+              ) : active && show ? (
+                <>
+                  <Badge tone={PHASE[show.phase].tone}>{PHASE[show.phase].label}</Badge>
+                  <p className="m-0 mt-1.5 font-display text-[22px] font-bold text-text">
+                    The show is on
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="m-0 font-display text-[22px] font-bold text-text">
+                    Ready when you are
+                  </h2>
+                  <p className="m-0 mt-0.5 text-[14.5px] text-text-2">
+                    Checks, Starting soon, a countdown, then live.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!active && (
                 <Button
                   variant="primary"
-                  busy={busy === 'skip'}
-                  onClick={() =>
-                    act('skip', () => studio.skipCountdown(), 'Switched to the live scene.')
-                  }
+                  size="lg"
+                  icon={<Play size={17} weight="fill" />}
+                  onClick={() => setStarting(true)}
                 >
-                  Go live now
+                  Start show
                 </Button>
+              )}
+              {counting && (
+                <>
+                  <Button
+                    variant="primary"
+                    busy={busy === 'skip'}
+                    onClick={() =>
+                      act('skip', () => studio.skipCountdown(), 'Switched to the live scene.')
+                    }
+                  >
+                    Go live now
+                  </Button>
+                  <Button
+                    busy={busy === 'cancel'}
+                    onClick={() =>
+                      act('cancel', () => studio.cancelCountdown(), 'Countdown stopped.')
+                    }
+                  >
+                    Cancel countdown
+                  </Button>
+                </>
+              )}
+              {show?.phase === 'starting' && show.live_scene && (
                 <Button
-                  busy={busy === 'cancel'}
+                  variant="primary"
+                  busy={busy === 'live'}
                   onClick={() =>
-                    act('cancel', () => studio.cancelCountdown(), 'Countdown stopped.')
+                    act('live', () => studio.liveScene(), 'Switched to the live scene.')
                   }
                 >
-                  Cancel countdown
+                  Switch to {show.live_scene}
                 </Button>
-              </>
-            )}
-            {show?.phase === 'starting' && show.live_scene && (
-              <Button
-                variant="primary"
-                busy={busy === 'live'}
-                onClick={() => act('live', () => studio.liveScene(), 'Switched to the live scene.')}
-              >
-                Switch to {show.live_scene}
-              </Button>
-            )}
-            {active && (
-              <Button
-                variant="danger-ghost"
-                icon={<Stop size={15} weight="fill" />}
-                busy={busy === 'end'}
-                onClick={() =>
-                  act('end', () => studio.endShow(), 'Show ended. Thanks posted in chat.')
-                }
-              >
-                End show
-              </Button>
+              )}
+              {active && (
+                <Button
+                  variant="danger"
+                  size="lg"
+                  icon={<Stop size={17} weight="fill" />}
+                  busy={busy === 'end'}
+                  onClick={() =>
+                    act('end', () => studio.endShow(), 'Show ended. Thanks posted in chat.')
+                  }
+                >
+                  End show
+                </Button>
+              )}
+            </div>
+          </div>
+          <StreamControl />
+          <div className="border-t border-line pt-4">
+            <h3 className="m-0 mb-2 text-[14.5px] font-bold text-text-2">
+              {show && show.steps.length > 0 ? 'What the show did' : 'Run of show'}
+            </h3>
+            {show && show.steps.length > 0 ? (
+              <ol className="m-0 flex list-none flex-col p-0" aria-label="What the show did">
+                {show.steps.map((st, i) => (
+                  <TimelineStep
+                    key={st.id}
+                    last={i === show.steps.length - 1}
+                    dot={<StatusIcon status={st.status} />}
+                    title={st.label}
+                    detail={st.detail}
+                  />
+                ))}
+              </ol>
+            ) : cfg.data ? (
+              <PlannedRun cfg={cfg.data} presets={presets} />
+            ) : (
+              <Skeleton className="h-40" />
             )}
           </div>
-        </div>
+        </>
       )}
       <StartShowDialog open={starting} onClose={() => setStarting(false)} />
-    </Panel>
+    </section>
+  )
+}
+
+/** One step on the timeline: a dot on a line, its name and what it does. */
+function TimelineStep({
+  dot,
+  title,
+  detail,
+  last,
+}: {
+  dot: React.ReactNode
+  title: string
+  detail?: string | null
+  last?: boolean
+}) {
+  return (
+    <li className="relative flex gap-3 pb-3.5">
+      {!last && (
+        <span aria-hidden className="absolute top-6 bottom-0 left-[11px] w-0.5 bg-line-strong" />
+      )}
+      <span className="relative grid size-6 flex-none place-items-center rounded-full bg-surface-3 text-[12px] font-bold text-text-2">
+        {dot}
+      </span>
+      <span className="min-w-0 pt-0.5">
+        <span className="block text-[14.5px] font-bold text-text">{title}</span>
+        {detail && <span className="block text-[14px] break-words text-text-2">{detail}</span>}
+      </span>
+    </li>
+  )
+}
+
+/** What Start show will do, step by step, from the settings (each says what's left unset). */
+function PlannedRun({ cfg, presets }: { cfg: ShowConfig; presets: StreamPreset[] }) {
+  const z = { ...AT_ZERO_DEFAULT, ...cfg.at_zero }
+  const preset = presets.find((p) => p.id === cfg.preset_id)
+  const join = (xs: (string | false | null)[]) => xs.filter(Boolean).join(' · ')
+  const steps: [string, string][] = [
+    [
+      'Checks',
+      join([
+        'Studio or OBS running',
+        `at least ${cfg.min_disk_gb} GB free`,
+        cfg.mic_sources.length > 0 && `${cfg.mic_sources.length} mic`,
+        cfg.cam_sources.length > 0 && `${cfg.cam_sources.length} camera`,
+      ]),
+    ],
+    [
+      'Stream info',
+      preset
+        ? `Sends the “${preset.name}” preset`
+        : 'No preset: each platform keeps its title (pick one in the checklist)',
+    ],
+    [
+      cfg.countdown_s > 0
+        ? `Starting soon · ${clock(cfg.countdown_s)} countdown`
+        : 'Starting soon · no countdown',
+      join([
+        cfg.starting_scene ? `Scene “${cfg.starting_scene}”` : 'No scene switch',
+        cfg.alerts_on && 'alerts on',
+        cfg.bot_on && 'bot and timers on',
+        cfg.discord && 'Discord post',
+        cfg.replay_buffer && 'replay buffer',
+        cfg.start_stream && 'starts streaming',
+      ]),
+    ],
+    [
+      'Live',
+      join([
+        z.switch && (cfg.live_scene ? `Scene “${cfg.live_scene}”` : 'No scene switch'),
+        z.unmute && 'mic unmuted',
+        z.start_stream && 'streaming',
+        z.record && 'recording',
+        z.marker && 'a marker',
+        z.chat && `“${z.chat}” in chat`,
+      ]) || 'Nothing set to happen',
+    ],
+    [
+      'Ending (End show)',
+      join([
+        cfg.ending_scene ? `Scene “${cfg.ending_scene}”` : 'No scene switch',
+        cfg.recap_message && 'thank-you in chat',
+        cfg.stop_stream && `stops streaming after ${cfg.stop_delay_s} s`,
+      ]),
+    ],
+  ]
+  return (
+    <ol className="m-0 flex list-none flex-col p-0" aria-label="Run of show">
+      {steps.map(([t, d], i) => (
+        <TimelineStep key={t} dot={i + 1} title={t} detail={d} last={i === steps.length - 1} />
+      ))}
+    </ol>
   )
 }
 

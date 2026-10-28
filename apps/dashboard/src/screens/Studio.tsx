@@ -64,10 +64,10 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-5">
             <GoingToLine />
-            <ShowPanel />
-            <PreflightPanel />
+            <ShowPanel presets={info.data?.presets ?? []} />
           </div>
           <div className="flex flex-col gap-5">
+            <PreflightPanel />
             <ShowSettings presets={info.data?.presets ?? []} rig={rig} />
             {/* BRB, !scene and shortcuts: in the OBS tab for OBS, here for the Studio. */}
             {!usesObs && (
