@@ -77,7 +77,11 @@ interface PreviewView {
   zoom: number
   frames: boolean
   keep: boolean
+  /** With the vertical picture on: both side by side, or one of them on its own. */
+  view: PictureView
 }
+export type PictureView = 'both' | 'wide' | 'vertical'
+const VIEWS: PictureView[] = ['wide', 'both', 'vertical']
 const VIEW_KEY = 'fc-preview-view'
 const viewSubs = new Set<() => void>()
 let view: PreviewView = readView()
@@ -90,11 +94,12 @@ function readView(): PreviewView {
         zoom: v.zoom as number,
         frames: v.frames,
         keep: typeof v.keep === 'boolean' ? v.keep : true,
+        view: VIEWS.find((x) => x === v.view) ?? 'both',
       }
   } catch {
     // Storage off (a private window): the defaults.
   }
-  return { zoom: 1, frames: true, keep: true }
+  return { zoom: 1, frames: true, keep: true, view: 'both' }
 }
 
 export function usePreviewView(): [PreviewView, (next: Partial<PreviewView>) => void] {
@@ -427,6 +432,9 @@ export function PreviewBox({ running }: { running: boolean }) {
       }`
     const stage =
       'grid min-h-0 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+    // One picture on its own (owner's pick X1): the other stage is hidden, so the app is told
+    // to draw nothing for it, and the one shown fills the stage.
+    const only = pv.view === 'both' ? null : pv.view
     return (
       <div className="flex min-h-16 flex-1 gap-px bg-line [container-type:size]">
         <div
@@ -434,6 +442,7 @@ export function PreviewBox({ running }: { running: boolean }) {
           role="group"
           aria-label={label('main', !onTall)}
           data-stage-bg
+          hidden={only === 'vertical'}
           className={cx(stage, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
           {...(onTall ? pick('main') : editing)}
         >
@@ -450,11 +459,14 @@ export function PreviewBox({ running }: { running: boolean }) {
           role="group"
           aria-label={label('vertical', onTall)}
           data-stage-bg
+          hidden={only === 'wide'}
           className={cx(
             stage,
             // The tall picture as tall as the stage (owner, 28 Oct: not shrunk), with room on
             // its sides where what's off its canvas shows with its outline.
-            'w-[calc(100cqh*9/16*1.3)] max-w-[45%] flex-none px-0! py-1.5!',
+            only === 'vertical'
+              ? 'min-w-0 flex-1 px-0! py-1.5!'
+              : 'w-[calc(100cqh*9/16*1.3)] max-w-[45%] flex-none px-0! py-1.5!',
             !onTall && 'cursor-pointer',
           )}
           {...(onTall ? editing : pick('vertical'))}
@@ -522,6 +534,76 @@ export function PreviewBox({ running }: { running: boolean }) {
 
 /** Turns the vertical picture on (a tall canvas with scenes of its own, beside the wide one),
  * or, when it's on, offers to take it away (its scenes go, so it asks first). */
+/** The canvases' own shapes, drawn small: the view toggle's icons. */
+function Shapes({ wide, tall }: { wide: boolean; tall: boolean }) {
+  const both = wide && tall
+  return (
+    <span aria-hidden className="flex items-center gap-[2px]">
+      {wide && (
+        <span
+          className={cx(
+            'block rounded-[2px] border-[1.6px] border-current',
+            both ? 'h-2 w-[11px]' : 'h-2.5 w-[15px]',
+          )}
+        />
+      )}
+      {tall && (
+        <span
+          className={cx(
+            'block rounded-[2px] border-[1.6px] border-current',
+            both ? 'h-2.5 w-1.5' : 'h-3 w-[7px]',
+          )}
+        />
+      )}
+    </span>
+  )
+}
+
+/**
+ * Which pictures the stage shows while the vertical one is on: wide only, both side by side,
+ * or vertical only (owner's pick X1: right after the Vertical button). Showing one picks it
+ * for editing too.
+ */
+function PictureViewPick() {
+  const { scenes, setCanvas } = useDesk()
+  const [pv, setPv] = usePreviewView()
+  const on = !!scenes.data?.vertical && !scenes.data?.preview
+  // One picture on its own is the one being edited.
+  useEffect(() => {
+    if (on && pv.view !== 'both') setCanvas(pv.view === 'wide' ? 'main' : 'vertical')
+  }, [on, pv.view, setCanvas])
+  if (!on) return null
+  const name: Record<PictureView, string> = {
+    wide: 'Wide picture only',
+    both: 'Both pictures',
+    vertical: 'Vertical picture only',
+  }
+  return (
+    <div
+      role="group"
+      aria-label="Pictures shown"
+      className="flex items-center gap-px rounded-[9px] bg-surface-3 p-0.5"
+    >
+      {VIEWS.map((v) => (
+        <button
+          key={v}
+          type="button"
+          title={name[v]}
+          aria-label={name[v]}
+          aria-pressed={pv.view === v}
+          onClick={() => setPv({ view: v })}
+          className={cx(
+            'grid h-[26px] w-7 place-items-center rounded-[7px] outline-none focus-visible:shadow-[var(--fc-focus)]',
+            pv.view === v ? 'fc-picked shadow-sm' : 'text-text-3 hover:text-text',
+          )}
+        >
+          <Shapes wide={v !== 'vertical'} tall={v !== 'wide'} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function VerticalToggle() {
   const { api, scenes, refresh, setCanvas } = useDesk()
   const { run, busy } = useAction()
@@ -1457,8 +1539,12 @@ export function StageBar() {
     // name and the picture size only where there's room for them.
     <div className="@container flex-none border-t border-line bg-surface-1">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2.5 py-2 text-[14px] text-text-3 @[900px]:gap-x-3 @[900px]:px-3">
-        {/* The Scenes panel shows what's on air; here the name fits on wide screens. */}
-        <span className="hidden font-display text-[16px] font-bold text-text @[1120px]:inline">
+        {/* The Scenes panel shows what's on air; here the name fits on wide screens. A set
+            width, so the buttons after it stay put when the scene or picture changes. */}
+        <span
+          title={scene}
+          className="hidden w-32 truncate font-display text-[16px] font-bold text-text @[1440px]:inline-block"
+        >
           {scene}
         </span>
         {c && (
@@ -1474,6 +1560,7 @@ export function StageBar() {
         )}
         <ViewControls />
         <VerticalToggle />
+        <PictureViewPick />
         <span className="flex-1" />
         {t && (
           <div className="flex items-center gap-2">
