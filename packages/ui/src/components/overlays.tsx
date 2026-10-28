@@ -349,10 +349,25 @@ const icons: Record<ToastTone, ReactNode> = {
 export function Toaster() {
   const list = useSyncExternalStore(subscribe, snapshot, snapshot)
   const reduce = useReducedMotion()
+  // In the top layer (a manual popover), shown again whenever the toasts change, so it sits
+  // above an open dialog: a toast from a dialog's action showed behind its backdrop.
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof el.showPopover !== 'function') return
+    try {
+      if (el.matches(':popover-open')) el.hidePopover()
+      if (list.length) el.showPopover()
+    } catch {
+      // Not supported here: it stays a fixed layer under dialogs, as before.
+    }
+  }, [list])
   return (
     <section
+      ref={ref}
+      popover="manual"
       aria-label="Notifications"
-      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[70] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-4 sm:bottom-[calc(1rem+var(--fc-statusbar,0px))] sm:left-auto sm:items-end"
+      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] bottom-auto z-[70] m-0 flex h-fit w-full flex-col items-center gap-2 overflow-visible border-0 bg-transparent px-3 py-0 text-inherit sm:top-auto sm:right-4 sm:bottom-[calc(1rem+var(--fc-statusbar,0px))] sm:left-auto sm:w-auto sm:items-end"
     >
       <AnimatePresence initial={false}>
         {list.map((t) => (
