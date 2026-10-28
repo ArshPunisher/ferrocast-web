@@ -600,7 +600,7 @@ export class DemoStudio {
       id: 'disk',
       label: 'Disk space',
       status: 'ok',
-      detail: '182 GB free where OBS records.',
+      detail: '182 GB free where recordings go.',
       fix: null,
     })
     for (const p of this.host.connectedChat())

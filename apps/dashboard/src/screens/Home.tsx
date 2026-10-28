@@ -133,7 +133,7 @@ export function Home() {
         ? {
             tone: 'ok',
             message: `Copied the “${main.name}” overlay URL.`,
-            hint: 'Paste it into an OBS Browser source. Keep it private: anyone with it sees your alerts.',
+            hint: 'Use it in a Browser source (Add to Studio does it for you). Keep it private: anyone with it sees your alerts.',
           }
         : {
             tone: 'error',

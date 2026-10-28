@@ -693,9 +693,7 @@ function AudioPage({ s, set }: PageProps) {
           />
         </Row>
       </div>
-      <Heading info="Heard in every scene, as OBS's global audio devices. Changes apply at once.">
-        Everywhere
-      </Heading>
+      <Heading info="Heard in every scene. Changes apply at once.">Everywhere</Heading>
       <EverywhereDevices />
     </>
   )
@@ -1529,7 +1527,7 @@ function AdvancedPage({ s, set }: PageProps) {
   const [logOpen, setLogOpen] = useState(false)
   return (
     <>
-      <Heading info="What the app and OBS's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
+      <Heading info="What the app and the Studio's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
         Log
       </Heading>
       <div className="flex flex-col">

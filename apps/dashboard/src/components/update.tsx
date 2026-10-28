@@ -250,7 +250,7 @@ function InstallState({ u, s }: { u: UpdateInfo; s: UpdateSummary }) {
           <p className="font-semibold text-text">Version {s.version} is ready.</p>
           <p className="mt-0.5 text-text-2">
             Restart Ferrocast to finish (on Windows the installer runs first). It takes a few
-            seconds, and overlays in OBS reconnect by themselves.
+            seconds, and your overlays reconnect by themselves.
           </p>
         </div>
       </div>
