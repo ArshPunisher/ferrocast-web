@@ -558,7 +558,7 @@ function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
 
 export function AudioDock() {
   const desk = useDesk()
-  const { api, audio, scenes, setAdding, openSettings, edit, refresh } = desk
+  const { api, audio, pictureScenes, setAdding, openSettings, edit, refresh } = desk
   const { run } = useAction()
   const [all, setAll] = useState(false)
   const [prefs, setPrefs] = usePrefs()
@@ -566,7 +566,7 @@ export function AudioDock() {
   // Advanced audio: open on one sound's name, or '' for all.
   const [advanced, setAdvanced] = useState<string | null>(null)
   const { open, menu } = useContextMenu()
-  const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
+  const names = pictureScenes.map((x) => x.name).join('\n')
   // Every scene's sounds, each once: the global devices first, then in scene order.
   const every = useResource(async () => {
     if (!all || !names) return null

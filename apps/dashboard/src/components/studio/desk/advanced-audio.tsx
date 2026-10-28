@@ -26,10 +26,10 @@ export function balanceLabel(b: number): string {
 
 /** Opens on `focus` (a sound's name) or on every sound (an empty string); null is closed. */
 export function AdvancedAudio({ focus, onClose }: { focus: string | null; onClose: () => void }) {
-  const { api, scene, scenes } = useDesk()
+  const { api, scene, pictureScenes } = useDesk()
   const { run } = useAction()
   const [scope, setScope] = useState<'scene' | 'all'>('all')
-  const names = scenes.data?.scenes.map((s) => s.name).join('\n') ?? ''
+  const names = pictureScenes.map((s) => s.name).join('\n')
   const open = focus !== null
   const list = useResource(async () => {
     if (!open) return null

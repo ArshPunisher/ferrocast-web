@@ -274,11 +274,12 @@ export function groupScenes(
  * scenes).
  */
 function EverywhereIn({ sound }: { sound: EngineAudio }) {
-  const { api, scenes, refresh, select } = useDesk()
+  const { api, allScenes, refresh, select } = useDesk()
   const { run, busy } = useAction()
   const [choosing, setChoosing] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
-  const all = (scenes.data?.scenes ?? []).map((s) => s.name)
+  // A sound heard everywhere is in both pictures' scenes, so it can move to any of them.
+  const all = allScenes.map((s) => s.name)
   const move = async () => {
     const ok = await run('in:some', async () => {
       const settings = await api.settings(sound.name)
@@ -393,12 +394,13 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
 /** The scenes a sound (or any source) is in: every scene, or some, picked from tiles grouped
  * as the scenes are named. On adds it to a scene, off takes it out. */
 function PlaysIn({ name }: { name: string }) {
-  const { api, scenes, refresh } = useDesk()
+  const { api, pictureScenes, pictureCurrent, refresh } = useDesk()
   const { run, busy } = useAction()
   const uses = useResource(() => api.sources(), [api])
   const mine = uses.data?.find((u) => u.name === name)?.scenes ?? []
-  const all = (scenes.data?.scenes ?? []).map((s) => s.name)
-  const current = scenes.data?.current
+  // The edited picture's scenes only: a vertical source plays in vertical scenes.
+  const all = pictureScenes.map((s) => s.name)
+  const current = pictureCurrent
   const everywhere = all.length > 0 && all.every((n) => mine.includes(n))
   // "Some scenes" shows the tiles; picking it from "Every scene" changes nothing until a tile.
   const [choosing, setChoosing] = useState(false)

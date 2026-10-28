@@ -162,7 +162,7 @@ export function AddSourceDialog() {
 }
 
 function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
-  const { kinds, scenes, scene } = useDesk()
+  const { kinds, pictureScenes, scene } = useDesk()
   const [q, setQ] = useState('')
   const groups = useMemo(() => {
     const k = kinds.data
@@ -173,7 +173,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
         .map((entry) => ({ entry, kind: pickKind(entry, k), tone: g.tone }))
         .filter((c): c is Choice => {
           if (!c.kind) return false
-          if (c.entry.scene) return (scenes.data?.scenes.length ?? 0) > 1
+          if (c.entry.scene) return pictureScenes.length > 1
           c.entry.kinds.forEach((x) => used.add(x))
           return true
         }),
@@ -188,7 +188,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
       }))
     if (more.length) out.push({ label: 'More', choices: more })
     return out.filter((g) => g.choices.length > 0)
-  }, [kinds.data, scenes.data])
+  }, [kinds.data, pictureScenes])
   const all = groups.flatMap((g) => g.choices)
   const [pick, setPick] = useState<string>(start)
   const chosen = all.find((c) => c.entry.key === pick) ?? all[0] ?? null
@@ -257,7 +257,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
 
 /** The right side: devices or settings for the kind, a name, and Add. */
 function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => void }) {
-  const { api, scenes, audio, refresh, kinds } = useDesk()
+  const { api, allScenes, pictureScenes, audio, refresh, kinds } = useDesk()
   const { run, busy } = useAction()
   const isScene = !!c.entry.scene
   const loaded = useResource(
@@ -291,7 +291,8 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
   if (!loaded.data) return <Skeleton className="h-72" />
   const [opts, defaults, sources] = loaded.data
-  const sceneNames = new Set(scenes.data?.scenes.map((s) => s.name) ?? [])
+  // Names are one list across both pictures.
+  const sceneNames = new Set(allScenes.map((s) => s.name))
   const taken = new Set([...sources.map((s) => s.name), ...sceneNames])
   const dev = deviceOption(opts, c.entry.device)
   const devName = dev && device !== null ? dev.choices[device] : null
@@ -306,7 +307,8 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       : 'source'
     : null
   const reuse = isScene
-    ? (scenes.data?.scenes ?? [])
+    ? // A scene shown in a scene: one of the same picture's.
+      pictureScenes
         .filter((s) => s.name !== scene)
         .map((s) => ({ name: s.name, where: `${s.items} sources` }))
     : sources

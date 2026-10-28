@@ -29,6 +29,7 @@ import {
   type EngineAudio,
   type EngineItem,
   type EngineKinds,
+  type EngineScene,
   type EngineScenes,
   type EngineScreen,
   type EngineStats,
@@ -56,6 +57,13 @@ export interface Desk {
   setCanvas: (c: 'main' | 'vertical') => void
   /** The edited picture's size in pixels (null until the engine says). */
   size: { width: number; height: number } | null
+  /** The edited picture's scenes, in order (the vertical picture's while it's picked): what
+   * the panels offer for "this picture" (Plays in, the mixer's All, scenes in a scene). */
+  pictureScenes: EngineScene[]
+  /** The scene on air in the edited picture. */
+  pictureCurrent: string
+  /** Every scene in both pictures (names are one list): for name clashes, shortcuts and files. */
+  allScenes: EngineScene[]
   items: Resource<EngineItem[]>
   audio: Resource<EngineAudio[]>
   kinds: Resource<EngineKinds>

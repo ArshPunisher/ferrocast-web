@@ -2,7 +2,7 @@
 // like OBS (preview, Scenes, Sources, Audio) with the platforms beside it, and one button to
 // go live everywhere.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowCounterClockwise,
   Broadcast,
@@ -233,6 +233,10 @@ function Running({
     canvas === 'vertical' && vertical
       ? { width: vertical.width, height: vertical.height }
       : (stats?.canvas ?? null)
+  // Made once per scenes answer, so panels that compute from them don't redo it every render.
+  const wide = useMemo(() => scenes.data?.scenes ?? [], [scenes.data])
+  const tallScenes = useMemo(() => scenes.data?.vertical?.scenes ?? [], [scenes.data])
+  const allScenes = useMemo(() => [...wide, ...tallScenes], [wide, tallScenes])
   const desk: Desk = {
     api,
     scenes,
@@ -240,6 +244,10 @@ function Running({
     canvas,
     setCanvas,
     size,
+    pictureScenes: canvas === 'vertical' ? tallScenes : wide,
+    pictureCurrent:
+      (canvas === 'vertical' ? scenes.data?.vertical?.current : scenes.data?.current) ?? '',
+    allScenes,
     items,
     audio,
     kinds,

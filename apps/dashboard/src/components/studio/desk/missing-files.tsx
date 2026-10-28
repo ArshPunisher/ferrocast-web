@@ -24,10 +24,10 @@ export function fileName(path: string): string {
 
 /** The notice in the Studio when files are missing, and the dialog to fix them. */
 export function MissingFiles() {
-  const { api, scenes } = useDesk()
+  const { api, allScenes } = useDesk()
   const [open, setOpen] = useState(false)
   // Checked when the Studio opens and whenever the scenes change (a collection switch).
-  const sceneKey = scenes.data?.scenes.map((s) => s.name).join('\n') ?? ''
+  const sceneKey = allScenes.map((s) => s.name).join('\n')
   const list = useResource(() => api.missingFiles(), [api, sceneKey])
   const n = list.data?.length ?? 0
   if (n === 0 && !open) return null

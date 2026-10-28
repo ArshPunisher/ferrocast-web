@@ -1310,11 +1310,11 @@ export function shortcutGroups(
 }
 
 function KeysPage({ s, set }: PageProps) {
-  const { api, scenes, audio } = useDesk()
+  const { api, allScenes, scenes, audio } = useDesk()
   const [listening, setListening] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // Every scene's sources, filters and media: what OBS lists on its Hotkeys page.
-  const names = scenes.data?.scenes.map((x) => x.name).join('\n') ?? ''
+  const names = allScenes.map((x) => x.name).join('\n')
   const extra = useResource(async () => {
     const list = names ? names.split('\n') : []
     const per = await Promise.all(
@@ -1340,7 +1340,7 @@ function KeysPage({ s, set }: PageProps) {
     }
   }, [api, names])
   const groups = shortcutGroups(
-    scenes.data?.scenes ?? [],
+    allScenes,
     extra.data?.items ?? [],
     (audio.data ?? []).map((a) => a.name),
     extra.data?.filters ?? [],
