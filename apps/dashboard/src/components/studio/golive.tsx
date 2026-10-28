@@ -609,10 +609,11 @@ export function RowText({
             <LockSimple size={12} aria-label="kept safe" />
           </span>
         ) : (
-          <span className="inline-flex items-center gap-2">
-            Not connected
+          // A plain link, not a pill: the tag looked heavy in the panel (owner, 28 Oct).
+          <span>
+            Not connected ·{' '}
             <a
-              className="inline-flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-[13px] font-bold text-accent-text ring-1 ring-accent-line hover:bg-accent-line/30"
+              className="font-semibold text-accent-text underline-offset-2 hover:underline"
               href={href({ name: 'settings', section: 'accounts' })}
               aria-label={`Connect ${platform}`}
             >
