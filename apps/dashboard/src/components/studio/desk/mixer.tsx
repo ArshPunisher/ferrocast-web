@@ -432,11 +432,11 @@ function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
       label={hearing ? `Stop hearing ${a.name}` : `Hear ${a.name} in your headphones`}
       aria-pressed={hearing}
       className={cx(
-        hearing ? 'bg-accent-soft text-accent-text hover:bg-accent-soft' : 'text-text-3',
+        hearing ? 'fc-picked hover:bg-[var(--fc-pick-hover)]' : 'text-text-3',
       )}
       onClick={() => onAudio({ monitor: hearing ? 'off' : 'me_and_stream' })}
     >
-      <Headphones size={16} weight="bold" />
+      <Headphones size={16} weight={hearing ? 'fill' : 'bold'} />
     </IconButton>
   )
 }
