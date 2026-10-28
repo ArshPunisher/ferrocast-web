@@ -335,7 +335,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
       <span id="plays-in-all" className="text-[14px] font-semibold text-text-2">
         Plays in
       </span>
-      <div role="radiogroup" aria-labelledby="plays-in-all" className="grid gap-2">
+      <div role="radiogroup" aria-labelledby="plays-in-all" className="grid grid-cols-2 gap-2">
         {option(!choosing, 'Every scene', () => {
           setChoosing(false)
           setPicked([])
@@ -459,7 +459,7 @@ function PlaysIn({ name }: { name: string }) {
       <span id="plays-in" className="text-[14px] font-semibold text-text-2">
         Plays in
       </span>
-      <div role="radiogroup" aria-labelledby="plays-in" className="grid gap-2">
+      <div role="radiogroup" aria-labelledby="plays-in" className="grid grid-cols-2 gap-2">
         {option(everywhere && !choosing, 'Every scene', () => void addEverywhere())}
         {option(
           showTiles,
