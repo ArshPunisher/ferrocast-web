@@ -14,7 +14,7 @@ import {
 } from '@ferrocast/api'
 import { Button, InfoTip, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
-import { done, useAction, useClient, useResource } from '../../lib/hooks'
+import { useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor, CutPreview, type CutShown } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
@@ -193,16 +193,6 @@ function Source({
     <Panel title="Picture" description="Where the vertical picture comes from.">
       <fieldset className="m-0 grid grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2">
         <legend className="sr-only">Where the vertical picture comes from</legend>
-        {!usesObs && (
-          <Option
-            title="The Studio’s vertical picture"
-            text="Its own scenes · best quality"
-            info="A tall picture beside the wide one in Studio, Go live, with scenes of its own. Your game and camera are shared, placed for phones."
-            checked={source === 'canvas'}
-            busy={busy === 'source:canvas'}
-            onPick={() => pick('canvas')}
-          />
-        )}
         <Option
           title="Cut it from your stream"
           text={usesObs ? 'Any OBS' : 'Quick: no scenes to make'}
@@ -224,7 +214,6 @@ function Source({
         )}
       </fieldset>
       <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2 empty:hidden">
-        {source === 'canvas' && !usesObs && <StudioVertical />}
         {source === 'cut' || !usesObs ? null : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
@@ -291,70 +280,6 @@ function Source({
         {source === 'canvas' && usesObs && <ByHand vertical />}
       </div>
     </Panel>
-  )
-}
-
-/** The Studio's vertical picture: on with its scenes (edited in Go live), or a button that
- * turns it on. */
-function StudioVertical() {
-  const client = useClient()
-  const engine = useMemo(() => studioEngineApi(client), [client])
-  const { run, busy } = useAction()
-  const state = useResource(async () => {
-    if (!(await engine.status()).running) return 'stopped' as const
-    return (await engine.scenes()).vertical ?? null
-  }, [engine])
-  const v = state.data
-  if (state.error && v === undefined)
-    return <LoadError error={state.error} onRetry={state.reload} />
-  if (v === undefined) return <Skeleton className="h-10" />
-  if (v === 'stopped')
-    return (
-      <p className="m-0">
-        Start the Studio in{' '}
-        <a
-          className="font-semibold text-accent-text hover:underline"
-          href={href({ name: 'studio', section: 'golive' })}
-        >
-          Go live
-        </a>{' '}
-        to make its vertical picture.
-      </p>
-    )
-  if (!v)
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="primary"
-          icon={<DeviceMobile size={16} />}
-          busy={busy === 'on'}
-          onClick={() =>
-            void run('on', () => done(engine.startVertical('Vertical')), {
-              success: 'Vertical picture added beside the wide one in Go live.',
-            }).then((ok) => ok && state.reload())
-          }
-        >
-          Add a vertical picture
-        </Button>
-        <InfoTip>
-          It sits beside the wide picture in Go live. Click it there to add its own scenes and place
-          your game and camera for phones.
-        </InfoTip>
-      </div>
-    )
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
-      <CheckCircle size={18} weight="fill" className="text-ok" aria-hidden />
-      <span className="font-semibold text-text">
-        Vertical picture on · {v.scenes.length} {v.scenes.length === 1 ? 'scene' : 'scenes'}
-      </span>
-      <a
-        className="ml-auto font-semibold text-accent-text hover:underline"
-        href={href({ name: 'studio', section: 'golive' })}
-      >
-        Edit in Go live
-      </a>
-    </div>
   )
 }
 

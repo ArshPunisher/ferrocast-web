@@ -1,7 +1,7 @@
 // The "Go live to" panel: the platforms the Studio's picture goes to, each switched on or off
 // here; adding, ordering and the rest open Go live's full list.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   MAX_STREAM_TITLE,
   onCanvas,
@@ -44,6 +44,17 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const mine = view ? onCanvas(view.destinations, 'main') : []
   // Owner's pick G1: the vertical platforms in their own group under the wide ones.
   const tall = view ? onCanvas(view.destinations, 'vertical') : []
+  // With the Studio, the vertical stream is always its vertical picture (cutting is for OBS).
+  const cutting = view?.cut.source === 'cut'
+  const reloadView = res.reload
+  useEffect(() => {
+    if (!cutting) return
+    void api
+      .setVerticalSource('canvas')
+      .then(reloadView)
+      .catch(() => undefined)
+  }, [cutting, api, reloadView])
+  const hasPicture = !!desk.scenes.data?.vertical
   /** A platform says the video is too much: the Studio's bitrate down to what it asks. */
   const fixBitrate = (kbps: number) =>
     void run('bitrate', async () => {
@@ -149,7 +160,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 <DeviceMobile size={14} weight="bold" aria-hidden />
                 Vertical
                 <span className="ml-auto font-semibold tracking-normal normal-case">
-                  {view.cut.source === 'cut' ? 'cut from your stream' : 'the vertical picture'}
+                  {hasPicture ? 'the vertical picture' : 'add it: Vertical, under the picture'}
                 </span>
               </h3>
               {tall.length > 0 && <ul className="flex flex-col">{tall.map(row)}</ul>}

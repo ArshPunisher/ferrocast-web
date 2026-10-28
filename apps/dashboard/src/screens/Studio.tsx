@@ -33,9 +33,10 @@ const TABS: { value: StudioSection; label: string }[] = [
 
 export function Studio({ section = 'golive' }: { section?: StudioSection | undefined }) {
   const studio = useStudio()
-  // The OBS tab only for those who stream from OBS (Ferrocast's Studio does all of it).
+  // The OBS and Vertical tabs only for those who stream from OBS: with Ferrocast's Studio the
+  // vertical picture and its platforms are all in Go live (owner, 28 Oct).
   const usesObs = useUsesObs()
-  const tabs = usesObs ? TABS : TABS.filter((t) => t.value !== 'obs')
+  const tabs = usesObs ? TABS : TABS.filter((t) => t.value !== 'obs' && t.value !== 'vertical')
   const info = useResource(() => studio.streamInfo(), [studio])
   const scenes = useResource(() => studio.obsScenes(), [studio])
   // The Show tab picks from the Studio's scenes and sounds (OBS's when OBS is the source).
@@ -56,15 +57,20 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
           <Segmented
             label="Studio section"
             className="max-w-full overflow-x-auto"
-            value={section === 'engine' ? 'golive' : section}
+            value={
+              section === 'engine' || (section === 'vertical' && !usesObs) ? 'golive' : section
+            }
             options={tabs}
             onChange={(s) => go({ name: 'studio', section: s })}
           />
         }
       />
       {/* The Studio without OBS lives in Go live now ("engine" links from 2.1 previews land there). */}
-      {(section === 'golive' || section === 'engine') && <GoLiveTab />}
-      {section === 'vertical' && <VerticalTab />}
+      {/* An old link to Vertical lands in Go live when the Studio is the picture. */}
+      {(section === 'golive' || section === 'engine' || (section === 'vertical' && !usesObs)) && (
+        <GoLiveTab />
+      )}
+      {section === 'vertical' && usesObs && <VerticalTab />}
       {section === 'show' && (
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-5">
