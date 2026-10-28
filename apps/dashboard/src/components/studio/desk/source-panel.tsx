@@ -13,7 +13,12 @@ import {
   Trash,
   X,
 } from '@phosphor-icons/react'
-import { describeError, type EngineMonitor, type EngineSettings } from '@ferrocast/api'
+import {
+  describeError,
+  type EngineAudio,
+  type EngineMonitor,
+  type EngineSettings,
+} from '@ferrocast/api'
 import {
   Button,
   IconButton,
@@ -178,11 +183,7 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
                 />
               </div>
             </div>
-            {a.channel ? (
-              <p className="m-0 text-[14px] text-text-3">Plays in every scene.</p>
-            ) : (
-              <PlaysIn name={name} />
-            )}
+            {a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}
           </section>
         )}
         <Filters name={name} audio={!!a} />
@@ -264,6 +265,129 @@ export function groupScenes(
     ...(mine.length ? [{ title: 'Your scenes', scenes: mine }] : []),
     ...[...groups].map(([title, scenes]) => ({ title, scenes })),
   ]
+}
+
+/**
+ * A sound heard in every scene (one of OBS's global devices). Picking "Some scenes" and a
+ * scene moves it into the scenes picked instead: the same device, settings, volume and
+ * listening, then the global spot is freed (owner: a mic or capture sound only in one or two
+ * scenes).
+ */
+function EverywhereIn({ sound }: { sound: EngineAudio }) {
+  const { api, scenes, refresh, select } = useDesk()
+  const { run, busy } = useAction()
+  const [choosing, setChoosing] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
+  const all = (scenes.data?.scenes ?? []).map((s) => s.name)
+  const move = async () => {
+    const ok = await run('in:some', async () => {
+      const settings = await api.settings(sound.name)
+      const [first, ...rest] = picked
+      if (!first || sound.channel === null) return false
+      // Freed first: a name can be in use once.
+      await api.setChannel(sound.channel, null)
+      try {
+        await api.addSource(first, { kind: sound.kind, name: sound.name, settings })
+      } catch (e) {
+        // Put it back as it was, so nothing is lost.
+        await api
+          .setChannel(sound.channel, { kind: sound.kind, name: sound.name, settings })
+          .catch(() => undefined)
+        throw e
+      }
+      for (const scene of rest) await api.addExisting(scene, sound.name)
+      await api.setAudio(sound.name, {
+        volume_db: sound.volume_db,
+        muted: sound.muted,
+        monitor: sound.monitor,
+      })
+      return true
+    })
+    if (ok) {
+      select(null)
+      refresh()
+    }
+  }
+  const option = (on: boolean, label: string, onPick: () => void) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      disabled={busy !== null}
+      onClick={onPick}
+      className={cx(
+        'flex min-h-11 items-center gap-3 rounded-[11px] border px-3.5 text-left text-[14.5px] font-bold transition-colors',
+        on ? 'fc-picked border-transparent' : 'border-line text-text-2 hover:bg-surface-2',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cx(
+          'size-5 shrink-0 rounded-full border-2',
+          on ? 'border-[6px] border-current' : 'border-line-strong',
+        )}
+      />
+      <span className="flex-1">{label}</span>
+    </button>
+  )
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span id="plays-in-all" className="text-[14px] font-semibold text-text-2">
+        Plays in
+      </span>
+      <div role="radiogroup" aria-labelledby="plays-in-all" className="grid gap-2">
+        {option(!choosing, 'Every scene', () => {
+          setChoosing(false)
+          setPicked([])
+        })}
+        {option(choosing, 'Some scenes', () => setChoosing(true))}
+      </div>
+      {choosing && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {all.map((n) => {
+              const on = picked.includes(n)
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={on}
+                  title={n}
+                  onClick={() => setPicked((p) => (on ? p.filter((x) => x !== n) : [...p, n]))}
+                  className={cx(
+                    'flex min-h-9 min-w-0 items-center gap-2 rounded-[10px] border px-2.5 text-left text-[13.5px] transition-colors',
+                    on
+                      ? 'fc-picked border-transparent font-extrabold'
+                      : 'border-line font-semibold text-text-2 hover:bg-surface-2',
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cx(
+                      'grid size-[18px] shrink-0 place-items-center rounded-[5px] border-2',
+                      on ? 'border-current' : 'border-line-strong',
+                    )}
+                  >
+                    {on && <Check size={11} weight="bold" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{n}</span>
+                </button>
+              )
+            })}
+          </div>
+          <Button
+            variant="primary"
+            className="self-start"
+            disabled={picked.length === 0}
+            busy={busy === 'in:some'}
+            onClick={() => void move()}
+          >
+            Play only in {picked.length === 1 ? picked[0] : `${picked.length} scenes`}
+          </Button>
+        </>
+      )}
+    </div>
+  )
 }
 
 /** The scenes a sound (or any source) is in: every scene, or some, picked from tiles grouped
