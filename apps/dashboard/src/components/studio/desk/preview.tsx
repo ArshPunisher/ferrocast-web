@@ -238,7 +238,12 @@ export function PreviewBox({ running }: { running: boolean }) {
       [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
     const unfreeze = () => {
       frozen = 0
-      for (const b of boxes()) if (b) b.style.backgroundImage = ''
+      for (const b of boxes()) {
+        if (!b) continue
+        b.style.backgroundImage = ''
+        b.style.backgroundColor = ''
+        b.style.opacity = ''
+      }
     }
     const freeze = () => {
       const token = (frozen = performance.now())
@@ -263,6 +268,11 @@ export function PreviewBox({ running }: { running: boolean }) {
           img.src = image
           await img.decode()
           if (frozen !== token) return
+          // A scene's picture is clear where nothing is (the vertical one's bars above and
+          // below a wide source): black under it, as the canvas draws; and dimmed like the
+          // live one when it's the picture not being edited (owner's recording, 28 Oct).
+          b.style.backgroundColor = '#000'
+          b.style.opacity = b.parentElement?.dataset.dim ? '0.42' : ''
           b.style.backgroundImage = `url("${image}")`
           b.style.backgroundSize = '100% 100%'
         }),
