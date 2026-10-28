@@ -128,45 +128,73 @@ export function drag(f: Frame, g: Grip, d: Pt, o: DragOpts): Box {
   let nv = g.v === 1 ? lv + dv : g.v === 0 ? lv - dv : lv
   const corner = g.u !== 0.5 && g.v !== 0.5
   const shaped = o.keep || (corner && !o.free)
+  const MIN = 4
+  // One scale for both sides, so the box keeps its shape. From a corner it's the scale
+  // nearest the pointer along the box's diagonal: it changes smoothly as the pointer goes
+  // round, never jumping between the two sides' sizes (owner's recording, 28 Oct). A side
+  // handle moves one side only: that one sets it.
+  const uniform = (u: number, v: number) => {
+    const s = g.v === 0.5 ? u / lu : g.u === 0.5 ? v / lv : (u * lu + v * lv) / (lu * lu + lv * lv)
+    const least = Math.max(MIN / lu, MIN / lv)
+    return Math.max(s, least)
+  }
   if (shaped) {
-    // The side that moved more (for its length) sets the size; the other keeps the shape.
-    // A side handle moves one side only: that one sets it.
-    const su = nu / lu
-    const sv = nv / lv
-    const s = g.v === 0.5 ? su : g.u === 0.5 ? sv : Math.abs(su - 1) >= Math.abs(sv - 1) ? su : sv
+    const s = uniform(nu, nv)
     nu = lu * s
     nv = lv * s
   }
-  const MIN = 4
-  if (shaped && (nu < MIN || nv < MIN)) {
-    const s = Math.max(MIN / lu, MIN / lv)
-    nu = Math.max(nu, lu * s)
-    nv = Math.max(nv, lv * s)
-  }
   nu = Math.max(MIN, nu)
   nv = Math.max(MIN, nv)
-  // Handles on the first corner's sides move that corner; the far sides stay put.
-  let x = f[4]
-  let y = f[5]
-  if (g.u === 0) {
-    x += ux * (lu - nu)
-    y += uy * (lu - nu)
+  // Handles on the first corner's sides move that corner; the far sides stay put. A side
+  // handle that keeps the shape grows the other way from the middle, so the box stays
+  // centred on the line it was pulled along.
+  const place = (nu: number, nv: number) => {
+    let x = f[4]
+    let y = f[5]
+    const along = (gu: number, l: number, n: number, ax: number, ay: number) => {
+      const k = gu === 0 ? 1 : gu === 0.5 && shaped ? 0.5 : 0
+      x += ax * (l - n) * k
+      y += ay * (l - n) * k
+    }
+    along(g.u, lu, nu, ux, uy)
+    along(g.v, lv, nv, vx, vy)
+    return { x, y, w: nu, h: nv }
   }
-  if (g.v === 0) {
-    x += vx * (lv - nv)
-    y += vy * (lv - nv)
+  let box = place(nu, nv)
+  // Magnetic, as in OBS: a side being pulled lands on a line it snaps to once it's near. Only
+  // for boxes that aren't turned (their sides run along the canvas's).
+  const level = Math.abs(uy) < 1e-6 && Math.abs(vx) < 1e-6
+  if (o.snap > 0 && level) {
+    const { lx, ly } = snapLines(o)
+    // How far each moving side is from its nearest line (along its own axis), if near.
+    const pull = (gu: number, n: number, a: number, start: number, lines: number[]) => {
+      if (gu === 0.5) return null
+      // The side that moves: the far one (gu 1) or the first one (gu 0), on the canvas.
+      const anchor = gu === 1 ? start : start + a * n
+      const edge = gu === 1 ? start + a * n : start
+      let best: { gap: number; n: number } | null = null
+      for (const line of lines) {
+        const gap = Math.abs(line - edge)
+        const size = (gu === 1 ? line - anchor : anchor - line) * a
+        if (gap <= o.snap && size >= MIN && (!best || gap < best.gap)) best = { gap, n: size }
+      }
+      return best
+    }
+    const pu = pull(g.u, box.w, ux, box.x, lx)
+    const pv = pull(g.v, box.h, vy, box.y, ly)
+    if (shaped) {
+      // The nearer line wins, unless its scale would make either side smaller than allowed.
+      const ok = (s: number) => lu * s >= MIN && lv * s >= MIN
+      const options = [pu && { gap: pu.gap, s: pu.n / lu }, pv && { gap: pv.gap, s: pv.n / lv }]
+        .filter((c): c is { gap: number; s: number } => !!c && ok(c.s))
+        .sort((a, b) => a.gap - b.gap)
+      const p = options[0]
+      if (p) box = place(lu * p.s, lv * p.s)
+    } else if (pu || pv) {
+      box = place(pu ? pu.n : box.w, pv ? pv.n : box.h)
+    }
   }
-  // A side handle that keeps the shape grows the other way from the middle, so the box
-  // stays centred on the line it was pulled along.
-  if (shaped && g.u === 0.5) {
-    x += (ux * (lu - nu)) / 2
-    y += (uy * (lu - nu)) / 2
-  }
-  if (shaped && g.v === 0.5) {
-    x += (vx * (lv - nv)) / 2
-    y += (vy * (lv - nv)) / 2
-  }
-  return { x, y, w: nu, h: nv }
+  return box
 }
 
 /** The box's bounds on the canvas (turned boxes included). */
@@ -182,11 +210,9 @@ function bounds(f: Frame, d: Pt = { x: 0, y: 0 }) {
   }
 }
 
-/** How far to nudge a moved box so its edge or middle lands on a line it snaps to. */
-function snapMove(f: Frame, d: Pt, o: DragOpts): Pt {
-  if (o.snap <= 0) return { x: 0, y: 0 }
+/** The lines a box snaps to, across (x) and down (y). */
+function snapLines(o: DragOpts): { lx: number[]; ly: number[] } {
   const to = o.to ?? { screen: true, center: true, others: [] }
-  const { left, right, top, bottom } = bounds(f, d)
   const { width: W, height: H } = o.canvas
   const lx: number[] = []
   const ly: number[] = []
@@ -204,6 +230,14 @@ function snapMove(f: Frame, d: Pt, o: DragOpts): Pt {
     lx.push(b.left, b.right)
     ly.push(b.top, b.bottom)
   }
+  return { lx, ly }
+}
+
+/** How far to nudge a moved box so its edge or middle lands on a line it snaps to. */
+function snapMove(f: Frame, d: Pt, o: DragOpts): Pt {
+  if (o.snap <= 0) return { x: 0, y: 0 }
+  const { left, right, top, bottom } = bounds(f, d)
+  const { lx, ly } = snapLines(o)
   const best = (vals: number[], lines: number[]) => {
     let out = 0
     let gap = o.snap

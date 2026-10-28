@@ -72,7 +72,7 @@ describe('dragging', () => {
   })
 
   it('resizes from the far corner keeping the shape, or freely with Shift', () => {
-    expect(drag(plain, { u: 1, v: 1 }, { x: 400, y: 0 }, opts)).toEqual({
+    expect(drag(plain, { u: 1, v: 1 }, { x: 400, y: 300 }, opts)).toEqual({
       x: 100,
       y: 50,
       w: 800,
@@ -103,9 +103,51 @@ describe('dragging', () => {
     expect(c.w / c.h).toBeCloseTo(400 / 300)
   })
 
+  it('sizes smoothly from a corner as the pointer goes round, never jumping', () => {
+    // Before, the side that moved more set the size: crossing the diagonal jumped.
+    const a = drag(plain, { u: 1, v: 1 }, { x: 100, y: 74 }, opts)
+    const b = drag(plain, { u: 1, v: 1 }, { x: 100, y: 76 }, opts)
+    expect(Math.abs(a.w - b.w)).toBeLessThan(3)
+  })
+
+  it('pulls a side being resized onto the canvas edge when near, as OBS does', () => {
+    const snap = { canvas, snap: 20 }
+    // Free: the right side 10 short of the canvas's edge lands on it.
+    expect(drag(plain, { u: 1, v: 0.5 }, { x: 1410, y: 0 }, snap).w).toBe(1820)
+    // Keeping the shape: the far corner's side lands on the edge, the shape stays.
+    const c = drag(plain, { u: 1, v: 1 }, { x: 1408, y: 1056 }, snap)
+    expect(c.x + c.w).toBeCloseTo(1920)
+    expect(c.w / c.h).toBeCloseTo(400 / 300)
+    // The first corner pulled out to the canvas's top-left edge.
+    const d = drag(plain, { u: 0, v: 0.5 }, { x: -92, y: 0 }, snap)
+    expect(d.x).toBe(0)
+    expect(d.w).toBe(500)
+    // A snap that would leave the short side under 4 pixels isn't taken.
+    const thin: Frame = [400, 0, 0, 10, 100, 50]
+    const t = drag(
+      thin,
+      { u: 0, v: 0.5 },
+      { x: 396, y: 0 },
+      {
+        ...snap,
+        keep: true,
+        to: {
+          screen: false,
+          center: false,
+          others: [[1, 0, 0, 1, 345, 0]],
+        },
+      },
+    )
+    expect(t.h).toBeGreaterThanOrEqual(4)
+    // Its smallest is 160×4; the line 5 short of that left side would make it 3.9 high.
+    expect(t.w).toBe(160)
+    // Nowhere near a line: no pull.
+    expect(drag(plain, { u: 1, v: 0.5 }, { x: 300, y: 0 }, snap).w).toBe(700)
+  })
+
   it('moves the first corner when its sides are dragged', () => {
-    // The top-left handle pulled in by 100 across: half the size, far corner fixed.
-    expect(drag(plain, { u: 0, v: 0 }, { x: 200, y: 0 }, opts)).toEqual({
+    // The top-left handle pulled in along its diagonal: half the size, far corner fixed.
+    expect(drag(plain, { u: 0, v: 0 }, { x: 200, y: 150 }, opts)).toEqual({
       x: 300,
       y: 200,
       w: 200,
