@@ -16,6 +16,8 @@ import {
   ArrowUUpRight,
   ArrowsLeftRight,
   BoundingBox,
+  LockSimple,
+  LockSimpleOpen,
   ClockCounterClockwise,
   Columns,
   DeviceMobile,
@@ -69,10 +71,12 @@ const EDGE = 10
 /** How far the preview can zoom out: all of the canvas, then smaller to see what's off it. */
 export const ZOOMS = [1, 0.75, 0.5] as const
 
-/** The preview's zoom and whether every source shows its outline, kept for this viewer. */
+/** The preview's zoom, whether every source shows its outline, and whether frames keep their
+ * shape from every handle (locked) or stretch from the side ones, kept for this viewer. */
 interface PreviewView {
   zoom: number
   frames: boolean
+  keep: boolean
 }
 const VIEW_KEY = 'fc-preview-view'
 const viewSubs = new Set<() => void>()
@@ -82,11 +86,15 @@ function readView(): PreviewView {
   try {
     const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as Partial<PreviewView> | null
     if (v && ZOOMS.some((z) => z === v.zoom) && typeof v.frames === 'boolean')
-      return { zoom: v.zoom as number, frames: v.frames }
+      return {
+        zoom: v.zoom as number,
+        frames: v.frames,
+        keep: typeof v.keep === 'boolean' ? v.keep : true,
+      }
   } catch {
     // Storage off (a private window): the defaults.
   }
-  return { zoom: 1, frames: true }
+  return { zoom: 1, frames: true, keep: true }
 }
 
 export function usePreviewView(): [PreviewView, (next: Partial<PreviewView>) => void] {
@@ -269,10 +277,8 @@ export function PreviewBox({ running }: { running: boolean }) {
           await img.decode()
           if (frozen !== token) return
           // A scene's picture is clear where nothing is (the vertical one's bars above and
-          // below a wide source): black under it, as the canvas draws; and dimmed like the
-          // live one when it's the picture not being edited (owner's recording, 28 Oct).
+          // below a wide source): black under it, as the canvas draws.
           b.style.backgroundColor = '#000'
-          b.style.opacity = b.parentElement?.dataset.dim ? '0.42' : ''
           b.style.backgroundImage = `url("${image}")`
           b.style.backgroundSize = '100% 100%'
         }),
@@ -298,13 +304,6 @@ export function PreviewBox({ running }: { running: boolean }) {
       let rect = studio ? place(el) : placeStage(stageRef.current, el)
       let program = studio ? place(programRef.current) : null
       let tallRect = tall && vRef.current ? placeStage(vStageRef.current, vRef.current) : null
-      // The picture not being edited is dimmed (its stage says so in data-dim).
-      const dimmed = (stage: HTMLElement | null, r: PreviewRect | null) =>
-        r && stage?.dataset.dim ? { ...r, opacity: 0.42 } : r
-      if (tall) {
-        rect = dimmed(stageRef.current, rect)
-        tallRect = dimmed(vStageRef.current, tallRect)
-      }
       // Under a dialog the page is dimmed by its backdrop (rgb(4 5 8 / 0.62)): the app draws
       // the same over the picture.
       if (document.querySelector('dialog[open]')) {
@@ -373,7 +372,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['open', 'data-dock-drag', 'data-pos', 'data-dim'],
+      attributeFilter: ['open', 'data-dock-drag', 'data-pos'],
     })
     // A theme change repaints the stage round the canvas.
     mo.observe(document.documentElement, {
@@ -402,8 +401,6 @@ export function PreviewBox({ running }: { running: boolean }) {
   }, [api, running, desktop, studio, tall])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
-  // The picture under the pointer that isn't being edited (it brightens: "click to edit").
-  const [hover, setHover] = useState<'main' | 'vertical' | null>(null)
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
@@ -413,20 +410,15 @@ export function PreviewBox({ running }: { running: boolean }) {
   )
   if (tall) {
     // The wide picture and the tall one side by side (as OBS with a vertical canvas), nothing
-    // above them (owner's pick P2): the one not being edited is dimmed, and brightens under
-    // the pointer; a press on it picks it. The app's view reads the dimming from data-dim.
+    // above them (owner's pick P2), both at full brightness (owner, 28 Oct): a press on the
+    // one not being edited picks it.
     const pick = (c: 'main' | 'vertical') => ({
       onPointerDown: (e: React.PointerEvent) => {
         if (e.button !== 0) return
         e.preventDefault()
         setCanvas(c)
-        setHover(null)
       },
-      onPointerEnter: () => setHover(c),
-      onPointerLeave: () => setHover(null),
     })
-    const dim = (c: 'main' | 'vertical') =>
-      (onTall ? c === 'main' : c === 'vertical') && hover !== c
     const label = (c: 'main' | 'vertical', on: boolean) =>
       `${c === 'main' ? 'Wide' : 'Vertical'} picture. ${
         on
@@ -442,18 +434,13 @@ export function PreviewBox({ running }: { running: boolean }) {
           role="group"
           aria-label={label('main', !onTall)}
           data-stage-bg
-          data-dim={dim('main') ? '1' : undefined}
           className={cx(stage, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
           {...(onTall ? pick('main') : editing)}
         >
           <div
             ref={ref}
             style={{ '--fc-zoom': pv.zoom } as CSSProperties}
-            className={cx(
-              screen,
-              'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))] transition-opacity',
-              !desktop && dim('main') && 'opacity-40',
-            )}
+            className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
           >
             {!desktop && 'The live picture shows in the Ferrocast app.'}
           </div>
@@ -463,10 +450,12 @@ export function PreviewBox({ running }: { running: boolean }) {
           role="group"
           aria-label={label('vertical', onTall)}
           data-stage-bg
-          data-dim={dim('vertical') ? '1' : undefined}
+          style={{ '--fc-zoom': onTall ? pv.zoom : 1 } as CSSProperties}
           className={cx(
             stage,
-            'w-[calc(100cqh*9/16+12px)] max-w-[40%] flex-none p-1.5',
+            // Room round the tall picture, as round the wide one: what's off its canvas
+            // shows there with its outline (owner, 28 Oct).
+            'w-[calc(100cqh*9/16*1.3+24px)] max-w-[45%] flex-none',
             !onTall && 'cursor-pointer',
           )}
           {...(onTall ? editing : pick('vertical'))}
@@ -475,8 +464,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             ref={vRef}
             className={cx(
               screen,
-              'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0! transition-opacity',
-              !desktop && dim('vertical') && 'opacity-40',
+              'aspect-[9/16]! w-[calc(min(100cqw,100cqh*9/16)*0.86*var(--fc-zoom))] p-0!',
             )}
           >
             {!desktop && 'Vertical'}
@@ -906,7 +894,8 @@ type Job = { box: Box; save: boolean } | { crop: Crop; save: boolean }
 /**
  * Pick, move and resize sources in the preview, as in OBS: click picks (the engine outlines
  * it), ⌘-click (Ctrl on Windows) picks more, drag moves every picked source, the handles
- * resize (corners keep the shape unless Shift is held), Alt on a handle crops instead, it
+ * resize (corners keep the shape unless Shift is held; every handle does while the frame lock
+ * is on), Alt on a handle crops instead, it
  * snaps to the canvas's edges unless Alt is held, arrow keys nudge. A source inside a group
  * moves on its own once picked (in Sources, or by pressing inside it when picked); a click
  * on it picks its group, as in OBS.
@@ -920,7 +909,6 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     select,
     also,
     pickMore,
-    edit,
     setTransforming,
     prefs,
     itemMenu,
@@ -1173,6 +1161,7 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       }
       const b = drag(h.from, h.grip, d, {
         free: e.shiftKey,
+        keep: pv.keep,
         canvas,
         // Alt (Option) held: no snapping this once, as in OBS.
         snap: e.altKey ? 0 : w.snap,
@@ -1203,11 +1192,6 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       const h = held.current
       held.current = null
       finish(h)
-    },
-    onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => {
-      const w = where(e)
-      const it = w && pick(list, w.p)
-      if (it) edit(it.name)
     },
     onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key === 'Escape') {
@@ -1384,12 +1368,25 @@ function ViewControls() {
       >
         <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} />
       </IconButton>
+      <IconButton
+        size="sm"
+        label={
+          pv.keep
+            ? 'Frames keep their shape. Click to let the side handles stretch them'
+            : 'Side handles stretch frames. Click to keep their shape'
+        }
+        aria-pressed={pv.keep}
+        className={cx(pv.keep && 'fc-picked')}
+        onClick={() => setPv({ keep: !pv.keep })}
+      >
+        {pv.keep ? <LockSimple size={17} weight="fill" /> : <LockSimpleOpen size={17} />}
+      </IconButton>
     </>
   )
 }
 
 export function StageBar() {
-  const { api, scenes, scene, kinds, stats, openSettings, screens, refresh } = useDesk()
+  const { api, scenes, scene, kinds, stats, openSettings, screens, refresh, size } = useDesk()
   const c = stats?.canvas
   const { run } = useAction()
   const { open, menu } = useContextMenu()
@@ -1478,7 +1475,8 @@ export function StageBar() {
             onClick={() => openSettings('picture')}
             className="hidden rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text @[1040px]:inline-block"
           >
-            {c.width}×{c.height} · {c.fps}&nbsp;fps
+            {/* The edited picture's size: the vertical one's while it's picked. */}
+            {size?.width ?? c.width}×{size?.height ?? c.height} · {c.fps}&nbsp;fps
           </button>
         )}
         <ViewControls />
