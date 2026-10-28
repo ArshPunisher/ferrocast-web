@@ -450,23 +450,16 @@ export function PreviewBox({ running }: { running: boolean }) {
           role="group"
           aria-label={label('vertical', onTall)}
           data-stage-bg
-          style={{ '--fc-zoom': onTall ? pv.zoom : 1 } as CSSProperties}
           className={cx(
             stage,
-            // Room round the tall picture, as round the wide one: what's off its canvas
-            // shows there with its outline (owner, 28 Oct).
-            'w-[calc(100cqh*9/16*1.3+24px)] max-w-[45%] flex-none',
+            // The tall picture as tall as the stage (owner, 28 Oct: not shrunk), with room on
+            // its sides where what's off its canvas shows with its outline.
+            'w-[calc(100cqh*9/16*1.3)] max-w-[45%] flex-none px-0! py-1.5!',
             !onTall && 'cursor-pointer',
           )}
           {...(onTall ? editing : pick('vertical'))}
         >
-          <div
-            ref={vRef}
-            className={cx(
-              screen,
-              'aspect-[9/16]! w-[calc(min(100cqw,100cqh*9/16)*0.86*var(--fc-zoom))] p-0!',
-            )}
-          >
+          <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0!')}>
             {!desktop && 'Vertical'}
           </div>
         </div>
