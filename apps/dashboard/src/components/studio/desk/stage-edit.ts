@@ -96,6 +96,9 @@ export interface SnapTo {
 export interface DragOpts {
   /** Corner handles keep the shape unless this is set (Shift held). */
   free?: boolean
+  /** Every handle keeps the shape, the sides' too, and Shift doesn't free it (the frame
+   * lock in the preview's bar). */
+  keep?: boolean
   canvas: { width: number; height: number }
   /** How near snaps, canvas pixels (0 for none). */
   snap: number
@@ -124,16 +127,18 @@ export function drag(f: Frame, g: Grip, d: Pt, o: DragOpts): Box {
   let nu = g.u === 1 ? lu + du : g.u === 0 ? lu - du : lu
   let nv = g.v === 1 ? lv + dv : g.v === 0 ? lv - dv : lv
   const corner = g.u !== 0.5 && g.v !== 0.5
-  if (corner && !o.free) {
+  const shaped = o.keep || (corner && !o.free)
+  if (shaped) {
     // The side that moved more (for its length) sets the size; the other keeps the shape.
+    // A side handle moves one side only: that one sets it.
     const su = nu / lu
     const sv = nv / lv
-    const s = Math.abs(su - 1) >= Math.abs(sv - 1) ? su : sv
+    const s = g.v === 0.5 ? su : g.u === 0.5 ? sv : Math.abs(su - 1) >= Math.abs(sv - 1) ? su : sv
     nu = lu * s
     nv = lv * s
   }
   const MIN = 4
-  if (corner && !o.free && (nu < MIN || nv < MIN)) {
+  if (shaped && (nu < MIN || nv < MIN)) {
     const s = Math.max(MIN / lu, MIN / lv)
     nu = Math.max(nu, lu * s)
     nv = Math.max(nv, lv * s)
@@ -150,6 +155,16 @@ export function drag(f: Frame, g: Grip, d: Pt, o: DragOpts): Box {
   if (g.v === 0) {
     x += vx * (lv - nv)
     y += vy * (lv - nv)
+  }
+  // A side handle that keeps the shape grows the other way from the middle, so the box
+  // stays centred on the line it was pulled along.
+  if (shaped && g.u === 0.5) {
+    x += (ux * (lu - nu)) / 2
+    y += (uy * (lu - nu)) / 2
+  }
+  if (shaped && g.v === 0.5) {
+    x += (vx * (lv - nv)) / 2
+    y += (vy * (lv - nv)) / 2
   }
   return { x, y, w: nu, h: nv }
 }

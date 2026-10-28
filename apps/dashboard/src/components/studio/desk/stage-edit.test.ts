@@ -86,6 +86,23 @@ describe('dragging', () => {
     })
   })
 
+  it('keeps the shape from every handle when the frame is locked, Shift or not', () => {
+    // The right side pulled 200 out: twice as wide, so twice as tall, round the same middle.
+    expect(drag(plain, { u: 1, v: 0.5 }, { x: 200, y: 0 }, { ...opts, keep: true })).toEqual({
+      x: 100,
+      y: -25,
+      w: 600,
+      h: 450,
+    })
+    // The top pulled 150 down: half as tall, so half as wide, the bottom staying put.
+    expect(
+      drag(plain, { u: 0.5, v: 0 }, { x: 0, y: 150 }, { ...opts, keep: true, free: true }),
+    ).toEqual({ x: 200, y: 200, w: 200, h: 150 })
+    // A corner too, even with Shift held.
+    const c = drag(plain, { u: 1, v: 1 }, { x: 400, y: 0 }, { ...opts, keep: true, free: true })
+    expect(c.w / c.h).toBeCloseTo(400 / 300)
+  })
+
   it('moves the first corner when its sides are dragged', () => {
     // The top-left handle pulled in by 100 across: half the size, far corner fixed.
     expect(drag(plain, { u: 0, v: 0 }, { x: 200, y: 0 }, opts)).toEqual({
