@@ -3,8 +3,8 @@
 // right the stream and recording times, CPU, frame rate, dropped frames and upload. A click on
 // those opens Stats.
 
-import { useEffect, useMemo, useState } from 'react'
-import { studioEngineApi } from '@ferrocast/api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { studioEngineApi, type EngineStats } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
@@ -37,6 +37,65 @@ function Cell({
   )
 }
 
+/** Counts from one read to the next: what went wrong in the last few seconds. */
+type Counts = { lagged: number; skipped: number; dropped: number; at: number }
+
+/**
+ * Trouble while it happens, in words (OBS shows only the numbers): frames the computer drew
+ * late (the game or the scenes are too heavy), frames the encoder skipped, frames the network
+ * dropped. Shown for 10 s after it last happened.
+ */
+function useStrain(stats: EngineStats | null): { text: string; tone: string } | null {
+  const last = useRef<Counts | null>(null)
+  const [seen, setSeen] = useState<{ what: 'render' | 'encode' | 'network'; until: number } | null>(
+    null,
+  )
+  useEffect(() => {
+    if (!stats) {
+      last.current = null
+      return
+    }
+    const now = Date.now()
+    const cur: Counts = {
+      lagged: stats.engine.lagged,
+      skipped: stats.engine.skipped ?? 0,
+      dropped: stats.stream?.dropped ?? 0,
+      at: now,
+    }
+    const prev = last.current
+    last.current = cur
+    if (!prev) return
+    // A few missed frames now and then are normal; more than 1 in 30 a second isn't.
+    const fps = stats.canvas.fps || 30
+    const per = Math.max(1, (now - prev.at) / 1000)
+    const bad = (d: number) => d / per > fps / 30
+    const what =
+      cur.dropped > prev.dropped && bad(cur.dropped - prev.dropped)
+        ? 'network'
+        : cur.skipped > prev.skipped && bad(cur.skipped - prev.skipped)
+          ? 'encode'
+          : cur.lagged > prev.lagged && bad(cur.lagged - prev.lagged)
+            ? 'render'
+            : null
+    if (what) setSeen({ what, until: now + 10_000 })
+  }, [stats])
+  if (!seen || Date.now() > seen.until) return null
+  return {
+    render: {
+      text: 'Your computer is falling behind: frames are late. Close heavy apps, lower the game’s settings, or press Optimize in Go live.',
+      tone: 'text-warn',
+    },
+    encode: {
+      text: 'The encoder is falling behind. Press Optimize in Go live: it picks the hardware encoder and a lighter bitrate.',
+      tone: 'text-warn',
+    },
+    network: {
+      text: 'Your upload can’t keep up: frames are dropped. Press Optimize in Go live, or use a wired connection.',
+      tone: 'text-danger',
+    },
+  }[seen.what]
+}
+
 export function StudioStatusBar() {
   const client = useClient()
   const api = useMemo(() => studioEngineApi(client), [client])
@@ -44,6 +103,7 @@ export function StudioStatusBar() {
   const { stats, kbps, since, at } = reading
   const [open, setOpen] = useState(false)
   const on = !!stats
+  const strain = useStrain(stats)
   // The rest of the window leaves room for it while it shows.
   useEffect(() => {
     const root = document.documentElement
@@ -70,7 +130,7 @@ export function StudioStatusBar() {
           ? { text: `Making an MP4… ${Math.round(remux.percent)}%`, tone: 'text-text-2' }
           : rec?.paused
             ? { text: 'Recording paused', tone: 'text-warn' }
-            : null
+            : strain
   return (
     <footer
       aria-label="Studio status"
