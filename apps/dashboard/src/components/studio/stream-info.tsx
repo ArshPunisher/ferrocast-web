@@ -98,7 +98,36 @@ const EMPTY: Form = {
 
 /** YouTube's own thumbnail limits. */
 const THUMB_TYPES = ['image/png', 'image/jpeg']
-const THUMB_MAX = 2 * 1024 * 1024
+/** YouTube's thumbnail limit (thumbnails.set, checked 28 Oct 2026; it was 2 MB before). */
+const THUMB_MAX = 50 * 1024 * 1024
+
+/** A smaller JPEG of a picture, for one over YouTube's limit: at most 4K (YouTube's own
+ * recommendation), then 1080p if that's still too big. Null when the browser can't read it. */
+async function shrinkPicture(f: File): Promise<File | null> {
+  const bitmap = await createImageBitmap(f).catch(() => null)
+  if (!bitmap) return null
+  try {
+    for (const [maxW, quality] of [
+      [3840, 0.9],
+      [1920, 0.85],
+      [1280, 0.8],
+    ] as const) {
+      const k = Math.min(1, maxW / bitmap.width)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(bitmap.width * k)
+      canvas.height = Math.round(bitmap.height * k)
+      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/jpeg', quality))
+      if (blob && blob.size <= THUMB_MAX) {
+        const name = f.name.replace(/\.[^.]+$/, '') + '.jpg'
+        return new File([blob], name, { type: 'image/jpeg' })
+      }
+    }
+    return null
+  } finally {
+    bitmap.close()
+  }
+}
 const isThumbName = (n: string) => /\.(png|jpe?g)$/i.test(n)
 
 function toOwn(i: StreamInfo): Own {
@@ -332,8 +361,21 @@ function ThumbnailPicker({
     if (f.size > THUMB_MAX) {
       toast({
         tone: 'error',
-        message: `That picture is ${(f.size / 1024 / 1024).toFixed(1)} MB. YouTube takes up to 2 MB.`,
-        hint: 'Save it smaller (1280 × 720 JPEG is plenty), then try again.',
+        message: `That picture is ${(f.size / 1024 / 1024).toFixed(1)} MB. YouTube takes up to 50 MB.`,
+        hint: 'Make it smaller here, or save it smaller and try again.',
+        action: {
+          label: 'Make it smaller',
+          run: () =>
+            void shrinkPicture(f).then((small) =>
+              small
+                ? upload(small)
+                : toast({
+                    tone: 'error',
+                    message: 'That picture couldn’t be made smaller here.',
+                    hint: 'Save it as a JPEG of 1920 × 1080 or less, then try again.',
+                  }),
+            ),
+        },
       })
       return
     }
@@ -349,7 +391,7 @@ function ThumbnailPicker({
     <Field
       label="Thumbnail"
       optional
-      hint="YouTube only. JPEG or PNG up to 2 MB, 1280 × 720 is best. Needs a verified channel."
+      hint="YouTube only. JPEG or PNG up to 50 MB, 16:9 (1280 × 720 or bigger). Needs a verified channel."
     >
       {(p) => (
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
