@@ -109,6 +109,16 @@ export interface EngineScenes {
   tbar?: EngineTBar
   /** Faded to black now. */
   black?: boolean
+  /** The vertical picture (its own scenes, 1080×1920), or null while it's off. */
+  vertical?: EngineVertical | null
+}
+
+/** The vertical picture: a second canvas with scenes of its own, sharing sources. */
+export interface EngineVertical {
+  width: number
+  height: number
+  scenes: EngineScene[]
+  current: string
 }
 
 /** Studio Mode's options, as OBS has them under the Transition button. */
@@ -587,7 +597,18 @@ export function studioEngineApi(c: FerroClient) {
     defaults: (kind: string) =>
       c.request<EngineSettings>('GET', `/api/v1/studio/engine/kinds/${enc(kind)}/defaults`),
     scenes: () => c.request<EngineScenes>('GET', '/api/v1/studio/engine/scenes'),
-    addScene: (name: string) => c.request<void>('POST', '/api/v1/studio/engine/scenes', { name }),
+    /** An empty scene at the end; in the vertical picture with `vertical`. */
+    addScene: (name: string, vertical = false) =>
+      c.request<void>(
+        'POST',
+        '/api/v1/studio/engine/scenes',
+        vertical ? { name, vertical } : { name },
+      ),
+    /** Turns the vertical picture on with a first scene (nothing happens when it's on). */
+    startVertical: (scene: string) =>
+      c.request<void>('POST', '/api/v1/studio/engine/vertical', { scene }),
+    /** Turns the vertical picture off: its scenes go. */
+    stopVertical: () => c.request<void>('DELETE', '/api/v1/studio/engine/vertical'),
     removeScene: (scene: string) =>
       c.request<void>('DELETE', `/api/v1/studio/engine/scenes/${enc(scene)}`),
     duplicateScene: (scene: string, name: string) =>
@@ -877,9 +898,13 @@ export function studioEngineApi(c: FerroClient) {
       ),
     streamStats: () => c.request<EngineStreamStats | null>('GET', '/api/v1/studio/engine/stream'),
     /** Puts the live preview over the box, or takes it away (null). */
-    /** The preview over the page's box; in Studio Mode, what's on air over `program`. */
-    preview: (rect: PreviewRect | null, program: PreviewRect | null = null) =>
-      c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect, program }),
+    /** The preview over the page's box; in Studio Mode, what's on air over `program`; the
+     * vertical picture over `vertical`. */
+    preview: (
+      rect: PreviewRect | null,
+      program: PreviewRect | null = null,
+      vertical: PreviewRect | null = null,
+    ) => c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect, program, vertical }),
     /** Studio Mode on (its preview starts as what's on air) or off. */
     studioMode: (on: boolean) =>
       c.request<void>('PUT', '/api/v1/studio/engine/studio-mode', { on }),
