@@ -166,6 +166,8 @@ export interface PlatformResult {
   applied: string[]
   skipped: string[]
   error: { code: StreamInfoErrorCode; message: string; hint: string | null } | null
+  /** YouTube before the stream starts: saved, and put on its live broadcast once you're live. */
+  waiting?: boolean
 }
 
 export interface ApplyResult {

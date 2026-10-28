@@ -43,6 +43,7 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
+import { previewMediaUrl } from '../../lib/media-url'
 import { useAction, useClient, useNow, useResource, type Resource } from '../../lib/hooks'
 import { PLATFORM_LABEL, StatusIcon, useStudio } from './common'
 
@@ -358,7 +359,11 @@ function ThumbnailPicker({
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
           <div className="grid aspect-video w-full max-w-60 shrink-0 place-items-center overflow-hidden rounded-control border border-line bg-surface-2 sm:w-44">
             {picked ? (
-              <img src={picked.url} alt="" className="size-full object-cover" />
+              <img
+                src={previewMediaUrl(client, media.data, picked.id) ?? undefined}
+                alt=""
+                className="size-full object-cover"
+              />
             ) : (
               <ImageSquare size={26} className="text-text-3" aria-hidden="true" />
             )}
@@ -413,40 +418,101 @@ function ThumbnailPicker({
   )
 }
 
+/** "description: Twitch has no stream description" → the field and why. */
+function skipParts(s: string): { field: string; why: string } {
+  const i = s.indexOf(':')
+  return i > 0 ? { field: s.slice(0, i).trim(), why: s.slice(i + 1).trim() } : { field: s, why: '' }
+}
+
+/** What each platform took, as a card each: what changed, what it doesn't have, or why it
+ * refused and what to do. */
 function Results({ results }: { results: PlatformResult[] }) {
   return (
-    <ul className="flex flex-col gap-2" aria-label="What each platform said">
+    <ul
+      className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-3"
+      aria-label="What each platform said"
+    >
       {results.map((r) => (
-        <li key={r.platform} className="flex items-start gap-2.5 text-sm">
-          <StatusIcon status={r.ok ? 'done' : 'failed'} className="mt-0.5" />
-          <div className="min-w-0">
-            <p className="font-medium text-text">
-              {PLATFORM_LABEL[r.platform]}
-              {r.ok && (
-                <span className="font-normal text-text-3"> updated {r.applied.join(', ')}</span>
+        <li
+          key={r.platform}
+          className={cx(
+            'flex flex-col gap-2.5 rounded-[12px] border p-3.5',
+            r.ok ? 'border-line bg-surface-2' : 'border-transparent bg-danger-soft',
+          )}
+        >
+          <p className="m-0 flex items-center gap-2 text-[15px] font-bold text-text">
+            <PlatformMark platform={r.platform} size={15} />
+            {PLATFORM_LABEL[r.platform]}
+            <span
+              className={cx(
+                'ml-auto inline-flex items-center gap-1 text-[13px] font-bold',
+                r.waiting ? 'text-accent-text' : r.ok ? 'text-ok' : 'text-danger',
+              )}
+            >
+              <StatusIcon status={r.waiting ? 'waiting' : r.ok ? 'done' : 'failed'} />
+              {r.waiting ? 'When you go live' : r.ok ? 'Updated' : 'Not updated'}
+            </span>
+          </p>
+          {r.waiting && (
+            <p className="m-0 text-[13.5px] leading-snug text-text-2">
+              Saved. YouTube makes your live video when the stream starts; Ferrocast puts these on
+              it then. No need to schedule anything.
+            </p>
+          )}
+          {r.ok && r.applied.length > 0 && (
+            <div
+              className="flex flex-wrap gap-1.5"
+              aria-label={r.waiting ? 'Will change' : 'Changed'}
+            >
+              {r.applied.map((f) => (
+                <span
+                  key={f}
+                  className={cx(
+                    'rounded-full px-2.5 py-0.5 text-[13px] font-semibold capitalize',
+                    r.waiting ? 'bg-accent-soft text-accent-text' : 'bg-ok-soft text-ok',
+                  )}
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+          {r.error && (
+            <p className="m-0 text-[14px] leading-snug break-words text-text">
+              {r.error.message}{' '}
+              {r.error.code === 'reconnect_needed' || r.error.code === 'not_connected' ? (
+                <a
+                  href="#/settings/accounts"
+                  className="font-semibold text-accent-text underline-offset-2 hover:underline"
+                >
+                  Open Accounts
+                </a>
+              ) : (
+                <span className="text-text-2">{r.error.hint}</span>
               )}
             </p>
-            {r.error && (
-              <p className="text-[14.5px] break-words text-text-2">
-                {r.error.message}{' '}
-                {r.error.code === 'reconnect_needed' || r.error.code === 'not_connected' ? (
-                  <a
-                    href="#/settings/accounts"
-                    className="font-semibold text-accent-text underline-offset-2 hover:underline"
-                  >
-                    Open Accounts
-                  </a>
-                ) : (
-                  r.error.hint
-                )}
-              </p>
-            )}
-            {r.skipped.map((s) => (
-              <p key={s} className="text-[14.5px] text-text-3">
-                Skipped {s}
-              </p>
-            ))}
-          </div>
+          )}
+          {r.skipped.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-bold text-text-3">
+                {PLATFORM_LABEL[r.platform]} doesn&apos;t take
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {r.skipped.map((x) => {
+                  const { field, why } = skipParts(x)
+                  return (
+                    <span
+                      key={x}
+                      title={why}
+                      className="rounded-full border border-line px-2.5 py-0.5 text-[13px] font-semibold text-text-3 capitalize"
+                    >
+                      {field}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </li>
       ))}
     </ul>
