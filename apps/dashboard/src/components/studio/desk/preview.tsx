@@ -607,64 +607,36 @@ function PictureViewPick() {
 function VerticalToggle() {
   const { api, scenes, refresh, setCanvas } = useDesk()
   const { run, busy } = useAction()
-  const [removing, setRemoving] = useState(false)
   const on = !!scenes.data?.vertical
   // Studio Mode is the main picture's: the vertical one waits until it's off.
   if (scenes.data?.preview) return null
+  // On and off, nothing more to it: off keeps its scenes and sources for next time (owner,
+  // 28 Oct: they were removed with it).
+  const flip = () =>
+    void run('vertical', () => done(on ? api.stopVertical() : api.startVertical('Vertical')), {
+      success: on ? 'Vertical picture off. Its scenes are kept.' : 'Vertical picture on.',
+    }).then((ok) => {
+      if (!ok) return
+      setCanvas(on ? 'main' : 'vertical')
+      refresh()
+    })
   return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-pressed={on}
-        busy={busy === 'vertical'}
-        title={
-          on ? 'Remove the vertical picture' : 'Add a vertical picture for Shorts, TikTok and Reels'
-        }
-        className={cx('gap-1.5', on && 'fc-picked hover:bg-[var(--fc-pick-hover)]')}
-        onClick={() => {
-          if (on) return setRemoving(true)
-          void run('vertical', () => done(api.startVertical('Vertical')), {
-            success: 'Vertical picture added. Click it to edit its scenes and sources.',
-          }).then((ok) => {
-            if (!ok) return
-            setCanvas('vertical')
-            refresh()
-          })
-        }}
-      >
-        <DeviceMobile size={16} weight={on ? 'fill' : 'bold'} />
-        Vertical
-      </Button>
-      <Dialog
-        open={removing}
-        onClose={() => setRemoving(false)}
-        size="sm"
-        title="Remove the vertical picture?"
-        description="Its scenes go. Your sources stay in the wide picture's scenes."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRemoving(false)}>
-              Keep it
-            </Button>
-            <Button
-              variant="danger"
-              busy={busy === 'vertical-off'}
-              onClick={() =>
-                void run('vertical-off', () => done(api.stopVertical())).then((ok) => {
-                  if (!ok) return
-                  setRemoving(false)
-                  setCanvas('main')
-                  refresh()
-                })
-              }
-            >
-              Remove
-            </Button>
-          </>
-        }
-      />
-    </>
+    <Button
+      size="sm"
+      variant="ghost"
+      aria-pressed={on}
+      busy={busy === 'vertical'}
+      title={
+        on
+          ? 'Turn the vertical picture off (its scenes are kept)'
+          : 'A vertical picture for Shorts, TikTok and Reels'
+      }
+      className={cx('gap-1.5', on && 'fc-picked hover:bg-[var(--fc-pick-hover)]')}
+      onClick={flip}
+    >
+      <DeviceMobile size={16} weight={on ? 'fill' : 'bold'} />
+      Vertical
+    </Button>
   )
 }
 
