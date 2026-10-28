@@ -248,7 +248,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
           })}
         </div>
       </nav>
-      <div className="min-h-0 min-w-0 sm:overflow-y-auto sm:pr-1">
+      <div className="min-h-0 min-w-0 sm:overflow-y-auto sm:pr-3 sm:[scrollbar-gutter:stable]">
         {chosen && <Pick key={chosen.entry.key} c={chosen} scene={scene} onDone={onDone} />}
       </div>
     </div>
@@ -387,18 +387,18 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   const Icon = c.entry.icon
   return (
     <form
-      className="flex min-w-0 flex-col gap-4"
+      className="flex min-h-full min-w-0 flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault()
         void add()
       }}
     >
-      {/* The name and Add first, where they're always in view (a long list of settings
-          below pushed them out of sight). */}
+      {/* The name first; how it's added and Add sit in a bar at the bottom that stays in view
+          (owner, 28 Oct: they sat oddly beside the name). */}
       {!isScene && !c.entry.overlays && (
         <>
-          <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end">
-            <Field label="Name" className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3">
+            <Field label="Name" className="min-w-0">
               {(p) => (
                 <Input
                   {...p}
@@ -412,41 +412,6 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                 />
               )}
             </Field>
-            {sound ? (
-              <div className="sm:pb-2">
-                <Switch
-                  label="Every scene"
-                  checked={global}
-                  disabled={channel === null}
-                  description={
-                    channel === null
-                      ? 'All six device spots are used.'
-                      : 'On: heard in all your scenes.'
-                  }
-                  onChange={setEverywhere}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 sm:pb-2">
-                <Switch label="Show it now" checked={visible} onChange={setVisible} />
-                {soundName && (
-                  <Switch
-                    label={`With its sound (${soundName})`}
-                    description="Adds its sound to this scene and lets you hear it."
-                    checked={withSound}
-                    onChange={setWithSound}
-                  />
-                )}
-              </div>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              busy={busy === 'add'}
-              disabled={!shownName.trim() || !!clash || (!!dev && device === null)}
-            >
-              Add
-            </Button>
           </div>
           {clash && (
             <p
@@ -603,6 +568,46 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             </details>
           )}
         </>
+      )}
+      {!isScene && !c.entry.overlays && (
+        <div className="sticky bottom-0 z-10 -mx-1 mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-1 px-1 pt-3 pb-1">
+          {sound ? (
+            <div>
+              <Switch
+                label="Every scene"
+                checked={global}
+                disabled={channel === null}
+                description={
+                  channel === null
+                    ? 'All six device spots are used.'
+                    : 'On: heard in all your scenes.'
+                }
+                onChange={setEverywhere}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <Switch label="Show it now" checked={visible} onChange={setVisible} />
+              {soundName && (
+                <Switch
+                  label={`With its sound (${soundName})`}
+                  description="Adds its sound to this scene and lets you hear it."
+                  checked={withSound}
+                  onChange={setWithSound}
+                />
+              )}
+            </div>
+          )}
+          <span className="flex-1" />
+          <Button
+            type="submit"
+            variant="primary"
+            busy={busy === 'add'}
+            disabled={!shownName.trim() || !!clash || (!!dev && device === null)}
+          >
+            Add
+          </Button>
+        </div>
       )}
     </form>
   )
