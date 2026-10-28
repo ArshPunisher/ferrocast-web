@@ -202,7 +202,7 @@ export function Chat() {
   return (
     <div
       // `--fc-top`: the sticky header's measured height (Shell), the phone's strip included.
-      className="flex h-[calc(100dvh-var(--fc-top,56px)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top,56px)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top,56px)-28px-48px)] lg:flex-row lg:gap-5"
+      className="flex h-[calc(100dvh-var(--fc-top,56px)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top,56px)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top,56px)-28px-48px-var(--fc-statusbar,0px))] lg:flex-row lg:gap-5"
     >
       {mod || limited ? (
         chatPane
