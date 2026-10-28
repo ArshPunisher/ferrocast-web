@@ -18,7 +18,7 @@ import { done, useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor, CutPreview, type CutShown } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
-import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
+import { ByHand, LiveCard, useGoLive, useMerged } from './golive'
 
 export function VerticalTab() {
   const api = useGoLive()
@@ -59,19 +59,19 @@ export function VerticalTab() {
           {view.cut.source === 'cut' && (
             <CutEditor cut={view.cut} onSaved={res.reload} onShown={setShown} />
           )}
-          <Platforms view={view} onSaved={res.reload} canvas="vertical" />
-          {ticked > 0 && (
-            <p className="m-0 flex items-start gap-2.5 rounded-[12px] bg-ok-soft px-3.5 py-3 text-[14.5px] text-text">
-              <CheckCircle
-                size={18}
-                weight="fill"
-                className="mt-0.5 shrink-0 text-ok"
-                aria-hidden
-              />
-              Ready: the vertical stream starts with Go live, about 4 Mbps more upload (Optimize
-              counts it).
-            </p>
-          )}
+          <p className="m-0 flex items-center gap-2 text-[14.5px] text-text-2">
+            <Info size={16} className="shrink-0 text-accent-text" aria-hidden />
+            <span>
+              Where it goes: Go live’s{' '}
+              <a
+                className="font-semibold text-accent-text hover:underline"
+                href={href({ name: 'studio', section: 'golive' })}
+              >
+                Go live to
+              </a>
+              , under Vertical{ticked > 0 ? ` (${ticked} on)` : ''}.
+            </span>
+          </p>
         </div>
       </div>
     </div>

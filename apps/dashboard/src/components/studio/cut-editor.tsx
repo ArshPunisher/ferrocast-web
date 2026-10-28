@@ -127,7 +127,13 @@ export function CutEditor({
             !onShown && 'sm:grid-cols-[minmax(0,1fr)_120px]',
           )}
         >
-          <div className="flex max-w-[760px] flex-col gap-3">
+          <div
+            className={cx(
+              'flex flex-col gap-3',
+              // Beside the phone: the picture fills the width with the layouts next to it.
+              onShown && 'xl:grid xl:grid-cols-[minmax(0,1fr)_196px] xl:items-start xl:gap-5',
+            )}
+          >
             {picture.error && !picture.data ? (
               <LoadError error={picture.error} onRetry={picture.reload} />
             ) : !picture.data ? (
@@ -146,7 +152,7 @@ export function CutEditor({
             )}
             <fieldset className="m-0 border-0 p-0">
               <legend className="mb-2 text-[14.5px] font-semibold text-text">Layout</legend>
-              <div className="flex flex-wrap gap-2">
+              <div className={cx('flex flex-wrap gap-2', onShown && 'xl:grid xl:grid-cols-2')}>
                 {LAYOUTS.map((l) => (
                   <label
                     key={l.value}

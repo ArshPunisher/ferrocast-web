@@ -9,7 +9,7 @@ import {
   type GoLiveView,
   type StudioSettings,
 } from '@ferrocast/api'
-import { Gauge } from '@phosphor-icons/react'
+import { DeviceMobile, Gauge, Plus } from '@phosphor-icons/react'
 import { Button, Dialog, Input, Skeleton, Switch, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
@@ -23,7 +23,8 @@ import { AutoConfigDialog } from './auto-config'
 export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoLiveView | null }) {
   const api = useGoLive()
   const { run, busy } = useAction()
-  const [managing, setManaging] = useState(false)
+  // Which platforms Manage edits: the wide picture's or the vertical one's.
+  const [managing, setManaging] = useState<'main' | 'vertical' | null>(null)
   const [optimizing, setOptimizing] = useState(false)
   const desk = useDesk()
   const applyOptimized = (patch: Partial<StudioSettings>) =>
@@ -41,6 +42,8 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       )
     })
   const mine = view ? onCanvas(view.destinations, 'main') : []
+  // Owner's pick G1: the vertical platforms in their own group under the wide ones.
+  const tall = view ? onCanvas(view.destinations, 'vertical') : []
   /** A platform says the video is too much: the Studio's bitrate down to what it asks. */
   const fixBitrate = (kbps: number) =>
     void run('bitrate', async () => {
@@ -75,6 +78,22 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       if (!r) res.reload()
     })
   }
+  const row = (d: DestinationView) => (
+    <li key={d.id} className="flex items-start gap-2.5 px-3 py-2.5">
+      <Logo kind={d.kind} />
+      <div className="min-w-0 flex-1">
+        <RowText d={d} fixBitrate={fixBitrate} />
+      </div>
+      {/* At the top, lined up with the name, however long the notes below. */}
+      <Switch
+        label={`Go live on ${d.name}`}
+        hideLabel
+        checked={d.enabled}
+        disabled={busy !== null || !!d.blocked}
+        onChange={(on) => toggle(d, on)}
+      />
+    </li>
+  )
   return (
     <section aria-label="Go live to" className="flex min-h-0 flex-1 flex-col">
       {desk.prefs.data && (
@@ -97,7 +116,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             >
               <Gauge size={15} weight="bold" aria-hidden /> Optimize
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setManaging(true)}>
+            <Button size="sm" variant="ghost" onClick={() => setManaging('main')}>
               Manage
             </Button>
           </>
@@ -110,37 +129,50 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           </div>
         ) : !view ? (
           <Skeleton className="m-3 h-28" />
-        ) : mine.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 p-3">
-            <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
-            <Button size="sm" variant="primary" onClick={() => setManaging(true)}>
-              Add a platform
-            </Button>
-          </div>
         ) : (
-          <ul className="flex flex-col" aria-label="Platforms">
-            {mine.map((d) => (
-              <li key={d.id} className="flex items-start gap-2.5 px-3 py-2.5">
-                <Logo kind={d.kind} />
-                <div className="min-w-0 flex-1">
-                  <RowText d={d} fixBitrate={fixBitrate} />
-                </div>
-                {/* At the top, lined up with the name, however long the notes below. */}
-                <Switch
-                  label={`Go live on ${d.name}`}
-                  hideLabel
-                  checked={d.enabled}
-                  disabled={busy !== null || !!d.blocked}
-                  onChange={(on) => toggle(d, on)}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            {mine.length === 0 ? (
+              <div className="flex flex-col items-start gap-3 p-3">
+                <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
+                <Button size="sm" variant="primary" onClick={() => setManaging('main')}>
+                  Add a platform
+                </Button>
+              </div>
+            ) : (
+              <ul className="flex flex-col" aria-label="Platforms">
+                {mine.map(row)}
+              </ul>
+            )}
+            {/* Shown whatever the wide list holds: the Vertical tab sends people here. */}
+            <section aria-label="Vertical platforms">
+              <h3 className="m-0 flex items-center gap-1.5 px-3 pt-2 pb-0.5 text-[12px] font-extrabold tracking-[0.06em] text-text-3 uppercase">
+                <DeviceMobile size={14} weight="bold" aria-hidden />
+                Vertical
+                <span className="ml-auto font-semibold tracking-normal normal-case">
+                  {view.cut.source === 'cut' ? 'cut from your stream' : 'the vertical picture'}
+                </span>
+              </h3>
+              {tall.length > 0 && <ul className="flex flex-col">{tall.map(row)}</ul>}
+              <button
+                type="button"
+                onClick={() => setManaging('vertical')}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] font-semibold text-text-3 hover:text-text"
+              >
+                <Plus size={14} weight="bold" aria-hidden />
+                Add a vertical destination
+              </button>
+            </section>
+          </>
         )}
         <StreamTitle />
       </div>
-      <Dialog open={managing} onClose={() => setManaging(false)} size="lg" title="Your platforms">
-        {view && <Platforms view={view} onSaved={res.reload} />}
+      <Dialog
+        open={managing !== null}
+        onClose={() => setManaging(null)}
+        size="lg"
+        title={managing === 'vertical' ? 'Your vertical platforms' : 'Your platforms'}
+      >
+        {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
       </Dialog>
     </section>
   )
