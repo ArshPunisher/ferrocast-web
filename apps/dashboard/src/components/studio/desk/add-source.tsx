@@ -43,6 +43,47 @@ function deviceOption(opts: EngineOption[], keys: string[] | undefined): EngineO
 
 const SOUND = new Set(['mic', 'desktop', 'app'])
 
+/** Words that name what a device is rather than which one it is. */
+const DEVICE_WORDS = new Set([
+  'video',
+  'audio',
+  'digital',
+  'camera',
+  'microphone',
+  'mic',
+  'input',
+  'capture',
+  'device',
+  'usb',
+  'hd',
+  'the',
+])
+
+/**
+ * The sound device that belongs to a video device (a capture card's "USB2 Digital Audio" for
+ * "USB2 Video", an iPhone's microphone for its camera): the one sharing the most naming words,
+ * as OBS brings a capture card's own sound with it.
+ */
+export function pairedSound(video: string, sounds: readonly string[]): string | null {
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[’']/g, "'")
+      .split(/[^a-z0-9']+/)
+      .filter((w) => w && !DEVICE_WORDS.has(w))
+  const mine = new Set(words(video))
+  if (mine.size === 0) return null
+  let best: { name: string; score: number } | null = null
+  for (const s of sounds) {
+    const score = words(s).filter((w) => mine.has(w)).length
+    if (score > 0 && (!best || score > best.score)) best = { name: s, score }
+  }
+  return best?.name ?? null
+}
+
+/** Video devices whose sound comes with them: on by default for capture cards. */
+const BRINGS_SOUND: Record<string, boolean> = { card: true, camera: false }
+
 /** Kinds that need macOS's Screen Recording switch (screens, windows, and their sound). */
 const NEEDS_SCREEN = new Set(['screen', 'window', 'desktop', 'app'])
 
@@ -216,7 +257,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
 
 /** The right side: devices or settings for the kind, a name, and Add. */
 function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => void }) {
-  const { api, scenes, audio, refresh } = useDesk()
+  const { api, scenes, audio, refresh, kinds } = useDesk()
   const { run, busy } = useAction()
   const isScene = !!c.entry.scene
   const loaded = useResource(
@@ -236,18 +277,34 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   const [visible, setVisible] = useState(true)
   const sound = SOUND.has(c.entry.key)
   const [everywhere, setEverywhere] = useState(c.entry.key !== 'app')
+  // A capture card or camera: its own sound device, to add with it.
+  const pairs = c.entry.key in BRINGS_SOUND
+  const micEntry = KIND_GROUPS.flatMap((g) => g.entries).find((e) => e.key === 'mic')
+  const micKind = pairs && micEntry ? pickKind(micEntry, kinds.data) : null
+  const micOpts = useResource(
+    () => (micKind ? api.options(micKind) : Promise.resolve([] as EngineOption[])),
+    [api, micKind],
+  )
+  const [withSound, setWithSound] = useState(BRINGS_SOUND[c.entry.key] ?? false)
 
   if (loaded.error && !loaded.data)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
   if (!loaded.data) return <Skeleton className="h-72" />
   const [opts, defaults, sources] = loaded.data
-  const taken = new Set([
-    ...sources.map((s) => s.name),
-    ...(scenes.data?.scenes.map((s) => s.name) ?? []),
-  ])
+  const sceneNames = new Set(scenes.data?.scenes.map((s) => s.name) ?? [])
+  const taken = new Set([...sources.map((s) => s.name), ...sceneNames])
   const dev = deviceOption(opts, c.entry.device)
   const devName = dev && device !== null ? dev.choices[device] : null
   const shownName = name ?? freeName(devName ?? c.entry.label, taken)
+  const micDev = deviceOption(micOpts.data ?? [], micEntry?.device)
+  const soundName = devName && micDev ? pairedSound(devName, micDev.choices) : null
+  // Scenes and sources share one set of names (as in OBS): say which one has it, and offer
+  // a free one, right under the field (a toast would sit behind this dialog).
+  const clash = taken.has(shownName.trim())
+    ? sceneNames.has(shownName.trim())
+      ? 'scene'
+      : 'source'
+    : null
   const reuse = isScene
     ? (scenes.data?.scenes ?? [])
         .filter((s) => s.name !== scene)
@@ -269,9 +326,17 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       settings: { url: o.url, width: o.width, height: o.height },
     }
     finish(
-      await run('overlay', () => api.addSource(scene, source, true), {
-        success: `Added ${source.name}.`,
-      }),
+      await run(
+        'overlay',
+        async () => {
+          const made = await api.addSource(scene, source, true)
+          // Alert sounds: heard by you as well as the stream (OBS's browser source plays them
+          // on the computer too). Without this they only reached viewers.
+          await api.setAudio(source.name, { monitor: 'me_and_stream' }).catch(() => undefined)
+          return made
+        },
+        { success: `Added ${source.name}.` },
+      ),
     )
   }
   const finish = (ok: unknown) => {
@@ -299,6 +364,21 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       success: `Added ${source.name}.`,
     })
     if (made && !visible) await api.editItem(scene, made.item.id, 'hide').catch(() => undefined)
+    // Its own sound, in this scene, heard by you and the stream (a console through a capture
+    // card is heard like in OBS).
+    if (made && withSound && soundName && micKind && micDev) {
+      const at = micDev.choices.indexOf(soundName)
+      const snd = {
+        kind: micKind,
+        name: freeName(soundName, taken),
+        settings: { [micDev.key]: micDev.values[at] },
+      }
+      await run('add-sound', async () => {
+        await api.addSource(scene, snd)
+        await api.setAudio(snd.name, { monitor: 'me_and_stream' })
+        return true
+      })
+    }
     finish(made)
   }
 
@@ -311,6 +391,80 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         void add()
       }}
     >
+      {/* The name and Add first, where they're always in view (a long list of settings
+          below pushed them out of sight). */}
+      {!isScene && !c.entry.overlays && (
+        <>
+          <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end">
+            <Field label="Name" className="min-w-0 flex-1">
+              {(p) => (
+                <Input
+                  {...p}
+                  value={shownName}
+                  maxLength={100}
+                  required
+                  autoComplete="off"
+                  onChange={(e) => setName(e.target.value)}
+                  aria-invalid={clash ? true : undefined}
+                  aria-describedby={clash ? 'add-name-clash' : undefined}
+                />
+              )}
+            </Field>
+            {sound ? (
+              <div className="sm:pb-2">
+                <Switch
+                  label="Every scene"
+                  checked={global}
+                  disabled={channel === null}
+                  description={
+                    channel === null
+                      ? 'All six device spots are used.'
+                      : 'On: heard in all your scenes.'
+                  }
+                  onChange={setEverywhere}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 sm:pb-2">
+                <Switch label="Show it now" checked={visible} onChange={setVisible} />
+                {soundName && (
+                  <Switch
+                    label={`With its sound (${soundName})`}
+                    description="Adds its sound to this scene and lets you hear it."
+                    checked={withSound}
+                    onChange={setWithSound}
+                  />
+                )}
+              </div>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              busy={busy === 'add'}
+              disabled={!shownName.trim() || !!clash || (!!dev && device === null)}
+            >
+              Add
+            </Button>
+          </div>
+          {clash && (
+            <p
+              id="add-name-clash"
+              role="alert"
+              className="-mt-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] font-semibold text-danger"
+            >
+              There&apos;s already a {clash} called &ldquo;{shownName.trim()}&rdquo;. Scenes and
+              sources need different names.
+              <button
+                type="button"
+                className="font-bold text-accent-text underline underline-offset-2"
+                onClick={() => setName(freeName(shownName.trim(), taken))}
+              >
+                Use &ldquo;{freeName(shownName.trim(), taken)}&rdquo;
+              </button>
+            </p>
+          )}
+        </>
+      )}
       {NEEDS_SCREEN.has(c.entry.key) && <ScreenAccess />}
       {dev && dev.choices.every((l) => !l.trim()) && (
         <p className="m-0 rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[15px] font-semibold text-text-2">
@@ -446,47 +600,6 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
               </div>
             </details>
           )}
-          <div className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end">
-            <Field label="Name" className="min-w-0 flex-1">
-              {(p) => (
-                <Input
-                  {...p}
-                  value={shownName}
-                  maxLength={100}
-                  required
-                  autoComplete="off"
-                  onChange={(e) => setName(e.target.value)}
-                />
-              )}
-            </Field>
-            {sound ? (
-              <div className="sm:pb-2">
-                <Switch
-                  label="Every scene"
-                  checked={global}
-                  disabled={channel === null}
-                  description={
-                    channel === null
-                      ? 'All six device spots are used.'
-                      : "On: heard in all your scenes, like OBS's Mic/Aux."
-                  }
-                  onChange={setEverywhere}
-                />
-              </div>
-            ) : (
-              <div className="sm:pb-2">
-                <Switch label="Show it now" checked={visible} onChange={setVisible} />
-              </div>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              busy={busy === 'add'}
-              disabled={!shownName.trim() || (!!dev && device === null)}
-            >
-              Add
-            </Button>
-          </div>
         </>
       )}
     </form>

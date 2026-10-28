@@ -231,7 +231,7 @@ export const KIND_GROUPS: KindGroup[] = [
         kinds: ['slideshow_v2', 'slideshow'],
         fit: true,
       },
-      { key: 'web', label: 'Web page', icon: Browser, kinds: ['ferrocast_web', 'browser_source'] },
+      { key: 'web', label: 'Browser', icon: Browser, kinds: ['ferrocast_web', 'browser_source'] },
     ],
   },
   {
