@@ -3,9 +3,10 @@
 // 28 Oct, or OBS's; or cut from the normal stream with the 5A editor) and where it goes
 // (YouTube Shorts live, servers of your own). API.md §4 "Vertical" and "Cut from the stream".
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, CheckCircle, DeviceMobile, Info, Plug } from '@phosphor-icons/react'
 import {
+  onCanvas,
   studioEngineApi,
   type GoLiveView,
   type VerticalObs,
@@ -43,15 +44,104 @@ export function VerticalTab() {
       const base = v ?? view
       return { ...base, obs: { ...base.obs, vertical } }
     })
+  // Owner's pick T1: what phones see on the left, where it comes from and where it goes on
+  // the right; cutting's layout editor below when that's the source.
+  const ticked = onCanvas(view.destinations, 'vertical').filter((d) => d.enabled).length
   return (
-    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col gap-5">
-        {view.vertical_live && <LiveCard view={view} onSaved={res.reload} canvas="vertical" />}
-        {view.cut.source === 'cut' && <CutEditor cut={view.cut} onSaved={res.reload} />}
-        <Platforms view={view} onSaved={res.reload} canvas="vertical" />
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[auto_minmax(0,1fr)]">
+        <Phone view={view} />
+        <div className="flex min-w-0 flex-col gap-5">
+          {view.vertical_live && <LiveCard view={view} onSaved={res.reload} canvas="vertical" />}
+          <Source view={view} onVertical={setVertical} onSource={res.reload} />
+          <Platforms view={view} onSaved={res.reload} canvas="vertical" />
+          {ticked > 0 && (
+            <p className="m-0 flex items-start gap-2.5 rounded-[12px] bg-ok-soft px-3.5 py-3 text-[14.5px] text-text">
+              <CheckCircle
+                size={18}
+                weight="fill"
+                className="mt-0.5 shrink-0 text-ok"
+                aria-hidden
+              />
+              Ready: the vertical stream starts with Go live, about 4 Mbps more upload (Optimize
+              counts it).
+            </p>
+          )}
+        </div>
       </div>
-      <Source view={view} onVertical={setVertical} onSource={res.reload} />
+      {view.cut.source === 'cut' && <CutEditor cut={view.cut} onSaved={res.reload} />}
     </div>
+  )
+}
+
+/** What phones see, in a phone: the Studio's vertical picture (a fresh still every two
+ * seconds), or the stream coming in from OBS's canvas; otherwise what to do. */
+function Phone({ view }: { view: GoLiveView }) {
+  const client = useClient()
+  const engine = useMemo(() => studioEngineApi(client), [client])
+  const usesObs = useUsesObs()
+  const studioCanvas = !usesObs && view.cut.source === 'canvas'
+  const [image, setImage] = useState<string | null>(null)
+  const [none, setNone] = useState(false)
+  useEffect(() => {
+    if (!studioCanvas) return
+    let alive = true
+    const take = async () => {
+      try {
+        const s = await engine.scenes()
+        const scene = s.vertical?.current
+        if (!scene) {
+          if (alive) setNone(true)
+          return
+        }
+        const { image: img } = await engine.thumbnail(scene, 360)
+        if (alive) {
+          setNone(false)
+          setImage(img)
+        }
+      } catch {
+        if (alive) setNone(true)
+      }
+    }
+    void take()
+    const t = setInterval(() => document.visibilityState === 'visible' && void take(), 2000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [engine, studioCanvas])
+  const live = view.vertical_live
+  const note = studioCanvas
+    ? none
+      ? 'No vertical picture yet'
+      : null
+    : view.cut.source === 'cut'
+      ? 'Your layout is below'
+      : live
+        ? null
+        : 'Nothing coming in from OBS yet'
+  return (
+    <figure className="m-0 flex flex-col items-center gap-2.5 justify-self-center">
+      <div className="rounded-[30px] border border-line-strong bg-black p-2 shadow-2">
+        <div className="relative grid aspect-[9/16] h-[min(60vh,420px)] place-items-center overflow-hidden rounded-[22px] bg-[#0a0b0d]">
+          {studioCanvas && image && !none && (
+            <img
+              src={image}
+              alt="The vertical picture now"
+              className="absolute inset-0 size-full object-cover"
+            />
+          )}
+          {note && <span className="px-6 text-center text-[13.5px] text-[#9aa1ac]">{note}</span>}
+          {live && (
+            <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-danger-fill px-2 py-0.5 text-[12px] font-extrabold text-white">
+              <span aria-hidden className="size-1.5 rounded-full bg-white" />
+              LIVE
+            </span>
+          )}
+        </div>
+      </div>
+      <figcaption className="text-[13.5px] font-semibold text-text-3">What phones see</figcaption>
+    </figure>
   )
 }
 
@@ -93,7 +183,7 @@ function Source({
             : 'The vertical picture comes from the Studio’s vertical scenes.',
     }).then((r) => r && onSource())
   return (
-    <Panel title="Vertical stream" description="Camera on top, game below, for people on phones.">
+    <Panel title="Picture" description="Where the vertical picture comes from.">
       <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
         <legend className="sr-only">Where the vertical picture comes from</legend>
         {!usesObs && (
@@ -316,7 +406,9 @@ function Option({
         )}
       </label>
       {/* Outside the label, so the option's name stays just its title. */}
-      <InfoTip className="absolute top-2.5 right-2.5">{info}</InfoTip>
+      <span className="absolute top-2.5 right-2.5">
+        <InfoTip>{info}</InfoTip>
+      </span>
     </div>
   )
 }
