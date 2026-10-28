@@ -657,8 +657,8 @@ export function AudioDock() {
         icon: PencilSimple,
         onSelect: () => setNaming({ from: a.name, value: a.name }),
       },
-      { label: 'Filters', icon: Funnel, onSelect: () => edit(a.name) },
-      { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(a.name) },
+      { label: 'Filters', icon: Funnel, onSelect: () => edit(a.name, 'filters') },
+      { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(a.name, 'settings') },
       {
         label: 'Advanced audio',
         icon: Faders,

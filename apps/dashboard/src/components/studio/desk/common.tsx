@@ -4,21 +4,31 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import {
   AppWindow,
+  ArrowsInLineVertical,
+  ArrowsLeftRight,
   BellRinging,
   Browser,
   CardsThree,
   ChatCircleText,
+  CircleDashed,
+  Crop,
   Cube,
   FilmStrip,
   FolderSimple,
   Image as ImageIcon,
   Microphone,
+  MicrophoneSlash,
   Monitor,
+  Moon,
   Palette,
+  ShieldCheck,
+  SlidersHorizontal,
   Slideshow,
+  Sparkle,
   SpeakerHigh,
   Stack,
   TextT,
+  UserSquare,
   VideoCamera,
   Waveform,
   Webcam,
@@ -84,7 +94,10 @@ export interface Desk {
   itemMenu: { current: ((e: React.MouseEvent, id: number | null) => void) | null }
   /** The source whose settings are open. */
   editing: string | null
-  edit: (name: string | null) => void
+  /** Opens a source's drawer (on `tab`, else its first), or closes it with null. */
+  edit: (name: string | null, tab?: DrawerTab) => void
+  /** The drawer tab asked for when it was opened. */
+  editTab: DrawerTab | null
   /** "Add a source" is open, at this kind (an entry key from KIND_GROUPS, or "" for the first). */
   adding: string | null
   setAdding: (at: string | null) => void
@@ -338,12 +351,17 @@ export function pickKind(e: KindEntry, kinds: EngineKinds | null): string | null
   return e.kinds.find((k) => have.has(k)) ?? null
 }
 
+/** The source drawer's tabs. */
+export type DrawerTab = 'sound' | 'filters' | 'settings'
+
 /** Friendly filters by what they're for; every other OBS filter is under "More". */
 export interface FilterEntry {
   kinds: string[]
   label: string
   help: string
   audio?: boolean
+  /** Its picture in the drawer. */
+  icon: Icon
 }
 
 export const FILTERS: FilterEntry[] = [
@@ -352,58 +370,88 @@ export const FILTERS: FilterEntry[] = [
     label: 'Remove background noise',
     help: 'Fans, keyboards, hum.',
     audio: true,
+    icon: Waveform,
   },
   {
     kinds: ['noise_gate_filter'],
     label: 'Cut silence',
     help: 'Mutes the mic between words.',
     audio: true,
+    icon: MicrophoneSlash,
   },
   {
     kinds: ['compressor_filter'],
     label: 'Even out loud moments',
     help: 'Keeps shouts from blasting.',
     audio: true,
+    icon: ArrowsInLineVertical,
   },
-  { kinds: ['gain_filter'], label: 'Make it louder', help: 'Boosts a quiet mic.', audio: true },
+  {
+    kinds: ['gain_filter'],
+    label: 'Make it louder',
+    help: 'Boosts a quiet mic.',
+    audio: true,
+    icon: SpeakerHigh,
+  },
   {
     kinds: ['limiter_filter'],
     label: 'Stop clipping',
     help: 'Never goes over a ceiling.',
     audio: true,
+    icon: ShieldCheck,
   },
   {
     kinds: ['basic_eq_filter'],
     label: 'Bass, mid and treble',
     help: 'A 3-band equaliser.',
     audio: true,
+    icon: SlidersHorizontal,
   },
   {
     kinds: ['expander_filter'],
     label: 'Quieten the room',
     help: 'Lowers sound between words.',
     audio: true,
+    icon: Moon,
   },
   {
     kinds: ['chroma_key_filter_v2', 'chroma_key_filter'],
     label: 'Green screen',
     help: 'Removes a green or blue background.',
+    icon: UserSquare,
   },
-  { kinds: ['crop_filter'], label: 'Crop', help: 'Trims the edges.' },
+  { kinds: ['crop_filter'], label: 'Crop', help: 'Trims the edges.', icon: Crop },
   {
     kinds: ['color_filter_v2', 'color_filter'],
     label: 'Colour',
     help: 'Brightness, contrast, saturation.',
+    icon: Palette,
   },
-  { kinds: ['sharpness_filter_v2', 'sharpness_filter'], label: 'Sharpen', help: 'Crisper edges.' },
+  {
+    kinds: ['sharpness_filter_v2', 'sharpness_filter'],
+    label: 'Sharpen',
+    help: 'Crisper edges.',
+    icon: Sparkle,
+  },
   {
     kinds: ['mask_filter_v2', 'mask_filter'],
     label: 'Shape or mask',
     help: 'Rounds or cuts it with an image.',
+    icon: CircleDashed,
   },
-  { kinds: ['scroll_filter'], label: 'Scroll', help: 'Moves it sideways or up, on a loop.' },
+  {
+    kinds: ['scroll_filter'],
+    label: 'Scroll',
+    help: 'Moves it sideways or up, on a loop.',
+    icon: ArrowsLeftRight,
+  },
 ]
 
 export const FILTER_LABEL: Record<string, string> = Object.fromEntries(
   FILTERS.flatMap((f) => f.kinds.map((k) => [k, f.label])),
+)
+
+/** A filter kind's entry above, when it's one of the friendly ones. */
+export const FILTER_OF: Record<string, FilterEntry> = Object.fromEntries(
+  FILTERS.flatMap((f) => f.kinds.map((k) => [k, f])),
 )

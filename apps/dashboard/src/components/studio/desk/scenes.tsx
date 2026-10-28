@@ -231,7 +231,7 @@ export function ScenesDock() {
             ),
           ]
         : []),
-      { label: 'Filters', icon: Funnel, onSelect: () => edit(name) },
+      { label: 'Filters', icon: Funnel, onSelect: () => edit(name, 'filters') },
       ...filterItems(name, {
         ...desk,
         paste: (from) =>

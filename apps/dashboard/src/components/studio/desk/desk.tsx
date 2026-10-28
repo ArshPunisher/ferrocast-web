@@ -40,7 +40,7 @@ import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { AddSourceDialog } from './add-source'
 import { FileDrop } from './file-drop'
-import { DeskProvider, useDesk, useEngine, type Desk } from './common'
+import { DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
 import { GoLiveDock } from './golive-dock'
 import {
   BUILT_INS,
@@ -173,7 +173,12 @@ function Running({
       }),
     [],
   )
-  const [editing, edit] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editTab, setEditTab] = useState<DrawerTab | null>(null)
+  const edit = useCallback((name: string | null, tab?: DrawerTab) => {
+    setEditing(name)
+    setEditTab(tab ?? null)
+  }, [])
   const itemMenu = useRef<((e: React.MouseEvent, id: number | null) => void) | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)
@@ -260,6 +265,7 @@ function Running({
     itemMenu,
     editing,
     edit,
+    editTab,
     adding,
     setAdding,
     stats,

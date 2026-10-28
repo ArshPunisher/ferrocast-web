@@ -297,7 +297,7 @@ export function SourcesDock() {
         ] satisfies MenuItem[])
       : []),
     { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(item.name) },
-    { label: 'Filters', icon: Funnel, onSelect: () => edit(item.name) },
+    { label: 'Filters', icon: Funnel, onSelect: () => edit(item.name, 'filters') },
     {
       label: 'Rename',
       icon: PencilSimple,

@@ -5,17 +5,18 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowClockwise,
-  CaretDown,
   Check,
-  CaretUp,
   CursorClick,
-  Plus,
+  DotsSixVertical,
+  DotsThree,
+  Funnel,
   Trash,
   X,
 } from '@phosphor-icons/react'
 import {
   describeError,
   type EngineAudio,
+  type EngineFilter,
   type EngineMonitor,
   type EngineSettings,
 } from '@ferrocast/api'
@@ -31,8 +32,8 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
-import { done, useAction, useResource } from '../../../lib/hooks'
-import { FILTERS, FILTER_LABEL, KindTile, useDesk } from './common'
+import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
+import { FILTERS, FILTER_OF, KindTile, useDesk, type DrawerTab } from './common'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
 
@@ -43,6 +44,21 @@ function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: (
   applyRef.current = apply
   const afterRef = useRef(after)
   afterRef.current = after
+  // What's waiting to be sent: sent at once if the drawer closes first (a click outside it
+  // right after a change), so a change is never lost (CodeRabbit).
+  const waiting = useRef<EngineSettings>({})
+  waiting.current = edits
+  useEffect(
+    () => () => {
+      const left = waiting.current
+      if (Object.keys(left).length === 0) return
+      void applyRef.current(left).catch((err: unknown) => {
+        const d = describeError(err)
+        toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+      })
+    },
+    [],
+  )
   useEffect(() => {
     if (Object.keys(edits).length === 0) return
     const t = setTimeout(() => {
@@ -55,6 +71,7 @@ function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: (
           toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
         })
         .finally(() => {
+          if (waiting.current === sent) waiting.current = {}
           setEdits((e) => (e === sent ? {} : e))
           afterRef.current()
         })
@@ -65,13 +82,31 @@ function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: (
 }
 
 export function SourcePanel() {
-  const { editing, edit } = useDesk()
+  const { editing, edit, editTab } = useDesk()
   if (!editing) return null
-  return <Panel key={editing} name={editing} onClose={() => edit(null)} />
+  return (
+    <Panel
+      key={`${editing}\n${editTab ?? ''}`}
+      name={editing}
+      first={editTab}
+      onClose={() => edit(null)}
+    />
+  )
 }
 
-function Panel({ name, onClose }: { name: string; onClose: () => void }) {
-  const { api, audio, items, scene, refresh, edit } = useDesk()
+type Tab = DrawerTab
+
+function Panel({
+  name,
+  first,
+  onClose,
+}: {
+  name: string
+  /** The tab to open on (null: Sound for a sound, else Settings). */
+  first: Tab | null
+  onClose: () => void
+}) {
+  const { api, audio, items, scene, refresh, edit, kinds } = useDesk()
   const { run, busy } = useAction()
   const [rename, setRename] = useState(name)
   // Removing asks once more: the button turns into "Sure? Remove".
@@ -80,6 +115,27 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
   const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
   const kind = a?.kind ?? item?.kind ?? ''
   const levels = useLevels(api, a ? [name] : [])
+  const [tab, setTab] = useState<Tab | null>(first)
+  const filters = useResource(() => api.filters(name), [api, name])
+  const panel = useRef<HTMLElement>(null)
+  // A click anywhere outside closes it (owner, 28 Oct): what's in it is applied as it's
+  // changed, so nothing is lost. Not for what it opened over the page (a list, a menu, a
+  // dialog, a toast or an info bubble), nor a pick in the Sources list, which opens another.
+  useEffect(() => {
+    const away = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t || !t.isConnected || panel.current?.contains(t)) return
+      if (
+        t.closest(
+          '[data-over-preview], [data-fc-menu], [role="listbox"], [role="menu"], [role="option"], dialog',
+        )
+      )
+        return
+      onClose()
+    }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [onClose])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -95,7 +151,8 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
     const ok = await run('rename', () => done(api.rename(name, to)))
     if (ok) {
       refresh()
-      edit(to)
+      // Opened again under its new name, on the same tab (CodeRabbit).
+      edit(to, shown)
     } else setRename(name)
   }
   const setAudio = (patch: { volume_db?: number; muted?: boolean; monitor?: EngineMonitor }) => {
@@ -103,53 +160,103 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
     void run('audio', () => api.setAudio(name, patch))
   }
 
+  // Three tabs (owner's pick D1, 28 Oct): the sound, its filters, and where it plays with
+  // its own settings. A sound opens on Sound, anything else on Settings.
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    ...(a ? [{ id: 'sound' as const, label: 'Sound' }] : []),
+    {
+      id: 'filters',
+      label: a ? 'Clean up' : 'Filters',
+      ...(filters.data?.length ? { count: filters.data.length } : {}),
+    },
+    { id: 'settings', label: 'Settings' },
+  ]
+  const shown: Tab = tab === 'sound' && !a ? 'settings' : (tab ?? (a ? 'sound' : 'settings'))
+  const kindName = kinds.data?.inputs.find((k) => k.id === kind)?.name
+  const panelId = `source-tab-${shown}`
+
   return (
     <aside
+      ref={panel}
       data-over-preview
       aria-label={`${name} settings`}
-      className="fixed top-0 right-0 bottom-[var(--fc-statusbar,0px)] z-40 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+      className="fixed top-0 right-0 bottom-[var(--fc-statusbar,0px)] z-40 flex w-full max-w-[540px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
     >
-      <header className="flex items-center gap-2.5 border-b border-line py-3 pr-3 pl-4">
-        <KindTile kind={kind} size={36} />
-        <Input
-          aria-label="Name"
-          className="h-9! min-w-0 flex-1 border-transparent! bg-transparent! font-display text-[18px]! font-bold hover:border-line-strong!"
-          maxLength={100}
-          value={rename}
-          onChange={(e) => setRename(e.target.value)}
-          onBlur={() => void commitName()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          }}
-        />
+      <header className="flex items-center gap-3 py-3 pr-3 pl-4">
+        <KindTile kind={kind} size={40} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Input
+            aria-label="Name"
+            className="-ml-2 h-8! min-w-0 border-transparent! bg-transparent! px-2! font-display text-[18px]! font-bold hover:border-line-strong!"
+            maxLength={100}
+            value={rename}
+            onChange={(e) => setRename(e.target.value)}
+            onBlur={() => void commitName()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+          />
+          <span className="truncate text-[13px] text-text-3">
+            {[kindName, a?.channel ? 'plays in every scene' : null].filter(Boolean).join(' · ') ||
+              '\u00a0'}
+          </span>
+        </div>
         <IconButton label="Close" onClick={onClose}>
           <X size={18} />
         </IconButton>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
-        {kind === 'ferrocast_web' && (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              busy={busy === 'interact'}
-              onClick={() => void run('interact', () => done(api.web(name, 'interact')))}
-            >
-              <CursorClick size={16} weight="bold" /> Interact
-            </Button>
-            <Button
-              variant="secondary"
-              busy={busy === 'reload'}
-              onClick={() => void run('reload', () => done(api.web(name, 'reload')))}
-            >
-              <ArrowClockwise size={16} weight="bold" /> Reload
-            </Button>
-          </div>
-        )}
-        {a && (
+      <div
+        role="tablist"
+        aria-label={`${name} settings`}
+        className="flex gap-1 border-b border-line px-3"
+        onKeyDown={(e) => {
+          // Left and right move between the tabs, as tabs do.
+          const at = tabs.findIndex((t) => t.id === shown)
+          const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+          if (!step) return
+          e.preventDefault()
+          const next = tabs[(at + step + tabs.length) % tabs.length]
+          if (!next) return
+          setTab(next.id)
+          e.currentTarget.querySelector<HTMLElement>(`#tab-${next.id}`)?.focus()
+        }}
+      >
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            id={`tab-${t.id}`}
+            type="button"
+            role="tab"
+            aria-selected={shown === t.id}
+            aria-controls={panelId}
+            tabIndex={shown === t.id ? 0 : -1}
+            onClick={() => setTab(t.id)}
+            className={cx(
+              '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[14.5px] font-bold outline-none focus-visible:shadow-[var(--fc-focus)]',
+              shown === t.id
+                ? 'border-text text-text'
+                : 'border-transparent text-text-3 hover:text-text',
+            )}
+          >
+            {t.label}
+            {t.count !== undefined && (
+              <span className="rounded-full bg-surface-3 px-1.5 font-mono text-[11.5px] text-text-2 tabular-nums">
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={`tab-${shown}`}
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4"
+      >
+        {shown === 'sound' && a && (
           <section aria-label="Sound" className="flex flex-col gap-3">
-            <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">Sound</h3>
             <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
-              <div className="flex items-center justify-between text-[14.5px]">
+              <div className="flex items-center justify-between text-[14.5px] font-semibold">
                 <span>Volume</span>
                 <span className="font-mono text-[13.5px] text-text-2 tabular-nums">
                   {a.muted ? 'Muted' : `${a.volume_db.toFixed(1)} dB`}
@@ -183,11 +290,37 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
                 />
               </div>
             </div>
-            {a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}
           </section>
         )}
-        <Filters name={name} audio={!!a} />
-        <Settings name={name} />
+        {shown === 'filters' && <Filters name={name} audio={!!a} list={filters} />}
+        {shown === 'settings' && (
+          <>
+            {kind === 'ferrocast_web' && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  busy={busy === 'interact'}
+                  onClick={() => void run('interact', () => done(api.web(name, 'interact')))}
+                >
+                  <CursorClick size={16} weight="bold" /> Interact
+                </Button>
+                <Button
+                  variant="secondary"
+                  busy={busy === 'reload'}
+                  onClick={() => void run('reload', () => done(api.web(name, 'reload')))}
+                >
+                  <ArrowClockwise size={16} weight="bold" /> Reload
+                </Button>
+              </div>
+            )}
+            {a && (
+              <section aria-label="Plays in" className="flex flex-col gap-2">
+                {a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}
+              </section>
+            )}
+            <Settings name={name} device={a ? 'Device settings' : 'Source settings'} />
+          </>
+        )}
       </div>
       <footer className="flex items-center gap-2 border-t border-line px-4 py-3">
         {item ? (
@@ -530,28 +663,24 @@ function PlaysIn({ name }: { name: string }) {
   )
 }
 
-/** Filters, in the order they run: each can be switched off, opened, moved or removed. */
-function Filters({ name, audio }: { name: string; audio: boolean }) {
+/**
+ * Filters, in the order they run: each can be switched off, opened (its settings fold out
+ * under it), dragged by its dots (or moved with the arrow keys there) or removed. Below them,
+ * every filter to add as a tile, one click each (owner's pick, 28 Oct): the ones it has
+ * already show faded, and can still be added again.
+ */
+function Filters({
+  name,
+  audio,
+  list,
+}: {
+  name: string
+  audio: boolean
+  list: Resource<EngineFilter[]>
+}) {
   const { api, kinds } = useDesk()
   const { run, busy } = useAction()
-  const list = useResource(() => api.filters(name), [api, name])
   const [open, setOpen] = useState<string | null>(null)
-  const [picking, setPicking] = useState(false)
-  // An open filter's settings, or the list of filters to add, fold away on a click anywhere
-  // else (a menu or list it opened doesn't count).
-  const openCard = useRef<HTMLDivElement>(null)
-  const pickList = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (open === null && !picking) return
-    const away = (e: PointerEvent) => {
-      const t = e.target as HTMLElement | null
-      if (!t || t.closest('[data-fc-menu], [role="listbox"], [role="menu"]')) return
-      if (open !== null && !openCard.current?.contains(t)) setOpen(null)
-      if (picking && !pickList.current?.contains(t)) setPicking(false)
-    }
-    document.addEventListener('pointerdown', away, true)
-    return () => document.removeEventListener('pointerdown', away, true)
-  }, [open, picking])
   // A filter's trash asks once more (its settings go with it).
   const [sure, setSure] = useState<string | null>(null)
   const have = new Set(kinds.data?.filters.map((k) => k.id))
@@ -560,7 +689,9 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
     .filter((f): f is typeof f & { kind: string } => !!f.kind)
   const curatedKinds = new Set(FILTERS.flatMap((f) => f.kinds))
   const more = (kinds.data?.filters ?? []).filter((k) => !curatedKinds.has(k.id))
-  const taken = new Set(list.data?.map((f) => f.name))
+  const filters = list.data ?? []
+  const taken = new Set(filters.map((f) => f.name))
+  const added = new Set(filters.map((f) => f.kind))
   const act = async (key: string, f: () => Promise<unknown>) => {
     const ok = await run(key, () => done(f()))
     if (ok) list.reload()
@@ -569,159 +700,226 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
   const add = async (kind: string, label: string) => {
     let n = label
     for (let i = 2; taken.has(n); i++) n = `${label} ${i}`
-    const ok = await act('add', () => api.addFilter(name, { kind, name: n }))
-    if (ok) {
-      setPicking(false)
-      setOpen(n)
-    }
+    if (await act('add', () => api.addFilter(name, { kind, name: n }))) setOpen(n)
+  }
+  // Moves a filter `by` places (negative: up), one step at a time as the engine moves them.
+  const move = (f: string, by: number) =>
+    void act('move', async () => {
+      for (let i = 0; i < Math.abs(by); i++) await api.editFilter(name, f, by < 0 ? 'up' : 'down')
+    })
+  // Dragging by the dots: where it would land, shown as a line.
+  const rows = useRef<HTMLDivElement>(null)
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
+  const landing = (y: number) => {
+    const els = [...(rows.current?.querySelectorAll<HTMLElement>('[data-filter-row]') ?? [])]
+    const at = els.findIndex((el) => {
+      const r = el.getBoundingClientRect()
+      return y < r.top + r.height / 2
+    })
+    return at < 0 ? els.length : at
   }
   return (
-    <section aria-label="Filters" className="flex flex-col gap-2">
-      {/* The label and its add button share a row (owner, 28 Oct). */}
-      <div className="flex min-h-8 items-center justify-between gap-2">
+    <section aria-label={audio ? 'Clean up' : 'Filters'} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
         <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
-          {audio ? 'Clean up' : 'Filters'}
+          Your filters
           <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
         </h3>
-        {!picking && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="-mr-2 text-accent-text!"
-            onClick={() => setPicking(true)}
-          >
-            <Plus size={14} weight="bold" /> Add a filter
-          </Button>
+        {list.error && !list.data ? (
+          <LoadError error={list.error} onRetry={list.reload} />
+        ) : !list.data ? (
+          <Skeleton className="h-16" />
+        ) : filters.length === 0 ? (
+          <p className="m-0 rounded-control border border-dashed border-line-strong px-3 py-3 text-[14px] text-text-3">
+            None yet. Pick one below.
+          </p>
+        ) : (
+          <div ref={rows} className="flex flex-col gap-1.5">
+            {filters.map((f, i) => {
+              const entry = FILTER_OF[f.kind]
+              const FIcon = entry?.icon ?? Funnel
+              const lineAbove =
+                drag && drag.to === i && drag.to !== drag.from && drag.to !== drag.from + 1
+              const lineBelow =
+                drag && i === filters.length - 1 && drag.to === filters.length && drag.from !== i
+              return (
+                <div
+                  key={f.name}
+                  data-filter-row
+                  className={cx(
+                    'relative rounded-[12px] border border-line bg-surface-2',
+                    !f.enabled && 'opacity-60',
+                    drag?.from === i && 'ring-2 ring-accent-line',
+                  )}
+                >
+                  {lineAbove && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-1 -top-[5px] h-[3px] rounded-full bg-accent-text"
+                    />
+                  )}
+                  {lineBelow && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-1 -bottom-[5px] h-[3px] rounded-full bg-accent-text"
+                    />
+                  )}
+                  <div className="flex items-center gap-2 py-1.5 pr-2 pl-1">
+                    <button
+                      type="button"
+                      aria-label={`Move ${f.name}: drag, or press the up and down arrows`}
+                      // Not disabled while a move is sent: that would drop the keyboard's
+                      // place on it after each step (CodeRabbit).
+                      aria-disabled={busy !== null || undefined}
+                      className="grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center rounded-[6px] text-text-3 outline-none hover:text-text focus-visible:shadow-[var(--fc-focus)] active:cursor-grabbing"
+                      onKeyDown={(e) => {
+                        const by = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+                        if (!by || i + by < 0 || i + by >= filters.length) return
+                        e.preventDefault()
+                        if (busy === null) move(f.name, by)
+                      }}
+                      onPointerDown={(e) => {
+                        if (e.button !== 0 || busy !== null) return
+                        e.currentTarget.setPointerCapture(e.pointerId)
+                        setDrag({ from: i, to: i })
+                      }}
+                      onPointerMove={(e) => {
+                        if (drag?.from === i) setDrag({ from: i, to: landing(e.clientY) })
+                      }}
+                      onPointerUp={(e) => {
+                        if (e.currentTarget.hasPointerCapture(e.pointerId))
+                          e.currentTarget.releasePointerCapture(e.pointerId)
+                        const d = drag
+                        setDrag(null)
+                        if (!d) return
+                        // Landing below itself counts the gap it leaves.
+                        const by = d.to > d.from ? d.to - d.from - 1 : d.to - d.from
+                        if (by) move(f.name, by)
+                      }}
+                      onPointerCancel={() => setDrag(null)}
+                    >
+                      <DotsSixVertical size={16} weight="bold" />
+                    </button>
+                    <span
+                      aria-hidden
+                      className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent-text"
+                    >
+                      <FIcon size={17} />
+                    </span>
+                    <button
+                      type="button"
+                      aria-expanded={open === f.name}
+                      onClick={() => setOpen(open === f.name ? null : f.name)}
+                      className="flex min-w-0 flex-1 flex-col items-start text-left"
+                    >
+                      <span className="w-full truncate text-[14.5px] font-bold">{f.name}</span>
+                      <span className="w-full truncate text-[13px] text-text-3">
+                        {entry && entry.label !== f.name ? entry.label : (entry?.help ?? f.kind)}
+                      </span>
+                    </button>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      className={cx(
+                        'hover:bg-danger-soft hover:text-danger',
+                        sure === f.name && 'bg-danger-soft text-danger',
+                      )}
+                      label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
+                      disabled={busy !== null}
+                      onBlur={() => setSure(null)}
+                      onClick={() =>
+                        sure === f.name
+                          ? void act('rm', () => api.removeFilter(name, f.name))
+                          : setSure(f.name)
+                      }
+                    >
+                      <Trash size={15} weight={sure === f.name ? 'fill' : 'regular'} />
+                    </IconButton>
+                    <Switch
+                      label={`${f.name} on`}
+                      hideLabel
+                      checked={f.enabled}
+                      onChange={(on) =>
+                        void act('on', () =>
+                          api.editFilter(name, f.name, on ? 'enable' : 'disable'),
+                        )
+                      }
+                    />
+                  </div>
+                  {open === f.name && (
+                    <div className="border-t border-line p-3">
+                      <FilterSettings source={name} filter={f.name} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
-      {list.error && !list.data ? (
-        <LoadError error={list.error} onRetry={list.reload} />
-      ) : !list.data ? (
-        <Skeleton className="h-16" />
-      ) : (
-        list.data.map((f, i) => (
-          <div
-            key={f.name}
-            ref={open === f.name ? openCard : undefined}
-            className={cx(
-              'rounded-control border border-line bg-surface-2',
-              !f.enabled && 'opacity-70',
-            )}
-          >
-            <div className="flex items-center gap-1 py-1.5 pr-1.5 pl-3">
+      <div className="flex flex-col gap-2">
+        <h3 className="m-0 flex items-baseline gap-2 font-display text-[14px] font-extrabold text-text-2">
+          Add a filter
+          <span className="font-sans text-[13px] font-medium text-text-3">click one to add it</span>
+        </h3>
+        <div role="group" aria-label="Add a filter" className="grid grid-cols-2 gap-2">
+          {curated.map((f) => {
+            const FIcon = f.icon
+            const already = f.kinds.some((k) => added.has(k))
+            return (
               <button
+                key={f.kind}
                 type="button"
-                aria-expanded={open === f.name}
-                onClick={() => setOpen(open === f.name ? null : f.name)}
-                className="min-w-0 flex-1 truncate text-left text-[14.5px] font-semibold"
-              >
-                {f.name}
-                {FILTER_LABEL[f.kind] && FILTER_LABEL[f.kind] !== f.name && (
-                  <span className="ml-1.5 font-normal text-text-3">{FILTER_LABEL[f.kind]}</span>
-                )}
-              </button>
-              <IconButton
-                size="sm"
-                variant="ghost"
-                label={`Move ${f.name} up`}
-                disabled={i === 0 || busy !== null}
-                onClick={() => void act('up', () => api.editFilter(name, f.name, 'up'))}
-              >
-                <CaretUp size={14} />
-              </IconButton>
-              <IconButton
-                size="sm"
-                variant="ghost"
-                label={`Move ${f.name} down`}
-                disabled={i === (list.data?.length ?? 0) - 1 || busy !== null}
-                onClick={() => void act('down', () => api.editFilter(name, f.name, 'down'))}
-              >
-                <CaretDown size={14} />
-              </IconButton>
-              <IconButton
-                size="sm"
-                variant="ghost"
-                className={cx(
-                  'hover:bg-danger-soft hover:text-danger',
-                  sure === f.name && 'bg-danger-soft text-danger',
-                )}
-                label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
                 disabled={busy !== null}
-                onBlur={() => setSure(null)}
-                onClick={() =>
-                  sure === f.name
-                    ? void act('rm', () => api.removeFilter(name, f.name))
-                    : setSure(f.name)
-                }
+                aria-label={`Add ${f.label}${already ? ' (it has one already)' : ''}`}
+                onClick={() => void add(f.kind, f.label)}
+                className={cx(
+                  'flex flex-col items-start gap-1.5 rounded-[12px] border p-3 text-left transition-[border-color,box-shadow] outline-none focus-visible:shadow-[var(--fc-focus)]',
+                  already
+                    ? 'border-dashed border-line-strong text-text-3 hover:border-accent-line hover:text-text-2'
+                    : 'border-line bg-surface-2 hover:border-accent-line hover:shadow-[0_0_0_3px_var(--fc-accent-soft)]',
+                )}
               >
-                <Trash size={14} weight={sure === f.name ? 'fill' : 'regular'} />
-              </IconButton>
-              <Switch
-                label={`${f.name} on`}
-                hideLabel
-                checked={f.enabled}
-                onChange={(on) =>
-                  void act('on', () => api.editFilter(name, f.name, on ? 'enable' : 'disable'))
-                }
-              />
-            </div>
-            {open === f.name && (
-              <div className="border-t border-line p-3">
-                <FilterSettings source={name} filter={f.name} />
-              </div>
-            )}
-          </div>
-        ))
-      )}
-      {picking ? (
-        <div
-          ref={pickList}
-          className="flex flex-col gap-1 rounded-control border border-line p-1.5"
-          role="group"
-          aria-label="Add a filter"
-        >
-          {curated.map((f) => (
-            <button
-              key={f.kind}
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void add(f.kind, f.label)}
-              className="flex flex-col items-start rounded-[8px] px-2.5 py-2 text-left hover:bg-surface-2"
-            >
-              <span className="text-[14.5px] font-semibold">{f.label}</span>
-              <span className="text-[13.5px] text-text-3">{f.help}</span>
-            </button>
-          ))}
-          {more.length > 0 && (
-            <details className="rounded-[8px] px-2.5 py-1.5">
-              <summary className="cursor-pointer text-[14px] font-semibold text-accent-text">
-                More filters
-              </summary>
-              <div className="mt-1 flex flex-col">
-                {more.map((k) => (
-                  <button
-                    key={k.id}
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void add(k.id, k.name || k.id)}
-                    className="rounded-[8px] px-2 py-1.5 text-left text-[14px] hover:bg-surface-2"
-                  >
-                    {k.name || k.id}
-                  </button>
-                ))}
-              </div>
-            </details>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="self-start"
-            onClick={() => setPicking(false)}
-          >
-            Cancel
-          </Button>
+                <span
+                  aria-hidden
+                  className={cx(
+                    'grid size-8 place-items-center rounded-[9px]',
+                    already ? 'bg-surface-3' : 'bg-accent-soft text-accent-text',
+                  )}
+                >
+                  <FIcon size={17} />
+                </span>
+                <span className="text-[14px] leading-tight font-bold">
+                  {f.label}
+                  {already && <span className="font-medium"> · added</span>}
+                </span>
+                <span className="text-[13px] leading-snug text-text-3">{f.help}</span>
+              </button>
+            )
+          })}
         </div>
-      ) : null}
+        {more.length > 0 && (
+          <details className="rounded-[12px] border border-line">
+            <summary className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-[14px] font-bold text-text-2 hover:text-text">
+              <DotsThree size={17} weight="bold" /> Every other filter
+              <span className="font-medium text-text-3">({more.length})</span>
+            </summary>
+            <div className="grid grid-cols-2 gap-1 border-t border-line p-1.5">
+              {more.map((k) => (
+                <button
+                  key={k.id}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void add(k.id, k.name || k.id)}
+                  className="truncate rounded-[8px] px-2.5 py-2 text-left text-[14px] hover:bg-surface-2"
+                >
+                  {k.name || k.id}
+                </button>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
     </section>
   )
 }
@@ -741,8 +939,9 @@ function FilterSettings({ source, filter }: { source: string; filter: string }) 
   )
 }
 
-/** Every setting OBS has for the source, applied as it changes. */
-function Settings({ name }: { name: string }) {
+/** Every setting OBS has for the source, applied as it changes, under `device` ("Device settings"
+ * for a sound, else "Source settings"). */
+function Settings({ name, device }: { name: string; device: string }) {
   const { api } = useDesk()
   const loaded = useResource(
     () => Promise.all([api.sourceOptions(name), api.settings(name)]),
@@ -751,7 +950,7 @@ function Settings({ name }: { name: string }) {
   const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload)
   return (
     <section aria-label="All settings" className="flex flex-col gap-2">
-      <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">Settings</h3>
+      <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">{device}</h3>
       {loaded.error && !loaded.data ? (
         <LoadError error={loaded.error} onRetry={loaded.reload} />
       ) : !loaded.data ? (
