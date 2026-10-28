@@ -16,6 +16,7 @@ import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { go, href } from '../lib/router'
 import { useUsesObs } from '../lib/picture'
 import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
+import { SavedOverlayPreview } from '../components/design/previews'
 
 const WIDGET_NAME: Record<string, string> = {
   alerts: 'Alerts',
@@ -49,37 +50,11 @@ const PRESETS: { value: OverlayPreset; title: string; body: string }[] = [
   { value: 'blank', title: 'Blank', body: 'Start empty and add widgets yourself.' },
 ]
 
-/** A widget kind's colour in the little layout map. */
-function thumbTone(kind: string): string {
-  if (kind === 'alerts') return 'var(--fc-accent)'
-  if (kind === 'chat') return 'var(--fc-arc)'
-  if (kind === 'goal' || kind === 'tips') return 'var(--fc-ok)'
-  if (kind === 'viewers' || kind === 'event_list') return 'var(--fc-twitch)'
-  return 'var(--fc-text-3)'
-}
-
-/** A tiny map of where each widget sits, drawn from the real layout. */
+/** The overlay as it looks, with sample alerts, chat and goals. */
 function LayoutThumb({ overlay }: { overlay: Overlay }) {
   return (
-    <div
-      className="relative aspect-video w-full overflow-hidden rounded-[10px] border border-line bg-[linear-gradient(135deg,var(--fc-surface-3),var(--fc-surface-inset))]"
-      aria-hidden="true"
-    >
-      {overlay.widgets.map((w) => (
-        <div
-          key={w.id}
-          className="absolute rounded-[3px] border"
-          style={{
-            // Each kind of widget in its own colour, as in the editor's palette.
-            borderColor: `color-mix(in srgb, ${thumbTone(w.kind)} 55%, transparent)`,
-            background: `color-mix(in srgb, ${thumbTone(w.kind)} 22%, var(--fc-surface-1))`,
-            left: `${(w.x / overlay.width) * 100}%`,
-            top: `${(w.y / overlay.height) * 100}%`,
-            width: `${(w.w / overlay.width) * 100}%`,
-            height: `${(w.h / overlay.height) * 100}%`,
-          }}
-        />
-      ))}
+    <div className="overflow-hidden rounded-[10px] border border-line" aria-hidden="true">
+      <SavedOverlayPreview overlay={overlay} />
     </div>
   )
 }

@@ -174,6 +174,27 @@ export function ScenePreview({
   )
 }
 
+/** A saved overlay drawn whole with sample state (the Overlays page's cards). */
+export function SavedOverlayPreview({
+  overlay,
+  className,
+}: {
+  overlay: Overlay
+  className?: string
+}) {
+  const [box, near] = useNear<HTMLDivElement>(true)
+  const state = useSampleState(overlay.widgets)
+  return (
+    <div ref={box} className={className ?? 'relative aspect-video w-full'}>
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,#2a3550,#0d1016_70%)]"
+      />
+      {near && <OverlayPreview overlay={overlay} state={state} className="absolute inset-0" />}
+    </div>
+  )
+}
+
 /** A widget design's widget on its own, with sample state. */
 export function WidgetPreview({
   design,
