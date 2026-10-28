@@ -48,6 +48,7 @@ import { LoadError, Panel } from '../Panel'
 import { ModeSwitch } from '../ModeSwitch'
 import { StatusIcon } from '../studio/common'
 import { useAction, useClient, useResource } from '../../lib/hooks'
+import { useUsesObs } from '../../lib/picture'
 import { useMode } from '../../lib/mode'
 import { useLive } from '../../lib/store'
 import { isCloud } from '../../lib/boot'
@@ -77,12 +78,16 @@ export function ThemeUseDialog({
 }: {
   design: ThemeDesign
   onClose: () => void
-  /** Use without OBS (today's dialog: new overlays, or one screen on an overlay). */
-  onClassic: () => void
+  /** Use without OBS (today's dialog: new overlays, or one screen on an overlay); `true`
+   * also makes them scenes in the Studio. */
+  onClassic: (intoStudio: boolean) => void
 }) {
   const api = useThemeObs()
   const reach = useObsReach()
-  const [intoObs, setIntoObs] = useState(reach.ok)
+  // With Ferrocast's Studio the theme goes there (OBS only for those who use OBS).
+  const usesObs = useUsesObs()
+  const [intoObs, setIntoObs] = useState(reach.ok && usesObs)
+  const [intoStudio, setIntoStudio] = useState(!usesObs)
   const [result, setResult] = useState<{ steps: ShowStep[]; applied: ObsTheme | null } | null>(null)
   const [styling, setStyling] = useState(false)
   if (styling) return <MakeItYoursDialog design={design} onClose={onClose} />
@@ -116,7 +121,7 @@ export function ThemeUseDialog({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={onClassic}>
+          <Button variant="primary" onClick={() => onClassic(intoStudio && !usesObs)}>
             Next
           </Button>
         </>
@@ -124,7 +129,16 @@ export function ThemeUseDialog({
     >
       <div className="flex flex-col gap-4">
         <Screens design={design} />
-        <ObsSwitch reach={reach} checked={false} onChange={setIntoObs} />
+        {usesObs ? (
+          <ObsSwitch reach={reach} checked={false} onChange={setIntoObs} />
+        ) : (
+          <Switch
+            label="Set it up in the Studio"
+            description="A scene per screen with its overlay; your game and camera go under the gameplay screens."
+            checked={intoStudio}
+            onChange={setIntoStudio}
+          />
+        )}
       </div>
     </Dialog>
   )

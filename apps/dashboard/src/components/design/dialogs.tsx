@@ -1,13 +1,20 @@
 // Gallery dialogs: Use (themes, scenes and widgets need a target), importing a .ferrodesign,
 // exporting one, and Find in OBS.
 
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { DownloadSimple, FileArrowUp, MonitorPlay } from '@phosphor-icons/react'
-import { SCENE_LABEL, describeError, type Design, type DesignImportReport } from '@ferrocast/api'
+import {
+  SCENE_LABEL,
+  describeError,
+  studioEngineApi,
+  type Design,
+  type DesignImportReport,
+} from '@ferrocast/api'
 import { Button, Dialog, Field, Select, Switch, toast } from '@ferrocast/ui'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { go, href } from '../../lib/router'
 import { ThemeUseDialog } from './theme-obs'
+import { themeIntoStudio } from './theme-studio'
 
 /** Saves a blob through a temporary link (the desktop window and browsers both handle it). */
 export function downloadBlob(blob: Blob, name: string): void {
@@ -27,15 +34,32 @@ export function fileName(d: Design): string {
 
 /** "Use" for designs that need a target: a theme, a scene, or a widget design. */
 export function UseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
-  const [classic, setClassic] = useState(false)
-  // A theme can go into OBS as well (24 Oct pick 1A); "Next" without OBS is today's dialog.
+  const [classic, setClassic] = useState<{ intoStudio: boolean } | null>(null)
+  // A theme can go into the Studio or OBS as well (24 Oct pick 1A); "Next" without OBS is
+  // today's dialog, which then makes the Studio's scenes when asked.
   if (design?.kind === 'theme' && !classic)
-    return <ThemeUseDialog design={design} onClose={onClose} onClassic={() => setClassic(true)} />
-  return <ClassicUseDialog design={design} onClose={onClose} />
+    return (
+      <ThemeUseDialog
+        design={design}
+        onClose={onClose}
+        onClassic={(intoStudio) => setClassic({ intoStudio })}
+      />
+    )
+  return <ClassicUseDialog design={design} onClose={onClose} intoStudio={!!classic?.intoStudio} />
 }
 
-function ClassicUseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
+function ClassicUseDialog({
+  design,
+  onClose,
+  intoStudio,
+}: {
+  design: Design | null
+  onClose: () => void
+  /** A theme's new overlays also become scenes in the Studio. */
+  intoStudio: boolean
+}) {
   const client = useClient()
+  const engine = useMemo(() => studioEngineApi(client), [client])
   const { run, busy } = useAction()
   const overlays = useResource((c) => c.overlays(), [design?.id])
   const [target, setTarget] = useState<'new' | string>('new')
@@ -60,11 +84,37 @@ function ClassicUseDialog({ design, onClose }: { design: Design | null; onClose:
           design.kind === 'widget'
             ? `${design.name} added to ${r.overlays[0]?.name ?? 'the overlay'}.`
             : r.overlays.length > 1
-              ? `Made ${r.overlays.length} overlays from ${design.name}. Add each to its OBS scene.`
+              ? intoStudio
+                ? `Made ${r.overlays.length} overlays from ${design.name}.`
+                : `Made ${r.overlays.length} overlays from ${design.name}. Add each to a scene.`
               : `${r.overlays[0]?.name ?? 'The overlay'} now shows ${design.name}.`,
       },
-    ).then((r) => {
+    ).then(async (r) => {
       if (!r) return
+      if (theme && intoStudio && target === 'new') {
+        try {
+          const made = await themeIntoStudio(engine, theme, r.overlays)
+          toast(
+            made.skipped
+              ? { tone: 'warn', message: 'Overlays made; the Studio is off.', hint: made.skipped }
+              : {
+                  tone: 'ok',
+                  message: `${made.scenes.length} scenes made in the Studio.`,
+                  hint: made.scenes.join(', '),
+                },
+          )
+          onClose()
+          go({ name: 'studio', section: 'golive' })
+          return
+        } catch (e) {
+          const d = describeError(e)
+          toast({
+            tone: 'error',
+            message: `The Studio scenes couldn't be made: ${d.message}`,
+            ...(d.hint ? { hint: d.hint } : {}),
+          })
+        }
+      }
       onClose()
       const first = r.overlays[0]
       if (first)
@@ -80,7 +130,7 @@ function ClassicUseDialog({ design, onClose }: { design: Design | null; onClose:
         needsOverlay
           ? 'Adds this widget, styled, to an overlay. Move it where you want in the layout editor.'
           : theme
-            ? 'Each scene becomes an overlay: one browser source per OBS scene. Or put one scene on an overlay you already use; its URL stays the same.'
+            ? 'Each scene becomes an overlay: one Browser source per scene. Or put one scene on an overlay you already use; its URL stays the same.'
             : 'Makes a new overlay from this scene, or replaces the layout of one you already use (its URL stays the same, so OBS keeps working).'
       }
       footer={
