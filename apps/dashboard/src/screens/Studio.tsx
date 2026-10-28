@@ -6,7 +6,12 @@ import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
 import { VerticalTab } from '../components/studio/vertical'
-import { MarkersPanel, MomentsSettings } from '../components/studio/moments'
+import {
+  DontMissLane,
+  MarkersPanel,
+  MomentsSettings,
+  MomentsTimeline,
+} from '../components/studio/moments'
 import { HealthPanel, ScenesPanel, SwitcherSettings } from '../components/studio/obs'
 import { PreflightPanel, ShowPanel, ShowSettings } from '../components/studio/show'
 import { StreamInfoEditor } from '../components/studio/stream-info'
@@ -100,9 +105,15 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         </div>
       )}
       {section === 'moments' && (
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <MarkersPanel title="Markers this stream" />
-          <MomentsSettings />
+        <div className="flex flex-col gap-5">
+          <MomentsTimeline />
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <MarkersPanel title="Moments" />
+            <div className="flex min-w-0 flex-col gap-5">
+              <DontMissLane />
+              <MomentsSettings />
+            </div>
+          </div>
         </div>
       )}
     </div>

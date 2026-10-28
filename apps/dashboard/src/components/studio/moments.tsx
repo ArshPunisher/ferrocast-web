@@ -21,6 +21,7 @@ import {
   Select,
   Skeleton,
   Switch,
+  cx,
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
@@ -188,7 +189,8 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
           {list.data.map((m: Marker) => (
             <li
               key={m.id}
-              className="flex items-center gap-3 rounded-control px-2 py-1.5 hover:bg-surface-2"
+              id={`marker-${m.id}`}
+              className="flex scroll-mt-24 items-center gap-3 rounded-control px-2 py-1.5 target:bg-accent-soft hover:bg-surface-2"
             >
               <span className="w-20 shrink-0 font-mono text-[14.5px] tabular-nums text-text-2">
                 {m.offset_ms === null ? '--:--:--' : timecode(m.offset_ms)}
@@ -221,6 +223,97 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
         </ol>
       )}
     </Panel>
+  )
+}
+
+/** Where each kind of moment shows on the timeline. */
+const DOT: Record<string, string> = {
+  raid: 'bg-[var(--fc-twitch)]',
+  gift: 'bg-[var(--fc-accent)]',
+  tip: 'bg-[var(--fc-accent)]',
+  superchat: 'bg-[var(--fc-accent)]',
+  bits: 'bg-[var(--fc-accent)]',
+  chat_spike: 'bg-ok',
+  first_chatter: 'bg-ok',
+  clip: 'bg-[var(--fc-arc)]',
+  manual: 'bg-[var(--fc-arc)]',
+}
+
+/** The stream as a bar with a dot where each moment happened (owner's pick M1): a click on a
+ * dot goes to it in the list. */
+export function MomentsTimeline({ since }: { since?: number }) {
+  const studio = useStudio()
+  const tick = useLive((s) => s.studio.markers)
+  const list = useResource(() => studio.markers(since), [studio, since, tick])
+  const session = useResource((c) => c.sessionStats(), [tick])
+  const now = useNow(1000)
+  const timed = (list.data ?? []).filter((m) => m.offset_ms !== null) as (Marker & {
+    offset_ms: number
+  })[]
+  // The bar is the stream so far while live (CodeRabbit), else up to the last moment; an
+  // hour when there's nothing yet.
+  const started = session.data?.live ? session.data.started_at : null
+  const elapsed = started ? Math.max(0, now - started) : 0
+  const end = Math.max(
+    elapsed,
+    ...timed.map((m) => m.offset_ms * 1.05),
+    timed.length || started ? 60 * 1000 : 60 * 60 * 1000,
+  )
+  return (
+    <section
+      aria-label="Tonight’s stream"
+      className="rounded-panel border border-line bg-surface-1 px-5 py-4"
+    >
+      <div className="flex items-center gap-2">
+        <h2 className="m-0 font-display text-[17px] font-bold text-text">This stream</h2>
+        <span className="flex-1" />
+        {started && <Badge tone="danger">Live {timecode(elapsed)}</Badge>}
+        <span className="text-[14px] text-text-3">
+          {timed.length === 0
+            ? 'Moments show here as they happen'
+            : `${timed.length} ${timed.length === 1 ? 'moment' : 'moments'}`}
+        </span>
+      </div>
+      <div className="relative mt-4 h-6">
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-[10px] h-1 rounded-full bg-line-strong"
+        />
+        <ol className="m-0 list-none p-0">
+          {timed.map((m) => (
+            <li
+              key={m.id}
+              className="absolute top-0"
+              style={{ left: `calc(${(m.offset_ms / end) * 100}% - 12px)` }}
+            >
+              {/* A button, not a #fragment link: the dashboard routes by the hash. */}
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById(`marker-${m.id}`)?.scrollIntoView({ block: 'center' })
+                }
+                title={`${timecode(m.offset_ms)} · ${KIND[m.kind] ?? m.kind}: ${m.label}`}
+                aria-label={`${timecode(m.offset_ms)}, ${KIND[m.kind] ?? m.kind}: ${m.label}`}
+                className="grid size-6 place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              >
+                <span
+                  aria-hidden
+                  className={cx(
+                    'size-3.5 rounded-full border-[3px] border-surface-1 box-content',
+                    DOT[m.kind] ?? 'bg-text-3',
+                  )}
+                />
+              </button>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="mt-1 flex font-mono text-[12.5px] text-text-3 tabular-nums">
+        <span>{timecode(0)}</span>
+        <span className="flex-1" />
+        <span>{timecode(end)}</span>
+      </div>
+    </section>
   )
 }
 
