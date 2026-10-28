@@ -3,7 +3,15 @@
 // (Ferrocast sends each its own copy), and Twitch's and Kick's bitrate limits are kept.
 
 import { useState } from 'react'
-import { Broadcast, Gauge, Lightning, Record, Sparkle, Timer } from '@phosphor-icons/react'
+import {
+  Broadcast,
+  CheckCircle,
+  Gauge,
+  Lightning,
+  Record,
+  Sparkle,
+  Timer,
+} from '@phosphor-icons/react'
 import { describeError, type StudioSettings, type UploadCheck } from '@ferrocast/api'
 import { Button, Dialog, cx } from '@ferrocast/ui'
 import { useGoLive } from '../golive'
@@ -96,14 +104,26 @@ function Big({
   return (
     <button
       type="button"
-      aria-pressed={on}
+      role="radio"
+      aria-checked={on}
       onClick={onPick}
       className={cx(
-        'fc-press flex flex-col items-start gap-2 rounded-panel border-2 p-4 text-left transition-colors',
+        'fc-press relative flex flex-col items-start gap-2 rounded-panel border-2 p-4 text-left transition-colors',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-        on ? 'fc-picked border-transparent' : 'border-line hover:border-line-strong',
+        // Picked: its own colour round it and a tick, not a dark fill (owner, 28 Oct).
+        on ? 'bg-surface-2' : 'border-line hover:border-line-strong',
       )}
+      style={on ? { borderColor: tone } : undefined}
     >
+      {on && (
+        <CheckCircle
+          size={22}
+          weight="fill"
+          aria-hidden
+          className="absolute top-3 right-3"
+          style={{ color: tone }}
+        />
+      )}
       <span
         className="grid size-10 place-items-center rounded-full"
         style={{ background: `color-mix(in srgb, ${tone} 16%, transparent)`, color: tone }}
@@ -270,7 +290,16 @@ function Wizard({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      {/* Two questions, each its own row with its own heading: in one grid of four, two
+          picked cards looked like two picks of one thing (owner, 28 Oct). */}
+      <h3 className="m-0 -mb-2 text-[13px] font-bold tracking-wide text-text-3 uppercase">
+        Mostly for
+      </h3>
+      <div
+        role="radiogroup"
+        aria-label="Mostly for"
+        className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+      >
         <Big
           on={use === 'stream'}
           icon={Broadcast}
@@ -287,6 +316,15 @@ function Wizard({
           tone="var(--fc-twitch)"
           onPick={() => setUse('record')}
         />
+      </div>
+      <h3 className="m-0 -mb-2 text-[13px] font-bold tracking-wide text-text-3 uppercase">
+        Motion
+      </h3>
+      <div
+        role="radiogroup"
+        aria-label="Motion"
+        className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+      >
         <Big
           on={fps === 60}
           icon={Lightning}
