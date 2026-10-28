@@ -274,12 +274,13 @@ export function groupScenes(
  * scenes).
  */
 function EverywhereIn({ sound }: { sound: EngineAudio }) {
-  const { api, allScenes, refresh, select } = useDesk()
+  const { api, pictureScenes, refresh, select } = useDesk()
   const { run, busy } = useAction()
   const [choosing, setChoosing] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
-  // A sound heard everywhere is in both pictures' scenes, so it can move to any of them.
-  const all = allScenes.map((s) => s.name)
+  // The edited picture's scenes only: in Vertical, its own (owner, 28 Oct: no wide scenes
+  // there).
+  const all = pictureScenes.map((s) => s.name)
   const move = async () => {
     const ok = await run('in:some', async () => {
       const settings = await api.settings(sound.name)
@@ -576,10 +577,23 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
   }
   return (
     <section aria-label="Filters" className="flex flex-col gap-2">
-      <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
-        {audio ? 'Clean up' : 'Filters'}
-        <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
-      </h3>
+      {/* The label and its add button share a row (owner, 28 Oct). */}
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
+          {audio ? 'Clean up' : 'Filters'}
+          <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
+        </h3>
+        {!picking && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="-mr-2 text-accent-text!"
+            onClick={() => setPicking(true)}
+          >
+            <Plus size={14} weight="bold" /> Add a filter
+          </Button>
+        )}
+      </div>
       {list.error && !list.data ? (
         <LoadError error={list.error} onRetry={list.reload} />
       ) : !list.data ? (
@@ -707,16 +721,7 @@ function Filters({ name, audio }: { name: string; audio: boolean }) {
             Cancel
           </Button>
         </div>
-      ) : (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="self-start"
-          onClick={() => setPicking(true)}
-        >
-          <Plus size={14} /> Add a filter
-        </Button>
-      )}
+      ) : null}
     </section>
   )
 }
