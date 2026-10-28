@@ -11,10 +11,10 @@ import {
 } from '@ferrocast/api'
 import { Badge, Button, Field, Input, Segmented, Select, Skeleton, toast } from '@ferrocast/ui'
 import { LoadError } from './Panel'
-import { useStudio } from './studio/common'
+import { useRigLists } from './studio/rig-lists'
 import { useClient, useResource } from '../lib/hooks'
 
-/** OBS sources that carry sound (listed first when picking the beat). */
+/** Sources that carry sound, the Studio's and OBS's (listed first when picking the beat). */
 const AUDIO_KINDS = [
   'wasapi_output_capture',
   'wasapi_input_capture',
@@ -34,9 +34,10 @@ const AUDIO_KINDS = [
 export function MusicSettings() {
   const client = useClient()
   const api = useMemo(() => musicApi(client), [client])
-  const studio = useStudio()
   const res = useResource(() => api.get(), [api])
-  const inputs = useResource(() => studio.obsInputs().catch(() => []), [studio])
+  // The Studio's sounds while it's the source (the engine reads its meters), else OBS's.
+  const rig = useRigLists()
+  const inputs = rig.inputs
   const [file, setFile] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -94,7 +95,7 @@ export function MusicSettings() {
       <NowPlaying view={view} />
       <Field
         label="Beat from"
-        hint="The OBS source your music plays through, often Desktop Audio."
+        hint="The sound your music plays through, often Desktop Audio."
         hintVisible={false}
         error={view.beat_problem}
       >
@@ -127,7 +128,11 @@ export function MusicSettings() {
         )}
       </Field>
       {inputs.data && list.length === 0 && (
-        <p className="-mt-2 text-[14px] text-text-3">Connect OBS to pick a source.</p>
+        <p className="-mt-2 text-[14px] text-text-3">
+          {rig.app === 'OBS'
+            ? 'Connect OBS to pick a source.'
+            : 'Start the Studio in Go live to pick a sound.'}
+        </p>
       )}
       <div className="flex flex-col gap-1.5">
         <span className="text-[14.5px] font-medium text-text-2">Song from</span>
