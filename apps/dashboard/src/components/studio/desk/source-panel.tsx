@@ -102,7 +102,7 @@ function Panel({ name, onClose }: { name: string; onClose: () => void }) {
     <aside
       data-over-preview
       aria-label={`${name} settings`}
-      className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+      className="fixed top-0 right-0 bottom-[var(--fc-statusbar,0px)] z-40 flex w-full max-w-[440px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
     >
       <header className="flex items-center gap-2.5 border-b border-line py-3 pr-3 pl-4">
         <KindTile kind={kind} size={36} />

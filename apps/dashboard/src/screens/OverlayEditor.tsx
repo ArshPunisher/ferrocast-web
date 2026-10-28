@@ -150,10 +150,10 @@ export function OverlayEditor({ id }: { id: string }) {
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-4"
+            className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-[calc(1rem+var(--fc-statusbar,0px))]"
           >
             <p className="min-w-0 flex-1 text-[14px] text-text-2">
-              Unsaved layout. OBS keeps the old one until you save.
+              Unsaved layout. Your stream keeps the old one until you save.
             </p>
             <Button size="sm" variant="ghost" onClick={() => ov.data && setDraft(ov.data)}>
               Discard
