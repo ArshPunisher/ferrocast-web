@@ -4,14 +4,7 @@
 // tab holds only what's different there (a dot marks it), and Everywhere lists those changes.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import {
-  FloppyDisk,
-  ImageSquare,
-  PaperPlaneTilt,
-  Trash,
-  UploadSimple,
-  X,
-} from '@phosphor-icons/react'
+import { FloppyDisk, ImageSquare, PaperPlaneTilt, UploadSimple, X } from '@phosphor-icons/react'
 import {
   ApiError,
   checkStreamInfo,
@@ -27,6 +20,9 @@ import {
   type StreamInfo,
   type StreamInfoView,
   type StreamPreset,
+  type PlatformAccess,
+  type StreamHistoryEntry,
+  streamInfoFor,
 } from '@ferrocast/api'
 import {
   Badge,
@@ -783,6 +779,29 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             send()
           }}
         >
+          <PresetChips
+            presets={v.presets}
+            onPick={(p) => {
+              setForm(toForm(p.info))
+              setResults(null)
+              toast({
+                tone: 'info',
+                message: `Filled in “${p.name}”.`,
+                hint: 'Press Update everywhere to send it, or it goes when you go live.',
+              })
+            }}
+            onDelete={(p) =>
+              void run(
+                'del',
+                async () => {
+                  await studio.deletePreset(p.id)
+                  view.set({ ...v, presets: v.presets.filter((x) => x.id !== p.id) })
+                  return true
+                },
+                { success: `Deleted “${p.name}”.` },
+              )
+            }
+          />
           <InfoTabs
             tab={tab}
             onTab={(t) => {
@@ -800,7 +819,15 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
           >
             {tab === 'all' ? (
               <>
-                <Field label="Title" hintVisible hint={`${titleLen} of 140 (YouTube takes 100)`}>
+                <Field
+                  label="Title"
+                  hintVisible
+                  hint={
+                    titleLen === 0
+                      ? 'Empty: each platform keeps the title it has.'
+                      : `${titleLen} of 140 (YouTube takes 100)`
+                  }
+                >
                   {(p) => (
                     <Input
                       {...p}
@@ -921,40 +948,6 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
               )
             )}
           </div>
-          <fieldset>
-            <legend className="text-[14.5px] font-medium text-text-2">Send to</legend>
-            <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
-              {v.platforms.map((p) => (
-                <Switch
-                  key={p.platform}
-                  label={PLATFORM_LABEL[p.platform] ?? p.platform}
-                  disabled={!p.connected}
-                  checked={p.connected && targets.includes(p.platform)}
-                  onChange={() =>
-                    setPicked(
-                      targets.includes(p.platform)
-                        ? targets.filter((x) => x !== p.platform)
-                        : [...targets, p.platform],
-                    )
-                  }
-                />
-              ))}
-            </div>
-            {v.platforms
-              .filter((p) => p.needs)
-              .map((p) => (
-                <p key={p.platform} className="mt-2 text-[14.5px] text-text-3">
-                  {PLATFORM_LABEL[p.platform]}:{' '}
-                  {p.connected ? <Badge tone="warn">Reconnect needed</Badge> : 'Not connected.'}{' '}
-                  <a
-                    href="#/settings/accounts"
-                    className="font-semibold text-accent-text hover:underline"
-                  >
-                    {p.connected ? 'Reconnect' : 'Connect'}
-                  </a>
-                </p>
-              ))}
-          </fieldset>
           {err && (
             <p role="alert" className="text-[14.5px] font-medium text-danger">
               {err}
@@ -1010,60 +1003,24 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
           {results && <Results results={results} />}
         </form>
       </Panel>
-      <div className="flex flex-col gap-5">
-        <Panel title="Presets">
-          {v.presets.length === 0 ? (
-            <p className="text-[14.5px] text-text-3">
-              Save the form as a preset to fill it in one click.
-            </p>
-          ) : (
-            <ul className="-mx-2 flex flex-col">
-              {v.presets.map((p: StreamPreset) => (
-                <li
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-control px-2 py-2 hover:bg-surface-2"
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => {
-                      setForm(toForm(p.info))
-                      setResults(null)
-                      toast({
-                        tone: 'info',
-                        message: `Filled in “${p.name}”.`,
-                        hint: 'Press Update everywhere to send it.',
-                      })
-                    }}
-                  >
-                    <span className="block truncate text-sm font-semibold text-text">{p.name}</span>
-                    <span className="block truncate text-[14.5px] text-text-3">
-                      {summary(p.info)}
-                    </span>
-                  </button>
-                  <IconButton
-                    size="sm"
-                    variant="danger-ghost"
-                    label={`Delete ${p.name}`}
-                    onClick={() =>
-                      void run(
-                        'del',
-                        async () => {
-                          await studio.deletePreset(p.id)
-                          view.set({ ...v, presets: v.presets.filter((x) => x.id !== p.id) })
-                          return true
-                        },
-                        { success: `Deleted “${p.name}”.` },
-                      )
-                    }
-                  >
-                    <Trash size={15} />
-                  </IconButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+      <div className="flex flex-col gap-3">
+        <h3 className="m-0 text-[14.5px] font-bold text-text-2">What each platform will show</h3>
+        {v.platforms.map((p) => (
+          <PlatformCard
+            key={p.platform}
+            access={p}
+            info={streamInfoFor(toInfo(form), p.platform)}
+            sending={p.connected && targets.includes(p.platform)}
+            last={v.history.find((h) => h.results.some((r) => r.platform === p.platform && r.ok))}
+            onSending={() =>
+              setPicked(
+                targets.includes(p.platform)
+                  ? targets.filter((x) => x !== p.platform)
+                  : [...targets, p.platform],
+              )
+            }
+          />
+        ))}
         <Panel title="Last sent">
           {v.history.length === 0 ? (
             <p className="text-[14.5px] text-text-3">Nothing sent from Ferrocast yet.</p>
@@ -1089,5 +1046,128 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
         </Panel>
       </div>
     </div>
+  )
+}
+
+/** Presets as one-click chips over the form (owner's pick S1); right-click or the × removes one. */
+function PresetChips({
+  presets,
+  onPick,
+  onDelete,
+}: {
+  presets: StreamPreset[]
+  onPick: (p: StreamPreset) => void
+  onDelete: (p: StreamPreset) => void
+}) {
+  if (presets.length === 0)
+    return (
+      <p className="m-0 text-[14px] text-text-3">
+        Presets: none yet. Fill the form, then Save as preset to fill it in one click next time.
+      </p>
+    )
+  return (
+    <ul aria-label="Presets" className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0">
+      <li className="mr-1 text-[14px] font-semibold text-text-3">Presets</li>
+      {presets.map((p) => (
+        <li key={p.id} className="flex items-center rounded-full bg-surface-3">
+          <button
+            type="button"
+            title={summary(p.info)}
+            onClick={() => onPick(p)}
+            className="max-w-[220px] truncate rounded-l-full py-1 pr-1 pl-3 text-[13.5px] font-bold text-text hover:text-accent-text"
+          >
+            {p.name}
+          </button>
+          <IconButton
+            size="sm"
+            variant="ghost"
+            label={`Delete ${p.name}`}
+            className="size-7! rounded-full! text-text-3"
+            onClick={() => onDelete(p)}
+          >
+            <X size={12} weight="bold" />
+          </IconButton>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** One platform: whether it gets the form (its switch), what it will show, or that it keeps
+ * what it has when nothing's filled in, and what Ferrocast sent it last. */
+function PlatformCard({
+  access,
+  info,
+  sending,
+  last,
+  onSending,
+}: {
+  access: PlatformAccess
+  info: StreamInfo
+  sending: boolean
+  last: StreamHistoryEntry | undefined
+  onSending: () => void
+}) {
+  const name = PLATFORM_LABEL[access.platform] ?? access.platform
+  const title = info.title?.trim() ?? ''
+  const category = info.category?.name?.trim() ?? ''
+  const anything = !!title || !!category || (info.tags?.length ?? 0) > 0
+  const cut = access.platform === 'youtube' && [...title].length > 100
+  const lastTitle = last ? streamInfoFor(last.info, access.platform).title : undefined
+  const state = !access.connected
+    ? { tone: 'neutral' as const, text: 'Not connected' }
+    : access.needs
+      ? { tone: 'warn' as const, text: 'Reconnect needed' }
+      : !sending
+        ? { tone: 'neutral' as const, text: 'Not sent' }
+        : !anything
+          ? { tone: 'neutral' as const, text: 'Keeps its own' }
+          : cut
+            ? { tone: 'warn' as const, text: 'Title cut to 100' }
+            : { tone: 'ok' as const, text: 'Will update' }
+  return (
+    <section
+      aria-label={name}
+      className="rounded-panel border border-line bg-surface-1 px-4 py-3.5"
+    >
+      <div className="flex items-center gap-2.5">
+        <PlatformMark platform={access.platform} size={18} />
+        <span className="font-bold text-text">{name}</span>
+        <Badge tone={state.tone}>{state.text}</Badge>
+        <span className="flex-1" />
+        <Switch
+          label={`Send to ${name}`}
+          hideLabel
+          disabled={!access.connected}
+          checked={sending}
+          onChange={onSending}
+        />
+      </div>
+      {!access.connected || access.needs ? (
+        <p className="m-0 mt-2 text-[14px] text-text-3">
+          <a href="#/settings/accounts" className="font-semibold text-accent-text hover:underline">
+            {access.connected ? 'Reconnect' : 'Connect'} {name}
+          </a>{' '}
+          to set its stream info from here.
+        </p>
+      ) : sending && anything ? (
+        <div className="mt-2 text-[14px]">
+          {title && (
+            <p className="m-0 font-bold break-words text-text">
+              {cut ? [...title].slice(0, 100).join('') + '…' : title}
+            </p>
+          )}
+          <p className="m-0 text-text-3">
+            {[category, info.tags?.join(', ')].filter(Boolean).join(' · ') || 'Title only'}
+          </p>
+        </div>
+      ) : (
+        <p className="m-0 mt-2 text-[14px] text-text-3">
+          {lastTitle
+            ? `Keeps what it has. Last from Ferrocast: “${lastTitle}”`
+            : 'Keeps what it has now.'}
+        </p>
+      )}
+    </section>
   )
 }
