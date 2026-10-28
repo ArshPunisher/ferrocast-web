@@ -1,14 +1,19 @@
 // Vertical (2.0, A2.3 and A2.4): Studio's second tab. Owner's pick 4B (24 Oct board): its own
-// tab with where the upright picture comes from (OBS's vertical canvas, or cut from the normal
-// stream with the 5A editor) and where it goes (YouTube Shorts live, servers of your own).
-// API.md §4 "Vertical" and "Cut from the stream".
+// tab with where the upright picture comes from (a vertical canvas: the Studio's own, V2 of
+// 28 Oct, or OBS's; or cut from the normal stream with the 5A editor) and where it goes
+// (YouTube Shorts live, servers of your own). API.md §4 "Vertical" and "Cut from the stream".
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { ArrowCounterClockwise, CheckCircle, DeviceMobile, Info, Plug } from '@phosphor-icons/react'
-import type { GoLiveView, VerticalObs, VerticalSource } from '@ferrocast/api'
+import {
+  studioEngineApi,
+  type GoLiveView,
+  type VerticalObs,
+  type VerticalSource,
+} from '@ferrocast/api'
 import { Button, InfoTip, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
-import { useAction, useResource } from '../../lib/hooks'
+import { done, useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
@@ -20,16 +25,6 @@ export function VerticalTab() {
   const view = useMerged(res.data)
   const live = !!view?.vertical_live
   const reload = res.reload
-  // The Studio has no second canvas: its vertical picture is always cut from its stream.
-  const usesObs = useUsesObs()
-  const onCanvasSource = view?.cut.source === 'canvas'
-  useEffect(() => {
-    if (usesObs || !onCanvasSource) return
-    void api
-      .setVerticalSource('cut')
-      .then(reload)
-      .catch(() => undefined)
-  }, [usesObs, onCanvasSource, api, reload])
   useEffect(() => {
     if (!live) return
     const t = setInterval(reload, 15_000)
@@ -84,8 +79,8 @@ function Source({
       success: `Aitum Vertical streams to ${before ?? 'its old setting'} again.`,
     }).then((r) => r !== undefined && onVertical(r))
   const source = view.cut.source
-  // With Ferrocast's Studio the vertical picture is cut from its stream; OBS's vertical
-  // canvas is only for those who stream from OBS.
+  // A vertical canvas is the Studio's own vertical picture, or OBS's for those who stream
+  // from OBS.
   const usesObs = useUsesObs()
   const pick = (s: VerticalSource) =>
     s !== source &&
@@ -93,15 +88,27 @@ function Source({
       success:
         s === 'cut'
           ? 'Ferrocast cuts the vertical picture from your stream.'
-          : 'The vertical picture comes from OBS’s vertical canvas.',
+          : usesObs
+            ? 'The vertical picture comes from OBS’s vertical canvas.'
+            : 'The vertical picture comes from the Studio’s vertical scenes.',
     }).then((r) => r && onSource())
   return (
     <Panel title="Vertical stream" description="Camera on top, game below, for people on phones.">
       <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
         <legend className="sr-only">Where the vertical picture comes from</legend>
+        {!usesObs && (
+          <Option
+            title="The Studio’s vertical picture"
+            text="Its own scenes · best quality"
+            info="A tall picture beside the wide one in Studio, Go live, with scenes of its own. Your game and camera are shared, placed for phones."
+            checked={source === 'canvas'}
+            busy={busy === 'source:canvas'}
+            onPick={() => pick('canvas')}
+          />
+        )}
         <Option
           title="Cut it from your stream"
-          text={usesObs ? 'Any OBS' : 'Works with the Studio'}
+          text={usesObs ? 'Any OBS' : 'Quick: no scenes to make'}
           info="Mark your camera and game once; Ferrocast stacks them upright. A small camera looks softer when made big."
           checked={source === 'cut'}
           busy={busy === 'source:cut'}
@@ -120,6 +127,7 @@ function Source({
         )}
       </fieldset>
       <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-[14.5px] text-text-2">
+        {source === 'canvas' && !usesObs && <StudioVertical />}
         {source === 'cut' || !usesObs ? null : !obs.connected ? (
           <p className="m-0">
             Open OBS on this computer first.{' '}
@@ -183,9 +191,73 @@ function Source({
             {view.vertical_stats.fps ? ` at ${view.vertical_stats.fps} fps` : ''} coming in
           </p>
         )}
-        {source === 'canvas' && <ByHand vertical />}
+        {source === 'canvas' && usesObs && <ByHand vertical />}
       </div>
     </Panel>
+  )
+}
+
+/** The Studio's vertical picture: on with its scenes (edited in Go live), or a button that
+ * turns it on. */
+function StudioVertical() {
+  const client = useClient()
+  const engine = useMemo(() => studioEngineApi(client), [client])
+  const { run, busy } = useAction()
+  const state = useResource(async () => {
+    if (!(await engine.status()).running) return 'stopped' as const
+    return (await engine.scenes()).vertical ?? null
+  }, [engine])
+  const v = state.data
+  if (state.error && v === undefined)
+    return <LoadError error={state.error} onRetry={state.reload} />
+  if (v === undefined) return <Skeleton className="h-10" />
+  if (v === 'stopped')
+    return (
+      <p className="m-0">
+        Start the Studio in{' '}
+        <a
+          className="font-semibold text-accent-text hover:underline"
+          href={href({ name: 'studio', section: 'golive' })}
+        >
+          Go live
+        </a>{' '}
+        to make its vertical picture.
+      </p>
+    )
+  if (!v)
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          icon={<DeviceMobile size={16} />}
+          busy={busy === 'on'}
+          onClick={() =>
+            void run('on', () => done(engine.startVertical('Vertical')), {
+              success: 'Vertical picture added beside the wide one in Go live.',
+            }).then((ok) => ok && state.reload())
+          }
+        >
+          Add a vertical picture
+        </Button>
+        <InfoTip>
+          It sits beside the wide picture in Go live. Click it there to add its own scenes and place
+          your game and camera for phones.
+        </InfoTip>
+      </div>
+    )
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
+      <CheckCircle size={18} weight="fill" className="text-ok" aria-hidden />
+      <span className="font-semibold text-text">
+        Vertical picture on · {v.scenes.length} {v.scenes.length === 1 ? 'scene' : 'scenes'}
+      </span>
+      <a
+        className="ml-auto font-semibold text-accent-text hover:underline"
+        href={href({ name: 'studio', section: 'golive' })}
+      >
+        Edit in Go live
+      </a>
+    </div>
   )
 }
 
