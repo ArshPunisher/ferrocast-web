@@ -358,6 +358,8 @@ export function ShowPanel({ presets = [] }: { presets?: StreamPreset[] }) {
       aria-label="Show"
       className="flex flex-col gap-4 rounded-panel border border-line bg-surface-1 p-5"
     >
+      {/* The big countdown or "ready" line leads visually; the panel still has its name. */}
+      <h2 className="sr-only">Show</h2>
       {show === undefined ? (
         <Skeleton className="h-40" />
       ) : (

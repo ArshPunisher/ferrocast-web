@@ -138,15 +138,21 @@ export function Overlays() {
               key={o.id}
               className="flex min-w-0 flex-col gap-3 rounded-panel border border-line bg-surface-1 p-4 shadow-1"
             >
-              <a
-                href={href({ name: 'overlay', id: o.id })}
-                className="group block focus-visible:outline-none"
-                aria-label={`Edit ${o.name}`}
-              >
-                <div className="transition-transform duration-200 group-hover:scale-[1.01] group-focus-visible:shadow-[var(--fc-focus)]">
+              {/* The picture of the overlay has text of its own, so the link lies over it,
+                  empty, named "Edit …" (axe: a link's name must match its visible text). */}
+              <div className="group relative">
+                <div
+                  aria-hidden
+                  className="transition-transform duration-200 group-hover:scale-[1.01] group-has-[a:focus-visible]:shadow-[var(--fc-focus)]"
+                >
                   <LayoutThumb overlay={o} />
                 </div>
-              </a>
+                <a
+                  href={href({ name: 'overlay', id: o.id })}
+                  className="absolute inset-0 rounded-[12px] focus-visible:outline-none"
+                  aria-label={`Edit ${o.name}`}
+                />
+              </div>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h2 className="truncate font-display text-[18px] font-extrabold tracking-tight">
