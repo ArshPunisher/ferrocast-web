@@ -9,8 +9,8 @@ import {
   type GoLiveView,
   type StudioSettings,
 } from '@ferrocast/api'
-import { DeviceMobile, Gauge, Plus } from '@phosphor-icons/react'
-import { Button, Dialog, Input, Skeleton, Switch, toast } from '@ferrocast/ui'
+import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
+import { IconButton, Button, Dialog, Input, Skeleton, Switch, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { href } from '../../../lib/router'
@@ -127,9 +127,14 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             >
               <Gauge size={15} weight="bold" aria-hidden /> Optimize
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setManaging('main')}>
-              Manage
-            </Button>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label="Manage platforms"
+              onClick={() => setManaging('main')}
+            >
+              <GearSix size={17} />
+            </IconButton>
           </>
         }
       />
