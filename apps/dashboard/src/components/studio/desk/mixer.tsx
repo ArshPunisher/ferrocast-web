@@ -489,7 +489,9 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
           )}
         >
           {!a.muted && <span className="font-sans text-[12px] font-semibold text-text-3">Vol</span>}
-          <span className="w-[60px]">{dbText(a)}</span>
+          {/* Wide enough for the longest ("-99.9 dB") on one line: the row never shifts as the
+              fader moves (owner, 29 Oct). */}
+          <span className="w-[8.5ch] whitespace-nowrap">{dbText(a)}</span>
         </span>
       </div>
       <div className="mt-1 flex items-start gap-0.5">
