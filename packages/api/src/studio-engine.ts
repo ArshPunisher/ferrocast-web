@@ -476,6 +476,8 @@ export interface EngineCaptions {
   text: string
   /** Whether the scenes have a text source named "Captions" to show it. */
   box: boolean
+  /** Times "clip that" was heard since Ferrocast opened. */
+  clips_said?: number
 }
 
 /** Smart vertical: the vertical item that follows the face in it. */

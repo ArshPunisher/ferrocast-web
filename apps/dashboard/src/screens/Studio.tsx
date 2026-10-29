@@ -91,7 +91,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
                 cfg={switcher}
               />
             )}
-            {!usesObs && <LiveCaptions inputs={rig.inputs.data} />}
+            {!usesObs && <LiveCaptions inputs={rig.inputs.data} cfg={switcher} />}
           </div>
         </div>
       )}

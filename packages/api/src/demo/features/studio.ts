@@ -83,6 +83,7 @@ const DEFAULT_SCENES: ScenesConfig = {
   clip_on_big_moments: false,
   vertical_clips: false,
   away_minutes: 0,
+  clip_by_voice: false,
 }
 
 const DEFAULT_MOMENTS: MomentsConfig = {

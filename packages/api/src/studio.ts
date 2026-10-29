@@ -386,6 +386,8 @@ export interface ScenesConfig {
   /** Away: while live, BRB after this many minutes of silence on the Show's mics, back when
    * you talk (0: off; the Studio only). */
   away_minutes: number
+  /** Saying "clip that" while live captions listen saves a clip (the Studio only). */
+  clip_by_voice: boolean
 }
 
 export interface HealthWarning {

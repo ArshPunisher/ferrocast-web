@@ -3,10 +3,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { ClosedCaptioning } from '@phosphor-icons/react'
-import type { EngineCaptions } from '@ferrocast/api'
+import type { EngineCaptions, ScenesConfig } from '@ferrocast/api'
 import { Button, Field, Select, Switch } from '@ferrocast/ui'
 import { Panel } from '../Panel'
-import { useAction } from '../../lib/hooks'
+import { useAction, type Resource } from '../../lib/hooks'
+import { useStudio } from './common'
 import { useEngine } from './desk/common'
 import { MIC_KIND, type RigInput } from './rig-lists'
 import { CAPTIONS_SOURCE, captionsBox, captionsStep, pickMic } from './captions-box'
@@ -14,13 +15,17 @@ import { CAPTIONS_SOURCE, captionsBox, captionsStep, pickMic } from './captions-
 export function LiveCaptions({
   inputs,
   preferred = [],
+  cfg,
 }: {
+  /** The scene switcher's settings (Clip by voice lives there). */
+  cfg?: Resource<ScenesConfig>
   /** The Studio's sounds (null while it isn't running). */
   inputs: RigInput[] | null
   /** Pre-flight's mics, tried first. */
   preferred?: string[]
 }) {
   const api = useEngine()
+  const studio = useStudio()
   const { run, busy } = useAction()
   const [c, setC] = useState<EngineCaptions | null>(null)
   const [failed, setFailed] = useState(false)
@@ -53,6 +58,15 @@ export function LiveCaptions({
   if (failed && !c) return null
   if (!c) return null
   const step = captionsStep(c)
+
+  const voice = cfg?.data?.clip_by_voice ?? false
+  const setVoice = async (on: boolean) => {
+    if (!cfg?.data) return
+    const prev = cfg.data
+    cfg.set({ ...prev, clip_by_voice: on })
+    const saved = await run('voice', () => studio.saveSwitcher({ clip_by_voice: on }))
+    cfg.set(saved ?? prev)
+  }
 
   const turn = async (on: boolean) => {
     const v = await run('captions', () => api.setCaptions(on ? chosen : null))
@@ -156,6 +170,15 @@ export function LiveCaptions({
                   checked={c.on}
                   onChange={(v) => void turn(v)}
                 />
+                {cfg?.data && (
+                  <Switch
+                    label="Say “clip that” to clip"
+                    description="While captions are on, saying “clip that” saves the replay buffer, like !clip. At most every 20 seconds."
+                    disabled={busy === 'voice'}
+                    checked={voice}
+                    onChange={(v) => void setVoice(v)}
+                  />
+                )}
               </>
             )}
             {!c.box && (
