@@ -224,6 +224,8 @@ function without(l: Layout, id: DockId): Layout {
   }
 }
 
+const rectOf = (b: DOMRect) => ({ left: b.left, top: b.top, width: b.width, height: b.height })
+
 /** Where a dragged panel would land. */
 interface Target {
   region: Region
@@ -357,27 +359,39 @@ export function DockWorkspace({
       }
       const s = ws.current?.querySelector('[data-stage]')?.getBoundingClientRect()
       if (!s) return null
+      // Beside the picture: a column (or the row below) that's there already takes the panel
+      // at its end, and the hint is that spot, not the whole edge: dropping Audio on the left
+      // edge, already the last there, showed a strip and did nothing (owner's recording).
+      const edge = (region: Region, hint: Target['hint']): Target => {
+        const ids = layout[region].filter((d) => !layout.hidden.includes(d))
+        const last = ids[ids.length - 1]
+        const el = last && ws.current?.querySelector<HTMLElement>(`[data-dock="${CSS.escape(last)}"]`)
+        if (!last || !el) return { region, hint }
+        const b = el.getBoundingClientRect()
+        // Already the last there: it stays where it is.
+        if (last === self) return { region, at: self, before: true, hint: rectOf(b) }
+        return {
+          region,
+          at: last,
+          before: false,
+          hint:
+            region === 'bottom'
+              ? { top: b.top, height: b.height, left: b.left + b.width / 2, width: b.width / 2 }
+              : { left: b.left, width: b.width, top: b.top + b.height / 2, height: b.height / 2 },
+        }
+      }
       const side = Math.min(320, s.width * 0.3)
       if (x < s.left + s.width * 0.22)
-        return {
-          region: 'left',
-          hint: { left: box.left, top: box.top, width: side, height: box.height },
-        }
+        return edge('left', { left: box.left, top: box.top, width: side, height: box.height })
       if (x > s.right - s.width * 0.22)
-        return {
-          region: 'right',
-          hint: { left: box.right - side, top: box.top, width: side, height: box.height },
-        }
+        return edge('right', { left: box.right - side, top: box.top, width: side, height: box.height })
       if (y > s.top + s.height * 0.55)
-        return {
-          region: 'bottom',
-          hint: {
-            left: s.left,
-            top: s.bottom - s.height * 0.35,
-            width: s.width,
-            height: s.height * 0.35,
-          },
-        }
+        return edge('bottom', {
+          left: s.left,
+          top: s.bottom - s.height * 0.35,
+          width: s.width,
+          height: s.height * 0.35,
+        })
       return null
     },
     [layout],
@@ -430,6 +444,7 @@ export function DockWorkspace({
             if (l.float[id]) return l
             return popOut(l, id, { x: Math.max(8, u.clientX - 60), y: Math.max(8, u.clientY - 16) })
           }
+          if (target.at === id) return l
           const n = without(l, id)
           const list = [...n[target.region]]
           if (target.at) {
