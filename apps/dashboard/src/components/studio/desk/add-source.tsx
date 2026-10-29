@@ -208,6 +208,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
           <Input
             type="search"
             aria-label="Search kinds"
+            data-keep-placeholder
             placeholder="Search…"
             className="pl-9!"
             value={q}

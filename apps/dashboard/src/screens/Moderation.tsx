@@ -222,6 +222,7 @@ function BanList() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            data-keep-placeholder
             placeholder="Search…"
             className="h-8 w-36 rounded-control border border-line bg-inset pr-2 pl-8 text-[14.5px] text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none sm:w-48"
           />

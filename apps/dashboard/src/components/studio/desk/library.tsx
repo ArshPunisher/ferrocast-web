@@ -17,7 +17,7 @@ import {
   UserGear,
 } from '@phosphor-icons/react'
 import { type EngineShelf, type EngineShelfKind } from '@ferrocast/api'
-import { Button, Dialog, Input, cx, toast } from '@ferrocast/ui'
+import { Field, Button, Dialog, Input, cx, toast } from '@ferrocast/ui'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { saveBlob } from '../common'
 import { useDesk } from './common'
@@ -269,16 +269,19 @@ export function LibraryBar() {
             void commit()
           }}
         >
-          <Input
-            autoFocus
-            data-autofocus
-            aria-label="Name"
-            maxLength={100}
-            placeholder="Name"
-            value={naming?.value ?? ''}
-            onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
-            className={cx('text-[16px]')}
-          />
+          <Field label="Name">
+            {(p) => (
+              <Input
+                {...p}
+                autoFocus
+                data-autofocus
+                maxLength={100}
+                value={naming?.value ?? ''}
+                onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
+                className={cx('text-[16px]')}
+              />
+            )}
+          </Field>
         </form>
       </Dialog>
     </>

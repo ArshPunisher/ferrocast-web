@@ -24,6 +24,13 @@ html,
 body {
   overflow-x: clip;
 }
+/* No placeholder text in fields (owner, 29 Oct: a grey example looked like a value already
+   filled in). Each field's label says what goes in it. Search boxes and the chat box keep
+   theirs (data-keep-placeholder): they have no other label on screen. */
+input:not([data-keep-placeholder])::placeholder,
+textarea:not([data-keep-placeholder])::placeholder {
+  color: transparent;
+}
 
 /* Long chat lists stay cheap: offscreen rows skip layout and paint (R-54). */
 .fc-row {

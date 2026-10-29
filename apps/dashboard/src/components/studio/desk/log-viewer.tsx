@@ -112,6 +112,7 @@ function LogBody() {
           />
           <Input
             aria-label="Search the log"
+            data-keep-placeholder
             placeholder="Search, e.g. error…"
             className="h-9 pl-9"
             value={q}

@@ -1376,6 +1376,7 @@ function KeysPage({ s, set }: PageProps) {
         aria-label="Search shortcuts"
         name="shortcut-search"
         autoComplete="off"
+        data-keep-placeholder
         placeholder="Search shortcuts…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

@@ -410,6 +410,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
           />
           <Input
             type="search"
+            data-keep-placeholder
             placeholder={searchLabel}
             value={q}
             onChange={(e) => setQ(e.target.value)}

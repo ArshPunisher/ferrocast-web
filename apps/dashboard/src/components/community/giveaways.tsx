@@ -234,6 +234,7 @@ function EntriesSheet({
           />
           <Input
             aria-label="Find someone who entered"
+            data-keep-placeholder
             placeholder="Find someone…"
             className="pl-10"
             value={q}

@@ -255,6 +255,7 @@ function AllViewers({ open, onClose, name }: { open: boolean; onClose: () => voi
           />
           <Input
             aria-label="Find a viewer"
+            data-keep-placeholder
             placeholder="Find a viewer…"
             className="pl-10"
             value={q}

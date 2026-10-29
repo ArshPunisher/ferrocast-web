@@ -1041,6 +1041,7 @@ function AddFilter({
         >
           <Input
             aria-label="Find a filter"
+            data-keep-placeholder
             placeholder="Find a filter"
             value={find}
             autoFocus

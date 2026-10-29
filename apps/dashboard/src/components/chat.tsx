@@ -589,6 +589,7 @@ export function Composer({
           value={text}
           maxLength={500}
           enterKeyHint="send"
+          data-keep-placeholder
           placeholder={reply ? `Reply to ${reply.name}…` : 'Send a message to chat…'}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
