@@ -70,6 +70,9 @@ export function SettingsDialog({
   )
 }
 
+/** A Mac (the only place the drawing choice applies). */
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent)
+
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
@@ -824,6 +827,22 @@ function PicturePage({ s, set }: PageProps) {
             ))}
           </Select>
         </Row>
+        {/* Only a Mac has the choice (Windows draws with Direct3D). */}
+        {isMac && (
+          <Row
+            label="Drawing"
+            info="Metal is Apple's own way of drawing and the default. If a filter or plugin looks wrong, try OpenGL, the older way. Applies after a restart."
+          >
+            <Select
+              aria-label="Drawing"
+              value={s.renderer ?? 'metal'}
+              onChange={(e) => set({ renderer: e.target.value as 'metal' | 'opengl' })}
+            >
+              <option value="metal">Metal</option>
+              <option value="opengl">OpenGL</option>
+            </Select>
+          </Row>
+        )}
       </div>
       <Heading info="A projector of every scene at once; a click puts one on air (in Studio Mode, in the preview).">
         Multiview

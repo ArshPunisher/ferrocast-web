@@ -433,6 +433,8 @@ export interface StudioSettings {
   true_peak?: boolean
   /** OBS's Low Latency Audio Buffering (after a restart). */
   low_latency_audio?: boolean
+  /** How a Mac draws the picture: Metal (the default) or the older OpenGL. After a restart. */
+  renderer?: 'metal' | 'opengl'
   /** Multiviews: what's on air above, below, left or right of the scenes, or scenes only. */
   multiview_layout?: 'top' | 'bottom' | 'left' | 'right' | 'scenes_only'
   multiview_labels?: boolean
