@@ -886,6 +886,9 @@ export function studioEngineApi(c: FerroClient) {
         '/api/v1/studio/engine/captions',
         source === null ? { on: false } : { on: true, source },
       ),
+    /** The app in front and the apps open now (for a scene per game; Mac only for now). */
+    apps: () =>
+      c.request<{ front: string | null; running: string[] }>('GET', '/api/v1/studio/engine/apps'),
     /** Smart vertical: which item follows a face. */
     follow: () => c.request<EngineFollow>('GET', '/api/v1/studio/engine/vertical/follow'),
     /** Makes an item of a vertical scene follow the face in it, or stops (null). */

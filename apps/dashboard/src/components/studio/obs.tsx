@@ -1,15 +1,27 @@
 // OBS helpers: health, scene switching with sources, clip that, BRB and the switcher's
 // settings (chat !scene allow-list, BRB, ads, hotkeys).
 
-import { useState } from 'react'
-import { Coffee, Scissors } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
+import { Coffee, GameController, Plus, Scissors, Trash } from '@phosphor-icons/react'
 import { type ObsHealth, type ObsScenes, type ScenesConfig } from '@ferrocast/api'
-import { Badge, Button, Field, Kbd, Select, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
+import {
+  Badge,
+  Button,
+  Field,
+  IconButton,
+  Kbd,
+  Select,
+  Skeleton,
+  Switch,
+  cx,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useResource, type Resource } from '../../lib/hooks'
 import { MIC_KIND, type RigInput } from './rig-lists'
 import { useLive } from '../../lib/store'
 import { useStudio } from './common'
+import { useEngine } from './desk/common'
 
 /** The watcher's reading from the live socket, loaded once before a frame arrives. */
 export function useObsHealth(): ObsHealth | null | undefined {
@@ -393,6 +405,13 @@ export function SwitcherSettings({
             )}
           </Field>
         )}
+        {app !== 'OBS' && (
+          <GameScenes
+            list={c.game_scenes ?? []}
+            names={names}
+            onChange={(game_scenes) => save({ game_scenes })}
+          />
+        )}
         {audio.length > 0 && (
           <fieldset>
             <legend className="text-[14.5px] font-medium text-text-2">Mute on BRB</legend>
@@ -441,6 +460,88 @@ export function SwitcherSettings({
 }
 
 /** Shows a toast when OBS answered a scene switch from a hotkey. */
+/** A scene per game: when that app comes to the front, its scene goes on air. Hidden where
+ * the app can't tell which app is in front (not a Mac yet), unless some are set. */
+function GameScenes({
+  list,
+  names,
+  onChange,
+}: {
+  list: { app: string; scene: string }[]
+  names: string[]
+  onChange: (list: { app: string; scene: string }[]) => void
+}) {
+  const api = useEngine()
+  const [running, setRunning] = useState<string[] | null>(null)
+  useEffect(() => {
+    let live = true
+    api.apps().then(
+      (a) => live && setRunning(a.running),
+      () => live && setRunning([]),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  if (running === null || (running.length === 0 && list.length === 0)) return null
+  const apps = [...new Set([...list.map((g) => g.app), ...running])]
+  const set = (i: number, patch: Partial<{ app: string; scene: string }>) =>
+    onChange(list.map((g, j) => (j === i ? { ...g, ...patch } : g)))
+  const free = running.find((a) => !list.some((g) => g.app === a))
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="flex items-center gap-1.5 text-[14.5px] font-medium text-text-2">
+        <GameController size={16} aria-hidden />A scene per game
+      </legend>
+      <p className="text-[14.5px] text-text-3">
+        When the game comes to the front, its scene goes on air (never over BRB).
+      </p>
+      {list.map((g, i) => (
+        <div
+          key={i}
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2"
+        >
+          <Select aria-label="Game" value={g.app} onChange={(e) => set(i, { app: e.target.value })}>
+            {apps.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label={`Scene for ${g.app}`}
+            value={g.scene}
+            onChange={(e) => set(i, { scene: e.target.value })}
+          >
+            {[...new Set([g.scene, ...names])].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </Select>
+          <IconButton
+            label={`Remove ${g.app}`}
+            onClick={() => onChange(list.filter((_, j) => j !== i))}
+          >
+            <Trash size={16} />
+          </IconButton>
+        </div>
+      ))}
+      {list.length < 20 && free && names.length > 0 && (
+        <div>
+          <Button
+            size="sm"
+            icon={<Plus size={14} weight="bold" />}
+            onClick={() => onChange([...list, { app: free, scene: names[0] ?? '' }])}
+          >
+            Add a game
+          </Button>
+        </div>
+      )}
+    </fieldset>
+  )
+}
+
 export function sceneToast(scene: string, ok: boolean, message?: string): void {
   toast(
     ok

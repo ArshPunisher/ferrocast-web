@@ -388,6 +388,9 @@ export interface ScenesConfig {
   away_minutes: number
   /** Saying "clip that" while live captions listen saves a clip (the Studio only). */
   clip_by_voice: boolean
+  /** A scene per game: when that app comes to the front, its scene goes on air (the Studio
+   * on a Mac). */
+  game_scenes: { app: string; scene: string }[]
 }
 
 export interface HealthWarning {
