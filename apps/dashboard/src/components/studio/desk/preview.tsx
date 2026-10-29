@@ -296,6 +296,16 @@ export function PreviewBox({ running }: { running: boolean }) {
       raf = 0
       if (!alive) return
       window.clearTimeout(again)
+      // The window is hidden or minimised (plan item 10, lighter): no live picture is drawn
+      // for nobody to see, which saves the graphics card for the game; the stream and the
+      // recording go on as before. It's placed again when the window shows.
+      if (document.hidden) {
+        if (last !== 'hidden') {
+          last = 'hidden'
+          void api.preview(null, null, null).catch(() => undefined)
+        }
+        return
+      }
       if (performance.now() < resizing) {
         // A panel is being dragged: placed again when it lands.
         if (resizing === Infinity) return
@@ -387,6 +397,9 @@ export function PreviewBox({ running }: { running: boolean }) {
       attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
+    // Straight away when hidden: a hidden page gets no animation frames.
+    const onVisible = () => (document.hidden ? send() : schedule())
+    document.addEventListener('visibilitychange', onVisible)
     // A moved stage that changed no size and fired nothing above (a panel landing elsewhere,
     // a bar above it growing) would leave the picture where it was, over the panels (owner,
     // 29 Oct): looked at again now and then. Unchanged, nothing is sent.
@@ -425,6 +438,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       ro.disconnect()
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
+      document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
       unfreeze()
       void api.preview(null, null, null).catch(() => undefined)
