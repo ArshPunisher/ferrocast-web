@@ -14,6 +14,7 @@ import {
   Funnel,
   Headphones,
   Plus,
+  Sparkle,
   SpeakerHigh,
   SpeakerSlash,
   Trash,
@@ -23,6 +24,7 @@ import {
   describeError,
   type EngineAudio,
   type EngineFilter,
+  type EngineLevel,
   type EngineMonitor,
   type EngineSettings,
 } from '@ferrocast/api'
@@ -40,6 +42,7 @@ import {
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
 import { FILTERS, FILTER_OF, KindTile, SOUND_ONLY, useDesk, type DrawerTab } from './common'
+import { VERDICT_WORDS, cleanMicPlan, freeName, voiceVerdict } from './cleanmic'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
 
@@ -316,6 +319,7 @@ function Panel({
                 onChange={(monitor) => setAudio({ monitor })}
               />
             </div>
+            {MIC_KINDS.has(kind) && <CleanMic name={name} level={levels[name]} list={filters} />}
           </section>
         )}
         {shown === 'sound' && (
@@ -1092,6 +1096,77 @@ function AddFilter({
             <p className="m-0 px-2 py-2 text-[14px] text-text-3">No filter called that.</p>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+/** Microphones: the kinds "Clean up my mic" is offered for. */
+const MIC_KINDS = new Set([
+  'coreaudio_input_capture',
+  'wasapi_input_capture',
+  'pulse_input_capture',
+  'alsa_input_capture',
+])
+
+/**
+ * One click to clean a mic (plan item 5): the filters it's missing, added in the order they
+ * work best, and a word on the level while talking (the last 10 s of the meter).
+ */
+function CleanMic({
+  name,
+  level,
+  list,
+}: {
+  name: string
+  level: EngineLevel | undefined
+  list: Resource<EngineFilter[]>
+}) {
+  const { api } = useDesk()
+  const { run, busy } = useAction()
+  const peaks = useRef<number[]>([])
+  useEffect(() => {
+    if (!level) return
+    peaks.current.push(Math.max(level.peak[0], level.peak[1]))
+    if (peaks.current.length > 100) peaks.current.shift()
+  }, [level])
+  const verdict = voiceVerdict(peaks.current)
+  const have = list.data ?? null
+  const plan = have ? cleanMicPlan(have.map((f) => f.kind)) : []
+  const clean = async () => {
+    const taken = (have ?? []).map((f) => f.name)
+    const ok = await run('clean', async () => {
+      // One at a time, in order: each goes after the last (the chain's order matters).
+      for (const f of plan) {
+        const n = freeName(f.name, taken)
+        taken.push(n)
+        await api.addFilter(name, { ...f, name: n })
+      }
+      return true
+    })
+    list.reload()
+    if (ok)
+      toast({ tone: 'ok', message: 'Your mic is cleaned up: noise out, level even, no clipping.' })
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+      <span
+        className={cx(
+          'text-[13.5px] font-semibold',
+          verdict === 'good' ? 'text-ok' : verdict ? 'text-warn' : 'text-text-3',
+        )}
+        aria-live="polite"
+      >
+        {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
+      </span>
+      {!have ? null : plan.length > 0 ? (
+        <Button size="sm" variant="secondary" busy={busy === 'clean'} onClick={() => void clean()}>
+          <Sparkle size={15} weight="bold" /> Clean up my mic
+        </Button>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-text-3">
+          <Check size={14} weight="bold" /> Mic cleaned up
+        </span>
       )}
     </div>
   )
