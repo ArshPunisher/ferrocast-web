@@ -63,3 +63,30 @@ export function captionsBox(
     y: Math.round(h * 0.8),
   }
 }
+
+/** What Whisper is offered in, as the engine accepts them (`WHISPER_LANGUAGES`). */
+export const WHISPER_LANGUAGES: { code: string; name: string }[] = [
+  { code: 'auto', name: 'Any (it works it out)' },
+  { code: 'en', name: 'English' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'tr', name: 'Turkish' },
+]
+
+/** Whether captions can be switched on with this engine now: the Mac's needs its permission,
+ * Whisper its model downloaded. */
+export function canListen(
+  engine: 'apple' | 'whisper',
+  step: CaptionsStep,
+  model: { state: string } | undefined,
+): boolean {
+  return engine === 'apple' ? step === 'ready' : model?.state === 'ready'
+}

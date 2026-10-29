@@ -492,6 +492,31 @@ export interface EngineCaptions {
   box: boolean
   /** Times "clip that" was heard since Ferrocast opened. */
   clips_said?: number
+  /** What's listening: macOS's own recognizer or Whisper (null while off). */
+  engine?: 'apple' | 'whisper' | null
+  /** Why captions stopped by themselves (the model didn't load…), until turned on again. */
+  error?: string | null
+}
+
+/** Whisper's speech models: downloaded once, kept on this computer. */
+export interface SpeechModel {
+  id: 'base' | 'small'
+  label: string
+  mb: number
+  state: 'ready' | 'missing' | 'downloading' | 'failed'
+  percent?: number
+  reason?: string
+}
+
+/** How captions should listen when switched on. */
+export interface CaptionsOn {
+  source: string
+  engine: 'apple' | 'whisper'
+  model?: 'base' | 'small'
+  /** "auto", "en", "hi"… */
+  language?: string
+  /** Captions in English whatever is said. */
+  translate?: boolean
 }
 
 /** Smart vertical: the vertical item that follows the face in it. */
@@ -893,13 +918,20 @@ export function studioEngineApi(c: FerroClient) {
     /** Shows macOS's speech recognition prompt (once). */
     askCaptions: () =>
       c.request<EngineCaptions>('PUT', '/api/v1/studio/engine/captions', { ask: true }),
-    /** Listens to a Studio sound (`source`), or stops (null). */
-    setCaptions: (source: string | null) =>
+    /** Listens to a Studio sound, or stops (null). */
+    setCaptions: (on: CaptionsOn | null) =>
       c.request<EngineCaptions>(
         'PUT',
         '/api/v1/studio/engine/captions',
-        source === null ? { on: false } : { on: true, source },
+        on === null ? { on: false } : { on: true, ...on },
       ),
+    /** Whisper's models and whether each is here. */
+    speechModels: () => c.request<SpeechModel[]>('GET', '/api/v1/speech/models'),
+    /** Starts downloading a model (nothing when it's here or on its way). */
+    fetchSpeechModel: (id: SpeechModel['id']) =>
+      c.request<SpeechModel[]>('POST', `/api/v1/speech/models/${id}`, {}),
+    removeSpeechModel: (id: SpeechModel['id']) =>
+      c.request<SpeechModel[]>('DELETE', `/api/v1/speech/models/${id}`),
     /** The app in front and the apps open now (for a scene per game; Mac only for now). */
     apps: () =>
       c.request<{ front: string | null; running: string[] }>('GET', '/api/v1/studio/engine/apps'),

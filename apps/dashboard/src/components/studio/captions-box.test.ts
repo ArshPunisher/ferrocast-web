@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { CAPTIONS_SOURCE, captionsBox, captionsStep, pickMic } from './captions-box'
+import {
+  CAPTIONS_SOURCE,
+  WHISPER_LANGUAGES,
+  canListen,
+  captionsBox,
+  captionsStep,
+  pickMic,
+} from './captions-box'
 
 describe('live captions', () => {
   it('shows the right step for each macOS answer', () => {
@@ -34,5 +41,19 @@ describe('live captions', () => {
     const tiny = captionsBox(0, -5)
     expect((tiny.source.settings?.font as { size: number }).size).toBe(24)
     expect(tiny.source.settings?.custom_width).toBeGreaterThan(0)
+  })
+
+  it('switches on only when the engine can listen', () => {
+    expect(canListen('apple', 'ready', undefined)).toBe(true)
+    expect(canListen('apple', 'ask', { state: 'ready' })).toBe(false)
+    expect(canListen('whisper', 'elsewhere', { state: 'ready' })).toBe(true)
+    expect(canListen('whisper', 'ready', { state: 'downloading' })).toBe(false)
+    expect(canListen('whisper', 'ready', undefined)).toBe(false)
+  })
+
+  it('offers exactly the languages the engine takes', () => {
+    // crates/engine/src/studio_host.rs WHISPER_LANGUAGES.
+    const engine = ['auto', 'en', 'hi', 'es', 'pt', 'fr', 'de', 'ja', 'ko', 'ru', 'ar', 'id', 'tr']
+    expect(WHISPER_LANGUAGES.map((l) => l.code)).toEqual(engine)
   })
 })
