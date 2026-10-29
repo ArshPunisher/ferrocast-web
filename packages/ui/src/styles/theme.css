@@ -22,6 +22,8 @@
   --color-on-btn-primary: var(--fc-on-btn-primary);
   --color-btn-soft: var(--fc-btn-soft);
   --color-btn-soft-hover: var(--fc-btn-soft-hover);
+  --color-teal: var(--fc-teal);
+  --color-teal-soft: var(--fc-teal-soft);
   --color-molten-text: var(--fc-molten-text);
   --color-arc: var(--fc-arc);
   --color-ok: var(--fc-ok);
