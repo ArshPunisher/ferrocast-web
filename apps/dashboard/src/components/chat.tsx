@@ -1,6 +1,7 @@
 import {
   memo,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -537,7 +538,7 @@ export function Composer({
     { value: 'all', label: 'All' },
     ...(['twitch', 'youtube', 'kick'] as const).filter(connected).map((p) => ({
       value: p as Target,
-      label: <PlatformMark platform={p} size={13} />,
+      label: <PlatformMark platform={p} size={18} />,
       title: `Only ${PLATFORM_LABEL[p]}`,
     })),
   ]
@@ -568,14 +569,8 @@ export function Composer({
       )}
       <div className="flex items-end gap-2">
         {!reply && !compact && (
-          <div className="mb-0.5 hidden shrink-0 sm:block">
-            <Segmented
-              label="Send to"
-              size="sm"
-              value={target}
-              onChange={setTarget}
-              options={options}
-            />
+          <div className="hidden shrink-0 sm:block">
+            <SendTo value={target} onChange={setTarget} options={options} />
           </div>
         )}
         <label className="sr-only" htmlFor="composer">
@@ -599,7 +594,7 @@ export function Composer({
             }
             if (e.key === 'Escape' && reply) onClearReply()
           }}
-          className="max-h-32 min-h-10 flex-1 resize-none py-2"
+          className="max-h-32 min-h-10 flex-1 resize-none py-[9px] leading-5!"
         />
         <Button
           type="submit"
@@ -613,6 +608,58 @@ export function Composer({
         </Button>
       </div>
     </form>
+  )
+}
+
+/** Where a message goes: everywhere, or one platform. As tall as the message box beside it
+ * (owner, 30 Oct), the platforms' own marks big enough to tell apart, the pick raised on a
+ * light chip so their colours stay true. Native radios underneath: arrow keys move the pick. */
+function SendTo({
+  value,
+  onChange,
+  options,
+}: {
+  value: Target
+  onChange: (t: Target) => void
+  options: { value: Target; label: ReactNode; title?: string }[]
+}) {
+  const name = useId()
+  // One option is no choice (one platform connected): nothing to show.
+  if (options.length < 2) return null
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Send to"
+      className="inline-flex h-10 items-stretch gap-0.5 rounded-control border border-line bg-inset p-0.5"
+    >
+      {options.map((o) => {
+        const on = o.value === value
+        return (
+          <label
+            key={o.value}
+            title={o.title ?? 'Every platform'}
+            className={cx(
+              'relative inline-flex min-w-10 cursor-pointer items-center justify-center rounded-[8px] px-2.5 text-[14px] font-bold transition-[background-color,box-shadow,opacity] duration-150',
+              'has-[:focus-visible]:shadow-[var(--fc-focus)]',
+              on
+                ? 'bg-surface-1 text-text shadow-[var(--fc-shadow-1)] ring-1 ring-line-strong'
+                : 'text-text-2 opacity-75 hover:bg-surface-3 hover:text-text hover:opacity-100',
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={o.value}
+              checked={on}
+              onChange={() => onChange(o.value)}
+              className="sr-only"
+            />
+            <span aria-hidden={o.value !== 'all'}>{o.label}</span>
+            {o.value !== 'all' && <span className="sr-only">{o.title}</span>}
+          </label>
+        )
+      })}
+    </div>
   )
 }
 
