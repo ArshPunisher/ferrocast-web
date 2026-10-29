@@ -100,6 +100,8 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
           ? { tone: 'warn', message: 'Saved.', hint: r.restart }
           : { tone: 'ok', message: 'Saved.' },
       )
+      // Saved: done here (owner, 29 Oct). A failure keeps it open to fix.
+      onClose()
     } catch (e) {
       const d = describeError(e)
       toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
