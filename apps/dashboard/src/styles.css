@@ -258,3 +258,162 @@ input[type='range'] {
 body[data-dock-drag] iframe {
   pointer-events: none;
 }
+
+/* Record and Go live (owner's pick C2, 29 Oct; onair.tsx). */
+.fc-air {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.18s ease,
+    transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.16s ease;
+}
+/* An outline, so no state's own shadow can hide it (CodeRabbit). */
+.fc-air.fc-air:focus-visible {
+  outline: 2px solid var(--fc-accent-text);
+  outline-offset: 2px;
+}
+.fc-air:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.fc-air:disabled {
+  cursor: not-allowed;
+}
+.fc-air[data-kind='rec'][data-state='idle'],
+.fc-air[data-kind='rec'][data-state='starting'] {
+  background: var(--fc-danger-soft);
+  color: var(--fc-danger);
+}
+.fc-air[data-kind='rec'][data-state='idle']:hover {
+  background: color-mix(in srgb, var(--fc-danger) 24%, transparent);
+}
+.fc-air[data-kind='live'][data-state='idle'],
+.fc-air[data-kind='live'][data-state='starting'] {
+  /* Both stops keep white text over 4.5:1 (the primary button's own pair). */
+  background: linear-gradient(180deg, var(--fc-btn-primary), var(--fc-btn-primary-hover));
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.25) inset,
+    0 6px 16px -8px var(--fc-btn-primary);
+}
+.fc-air[data-kind='live'][data-state='idle']:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.25) inset,
+    0 8px 22px -6px var(--fc-btn-primary);
+}
+.fc-air[data-kind='live'][data-state='idle']:disabled {
+  background: var(--fc-surface-3);
+  color: var(--fc-text-3);
+  box-shadow: none;
+}
+/* Starting: a line races round the edge. */
+.fc-air-trace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.fc-air-trace rect {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 28 172;
+  animation: fc-air-trace 1.1s linear infinite;
+}
+.fc-air[data-kind='rec'] .fc-air-trace rect {
+  stroke: var(--fc-danger);
+}
+.fc-air[data-kind='live'] .fc-air-trace rect {
+  stroke: #fff;
+}
+@keyframes fc-air-trace {
+  to {
+    stroke-dashoffset: -200;
+  }
+}
+/* On air: deep red, a slow texture, sound bars. */
+.fc-air[data-state='on'],
+.fc-air[data-state='stopping'] {
+  background: linear-gradient(
+    180deg,
+    var(--fc-danger-fill),
+    color-mix(in srgb, var(--fc-danger-fill) 70%, #000)
+  );
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.22) inset,
+    0 6px 18px -8px var(--fc-danger-fill);
+}
+.fc-air[data-state='on']:hover {
+  filter: brightness(1.08);
+}
+.fc-air[data-state='on']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 14px,
+    rgb(255 255 255 / 0.07) 14px 15px
+  );
+  animation: fc-air-drift 3s linear infinite;
+}
+@keyframes fc-air-drift {
+  to {
+    background-position: 60px 0;
+  }
+}
+.fc-air[data-state='stopping'] {
+  filter: saturate(0.4);
+}
+.fc-air-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.fc-air-eq b {
+  width: 3px;
+  height: 12px;
+  border-radius: 1px;
+  background: currentColor;
+  animation: fc-air-eq 0.9s ease-in-out infinite;
+}
+.fc-air-eq b:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.fc-air-eq b:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes fc-air-eq {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-air,
+  .fc-air *,
+  .fc-air::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

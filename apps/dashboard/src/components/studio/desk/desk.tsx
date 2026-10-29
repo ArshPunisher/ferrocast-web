@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowCounterClockwise,
-  Broadcast,
   CheckSquare,
   DotsThree,
   FilmSlate,
@@ -17,12 +16,10 @@ import {
   Play,
   Plus,
   Power,
-  Record as RecordIcon,
   ClockCounterClockwise,
   Scissors,
   VideoCamera,
   Square,
-  X,
 } from '@phosphor-icons/react'
 import {
   describeError,
@@ -64,6 +61,7 @@ import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
+import { OnAirButton } from './onair'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
 import { clock } from './stats-panel'
@@ -558,7 +556,7 @@ function ControlBar({
         {recording && (
           <Button
             variant="secondary"
-            className="h-10"
+            className={cx('h-10', rec?.paused && 'bg-warn-soft! text-warn!')}
             busy={busy === 'pause'}
             onClick={pause}
             aria-pressed={!!rec?.paused}
@@ -589,34 +587,34 @@ function ControlBar({
           </IconButton>
         )}
         {menu}
-        <Button
-          variant="secondary"
-          className={cx('h-10', recording && 'text-danger')}
-          busy={busy === 'record'}
+        <OnAirButton
+          kind="rec"
+          state={
+            busy === 'record' ? (recording ? 'stopping' : 'starting') : recording ? 'on' : 'idle'
+          }
+          // Time recorded (frames over the frame rate): pauses don't count.
+          time={clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
+          title={recording ? rec?.file : undefined}
           onClick={pressRecord}
-          title={rec?.file}
-        >
-          {recording ? (
-            <span aria-hidden className="size-2.5 rounded-full bg-danger-fill" />
-          ) : (
-            <RecordIcon size={16} weight="fill" />
-          )}
-          {recording
-            ? // Time recorded (frames over the frame rate): pauses don't count.
-              `Stop ${clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000).replace(/^00:/, '')}`
-            : 'Record'}
-        </Button>
-        <Button
-          variant={on ? 'danger' : 'primary'}
-          className="h-10 px-5 text-[16px]"
-          busy={busy === 'stream'}
+        />
+        <OnAirButton
+          kind="live"
+          state={
+            busy === 'stream'
+              ? on
+                ? 'stopping'
+                : 'starting'
+              : on
+                ? stream?.active
+                  ? 'on'
+                  : 'starting'
+                : 'idle'
+          }
+          time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
           disabled={!on && ticked.length === 0}
           title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
           onClick={() => void pressStream()}
-        >
-          {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
-          {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
-        </Button>
+        />
         <Dialog
           open={!!asked}
           onClose={() => setAsk(null)}
