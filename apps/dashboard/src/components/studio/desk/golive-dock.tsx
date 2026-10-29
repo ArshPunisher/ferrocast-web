@@ -1,20 +1,17 @@
 // The "Go live to" panel: the platforms the Studio's picture goes to, each switched on or off
 // here; adding, ordering and the rest open Go live's full list.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  MAX_STREAM_TITLE,
   onCanvas,
   type DestinationView,
   type GoLiveView,
   type StudioSettings,
 } from '@ferrocast/api'
 import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
-import { IconButton, Button, Dialog, Input, Skeleton, Switch, toast } from '@ferrocast/ui'
+import { IconButton, Button, Dialog, Skeleton, Switch, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
-import { useAction, useResource, type Resource } from '../../../lib/hooks'
-import { href } from '../../../lib/router'
-import { useStudio } from '../common'
+import { useAction, type Resource } from '../../../lib/hooks'
 import { Logo, Platforms, RowText, useGoLive } from '../golive'
 import { DockHeader } from './layout'
 import { useDesk } from './common'
@@ -180,7 +177,6 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             </section>
           </>
         )}
-        <StreamTitle />
       </div>
       <Dialog
         open={managing !== null}
@@ -191,77 +187,5 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
       </Dialog>
     </section>
-  )
-}
-
-/** The title and category viewers see: the title is set everywhere from here (Enter), the
- * category in Stream info. */
-function StreamTitle() {
-  const studio = useStudio()
-  const info = useResource(() => studio.streamInfo(), [studio])
-  const { run, busy } = useAction()
-  const last = info.data?.last?.info
-  const [title, setTitle] = useState<string | null>(null)
-  const shown = title ?? last?.title ?? ''
-  // Enter submits and the field then blurs: one apply per edit.
-  const applying = useRef(false)
-  const apply = async () => {
-    if (applying.current) return
-    const t = shown.trim()
-    if (!t || t === last?.title) return setTitle(null)
-    applying.current = true
-    const r = await run('title', () => studio.applyStreamInfo({ title: t })).finally(() => {
-      applying.current = false
-    })
-    if (!r) return
-    setTitle(null)
-    info.reload()
-    toast(
-      r.failed > 0
-        ? {
-            tone: 'warn',
-            message: `Title set on ${r.ok}, not on ${r.failed}.`,
-            hint: 'Stream info shows why.',
-          }
-        : {
-            tone: 'ok',
-            message: r.ok > 0 ? 'Title set everywhere.' : 'Saved for your next stream.',
-          },
-    )
-  }
-  if (!info.data) return null
-  return (
-    <form
-      className="flex flex-col gap-3 border-t border-line px-3 py-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void apply()
-      }}
-    >
-      <label className="flex flex-col gap-1.5 text-[13.5px] font-semibold text-text-2">
-        Title
-        <Input
-          value={shown}
-          maxLength={MAX_STREAM_TITLE}
-          autoComplete="off"
-          disabled={busy === 'title'}
-          placeholder="What you're streaming…"
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => void apply()}
-        />
-      </label>
-      <div className="flex items-center justify-between gap-2 text-[13.5px]">
-        <span className="min-w-0 truncate text-text-2">
-          <span className="font-semibold">Category</span>{' '}
-          <span className="text-text">{last?.category?.name ?? 'Not set'}</span>
-        </span>
-        <a
-          className="shrink-0 font-semibold text-accent-text hover:underline"
-          href={href({ name: 'studio', section: 'info' })}
-        >
-          Change
-        </a>
-      </div>
-    </form>
   )
 }
