@@ -21,6 +21,7 @@ import { ThemeInObsCard } from '../components/design/theme-obs'
 import { useWidePage } from '../lib/wide'
 import { useUsesObs } from '../lib/picture'
 import { useRigLists } from '../components/studio/rig-lists'
+import { LiveCaptions } from '../components/studio/captions'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -90,6 +91,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
                 cfg={switcher}
               />
             )}
+            {!usesObs && <LiveCaptions inputs={rig.inputs.data} />}
           </div>
         </div>
       )}
