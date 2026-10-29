@@ -297,6 +297,8 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (!alive) return
       window.clearTimeout(again)
       if (performance.now() < resizing) {
+        // A panel is being dragged: placed again when it lands.
+        if (resizing === Infinity) return
         again = window.setTimeout(
           () => {
             last = ''
@@ -385,6 +387,28 @@ export function PreviewBox({ running }: { running: boolean }) {
       attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
+    // A moved stage that changed no size and fired nothing above (a panel landing elsewhere,
+    // a bar above it growing) would leave the picture where it was, over the panels (owner,
+    // 29 Oct): looked at again now and then. Unchanged, nothing is sent.
+    const watch = window.setInterval(schedule, 400)
+    // While a panel is dragged the live picture can't stay (the drop zones are drawn over the
+    // stage): a still of it shows in its place, as for a window resize, rather than a grey box
+    // (owner's recording, 29 Oct). The live one comes back where the stage ends up.
+    let dragging = false
+    const dockWatch = new MutationObserver(() => {
+      const on = !!document.body.dataset.dockDrag
+      if (on && !dragging) {
+        dragging = true
+        resizing = Infinity
+        if (!frozen) freeze()
+      } else if (!on && dragging) {
+        dragging = false
+        resizing = 0
+        last = ''
+        schedule()
+      }
+    })
+    dockWatch.observe(document.body, { attributes: true, attributeFilter: ['data-dock-drag'] })
     const resize = () => {
       if (!frozen) freeze()
       resizing = performance.now() + 180
@@ -396,6 +420,8 @@ export function PreviewBox({ running }: { running: boolean }) {
       alive = false
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
+      window.clearInterval(watch)
+      dockWatch.disconnect()
       ro.disconnect()
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })

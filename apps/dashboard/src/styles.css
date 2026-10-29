@@ -16,6 +16,14 @@
 body {
   font-weight: 500;
 }
+/* The app never scrolls sideways: something poking past the window's edge for a moment (a
+   panel being dragged, a bubble) let the page shift left, and the Studio's live picture, a
+   native view, was then drawn over the panels (owner, 29 Oct). Clip, not hidden: the page
+   stays the scroller and sticky bars keep working. */
+html,
+body {
+  overflow-x: clip;
+}
 
 /* Long chat lists stay cheap: offscreen rows skip layout and paint (R-54). */
 .fc-row {
