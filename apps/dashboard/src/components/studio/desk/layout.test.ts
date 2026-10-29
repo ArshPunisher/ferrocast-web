@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeOf,
   dockName,
+  groupOf,
+  hostOf,
+  moveTo,
+  placed,
+  tabWith,
   fresh,
   fromPreset,
   putWeb,
@@ -125,5 +131,43 @@ describe('panel sizes saved before the divider fix', () => {
     expect(revive(old).bh).toBe(base.bh)
     expect(revive({ ...base, bh: 640, sizes: 2 }).bh).toBe(640)
     expect(revive({ ...base, bh: 150 }).bh).toBe(150)
+  })
+
+  it('panels share a spot as tabs, and leave it whole', () => {
+    // side: left [scenes, sources], right [golive], bottom [audio]
+    let l = tabWith(fresh('side'), 'audio', 'sources')
+    expect(l.bottom).toEqual([])
+    expect(groupOf(l, 'sources')).toEqual(['sources', 'audio'])
+    expect(activeOf(l, 'sources')).toBe('audio')
+    expect(hostOf(l, 'audio')).toBe('sources')
+    expect(placed(l, 'audio')).toBe(true)
+    expect(showing(l)).toEqual(['scenes', 'sources', 'audio', 'golive'])
+    // The panel holding the spot moves away: its tab takes the spot.
+    l = moveTo(l, 'sources', 'right')
+    expect(l.left).toEqual(['scenes', 'audio'])
+    expect(groupOf(l, 'audio')).toEqual(['audio'])
+    expect(l.right).toEqual(['golive', 'sources'])
+  })
+
+  it('a hidden tab leaves its spot and comes back beside the picture', () => {
+    let l = tabWith(fresh('side'), 'golive', 'scenes')
+    l = toggle(l, 'golive')
+    expect(groupOf(l, 'scenes')).toEqual(['scenes'])
+    expect(l.hidden).toContain('golive')
+    l = toggle(l, 'golive')
+    expect(placed(l, 'golive')).toBe(true)
+    expect(hostOf(l, 'golive')).toBe('golive')
+  })
+
+  it('keeps saved tabs, dropping ones that no longer make sense', () => {
+    const saved = {
+      ...tabWith(fresh('side'), 'audio', 'scenes'),
+      tabs: { scenes: ['audio', 'nope', 'sources'], ghost: ['chat'] },
+      on: { scenes: 'audio' },
+    } as unknown as Layout
+    const l = revive(saved)
+    // sources is placed on its own already, and nope and ghost don't exist.
+    expect(l.tabs).toEqual({ scenes: ['audio'] })
+    expect(activeOf(l, 'scenes')).toBe('audio')
   })
 })

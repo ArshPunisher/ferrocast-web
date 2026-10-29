@@ -17,7 +17,15 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import { DotsSixVertical, DotsThree } from '@phosphor-icons/react'
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Browsers,
+  DotsSixVertical,
+  DotsThree,
+} from '@phosphor-icons/react'
 import { IconButton, Segmented, cx } from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
 
@@ -75,6 +83,11 @@ export interface Layout {
   mob: DockId
   /** 2: sizes saved since the panels' height follows the divider exactly (27 Oct). */
   sizes?: 2
+  /** Panels sharing a spot as tabs (owner's pick L2, 29 Oct): the panel placed in the row or
+   * column, and the others with it. */
+  tabs?: Partial<Record<DockId, DockId[]>>
+  /** The tab showing in each shared spot (the placed panel when not set). */
+  on?: Partial<Record<DockId, DockId>>
 }
 
 const PRESETS: Record<Preset, Pick<Layout, 'left' | 'right' | 'bottom' | 'lw' | 'rw' | 'bh'>> = {
@@ -135,7 +148,19 @@ export function revive(v: Partial<Layout> | null): Layout {
     w: { ...v.w },
     webs,
     sizes: 2,
+    tabs: {},
+    on: {},
   }
+  // Tabs: only known panels, each in one place.
+  const used = new Set<string>([...l.left, ...l.right, ...l.bottom, ...Object.keys(l.float)])
+  for (const [host, guests] of Object.entries(v.tabs ?? {}) as [DockId, DockId[]][]) {
+    if (!used.has(host) || !Array.isArray(guests)) continue
+    const keepers = guests.filter((g) => known.has(g) && !used.has(g))
+    for (const g of keepers) used.add(g)
+    if (keepers.length) l.tabs = { ...l.tabs, [host]: keepers }
+  }
+  for (const [host, cur] of Object.entries(v.on ?? {}) as [DockId, DockId][])
+    if (l.tabs?.[host]?.includes(cur)) l.on = { ...l.on, [host]: cur }
   // Before 27 Oct the panels below showed at most 45% of the space, while a drag up kept
   // raising the height saved: honoured now, it would open with a tiny preview. Older saves
   // keep at most the default height once.
@@ -152,8 +177,28 @@ function load(): Layout {
   }
 }
 
-/** In a row, a column or floating. */
-export const placed = (l: Layout, id: DockId): boolean => !!regionOf(l, id) || !!l.float[id]
+/** The panel a tab shares its spot with (itself when it isn't a tab of another). */
+export function hostOf(l: Layout, id: DockId): DockId {
+  for (const [host, guests] of Object.entries(l.tabs ?? {}) as [DockId, DockId[]][])
+    if (guests.includes(id)) return host
+  return id
+}
+
+/** Every panel in a spot, the placed one first. */
+export const groupOf = (l: Layout, host: DockId): DockId[] => [host, ...(l.tabs?.[host] ?? [])]
+
+/** The tab showing in a spot: the one picked, or the first one that isn't hidden. */
+export function activeOf(l: Layout, host: DockId): DockId {
+  const group = groupOf(l, host).filter((d) => !l.hidden.includes(d))
+  const on = l.on?.[host]
+  return on && group.includes(on) ? on : (group[0] ?? host)
+}
+
+/** In a row, a column or floating (or a tab of one that is). */
+export const placed = (l: Layout, id: DockId): boolean => {
+  const h = hostOf(l, id)
+  return !!regionOf(l, h) || !!l.float[h]
+}
 
 /** Showing: placed and not hidden. */
 export const showing = (l: Layout): DockId[] =>
@@ -212,27 +257,90 @@ function save(l: Layout) {
 export const regionOf = (l: Layout, id: DockId): Region | null =>
   (['left', 'right', 'bottom'] as const).find((r) => l[r].includes(id)) ?? null
 
+/** Where a panel's spot is, for a tab the spot it shares. */
+export const spotOf = (l: Layout, id: DockId): Region | null => regionOf(l, hostOf(l, id))
+
 function without(l: Layout, id: DockId): Layout {
+  const tabs = { ...l.tabs }
+  const on = { ...l.on }
+  const host = hostOf(l, id)
+  if (host !== id) {
+    // A tab taken out: the spot keeps the others.
+    const rest = (tabs[host] ?? []).filter((g) => g !== id)
+    if (rest.length) tabs[host] = rest
+    else delete tabs[host]
+    if (on[host] === id) delete on[host]
+    return { ...l, tabs, on }
+  }
+  const guests = tabs[id] ?? []
+  const [next, ...others] = guests
+  delete tabs[id]
+  delete on[id]
   const float = { ...l.float }
+  const f = float[id]
   delete float[id]
+  if (next) {
+    // The panel holding the spot leaves: the next tab takes its place, size and all.
+    if (others.length) tabs[next] = others
+    if (f) float[next] = f
+    const swap = (ids: DockId[]) => ids.map((x) => (x === id ? next : x))
+    return {
+      ...l,
+      left: swap(l.left),
+      right: swap(l.right),
+      bottom: swap(l.bottom),
+      float,
+      tabs,
+      on,
+      w: { ...l.w, [next]: l.w[id] ?? 1 },
+    }
+  }
   return {
     ...l,
     left: l.left.filter((x) => x !== id),
     right: l.right.filter((x) => x !== id),
     bottom: l.bottom.filter((x) => x !== id),
     float,
+    tabs,
+    on,
   }
 }
 
-const rectOf = (b: DOMRect) => ({ left: b.left, top: b.top, width: b.width, height: b.height })
+/** Puts `id` in `host`'s spot as a tab, showing. */
+export function tabWith(l: Layout, id: DockId, host: DockId): Layout {
+  if (id === host) return l
+  const n = without(l, id)
+  const h = hostOf(n, host)
+  return {
+    ...n,
+    tabs: { ...n.tabs, [h]: [...(n.tabs?.[h] ?? []), id] },
+    on: { ...n.on, [h]: id },
+    hidden: n.hidden.filter((d) => d !== id),
+    preset: null,
+  }
+}
+
+const rectOf = (b: DOMRect): Rect => ({
+  left: b.left,
+  top: b.top,
+  width: b.width,
+  height: b.height,
+})
 
 /** Where a dragged panel would land. */
 interface Target {
   region: Region
   at?: DockId
   before?: boolean
+  /** Share `at`'s spot as a tab. */
+  tab?: boolean
   hint: { left: number; top: number; width: number; height: number }
+  /** The drop arrows shown (owner's pick L1): over what, which ways, which one is lit. */
+  pad: { rect: Rect; ways: Way[]; lit: Way | null }
 }
+
+type Way = 'up' | 'down' | 'left' | 'right' | 'tab'
+type Rect = { left: number; top: number; width: number; height: number }
 
 interface LayoutApi {
   layout: Layout
@@ -270,7 +378,9 @@ export function toggle(l: Layout, id: DockId): Layout {
     const r = home(l)
     return placed(shown, id) ? shown : { ...shown, [r]: [...shown[r], id] }
   }
-  return { ...l, hidden: [...l.hidden, id], preset: null }
+  // A tab hidden leaves its spot (shown again, it goes back beside the picture).
+  const n = hostOf(l, id) !== id ? without(l, id) : l
+  return { ...n, hidden: [...n.hidden, id], preset: null }
 }
 
 /**
@@ -341,7 +451,14 @@ export function DockWorkspace({
         const region = regionOf(layout, id)
         if (!region) continue
         const vertical = region !== 'bottom'
-        const before = vertical ? y < b.top + b.height / 2 : x < b.left + b.width / 2
+        const ways: Way[] = vertical ? ['up', 'tab', 'down'] : ['left', 'tab', 'right']
+        const pad = (lit: Way) => ({ rect: rectOf(b), ways, lit })
+        // The middle: share its spot as a tab (owner's pick L2).
+        const u = (x - b.left) / b.width
+        const v = (y - b.top) / b.height
+        if (u > 0.3 && u < 0.7 && v > 0.3 && v < 0.7)
+          return { region, at: id, tab: true, hint: rectOf(b), pad: pad('tab') }
+        const before = vertical ? v < 0.5 : u < 0.5
         const hint = vertical
           ? {
               left: b.left,
@@ -355,23 +472,38 @@ export function DockWorkspace({
               left: before ? b.left : b.left + b.width / 2,
               width: b.width / 2,
             }
-        return { region, at: id, before, hint }
+        return {
+          region,
+          at: id,
+          before,
+          hint,
+          pad: pad(vertical ? (before ? 'up' : 'down') : before ? 'left' : 'right'),
+        }
       }
       const s = ws.current?.querySelector('[data-stage]')?.getBoundingClientRect()
       if (!s) return null
       // Beside the picture: a column (or the row below) that's there already takes the panel
       // at its end, and the hint is that spot, not the whole edge: dropping Audio on the left
       // edge, already the last there, showed a strip and did nothing (owner's recording).
+      const way: Record<Region, Way> = { left: 'left', right: 'right', bottom: 'down' }
+      const pad = (region: Region) => ({
+        rect: rectOf(s),
+        ways: ['left', 'right', 'down'] as Way[],
+        lit: way[region],
+      })
       const edge = (region: Region, hint: Target['hint']): Target => {
         const ids = layout[region].filter((d) => !layout.hidden.includes(d))
         const last = ids[ids.length - 1]
-        const el = last && ws.current?.querySelector<HTMLElement>(`[data-dock="${CSS.escape(last)}"]`)
-        if (!last || !el) return { region, hint }
+        const el =
+          last && ws.current?.querySelector<HTMLElement>(`[data-dock="${CSS.escape(last)}"]`)
+        if (!last || !el) return { region, hint, pad: pad(region) }
         const b = el.getBoundingClientRect()
         // Already the last there: it stays where it is.
-        if (last === self) return { region, at: self, before: true, hint: rectOf(b) }
+        if (last === self)
+          return { region, at: self, before: true, hint: rectOf(b), pad: pad(region) }
         return {
           region,
+          pad: pad(region),
           at: last,
           before: false,
           hint:
@@ -384,7 +516,12 @@ export function DockWorkspace({
       if (x < s.left + s.width * 0.22)
         return edge('left', { left: box.left, top: box.top, width: side, height: box.height })
       if (x > s.right - s.width * 0.22)
-        return edge('right', { left: box.right - side, top: box.top, width: side, height: box.height })
+        return edge('right', {
+          left: box.right - side,
+          top: box.top,
+          width: side,
+          height: box.height,
+        })
       if (y > s.top + s.height * 0.55)
         return edge('bottom', {
           left: s.left,
@@ -445,6 +582,7 @@ export function DockWorkspace({
             return popOut(l, id, { x: Math.max(8, u.clientX - 60), y: Math.max(8, u.clientY - 16) })
           }
           if (target.at === id) return l
+          if (target.tab && target.at) return tabWith(l, id, target.at)
           const n = without(l, id)
           const list = [...n[target.region]]
           if (target.at) {
@@ -493,7 +631,10 @@ export function DockWorkspace({
   }
 
   const column = (region: Region) => {
-    const ids = layout[region].filter((d) => !layout.hidden.includes(d))
+    // A spot shows while any of its tabs isn't hidden.
+    const ids = layout[region].filter((d) =>
+      groupOf(layout, d).some((x) => !layout.hidden.includes(x)),
+    )
     if (ids.length === 0) return null
     const vertical = region !== 'bottom'
     const out: ReactNode[] = []
@@ -514,11 +655,11 @@ export function DockWorkspace({
           data-dock={id}
           className={cx(
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
-            drag?.id === id && 'opacity-40',
+            drag?.id === activeOf(layout, id) && 'opacity-40',
           )}
           style={{ flex: `${layout.w[id] ?? 1} 1 0` }}
         >
-          {docks(id)}
+          {docks(activeOf(layout, id))}
         </div>,
       )
     })
@@ -541,8 +682,8 @@ export function DockWorkspace({
   const left = column('left')
   const right = column('right')
   const bottom = column('bottom')
-  const floats = (Object.entries(layout.float) as [DockId, Float][]).filter(
-    ([id]) => !layout.hidden.includes(id),
+  const floats = (Object.entries(layout.float) as [DockId, Float][]).filter(([id]) =>
+    groupOf(layout, id).some((x) => !layout.hidden.includes(x)),
   )
 
   return (
@@ -573,7 +714,7 @@ export function DockWorkspace({
       </div>
       {floats.map(([id, f]) => (
         <FloatingDock key={id} id={id} f={f}>
-          {docks(id)}
+          {docks(activeOf(layout, id))}
         </FloatingDock>
       ))}
       {drag && (
@@ -585,6 +726,7 @@ export function DockWorkspace({
               style={drag.t.hint}
             />
           )}
+          {drag.t && <DropPad {...drag.t.pad} />}
           {!layout.float[drag.id] && (
             <div
               aria-hidden
@@ -597,6 +739,53 @@ export function DockWorkspace({
         </>
       )}
     </Ctx.Provider>
+  )
+}
+
+const WAY_AT: Record<Way, [number, number, typeof ArrowUp]> = {
+  up: [1, 0, ArrowUp],
+  left: [0, 1, ArrowLeft],
+  tab: [1, 1, Browsers],
+  right: [2, 1, ArrowRight],
+  down: [1, 2, ArrowDown],
+}
+
+/** The drop arrows over what a dragged panel is above: the ways it can go there, the one it
+ * would take lit (owner's pick L1). Only a picture; the pointer's place decides. */
+function DropPad({ rect, ways, lit }: Target['pad']) {
+  const cell = 40
+  const gap = 6
+  const size = cell * 3 + gap * 2
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed z-50 grid grid-cols-3 grid-rows-3"
+      style={{
+        left: rect.left + rect.width / 2 - size / 2,
+        top: rect.top + rect.height / 2 - size / 2,
+        width: size,
+        height: size,
+        gap,
+      }}
+    >
+      {ways.map((w) => {
+        const [col, row, Icon] = WAY_AT[w]
+        return (
+          <span
+            key={w}
+            className={cx(
+              'grid place-items-center rounded-[10px] border shadow-pop',
+              w === lit
+                ? 'border-transparent bg-arc text-white'
+                : 'border-line-strong bg-surface-1 text-text-2',
+            )}
+            style={{ gridColumn: col + 1, gridRow: row + 1 }}
+          >
+            <Icon size={18} weight="bold" />
+          </span>
+        )
+      })}
+    </div>
   )
 }
 
@@ -777,8 +966,11 @@ export function DockHeader({
   actions?: ReactNode
   info?: ReactNode
 }) {
-  const { grab, layout, narrow } = useLayout()
+  const { grab, layout, setLayout, narrow } = useLayout()
   const movable = !layout.locked && !narrow
+  const host = hostOf(layout, id)
+  // On a phone one panel shows at a time, picked below the picture: no tabs there.
+  const group = narrow ? [id] : groupOf(layout, host).filter((d) => !layout.hidden.includes(d))
   return (
     <header
       onPointerDown={(e) => {
@@ -797,9 +989,36 @@ export function DockHeader({
       )}
       {/* A short name stays whole (a long one, a web panel's, is cut at two thirds); on a
           narrow panel the buttons scroll sideways instead of squeezing it to "S…". */}
-      <h2 className="max-w-[65%] shrink-0 truncate font-display text-[17px] font-extrabold tracking-tight text-text">
-        {title ?? dockName(layout, id)}
-      </h2>
+      {group.length > 1 ? (
+        // Panels sharing this spot (owner's pick L2): one tab each; the grip drags this one.
+        <div
+          role="tablist"
+          aria-label="Panels here"
+          className="flex max-w-[75%] shrink-0 items-stretch gap-0.5 self-stretch overflow-x-auto [scrollbar-width:none]"
+        >
+          {group.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="tab"
+              aria-selected={d === id}
+              onClick={() => setLayout((l) => ({ ...l, on: { ...l.on, [host]: d } }))}
+              className={cx(
+                '-mb-px shrink-0 border-b-2 px-2 font-display text-[15px] font-extrabold tracking-tight outline-none focus-visible:shadow-[var(--fc-focus)]',
+                d === id
+                  ? 'border-text text-text'
+                  : 'border-transparent text-text-3 hover:text-text',
+              )}
+            >
+              {d === id ? (title ?? dockName(layout, d)) : dockName(layout, d)}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <h2 className="max-w-[65%] shrink-0 truncate font-display text-[17px] font-extrabold tracking-tight text-text">
+          {title ?? dockName(layout, id)}
+        </h2>
+      )}
       {info}
       <span className="min-w-0 flex-1" />
       <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
@@ -836,7 +1055,7 @@ function DockMenu({ id }: { id: DockId }) {
       document.removeEventListener('keydown', key)
     }
   }, [open])
-  const where = regionOf(layout, id)
+  const where = spotOf(layout, id)
   const pick = (f: (l: Layout) => Layout) => {
     setLayout(f)
     setOpen(false)
