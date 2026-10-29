@@ -195,6 +195,38 @@ function Running({
   const [transforming, setTransforming] = useState<Desk['transforming']>(null)
   const [library, setLibrary] = useState(0)
   const [transformClip, setTransformClip] = useState<Desk['transformClip']>(null)
+  // A source can change size by itself (a captured window resized): its frame is read again
+  // every second, so the handles the page grabs are where the picture draws them (owner's
+  // recording, 29 Oct: a handle under the cursor that wouldn't drag). Only a change re-renders.
+  const setItems = items.set
+  const itemsNow = useRef(items.data)
+  itemsNow.current = items.data
+  useEffect(() => {
+    if (!scene) return
+    // Not while a button is held: a read sent before a drag's last move would land after it
+    // and put the frame back for a moment.
+    let held = false
+    const down = () => (held = true)
+    const up = () => (held = false)
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
+    const t = setInterval(() => {
+      if (document.hidden || held) return
+      void api
+        .items(scene)
+        .then((v) => {
+          if (!held && JSON.stringify(v) !== JSON.stringify(itemsNow.current)) setItems(v)
+        })
+        .then(undefined, () => undefined)
+    }, 1000)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
+    }
+  }, [api, scene, setItems])
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
