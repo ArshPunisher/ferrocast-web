@@ -370,6 +370,29 @@ export function SwitcherSettings({
           checked={c.brb_on_ads}
           onChange={(v) => save({ brb_on_ads: v })}
         />
+        {/* Away (plan item 9): the Studio reads its own mics; OBS's aren't heard from here. */}
+        {app !== 'OBS' && (
+          <Field
+            label="Away"
+            hint="While you're live: BRB after this long without a word on your mics (the mics in Pre-flight), and back when you talk. Your mic stays on during it, so Ferrocast hears you come back."
+          >
+            {(p) => (
+              <Select
+                {...p}
+                disabled={!c.brb_scene}
+                value={String(c.away_minutes)}
+                onChange={(e) => save({ away_minutes: Number(e.target.value) })}
+              >
+                <option value="0">Off</option>
+                {[2, 3, 5, 10].map((m) => (
+                  <option key={m} value={m}>
+                    After {m} minutes quiet
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
         {audio.length > 0 && (
           <fieldset>
             <legend className="text-[14.5px] font-medium text-text-2">Mute on BRB</legend>
