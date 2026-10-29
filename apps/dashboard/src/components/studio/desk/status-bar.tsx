@@ -4,8 +4,14 @@
 // those opens Stats.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { studioEngineApi, type EngineStats } from '@ferrocast/api'
-import { cx } from '@ferrocast/ui'
+import {
+  describeError,
+  studioEngineApi,
+  type EngineStats,
+  type StudioSettings,
+} from '@ferrocast/api'
+import { cx, toast } from '@ferrocast/ui'
+import { doctorFix, type Strain } from './doctor'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
 import { StatsDialog, clock, droppedText } from './stats-panel'
@@ -45,7 +51,7 @@ type Counts = { lagged: number; skipped: number; dropped: number; at: number }
  * late (the game or the scenes are too heavy), frames the encoder skipped, frames the network
  * dropped. Shown for 10 s after it last happened.
  */
-function useStrain(stats: EngineStats | null): { text: string; tone: string } | null {
+function useStrain(stats: EngineStats | null): { text: string; tone: string; what: Strain } | null {
   const last = useRef<Counts | null>(null)
   const [seen, setSeen] = useState<{ what: 'render' | 'encode' | 'network'; until: number } | null>(
     null,
@@ -80,7 +86,7 @@ function useStrain(stats: EngineStats | null): { text: string; tone: string } | 
     if (what) setSeen({ what, until: now + 10_000 })
   }, [stats])
   if (!seen || Date.now() > seen.until) return null
-  return {
+  const words = {
     render: {
       text: 'Your computer is falling behind: frames are late. Close heavy apps, lower the game’s settings, or press Optimize in Go live.',
       tone: 'text-warn',
@@ -94,6 +100,73 @@ function useStrain(stats: EngineStats | null): { text: string; tone: string } | 
       tone: 'text-danger',
     },
   }[seen.what]
+  return { ...words, what: seen.what }
+}
+
+/** The stream doctor's button beside a warning: the lightest change that helps, in one click. */
+function FixButton({
+  what,
+  api,
+  canvas,
+  live,
+}: {
+  what: Strain
+  api: ReturnType<typeof studioEngineApi>
+  canvas: { width: number; height: number }
+  live: boolean
+}) {
+  const [settings, setSettings] = useState<StudioSettings | null>(null)
+  const [busy, setBusy] = useState(false)
+  // Done for this warning: the button goes until the next one.
+  const [done, setDone] = useState(false)
+  // The warning a fix's answer belongs to: a late answer for an earlier one changes nothing
+  // here (CodeRabbit).
+  const current = useRef(what)
+  current.current = what
+  useEffect(() => {
+    let alive = true
+    setDone(false)
+    api
+      .studioSettings()
+      .then((v) => alive && setSettings(v))
+      .catch(() => alive && setSettings(null))
+    return () => {
+      alive = false
+    }
+  }, [api, what])
+  const fix = settings ? doctorFix(what, settings, canvas, live) : null
+  if (!fix || done) return null
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true)
+        const sentFor = what
+        void api
+          .setStudioSettings({ ...settings, ...fix.patch } as StudioSettings)
+          .then((r) => {
+            if (current.current === sentFor) {
+              setDone(true)
+              setSettings(r.settings)
+            }
+            toast(
+              r.restart
+                ? { tone: 'warn', message: fix.done, hint: r.restart }
+                : { tone: 'ok', message: fix.done },
+            )
+          })
+          .catch((err: unknown) => {
+            const d = describeError(err)
+            toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+          })
+          .finally(() => setBusy(false))
+      }}
+      className="my-1 shrink-0 rounded-[6px] bg-btn-soft px-2 text-[12px] font-bold text-molten-text hover:bg-btn-soft-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
+    >
+      {busy ? 'Fixing…' : fix.label}
+    </button>
+  )
 }
 
 export function StudioStatusBar() {
@@ -144,6 +217,10 @@ export function StudioStatusBar() {
       >
         {note?.text}
       </span>
+      {/* Only for the strain warnings (not reconnecting, errors or remuxing). */}
+      {strain && note === strain && (
+        <FixButton what={strain.what} api={api} canvas={stats.canvas} live={live || recording} />
+      )}
       <button
         type="button"
         onClick={() => setOpen(true)}
