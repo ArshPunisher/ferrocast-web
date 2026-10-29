@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   SpeakerHigh,
   SpeakerSlash,
+  Globe,
 } from '@phosphor-icons/react'
 import { type EngineAudio, type EngineLevel, type EngineMonitor } from '@ferrocast/api'
 import { Button, Dialog, IconButton, InfoTip, Input, Segmented, Skeleton, cx } from '@ferrocast/ui'
@@ -297,7 +298,7 @@ export function Meter({
       aria-hidden
       className={cx(
         'pointer-events-none relative font-mono text-[10.5px] font-semibold text-text-3 tabular-nums',
-        vertical ? 'h-full w-5' : 'h-3 w-full',
+        vertical ? 'h-full w-5' : 'fc-scale-h h-3 w-full',
       )}
     >
       {SCALE.map((d) => (
@@ -460,7 +461,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
     <div
       onContextMenu={onMenu}
       className={cx(
-        'rounded-[12px] border border-transparent px-2 pt-2 pb-1 transition-colors hover:border-line hover:bg-surface-2',
+        'group/row rounded-[12px] border border-transparent px-2 pt-2 pb-1 transition-colors hover:border-line hover:bg-surface-2',
         a.muted && 'bg-danger-soft/40',
       )}
     >
@@ -472,9 +473,17 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
           {a.name}
         </span>
         {a.channel !== null && (
-          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-bold text-accent-text">
-            Everywhere
-          </span>
+          <>
+            <span className="hidden shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-bold text-accent-text @[300px]:inline">
+              Everywhere
+            </span>
+            <Globe
+              size={15}
+              weight="bold"
+              className="shrink-0 text-accent-text @[300px]:hidden"
+              aria-label="Everywhere: in every scene"
+            />
+          </>
         )}
         {locked && (
           <LockSimple size={13} weight="bold" className="text-text-3" aria-label="Locked" />
@@ -488,7 +497,11 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
             a.muted ? 'text-danger' : 'text-text',
           )}
         >
-          {!a.muted && <span className="font-sans text-[12px] font-semibold text-text-3">Vol</span>}
+          {!a.muted && (
+            <span className="hidden font-sans text-[12px] font-semibold text-text-3 @[260px]:inline">
+              Vol
+            </span>
+          )}
           {/* Wide enough for the longest ("-99.9 dB") on one line: the row never shifts as the
               fader moves (owner, 29 Oct). */}
           <span className="w-[8.5ch] whitespace-nowrap">{dbText(a)}</span>
@@ -509,7 +522,14 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
           />
         </div>
         <HearButton a={a} onAudio={onAudio} />
-        <IconButton size="sm" variant="ghost" label={`More for ${a.name}`} onClick={onMenu}>
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label={`More for ${a.name}`}
+          onClick={onMenu}
+          // Narrow (owner's pick N1): there on hover or focus; right-click opens it too.
+          className="fc-quiet"
+        >
           <DotsThree size={16} weight="bold" />
         </IconButton>
       </div>
@@ -517,41 +537,30 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
   )
 }
 
+/**
+ * A slim channel strip for the mixing desk (owner's pick D1, 29 Oct): the level on top, a tall
+ * meter with its fader, mute and hear, and the name at the bottom (it opens the sound's menu).
+ * The dB scale is printed once beside the strips (DeskScale), not on each.
+ */
 function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
   return (
     <div
       onContextMenu={onMenu}
       className={cx(
-        'flex h-full w-[112px] shrink-0 flex-col items-center gap-1.5 rounded-[12px] border border-line bg-surface-2 px-1.5 pt-2 pb-1.5',
+        'flex h-full w-[72px] shrink-0 flex-col items-center gap-1.5 rounded-[10px] border border-line bg-surface-2 px-1 pt-2 pb-1.5',
         a.muted && 'border-danger/30',
       )}
     >
-      <KindTile kind={a.kind} size={26} dim={a.muted} />
       <span
         className={cx(
-          'w-full truncate text-center text-[13.5px] font-bold',
-          a.muted ? 'text-text-3' : 'text-text',
-        )}
-        title={a.name}
-      >
-        {a.name}
-      </span>
-      <span
-        className={cx(
-          'font-mono text-[12.5px] font-bold tabular-nums',
+          'h-5 font-mono text-[12.5px] leading-5 font-bold tabular-nums',
           a.muted ? 'text-danger' : 'text-text-2',
         )}
       >
         {a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : a.volume_db.toFixed(1)}
       </span>
-      {a.channel !== null && (
-        <span className="rounded-full bg-accent-soft px-1.5 py-px text-[11.5px] font-bold text-accent-text">
-          Everywhere
-        </span>
-      )}
       <Meter
         vertical
-        scale
         level={level}
         muted={a.muted}
         volumeDb={a.volume_db}
@@ -560,13 +569,51 @@ function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         decay={decay}
         onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
       />
-      <div className="flex items-center">
+      <div className="flex h-8 items-center">
         <MuteButton a={a} onAudio={onAudio} />
         <HearButton a={a} onAudio={onAudio} />
-        <IconButton size="sm" variant="ghost" label={`More for ${a.name}`} onClick={onMenu}>
-          <DotsThree size={16} weight="bold" />
-        </IconButton>
       </div>
+      <button
+        type="button"
+        onClick={onMenu}
+        title={a.channel !== null ? `${a.name} (in every scene)` : a.name}
+        aria-label={`More for ${a.name}`}
+        className={cx(
+          'flex h-6 w-full min-w-0 items-center justify-center gap-1 rounded-[6px] px-1 text-[12px] font-bold outline-none hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)]',
+          a.muted ? 'text-text-3' : 'text-text',
+        )}
+      >
+        {a.channel !== null && (
+          <Globe size={11} weight="bold" className="shrink-0 text-accent-text" aria-hidden />
+        )}
+        <span className="min-w-0 truncate">{a.name}</span>
+      </button>
+    </div>
+  )
+}
+
+/** The mixing desk's dB scale, once, lined up with the strips' meters. */
+function DeskScale() {
+  return (
+    <div aria-hidden className="flex h-full w-6 shrink-0 flex-col items-center gap-1.5 pt-2 pb-1.5">
+      <span className="h-5" />
+      <span className="flex w-full flex-1 flex-col">
+        {/* The meter's clip light and gap above its bars (CodeRabbit). */}
+        <span className="h-[14px] shrink-0" />
+        <span className="relative w-full flex-1 font-mono text-[10.5px] font-semibold text-text-3 tabular-nums">
+          {SCALE.map((d) => (
+            <span
+              key={d}
+              className="absolute right-0 translate-y-1/2 leading-none"
+              style={{ bottom: `${meterPct(d)}%` }}
+            >
+              {Math.abs(d)}
+            </span>
+          ))}
+        </span>
+      </span>
+      <span className="h-8" />
+      <span className="h-6" />
     </div>
   )
 }
@@ -697,16 +744,29 @@ export function AudioDock() {
         }
         actions={
           <>
-            <Segmented
+            {/* Narrow (owner's pick N1): one button that says which, instead of both. */}
+            <span className="hidden @[320px]:contents">
+              <Segmented
+                size="sm"
+                label="Which sounds"
+                value={all ? 'all' : 'scene'}
+                options={[
+                  { value: 'scene', label: 'This scene' },
+                  { value: 'all', label: 'All' },
+                ]}
+                onChange={(v) => setAll(v === 'all')}
+              />
+            </span>
+            <Button
               size="sm"
-              label="Which sounds"
-              value={all ? 'all' : 'scene'}
-              options={[
-                { value: 'scene', label: 'This scene' },
-                { value: 'all', label: 'All' },
-              ]}
-              onChange={(v) => setAll(v === 'all')}
-            />
+              variant="ghost"
+              aria-pressed={all}
+              title={all ? 'Showing every scene’s sounds' : 'Showing this scene’s sounds'}
+              className="h-8 px-2 text-[13px] @[320px]:hidden"
+              onClick={() => setAll(!all)}
+            >
+              {all ? 'All' : 'Scene'}
+            </Button>
             <IconButton
               size="sm"
               variant="ghost"
@@ -759,12 +819,13 @@ export function AudioDock() {
           </p>
         ) : prefs.vertical ? (
           <div className="flex h-full gap-1.5">
+            <DeskScale />
             {shown.map((a) => (
               <Strip key={a.name} {...props(a)} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="@container flex flex-col gap-1">
             {shown.map((a) => (
               <Row key={a.name} {...props(a)} />
             ))}
