@@ -65,7 +65,9 @@ export function LiveCaptions({
   const [models, setModels] = useState<SpeechModel[] | null>(null)
   const [pickedEngine, setEngine] = useKept<Engine>('fc-captions-engine', 'apple')
   const [model, setModel] = useKept<ModelId>('fc-captions-model', 'base')
-  const [language, setLanguage] = useKept<string>('fc-captions-language', 'auto')
+  const [keptLanguage, setLanguage] = useKept<string>('fc-captions-language', 'auto')
+  // One kept from an older list falls back to working it out.
+  const language = WHISPER_LANGUAGES.some((l) => l.code === keptLanguage) ? keptLanguage : 'auto'
   const [english, setEnglish] = useKept<'on' | 'off'>('fc-captions-english', 'off')
 
   const read = useCallback(() => {

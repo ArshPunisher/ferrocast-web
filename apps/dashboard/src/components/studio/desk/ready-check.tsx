@@ -2,7 +2,7 @@
 // captures, scenes and disk a few seconds after the Studio starts, and shows only what needs
 // fixing. Also says what came back when Ferrocast closed unexpectedly last time.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from '@phosphor-icons/react'
 import type { EngineRecovered, Preflight } from '@ferrocast/api'
 import { IconButton } from '@ferrocast/ui'
@@ -58,13 +58,16 @@ export function ReadyCheck({
     }
   }, [api, studio])
 
-  // All good and nothing to say about a crash: it goes by itself.
+  // All good and nothing to say about a crash: it goes by itself (the parent redrawing doesn't
+  // restart the wait: its onClose is read when the time comes).
+  const close = useRef(onClose)
+  close.current = onClose
   const clean = found?.ready && !recovered
   useEffect(() => {
     if (!clean) return
-    const t = window.setTimeout(onClose, 5000)
+    const t = window.setTimeout(() => close.current(), 5000)
     return () => window.clearTimeout(t)
-  }, [clean, onClose])
+  }, [clean])
 
   const n = found?.checks.length ?? 0
   return (
