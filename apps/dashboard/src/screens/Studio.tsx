@@ -24,9 +24,10 @@ import { useRigLists } from '../components/studio/rig-lists'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
+  // Second: what viewers see is set right after picking where to go (owner, 29 Oct).
+  { value: 'info', label: 'Stream info' },
   { value: 'vertical', label: 'Vertical' },
   { value: 'show', label: 'Show' },
-  { value: 'info', label: 'Stream info' },
   { value: 'obs', label: 'OBS' },
   { value: 'moments', label: 'Moments' },
 ]
