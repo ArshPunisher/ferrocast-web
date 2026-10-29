@@ -10,7 +10,7 @@ import { balanceLabel } from './advanced-audio'
 import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
-import { asksFirst } from './desk'
+import { asksFirst, hasStreamInfo } from './desk'
 import { sourceFor } from './file-drop'
 import { levelOf, visibleLines } from './log-viewer'
 import { recommend } from './auto-config'
@@ -439,5 +439,16 @@ describe('files dropped on the Studio', () => {
   it('other files make nothing', () => {
     expect(sourceFor('/a/notes.txt')).toBeNull()
     expect(sourceFor('/a/folder')).toBeNull()
+  })
+})
+
+describe('going live without stream info', () => {
+  it('asks only when no title or category is set anywhere', () => {
+    expect(hasStreamInfo(null)).toBe(false)
+    expect(hasStreamInfo({})).toBe(false)
+    expect(hasStreamInfo({ title: '   ', tags: ['x'] })).toBe(false)
+    expect(hasStreamInfo({ title: 'Ranked grind' })).toBe(true)
+    expect(hasStreamInfo({ category: { id: '1', name: 'Valorant' } as never })).toBe(true)
+    expect(hasStreamInfo({ per: { youtube: { title: 'Only here' } } })).toBe(true)
   })
 })

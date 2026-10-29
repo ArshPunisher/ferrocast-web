@@ -30,6 +30,7 @@ import {
   onCanvas,
   type EngineStats,
   type GoLiveView,
+  type StreamInfo,
   type StudioEngineStatus,
   type StudioSettings,
 } from '@ferrocast/api'
@@ -38,6 +39,8 @@ import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
+import { go } from '../../../lib/router'
+import { useStudio } from '../common'
 import { AddSourceDialog } from './add-source'
 import { FileDrop } from './file-drop'
 import { DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
@@ -344,6 +347,13 @@ export function asksFirst(
   return p?.confirm_go_live ? 'live' : null
 }
 
+/** Whether stream info has anything set: a title or category, everywhere or for one platform. */
+export function hasStreamInfo(i: StreamInfo | null | undefined): boolean {
+  if (!i) return false
+  const own = (x: StreamInfo) => !!x.title?.trim() || !!x.category
+  return own(i) || Object.values(i.per ?? {}).some((x) => !!x && own(x))
+}
+
 /** The stream's health, the Layout menu, and Go live. */
 function ControlBar({
   view,
@@ -389,8 +399,18 @@ function ControlBar({
     if (v !== undefined && stats) setStats({ ...stats, record: v })
   }
   // OBS's General › "Show confirmation dialog when…": ending is asked by default.
-  const [ask, setAsk] = useState<'live' | 'end' | 'record' | null>(null)
-  const pressStream = () => {
+  const [ask, setAsk] = useState<'live' | 'end' | 'record' | 'noinfo' | null>(null)
+  const studio = useStudio()
+  // Read ahead, so pressing Go live answers at once when it's set (the usual case).
+  const info = useResource(() => studio.streamInfo(), [studio])
+  const pressStream = async () => {
+    // Going live with no title or category anywhere: asked once whether to set them first
+    // (owner, 29 Oct). Only then is it read afresh (it may have been set since), and stream
+    // info that can't be read doesn't hold the stream up.
+    if (!on && !hasStreamInfo(info.data?.last?.info)) {
+      const fresh = await studio.streamInfo().catch(() => null)
+      if (fresh && !hasStreamInfo(fresh.last?.info)) return setAsk('noinfo')
+    }
     const a = asksFirst('stream', on, prefs.data)
     if (a) setAsk(a)
     else void toggle()
@@ -403,7 +423,9 @@ function ControlBar({
   const confirmed = () => {
     // The stream or recording may have changed while the dialog was open: then do nothing.
     const stale =
-      (ask === 'end' && !on) || (ask === 'live' && on) || (ask === 'record' && !recording)
+      (ask === 'end' && !on) ||
+      ((ask === 'live' || ask === 'noinfo') && on) ||
+      (ask === 'record' && !recording)
     if (stale) {
       setAsk(null)
       return
@@ -412,6 +434,13 @@ function ControlBar({
     void go.finally(() => setAsk(null))
   }
   const ASK = {
+    noinfo: {
+      title: 'No stream info yet',
+      text: 'Your title and category are empty, so each platform shows what it had last time.',
+      keep: 'Set it up',
+      yes: 'Go live anyway',
+      key: 'stream',
+    },
     live: {
       title: 'Go live now?',
       text: `${goingTo(ticked)}.`,
@@ -583,7 +612,7 @@ function ControlBar({
           busy={busy === 'stream'}
           disabled={!on && ticked.length === 0}
           title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
-          onClick={pressStream}
+          onClick={() => void pressStream()}
         >
           {on ? <X size={16} weight="bold" /> : <Broadcast size={17} weight="fill" />}
           {on ? (stream?.active ? 'End stream' : 'Starting…') : 'Go live'}
@@ -596,11 +625,17 @@ function ControlBar({
           footer={
             asked && (
               <>
-                <Button variant="ghost" onClick={() => setAsk(null)}>
+                <Button
+                  variant={ask === 'noinfo' ? 'secondary' : 'ghost'}
+                  onClick={() => {
+                    if (ask === 'noinfo') go({ name: 'studio', section: 'info' })
+                    setAsk(null)
+                  }}
+                >
                   {asked.keep}
                 </Button>
                 <Button
-                  variant={ask === 'live' ? 'primary' : 'danger'}
+                  variant={ask === 'live' || ask === 'noinfo' ? 'primary' : 'danger'}
                   busy={busy === asked.key}
                   onClick={confirmed}
                 >
