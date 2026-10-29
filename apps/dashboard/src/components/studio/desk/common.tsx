@@ -352,7 +352,23 @@ export function pickKind(e: KindEntry, kinds: EngineKinds | null): string | null
 }
 
 /** The source drawer's tabs. */
+/** The drawer's tabs: Sound & filters, Settings. `filters` opens the first one at its filters. */
 export type DrawerTab = 'sound' | 'filters' | 'settings'
+
+/** Sources with sound and no picture: they get no picture filters (every other source has a
+ * picture, and a screen or window capture may have sound too). */
+export const SOUND_ONLY = new Set([
+  'coreaudio_input_capture',
+  'coreaudio_output_capture',
+  'sck_audio_capture',
+  'wasapi_input_capture',
+  'wasapi_output_capture',
+  'wasapi_process_output_capture',
+  'pulse_input_capture',
+  'pulse_output_capture',
+  'alsa_input_capture',
+  'jack_output_capture',
+])
 
 /** Friendly filters by what they're for; every other OBS filter is under "More". */
 export interface FilterEntry {

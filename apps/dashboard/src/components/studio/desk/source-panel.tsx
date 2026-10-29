@@ -2,14 +2,20 @@
 // rename it; for a sound, its level, "hear it" and the scenes it plays in; its filters in
 // plain words; and every setting OBS has for it, applied as you change them.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowClockwise,
+  CaretDown,
+  CaretRight,
+  CaretUp,
   Check,
   CursorClick,
   DotsSixVertical,
-  DotsThree,
   Funnel,
+  Headphones,
+  Plus,
+  SpeakerHigh,
+  SpeakerSlash,
   Trash,
   X,
 } from '@phosphor-icons/react'
@@ -33,7 +39,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
-import { FILTERS, FILTER_OF, KindTile, useDesk, type DrawerTab } from './common'
+import { FILTERS, FILTER_OF, KindTile, SOUND_ONLY, useDesk, type DrawerTab } from './common'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
 
@@ -160,18 +166,24 @@ function Panel({
     void run('audio', () => api.setAudio(name, patch))
   }
 
-  // Three tabs (owner's pick D1, 28 Oct): the sound, its filters, and where it plays with
-  // its own settings. A sound opens on Sound, anything else on Settings.
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    ...(a ? [{ id: 'sound' as const, label: 'Sound' }] : []),
+  // Two tabs (owner's pick F1, 29 Oct): the sound and the filters in one, then where it plays
+  // with its own settings. A sound opens on the first, anything else on Settings; "Filters"
+  // from a menu opens the first at its filters.
+  const tabs: { id: 'sound' | 'settings'; label: string; count?: number }[] = [
     {
-      id: 'filters',
-      label: a ? 'Clean up' : 'Filters',
+      id: 'sound',
+      label: a ? 'Sound & filters' : 'Filters',
       ...(filters.data?.length ? { count: filters.data.length } : {}),
     },
     { id: 'settings', label: 'Settings' },
   ]
-  const shown: Tab = tab === 'sound' && !a ? 'settings' : (tab ?? (a ? 'sound' : 'settings'))
+  const shown: 'sound' | 'settings' =
+    tab === 'settings'
+      ? 'settings'
+      : tab === 'sound' || tab === 'filters' || a
+        ? 'sound'
+        : 'settings'
+  const picture = !SOUND_ONLY.has(kind)
   const kindName = kinds.data?.inputs.find((k) => k.id === kind)?.name
   const panelId = `source-tab-${shown}`
 
@@ -254,45 +266,67 @@ function Panel({
         className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto px-4 py-4"
       >
         {shown === 'sound' && a && (
-          <section aria-label="Sound" className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
-              <div className="flex items-center justify-between text-[14.5px] font-semibold">
-                <span>Volume</span>
-                <span className="font-mono text-[13.5px] text-text-2 tabular-nums">
-                  {a.muted ? 'Muted' : `${a.volume_db.toFixed(1)} dB`}
-                </span>
-              </div>
-              <Meter
-                tall
-                level={levels[name]}
-                muted={a.muted}
-                volumeDb={a.volume_db}
-                label={`${name} volume`}
-                onVolume={(d) => setAudio({ volume_db: Math.round(d * 10) / 10 })}
+          <section
+            aria-label="Sound"
+            className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3"
+          >
+            <div className="flex items-center gap-2">
+              <IconButton
+                size="sm"
+                label={a.muted ? `Unmute ${name}` : `Mute ${name}`}
+                aria-pressed={a.muted}
+                variant={a.muted ? 'danger-ghost' : 'ghost'}
+                className={cx(a.muted ? 'bg-danger-soft' : 'bg-surface-3 text-text')}
+                onClick={() => setAudio({ muted: !a.muted })}
+              >
+                {a.muted ? <SpeakerSlash size={17} weight="bold" /> : <SpeakerHigh size={17} />}
+              </IconButton>
+              <span className={cx('text-[14.5px] font-bold', a.muted && 'text-danger')}>
+                {a.muted ? 'Muted' : 'Volume'}
+              </span>
+              <span className="ml-auto font-mono text-[13.5px] text-text-2 tabular-nums">
+                {`${a.volume_db.toFixed(1)} dB`}
+              </span>
+            </div>
+            <Meter
+              tall
+              level={levels[name]}
+              muted={a.muted}
+              volumeDb={a.volume_db}
+              label={`${name} volume`}
+              onVolume={(d) => setAudio({ volume_db: Math.round(d * 10) / 10 })}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-sm font-semibold">
+                <Headphones size={16} aria-hidden />
+                Hear it
+                <InfoTip label="About hearing it">
+                  Off: only the stream hears it. Only me: your headphones, not the stream or the
+                  recording. Me and stream: both.
+                </InfoTip>
+              </span>
+              <Segmented
+                label="Hear it"
+                value={a.monitor}
+                options={[
+                  { value: 'off', label: 'Off' },
+                  { value: 'only_me', label: 'Only me' },
+                  { value: 'me_and_stream', label: 'Me and stream' },
+                ]}
+                onChange={(monitor) => setAudio({ monitor })}
               />
-              <Switch label="Mute" checked={a.muted} onChange={(m) => setAudio({ muted: m })} />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="flex items-center gap-1 text-sm font-medium">
-                  Hear it
-                  <InfoTip label="About hearing it">
-                    Plays it in your headphones. Only me keeps it off the stream.
-                  </InfoTip>
-                </span>
-                <Segmented
-                  label="Hear it"
-                  value={a.monitor}
-                  options={[
-                    { value: 'off', label: 'Off' },
-                    { value: 'only_me', label: 'Only me' },
-                    { value: 'me_and_stream', label: 'Me and stream' },
-                  ]}
-                  onChange={(monitor) => setAudio({ monitor })}
-                />
-              </div>
             </div>
           </section>
         )}
-        {shown === 'filters' && <Filters name={name} audio={!!a} list={filters} />}
+        {shown === 'sound' && (
+          <Filters
+            name={name}
+            picture={picture}
+            sound={!!a}
+            list={filters}
+            reveal={first === 'filters'}
+          />
+        )}
         {shown === 'settings' && (
           <>
             {kind === 'ferrocast_web' && (
@@ -665,32 +699,48 @@ function PlaysIn({ name }: { name: string }) {
 
 /**
  * Filters, in the order they run: each can be switched off, opened (its settings fold out
- * under it), dragged by its dots (or moved with the arrow keys there) or removed. Below them,
- * every filter to add as a tile, one click each (owner's pick, 28 Oct): the ones it has
- * already show faded, and can still be added again.
+ * under it), dragged by its dots (or moved with the arrow keys there) or removed. Under them,
+ * "Add a filter" opens a picker right there (owner's pick F1, 29 Oct): a search, picture and
+ * sound filters in plain words (the ones it has say "On it" and can be added again), and
+ * OBS's others behind "more". A source with a picture gets picture filters, one with sound
+ * sound filters, a screen capture both.
  */
 function Filters({
   name,
-  audio,
+  picture,
+  sound,
   list,
+  reveal,
 }: {
   name: string
-  audio: boolean
+  picture: boolean
+  sound: boolean
   list: Resource<EngineFilter[]>
+  /** Opened from a "Filters" menu item: shown in view. */
+  reveal: boolean
 }) {
   const { api, kinds } = useDesk()
   const { run, busy } = useAction()
   const [open, setOpen] = useState<string | null>(null)
   // A filter's trash asks once more (its settings go with it).
   const [sure, setSure] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [find, setFind] = useState('')
+  const [only, setOnly] = useState<'all' | 'picture' | 'sound'>('all')
+  const [more, setMore] = useState(false)
+  const section = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (reveal) section.current?.scrollIntoView({ block: 'start' })
+  }, [reveal])
   const have = new Set(kinds.data?.filters.map((k) => k.id))
-  const curated = FILTERS.filter((f) => !!f.audio === audio)
+  const curated = FILTERS.filter((f) => (f.audio ? sound : picture))
     .map((f) => ({ ...f, kind: f.kinds.find((k) => have.has(k)) }))
     .filter((f): f is typeof f & { kind: string } => !!f.kind)
   const curatedKinds = new Set(FILTERS.flatMap((f) => f.kinds))
-  const more = (kinds.data?.filters ?? []).filter((k) => !curatedKinds.has(k.id))
+  const others = (kinds.data?.filters ?? []).filter((k) => !curatedKinds.has(k.id))
   const filters = list.data ?? []
   const taken = new Set(filters.map((f) => f.name))
+  const both = picture && sound
   const added = new Set(filters.map((f) => f.kind))
   const act = async (key: string, f: () => Promise<unknown>) => {
     const ok = await run(key, () => done(f()))
@@ -700,7 +750,11 @@ function Filters({
   const add = async (kind: string, label: string) => {
     let n = label
     for (let i = 2; taken.has(n); i++) n = `${label} ${i}`
-    if (await act('add', () => api.addFilter(name, { kind, name: n }))) setOpen(n)
+    if (await act('add', () => api.addFilter(name, { kind, name: n }))) {
+      setOpen(n)
+      setAdding(false)
+      setFind('')
+    }
   }
   // Moves a filter `by` places (negative: up), one step at a time as the engine moves them.
   const move = (f: string, by: number) =>
@@ -719,10 +773,10 @@ function Filters({
     return at < 0 ? els.length : at
   }
   return (
-    <section aria-label={audio ? 'Clean up' : 'Filters'} className="flex flex-col gap-5">
+    <section ref={section} aria-label="Filters" className="flex scroll-mt-4 flex-col gap-3">
       <div className="flex flex-col gap-2">
         <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
-          Your filters
+          Filters on it
           <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
         </h3>
         {list.error && !list.data ? (
@@ -731,7 +785,7 @@ function Filters({
           <Skeleton className="h-16" />
         ) : filters.length === 0 ? (
           <p className="m-0 rounded-control border border-dashed border-line-strong px-3 py-3 text-[14px] text-text-3">
-            None yet. Pick one below.
+            None yet.
           </p>
         ) : (
           <div ref={rows} className="flex flex-col gap-1.5">
@@ -857,70 +911,188 @@ function Filters({
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-2">
-        <h3 className="m-0 flex items-baseline gap-2 font-display text-[14px] font-extrabold text-text-2">
-          Add a filter
-          <span className="font-sans text-[13px] font-medium text-text-3">click one to add it</span>
-        </h3>
-        <div role="group" aria-label="Add a filter" className="grid grid-cols-2 gap-2">
-          {curated.map((f) => {
-            const FIcon = f.icon
-            const already = f.kinds.some((k) => added.has(k))
-            return (
-              <button
-                key={f.kind}
-                type="button"
-                disabled={busy !== null}
-                aria-label={`Add ${f.label}${already ? ' (it has one already)' : ''}`}
-                onClick={() => void add(f.kind, f.label)}
-                className={cx(
-                  'flex flex-col items-start gap-1.5 rounded-[12px] border p-3 text-left transition-[border-color,box-shadow] outline-none focus-visible:shadow-[var(--fc-focus)]',
-                  already
-                    ? 'border-dashed border-line-strong text-text-3 hover:border-accent-line hover:text-text-2'
-                    : 'border-line bg-surface-2 hover:border-accent-line hover:shadow-[0_0_0_3px_var(--fc-accent-soft)]',
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cx(
-                    'grid size-8 place-items-center rounded-[9px]',
-                    already ? 'bg-surface-3' : 'bg-accent-soft text-accent-text',
-                  )}
-                >
-                  <FIcon size={17} />
-                </span>
-                <span className="text-[14px] leading-tight font-bold">
-                  {f.label}
-                  {already && <span className="font-medium"> · added</span>}
-                </span>
-                <span className="text-[13px] leading-snug text-text-3">{f.help}</span>
-              </button>
-            )
-          })}
-        </div>
-        {more.length > 0 && (
-          <details className="rounded-[12px] border border-line">
-            <summary className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-[14px] font-bold text-text-2 hover:text-text">
-              <DotsThree size={17} weight="bold" /> Every other filter
-              <span className="font-medium text-text-3">({more.length})</span>
-            </summary>
-            <div className="grid grid-cols-2 gap-1 border-t border-line p-1.5">
-              {more.map((k) => (
-                <button
-                  key={k.id}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => void add(k.id, k.name || k.id)}
-                  className="truncate rounded-[8px] px-2.5 py-2 text-left text-[14px] hover:bg-surface-2"
-                >
-                  {k.name || k.id}
-                </button>
-              ))}
-            </div>
-          </details>
-        )}
-      </div>
+      <AddFilter
+        open={adding}
+        onOpen={setAdding}
+        find={find}
+        onFind={setFind}
+        only={both ? only : 'all'}
+        onOnly={both ? setOnly : null}
+        more={more}
+        onMore={setMore}
+        busy={busy !== null}
+        curated={curated.map((f) => ({ ...f, on: f.kinds.some((k) => added.has(k)) }))}
+        others={others.map((k) => ({ kind: k.id, label: k.name || k.id, on: added.has(k.id) }))}
+        onAdd={(kind, label) => void add(kind, label)}
+      />
     </section>
+  )
+}
+
+interface FilterPick {
+  kind: string
+  label: string
+  on: boolean
+  help?: string
+  icon?: (typeof FILTERS)[number]['icon']
+  audio?: boolean
+}
+
+/** "Add a filter" and the picker it opens under itself. */
+function AddFilter({
+  open,
+  onOpen,
+  find,
+  onFind,
+  only,
+  onOnly,
+  more,
+  onMore,
+  busy,
+  curated,
+  others,
+  onAdd,
+}: {
+  open: boolean
+  onOpen: (open: boolean) => void
+  find: string
+  onFind: (q: string) => void
+  only: 'all' | 'picture' | 'sound'
+  /** Null when the source has only a picture or only sound. */
+  onOnly: ((v: 'all' | 'picture' | 'sound') => void) | null
+  more: boolean
+  onMore: (open: boolean) => void
+  busy: boolean
+  curated: FilterPick[]
+  others: FilterPick[]
+  onAdd: (kind: string, label: string) => void
+}) {
+  const id = useId()
+  const q = find.trim().toLowerCase()
+  const match = (p: FilterPick) => !q || `${p.label} ${p.help ?? ''}`.toLowerCase().includes(q)
+  const pics = only === 'sound' ? [] : curated.filter((p) => !p.audio && match(p))
+  const sounds = only === 'picture' ? [] : curated.filter((p) => p.audio && match(p))
+  const rest = others.filter(match)
+  const row = (p: FilterPick) => {
+    const Icon = p.icon ?? Funnel
+    return (
+      <button
+        key={p.kind}
+        type="button"
+        disabled={busy}
+        aria-label={`Add ${p.label}${p.on ? ' (it has one already)' : ''}`}
+        onClick={() => onAdd(p.kind, p.label)}
+        className="group flex min-w-0 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left outline-none hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50"
+      >
+        <span
+          aria-hidden
+          className={cx(
+            'grid size-8 shrink-0 place-items-center rounded-[9px]',
+            p.audio ? 'bg-ok-soft text-ok' : 'bg-accent-soft text-accent-text',
+          )}
+        >
+          <Icon size={17} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[14px] font-bold">{p.label}</span>
+          {p.help && <span className="truncate text-[12.5px] text-text-3">{p.help}</span>}
+        </span>
+        {p.on ? (
+          <span className="shrink-0 text-[12.5px] font-bold text-ok">On it</span>
+        ) : (
+          <Plus
+            size={16}
+            weight="bold"
+            aria-hidden
+            className="shrink-0 text-text-3 group-hover:text-text"
+          />
+        )}
+      </button>
+    )
+  }
+  const group = (title: string, picks: FilterPick[]) =>
+    picks.length > 0 && (
+      <div className="flex flex-col gap-1">
+        <h4 className="m-0 flex items-center gap-2 text-[11.5px] font-extrabold tracking-[0.07em] text-text-3 uppercase after:h-px after:flex-1 after:bg-line">
+          {title}
+        </h4>
+        <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2">{picks.map(row)}</div>
+      </div>
+    )
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <Button
+          variant="secondary"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => onOpen(!open)}
+        >
+          <Plus size={16} weight="bold" /> Add a filter
+          {open ? <CaretUp size={13} weight="bold" /> : <CaretDown size={13} weight="bold" />}
+        </Button>
+      </div>
+      {open && (
+        <div
+          id={id}
+          role="group"
+          aria-label="Add a filter"
+          className="flex flex-col gap-2.5 rounded-[14px] border border-line-strong bg-surface-1 p-2.5 shadow-pop"
+        >
+          <Input
+            aria-label="Find a filter"
+            placeholder="Find a filter"
+            value={find}
+            autoFocus
+            onChange={(e) => onFind(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && find) {
+                // Clears the search first; the next Escape closes the drawer.
+                e.stopPropagation()
+                onFind('')
+              }
+            }}
+          />
+          {onOnly && (
+            <Segmented
+              label="Show"
+              value={only}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'picture', label: 'Picture' },
+                { value: 'sound', label: 'Sound' },
+              ]}
+              onChange={onOnly}
+            />
+          )}
+          {group('Picture', pics)}
+          {group('Sound', sounds)}
+          {rest.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                aria-expanded={more || !!q}
+                onClick={() => onMore(!more)}
+                className="flex items-center gap-2 rounded-[8px] px-2 py-2 text-left text-[13.5px] font-bold text-text-2 outline-none hover:text-text focus-visible:shadow-[var(--fc-focus)]"
+              >
+                {more || q ? (
+                  <CaretDown size={14} weight="bold" />
+                ) : (
+                  <CaretRight size={14} weight="bold" />
+                )}
+                {rest.length} more (OBS's own)
+              </button>
+              {(more || !!q) && (
+                <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2">{rest.map(row)}</div>
+              )}
+            </div>
+          )}
+          {pics.length + sounds.length + rest.length === 0 && (
+            <p className="m-0 px-2 py-2 text-[14px] text-text-3">No filter called that.</p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
