@@ -56,7 +56,9 @@ function OptionField({
   onChange,
   disabled,
 }: { o: EngineOption } & Omit<FormProps, 'opts'>) {
-  const label = o.label || o.key
+  // OBS's own wording names OBS where it means this app (macOS Screen Capture's "Hide OBS
+  // from capture" leaves out the app the plugin runs in: here, Ferrocast's own windows).
+  const label = (o.label || o.key).replace(/\bOBS\b(?= from capture)/, 'Ferrocast')
   const hint = o.help || undefined
   const off = disabled || !onChange || !o.enabled
   // A key OBS left unset reads as zero, false or "" there (obs_data_get_*): show it the same.
