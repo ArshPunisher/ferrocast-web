@@ -55,6 +55,7 @@ import {
   Segmented,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
+import { externalLink } from '../../lib/external'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
@@ -625,9 +626,8 @@ export function RowText({
       {d.enabled && d.kind === 'kick' && (
         <a
           // Kick's Creator Dashboard: Partner Income › Multistreaming (or /multi on in chat).
-          href="https://dashboard.kick.com/"
-          target="_blank"
-          rel="noreferrer"
+          // Through the app's opener: a plain new-window link does nothing in the desktop app.
+          {...externalLink('https://dashboard.kick.com/')}
           title="Kick Partners must allow multistreaming: Creator Dashboard › Partner Income › Multistreaming, or type /multi on in your chat."
           className="mt-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-warn underline-offset-2 hover:underline"
         >
