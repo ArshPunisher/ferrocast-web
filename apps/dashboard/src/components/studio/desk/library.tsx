@@ -26,9 +26,9 @@ import { useContextMenu, type MenuItem } from './menu'
 /** Biggest collection file to read (OBS's are well under this). */
 const MAX_FILE = 20 * 1024 * 1024
 
-const WORDS: Record<EngineShelfKind, { one: string; icon: typeof CardsThree }> = {
-  collections: { one: 'scene collection', icon: CardsThree },
-  profiles: { one: 'profile', icon: UserGear },
+const WORDS: Record<EngineShelfKind, { one: string; many: string; icon: typeof CardsThree }> = {
+  collections: { one: 'scene collection', many: 'Scene collections', icon: CardsThree },
+  profiles: { one: 'profile', many: 'Profiles', icon: UserGear },
 }
 
 /** A file name for an export: the name, safe for any system. */
@@ -195,23 +195,43 @@ export function LibraryBar() {
         const name = shelf?.list.find((e) => e.id === shelf.current)?.name ?? '…'
         const Icon = WORDS[kind].icon
         return (
-          <Button
+          // Outlined, told apart by a blue or teal icon tile, not words (owner's pick P1).
+          <button
             key={kind}
             type="button"
-            variant="secondary"
             aria-haspopup="menu"
             aria-label={`${WORDS[kind].one}: ${name}`}
+            aria-busy={busy === `switch:${kind}` || undefined}
             title={`${WORDS[kind].one[0]?.toUpperCase()}${WORDS[kind].one.slice(1)}: ${name}`}
-            busy={busy === `switch:${kind}`}
             disabled={!shelf}
-            onClick={(e) => shelf && open(e, WORDS[kind].one, items(kind, shelf))}
-            className="h-10 max-w-[170px] 2xl:max-w-[240px]"
+            onClick={(e) =>
+              shelf &&
+              open(e, WORDS[kind].one, items(kind, shelf), {
+                title: WORDS[kind].many,
+                icon: Icon,
+                count: shelf.list.length,
+              })
+            }
+            className={cx(
+              'fc-press inline-flex h-10 max-w-[200px] shrink-0 items-center gap-2 rounded-[9px] bg-surface-1 pr-2.5 pl-2 text-[14.5px] font-bold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
+              busy === `switch:${kind}` && 'opacity-60',
+            )}
           >
-            <Icon size={16} weight="bold" className="shrink-0 text-accent-text" aria-hidden />
+            <span
+              aria-hidden
+              className={cx(
+                'grid size-6 shrink-0 place-items-center rounded-[6px]',
+                kind === 'collections'
+                  ? 'bg-accent-soft text-accent-text'
+                  : 'bg-teal-soft text-teal',
+              )}
+            >
+              <Icon size={15} weight="bold" />
+            </span>
             {/* The name shows on wide screens; smaller ones keep the bar on one line. */}
             <span className="hidden min-w-0 truncate xl:inline">{name}</span>
             <CaretDown size={13} weight="bold" className="shrink-0 text-text-3" aria-hidden />
-          </Button>
+          </button>
         )
       })}
       <input

@@ -45,41 +45,60 @@ export type MenuItem =
 type Entry = Exclude<MenuItem, { sep: true }>
 const isSep = (m: MenuItem): m is { sep: true } => 'sep' in m
 
+/** A narrow title row on top of a menu (owner's pick M1, 29 Oct): what it lists, how many. */
+export interface MenuHead {
+  title: string
+  icon?: Icon
+  count?: number
+}
+
 interface Open {
   x: number
   y: number
   items: MenuItem[]
   label: string
+  head?: MenuHead | undefined
 }
 
 /** A menu to open from onContextMenu, and the node to render once. */
 export function useContextMenu(): {
-  open: (e: ReactMouseEvent, label: string, items: MenuItem[]) => void
+  open: (e: ReactMouseEvent, label: string, items: MenuItem[], head?: MenuHead) => void
   menu: ReactNode
 } {
   const [at, setAt] = useState<Open | null>(null)
   const back = useRef<HTMLElement | null>(null)
-  const open = useCallback((e: ReactMouseEvent, label: string, items: MenuItem[]) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const el = e.currentTarget as HTMLElement
-    back.current = el
-    // From the keyboard (menu key, Shift+F10) there's no pointer: open under the row.
-    let { clientX: x, clientY: y } = e
-    if (x === 0 && y === 0) {
-      const r = el.getBoundingClientRect()
-      x = r.left + 12
-      y = r.bottom
-    }
-    setAt({ x, y, items, label })
-  }, [])
+  const open = useCallback(
+    (e: ReactMouseEvent, label: string, items: MenuItem[], head?: MenuHead) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const el = e.currentTarget as HTMLElement
+      back.current = el
+      // From the keyboard (menu key, Shift+F10) there's no pointer: open under the row.
+      let { clientX: x, clientY: y } = e
+      if (x === 0 && y === 0) {
+        const r = el.getBoundingClientRect()
+        x = r.left + 12
+        y = r.bottom
+      }
+      setAt({ x, y, items, label, head })
+    },
+    [],
+  )
   const close = useCallback(() => {
     setAt(null)
     back.current?.focus?.()
   }, [])
   const menu = at
     ? createPortal(
-        <MenuList items={at.items} label={at.label} x={at.x} y={at.y} onClose={close} root />,
+        <MenuList
+          items={at.items}
+          label={at.label}
+          head={at.head}
+          x={at.x}
+          y={at.y}
+          onClose={close}
+          root
+        />,
         document.body,
       )
     : null
@@ -89,6 +108,7 @@ export function useContextMenu(): {
 function MenuList({
   items,
   label,
+  head,
   x,
   y,
   onClose,
@@ -97,6 +117,7 @@ function MenuList({
 }: {
   items: MenuItem[]
   label: string
+  head?: MenuHead | undefined
   x: number
   y: number
   onClose: () => void
@@ -202,6 +223,18 @@ function MenuList({
       className="fixed z-[80] flex min-w-[210px] flex-col rounded-control border border-line-strong bg-surface-1 p-1 shadow-pop"
       style={pos}
     >
+      {head && (
+        <div
+          role="presentation"
+          className="-mx-1 -mt-1 mb-1 flex h-[34px] items-center gap-2 rounded-t-[inherit] border-b border-line bg-surface-3 px-3.5 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase"
+        >
+          {head.icon && <head.icon size={14} weight="bold" aria-hidden />}
+          {head.title}
+          {head.count !== undefined && (
+            <span className="ml-auto font-mono tracking-normal tabular-nums">{head.count}</span>
+          )}
+        </div>
+      )}
       {items.map((m, i) => {
         if (isSep(m)) return <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-line" />
         const e = m as Entry
