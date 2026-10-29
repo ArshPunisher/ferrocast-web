@@ -394,6 +394,17 @@ export interface ScenesConfig {
   /** Each clip gets a subtitle file (.srt) beside it, and its vertical copy the words burned
    * in (Whisper on this computer, a downloaded model). */
   clip_captions: boolean
+  /** While live captions listen: "be right back", "I'm back", "switch to <scene>", "start
+   * recording", "stop recording" (the Studio only). */
+  voice_commands: boolean
+  /** While live captions listen: each finished sentence kept with its time, on this computer. */
+  keep_transcript: boolean
+}
+
+/** A sentence from the transcript: when (Unix ms) and what. */
+export interface TranscriptLine {
+  at: number
+  text: string
 }
 
 export interface HealthWarning {
@@ -572,6 +583,12 @@ export function studioApi(c: FerroClient) {
     lane: () => get<LaneItem[]>('/moments/lane'),
     dismiss: (id: string) => post<LaneItem[]>(`/moments/lane/${enc(id)}/dismiss`),
     dismissAll: () => post<LaneItem[]>('/moments/lane/dismiss-all'),
+    /** Sentences said (this stream, else the last day; or since `since`) holding every word of
+     * `q`, newest first. */
+    transcript: (q: string, since?: number) =>
+      get<TranscriptLine[]>(
+        `/transcript?q=${encodeURIComponent(q)}${since === undefined ? '' : `&since=${since}`}`,
+      ),
     markers: (since?: number) =>
       get<Marker[]>(since === undefined ? '/moments/markers' : `/moments/markers?since=${since}`),
     addMarker: (label?: string) => post<Marker>('/moments/markers', label ? { label } : {}),

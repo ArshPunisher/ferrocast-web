@@ -86,6 +86,8 @@ const DEFAULT_SCENES: ScenesConfig = {
   clip_by_voice: false,
   game_scenes: [],
   clip_captions: false,
+  voice_commands: false,
+  keep_transcript: false,
 }
 
 const DEFAULT_MOMENTS: MomentsConfig = {

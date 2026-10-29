@@ -119,13 +119,14 @@ export function LiveCaptions({
   const usable = canListen(engine, step, m)
 
   const voice = cfg?.data?.clip_by_voice ?? false
-  const setVoice = async (on: boolean) => {
+  const saveCfg = async (patch: Partial<ScenesConfig>) => {
     if (!cfg?.data) return
     const prev = cfg.data
-    cfg.set({ ...prev, clip_by_voice: on })
-    const saved = await run('voice', () => studio.saveSwitcher({ clip_by_voice: on }))
+    cfg.set({ ...prev, ...patch })
+    const saved = await run('voice', () => studio.saveSwitcher(patch))
     cfg.set(saved ?? prev)
   }
+  const setVoice = (on: boolean) => saveCfg({ clip_by_voice: on })
 
   const turn = async (on: boolean) => {
     const v = await run('captions', () =>
@@ -273,6 +274,24 @@ export function LiveCaptions({
                     disabled={busy === 'voice'}
                     checked={voice}
                     onChange={(v) => void setVoice(v)}
+                  />
+                )}
+                {cfg?.data && (
+                  <Switch
+                    label="Voice commands"
+                    description="While captions are on, say “be right back”, “I’m back”, “switch to” and a scene’s name, “start recording” or “stop recording”."
+                    disabled={busy === 'voice'}
+                    checked={cfg.data.voice_commands ?? false}
+                    onChange={(v) => void saveCfg({ voice_commands: v })}
+                  />
+                )}
+                {cfg?.data && (
+                  <Switch
+                    label="Keep a transcript"
+                    description="While captions are on, what you say is kept with its time, on this computer only, to search in Moments later."
+                    disabled={busy === 'voice'}
+                    checked={cfg.data.keep_transcript ?? false}
+                    onChange={(v) => void saveCfg({ keep_transcript: v })}
                   />
                 )}
               </>

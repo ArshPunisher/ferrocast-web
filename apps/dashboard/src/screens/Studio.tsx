@@ -22,6 +22,7 @@ import { useWidePage } from '../lib/wide'
 import { useUsesObs } from '../lib/picture'
 import { useRigLists } from '../components/studio/rig-lists'
 import { LiveCaptions } from '../components/studio/captions'
+import { TranscriptPanel } from '../components/studio/transcript'
 
 const TABS: { value: StudioSection; label: string }[] = [
   { value: 'golive', label: 'Go live' },
@@ -117,7 +118,10 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         <div className="flex flex-col gap-5">
           <MomentsTimeline />
           <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            <MarkersPanel title="Moments" />
+            <div className="flex min-w-0 flex-col gap-5">
+              <MarkersPanel title="Moments" />
+              <TranscriptPanel />
+            </div>
             <div className="flex min-w-0 flex-col gap-5">
               <DontMissLane />
               <MomentsSettings />
