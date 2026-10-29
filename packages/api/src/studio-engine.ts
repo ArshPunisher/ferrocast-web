@@ -464,6 +464,18 @@ export interface EngineRecordStats {
   error: string | null
 }
 
+/** Live captions (Mac first): what macOS allows, and what was last heard. */
+export interface EngineCaptions {
+  access: 'allowed' | 'not_asked' | 'denied' | 'restricted' | 'unsupported'
+  on: boolean
+  /** The Studio sound they listen to. */
+  source: string | null
+  /** The end of what was heard, about two lines. */
+  text: string
+  /** Whether the scenes have a text source named "Captions" to show it. */
+  box: boolean
+}
+
 export interface EngineCaptureProblem {
   source: string
   kind: string
@@ -845,6 +857,18 @@ export function studioEngineApi(c: FerroClient) {
     /** Asks macOS again, forgetting what it said to an older Ferrocast. */
     fixScreenAccess: () =>
       c.request<{ granted: boolean }>('POST', '/api/v1/studio/engine/screen-access/fix', {}),
+    /** Live captions: where they stand. */
+    captions: () => c.request<EngineCaptions>('GET', '/api/v1/studio/engine/captions'),
+    /** Shows macOS's speech recognition prompt (once). */
+    askCaptions: () =>
+      c.request<EngineCaptions>('PUT', '/api/v1/studio/engine/captions', { ask: true }),
+    /** Listens to a Studio sound (`source`), or stops (null). */
+    setCaptions: (source: string | null) =>
+      c.request<EngineCaptions>(
+        'PUT',
+        '/api/v1/studio/engine/captions',
+        source === null ? { on: false } : { on: true, source },
+      ),
     /** Opens a projector window, or full screen on a display (`screen` from `screens`). */
     projector: (p: EngineProjector) =>
       c.request<{ id: number }>('POST', '/api/v1/studio/engine/projectors', p),
