@@ -54,6 +54,10 @@
   --fc-btn-primary: #b35900;
   --fc-btn-primary-hover: #9e4f00;
   --fc-on-btn-primary: #ffffff;
+  /* Other buttons: Molten tinted, its text colour on it (owner, 29 Oct: buttons looked like
+     grey inputs). */
+  --fc-btn-soft: rgb(255 164 36 / 0.14);
+  --fc-btn-soft-hover: rgb(255 164 36 / 0.22);
   /* What's picked (D1 Graphite, owner's pick 27 Oct): a solid light grey in dark mode, not
      glaring white (13.8:1 with its text), like OBS and DaVinci. */
   --fc-pick: #d9dde4;
@@ -146,6 +150,8 @@
   --fc-accent-strong: #e08a1a;
   --fc-on-accent: #0a0600;
   --fc-molten-text: #8a4a00;
+  --fc-btn-soft: rgb(179 89 0 / 0.1);
+  --fc-btn-soft-hover: rgb(179 89 0 / 0.17);
   --fc-arc: #0888b8;
   --fc-accent-text: #05678c;
   --fc-accent-soft: rgb(8 136 184 / 0.1);
@@ -203,6 +209,8 @@
     --fc-accent-strong: #e08a1a;
     --fc-on-accent: #0a0600;
     --fc-molten-text: #8a4a00;
+    --fc-btn-soft: rgb(179 89 0 / 0.1);
+    --fc-btn-soft-hover: rgb(179 89 0 / 0.17);
     --fc-arc: #0888b8;
     --fc-accent-text: #05678c;
     --fc-accent-soft: rgb(8 136 184 / 0.1);

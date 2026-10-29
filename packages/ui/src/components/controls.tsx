@@ -16,8 +16,8 @@ type Size = 'sm' | 'md' | 'lg'
 const variants: Record<Variant, string> = {
   primary:
     'bg-btn-primary text-on-btn-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_18px_-8px_var(--fc-btn-primary)] hover:bg-btn-primary-hover',
-  secondary:
-    'bg-surface-3 text-text border border-line-strong hover:border-text-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]',
+  // Tinted Molten, so a button reads as one and not as a grey field (owner, 29 Oct).
+  secondary: 'bg-btn-soft text-molten-text hover:bg-btn-soft-hover',
   ghost: 'text-text-2 hover:text-text hover:bg-surface-3',
   danger:
     'bg-danger-fill text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110',
