@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { StudioSettings } from '@ferrocast/api'
-import { LOWEST_KBPS, doctorFix, lighterKbps, lighterScale } from './doctor'
+import type { EngineCaptureProblem } from '@ferrocast/api'
+import {
+  LOWEST_KBPS,
+  captureWords,
+  doctorFix,
+  lastingProblem,
+  lighterKbps,
+  lighterScale,
+} from './doctor'
 
 const base = {
   encoder: 'hardware',
@@ -49,5 +57,51 @@ describe('the stream doctor', () => {
     expect(doctorFix('render', base, hd, false)?.patch).toEqual({ fps: 30 })
     expect(doctorFix('render', base, hd, true)).toBeNull()
     expect(doctorFix('render', { ...base, fps: 30 }, hd, false)).toBeNull()
+  })
+})
+
+describe('the black screen fixer', () => {
+  const black: EngineCaptureProblem = { source: 'Game', kind: 'screen_capture', problem: 'black' }
+  const none: EngineCaptureProblem = {
+    source: 'Cam',
+    kind: 'macos-avcapture',
+    problem: 'no_picture',
+  }
+
+  it('waits until a problem has lasted, then names it', () => {
+    const seen = new Map<string, number>()
+    expect(lastingProblem([black], seen, 0)).toBeNull()
+    expect(lastingProblem([black], seen, 4999)).toBeNull()
+    expect(lastingProblem([black], seen, 5000)).toEqual(black)
+  })
+
+  it('forgets one that went away, so it waits again when it comes back', () => {
+    const seen = new Map<string, number>()
+    lastingProblem([black], seen, 0)
+    expect(lastingProblem([], seen, 6000)).toBeNull()
+    expect(seen.size).toBe(0)
+    expect(lastingProblem([black], seen, 7000)).toBeNull()
+    expect(lastingProblem([black], seen, 12_000)).toEqual(black)
+  })
+
+  it('a new kind of trouble with the same source starts its own wait', () => {
+    const seen = new Map<string, number>()
+    lastingProblem([black], seen, 0)
+    const fixedThenGone = { ...black, problem: 'no_picture' as const }
+    expect(lastingProblem([fixedThenGone], seen, 6000)).toBeNull()
+  })
+
+  it('shows the first lasting one when several are', () => {
+    const seen = new Map<string, number>()
+    lastingProblem([black], seen, 0)
+    lastingProblem([black, none], seen, 3000)
+    expect(lastingProblem([none, black], seen, 6000)).toEqual(black)
+    expect(lastingProblem([none, black], seen, 8000)).toEqual(none)
+  })
+
+  it('says why and what to do for each', () => {
+    expect(captureWords({ ...black, problem: 'permission' })).toMatch(/Allow, then restart/)
+    expect(captureWords(none)).toMatch(/^“Cam” has no picture/)
+    expect(captureWords(black)).toMatch(/all black/)
   })
 })

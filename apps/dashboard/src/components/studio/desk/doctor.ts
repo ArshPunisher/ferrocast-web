@@ -2,7 +2,7 @@
 // struggling (late frames, a busy encoder, an upload that can't keep up); each cause offers the
 // lightest change that helps, worked out here from the Studio's settings.
 
-import type { StudioSettings } from '@ferrocast/api'
+import type { EngineCaptureProblem, StudioSettings } from '@ferrocast/api'
 
 export type Strain = 'render' | 'encode' | 'network'
 
@@ -71,4 +71,37 @@ export function doctorFix(
   }
   if (live || s.fps <= 30) return null
   return { label: 'Use 30 fps', patch: { fps: 30 }, done: 'The picture runs at 30 fps.' }
+}
+
+/**
+ * The black screen fixer (29 Oct): a capture on air that shows nothing, once it has for
+ * `after` ms (a capture starting up is black for a moment). `seen` keeps when each was first
+ * noticed and forgets the ones gone, so one that comes back waits again.
+ */
+export function lastingProblem(
+  list: readonly EngineCaptureProblem[],
+  seen: Map<string, number>,
+  now: number,
+  after = 5000,
+): EngineCaptureProblem | null {
+  const key = (p: EngineCaptureProblem) => `${p.source}\n${p.problem}`
+  const here = new Set(list.map(key))
+  for (const k of [...seen.keys()]) if (!here.has(k)) seen.delete(k)
+  let found: EngineCaptureProblem | null = null
+  for (const p of list) {
+    const k = key(p)
+    if (!seen.has(k)) seen.set(k, now)
+    if (!found && now - (seen.get(k) ?? now) >= after) found = p
+  }
+  return found
+}
+
+/** What the status bar says about it: why, and what to do. */
+export function captureWords(p: EngineCaptureProblem): string {
+  const name = `“${p.source}”`
+  if (p.problem === 'permission')
+    return `${name} shows nothing: macOS doesn't let Ferrocast record the screen. Press Allow, then restart Ferrocast.`
+  if (p.problem === 'no_picture')
+    return `${name} has no picture: pick a window, screen or camera in its settings.`
+  return `${name} is all black: the window may be minimised or covered, or the game blocks capture (try Display Capture).`
 }

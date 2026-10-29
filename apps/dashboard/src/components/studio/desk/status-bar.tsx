@@ -11,7 +11,7 @@ import {
   type StudioSettings,
 } from '@ferrocast/api'
 import { cx, toast } from '@ferrocast/ui'
-import { doctorFix, type Strain } from './doctor'
+import { captureWords, doctorFix, lastingProblem, type Strain } from './doctor'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
 import { StatsDialog, clock, droppedText } from './stats-panel'
@@ -177,6 +177,11 @@ export function StudioStatusBar() {
   const [open, setOpen] = useState(false)
   const on = !!stats
   const strain = useStrain(stats)
+  // A capture on air that shows nothing, once it has for a few seconds.
+  const seenCaptures = useRef(new Map<string, number>())
+  const capture = stats
+    ? lastingProblem(stats.captures ?? [], seenCaptures.current, Date.now())
+    : null
   // The rest of the window leaves room for it while it shows.
   useEffect(() => {
     const root = document.documentElement
@@ -203,7 +208,7 @@ export function StudioStatusBar() {
           ? { text: `Making an MP4… ${Math.round(remux.percent)}%`, tone: 'text-text-2' }
           : rec?.paused
             ? { text: 'Recording paused', tone: 'text-warn' }
-            : strain
+            : (strain ?? (capture ? { text: captureWords(capture), tone: 'text-warn' } : null))
   return (
     <footer
       aria-label="Studio status"
@@ -218,6 +223,29 @@ export function StudioStatusBar() {
         {note?.text}
       </span>
       {/* Only for the strain warnings (not reconnecting, errors or remuxing). */}
+      {!strain && capture?.problem === 'permission' && note?.text === captureWords(capture) && (
+        <button
+          type="button"
+          aria-label="Allow Ferrocast to record the screen"
+          onClick={() =>
+            void api
+              .fixScreenAccess()
+              .then(() =>
+                toast({
+                  tone: 'ok',
+                  message: 'Turn Ferrocast on in the list macOS opened, then restart Ferrocast.',
+                }),
+              )
+              .catch((err: unknown) => {
+                const d = describeError(err)
+                toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+              })
+          }
+          className="my-1 shrink-0 rounded-[6px] bg-btn-soft px-2 text-[12px] font-bold text-molten-text hover:bg-btn-soft-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        >
+          Allow
+        </button>
+      )}
       {strain && note === strain && (
         <FixButton what={strain.what} api={api} canvas={stats.canvas} live={live || recording} />
       )}

@@ -464,6 +464,12 @@ export interface EngineRecordStats {
   error: string | null
 }
 
+export interface EngineCaptureProblem {
+  source: string
+  kind: string
+  problem: 'permission' | 'no_picture' | 'black'
+}
+
 export interface EngineStats {
   engine: {
     cpu: number
@@ -488,6 +494,9 @@ export interface EngineStats {
   /** The replay buffer when on: the last file saved, or why it stopped. */
   replay?: { active: boolean; last: string | null; error: string | null } | null
   virtualcam?: { active: boolean } | null
+  /** Captures on air that show nothing: macOS's Screen Recording off for Ferrocast, no picture
+   * at all, or an all-black one (checked every 3 s). */
+  captures?: EngineCaptureProblem[]
   /** Free space where recordings go, MB. */
   disk_free_mb?: number
 }
