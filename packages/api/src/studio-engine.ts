@@ -487,6 +487,10 @@ export interface EngineFollow {
   item: number | null
   /** A face was seen in the last look. */
   face: boolean
+  /** What it follows (a face or the action) was seen in the last look. */
+  found?: boolean
+  /** What it follows: a face, or what stands out (the action in a game). */
+  what?: 'face' | 'action' | null
 }
 
 export interface EngineCaptureProblem {
@@ -885,7 +889,7 @@ export function studioEngineApi(c: FerroClient) {
     /** Smart vertical: which item follows a face. */
     follow: () => c.request<EngineFollow>('GET', '/api/v1/studio/engine/vertical/follow'),
     /** Makes an item of a vertical scene follow the face in it, or stops (null). */
-    setFollow: (to: { scene: string; item: number } | null) =>
+    setFollow: (to: { scene: string; item: number; what?: 'face' | 'action' } | null) =>
       c.request<EngineFollow>('PUT', '/api/v1/studio/engine/vertical/follow', to ?? {}),
     /** Opens a projector window, or full screen on a display (`screen` from `screens`). */
     projector: (p: EngineProjector) =>

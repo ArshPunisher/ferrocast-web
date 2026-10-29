@@ -1140,19 +1140,42 @@ function FollowFace({ scene, item }: { scene: string; item: number }) {
     }
   }, [api, mine])
   if (!st) return null
+  const now = mine ? (st.what ?? 'face') : 'off'
   return (
-    <Switch
-      label="Follow my face"
-      {...(mine
-        ? { description: st.face ? 'Keeping your face in the middle.' : 'Looking for a face…' }
-        : {})}
-      disabled={busy === 'follow'}
-      checked={mine}
-      onChange={async (on) => {
-        const v = await run('follow', () => api.setFollow(on ? { scene, item } : null))
-        if (v) setSt(v)
-      }}
-    />
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span className="flex items-center gap-1.5 text-sm font-semibold">
+        Follow
+        <InfoTip label="About following">
+          In the vertical picture, this slides sideways to keep your face (or the action in a game)
+          in the middle. Worked out on this Mac.
+        </InfoTip>
+        {mine && (
+          <span className="font-normal text-text-3">
+            {(st.found ?? st.face)
+              ? '· following'
+              : st.what === 'action'
+                ? '· looking…'
+                : '· looking for a face…'}
+          </span>
+        )}
+      </span>
+      <Segmented
+        label="Follow"
+        value={now}
+        options={[
+          { value: 'off', label: 'Off' },
+          { value: 'face', label: 'My face' },
+          { value: 'action', label: 'The action' },
+        ]}
+        onChange={async (to) => {
+          if (busy === 'follow' || to === now) return
+          const v = await run('follow', () =>
+            api.setFollow(to === 'off' ? null : { scene, item, what: to }),
+          )
+          if (v) setSt(v)
+        }}
+      />
+    </div>
   )
 }
 
