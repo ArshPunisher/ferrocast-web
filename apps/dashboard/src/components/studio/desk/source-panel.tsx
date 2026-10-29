@@ -24,6 +24,7 @@ import {
   describeError,
   type EngineAudio,
   type EngineFilter,
+  type EngineFollow,
   type EngineLevel,
   type EngineMonitor,
   type EngineSettings,
@@ -115,7 +116,7 @@ function Panel({
   first: Tab | null
   onClose: () => void
 }) {
-  const { api, audio, items, scene, refresh, edit, kinds } = useDesk()
+  const { api, audio, items, scene, refresh, edit, kinds, canvas } = useDesk()
   const { run, busy } = useAction()
   const [rename, setRename] = useState(name)
   // Removing asks once more: the button turns into "Sure? Remove".
@@ -333,6 +334,10 @@ function Panel({
         )}
         {shown === 'settings' && (
           <>
+            {/* Smart vertical (plan item 8): a picture in a vertical scene can follow a face. */}
+            {canvas === 'vertical' && picture && item && (
+              <FollowFace scene={scene} item={item.id} />
+            )}
             {kind === 'ferrocast_web' && (
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1113,6 +1118,44 @@ const MIC_KINDS = new Set([
  * One click to clean a mic (plan item 5): the filters it's missing, added in the order they
  * work best, and a word on the level while talking (the last 10 s of the meter).
  */
+/** "Follow my face" for an item of a vertical scene: hidden where the app can't do it. */
+function FollowFace({ scene, item }: { scene: string; item: number }) {
+  const { api } = useDesk()
+  const { run, busy } = useAction()
+  const [st, setSt] = useState<EngineFollow | null>(null)
+  const mine = !!st?.on && st.scene === scene && st.item === item
+  useEffect(() => {
+    let live = true
+    const read = () =>
+      api.follow().then(
+        (v) => live && setSt(v),
+        () => live && setSt(null),
+      )
+    void read()
+    // While this item follows, how the looking goes ("Looking for a face…").
+    const t = mine ? window.setInterval(() => !document.hidden && void read(), 2000) : 0
+    return () => {
+      live = false
+      window.clearInterval(t)
+    }
+  }, [api, mine])
+  if (!st) return null
+  return (
+    <Switch
+      label="Follow my face"
+      {...(mine
+        ? { description: st.face ? 'Keeping your face in the middle.' : 'Looking for a face…' }
+        : {})}
+      disabled={busy === 'follow'}
+      checked={mine}
+      onChange={async (on) => {
+        const v = await run('follow', () => api.setFollow(on ? { scene, item } : null))
+        if (v) setSt(v)
+      }}
+    />
+  )
+}
+
 function CleanMic({
   name,
   level,

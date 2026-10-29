@@ -476,6 +476,15 @@ export interface EngineCaptions {
   box: boolean
 }
 
+/** Smart vertical: the vertical item that follows the face in it. */
+export interface EngineFollow {
+  on: boolean
+  scene: string | null
+  item: number | null
+  /** A face was seen in the last look. */
+  face: boolean
+}
+
 export interface EngineCaptureProblem {
   source: string
   kind: string
@@ -869,6 +878,11 @@ export function studioEngineApi(c: FerroClient) {
         '/api/v1/studio/engine/captions',
         source === null ? { on: false } : { on: true, source },
       ),
+    /** Smart vertical: which item follows a face. */
+    follow: () => c.request<EngineFollow>('GET', '/api/v1/studio/engine/vertical/follow'),
+    /** Makes an item of a vertical scene follow the face in it, or stops (null). */
+    setFollow: (to: { scene: string; item: number } | null) =>
+      c.request<EngineFollow>('PUT', '/api/v1/studio/engine/vertical/follow', to ?? {}),
     /** Opens a projector window, or full screen on a display (`screen` from `screens`). */
     projector: (p: EngineProjector) =>
       c.request<{ id: number }>('POST', '/api/v1/studio/engine/projectors', p),
