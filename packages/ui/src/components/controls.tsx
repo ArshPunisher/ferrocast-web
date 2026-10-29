@@ -220,7 +220,7 @@ export function Field({
 }
 
 const inputBase =
-  'w-full rounded-control border border-line-strong bg-inset px-3 text-[15.5px] text-text placeholder:text-text-3 ' +
+  'w-full min-w-0 max-w-full rounded-control border border-line-strong bg-inset px-3 text-[15.5px] text-text placeholder:text-text-3 ' +
   'transition-[border-color,box-shadow] duration-150 hover:border-text-3 ' +
   'focus:border-accent-text focus:shadow-[0_0_0_3px_var(--fc-accent-soft)] focus:outline-none ' +
   'aria-[invalid=true]:border-danger disabled:opacity-50'

@@ -251,7 +251,7 @@ function Panel({
         id={panelId}
         role="tabpanel"
         aria-labelledby={`tab-${shown}`}
-        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto px-4 py-4"
       >
         {shown === 'sound' && a && (
           <section aria-label="Sound" className="flex flex-col gap-3">
