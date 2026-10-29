@@ -343,7 +343,7 @@ test.describe('settings: Discord and OBS', () => {
     'https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz_-0123'
 
   test('paste a webhook, see only a masked hint, send a test', async ({ page }) => {
-    await open(page, 'settings')
+    await open(page, 'settings/discord')
     const s = page.locator('#s-discord')
     await s.getByLabel('Webhook URL').fill(GOOD)
     await s.getByRole('button', { name: 'Save', exact: true }).click()
@@ -356,7 +356,7 @@ test.describe('settings: Discord and OBS', () => {
   })
 
   test('a URL that is not Discord is refused inline', async ({ page }) => {
-    await open(page, 'settings')
+    await open(page, 'settings/discord')
     const s = page.locator('#s-discord')
     await expect(s.getByRole('button', { name: 'Send test' })).toBeDisabled()
     for (const bad of [
@@ -376,7 +376,7 @@ test.describe('settings: Discord and OBS', () => {
   })
 
   test('an empty or unclosed message is explained', async ({ page }) => {
-    await open(page, 'settings')
+    await open(page, 'settings/discord')
     const s = page.locator('#s-discord')
     await s.getByLabel('Message').fill('')
     await s.getByRole('button', { name: 'Save', exact: true }).click()
@@ -389,7 +389,7 @@ test.describe('settings: Discord and OBS', () => {
   test('OBS found on this computer is used without a click, and typed details win', async ({
     page,
   }) => {
-    await open(page, 'settings')
+    await open(page, 'settings/obs')
     const s = page.locator('#s-obs')
     await expect(s.getByText('Using OBS’s own settings')).toBeVisible()
     await expect(s.getByLabel('Password', { exact: true })).toHaveAttribute(

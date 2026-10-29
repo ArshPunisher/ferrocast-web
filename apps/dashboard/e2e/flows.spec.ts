@@ -358,9 +358,10 @@ test.describe('tips and settings', () => {
     await open(page, 'settings/appearance')
     await page.getByLabel('Main currency').selectOption('USD')
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')
-    // The TTS minimum's hint follows straight away, without a reload.
-    await expect(page.getByText('In USD (set in Appearance).')).toBeVisible()
+    // The TTS minimum's hint follows, without a reload.
     await page.getByRole('link', { name: 'Text-to-speech' }).click()
+    await expect(page.getByText('In USD (set in Appearance).')).toBeVisible()
+    await page.getByRole('link', { name: 'Appearance' }).click()
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')
   })
 })

@@ -64,19 +64,46 @@ import { useLive } from '../lib/store'
 import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
-const SECTIONS = [
-  ['accounts', 'Accounts', UserCircle],
-  ['obs', 'OBS', Broadcast],
-  ['music', 'Music', MusicNotes],
-  ['cloud', 'Cloud mode', Cloud],
-  ['tts', 'Text-to-speech', SpeakerHigh],
-  ['discord', 'Discord', DiscordLogo],
-  ['appearance', 'Appearance', PaintBrush],
-  ['data', 'Your data', Database],
-  ['updates', 'Updates', ArrowsClockwise],
-  ['pro', 'Pro', Sparkle],
-  ['advanced', 'Advanced', SlidersHorizontal],
+// One area at a time (owner's pick S1, 29 Oct): the list picks it and only it shows, so the
+// list is always right, and the page ends where the area does (a long page of every section
+// in two columns had a list that didn't follow and a lot of empty page at the end).
+const GROUPS = [
+  {
+    label: 'Streaming',
+    items: [
+      ['accounts', 'Accounts', UserCircle],
+      ['obs', 'OBS', Broadcast],
+      ['cloud', 'Cloud mode', Cloud],
+    ],
+  },
+  {
+    label: 'Extras',
+    items: [
+      ['music', 'Music', MusicNotes],
+      ['tts', 'Text-to-speech', SpeakerHigh],
+      ['discord', 'Discord', DiscordLogo],
+    ],
+  },
+  {
+    label: 'App',
+    items: [
+      ['appearance', 'Appearance', PaintBrush],
+      ['data', 'Your data', Database],
+      ['updates', 'Updates', ArrowsClockwise],
+      ['pro', 'Pro', Sparkle],
+      ['advanced', 'Advanced', SlidersHorizontal],
+    ],
+  },
 ] as const
+type SectionItem = (typeof GROUPS)[number]['items'][number]
+const SECTIONS: readonly SectionItem[] = GROUPS.flatMap((g): readonly SectionItem[] => g.items)
+type SectionId = SectionItem[0]
+const ALIAS: Record<string, SectionId> = {
+  remote: 'advanced',
+  'cloud-backups': 'data',
+  'discord-pro': 'discord',
+}
+const isSection = (id: string | undefined): id is SectionId => SECTIONS.some(([s]) => s === id)
 
 function Section({
   id,
@@ -998,10 +1025,10 @@ export function Settings({ section }: { section?: string | undefined }) {
   const { run } = useAction()
   // The window's full width, as the Studio and Community.
   useWidePage()
+  // A page opens at its top.
   useEffect(() => {
-    if (section && res.data)
-      document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
-  }, [section, res.data])
+    window.scrollTo({ top: 0 })
+  }, [section])
   const save = (s: SettingsData) => {
     res.set(s)
     void run('settings', () => client.saveSettings(s))
@@ -1016,27 +1043,11 @@ export function Settings({ section }: { section?: string | undefined }) {
   const remote = useLive((s) => s.remote)
   const current = useLive((s) => s.update?.current)
   const show = (id: string) => !remote || !OWNER_HIDDEN_SETTINGS.includes(id)
-  // The section being read: the list beside follows the scroll, so one is always marked.
-  const [seen, setSeen] = useState<string | null>(null)
-  useEffect(() => {
-    if (!res.data) return
-    const els = SECTIONS.map(([id]) => document.getElementById(`settings-${id}`)).filter(
-      (e): e is HTMLElement => !!e,
-    )
-    const io = new IntersectionObserver(
-      (entries) => {
-        const top = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (top) setSeen(top.target.id.replace(/^settings-/, ''))
-      },
-      // The band just under the top bar.
-      { rootMargin: '-90px 0px -65% 0px' },
-    )
-    for (const e of els) io.observe(e)
-    return () => io.disconnect()
-  }, [res.data])
-  const at = seen ?? section ?? SECTIONS[0]?.[0]
+  const visible = (id: string) => show(id) && (id !== 'cloud' || !remote)
+  const first = SECTIONS.find(([id]) => visible(id))?.[0] ?? 'appearance'
+  // Parts that live inside an area (older links name them).
+  const asked = section && ALIAS[section] ? ALIAS[section] : section
+  const at: SectionId = isSection(asked) && visible(asked) ? asked : first
   return (
     <div>
       <PageHeader title="Settings" />
@@ -1045,24 +1056,33 @@ export function Settings({ section }: { section?: string | undefined }) {
           aria-label="Settings sections"
           className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
         >
-          {SECTIONS.filter(([id]) => show(id) && (id !== 'cloud' || !remote)).map(
-            ([id, label, SectionIcon]) => (
-              <a
-                key={id}
-                href={href({ name: 'settings', section: id })}
-                aria-current={at === id ? 'location' : undefined}
-                className={cx(
-                  'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
-                  at === id
-                    ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
-                    : 'text-text-2 hover:bg-surface-2 hover:text-text',
-                )}
-              >
-                <SectionIcon size={18} weight={at === id ? 'fill' : 'regular'} aria-hidden />
-                {label}
-              </a>
-            ),
-          )}
+          {GROUPS.map((g) => {
+            const items = g.items.filter(([id]) => visible(id))
+            if (items.length === 0) return null
+            return (
+              <div key={g.label} className="flex shrink-0 gap-1 lg:flex-col">
+                <span className="hidden px-3 pt-3 pb-1 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase lg:block">
+                  {g.label}
+                </span>
+                {items.map(([id, label, SectionIcon]) => (
+                  <a
+                    key={id}
+                    href={href({ name: 'settings', section: id })}
+                    aria-current={at === id ? 'page' : undefined}
+                    className={cx(
+                      'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
+                      at === id
+                        ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
+                        : 'text-text-2 hover:bg-surface-2 hover:text-text',
+                    )}
+                  >
+                    <SectionIcon size={18} weight={at === id ? 'fill' : 'regular'} aria-hidden />
+                    {label}
+                  </a>
+                ))}
+              </div>
+            )
+          })}
           {current && (
             <a
               href={href({ name: 'settings', section: 'updates' })}
@@ -1073,11 +1093,10 @@ export function Settings({ section }: { section?: string | undefined }) {
             </a>
           )}
         </nav>
-        {/* One column up to big screens; there, two (sections never split across them). */}
-        <div className="flex min-w-0 flex-col gap-5 2xl:block 2xl:columns-2 2xl:gap-x-5 [&>*]:break-inside-avoid 2xl:[&>*]:mb-5">
-          {show('accounts') && <Accounts />}
-          {show('obs') && <Obs />}
-          {show('music') && (
+        <div className="flex max-w-[860px] min-w-0 flex-col gap-5">
+          {at === 'accounts' && <Accounts />}
+          {at === 'obs' && <Obs />}
+          {at === 'music' && (
             <Section
               id="music"
               title="Music"
@@ -1087,41 +1106,52 @@ export function Settings({ section }: { section?: string | undefined }) {
             </Section>
           )}
           {/* A phone never changes the PC's sync (it's under /pro). */}
-          {!remote && <CloudSyncSettings />}
-          <Tts currency={res.data?.currency} />
-          {show('discord') && (
-            <Section
-              id="discord"
-              title="Discord"
-              description="Tell your server when you go live. The webhook stays on this computer."
-            >
-              <DiscordSettingsForm />
-            </Section>
-          )}
-          {show('discord') && <DiscordPro />}
-          {res.error ? (
-            <LoadError error={res.error} onRetry={res.reload} />
-          ) : !res.data ? (
-            <Skeleton className="h-48" />
-          ) : (
+          {at === 'cloud' && <CloudSyncSettings />}
+          {at === 'tts' && <Tts currency={res.data?.currency} />}
+          {at === 'discord' && (
             <>
-              <Appearance settings={res.data} save={save} />
-              {show('data') && <Data />}
-              {show('data') && <CloudBackups />}
-              <Updates settings={res.data} save={save} />
-              {show('remote') && <RemoteDevices />}
-              {show('pro') && (
-                <Section
-                  id="pro"
-                  title="Ferrocast Pro"
-                  description="Optional hosted extras. Everything free stays free."
-                >
-                  <ProSettings />
-                </Section>
-              )}
-              {show('advanced') && <Advanced settings={res.data} save={save} />}
+              <Section
+                id="discord"
+                title="Discord"
+                description="Tell your server when you go live. The webhook stays on this computer."
+              >
+                <DiscordSettingsForm />
+              </Section>
+              <DiscordPro />
             </>
           )}
+          {['appearance', 'data', 'updates', 'pro', 'advanced'].includes(at) &&
+            (res.error ? (
+              <LoadError error={res.error} onRetry={res.reload} />
+            ) : !res.data ? (
+              <Skeleton className="h-48" />
+            ) : (
+              <>
+                {at === 'appearance' && <Appearance settings={res.data} save={save} />}
+                {at === 'data' && (
+                  <>
+                    <Data />
+                    <CloudBackups />
+                  </>
+                )}
+                {at === 'updates' && <Updates settings={res.data} save={save} />}
+                {at === 'pro' && (
+                  <Section
+                    id="pro"
+                    title="Ferrocast Pro"
+                    description="Optional hosted extras. Everything free stays free."
+                  >
+                    <ProSettings />
+                  </Section>
+                )}
+                {at === 'advanced' && (
+                  <>
+                    <Advanced settings={res.data} save={save} />
+                    {show('remote') && <RemoteDevices />}
+                  </>
+                )}
+              </>
+            ))}
         </div>
       </div>
     </div>

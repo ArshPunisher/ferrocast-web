@@ -17,7 +17,7 @@ test('sidebar update: notes, progress, restart; blocked while live', async ({ pa
   await expect(page.getByText('You’re live, so it waits until your stream ends.')).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await open(page, 'settings', 'autoplay=0&latency=0')
+  await open(page, 'settings/updates', 'autoplay=0&latency=0')
   const card = page.locator('#s-updates')
   await card.getByRole('switch', { name: 'Never update while I’m live' }).click()
   await card.getByRole('button', { name: 'Check for updates' }).click()

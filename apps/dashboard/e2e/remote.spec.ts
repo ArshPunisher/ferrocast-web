@@ -17,7 +17,7 @@ async function noSideScroll(page: Page): Promise<void> {
 test.describe('Dashboard anywhere on the PC', () => {
   test('hidden without the feature; one calm line on sale without Pro', async ({ page }) => {
     await open(page, 'settings/remote', 'autoplay=0&latency=0')
-    await expect(page.locator('#s-appearance')).toBeVisible()
+    await expect(page.locator('#s-advanced')).toBeVisible()
     await expect(panel(page)).toHaveCount(0)
     await open(page, 'settings/remote', 'autoplay=0&latency=0&pro=open&pro_features=on')
     await expect(panel(page).getByTestId('pro-line')).toContainText('part of Pro')
@@ -143,8 +143,10 @@ test.describe('A phone only asks for what its role may do', () => {
 
   test('an owner’s phone boots home and settings without one refused call', async ({ page }) => {
     await open(page, 'home', 'autoplay=0&latency=0&remote=owner')
-    await page.evaluate(() => (location.hash = '#/settings'))
+    await page.evaluate(() => (location.hash = '#/settings/appearance'))
     await expect(page.locator('#s-appearance')).toBeVisible()
+    await page.evaluate(() => (location.hash = '#/settings/updates'))
+    await expect(page.locator('#s-updates')).toBeVisible()
     await page.waitForTimeout(300)
     expect(await page.evaluate(() => window.__ferrocastDemo?.remoteRefused)).toEqual([])
     // Installing an update needs the PC itself.
@@ -189,7 +191,7 @@ test.describe('The relay closes a phone’s live socket', () => {
 
 test.describe('The dashboard on the streamer’s phone', () => {
   test('everything but accounts, secrets, Pro, export and import', async ({ page }) => {
-    await open(page, 'settings', 'autoplay=0&latency=0&remote=owner')
+    await open(page, 'settings/appearance', 'autoplay=0&latency=0&remote=owner')
     await expect(page.getByTestId('remote-strip')).toContainText('PC online')
     await expect(page.getByTestId('remote-strip')).not.toContainText('Mod')
     await expect(page.locator('#s-appearance')).toBeVisible()
