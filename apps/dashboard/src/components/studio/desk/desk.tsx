@@ -28,6 +28,7 @@ import {
   type EngineStats,
   type GoLiveView,
   type StreamInfo,
+  type EngineRecovered,
   type StudioEngineStatus,
   type StudioSettings,
 } from '@ferrocast/api'
@@ -69,6 +70,7 @@ import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
 import { TransformDialog } from './transform'
+import { ReadyCheck } from './ready-check'
 
 export function StudioDesk({
   res,
@@ -84,9 +86,13 @@ export function StudioDesk({
   useWidePage()
   const status = useResource(() => api.status(), [api])
   const s = status.data
+  // After pressing Start (never on its own): the ready check, with what came back after a crash.
+  const [ready, setReady] = useState<{ recovered: EngineRecovered | null } | null>(null)
   const start = useCallback(async () => {
     try {
-      status.set(await api.start())
+      const st = await api.start()
+      status.set(st)
+      setReady({ recovered: st.recovered ?? null })
     } catch (e) {
       const d = describeError(e)
       toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
@@ -113,7 +119,12 @@ export function StudioDesk({
         </div>
       </>
     )
-  return <Running res={res} view={view} lead={lead} onStatus={status.set} />
+  return (
+    <>
+      <Running res={res} view={view} lead={lead} onStatus={status.set} />
+      {ready && <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} />}
+    </>
+  )
 }
 
 function Running({

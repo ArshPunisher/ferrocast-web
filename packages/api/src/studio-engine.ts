@@ -10,7 +10,21 @@ export interface StudioEngineStatus {
   version: string | null
   renderer: string | null
   /** Why it isn't available, with what to do. */
-  detail: string | null
+  detail:
+    | string
+    | null /** Only from the Start after Ferrocast didn't close normally: what was on, what came back. */
+  recovered?: EngineRecovered
+}
+
+export interface EngineRecovered {
+  record: boolean
+  replay: boolean
+  /** It was live: the stream isn't started again by itself. */
+  live: boolean
+  /** What came back on ("recording", "replay buffer"). */
+  again: string[]
+  /** What didn't, in words. */
+  failed: string[]
 }
 
 export interface EngineKind {
