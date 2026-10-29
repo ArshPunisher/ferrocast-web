@@ -391,6 +391,9 @@ export interface ScenesConfig {
   /** A scene per game: when that app comes to the front, its scene goes on air (the Studio
    * on a Mac). */
   game_scenes: { app: string; scene: string }[]
+  /** Each clip gets a subtitle file (.srt) beside it, and its vertical copy the words burned
+   * in (Whisper on this computer, a downloaded model). */
+  clip_captions: boolean
 }
 
 export interface HealthWarning {

@@ -451,6 +451,14 @@ export function SwitcherSettings({
           checked={c.vertical_clips}
           onChange={(v) => save({ vertical_clips: v })}
         />
+        {app !== 'OBS' && (
+          <Switch
+            label="Add subtitles to clips"
+            description="A subtitle file beside each clip, and the words burned into its vertical copy (most Shorts are watched muted). Made on this computer with the speech model from Live captions: download one there first."
+            checked={c.clip_captions ?? false}
+            onChange={(v) => save({ clip_captions: v })}
+          />
+        )}
         {!scenes && (
           <Badge tone="warn">OBS isn’t connected: scene lists are from your settings.</Badge>
         )}
