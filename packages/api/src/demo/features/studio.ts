@@ -81,6 +81,7 @@ const DEFAULT_SCENES: ScenesConfig = {
   brb_mute: ['Mic'],
   clip_command: true,
   clip_on_big_moments: false,
+  vertical_clips: false,
 }
 
 const DEFAULT_MOMENTS: MomentsConfig = {

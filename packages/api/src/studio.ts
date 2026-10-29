@@ -381,6 +381,8 @@ export interface ScenesConfig {
   brb_mute: string[]
   clip_command: boolean
   clip_on_big_moments: boolean
+  /** Each saved clip also as a 1080×1920 copy (ffmpeg, fetched when switched on). */
+  vertical_clips: boolean
 }
 
 export interface HealthWarning {

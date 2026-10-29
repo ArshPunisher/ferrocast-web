@@ -403,6 +403,12 @@ export function SwitcherSettings({
           checked={c.clip_on_big_moments}
           onChange={(v) => save({ clip_on_big_moments: v })}
         />
+        <Switch
+          label="Make a vertical copy of each clip"
+          description="1080×1920 for Shorts, TikTok and Reels, saved beside the clip. The first time, Ferrocast downloads ffmpeg (about 30 MB)."
+          checked={c.vertical_clips}
+          onChange={(v) => save({ vertical_clips: v })}
+        />
         {!scenes && (
           <Badge tone="warn">OBS isn’t connected: scene lists are from your settings.</Badge>
         )}
