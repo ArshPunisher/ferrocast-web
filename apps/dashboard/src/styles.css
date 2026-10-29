@@ -381,6 +381,10 @@ body[data-dock-drag] iframe {
 .fc-air[data-state='stopping'] {
   filter: saturate(0.4);
 }
+/* A paused recording stands still (owner, 29 Oct). */
+.fc-air[data-paused]::after {
+  animation: none;
+}
 .fc-air-eq {
   display: inline-flex;
   align-items: flex-end;

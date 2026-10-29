@@ -34,7 +34,7 @@ import {
 import { Button, Dialog, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
-import { useAction, useResource, type Resource } from '../../../lib/hooks'
+import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { go } from '../../../lib/router'
 import { useStudio } from '../common'
@@ -462,7 +462,20 @@ function ControlBar({
     },
   } as const
   const asked = ask ? ASK[ask] : null
-  const pause = () => void run('pause', () => api.pauseRecord(!rec?.paused))
+  // Pause and Resume answer at once (owner, 29 Oct): the button shows what was asked while the
+  // engine does it, and goes back if it couldn't.
+  const [askedPause, setAskedPause] = useState<boolean | null>(null)
+  const paused = askedPause ?? !!rec?.paused
+  useEffect(() => {
+    if (askedPause !== null && (!recording || !!rec?.paused === askedPause)) setAskedPause(null)
+  }, [askedPause, recording, rec?.paused])
+  const pause = () => {
+    const next = !paused
+    setAskedPause(next)
+    void run('pause', () => done(api.pauseRecord(next))).then((v) => {
+      if (v === undefined) setAskedPause(null)
+    })
+  }
   const { open: openMenu, menu } = useContextMenu()
   const recordMenu = (e: React.MouseEvent) =>
     openMenu(e, 'Recording', [
@@ -556,13 +569,12 @@ function ControlBar({
         {recording && (
           <Button
             variant="secondary"
-            className={cx('h-10', rec?.paused && 'bg-warn-soft! text-warn!')}
-            busy={busy === 'pause'}
+            className={cx('h-10', paused && 'bg-warn-soft! text-warn!')}
             onClick={pause}
-            aria-pressed={!!rec?.paused}
+            aria-pressed={paused}
           >
-            {rec?.paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
-            <span className="hidden sm:inline">{rec?.paused ? 'Resume' : 'Pause'}</span>
+            {paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
+            <span className="hidden sm:inline">{paused ? 'Resume' : 'Pause'}</span>
           </Button>
         )}
         {replayOn && (
@@ -589,6 +601,7 @@ function ControlBar({
         {menu}
         <OnAirButton
           kind="rec"
+          paused={recording && paused}
           state={
             busy === 'record' ? (recording ? 'stopping' : 'starting') : recording ? 'on' : 'idle'
           }

@@ -4,7 +4,7 @@
 // with a moving texture, small sound bars and the time. Motion stops with Reduce motion.
 
 import type { ReactNode } from 'react'
-import { Broadcast, Record as RecordIcon } from '@phosphor-icons/react'
+import { Broadcast, Pause, Record as RecordIcon } from '@phosphor-icons/react'
 import { cx } from '@ferrocast/ui'
 
 export type AirState = 'idle' | 'starting' | 'on' | 'stopping'
@@ -17,6 +17,7 @@ export function OnAirButton({
   disabled,
   title,
   onContextMenu,
+  paused,
 }: {
   kind: 'rec' | 'live'
   state: AirState
@@ -26,6 +27,8 @@ export function OnAirButton({
   disabled?: boolean
   title?: string | undefined
   onContextMenu?: (e: React.MouseEvent) => void
+  /** A recording on pause: still, with a pause mark instead of the moving bars. */
+  paused?: boolean
 }) {
   const tag = kind === 'rec' ? 'REC' : 'LIVE'
   const idle = kind === 'rec' ? 'Record' : 'Go live'
@@ -33,11 +36,15 @@ export function OnAirButton({
   if (state === 'on')
     face = (
       <>
-        <span aria-hidden className="fc-air-eq">
-          <b />
-          <b />
-          <b />
-        </span>
+        {paused ? (
+          <Pause size={14} weight="fill" aria-hidden />
+        ) : (
+          <span aria-hidden className="fc-air-eq">
+            <b />
+            <b />
+            <b />
+          </span>
+        )}
         {tag} <span className="font-mono text-[13.5px] tabular-nums">{time}</span>
       </>
     )
@@ -57,7 +64,7 @@ export function OnAirButton({
   const label =
     state === 'on'
       ? kind === 'rec'
-        ? `Stop recording (recording ${time})`
+        ? `Stop recording (${paused ? 'paused at' : 'recording'} ${time})`
         : `End stream (live ${time})`
       : undefined
   return (
@@ -65,6 +72,7 @@ export function OnAirButton({
       type="button"
       data-kind={kind}
       data-state={state}
+      data-paused={paused || undefined}
       aria-label={label}
       aria-busy={state === 'starting' || state === 'stopping' || undefined}
       disabled={disabled || state === 'stopping'}
