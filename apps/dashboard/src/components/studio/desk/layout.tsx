@@ -978,7 +978,7 @@ export function DockHeader({
         if (movable) grab(id, e)
       }}
       className={cx(
-        'flex h-11 min-w-0 flex-none items-center gap-1.5 border-b border-line bg-surface-1 pr-1.5 select-none',
+        '@container flex h-11 min-w-0 flex-none items-center gap-1.5 border-b border-line bg-surface-1 pr-1.5 select-none',
         movable ? 'cursor-grab pl-1 active:cursor-grabbing' : 'pl-3',
       )}
     >

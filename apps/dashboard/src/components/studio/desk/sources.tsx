@@ -110,6 +110,10 @@ const BLEND_LABEL: Record<(typeof ENGINE_BLENDS)[number], string> = {
   darken: 'Darken',
 }
 
+/** A row button that steps back in a narrow list: there on hover or focus (a nested list sits in
+ * the same container, so it follows the list's width). */
+const quiet = 'fc-quiet'
+
 export function SourcesDock() {
   const desk = useDesk()
   const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
@@ -772,7 +776,11 @@ export function SourcesDock() {
           data-no-drag
           label={item.visible ? `Hide ${item.name}` : `Show ${item.name}`}
           disabled={busy !== null}
-          className={cx(!item.visible && 'text-text-3')}
+          className={cx(
+            !item.visible && 'text-text-3',
+            // Narrow (owner's pick N1): shown on hover or focus, or while it says something.
+            item.visible && !on && quiet,
+          )}
           onClick={() => void act(item, item.visible ? 'hide' : 'show')}
         >
           {item.visible ? <Eye size={16} weight="bold" /> : <EyeSlash size={16} />}
@@ -783,7 +791,10 @@ export function SourcesDock() {
           data-no-drag
           label={item.locked ? `Unlock ${item.name}` : `Lock ${item.name}`}
           aria-pressed={item.locked}
-          className={cx(item.locked ? 'text-accent-text' : 'text-text-3')}
+          className={cx(
+            item.locked ? 'text-accent-text' : 'text-text-3',
+            !item.locked && !on && quiet,
+          )}
           disabled={busy !== null}
           onClick={() => void act(item, item.locked ? 'unlock' : 'lock')}
         >
@@ -815,7 +826,8 @@ export function SourcesDock() {
       <DockHeader
         id="sources"
         info={
-          <span className="truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text">
+          // The scene's name only where the panel has room for it (owner's pick N1).
+          <span className="hidden truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text @[280px]:inline">
             {scene}
           </span>
         }
@@ -844,7 +856,7 @@ export function SourcesDock() {
             your camera, screen or a game.
           </p>
         ) : (
-          <ul className="flex flex-col gap-px" aria-label="Sources, top first">
+          <ul className="@container flex flex-col gap-px" aria-label="Sources, top first">
             {list.map((item) => (
               <li key={item.id}>
                 {row(item)}

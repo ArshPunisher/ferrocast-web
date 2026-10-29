@@ -348,7 +348,8 @@ export function ScenesDock() {
             className={cx(
               grid
                 ? 'grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-1.5'
-                : 'flex flex-col gap-px',
+                : // Narrow (owner's pick N1): the extras go first, the name keeps its room.
+                  '@container flex flex-col gap-px',
             )}
             aria-label={
               studio ? 'Scenes, click to show in the preview' : 'Scenes, click to go on air'
@@ -455,17 +456,23 @@ export function ScenesDock() {
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.preview && !s.current && (
-                          <span className="text-[12px] font-bold text-accent-text">Preview</span>
+                          <span className="hidden text-[12px] font-bold text-accent-text @[240px]:inline">
+                            Preview
+                          </span>
                         )}
                         {s.items > 0 && !s.current && (
-                          <span className="font-mono text-[12.5px] font-semibold text-text-3 tabular-nums">
+                          <span className="hidden font-mono text-[12.5px] font-semibold text-text-3 tabular-nums @[240px]:inline">
                             {s.items}
                           </span>
                         )}
                         {s.current && (
-                          <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-danger">
-                            <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
-                            On air
+                          <span className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-bold text-danger">
+                            <span
+                              aria-hidden
+                              className="size-2 rounded-full bg-danger-fill shadow-[0_0_0_3px_rgb(239_59_82/0.25)]"
+                            />
+                            {/* Only the dot when narrow; the words stay for screen readers. */}
+                            <span className="sr-only @[240px]:not-sr-only">On air</span>
                           </span>
                         )}
                       </>

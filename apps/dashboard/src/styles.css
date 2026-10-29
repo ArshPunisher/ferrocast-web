@@ -417,3 +417,18 @@ body[data-dock-drag] iframe {
     transition: none !important;
   }
 }
+
+/* A sound row's dB scale goes when its list is narrow (owner's pick N1). */
+@container (max-width: 259px) {
+  .fc-scale-h {
+    display: none;
+  }
+}
+
+/* A row's extra buttons (eye, lock, more) in a narrow list: there on hover or focus only. */
+@container (max-width: 259px) {
+  .group:not(:hover, :focus-within) .fc-quiet,
+  .group\/row:not(:hover, :focus-within) .fc-quiet {
+    display: none;
+  }
+}
