@@ -605,11 +605,7 @@ function PictureViewPick() {
     vertical: 'Vertical picture only',
   }
   return (
-    <div
-      role="group"
-      aria-label="Pictures shown"
-      className="flex items-center gap-px rounded-[9px] bg-surface-3 p-0.5"
-    >
+    <div role="group" aria-label="Pictures shown" className="flex items-center gap-0.5">
       {VIEWS.map((v) => (
         <button
           key={v}
@@ -619,8 +615,10 @@ function PictureViewPick() {
           aria-pressed={pv.view === v}
           onClick={() => setPv({ view: v })}
           className={cx(
-            'grid h-[26px] w-7 place-items-center rounded-[7px] outline-none focus-visible:shadow-[var(--fc-focus)]',
-            pv.view === v ? 'fc-picked shadow-sm' : 'text-text-3 hover:text-text',
+            'grid size-8 place-items-center rounded-[7px] outline-none focus-visible:shadow-[var(--fc-focus)]',
+            pv.view === v
+              ? 'bg-accent-soft text-accent-text'
+              : 'text-text-2 hover:bg-surface-3 hover:text-text',
           )}
         >
           <Shapes wide={v !== 'vertical'} tall={v !== 'wide'} />
@@ -657,7 +655,7 @@ function VerticalToggle() {
           ? 'Turn the vertical picture off (its scenes are kept)'
           : 'A vertical picture for Shorts, TikTok and Reels'
       }
-      className={cx('gap-1.5', on && 'fc-picked hover:bg-[var(--fc-pick-hover)]')}
+      className={cx('gap-1.5', on ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
       onClick={flip}
     >
       <DeviceMobile size={16} weight={on ? 'fill' : 'bold'} />
@@ -1411,11 +1409,7 @@ function ViewControls() {
         </span>
       )}
       {!scenes.data?.preview && (
-        <div
-          role="group"
-          aria-label="Zoom"
-          className="flex items-center rounded-full bg-surface-3 p-0.5"
-        >
+        <div role="group" aria-label="Zoom" className="flex items-center gap-0.5">
           {ZOOMS.map((z) => (
             <button
               key={z}
@@ -1423,8 +1417,10 @@ function ViewControls() {
               aria-pressed={pv.zoom === z}
               onClick={() => setPv({ zoom: z })}
               className={cx(
-                'rounded-full px-2 py-0.5 font-mono text-[12.5px] font-semibold tabular-nums',
-                pv.zoom === z ? 'fc-picked shadow-sm' : 'text-text-3 hover:text-text',
+                'h-8 rounded-[7px] px-2.5 text-[13.5px] font-bold outline-none focus-visible:shadow-[var(--fc-focus)]',
+                pv.zoom === z
+                  ? 'rounded-b-[3px] bg-surface-3 text-text shadow-[inset_0_-2px_0_var(--fc-accent-text)]'
+                  : 'text-text-2 hover:bg-surface-3 hover:text-text',
               )}
             >
               {z === 1 ? 'Fit' : `${z * 100}%`}
@@ -1432,11 +1428,12 @@ function ViewControls() {
           ))}
         </div>
       )}
+      <span aria-hidden className="h-5 w-px bg-line" />
       <IconButton
         size="sm"
         label={pv.frames ? 'Hide source outlines' : 'Show every source’s outline'}
         aria-pressed={pv.frames}
-        className={cx(pv.frames && 'fc-picked')}
+        className={cx(pv.frames ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
         onClick={() => setPv({ frames: !pv.frames })}
       >
         <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} />
@@ -1449,7 +1446,7 @@ function ViewControls() {
             : 'Side handles stretch frames. Click to keep their shape'
         }
         aria-pressed={pv.keep}
-        className={cx(pv.keep && 'fc-picked')}
+        className={cx(pv.keep ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
         onClick={() => setPv({ keep: !pv.keep })}
       >
         {pv.keep ? <LockSimple size={17} weight="fill" /> : <LockSimpleOpen size={17} />}
@@ -1550,13 +1547,17 @@ export function StageBar() {
             type="button"
             title="Change the picture size"
             onClick={() => openSettings('picture')}
-            className="hidden rounded-full bg-surface-3 px-2 py-0.5 font-mono text-[12.5px] font-semibold text-text-2 tabular-nums hover:text-text @[1040px]:inline-block"
+            className="hidden rounded-[6px] px-1.5 py-0.5 font-mono text-[12.5px] font-semibold text-text-3 tabular-nums hover:bg-surface-3 hover:text-text @[1040px]:inline-block"
           >
             {/* The edited picture's size: the vertical one's while it's picked. */}
             {size?.width ?? c.width}×{size?.height ?? c.height} · {c.fps}&nbsp;fps
           </button>
         )}
+        {/* One quiet strip (owner's pick S1): plain tools, blue when on, thin lines between
+            the groups. */}
+        <span aria-hidden className="hidden h-5 w-px bg-line @[1040px]:block" />
         <ViewControls />
+        <span aria-hidden className="h-5 w-px bg-line" />
         <VerticalToggle />
         <PictureViewPick />
         <span className="flex-1" />
@@ -1629,7 +1630,7 @@ export function StageBar() {
               : 'Studio Mode: edit a scene before it goes on air'
           }
           aria-pressed={!!scenes.data?.preview}
-          className={cx(scenes.data?.preview && 'fc-picked')}
+          className={cx(scenes.data?.preview ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
           onClick={() =>
             void run('studio', () => done(api.studioMode(!scenes.data?.preview))).then(
               (ok) => ok && refresh(),
