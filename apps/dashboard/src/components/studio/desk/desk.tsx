@@ -39,6 +39,8 @@ import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { go } from '../../../lib/router'
 import { useStudio } from '../common'
+import { useShow } from '../show'
+import { styleOf } from '../show-style'
 import { AddSourceDialog } from './add-source'
 import { FileDrop } from './file-drop'
 import { DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
@@ -413,8 +415,30 @@ function ControlBar({
   // A stream exists until stopped; while connecting it isn't active yet but is on.
   const on = !!stream && (stream.active || stream.reconnecting || !stream.error)
   const recording = !!rec?.active
+  const studio = useStudio()
+  const [show, setShow] = useShow()
   const ticked = view ? onCanvas(view.destinations, 'main').filter((d) => d.enabled) : []
   const toggle = async () => {
+    // A show style (anything but "just go live"): Go live runs the show, which starts the
+    // stream itself, and ending runs its ending, which stops it (owner's pick D1, 30 Oct).
+    // Settings that can't be read stop here with their error (never a plain stream that skips
+    // the show, CodeRabbit).
+    const cfg = await run('stream', () => studio.showConfig())
+    if (!cfg) return
+    const showing = !!show && show.phase !== 'ended'
+    if ((!on && styleOf(cfg) !== 'just') || (on && showing)) {
+      const r = await run(
+        'stream',
+        async () => {
+          if (!cfg.start_stream || !cfg.stop_stream)
+            await studio.saveShowConfig({ ...cfg, start_stream: true, stop_stream: true })
+          return on ? studio.endShow() : studio.startShow(true)
+        },
+        { success: () => (on ? 'Ending the show.' : null) },
+      )
+      if (r) setShow(r.show)
+      return
+    }
     const v = await run('stream', () => api.stream(!on), {
       success: () => (on ? 'Stream ended.' : null),
     })
@@ -441,7 +465,6 @@ function ControlBar({
   }
   // OBS's General › "Show confirmation dialog when…": ending is asked by default.
   const [ask, setAsk] = useState<'live' | 'end' | 'record' | 'noinfo' | null>(null)
-  const studio = useStudio()
   // Read ahead, so pressing Go live answers at once when it's set (the usual case).
   const info = useResource(() => studio.streamInfo(), [studio])
   const pressStream = async () => {
