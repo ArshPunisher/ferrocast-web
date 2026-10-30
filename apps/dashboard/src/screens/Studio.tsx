@@ -13,7 +13,7 @@ import {
   MomentsTimeline,
 } from '../components/studio/moments'
 import { HealthPanel, ScenesPanel, SwitcherSettings } from '../components/studio/obs'
-import { PreflightPanel, ShowPanel, ShowSettings } from '../components/studio/show'
+import { PreflightPanel, ShowPanel, ShowSettings, useShow } from '../components/studio/show'
 import { StreamInfoEditor } from '../components/studio/stream-info'
 import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
@@ -22,6 +22,7 @@ import { useWidePage } from '../lib/wide'
 import { useUsesObs } from '../lib/picture'
 import { useRigLists } from '../components/studio/rig-lists'
 import { LiveCaptions } from '../components/studio/captions'
+import { ShowStylePicker } from '../components/studio/show-style-picker'
 import { TranscriptPanel } from '../components/studio/transcript'
 
 const TABS: { value: StudioSection; label: string }[] = [
@@ -45,6 +46,13 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   // The Show tab picks from the Studio's scenes and sounds (OBS's when OBS is the source).
   const rig = useRigLists()
   const switcher = useResource(() => studio.switcher(), [studio])
+  // The show's settings, shared by the style picker and its details; pre-flight's problems.
+  const showCfg = useResource(() => studio.showConfig(), [studio])
+  const [show] = useShow()
+  const preflight = useResource(() => studio.preflight(), [studio])
+  const problems = (preflight.data?.checks ?? []).filter(
+    (c) => c.status === 'fail' || c.status === 'warn',
+  ).length
   // Every tab uses the window's full width, so switching tabs (or Ferrocast / OBS) never jumps.
   useWidePage()
   return (
@@ -78,11 +86,30 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-5">
             <GoingToLine />
-            <ShowPanel presets={info.data?.presets ?? []} />
+            {/* A show running (its countdown can be skipped or cancelled there): its panel. */}
+            {(usesObs || (show && show.phase !== 'ended')) && (
+              <ShowPanel presets={info.data?.presets ?? []} />
+            )}
+            {usesObs ? null : (
+              // The Studio (owner's pick D1/P1, 30 Oct): pick how the stream starts; Go live
+              // runs it, so there's no Start show or Start streaming here.
+              <ShowStylePicker
+                cfg={showCfg}
+                names={rig.scenes.data?.scenes.map((s) => s.name) ?? []}
+                checks={problems}
+                onChecks={() =>
+                  document
+                    .getElementById('preflight')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              >
+                <ShowSettings presets={info.data?.presets ?? []} rig={rig} cfg={showCfg} goLive />
+              </ShowStylePicker>
+            )}
           </div>
           <div className="flex flex-col gap-5">
-            <PreflightPanel />
-            <ShowSettings presets={info.data?.presets ?? []} rig={rig} />
+            <PreflightPanel id="preflight" />
+            {usesObs && <ShowSettings presets={info.data?.presets ?? []} rig={rig} />}
             {/* BRB, !scene and shortcuts: in the OBS tab for OBS, here for the Studio. */}
             {!usesObs && (
               <SwitcherSettings

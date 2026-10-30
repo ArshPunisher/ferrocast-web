@@ -28,7 +28,7 @@ import {
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
-import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
+import { useAction, useClient, useNow, useResource, type Resource } from '../../lib/hooks'
 import { useEngineReading } from '../../lib/engine-stats'
 import { useUsesObs } from '../../lib/picture'
 import { useLive } from '../../lib/store'
@@ -574,7 +574,7 @@ function PlannedRun({ cfg, presets }: { cfg: ShowConfig; presets: StreamPreset[]
   )
 }
 
-export function PreflightPanel() {
+export function PreflightPanel({ id }: { id?: string } = {}) {
   const studio = useStudio()
   const pf = useResource(() => studio.preflight(), [studio])
   const [checking, setChecking] = useState(false)
@@ -599,6 +599,7 @@ export function PreflightPanel() {
   }
   return (
     <Panel
+      {...(id ? { id } : {})}
       title="Pre-flight"
       actions={
         <Button
@@ -628,9 +629,26 @@ export function PreflightPanel() {
 
 const COUNTDOWNS = [0, 60, 120, 180, 300, 600, 900]
 
-export function ShowSettings({ presets, rig }: { presets: StreamPreset[]; rig: RigLists }) {
+export function ShowSettings({
+  presets,
+  rig,
+  cfg: shared,
+  goLive = false,
+}: {
+  presets: StreamPreset[]
+  rig: RigLists
+  /** The settings, when another part of the page shows them too (the style picker). */
+  cfg?: Resource<ShowConfig>
+  /** Under the Studio's style picker: Go live streams and ending stops, so those two switches
+   * aren't asked, and it's titled for that place. */
+  goLive?: boolean
+}) {
   const studio = useStudio()
-  const cfg = useResource(() => studio.showConfig(), [studio])
+  const own = useResource(() => studio.showConfig(), [studio])
+  const cfg = shared ?? own
+  // The settings changed underneath (a style was picked): unsaved edits here are dropped, so
+  // Save can't put the old style back (CodeRabbit).
+  useEffect(() => setDraft(null), [cfg.data])
   const scenes = rig.scenes.data
   const inputs = rig.inputs
   const app = rig.app
@@ -685,8 +703,8 @@ export function ShowSettings({ presets, rig }: { presets: StreamPreset[]; rig: R
     )
   return (
     <Panel
-      title="Go-live checklist"
-      description="Runs when you press Start show."
+      title={goLive ? 'Details' : 'Go-live checklist'}
+      description={goLive ? 'Runs when you press Go live.' : 'Runs when you press Start show.'}
       actions={
         <Button size="sm" variant="primary" disabled={!draft} busy={busy === 'save'} onClick={save}>
           Save
@@ -744,7 +762,7 @@ export function ShowSettings({ presets, rig }: { presets: StreamPreset[]; rig: R
               : 'Start the Studio to pick its scenes from a list.'}
           </p>
         )}
-        {c.countdown_s > 0 && <AtZeroSettings c={c} set={set} err={err} />}
+        {c.countdown_s > 0 && <AtZeroSettings c={c} set={set} err={err} goLive={goLive} />}
         <div className="flex flex-col gap-3">
           <Switch
             label="Turn alerts on"
@@ -768,18 +786,22 @@ export function ShowSettings({ presets, rig }: { presets: StreamPreset[]; rig: R
             checked={c.replay_buffer}
             onChange={(v) => set({ replay_buffer: v })}
           />
-          <Switch
-            label="Start streaming"
-            description="After the starting scene, so viewers see it during the countdown."
-            checked={c.start_stream}
-            onChange={(v) => set({ start_stream: v })}
-          />
-          <Switch
-            label="End show: stop streaming"
-            description="After the ending scene and the thank-you, so viewers see them first."
-            checked={c.stop_stream}
-            onChange={(v) => set({ stop_stream: v })}
-          />
+          {!goLive && (
+            <>
+              <Switch
+                label="Start streaming"
+                description="After the starting scene, so viewers see it during the countdown."
+                checked={c.start_stream}
+                onChange={(v) => set({ start_stream: v })}
+              />
+              <Switch
+                label="End show: stop streaming"
+                description="After the ending scene and the thank-you, so viewers see them first."
+                checked={c.stop_stream}
+                onChange={(v) => set({ stop_stream: v })}
+              />
+            </>
+          )}
           {c.stop_stream && (
             <Field
               label="Stop after"
@@ -888,10 +910,13 @@ function AtZeroSettings({
   c,
   set,
   err,
+  goLive,
 }: {
   c: ShowConfig
   set: (patch: Partial<ShowConfig>) => void
   err: { field: string | null; message: string } | null
+  /** Go live already streams by zero: not asked. */
+  goLive: boolean
 }) {
   const z = { ...AT_ZERO_DEFAULT, ...c.at_zero }
   const put = (patch: Partial<AtZero>) => set({ at_zero: { ...z, ...patch } })
@@ -909,12 +934,14 @@ function AtZeroSettings({
         checked={z.unmute}
         onChange={(v) => put({ unmute: v })}
       />
-      <Switch
-        label="Start streaming"
-        description="Only if you aren’t streaming yet."
-        checked={z.start_stream}
-        onChange={(v) => put({ start_stream: v })}
-      />
+      {!goLive && (
+        <Switch
+          label="Start streaming"
+          description="Only if you aren’t streaming yet."
+          checked={z.start_stream}
+          onChange={(v) => put({ start_stream: v })}
+        />
+      )}
       <Switch label="Start recording" checked={z.record} onChange={(v) => put({ record: v })} />
       <Switch label="Add a marker" checked={z.marker} onChange={(v) => put({ marker: v })} />
       <Switch
