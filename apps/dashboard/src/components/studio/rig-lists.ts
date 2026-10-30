@@ -2,7 +2,7 @@
 // Studio is the picture source (the engine then runs them there), OBS's otherwise.
 
 import { useMemo } from 'react'
-import { studioEngineApi, type ObsScenes } from '@ferrocast/api'
+import { ApiError, studioEngineApi, type ObsScenes } from '@ferrocast/api'
 import { useClient, useResource, type Resource } from '../../lib/hooks'
 import { useUsesObs } from '../../lib/picture'
 import { useStudio } from './common'
@@ -32,8 +32,15 @@ export function useRigLists(): RigLists {
   const engine = useMemo(() => studioEngineApi(client), [client])
   const scenes = useResource<ObsScenes | null>(async () => {
     if (usesObs) return studio.obsScenes()
-    if (!(await engine.status()).running) return null
-    const s = await engine.scenes()
+    // The Studio off: its saved scenes (the app reads them from its file), so BRB and the show
+    // can be set up before starting it.
+    const s = await engine.scenes().catch((e: unknown) => {
+      // Only "there's no Studio here" (a browser, the server) is no list; anything else is an
+      // error to show, not "start the Studio" (CodeRabbit).
+      if (e instanceof ApiError && e.code === 'studio_unavailable') return null
+      throw e
+    })
+    if (!s) return null
     return { current: s.current, scenes: s.scenes.map((x) => ({ name: x.name, items: [] })) }
   }, [usesObs, studio, engine])
   const inputs = useResource<RigInput[]>(async () => {

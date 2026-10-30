@@ -460,7 +460,11 @@ export function SwitcherSettings({
           />
         )}
         {!scenes && (
-          <Badge tone="warn">OBS isn’t connected: scene lists are from your settings.</Badge>
+          <Badge tone="warn">
+            {app === 'OBS'
+              ? 'OBS isn’t connected: scene lists are from your settings.'
+              : 'Start the Studio to see its scenes here.'}
+          </Badge>
         )}
       </div>
     </Panel>

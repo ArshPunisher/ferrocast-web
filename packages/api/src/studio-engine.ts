@@ -112,6 +112,8 @@ export interface EngineTransition {
 export interface EngineScenes {
   scenes: EngineScene[]
   current: string
+  /** The Studio is off: the scenes are from its saved file (nothing is on air). */
+  saved?: boolean
   transition: EngineTransition
   /** Studio Mode's preview scene (what goes on air next), or null when Studio Mode is off. */
   preview?: string | null
