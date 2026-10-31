@@ -371,6 +371,19 @@ export interface ObsScenes {
   scenes: ObsScene[]
 }
 
+/** What sets a rule off: `min` is gifts in the batch, raid viewers, or the amount (whole
+ * units of the currency, or Bits). */
+export type RuleWhen = 'follow' | 'sub' | 'gift' | 'raid' | 'money'
+
+/** Exactly one of `scene` and `source`; `seconds` 1 to 600. */
+export interface EventRule {
+  when: RuleWhen
+  min?: number
+  scene?: string
+  source?: string
+  seconds: number
+}
+
 export interface ScenesConfig {
   chat_enabled: boolean
   chat_allowed: string[]
@@ -391,6 +404,8 @@ export interface ScenesConfig {
   /** A scene per game: when that app comes to the front, its scene goes on air (the Studio
    * on a Mac). */
   game_scenes: { app: string; scene: string }[]
+  /** "When X, do Y": a live event puts a scene on air, or shows a source, for a while. */
+  event_rules?: EventRule[]
   /** Each clip gets a subtitle file (.srt) beside it, and its vertical copy the words burned
    * in (Whisper on this computer, a downloaded model). */
   clip_captions: boolean

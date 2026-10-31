@@ -2,13 +2,20 @@
 // settings (chat !scene allow-list, BRB, ads, hotkeys).
 
 import { useEffect, useState } from 'react'
-import { Coffee, GameController, Plus, Scissors, Trash } from '@phosphor-icons/react'
-import { type ObsHealth, type ObsScenes, type ScenesConfig } from '@ferrocast/api'
+import { Coffee, GameController, Lightning, Plus, Scissors, Trash } from '@phosphor-icons/react'
+import {
+  type EventRule,
+  type ObsHealth,
+  type ObsScenes,
+  type RuleWhen,
+  type ScenesConfig,
+} from '@ferrocast/api'
 import {
   Badge,
   Button,
   Field,
   IconButton,
+  Input,
   Kbd,
   Select,
   Skeleton,
@@ -412,6 +419,14 @@ export function SwitcherSettings({
             onChange={(game_scenes) => save({ game_scenes })}
           />
         )}
+        <EventRules
+          list={c.event_rules ?? []}
+          scenes={names}
+          sources={[
+            ...new Set((scenes?.scenes ?? []).flatMap((s) => s.items.map((i) => i.source))),
+          ]}
+          onChange={(event_rules) => save({ event_rules })}
+        />
         {audio.length > 0 && (
           <fieldset>
             <legend className="text-[14.5px] font-medium text-text-2">Mute on BRB</legend>
@@ -547,6 +562,167 @@ function GameScenes({
             onClick={() => onChange([...list, { app: free, scene: names[0] ?? '' }])}
           >
             Add a game
+          </Button>
+        </div>
+      )}
+    </fieldset>
+  )
+}
+
+const WHEN: { value: RuleWhen; label: string; min?: string }[] = [
+  { value: 'follow', label: 'A follow' },
+  { value: 'sub', label: 'A sub' },
+  { value: 'gift', label: 'Gifted subs', min: 'At least this many' },
+  { value: 'raid', label: 'A raid', min: 'At least this many viewers' },
+  { value: 'money', label: 'A tip, Super Chat or Bits', min: 'At least this much' },
+]
+
+/** "When X, do Y": a live event puts a scene on air, or shows a source, for a while. */
+function EventRules({
+  list,
+  scenes,
+  sources,
+  onChange,
+}: {
+  list: EventRule[]
+  scenes: string[]
+  sources: string[]
+  onChange: (list: EventRule[]) => void
+}) {
+  if (scenes.length === 0 && list.length === 0) return null
+  const set = (i: number, r: EventRule) => onChange(list.map((x, j) => (j === i ? r : x)))
+  const num = (v: string, lo: number, hi: number) =>
+    Math.min(hi, Math.max(lo, Math.round(Number(v) || 0)))
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="flex items-center gap-1.5 text-[14.5px] font-medium text-text-2">
+        <Lightning size={16} aria-hidden />
+        When something happens
+      </legend>
+      <p className="text-[14.5px] text-text-3">
+        Puts a scene on air or shows a source for a while, then back as it was.
+      </p>
+      {list.map((r, i) => {
+        const when = WHEN.find((w) => w.value === r.when)
+        const target = r.scene !== undefined ? 'scene' : 'source'
+        const options = target === 'scene' ? scenes : sources
+        const name = r.scene ?? r.source ?? ''
+        return (
+          <div key={i} className="flex flex-col gap-2 rounded-control border border-line p-3">
+            <div
+              className={cx(
+                'grid items-center gap-2',
+                when?.min ? 'grid-cols-[minmax(0,1fr)_auto_5.5rem]' : 'grid-cols-1',
+              )}
+            >
+              <Select
+                aria-label="When"
+                value={r.when}
+                onChange={(e) => set(i, { ...r, when: e.target.value as RuleWhen, min: 0 })}
+              >
+                {WHEN.map((w) => (
+                  <option key={w.value} value={w.value}>
+                    {w.label}
+                  </option>
+                ))}
+              </Select>
+              {when?.min && (
+                <>
+                  <span className="text-[14.5px] text-text-2">at least</span>
+                  <Input
+                    name={`rule-${i}-min`}
+                    aria-label={when.min}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={String(r.min ?? 0)}
+                    onChange={(e) => set(i, { ...r, min: num(e.target.value, 0, 1_000_000) })}
+                  />
+                </>
+              )}
+            </div>
+            <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-2">
+              <Select
+                aria-label="Do"
+                value={target}
+                onChange={(e) =>
+                  set(
+                    i,
+                    e.target.value === 'scene'
+                      ? {
+                          when: r.when,
+                          min: r.min ?? 0,
+                          scene: scenes[0] ?? '',
+                          seconds: r.seconds,
+                        }
+                      : {
+                          when: r.when,
+                          min: r.min ?? 0,
+                          source: sources[0] ?? '',
+                          seconds: r.seconds,
+                        },
+                  )
+                }
+              >
+                <option value="scene">Switch to</option>
+                <option value="source" disabled={sources.length === 0}>
+                  Show
+                </option>
+              </Select>
+              <Select
+                aria-label={target === 'scene' ? 'Scene' : 'Source'}
+                value={name}
+                onChange={(e) =>
+                  set(
+                    i,
+                    target === 'scene'
+                      ? { ...r, scene: e.target.value }
+                      : { ...r, source: e.target.value },
+                  )
+                }
+              >
+                {[...new Set([name, ...options])].filter(Boolean).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="grid grid-cols-[auto_4.5rem_auto] items-center gap-2 text-[14.5px] text-text-2">
+                for
+                <Input
+                  name={`rule-${i}-seconds`}
+                  aria-label="Seconds"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={600}
+                  value={String(r.seconds)}
+                  onChange={(e) => set(i, { ...r, seconds: num(e.target.value, 1, 600) })}
+                />
+                seconds
+              </span>
+              <IconButton
+                label="Remove this rule"
+                onClick={() => onChange(list.filter((_, j) => j !== i))}
+              >
+                <Trash size={16} />
+              </IconButton>
+            </div>
+          </div>
+        )
+      })}
+      {list.length < 20 && scenes.length > 0 && (
+        <div>
+          <Button
+            size="sm"
+            icon={<Plus size={14} weight="bold" />}
+            onClick={() =>
+              onChange([...list, { when: 'raid', min: 0, scene: scenes[0] ?? '', seconds: 20 }])
+            }
+          >
+            Add a rule
           </Button>
         </div>
       )}
