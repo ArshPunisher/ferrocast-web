@@ -667,6 +667,29 @@ export interface PreviewRect {
   shade?: number
 }
 
+/** A guest link: the page a guest opens to send their camera into the Studio. */
+export interface GuestLink {
+  id: string
+  label: string
+  url: string
+  created_ms: number
+  expires_ms: number
+}
+
+/** A guest here now, and their source in the Studio. */
+export interface StudioGuest {
+  name: string
+  source: string
+  connected: boolean
+  video: boolean
+  audio: boolean
+}
+
+export interface StudioGuests {
+  invites: GuestLink[]
+  guests: StudioGuest[]
+}
+
 export function studioEngineApi(c: FerroClient) {
   const enc = encodeURIComponent
   return {
@@ -993,6 +1016,16 @@ export function studioEngineApi(c: FerroClient) {
         `/api/v1/studio/engine/sources/${enc(name)}/record`,
         { on },
       ),
+    /** Guest links and the guests here now (API.md §9.11). */
+    guests: () => c.request<StudioGuests>('GET', '/api/v1/studio/guests'),
+    /** A new guest link, made at the relay. */
+    createGuestLink: (label: string) =>
+      c.request<GuestLink>('POST', '/api/v1/studio/guests/invites', { label }),
+    /** The link stops working. */
+    removeGuestLink: (id: string) =>
+      c.request<void>('DELETE', `/api/v1/studio/guests/invites/${enc(id)}`),
+    /** Hangs up on a guest (their source stays, empty). */
+    hangUpGuest: (name: string) => c.request<void>('DELETE', `/api/v1/studio/guests/${enc(name)}`),
     pauseRecord: (on: boolean) =>
       c.request<void>('POST', '/api/v1/studio/engine/record/pause', { on }),
     /** Where "Hear it" can play. */
