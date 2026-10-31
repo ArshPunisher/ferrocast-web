@@ -1364,6 +1364,8 @@ export const TRANSITIONS: Record<string, string> = {
   fade_to_color_transition: 'Fade to colour',
   wipe_transition: 'Wipe',
   obs_stinger_transition: 'Stinger',
+  // Ferrocast's own: what both scenes show glides into place.
+  ferrocast_move: 'Move',
 }
 
 /** Transitions with settings of their own (a direction, a colour, an image, a video). */
