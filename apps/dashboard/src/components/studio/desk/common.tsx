@@ -34,6 +34,7 @@ import {
   Stack,
   Swatches,
   TextT,
+  UserFocus,
   UserSquare,
   VideoCamera,
   Waveform,
@@ -448,6 +449,12 @@ export const FILTERS: FilterEntry[] = [
     label: 'Rounded corners',
     help: 'Rounds its corners, like a webcam frame.',
     icon: FrameCorners,
+  },
+  {
+    kinds: ['ferrocast_remove_background'],
+    label: 'Remove background',
+    help: 'Takes out or blurs what’s behind you. No green screen.',
+    icon: UserFocus,
   },
   {
     kinds: ['ferrocast_border'],
