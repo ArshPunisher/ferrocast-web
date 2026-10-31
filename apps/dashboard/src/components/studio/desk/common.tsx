@@ -14,6 +14,7 @@ import {
   CircleDashed,
   Crop,
   Cube,
+  Ear,
   FilmStrip,
   FolderSimple,
   FrameCorners,
@@ -394,6 +395,13 @@ export const FILTERS: FilterEntry[] = [
     help: 'Fans, keyboards, hum.',
     audio: true,
     icon: Waveform,
+  },
+  {
+    kinds: ['ferrocast_deepfilter'],
+    label: 'Strong noise removal',
+    help: 'Loud keyboards, busy rooms. Keeps your voice natural.',
+    audio: true,
+    icon: Ear,
   },
   {
     kinds: ['noise_gate_filter'],
