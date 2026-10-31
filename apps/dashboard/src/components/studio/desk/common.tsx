@@ -37,6 +37,7 @@ import {
   TextT,
   UserFocus,
   UserSquare,
+  UsersThree,
   VideoCamera,
   Waveform,
   Webcam,
@@ -163,6 +164,8 @@ export interface KindEntry {
   scene?: boolean
   /** Lists Ferrocast's overlays to add as web pages. */
   overlays?: boolean
+  /** Guest links instead of a source to add (a guest adds their own when they join). */
+  guest?: boolean
 }
 
 export interface KindGroup {
@@ -209,6 +212,14 @@ export const KIND_GROUPS: KindGroup[] = [
         kinds: ['macos-avcapture-fast', 'dshow_input'],
         device: ['device', 'video_device_id'],
         fit: true,
+      },
+      {
+        key: 'guest',
+        label: 'Guest',
+        icon: UsersThree,
+        // A guest's camera plays in a media source.
+        kinds: ['ffmpeg_source'],
+        guest: true,
       },
     ],
   },

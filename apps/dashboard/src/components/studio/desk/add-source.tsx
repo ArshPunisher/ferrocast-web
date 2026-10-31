@@ -16,6 +16,7 @@ import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource } from '../../../lib/hooks'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, pickKind, useDesk, type KindEntry } from './common'
+import { GuestInvites } from './guests'
 import { OptionsForm } from './options'
 
 interface Choice {
@@ -250,7 +251,12 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
         </div>
       </nav>
       <div className="min-h-0 min-w-0 sm:overflow-y-auto sm:pr-3 sm:[scrollbar-gutter:stable]">
-        {chosen && <Pick key={chosen.entry.key} c={chosen} scene={scene} onDone={onDone} />}
+        {chosen &&
+          (chosen.entry.guest ? (
+            <GuestInvites />
+          ) : (
+            <Pick key={chosen.entry.key} c={chosen} scene={scene} onDone={onDone} />
+          ))}
       </div>
     </div>
   )
