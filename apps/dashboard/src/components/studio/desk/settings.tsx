@@ -574,6 +574,20 @@ function StreamPage({ s, set }: PageProps) {
                 ))}
             </Select>
           </Row>
+          {isMac && (
+            <Row
+              label="Ferrocast's own encoder"
+              sub="Beta"
+              info="Sends your stream with Ferrocast's own encoder instead of OBS's. Same picture, steadier sound sync. Starts with your next stream. A stream delay, Twitch's VOD track or a smaller sending size still use OBS's."
+            >
+              <Switch
+                label="Ferrocast's own encoder"
+                hideLabel
+                checked={!!s.own_encoder}
+                onChange={(own_encoder) => set({ own_encoder })}
+              />
+            </Row>
+          )}
           <Row label="Encoder" info="One you pick here wins over the choice above (HEVC, AV1…).">
             <EncoderSelect
               label="Encoder"
