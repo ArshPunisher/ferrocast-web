@@ -578,7 +578,7 @@ function StreamPage({ s, set }: PageProps) {
             <Row
               label="Ferrocast's own encoder"
               sub="Beta"
-              info="Sends your stream with Ferrocast's own encoder instead of OBS's. Same picture, steadier sound sync. Starts with your next stream. A stream delay, Twitch's VOD track or a smaller sending size still use OBS's."
+              info="Streams and records with Ferrocast's own encoder instead of OBS's. Same picture, steadier sound sync, and recordings that survive a crash. From your next stream or recording. A delay, the VOD track, a smaller size, pausing, splitting and extra sound tracks still use OBS's."
             >
               <Switch
                 label="Ferrocast's own encoder"
