@@ -12,37 +12,38 @@ import {
   ArrowsOut,
   ArrowsOutSimple,
   Camera,
-  CornersOut,
-  CaretDown,
   CaretDoubleDown,
   CaretDoubleUp,
+  CaretDown,
   CaretRight,
   CaretUp,
   ClipboardText,
   Copy,
   CopySimple,
+  CornersOut,
   Crosshair,
   CursorClick,
   Eye,
   EyeSlash,
   Faders,
+  FilmReel,
   FlipHorizontal,
   FlipVertical,
-  FilmReel,
-  Play,
-  SkipBack,
-  SkipForward,
-  Stop,
   FrameCorners,
   Funnel,
   ImageSquare,
   LockSimple,
   LockSimpleOpen,
   PencilSimple,
+  Play,
   Plus,
-  Stack,
+  Record as RecordIcon,
+  SkipBack,
+  SkipForward,
   SlidersHorizontal,
   Sparkle,
+  Stack,
+  Stop,
   Trash,
 } from '@phosphor-icons/react'
 import {
@@ -288,7 +289,11 @@ export function SourcesDock() {
       },
       { success: (r) => r?.restart ?? 'The canvas now matches this source.' },
     ).then((r) => r && refresh())
-  const itemMenu = (item: EngineItem): MenuItem[] => [
+  const itemMenu = (item: EngineItem): MenuItem[] => {
+    const recordingAlone = !!desk.stats?.source_records?.some((r) => r.name === item.name)
+    return itemMenuWith(item, recordingAlone)
+  }
+  const itemMenuWith = (item: EngineItem, recordingAlone: boolean): MenuItem[] => [
     ...(item.kind === 'ferrocast_web'
       ? ([
           { label: 'Interact', icon: CursorClick, onSelect: () => web(item, 'interact') },
@@ -484,6 +489,17 @@ export function SourcesDock() {
       onSelect: () =>
         void run('shot', () => api.screenshot(item.name), {
           success: 'Screenshot saved with your recordings.',
+        }),
+    },
+    {
+      label: 'Record on its own',
+      icon: RecordIcon,
+      checked: recordingAlone,
+      onSelect: () =>
+        void run('iso', () => api.recordSource(item.name, !recordingAlone), {
+          success: recordingAlone
+            ? 'Stopped. Its file is with your recordings.'
+            : 'Recording it on its own, beside your recordings.',
         }),
     },
     ...(inDesktopApp()

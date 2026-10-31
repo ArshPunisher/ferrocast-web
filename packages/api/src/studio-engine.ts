@@ -569,6 +569,8 @@ export interface EngineStats {
   captures?: EngineCaptureProblem[]
   /** Free space where recordings go, MB. */
   disk_free_mb?: number
+  /** Sources being recorded on their own (Source Record). */
+  source_records?: { name: string; file: string }[]
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */
@@ -982,6 +984,13 @@ export function studioEngineApi(c: FerroClient) {
     /** Starts or stops recording → its stats (null when stopped). */
     record: (on: boolean) =>
       c.request<EngineRecordStats | null>('POST', '/api/v1/studio/engine/record', { on }),
+    /** Records a scene or source on its own, or stops it → its file (null when stopped). */
+    recordSource: (name: string, on: boolean) =>
+      c.request<{ file: string | null }>(
+        'POST',
+        `/api/v1/studio/engine/sources/${enc(name)}/record`,
+        { on },
+      ),
     pauseRecord: (on: boolean) =>
       c.request<void>('POST', '/api/v1/studio/engine/record/pause', { on }),
     /** Where "Hear it" can play. */
