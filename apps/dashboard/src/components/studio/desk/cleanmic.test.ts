@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { cleanMicPlan, freeName, voiceVerdict } from './cleanmic'
+import {
+  DUCK_FILTER,
+  VOICE_STYLES,
+  cleanMicPlan,
+  duckFilter,
+  duckMic,
+  freeName,
+  voiceStyleOf,
+  voiceVerdict,
+} from './cleanmic'
 
 describe('clean mic', () => {
   it('adds the whole chain to a bare mic, in order', () => {
@@ -53,5 +62,36 @@ describe('the voice level', () => {
   it('a few loud words in quiet talking still count as quiet only when most are low', () => {
     expect(voiceVerdict([...many(-30, 18), -10, -10])).toBe('quiet')
     expect(voiceVerdict([...many(-30, 10), ...many(-15, 10)])).toBe('good')
+  })
+})
+
+describe('voice styles', () => {
+  it('reads the style back from the equaliser', () => {
+    expect(voiceStyleOf(null)).toBe('natural')
+    expect(voiceStyleOf(VOICE_STYLES.radio)).toBe('radio')
+    expect(voiceStyleOf(VOICE_STYLES.podcast)).toBe('podcast')
+    expect(voiceStyleOf({ low: 1, mid: 1, high: 1 })).toBe('natural')
+  })
+})
+
+describe('lower it when I talk', () => {
+  const mics = new Set(['coreaudio_input_capture', 'wasapi_input_capture'])
+
+  it('ducks under the first mic, never itself', () => {
+    const sounds = [
+      { name: 'Music', kind: 'ffmpeg_source' },
+      { name: 'Mic', kind: 'coreaudio_input_capture' },
+      { name: 'Mic 2', kind: 'wasapi_input_capture' },
+    ]
+    expect(duckMic(sounds, 'Music', mics)).toBe('Mic')
+    expect(duckMic(sounds, 'Mic', mics)).toBe('Mic 2')
+    expect(duckMic([{ name: 'Music', kind: 'ffmpeg_source' }], 'Music', mics)).toBeNull()
+  })
+
+  it('keys OBS’s compressor to that mic', () => {
+    const f = duckFilter('Mic')
+    expect(f.kind).toBe('compressor_filter')
+    expect(f.name).toBe(DUCK_FILTER)
+    expect(f.settings).toMatchObject({ sidechain_source: 'Mic', ratio: 20 })
   })
 })

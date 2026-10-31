@@ -43,7 +43,19 @@ import {
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
 import { FILTERS, FILTER_OF, KindTile, SOUND_ONLY, useDesk, type DrawerTab } from './common'
-import { VERDICT_WORDS, cleanMicPlan, freeName, voiceVerdict } from './cleanmic'
+import {
+  DUCK_FILTER,
+  VERDICT_WORDS,
+  VOICE_FILTER,
+  VOICE_STYLES,
+  cleanMicPlan,
+  duckFilter,
+  duckMic,
+  freeName,
+  voiceStyleOf,
+  voiceVerdict,
+  type VoiceStyle,
+} from './cleanmic'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
 
@@ -320,7 +332,13 @@ function Panel({
                 onChange={(monitor) => setAudio({ monitor })}
               />
             </div>
-            {MIC_KINDS.has(kind) && <CleanMic name={name} level={levels[name]} list={filters} />}
+            {MIC_KINDS.has(kind) && (
+              <>
+                <CleanMic name={name} level={levels[name]} list={filters} />
+                <VoiceStyleRow name={name} list={filters} />
+              </>
+            )}
+            {!MIC_KINDS.has(kind) && <Duck name={name} list={filters} />}
           </section>
         )}
         {shown === 'sound' && (
@@ -1234,6 +1252,108 @@ function CleanMic({
           <Check size={14} weight="bold" /> Mic cleaned up
         </span>
       )}
+    </div>
+  )
+}
+
+/** A mic's voice style: one equaliser set three ways (Natural takes it off). */
+function VoiceStyleRow({ name, list }: { name: string; list: Resource<EngineFilter[]> }) {
+  const { api } = useDesk()
+  const { run, busy } = useAction()
+  const filter = list.data?.find((f) => f.name === VOICE_FILTER)
+  const has = !!filter
+  const eq = useResource(
+    () => (has ? api.filterSettings(name, VOICE_FILTER) : Promise.resolve(null)),
+    [api, name, has],
+  )
+  // Switched off in Filters, it's as if natural.
+  const style = filter?.enabled
+    ? voiceStyleOf(eq.data as { low?: number; mid?: number; high?: number } | null)
+    : 'natural'
+  const choose = async (to: VoiceStyle) => {
+    if (busy === 'voice') return
+    // Natural takes the filter off even when it was tuned by hand (it reads as natural then).
+    if (to === style && !(to === 'natural' && has)) return
+    await run('voice', async () => {
+      if (to === 'natural') return done(api.removeFilter(name, VOICE_FILTER))
+      if (!has)
+        return done(
+          api.addFilter(name, {
+            kind: 'basic_eq_filter',
+            name: VOICE_FILTER,
+            settings: VOICE_STYLES[to],
+          }),
+        )
+      await api.updateFilter(name, VOICE_FILTER, VOICE_STYLES[to])
+      return done(filter.enabled ? Promise.resolve() : api.editFilter(name, VOICE_FILTER, 'enable'))
+    })
+    list.reload()
+    eq.reload()
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span className="flex items-center gap-1.5 text-sm font-semibold">
+        Voice
+        <InfoTip label="About voice">
+          Warm radio: fuller and warmer. Clear podcast: less boom, clearer words. Natural: as the
+          mic hears it.
+        </InfoTip>
+      </span>
+      <Segmented
+        label="Voice"
+        value={style}
+        options={[
+          { value: 'natural', label: 'Natural' },
+          { value: 'radio', label: 'Warm radio' },
+          { value: 'podcast', label: 'Clear podcast' },
+        ]}
+        onChange={(to) => void choose(to)}
+      />
+    </div>
+  )
+}
+
+/** Music or a game that drops while you talk: OBS's compressor keyed to the mic. */
+function Duck({ name, list }: { name: string; list: Resource<EngineFilter[]> }) {
+  const { api, audio } = useDesk()
+  const { run, busy } = useAction()
+  const mic = duckMic(audio.data ?? [], name, MIC_KINDS)
+  const filter = list.data?.find((f) => f.name === DUCK_FILTER)
+  // Switched off in Filters, it's off here too; on again turns that one back on.
+  const on = !!filter?.enabled
+  if (!list.data || (!mic && !filter)) return null
+  const toggle = async (to: boolean) => {
+    if (busy === 'duck') return
+    await run('duck', () =>
+      done(
+        !to
+          ? api.removeFilter(name, DUCK_FILTER)
+          : filter
+            ? api.editFilter(name, DUCK_FILTER, 'enable')
+            : mic
+              ? api.addFilter(name, duckFilter(mic))
+              : Promise.resolve(),
+      ),
+    )
+    list.reload()
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+      <span className="flex items-center gap-1.5 text-sm font-semibold">
+        Lower it when I talk
+        <InfoTip label="About lowering it">
+          {mic
+            ? `It drops while ${mic} hears you, and comes back when you stop.`
+            : 'It drops while your mic hears you, and comes back when you stop.'}
+        </InfoTip>
+      </span>
+      <Switch
+        label="Lower it when I talk"
+        hideLabel
+        checked={on}
+        disabled={busy === 'duck'}
+        onChange={(to) => void toggle(to)}
+      />
     </div>
   )
 }

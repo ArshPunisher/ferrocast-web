@@ -68,3 +68,60 @@ export const VERDICT_WORDS: Record<Verdict, string> = {
   good: 'Sounds good.',
   loud: 'Too loud: it clips. Lower the volume or the mic’s gain.',
 }
+
+/** A voice's colour: one equaliser ("Voice style") set three ways; Natural takes it off. */
+export type VoiceStyle = 'natural' | 'radio' | 'podcast'
+
+export const VOICE_FILTER = 'Voice style'
+
+/** Bass, middle and treble in dB (OBS's 3-band equaliser). */
+export const VOICE_STYLES: Record<
+  Exclude<VoiceStyle, 'natural'>,
+  { low: number; mid: number; high: number }
+> = {
+  // Fuller and warmer, like a radio host close to the mic.
+  radio: { low: 4, mid: 2, high: -1 },
+  // Less boom, more clarity on the words.
+  podcast: { low: -2, mid: 1, high: 3 },
+}
+
+/** Which style the equaliser's values are (natural when there's none or they match no style). */
+export function voiceStyleOf(eq: { low?: number; mid?: number; high?: number } | null): VoiceStyle {
+  if (!eq) return 'natural'
+  for (const [style, v] of Object.entries(VOICE_STYLES) as [
+    VoiceStyle,
+    typeof VOICE_STYLES.radio,
+  ][])
+    if (eq.low === v.low && eq.mid === v.mid && eq.high === v.high) return style
+  return 'natural'
+}
+
+/** "Lower it when I talk": OBS's compressor keyed to the mic, so music or a game drops while
+ * you speak and comes back after. */
+export const DUCK_FILTER = 'Lower when I talk'
+
+export function duckFilter(mic: string): NewEngineSource {
+  return {
+    kind: 'compressor_filter',
+    name: DUCK_FILTER,
+    // Strong and quick to drop (20:1 from -32 dB, 10 ms), slow to come back (0.6 s) so it
+    // doesn't pump between words.
+    settings: {
+      ratio: 20,
+      threshold: -32,
+      attack_time: 10,
+      release_time: 600,
+      output_gain: 0,
+      sidechain_source: mic,
+    },
+  }
+}
+
+/** The mic to duck under: the first microphone among the sounds, never the sound itself. */
+export function duckMic(
+  sounds: readonly { name: string; kind: string }[],
+  self: string,
+  micKinds: ReadonlySet<string>,
+): string | null {
+  return sounds.find((s) => s.name !== self && micKinds.has(s.kind))?.name ?? null
+}
