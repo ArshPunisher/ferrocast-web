@@ -12,6 +12,7 @@ import {
   ChatCircleText,
   CircleDashed,
   Crop,
+  FrameCorners,
   Cube,
   FilmStrip,
   FolderSimple,
@@ -437,6 +438,12 @@ export const FILTERS: FilterEntry[] = [
     icon: UserSquare,
   },
   { kinds: ['crop_filter'], label: 'Crop', help: 'Trims the edges.', icon: Crop },
+  {
+    kinds: ['ferrocast_rounded_corners'],
+    label: 'Rounded corners',
+    help: 'Rounds its corners, like a webcam frame.',
+    icon: FrameCorners,
+  },
   {
     kinds: ['color_filter_v2', 'color_filter'],
     label: 'Colour',
