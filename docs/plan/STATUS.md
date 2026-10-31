@@ -1,5 +1,10 @@
 # Status
 
+## 31 Oct 2026, night (guest cameras, branch windows-studio)
+
+- The guest's page `apps/dashboard/guest.html` (own small entry): camera and mic preview, name, pick camera and mic, Join, then mute, camera off and Leave; plain errors with what to do; 375 px and both themes checked. WebRTC logic in `src/guest/call.ts` (tested).
+- Studio › Add a source › Guest: make, copy and remove guest links (remove asks first), see who's here and hang up. Strong noise removal listed for mics (`ferrocast_deepfilter`).
+
 ## 28 Oct 2026 (2.1.7: the Studio first, and the vertical picture)
 
 - Studio-first: Start show, BRB, `!scene`, clips, Alt+1…9, overlays (Add to Studio, real previews), themes, onboarding and the music beat use the Studio; OBS wording only where OBS is meant.
