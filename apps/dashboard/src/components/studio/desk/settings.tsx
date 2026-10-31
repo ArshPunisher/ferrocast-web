@@ -1620,6 +1620,34 @@ function AdvancedPage({ s, set }: PageProps) {
           </Row>
         )}
       </div>
+      <Heading info="Twitch keeps a second sound for your VOD. Play music only on track 1 and it stays out of the VOD (no muted parts), while viewers hear it live.">
+        Twitch VOD
+      </Heading>
+      <div className="flex flex-col">
+        <Row label="Music-free VOD">
+          <Switch
+            label="Music-free VOD"
+            hideLabel
+            checked={(s.twitch_vod_track ?? 0) >= 2}
+            onChange={(on) => set({ twitch_vod_track: on ? 2 : 0 })}
+          />
+        </Row>
+        {(s.twitch_vod_track ?? 0) >= 2 && (
+          <Row label="VOD sound" sub="Untick this track on your music in its Plays in">
+            <Select
+              aria-label="VOD sound"
+              value={String(s.twitch_vod_track)}
+              onChange={(e) => set({ twitch_vod_track: Number(e.target.value) })}
+            >
+              {[2, 3, 4, 5, 6].map((t) => (
+                <option key={t} value={t}>
+                  Track {t}
+                </option>
+              ))}
+            </Select>
+          </Row>
+        )}
+      </div>
     </>
   )
 }

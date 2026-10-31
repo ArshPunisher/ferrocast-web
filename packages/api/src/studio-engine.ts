@@ -412,6 +412,8 @@ export interface StudioSettings {
   reconnect_every_s: number
   reconnect_tries: number
   delay_s: number
+  /** Twitch's VOD track: this audio track (2 to 6) goes to Twitch for the VOD; 0 off. */
+  twitch_vod_track?: number
   sample_rate: 44100 | 48000
   stereo: boolean
   /** [name, id]; null: the system's. */
