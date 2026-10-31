@@ -12,7 +12,7 @@ import {
   type DestAdvanced,
   type GoLiveView,
 } from '@ferrocast/api'
-import { Button, Dialog, Field, Input, Select, cx } from '@ferrocast/ui'
+import { Button, Dialog, Field, Input, Select, Switch, cx } from '@ferrocast/ui'
 import { Panel } from '../Panel'
 import { useAction } from '../../lib/hooks'
 import { useGoLive } from './golive'
@@ -270,6 +270,24 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
             </>
           ) : (
             <>
+              {dest && !dest.direct && (
+                <Row
+                  label="Lighter stream"
+                  hint="720p, up to 3,000 kbps (the Ferrocast Studio). For a slow route."
+                >
+                  <Switch
+                    label="Lighter stream"
+                    hideLabel
+                    checked={!!dest.light}
+                    disabled={busy === 'light'}
+                    onChange={(on) =>
+                      void run('light', () => api.setLight(dest.id, on).then(() => true)).then(
+                        (x) => x && onSaved(),
+                      )
+                    }
+                  />
+                </Row>
+              )}
               {dest?.kind !== 'custom' && (
                 <Field
                   label="Server"

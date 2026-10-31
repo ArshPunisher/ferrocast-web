@@ -20,6 +20,8 @@ export interface DestinationConfig {
   enabled: boolean
   /** Left out: `main`. */
   canvas?: Canvas
+  /** Takes the Ferrocast Studio's lighter stream (720p); left out when not. */
+  light?: boolean
 }
 
 export type PushState =
@@ -58,6 +60,8 @@ export interface DestinationView {
   rules: string[]
   /** Sent straight from the Ferrocast Studio by this protocol; absent for RTMP. */
   direct?: DirectKind
+  /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
+  light?: boolean
 }
 
 /** Servers the Ferrocast Studio sends to itself (not through the RTMP forwarders). */
@@ -352,6 +356,15 @@ export function goliveApi(c: FerroClient) {
       }),
     addCustom: (name: string, url: string, key: string, canvas: Canvas = 'main') =>
       post<DestinationConfig>('/golive/destinations', { name, url, key, canvas }),
+    /** The Studio's lighter stream (720p) for this platform, or the full one. */
+    setLight: (id: string, on: boolean) =>
+      c.request<{ destinations: DestinationConfig[] }>(
+        'PUT',
+        `/api/v1/golive/destinations/${encodeURIComponent(id)}/light`,
+        {
+          on,
+        },
+      ),
     removeCustom: (id: string) =>
       c.request<void>('DELETE', `/api/v1/golive/destinations/${encodeURIComponent(id)}`),
     pointObs: () => post<ObsSetup>('/golive/obs/setup'),
