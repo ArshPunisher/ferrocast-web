@@ -1011,6 +1011,9 @@ export function studioEngineApi(c: FerroClient) {
       program: PreviewRect | null = null,
       vertical: PreviewRect | null = null,
     ) => c.request<void>('PUT', '/api/v1/studio/engine/preview', { rect, program, vertical }),
+    /** The cursor over the pictures, by its CSS name (Windows: they take the mouse themselves). */
+    previewCursor: (cursor: string) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/preview/cursor', { cursor }),
     /** Studio Mode on (its preview starts as what's on air) or off. */
     studioMode: (on: boolean) =>
       c.request<void>('PUT', '/api/v1/studio/engine/studio-mode', { on }),

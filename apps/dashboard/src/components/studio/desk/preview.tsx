@@ -41,6 +41,7 @@ import {
 import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-input'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
 import { projectorItem, useContextMenu, type MenuItem } from './menu'
@@ -178,6 +179,11 @@ export function PreviewBox({ running }: { running: boolean }) {
   const vRef = useRef<HTMLDivElement>(null)
   const vStageRef = useRef<HTMLDivElement>(null)
   const desktop = inDesktopApp()
+  // Windows: the pictures take the mouse and the app plays it on the page here.
+  useEffect(() => {
+    if (!desktop || !running || !picturesTakeMouse()) return
+    return installPreviewInput((css) => void api.previewCursor(css).catch(() => undefined))
+  }, [api, desktop, running])
   const [pv] = usePreviewView()
   // The scenes shown, for the still during a window resize (read there, not a reason to
   // place the picture again).
