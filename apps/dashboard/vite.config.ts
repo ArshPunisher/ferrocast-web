@@ -43,6 +43,8 @@ export default defineConfig({
     target: ['safari15', 'chrome103', 'firefox115'],
     sourcemap: false,
     chunkSizeWarningLimit: 900,
+    // The dashboard, and a guest's page (guest.html: a camera into a streamer's Studio).
+    rollupOptions: { input: { main: 'index.html', guest: 'guest.html' } },
     // Sounds stay files: the engine's CSP (connect-src 'self') refuses fetching a data: URL.
     assetsInlineLimit: (file: string) => (file.endsWith('.mp3') ? false : undefined),
   },

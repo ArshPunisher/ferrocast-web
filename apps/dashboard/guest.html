@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a0b0d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f2f3f6" media="(prefers-color-scheme: light)" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/app/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/app/favicon.ico" sizes="any" />
+    <title>Join the stream · Ferrocast</title>
+    <!-- A file, not inline: the relay's CSP allows scripts from itself only. -->
+    <script src="theme-boot.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/guest/main.tsx"></script>
+  </body>
+</html>
