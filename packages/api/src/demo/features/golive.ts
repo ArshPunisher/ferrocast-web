@@ -457,6 +457,7 @@ export class DemoGoLive {
       const err = checkAdvanced(
         requireObj(body) as unknown as Advanced,
         this.cfg.map((d) => d.id),
+        Object.fromEntries(this.cfg.map((d) => [d.id, d.url])),
       )
       if (err) throw new HttpError(400, 'invalid', err)
       this.advanced = clone(body as Advanced)

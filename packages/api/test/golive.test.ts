@@ -459,3 +459,19 @@ describe('RIST over two connections', () => {
     expect((await api.networks()).map((n) => n.name)).toEqual(['en0', 'en7'])
   })
 })
+
+describe('simulcast', () => {
+  it('is for WebRTC servers only', async () => {
+    const { api } = demo()
+    await api.addCustom('Web', 'https://whip.example/x', '')
+    const v = await api.view()
+    const web = v.destinations.find((d) => d.name === 'Web')!
+    const per = (id: string) => ({
+      ...v.advanced,
+      per: { [id]: { server: null, first_retry_s: 1, max_retry_s: 30, simulcast: true } },
+    })
+    expect((await refusal(api.setAdvanced(per('twitch')))).message).toMatch(/simulcast/)
+    const saved = await api.setAdvanced(per(web.id))
+    expect(saved.advanced.per[web.id]?.simulcast).toBe(true)
+  })
+})

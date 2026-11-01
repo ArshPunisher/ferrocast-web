@@ -248,6 +248,8 @@ export interface DestAdvanced {
    * 10 s of this one failing and stops once this one has sent again for 10 s.
    */
   backup?: string | null
+  /** A WebRTC (WHIP) server: the lighter stream goes beside the full one (simulcast). */
+  simulcast?: boolean
 }
 
 export interface Advanced {
@@ -266,7 +268,12 @@ export const DEST_ADVANCED_DEFAULT: DestAdvanced = {
 }
 
 /** Same rules as the engine, so Advanced mode can say what's wrong before saving. */
-export function checkAdvanced(a: Advanced, ids: string[]): string | null {
+export function checkAdvanced(
+  a: Advanced,
+  ids: string[],
+  /** Each server's address, when known: simulcast is for WebRTC ones only. */
+  urls?: Record<string, string | null | undefined>,
+): string | null {
   if (typeof a !== 'object' || a === null || typeof a.rules !== 'object' || a.rules === null)
     return 'rules: send the protection rule as an object.'
   if (typeof a.per !== 'object' || a.per === null)
@@ -291,6 +298,8 @@ export function checkAdvanced(a: Advanced, ids: string[]): string | null {
     if (!int(d.first_retry_s, 1, 30)) return `per.${id}.first_retry_s: 1 to 30 seconds.`
     if (!int(d.max_retry_s, d.first_retry_s, 600))
       return `per.${id}.max_retry_s: at least the first wait, at most 600 seconds.`
+    if (d.simulcast && urls && directKind(urls[id] ?? '') !== 'whip')
+      return `per.${id}.simulcast: only a WebRTC (WHIP) server takes simulcast.`
     const b = d.backup
     if (b) {
       if (!ids.includes(b)) return `per.${id}.backup: no such destination.`
