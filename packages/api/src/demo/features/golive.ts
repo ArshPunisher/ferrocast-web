@@ -18,6 +18,7 @@ import type {
   GoLiveView,
   ObsSetup,
   PushHealth,
+  Reach,
   Service,
   StreamStats,
   UploadCheck,
@@ -503,7 +504,54 @@ export class DemoGoLive {
     }
     if (method === 'POST' && seg[1] === 'resume' && seg.length === 3)
       return this.resume(seg[2] ?? '')
+    if (method === 'POST' && seg[1] === 'destinations' && seg[3] === 'test' && seg.length === 4) {
+      const d = this.cfg.find((x) => x.id === seg[2])
+      if (!d) throw new HttpError(404, 'not_found', 'No such destination.')
+      const blocked = this.blocked(d)
+      if (blocked) return { ok: false, message: blocked }
+      if (d.kind !== 'custom') return this.reach(`rtmps://${LABELS[d.kind]}/app`, '')
+      return this.reach(d.url ?? '', '')
+    }
+    if (method === 'POST' && path === 'test') {
+      const b = requireObj(body)
+      const url = typeof b.url === 'string' ? b.url : ''
+      if (!url.trim() || url.length > 2048)
+        throw new HttpError(400, 'invalid', 'url: an address up to 2048 letters; key: up to 512.')
+      return this.reach(url, typeof b.key === 'string' ? b.key : '')
+    }
     return NOT_MINE
+  }
+
+  /** The demo's "Test connection": an address with "fail" in it doesn't answer. */
+  private reach(url: string, key: string): Reach {
+    const kind = directKind(url)
+    if (/fail/i.test(url))
+      return { ok: false, message: 'Couldn’t reach that server (nothing answered there).' }
+    const rtt = 30 + Math.round(this.host.random() * 25)
+    if (kind === 'srt')
+      return url.includes('far')
+        ? {
+            ok: true,
+            rtt_ms: 210,
+            message:
+              'Your SRT server answered. Ping 210 ms. This distance needs a delay of 840 ms; Ferrocast uses it when the address doesn’t set one.',
+            srt_latency_ms: 840,
+          }
+        : { ok: true, rtt_ms: rtt, message: `Your SRT server answered. Ping ${rtt} ms.` }
+    if (kind === 'rist')
+      return { ok: true, rtt_ms: rtt, message: `Your RIST receiver answered. Ping ${rtt} ms.` }
+    if (kind === 'whip')
+      return {
+        ok: true,
+        rtt_ms: rtt,
+        message: `Your WebRTC server took the offer${key.trim() ? ' and the token' : ''}.`,
+      }
+    const host = /^[a-z]+:\/\/([^/:?]+)/i.exec(url.trim())?.[1] ?? 'The server'
+    return {
+      ok: true,
+      rtt_ms: rtt,
+      message: `${host} answered. The stream key is checked when you go live.`,
+    }
   }
 
   private saveOrder(body: unknown): { destinations: DestinationConfig[] } {

@@ -396,3 +396,18 @@ describe("a direct destination's network in words", () => {
     ).toEqual({ tone: 'warn', label: 'Reconnecting', detail: 'The server refused it.' })
   })
 })
+
+describe('demo: Test connection', () => {
+  it('tries a saved destination or an address, and says how it went', async () => {
+    const { api } = demo()
+    const twitch = await api.testDestination('twitch')
+    expect(twitch.ok).toBe(true)
+    expect(twitch.message).toContain('answered')
+    const far = await api.testAddress('srt://far.example.com:9000', '')
+    expect(far).toMatchObject({ ok: true, srt_latency_ms: 840 })
+    const failed = await api.testAddress('rtmp://fail.example.com/live', 'k')
+    expect(failed.ok).toBe(false)
+    expect((await refusal(api.testAddress(' ', ''))).status).toBe(400)
+    expect((await refusal(api.testDestination('nope'))).status).toBe(404)
+  })
+})

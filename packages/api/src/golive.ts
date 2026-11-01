@@ -46,6 +46,16 @@ export type PushHealth = PushState & {
   link?: Link
 }
 
+/** How "Test connection" went: tried as the stream would connect, without sending it. */
+export interface Reach {
+  ok: boolean
+  /** The round trip (WebRTC: how long the server took to answer). */
+  rtt_ms?: number
+  message: string
+  /** SRT: the delay this distance needs, when longer than the address sets. */
+  srt_latency_ms?: number
+}
+
 /** How a direct destination's network is doing, in words. */
 export function linkText(l: Link): { tone: 'ok' | 'warn'; label: string; detail: string } {
   const ping = `ping ${Math.round(l.rtt_ms)} ms`
@@ -398,6 +408,11 @@ export function goliveApi(c: FerroClient) {
       ),
     removeCustom: (id: string) =>
       c.request<void>('DELETE', `/api/v1/golive/destinations/${encodeURIComponent(id)}`),
+    /** "Test connection" on a saved destination. */
+    testDestination: (id: string) =>
+      post<Reach>(`/golive/destinations/${encodeURIComponent(id)}/test`),
+    /** "Test connection" in the add dialog, before saving. */
+    testAddress: (url: string, key: string) => post<Reach>('/golive/test', { url, key }),
     pointObs: () => post<ObsSetup>('/golive/obs/setup'),
     restoreObs: () => post<ObsSetup>('/golive/obs/restore'),
     /** Points Aitum Vertical (OBS's vertical canvas) at Ferrocast. */
