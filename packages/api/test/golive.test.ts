@@ -411,3 +411,29 @@ describe('demo: Test connection', () => {
     expect((await refusal(api.testDestination('nope'))).status).toBe(404)
   })
 })
+
+describe('backups', () => {
+  it('are checked like the engine, and wait on standby', async () => {
+    const { api } = demo()
+    const v = await api.view()
+    const ids = v.destinations.map((d) => d.id)
+    const per = (backup: string, of = 'twitch') => ({
+      ...v.advanced,
+      per: { [of]: { server: null, first_retry_s: 1, max_retry_s: 30, backup } },
+    })
+    expect(checkAdvanced(per('kick'), ids)).toBeNull()
+    expect(checkAdvanced(per('twitch'), ids)).toMatch(/back itself up/)
+    expect(checkAdvanced(per('nope'), ids)).toMatch(/no such destination/)
+    const two = {
+      ...v.advanced,
+      per: {
+        twitch: { server: null, first_retry_s: 1, max_retry_s: 30, backup: 'kick' },
+        youtube: { server: null, first_retry_s: 1, max_retry_s: 30, backup: 'kick' },
+      },
+    }
+    expect(checkAdvanced(two, ids)).toMatch(/already backs up/)
+    await api.setAdvanced(per('kick'))
+    const kick = (await api.view()).destinations.find((d) => d.id === 'kick')
+    expect(kick?.standby_for).toBe('Twitch')
+  })
+})

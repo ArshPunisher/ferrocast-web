@@ -304,27 +304,33 @@ export class DemoGoLive {
     const now = Date.now()
     const s = this.stats()
     const vs = this.verticalStats()
+    const nameOf = (d: DestinationConfig) =>
+      d.kind === 'custom'
+        ? (d.name ?? 'Custom server')
+        : d.canvas === 'vertical' && d.kind === 'youtube'
+          ? 'YouTube Shorts live'
+          : LABELS[d.kind as Exclude<Service, 'custom'>]
     return this.cfg.map((d) => {
       const custom = d.kind === 'custom'
       const acct = custom ? null : this.account(d.kind)
       const vertical = d.canvas === 'vertical'
+      // A backup waits while the one it backs up is ticked (the demo's never fails).
+      const primary = Object.entries(this.advanced.per).find(([, a]) => a.backup === d.id)?.[0]
+      const backs = this.cfg.find((x) => x.id === primary && x.enabled)
       return {
         id: d.id,
         kind: d.kind,
         canvas: d.canvas ?? 'main',
-        name: custom
-          ? (d.name ?? 'Custom server')
-          : vertical && d.kind === 'youtube'
-            ? 'YouTube Shorts live'
-            : LABELS[d.kind as Exclude<Service, 'custom'>],
+        name: nameOf(d),
         account: custom ? hostOf(d.url ?? '') : (acct?.name ?? null),
         enabled: d.enabled,
         connected: custom || !!acct,
-        health: this.health(d, now),
+        health: backs ? null : this.health(d, now),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
         rules: d.enabled ? this.rules(d.kind, vertical ? vs : s, vertical) : [],
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),
         ...(d.light ? { light: true } : {}),
+        ...(backs ? { standby_for: nameOf(backs) } : {}),
       }
     })
   }

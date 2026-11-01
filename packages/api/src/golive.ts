@@ -103,6 +103,10 @@ export interface DestinationView {
   direct?: DirectKind
   /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
   light?: boolean
+  /** A backup sending now, for this destination's name. */
+  backup_for?: string
+  /** A backup on standby: it sends only while this one (its name) can't. */
+  standby_for?: string
 }
 
 /** Servers the Ferrocast Studio sends to itself (not through the RTMP forwarders). */
@@ -208,6 +212,11 @@ export interface DestAdvanced {
   server: string | null
   first_retry_s: number
   max_retry_s: number
+  /**
+   * Another destination that sends while this one can't: it waits on standby, starts after
+   * 10 s of this one failing and stops once this one has sent again for 10 s.
+   */
+  backup?: string | null
 }
 
 export interface Advanced {
@@ -251,6 +260,15 @@ export function checkAdvanced(a: Advanced, ids: string[]): string | null {
     if (!int(d.first_retry_s, 1, 30)) return `per.${id}.first_retry_s: 1 to 30 seconds.`
     if (!int(d.max_retry_s, d.first_retry_s, 600))
       return `per.${id}.max_retry_s: at least the first wait, at most 600 seconds.`
+    const b = d.backup
+    if (b) {
+      if (!ids.includes(b)) return `per.${id}.backup: no such destination.`
+      if (b === id) return `per.${id}.backup: a destination can't back itself up.`
+      if (a.per[b]?.backup)
+        return `per.${id}.backup: that one has a backup of its own; pick another.`
+      if (Object.entries(a.per).some(([o, x]) => o !== id && x.backup === b))
+        return `per.${id}.backup: that one already backs up another destination.`
+    }
   }
   return null
 }
