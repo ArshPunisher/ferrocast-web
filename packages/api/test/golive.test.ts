@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  directKind,
   aitumClashes,
   andList,
   checkAdvanced,
@@ -479,5 +480,16 @@ describe('simulcast', () => {
     expect((await refusal(api.setAdvanced(per('twitch')))).message).toMatch(/simulcast/)
     const saved = await api.setAdvanced(per(web.id))
     expect(saved.advanced.per[web.id]?.simulcast).toBe(true)
+  })
+})
+
+describe('which servers the Studio sends to itself', () => {
+  it('knows SRT, SRTLA, RIST and WebRTC, and leaves RTMP to the forwarders', () => {
+    expect(directKind('srt://a:1')).toBe('srt')
+    expect(directKind('SRTLA://a:5000?via=en0,en8')).toBe('srt')
+    expect(directKind('rist://a:1')).toBe('rist')
+    expect(directKind('https://a/whip')).toBe('whip')
+    expect(directKind('http://example.com/whip')).toBeNull()
+    expect(directKind('rtmp://a/app')).toBeNull()
   })
 })

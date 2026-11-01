@@ -853,11 +853,11 @@ function hostOf(url: string): string | null {
 function urlProblem(url: string): string | null {
   if (directKind(url)) {
     if (/[\s]/.test(url) || !hostOf(url) || hostOf(url)?.includes('@') || url.length > 512)
-      return 'a whole address like srt://host:port, rist://host:port or https://host/whip, without a user name.'
+      return 'a whole address like srt://host:port, srtla://host:port, rist://host:port or https://host/whip, without a user name.'
     return null
   }
   if (!/^rtmps?:\/\//i.test(url))
-    return 'The server address must start with rtmp://, rtmps://, srt://, rist:// or https:// (WebRTC).'
+    return 'The server address must start with rtmp://, rtmps://, srt://, srtla://, rist:// or https:// (WebRTC).'
   if (/[\s#@]/.test(url)) return 'The server address can’t contain a user name, spaces or a #.'
   const rest = url.replace(/^rtmps?:\/\//i, '')
   const [host, ...app] = rest.split('/')

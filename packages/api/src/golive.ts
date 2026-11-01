@@ -148,7 +148,8 @@ export type DirectKind = 'srt' | 'rist' | 'whip'
 /** The protocol a server address asks for, or null for RTMP (as the engine's `direct_kind`). */
 export function directKind(url: string): DirectKind | null {
   const u = url.trim().toLowerCase()
-  if (u.startsWith('srt://')) return 'srt'
+  // srtla:// is SRT over every connection at once, to an SRTLA receiver.
+  if (u.startsWith('srt://') || u.startsWith('srtla://')) return 'srt'
   if (u.startsWith('rist://')) return 'rist'
   // Plain http only on this computer (a local WHIP server): a token never crosses the
   // network unencrypted.
