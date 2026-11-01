@@ -34,10 +34,13 @@ import {
   healthText,
   mbps,
   onCanvas,
+  viaOf,
+  withVia,
   type Canvas,
   type DestinationView,
   type DirectKind,
   type GoLiveView,
+  type Network,
   type Reach,
   type Service,
   type UploadCheck,
@@ -811,6 +814,21 @@ function AddDestination({
   // The last "Test connection": cleared when the address or key changes.
   const [reach, setReach] = useState<Reach | null>(null)
   const direct = directKind(url)
+  // RIST can go over two connections at once: this computer's, asked for once it's RIST.
+  const [networks, setNetworks] = useState<Network[] | null>(null)
+  const rist = direct === 'rist' && canvas === 'main'
+  useEffect(() => {
+    if (!rist || networks) return
+    api
+      .networks()
+      .then(setNetworks)
+      .catch(() => setNetworks([]))
+  }, [rist, networks, api])
+  const via = viaOf(url)
+  const toggleVia = (name: string) => {
+    setUrl(withVia(url, via.includes(name) ? via.filter((v) => v !== name) : [...via, name]))
+    setReach(null)
+  }
   const tryIt = () => {
     setReach(null)
     void run('test', () => api.testAddress(url, key).catch(reachFailed), { quiet: true }).then(
@@ -943,6 +961,48 @@ function AddDestination({
             </div>
           )}
         </Field>
+        {rist && networks && networks.length > 1 && (
+          <div className="flex flex-col gap-2">
+            <span className="flex items-center gap-1 text-[14px] font-semibold text-text">
+              Send over
+              <InfoTip>
+                Pick two, like Wi-Fi and a phone’s hotspot: every packet goes over both, so one
+                dropping doesn’t stop the stream.
+              </InfoTip>
+            </span>
+            <div role="group" aria-label="Send over" className="flex flex-wrap gap-2">
+              {networks.map((n) => {
+                const on = via.includes(n.name)
+                return (
+                  <button
+                    key={n.name}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleVia(n.name)}
+                    className={cx(
+                      'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+                      'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                      on
+                        ? 'border-accent-line bg-accent-soft text-text'
+                        : 'border-line bg-surface-2 text-text-2 hover:text-text',
+                    )}
+                  >
+                    {on && (
+                      <CheckCircle
+                        size={15}
+                        weight="fill"
+                        className="text-accent-text"
+                        aria-hidden
+                      />
+                    )}
+                    {n.name}
+                    <span className="font-mono text-[12.5px] font-normal text-text-3">{n.ip}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
         {err?.field === 'form' && (
           <p role="alert" className="m-0 text-[14px] text-danger">
             {err.message}
