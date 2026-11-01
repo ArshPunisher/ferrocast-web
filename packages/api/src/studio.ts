@@ -401,6 +401,9 @@ export interface ScenesConfig {
   clip_on_big_moments: boolean
   /** Each saved clip also as a 1080×1920 copy (ffmpeg, fetched when switched on). */
   vertical_clips: boolean
+  /** The vertical copy fills the frame, following a face that fills the picture (else the
+   * action), instead of the whole clip over a blurred copy (the Studio on a Mac). */
+  vertical_fill?: boolean
   /** Away: while live, BRB after this many minutes of silence on the Show's mics, back when
    * you talk (0: off; the Studio only). */
   away_minutes: number
