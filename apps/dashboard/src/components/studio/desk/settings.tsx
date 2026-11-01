@@ -592,7 +592,7 @@ function StreamPage({ s, set }: PageProps) {
             <Row
               label="Ferrocast's own engine"
               sub="Beta"
-              info="Ferrocast's own engine draws and mixes what you stream and record, not just encodes it. The preview stays the same. Sources it can't show yet are left out of the stream. Scene changes follow at once; other edits take up to 2 seconds. From your next stream or recording."
+              info="Ferrocast's own engine draws and mixes what you stream and record, not just encodes it. The preview stays the same. Sources it can't show yet are left out of the stream. Your scene changes and edits follow within half a second. From your next stream or recording."
             >
               <Switch
                 label="Ferrocast's own engine"
