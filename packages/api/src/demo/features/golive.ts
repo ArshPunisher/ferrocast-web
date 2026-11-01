@@ -112,6 +112,7 @@ export class DemoGoLive {
   }
   private aitumOk = false
   private bond = false
+  private irl: string | null = null
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
   private struggle = 0
@@ -506,6 +507,31 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'vertical/obs/restore') return this.restoreVertical()
     if (method === 'POST' && path === 'upload-check') return this.check()
     if (method === 'PUT' && path === 'protection') return this.setProtect(body)
+    if (path === 'irl') {
+      if (method === 'POST') {
+        if (!this.cfg.some((d) => d.enabled && (d.canvas ?? 'main') === 'main'))
+          throw new HttpError(400, 'invalid', 'Tick at least one platform above first.')
+        this.irl = 'https://bond.example/irl#demo.demo'
+        return { phone_url: this.irl }
+      }
+      if (method === 'DELETE') {
+        this.irl = null
+        return undefined
+      }
+      if (method === 'GET')
+        return this.irl
+          ? {
+              phone_url: this.irl,
+              input: 'waiting',
+              destinations: this.cfg
+                .filter((d) => d.enabled && (d.canvas ?? 'main') === 'main')
+                .map((d) => ({
+                  id: d.id,
+                  health: { state: 'waiting', kbps: 0, dropped: 0, since_ms: 0 },
+                })),
+            }
+          : { phone_url: null }
+    }
     if (method === 'PUT' && path === 'bond') {
       const b = requireObj(body)
       if (typeof b.on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')

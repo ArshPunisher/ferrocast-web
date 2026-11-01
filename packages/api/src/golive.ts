@@ -48,6 +48,14 @@ export type PushHealth = PushState & {
   via?: string
 }
 
+/** A phone stream through Ferrocast Bond (IRL). `phone_url: null`: none made. */
+export interface IrlStream {
+  phone_url: string | null
+  /** waiting (for the phone), live, away (Be right back is on), ended. */
+  input?: 'waiting' | 'live' | 'away' | 'ended' | null
+  destinations?: { id: string; health: PushHealth }[] | null
+}
+
 /** One of this computer's network connections. */
 export interface Network {
   /** The system's name for it (en0, Wi-Fi, eth0). */
@@ -508,6 +516,10 @@ export function goliveApi(c: FerroClient) {
     getFfmpeg: () => post<FfmpegState>('/golive/ffmpeg'),
     /** What's on air in OBS, to mark the camera and game on. */
     picture: () => get<{ image: string; width: number; height: number }>('/golive/picture'),
+    /** "Stream from your phone" (Bond, Pro): the phone's link, its state, and ending it. */
+    irl: () => get<IrlStream>('/golive/irl'),
+    startIrl: () => post<{ phone_url: string }>('/golive/irl'),
+    endIrl: () => c.request<void>('DELETE', '/api/v1/golive/irl'),
     /** Ferrocast Bond (Pro) on or off, from the next stream. */
     setBond: (on: boolean) =>
       c.request<{ destinations: DestinationConfig[]; bond: boolean }>(
