@@ -213,7 +213,12 @@ export function LiveCard({
   const now = useNow(1000)
   const api = useGoLive()
   const { run, busy } = useAction()
-  const on = onCanvas(view.destinations, canvas).filter((d) => d.enabled)
+  // Ticked ones, and backups (sending, or waiting for a ticked one) though they aren't.
+  const shown = onCanvas(view.destinations, canvas).filter(
+    (d) => d.enabled || !!d.backup_for || !!d.standby_for,
+  )
+  // A backup on standby isn't counted: it isn't meant to be live.
+  const on = shown.filter((d) => !d.standby_for)
   const live = on.filter((d) => d.health?.state === 'live')
   const paused = on.filter((d) => d.health?.state === 'paused').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
@@ -251,8 +256,16 @@ export function LiveCard({
           className="overflow-hidden rounded-[12px] border border-line"
           aria-label="Health per platform"
         >
-          {on.map((d) => {
-            const h = healthText(d.health, d.blocked)
+          {shown.map((d) => {
+            const h = d.standby_for
+              ? {
+                  tone: 'off' as const,
+                  label: 'On standby',
+                  detail: `Sends only if ${d.standby_for} can’t.`,
+                }
+              : d.backup_for
+                ? withBackup(healthText(d.health, d.blocked), d.backup_for)
+                : healthText(d.health, d.blocked)
             return (
               <li
                 key={d.id}
@@ -667,6 +680,16 @@ export function RowText({
           <ArrowSquareOut size={12} aria-hidden />
         </a>
       )}
+      {d.standby_for && (
+        <span className="block text-[13.5px] text-text-3">
+          Backup for {d.standby_for}: sends only if it can’t
+        </span>
+      )}
+      {d.backup_for && (
+        <span className="block text-[13.5px] font-semibold text-warn">
+          Sending for {d.backup_for}
+        </span>
+      )}
       {d.blocked && <span className="block text-[13.5px] text-danger">{d.blocked}</span>}
       {d.rules.map((r) => {
         const kbps = fixBitrate ? askedKbps(r) : null
@@ -687,6 +710,14 @@ export function RowText({
       })}
     </div>
   )
+}
+
+/** A backup's health line says whom it sends for. */
+function withBackup(
+  h: ReturnType<typeof healthText>,
+  forName: string,
+): ReturnType<typeof healthText> {
+  return { ...h, label: `${h.label} · sending for ${forName}` }
 }
 
 /** A test that couldn't run (a refused address) reads like one that failed. */

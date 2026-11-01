@@ -325,6 +325,28 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   onChange={(n) => setPer({ max_retry_s: n })}
                 />
               </Row>
+              <Row
+                label="Backup"
+                hint="Sends instead if this one can’t for 10 seconds, and stops once this one is back."
+              >
+                <span className="inline-block w-48">
+                  <Select
+                    aria-label={`Backup for ${dest?.name ?? 'this destination'}`}
+                    className="h-8"
+                    value={per.backup ?? ''}
+                    onChange={(e) => setPer({ backup: e.target.value || null })}
+                  >
+                    <option value="">None</option>
+                    {main
+                      .filter((d) => d.id !== tab && !draft.per[d.id]?.backup)
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                  </Select>
+                </span>
+              </Row>
             </>
           )}
         </div>
