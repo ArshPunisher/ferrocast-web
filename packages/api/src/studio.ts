@@ -509,6 +509,7 @@ export type StudioFrame =
   | { v: 1; type: 'obs_health'; data: ObsHealth }
   | { v: 1; type: 'brb'; data: { on: boolean; scene: string } }
   | { v: 1; type: 'golive'; data: import('./golive').GoLiveFrame }
+  | { v: 1; type: 'live_alert'; data: LiveAlert }
 
 export const STUDIO_FRAME_TYPES = [
   'lane',
@@ -518,7 +519,20 @@ export const STUDIO_FRAME_TYPES = [
   'obs_health',
   'brb',
   'golive',
+  'live_alert',
 ] as const
+
+/**
+ * The live watch says a mistake while live (a mic silent, a camera black or frozen, a
+ * destination not sending), or that it's fixed (`cleared`).
+ */
+export interface LiveAlert {
+  /** `mic:<name>`, `camera:<name>:black`, `camera:<name>:frozen`, `destination:<name>`. */
+  id: string
+  level: 'warn' | 'error'
+  message: string
+  cleared: boolean
+}
 
 /** "01:02:03" from milliseconds into the stream. */
 export function timecode(ms: number): string {

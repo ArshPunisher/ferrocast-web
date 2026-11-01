@@ -37,6 +37,8 @@ const LIVE_TYPES = new Set([
   'brb',
   // Go live everywhere (golive.ts)
   'golive',
+  // The live watch (studio.ts LiveAlert)
+  'live_alert',
 ])
 
 const UPDATE_PHASES = new Set(['idle', 'downloading', 'installing', 'ready', 'failed'])
@@ -105,6 +107,11 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
   if (f.type === 'counter' && (typeof d.name !== 'string' || typeof d.value !== 'number'))
     return null
   if (f.type === 'golive' && (typeof d.live !== 'boolean' || !Array.isArray(d.destinations)))
+    return null
+  if (
+    f.type === 'live_alert' &&
+    (typeof d.id !== 'string' || typeof d.message !== 'string' || typeof d.cleared !== 'boolean')
+  )
     return null
   return f as LiveFrame
 }
