@@ -262,25 +262,31 @@ export function LiveCard({
                 <div className="min-w-0">
                   <span
                     className={cx(
-                      'flex items-center gap-1.5 text-[14.5px] font-bold',
+                      'flex items-start gap-1.5 text-[14.5px] font-bold',
                       h.tone === 'ok' && 'text-ok',
                       h.tone === 'warn' && 'text-warn',
                       h.tone === 'bad' && 'text-danger',
                       (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
                     )}
                   >
+                    {/* On the first line when a long label wraps (a phone). */}
                     {h.tone === 'warn' ? (
-                      <ArrowsClockwise size={14} aria-hidden />
+                      <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
                     ) : h.tone === 'paused' ? (
-                      <Pause size={14} weight="fill" aria-hidden />
+                      <Pause size={14} weight="fill" className="mt-[3px] shrink-0" aria-hidden />
                     ) : (
-                      <span className="size-[7px] rounded-full bg-current" aria-hidden />
+                      <span
+                        className="mt-[7px] size-[7px] shrink-0 rounded-full bg-current"
+                        aria-hidden
+                      />
                     )}
                     <span>
                       {d.name}: {h.label}
                     </span>
                   </span>
-                  {h.detail && <p className="m-0 text-[13.5px] text-text-3">{h.detail}</p>}
+                  {h.detail && (
+                    <p className="m-0 text-[13.5px] text-text-3 tabular-nums">{h.detail}</p>
+                  )}
                   {d.health?.state === 'paused' && d.health.until_ms > now && (
                     <p className="m-0 text-[13.5px] text-text-3 tabular-nums">
                       Back in {waitText(d.health.until_ms - now)} at the earliest.
