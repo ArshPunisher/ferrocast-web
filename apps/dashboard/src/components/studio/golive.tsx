@@ -265,7 +265,9 @@ export function LiveCard({
                 }
               : d.backup_for
                 ? withBackup(healthText(d.health, d.blocked), d.backup_for)
-                : healthText(d.health, d.blocked)
+                : d.lighter_for_route
+                  ? lighterForNow(healthText(d.health, d.blocked))
+                  : healthText(d.health, d.blocked)
             return (
               <li
                 key={d.id}
@@ -718,6 +720,15 @@ function withBackup(
   forName: string,
 ): ReturnType<typeof healthText> {
   return { ...h, label: `${h.label} · sending for ${forName}` }
+}
+
+/** One moved to the lighter stream because its route is slow says so, and that it's for now. */
+function lighterForNow(h: ReturnType<typeof healthText>): ReturnType<typeof healthText> {
+  return {
+    ...h,
+    label: `${h.label} · Lighter stream for now`,
+    detail: `${h.detail ? `${h.detail} · ` : ''}its route is slow; full quality again soon`,
+  }
 }
 
 /** A test that couldn't run (a refused address) reads like one that failed. */

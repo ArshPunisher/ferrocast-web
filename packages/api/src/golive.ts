@@ -103,6 +103,11 @@ export interface DestinationView {
   direct?: DirectKind
   /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
   light?: boolean
+  /**
+   * On the lighter stream for now: its route fell behind while the others kept up. It tries
+   * the full stream again by itself.
+   */
+  lighter_for_route?: true
   /** A backup sending now, for this destination's name. */
   backup_for?: string
   /** A backup on standby: it sends only while this one (its name) can't. */
