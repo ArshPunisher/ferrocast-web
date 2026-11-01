@@ -40,6 +40,7 @@ const KIND: Record<string, string> = {
   chat_spike: 'Chat spike',
   clip: 'Clip',
   manual: 'Marker',
+  scene: 'Scene',
 }
 
 /** The lane: live frames win; the first load fills it. */
@@ -116,39 +117,14 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
   const list = useResource(() => studio.markers(since), [studio, since, tick])
   const [label, setLabel] = useState('')
   const { run, busy } = useAction()
-  const download = (format: 'csv' | 'txt') =>
+  const download = (format: 'csv' | 'txt' | 'youtube') =>
     void run(format, async () => {
       const blob = await client.downloadFile(studio.exportPath(format, since))
-      saveBlob(blob, `ferrocast-markers.${format}`)
+      saveBlob(blob, format === 'youtube' ? 'youtube-chapters.txt' : `ferrocast-markers.${format}`)
       return true
     })
   return (
-    <Panel
-      title={title}
-      description="Big moments with their stream time, for editing."
-      actions={
-        <>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<DownloadSimple size={14} />}
-            busy={busy === 'csv'}
-            onClick={() => download('csv')}
-          >
-            CSV
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<DownloadSimple size={14} />}
-            busy={busy === 'txt'}
-            onClick={() => download('txt')}
-          >
-            Text
-          </Button>
-        </>
-      }
-    >
+    <Panel title={title} description="Big moments with their stream time, for editing.">
       <form
         className="mb-3 flex gap-2"
         onSubmit={(e) => {
@@ -176,6 +152,30 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
           Add marker
         </Button>
       </form>
+      <div
+        role="group"
+        aria-label="Download the markers"
+        className="-ml-2 mb-2 flex flex-wrap items-center gap-1"
+      >
+        {(
+          [
+            ['csv', 'CSV'],
+            ['txt', 'Text'],
+            ['youtube', 'YouTube chapters'],
+          ] as const
+        ).map(([f, name]) => (
+          <Button
+            key={f}
+            size="sm"
+            variant="ghost"
+            icon={<DownloadSimple size={14} />}
+            busy={busy === f}
+            onClick={() => download(f)}
+          >
+            {name}
+          </Button>
+        ))}
+      </div>
       {list.error ? (
         <LoadError error={list.error} onRetry={list.reload} />
       ) : !list.data ? (
@@ -237,6 +237,7 @@ const DOT: Record<string, string> = {
   first_chatter: 'bg-ok',
   clip: 'bg-[var(--fc-arc)]',
   manual: 'bg-[var(--fc-arc)]',
+  scene: 'bg-text-3',
 }
 
 /** The stream as a bar with a dot where each moment happened (owner's pick M1): a click on a
@@ -412,6 +413,12 @@ export function MomentsSettings() {
           description="Shows them in Twitch’s highlighter. Needs Twitch reconnected once."
           checked={c.twitch_markers}
           onChange={(v) => save({ twitch_markers: v })}
+        />
+        <Switch
+          label="Add chapters to the YouTube video"
+          description="After the stream: scene changes and big moments, at the end of its description."
+          checked={c.youtube_chapters}
+          onChange={(v) => save({ youtube_chapters: v })}
         />
       </div>
     </Panel>

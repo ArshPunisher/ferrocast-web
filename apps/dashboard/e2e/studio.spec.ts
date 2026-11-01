@@ -202,7 +202,7 @@ test.describe('studio', () => {
     await expect(page.getByText('Switched to Gameplay.')).toBeVisible()
   })
 
-  test('markers: add one and export CSV and text', async ({ page }) => {
+  test('markers: add one and export CSV, text and YouTube chapters', async ({ page }) => {
     await open(page, 'studio/moments')
     const m = panel(page, 'Moments')
     await expect(m.getByText('GlitchGarden raided with 38 viewers')).toBeVisible()
@@ -216,6 +216,9 @@ test.describe('studio', () => {
     const text = page.waitForEvent('download')
     await m.getByRole('button', { name: 'Text' }).click()
     expect((await text).suggestedFilename()).toBe('ferrocast-markers.txt')
+    const chapters = page.waitForEvent('download')
+    await m.getByRole('button', { name: 'YouTube chapters' }).click()
+    expect((await chapters).suggestedFilename()).toBe('youtube-chapters.txt')
   })
 
   test('the Don’t miss lane pins big moments and dismisses them', async ({ page }) => {
