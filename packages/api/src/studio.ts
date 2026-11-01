@@ -460,6 +460,8 @@ export type MomentKind =
   | 'chat_spike'
   | 'clip'
   | 'manual'
+  /** The Studio's scene on air changed: a chapter. */
+  | 'scene'
 
 export interface LaneItem {
   id: string
@@ -493,6 +495,8 @@ export interface MomentsConfig {
   spike_factor: number
   spike_min: number
   twitch_markers: boolean
+  /** After a YouTube stream, its chapters go at the end of the video's description. */
+  youtube_chapters: boolean
 }
 
 export interface ClipResult {
@@ -628,7 +632,7 @@ export function studioApi(c: FerroClient) {
     addMarker: (label?: string) => post<Marker>('/moments/markers', label ? { label } : {}),
     deleteMarker: (id: number) => del(`/moments/markers/${id}`),
     /** The URL of the export (the dashboard downloads it with the session header). */
-    exportPath: (format: 'csv' | 'txt', since?: number) =>
+    exportPath: (format: 'csv' | 'txt' | 'youtube', since?: number) =>
       `/api/v1/moments/markers/export?format=${format}${since === undefined ? '' : `&since=${since}`}`,
   }
 }

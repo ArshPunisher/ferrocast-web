@@ -3,8 +3,8 @@ import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
 import { parseLiveFrame } from '../src/live'
-import { checkStreamInfo, streamInfoFor, studioApi, timecode } from '../src/studio'
-import { markersCsv, markersTxt } from '../src/demo/features/studio'
+import { checkStreamInfo, streamInfoFor, studioApi, timecode, type Marker } from '../src/studio'
+import { markersCsv, markersTxt, youtubeChapters } from '../src/demo/features/studio'
 
 let engine: DemoEngine
 let studio: ReturnType<typeof studioApi>
@@ -87,6 +87,34 @@ describe('studio helpers (mirror core::stream_info)', () => {
     expect(markersTxt(m)).toBe(
       '01:02:03  Bo raided, "30" [clip saved]\n--:--:--  =HYPERLINK("x") hi\n',
     )
+  })
+
+  it('makes YouTube chapters as the engine does', () => {
+    const mk = (s: number, kind: Marker['kind'], label: string): Marker => ({
+      id: s,
+      at: 0,
+      offset_ms: s * 1000,
+      kind,
+      label,
+      platform: null,
+      clip: false,
+    })
+    // The same markers as core::moments' test.
+    expect(
+      youtubeChapters([
+        mk(3, 'scene', 'Starting soon'),
+        mk(185, 'scene', 'Just chatting'),
+        mk(190, 'scene', 'Gameplay'),
+        mk(400, 'chat_spike', 'Chat spike: 40 messages in 30 seconds'),
+        mk(3725, 'raid', 'Bo raided\nwith 30'),
+      ]),
+    ).toEqual({ ok: true, text: '0:00 Starting soon\n3:05 Gameplay\n1:02:05 Bo raided with 30\n' })
+    expect(youtubeChapters([mk(60, 'scene', 'Gameplay'), mk(600, 'scene', 'Chat')])).toEqual({
+      ok: true,
+      text: '0:00 Start\n1:00 Gameplay\n10:00 Chat\n',
+    })
+    const few = youtubeChapters([mk(60, 'scene', 'Gameplay')])
+    expect(few.ok).toBe(false)
   })
 
   it('parses Studio frames and refuses malformed ones', () => {

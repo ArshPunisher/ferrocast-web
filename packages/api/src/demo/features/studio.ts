@@ -102,6 +102,7 @@ const DEFAULT_MOMENTS: MomentsConfig = {
   spike_factor: 3,
   spike_min: 15,
   twitch_markers: false,
+  youtube_chapters: false,
 }
 
 const EIGHT_BALL = [
@@ -1619,17 +1620,22 @@ export class DemoStudio {
     }
     if (is('GET', 'moments', 'markers', 'export')) {
       const format = url.searchParams.get('format') ?? 'csv'
-      if (format !== 'csv' && format !== 'txt')
-        throw new HttpError(400, 'invalid', 'format: csv or txt.')
+      if (format !== 'csv' && format !== 'txt' && format !== 'youtube')
+        throw new HttpError(400, 'invalid', 'format: csv, txt or youtube.')
       const since = Number(url.searchParams.get('since') ?? 0)
       const list = this.markers.filter((m) => m.at >= since)
-      const text = format === 'csv' ? markersCsv(list) : markersTxt(list)
+      let text: string
+      if (format === 'youtube') {
+        const got = youtubeChapters(list)
+        if (!got.ok) throw new HttpError(400, 'invalid', got.reason)
+        text = got.text
+      } else text = format === 'csv' ? markersCsv(list) : markersTxt(list)
       return new Response(text, {
         status: 200,
         headers: {
           'Content-Type':
             format === 'csv' ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8',
-          'Content-Disposition': `attachment; filename="ferrocast-markers.${format}"`,
+          'Content-Disposition': `attachment; filename="ferrocast-${format === 'youtube' ? 'chapters.txt' : `markers.${format}`}"`,
         },
       })
     }
@@ -1691,6 +1697,52 @@ export function markersTxt(list: Marker[]): string {
       return `${tc}  ${noControl(m.label).trim()}${m.clip ? ' [clip saved]' : ''}\n`
     })
     .join('')
+}
+
+/**
+ * The engine's `core::moments::youtube_chapters`: scene changes and big moments (chat spikes
+ * and first chatters left out), from 0:00, at least 10 s apart; YouTube needs 3.
+ */
+export function youtubeChapters(
+  list: Marker[],
+): { ok: true; text: string } | { ok: false; reason: string } {
+  const out: [number, string][] = []
+  const timed = list
+    .filter((m) => m.offset_ms !== null)
+    .sort((a, b) => (a.offset_ms ?? 0) - (b.offset_ms ?? 0))
+  for (const m of timed) {
+    if (m.kind === 'chat_spike' || m.kind === 'first_chatter') continue
+    const at = Math.max(0, m.offset_ms ?? 0)
+    const name = [
+      ...noControl(m.label).replace(/[<>]/g, ' ').split(/\s+/).filter(Boolean).join(' '),
+    ]
+      .slice(0, 100)
+      .join('')
+    if (!name) continue
+    const last = out.at(-1)
+    if (last && at - last[0] < 10_000) {
+      last[1] = name
+      continue
+    }
+    out.push([at, name])
+  }
+  const first = out[0]
+  if (first && first[0] < 10_000) first[0] = 0
+  else out.unshift([0, 'Start'])
+  out.length = Math.min(out.length, 50)
+  if (out.length < 3)
+    return {
+      ok: false,
+      reason: `YouTube needs at least 3 chapters, 10 seconds apart; this stream has ${out.length}. Scene changes and big moments make them.`,
+    }
+  const time = (ms: number) => {
+    const s = Math.floor(ms / 1000)
+    const p = (n: number) => String(n).padStart(2, '0')
+    return s >= 3600
+      ? `${Math.floor(s / 3600)}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`
+      : `${Math.floor(s / 60)}:${p(s % 60)}`
+  }
+  return { ok: true, text: out.map(([at, n]) => `${time(at)} ${n}\n`).join('') }
 }
 
 function noControl(s: string): string {
