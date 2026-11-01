@@ -475,6 +475,14 @@ export function SwitcherSettings({
           checked={c.vertical_clips}
           onChange={(v) => save({ vertical_clips: v })}
         />
+        {app !== 'OBS' && c.vertical_clips && (
+          <Switch
+            label="Fill the frame"
+            description="Follows your face when the camera fills the picture, else the action, instead of the whole clip over a blurred copy. On a Mac."
+            checked={c.vertical_fill ?? false}
+            onChange={(v) => save({ vertical_fill: v })}
+          />
+        )}
         {app !== 'OBS' && (
           <Switch
             label="Add subtitles to clips"
