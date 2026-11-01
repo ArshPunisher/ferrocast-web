@@ -7,6 +7,7 @@ import {
   goliveApi,
   goingTo,
   healthText,
+  linkText,
   mbps,
 } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
@@ -352,5 +353,46 @@ describe('Go live words', () => {
     expect(remoteAllowed('owner', 'PUT', '/golive/protection')).toBe(true)
     expect(remoteAllowed('owner', 'PUT', '/golive/aitum')).toBe(true)
     expect(remoteAllowed('mod', 'GET', '/golive')).toBe(false)
+  })
+})
+
+describe("a direct destination's network in words", () => {
+  const live = { state: 'live', kbps: 6000, dropped: 0, since_ms: 0 } as const
+  it('says how the network is doing beside the rate', () => {
+    expect(healthText({ ...live, link: { rtt_ms: 42, lost_pct: 0, resent_pct: 0 } }, null)).toEqual(
+      {
+        tone: 'ok',
+        label: 'Live · Strong network',
+        detail: '6.0 Mbps · ping 42 ms',
+      },
+    )
+    expect(linkText({ rtt_ms: 120, lost_pct: 3.2, resent_pct: 3.1 })).toEqual({
+      tone: 'ok',
+      label: 'Weak network, fixing itself',
+      detail: 'ping 120 ms · 3.2% lost',
+    })
+    expect(linkText({ rtt_ms: 350, lost_pct: 0, resent_pct: 0 }).label).toBe('Slow network')
+    expect(linkText({ rtt_ms: 90, lost_pct: 14, resent_pct: 9 })).toMatchObject({
+      tone: 'warn',
+      label: 'Network struggling',
+    })
+    // No measure yet (or RTMP): as before.
+    expect(healthText(live, null).label).toBe('Live')
+  })
+  it("keeps a direct destination's retry plain", () => {
+    expect(
+      healthText(
+        {
+          state: 'reconnecting',
+          attempt: 0,
+          retry_in_ms: 0,
+          reason: 'The server refused it.',
+          kbps: 0,
+          dropped: 0,
+          since_ms: 0,
+        },
+        null,
+      ),
+    ).toEqual({ tone: 'warn', label: 'Reconnecting', detail: 'The server refused it.' })
   })
 })

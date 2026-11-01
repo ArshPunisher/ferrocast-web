@@ -264,7 +264,17 @@ export class DemoGoLive {
     }
     const wobble = Math.round((this.host.random() - 0.5) * 300)
     const base = d.canvas === 'vertical' ? 4500 : 6100
-    return { state: 'live', kbps: base + wobble, dropped: 0, since_ms: since }
+    const health: PushHealth = { state: 'live', kbps: base + wobble, dropped: 0, since_ms: since }
+    // A direct destination measures its network: a weak patch every half minute, resent.
+    if (directKind(d.url ?? '')) {
+      const weak = age % 30_000 > 20_000
+      health.link = {
+        rtt_ms: (weak ? 140 : 38) + Math.round(this.host.random() * 8),
+        lost_pct: weak ? 3.2 : 0,
+        resent_pct: weak ? 3.1 : 0,
+      }
+    }
+    return health
   }
 
   private blocked(d: DestinationConfig): string | null {

@@ -30,7 +30,38 @@ export type PushState =
   /** Upload protection paused it; it comes back by itself, no earlier than `until_ms`. */
   | { state: 'paused'; until_ms: number; reason: string }
 
-export type PushHealth = PushState & { kbps: number; dropped: number; since_ms: number }
+/** A direct destination's network (SRT, RIST, WebRTC), as its sender measures it. */
+export interface Link {
+  rtt_ms: number
+  /** Of the packets sent, the share the network lost (most come back resent). */
+  lost_pct: number
+  resent_pct: number
+}
+
+export type PushHealth = PushState & {
+  kbps: number
+  dropped: number
+  since_ms: number
+  /** Direct destinations, once connected. */
+  link?: Link
+}
+
+/** How a direct destination's network is doing, in words. */
+export function linkText(l: Link): { tone: 'ok' | 'warn'; label: string; detail: string } {
+  const ping = `ping ${Math.round(l.rtt_ms)} ms`
+  const lost = l.lost_pct >= 0.5 ? ` · ${l.lost_pct.toFixed(1)}% lost` : ''
+  if (l.lost_pct >= 10 || l.rtt_ms >= 800) {
+    return { tone: 'warn', label: 'Network struggling', detail: `${ping}${lost}` }
+  }
+  if (l.lost_pct >= 1 || l.rtt_ms >= 300) {
+    return {
+      tone: 'ok',
+      label: l.resent_pct > 0 ? 'Weak network, fixing itself' : 'Slow network',
+      detail: `${ping}${lost}`,
+    }
+  }
+  return { tone: 'ok', label: 'Strong network', detail: ping }
+}
 
 export type VideoCodec = 'h264' | 'hevc' | 'av1' | 'vp9'
 
@@ -433,20 +464,23 @@ export function healthText(
   if (blocked) return { tone: 'bad', label: 'Can’t start', detail: blocked }
   if (!h) return { tone: 'off', label: 'Waiting for OBS', detail: null }
   switch (h.state) {
-    case 'live':
-      return {
-        tone: 'ok',
-        label: 'Live',
-        detail: `${mbps(h.kbps)}${h.dropped ? ` · ${h.dropped} skipped` : ''}`,
-      }
+    case 'live': {
+      const rate = `${mbps(h.kbps)}${h.dropped ? ` · ${h.dropped} skipped` : ''}`
+      if (!h.link) return { tone: 'ok', label: 'Live', detail: rate }
+      const l = linkText(h.link)
+      return { tone: l.tone, label: `Live · ${l.label}`, detail: `${rate} · ${l.detail}` }
+    }
     case 'connecting':
       return { tone: 'warn', label: 'Connecting', detail: null }
     case 'reconnecting':
-      return {
-        tone: 'warn',
-        label: `Reconnecting, try ${h.attempt}`,
-        detail: `${h.reason} Trying again in ${Math.max(1, Math.round(h.retry_in_ms / 1000))} s.`,
-      }
+      // Direct destinations (sent from the Studio) don't count their tries here.
+      return h.attempt > 0
+        ? {
+            tone: 'warn',
+            label: `Reconnecting, try ${h.attempt}`,
+            detail: `${h.reason} Trying again in ${Math.max(1, Math.round(h.retry_in_ms / 1000))} s.`,
+          }
+        : { tone: 'warn', label: 'Reconnecting', detail: h.reason }
     case 'waiting':
       return { tone: 'off', label: 'Waiting for OBS', detail: null }
     case 'stopped':
