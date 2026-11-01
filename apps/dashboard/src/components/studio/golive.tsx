@@ -811,8 +811,14 @@ function AddDestination({
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
-  // The last "Test connection": cleared when the address or key changes.
-  const [reach, setReach] = useState<Reach | null>(null)
+  // The last "Test connection": cleared when the address or key changes, and a slow answer
+  // for an address since changed is dropped (each try and each change counts one).
+  const [reach, setReachNow] = useState<Reach | null>(null)
+  const tries = useRef(0)
+  const setReach = (r: Reach | null) => {
+    tries.current += 1
+    setReachNow(r)
+  }
   const direct = directKind(url)
   // RIST can go over two connections at once: this computer's, asked for once it's RIST.
   const [networks, setNetworks] = useState<Network[] | null>(null)
@@ -831,8 +837,11 @@ function AddDestination({
   }
   const tryIt = () => {
     setReach(null)
+    const mine = tries.current
     void run('test', () => api.testAddress(url, key).catch(reachFailed), { quiet: true }).then(
-      (r) => r && setReach(r),
+      (r) => {
+        if (r && tries.current === mine) setReachNow(r)
+      },
     )
   }
   const submit = () => {
@@ -855,6 +864,7 @@ function AddDestination({
       setName('')
       setUrl('')
       setKey('')
+      setReach(null)
       onAdded()
       onClose()
     })
