@@ -338,7 +338,17 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   >
                     <option value="">None</option>
                     {main
-                      .filter((d) => d.id !== tab && !draft.per[d.id]?.backup)
+                      // Not itself, not one with its own backup, not one backing up another
+                      // (the engine refuses those); the one picked now stays listed.
+                      .filter(
+                        (d) =>
+                          d.id === per.backup ||
+                          (d.id !== tab &&
+                            !draft.per[d.id]?.backup &&
+                            !Object.entries(draft.per).some(
+                              ([o, x]) => o !== tab && x.backup === d.id,
+                            )),
+                      )
                       .map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}
