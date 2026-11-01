@@ -3,9 +3,17 @@
 
 import { useEffect, useState } from 'react'
 import type { StudioGuests } from '@ferrocast/api'
-import { Copy, LinkSimple, PhoneDisconnect, Plus, Trash } from '@phosphor-icons/react'
+import {
+  Copy,
+  LinkSimple,
+  PhoneDisconnect,
+  Plus,
+  QrCode as QrIcon,
+  Trash,
+} from '@phosphor-icons/react'
 import { Button, IconButton, InfoTip, Skeleton, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
+import { QrCode } from '../../remote'
 import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 
@@ -82,6 +90,8 @@ export function GuestLists({
   onHangUp: (source: string) => void
 }) {
   const [asking, setAsking] = useState<string | null>(null)
+  // The link shown as a QR code: a phone that scans it becomes a camera here.
+  const [qr, setQr] = useState<string | null>(null)
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -100,7 +110,7 @@ export function GuestLists({
             {invites.map((i) => (
               <li
                 key={i.id}
-                className="flex items-center gap-2 rounded-control border border-line bg-surface-2 py-1.5 pr-1.5 pl-3"
+                className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-2 py-1.5 pr-1.5 pl-3"
               >
                 <LinkSimple size={18} className="shrink-0 text-accent-text" aria-hidden />
                 <span className="min-w-0 flex-1 truncate font-mono text-[14px] text-text-2">
@@ -126,6 +136,14 @@ export function GuestLists({
                   </>
                 ) : (
                   <>
+                    <IconButton
+                      label={qr === i.id ? 'Hide QR code' : 'Show QR code'}
+                      size="sm"
+                      aria-expanded={qr === i.id}
+                      onClick={() => setQr((q) => (q === i.id ? null : i.id))}
+                    >
+                      <QrIcon size={17} />
+                    </IconButton>
                     <IconButton label="Copy link" size="sm" onClick={() => onCopy(i.url)}>
                       <Copy size={17} />
                     </IconButton>
@@ -139,6 +157,14 @@ export function GuestLists({
                       <Trash size={17} />
                     </IconButton>
                   </>
+                )}
+                {qr === i.id && (
+                  <div className="flex w-full flex-col items-center gap-2 pt-2 pb-1">
+                    <QrCode text={i.url} size={200} label="QR code for this guest link" />
+                    <p className="m-0 text-center text-[13.5px] text-text-2">
+                      Scan it with a phone’s camera: the phone becomes a camera in this scene.
+                    </p>
+                  </div>
                 )}
               </li>
             ))}

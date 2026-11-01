@@ -48,6 +48,8 @@ describe('guests', () => {
       ],
     })
     expect(html).toContain('https://x/app/guest.html#tok')
+    // A phone scans the link instead of having it sent.
+    expect(html).toContain('aria-label="Show QR code"')
     expect(html).toContain('aria-label="Copy link"')
     expect(html).toContain('aria-label="Remove link"')
     expect(html).toContain('Asha')
