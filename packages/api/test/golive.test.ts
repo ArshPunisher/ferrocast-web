@@ -9,6 +9,8 @@ import {
   healthText,
   linkText,
   mbps,
+  viaOf,
+  withVia,
 } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
@@ -435,5 +437,21 @@ describe('backups', () => {
     await api.setAdvanced(per('kick'))
     const kick = (await api.view()).destinations.find((d) => d.id === 'kick')
     expect(kick?.standby_for).toBe('Twitch')
+  })
+})
+
+describe('RIST over two connections', () => {
+  it('reads and writes via= and keeps the other settings', () => {
+    expect(viaOf('rist://h:5000')).toEqual([])
+    expect(viaOf('rist://h:5000?secret=x&via=en0,en7')).toEqual(['en0', 'en7'])
+    expect(withVia('rist://h:5000', ['en0', 'en7'])).toBe('rist://h:5000?via=en0,en7')
+    expect(withVia('rist://h:5000?secret=x&via=en0', ['en7'])).toBe(
+      'rist://h:5000?secret=x&via=en7',
+    )
+    expect(withVia('rist://h:5000?via=en0', [])).toBe('rist://h:5000')
+  })
+  it("lists the demo computer's connections", async () => {
+    const { api } = demo()
+    expect((await api.networks()).map((n) => n.name)).toEqual(['en0', 'en7'])
   })
 })

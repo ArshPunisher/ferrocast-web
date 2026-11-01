@@ -46,6 +46,31 @@ export type PushHealth = PushState & {
   link?: Link
 }
 
+/** One of this computer's network connections. */
+export interface Network {
+  /** The system's name for it (en0, Wi-Fi, eth0). */
+  name: string
+  ip: string
+}
+
+/** The connections a RIST address sends over (`via=`), by name. */
+export function viaOf(url: string): string[] {
+  const q = url.split('?')[1] ?? ''
+  const v = new URLSearchParams(q).get('via') ?? ''
+  return v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** `url` sending over `via` (none: the system's choice), its other settings kept. */
+export function withVia(url: string, via: string[]): string {
+  const [base, q = ''] = url.split('?', 2) as [string, string?]
+  const params = q.split('&').filter((kv) => kv && !/^via=/i.test(kv))
+  if (via.length > 0) params.push(`via=${via.join(',')}`)
+  return params.length > 0 ? `${base}?${params.join('&')}` : base
+}
+
 /** How "Test connection" went: tried as the stream would connect, without sending it. */
 export interface Reach {
   ok: boolean
@@ -436,6 +461,8 @@ export function goliveApi(c: FerroClient) {
       post<Reach>(`/golive/destinations/${encodeURIComponent(id)}/test`),
     /** "Test connection" in the add dialog, before saving. */
     testAddress: (url: string, key: string) => post<Reach>('/golive/test', { url, key }),
+    /** This computer's network connections, for RIST over two at once (`via=`). */
+    networks: () => get<Network[]>('/golive/networks'),
     pointObs: () => post<ObsSetup>('/golive/obs/setup'),
     restoreObs: () => post<ObsSetup>('/golive/obs/restore'),
     /** Points Aitum Vertical (OBS's vertical canvas) at Ferrocast. */

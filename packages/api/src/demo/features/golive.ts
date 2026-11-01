@@ -518,6 +518,11 @@ export class DemoGoLive {
       if (d.kind !== 'custom') return this.reach(`rtmps://${LABELS[d.kind]}/app`, '')
       return this.reach(d.url ?? '', '')
     }
+    if (method === 'GET' && path === 'networks')
+      return [
+        { name: 'en0', ip: '192.168.1.20' },
+        { name: 'en7', ip: '172.20.10.2' },
+      ]
     if (method === 'POST' && path === 'test') {
       const b = requireObj(body)
       const url = typeof b.url === 'string' ? b.url : ''
