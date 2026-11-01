@@ -111,6 +111,7 @@ export class DemoGoLive {
     per: {},
   }
   private aitumOk = false
+  private bond = false
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
   private struggle = 0
@@ -386,6 +387,8 @@ export class DemoGoLive {
       upload: clone(this.upload),
       protect: this.protect,
       aitum_ok: this.aitumOk,
+      bond: this.bond,
+      bond_sending: false,
       advanced: clone(this.advanced),
       cut: {
         source: this.source,
@@ -503,6 +506,12 @@ export class DemoGoLive {
     if (method === 'POST' && path === 'vertical/obs/restore') return this.restoreVertical()
     if (method === 'POST' && path === 'upload-check') return this.check()
     if (method === 'PUT' && path === 'protection') return this.setProtect(body)
+    if (method === 'PUT' && path === 'bond') {
+      const b = requireObj(body)
+      if (typeof b.on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+      this.bond = b.on
+      return { destinations: clone(this.cfg), bond: this.bond }
+    }
     if (method === 'PUT' && path === 'aitum') {
       const b = requireObj(body)
       if (typeof b.ok !== 'boolean') throw new HttpError(400, 'invalid', 'ok: true or false.')

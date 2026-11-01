@@ -223,6 +223,9 @@ export interface GoLiveView {
   protect: boolean
   /** The streamer said they run Aitum Multistream on purpose (hides the setup note). */
   aitum_ok: boolean
+  /** Ferrocast Bond (Pro) is on, and whether it sends this stream now. */
+  bond?: boolean
+  bond_sending?: boolean
   /** Where the vertical picture comes from, and the cut-from-stream layout. */
   cut: CutView
   /** Advanced mode's settings (A2.5). */
@@ -505,6 +508,15 @@ export function goliveApi(c: FerroClient) {
     getFfmpeg: () => post<FfmpegState>('/golive/ffmpeg'),
     /** What's on air in OBS, to mark the camera and game on. */
     picture: () => get<{ image: string; width: number; height: number }>('/golive/picture'),
+    /** Ferrocast Bond (Pro) on or off, from the next stream. */
+    setBond: (on: boolean) =>
+      c.request<{ destinations: DestinationConfig[]; bond: boolean }>(
+        'PUT',
+        '/api/v1/golive/bond',
+        {
+          on,
+        },
+      ),
     /** "I use Aitum Multistream on purpose": hides the setup note. */
     setAitumOk: (ok: boolean) =>
       c.request<{ destinations: DestinationConfig[]; aitum_ok: boolean }>(

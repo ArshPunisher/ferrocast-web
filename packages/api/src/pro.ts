@@ -19,6 +19,8 @@ export interface ProFeatures {
   tip_domain: boolean
   /** Smart moderation, smart replies and the written recap (a free-tier model is set up). */
   smart: boolean
+  /** Ferrocast Bond: platforms sent from the cloud, over every connection at once. */
+  bond: boolean
 }
 export type ProFeature = keyof ProFeatures
 
@@ -33,6 +35,7 @@ export const NO_PRO_FEATURES: ProFeatures = {
   weekly_email: false,
   tip_domain: false,
   smart: false,
+  bond: false,
 }
 
 /** One of the subscription's usage counters (API.md §9). */
