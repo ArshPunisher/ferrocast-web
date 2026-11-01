@@ -44,6 +44,8 @@ export type PushHealth = PushState & {
   since_ms: number
   /** Direct destinations, once connected. */
   link?: Link
+  /** RTMP: the connection it moved to after the usual one failed ("iPhone USB"). */
+  via?: string
 }
 
 /** One of this computer's network connections. */
@@ -541,6 +543,8 @@ export function healthText(
   switch (h.state) {
     case 'live': {
       const rate = `${mbps(h.kbps)}${h.dropped ? ` · ${h.dropped} skipped` : ''}`
+      // Still live, on the backup connection (it may cost mobile data).
+      if (h.via) return { tone: 'warn', label: `Live · over ${h.via}`, detail: rate }
       if (!h.link) return { tone: 'ok', label: 'Live', detail: rate }
       const l = linkText(h.link)
       return { tone: l.tone, label: `Live · ${l.label}`, detail: `${rate} · ${l.detail}` }

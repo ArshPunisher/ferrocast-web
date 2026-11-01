@@ -380,6 +380,12 @@ describe("a direct destination's network in words", () => {
     })
     // No measure yet (or RTMP): as before.
     expect(healthText(live, null).label).toBe('Live')
+    // RTMP moved to another connection when the usual one failed.
+    expect(healthText({ ...live, via: 'iPhone USB' }, null)).toEqual({
+      tone: 'warn',
+      label: 'Live · over iPhone USB',
+      detail: '6.0 Mbps',
+    })
   })
   it("keeps a direct destination's retry plain", () => {
     expect(
