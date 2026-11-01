@@ -820,9 +820,11 @@ function AddDestination({
     setReachNow(r)
   }
   const direct = directKind(url)
-  // RIST can go over two connections at once: this computer's, asked for once it's RIST.
+  // RIST and SRTLA go over several connections at once: this computer's, asked for once
+  // the address is one of them.
   const [networks, setNetworks] = useState<Network[] | null>(null)
-  const rist = direct === 'rist' && canvas === 'main'
+  const srtla = /^srtla:\/\//i.test(url.trim())
+  const rist = (direct === 'rist' || srtla) && canvas === 'main'
   useEffect(() => {
     if (!rist || networks) return
     api
@@ -919,7 +921,7 @@ function AddDestination({
         </Field>
         <Field
           label="Server"
-          hint="rtmp://, rtmps://, srt://, rist:// or a WebRTC (WHIP) https:// address. The place you stream to gives you this."
+          hint="rtmp://, rtmps://, srt://, srtla:// (every connection at once), rist:// or a WebRTC (WHIP) https:// address. The place you stream to gives you this."
           error={
             err?.field === 'url'
               ? err.message
@@ -976,8 +978,9 @@ function AddDestination({
             <span className="flex items-center gap-1 text-[14px] font-semibold text-text">
               Send over
               <InfoTip>
-                Pick two, like Wi-Fi and a phone’s hotspot: every packet goes over both, so one
-                dropping doesn’t stop the stream.
+                {srtla
+                  ? 'The stream is shared out over the ones picked (none: all of them), more on the stronger ones, so one dropping doesn’t stop it.'
+                  : 'Pick two, like Wi-Fi and a phone’s hotspot: every packet goes over both, so one dropping doesn’t stop the stream.'}
               </InfoTip>
             </span>
             <div role="group" aria-label="Send over" className="flex flex-wrap gap-2">
