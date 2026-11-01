@@ -789,7 +789,7 @@ const DIRECT_NAMES: Record<DirectKind, string> = { srt: 'SRT', rist: 'RIST', whi
 /** What the key is called for each kind of server. */
 const KEY_LABEL: Record<DirectKind, string> = {
   srt: 'Stream ID (optional)',
-  rist: 'Passphrase (optional)',
+  rist: 'Passphrase or login password (optional)',
   whip: 'Bearer token (optional)',
 }
 
