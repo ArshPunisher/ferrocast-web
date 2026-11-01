@@ -288,6 +288,19 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   />
                 </Row>
               )}
+              {dest?.direct === 'whip' && (
+                <Row
+                  label="Simulcast"
+                  hint="Also sends the 720p lighter stream, so the server gives each viewer the one that fits."
+                >
+                  <Switch
+                    label="Simulcast"
+                    hideLabel
+                    checked={!!per.simulcast}
+                    onChange={(on) => setPer({ simulcast: on })}
+                  />
+                </Row>
+              )}
               {dest?.kind !== 'custom' && (
                 <Field
                   label="Server"
