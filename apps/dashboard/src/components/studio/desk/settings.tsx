@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CheckCircle,
   Broadcast,
+  EyeSlash,
   GearSix,
   Keyboard,
   Monitor,
@@ -20,6 +21,7 @@ import {
   describeError,
   type AudioCare,
   type EngineRecordFormat,
+  type PrivacyGuard,
   type StudioSettings,
 } from '@ferrocast/api'
 import {
@@ -1033,7 +1035,101 @@ function PicturePage({ s, set }: PageProps) {
           />
         </Row>
       </div>
+      <Heading info="On a Mac. Your screen captures leave these out, so a message never reaches the stream. Applies at once.">
+        Privacy
+      </Heading>
+      <Privacy />
     </>
+  )
+}
+
+/** Apps that often show private things, offered first. */
+const PRIVATE_APPS = ['Messages', 'Mail', 'WhatsApp', 'Discord', 'Slack', 'Telegram', '1Password']
+
+/** Notifications and chosen apps left out of screen captures (kept with the scenes). */
+function Privacy() {
+  const { api } = useDesk()
+  const loaded = useResource(() => api.privacy(), [api])
+  const running = useResource(async () => (await api.apps()).running, [api])
+  const [p, setP] = useState<PrivacyGuard | null>(null)
+  const [busy, setBusy] = useState(false)
+  const now = p ?? loaded.data ?? null
+  if (loaded.error) return <LoadError error={loaded.error} onRetry={loaded.reload} />
+  if (!now) return <Skeleton className="h-24 w-full" />
+  const save = async (next: PrivacyGuard) => {
+    setBusy(true)
+    try {
+      setP(await api.setPrivacy(next))
+    } catch (e) {
+      toast({ tone: 'error', message: describeError(e).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  const hidden = (n: string) => now.hide_apps.some((a) => same(a, n))
+  // Chosen first, then the usual suspects, then whatever else is open.
+  const names: string[] = []
+  for (const n of [...now.hide_apps, ...PRIVATE_APPS, ...(running.data ?? [])])
+    if (!names.some((m) => same(m, n))) names.push(n)
+  const toggle = (n: string) =>
+    void save({
+      ...now,
+      hide_apps: hidden(n) ? now.hide_apps.filter((a) => !same(a, n)) : [...now.hide_apps, n],
+    })
+  return (
+    <div className="flex flex-col">
+      <Row label="Hide notifications" info="Banners and alerts never show on stream.">
+        <Switch
+          label="Hide notifications"
+          hideLabel
+          disabled={busy}
+          checked={now.hide_notifications}
+          onChange={(hide_notifications) => void save({ ...now, hide_notifications })}
+        />
+      </Row>
+      <div className="flex flex-col gap-2 border-t border-line py-2.5">
+        <span className="flex items-center gap-1 text-[14.5px]">
+          Hide these apps
+          <InfoTip label="About hiding apps">
+            Their windows are cut out of a display capture, even when opened later. A window capture
+            of one still shows it.
+          </InfoTip>
+        </span>
+        <div role="group" aria-label="Hide these apps" className="flex flex-wrap gap-2">
+          {names.map((n) => {
+            const on = hidden(n)
+            return (
+              <button
+                key={n}
+                type="button"
+                aria-pressed={on}
+                title={n}
+                disabled={busy}
+                onClick={() => toggle(n)}
+                className={cx(
+                  'fc-press inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+                  'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
+                  on
+                    ? 'border-accent-line bg-accent-soft text-text'
+                    : 'border-line bg-surface-2 text-text-2 hover:text-text',
+                )}
+              >
+                {on && (
+                  <EyeSlash
+                    size={14}
+                    weight="fill"
+                    className="shrink-0 text-accent-text"
+                    aria-hidden
+                  />
+                )}
+                <span className="truncate">{n}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 
