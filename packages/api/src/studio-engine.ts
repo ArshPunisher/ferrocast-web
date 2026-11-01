@@ -3,6 +3,16 @@
 
 import type { FerroClient } from './client'
 
+/**
+ * Sound that looks after itself: music quieter while you talk (ducking), and every track at
+ * the loudness platforms want.
+ */
+export interface AudioCare {
+  ducking: { voices: string[]; music: string[]; depth_db: number } | null
+  /** -14 for most platforms; null: off. */
+  loudness_lufs: number | null
+}
+
 export interface StudioEngineStatus {
   /** OBS's engine can be used here (the desktop app, with OBS installed). */
   available: boolean
@@ -1038,6 +1048,10 @@ export function studioEngineApi(c: FerroClient) {
         devices: { name: string; id: string }[]
         current: { name: string; id: string }
       }>('GET', '/api/v1/studio/engine/monitoring'),
+    /** The sound care: ducking and loudness, kept with the scenes. */
+    audioCare: () => c.request<AudioCare>('GET', '/api/v1/studio/engine/audio-care'),
+    setAudioCare: (care: AudioCare) =>
+      c.request<AudioCare>('PUT', '/api/v1/studio/engine/audio-care', care),
     /** Levels now, for these sounds (a meter starts on the first ask). */
     levels: (names: string[]) =>
       c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),

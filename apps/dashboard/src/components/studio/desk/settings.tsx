@@ -18,6 +18,7 @@ import {
 import {
   ENGINE_RECORD_FORMATS,
   describeError,
+  type AudioCare,
   type EngineRecordFormat,
   type StudioSettings,
 } from '@ferrocast/api'
@@ -726,9 +727,131 @@ function AudioPage({ s, set }: PageProps) {
           />
         </Row>
       </div>
+      <Heading info="Changes apply at once and are kept with your scenes.">
+        Sound that looks after itself
+      </Heading>
+      <SoundCare />
       <Heading info="Heard in every scene. Changes apply at once.">Everywhere</Heading>
       <EverywhereDevices />
     </>
+  )
+}
+
+const DEPTHS = [
+  { db: -6, label: 'A little' },
+  { db: -12, label: 'Clearly' },
+  { db: -18, label: 'A lot' },
+] as const
+
+/** Steady loudness, and music quieter while you talk (kept with the scenes). */
+function SoundCare() {
+  const { api, scene } = useDesk()
+  const loaded = useResource(() => api.audioCare(), [api])
+  const sounds = useResource(async () => (await api.audio(scene)).map((a) => a.name), [api, scene])
+  const [care, setCare] = useState<AudioCare | null>(null)
+  const [busy, setBusy] = useState(false)
+  const now = care ?? loaded.data ?? null
+  if (loaded.error) return <LoadError error={loaded.error} onRetry={loaded.reload} />
+  if (!now) return <Skeleton className="h-24 w-full" />
+  const save = async (next: AudioCare) => {
+    setBusy(true)
+    try {
+      setCare(await api.setAudioCare(next))
+    } catch (e) {
+      toast({ tone: 'error', message: describeError(e).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const duck = now.ducking
+  const toggle = (list: 'voices' | 'music', name: string) => {
+    if (!duck) return
+    const other = list === 'voices' ? 'music' : 'voices'
+    const has = duck[list].includes(name)
+    void save({
+      ...now,
+      ducking: {
+        ...duck,
+        [list]: has ? duck[list].filter((n) => n !== name) : [...duck[list], name],
+        // One source is a voice or music, not both.
+        [other]: duck[other].filter((n) => n !== name),
+      },
+    })
+  }
+  const chips = (list: 'voices' | 'music', label: string) => (
+    <div className="flex flex-col gap-2">
+      <span className="text-[13.5px] font-semibold text-text-2">{label}</span>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+        {(sounds.data ?? []).map((n) => {
+          const on = duck?.[list].includes(n) ?? false
+          return (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={on}
+              disabled={busy}
+              onClick={() => toggle(list, n)}
+              className={cx(
+                'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+                'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
+                on
+                  ? 'border-accent-line bg-accent-soft text-text'
+                  : 'border-line bg-surface-2 text-text-2 hover:text-text',
+              )}
+            >
+              {on && (
+                <CheckCircle size={14} weight="fill" className="text-accent-text" aria-hidden />
+              )}
+              {n}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+  return (
+    <div className="flex flex-col">
+      <Row
+        label="Steady loudness"
+        info="Every track at the loudness platforms use (-14 LUFS), raised or lowered slowly, never clipping."
+      >
+        <Switch
+          label="Steady loudness"
+          hideLabel
+          disabled={busy}
+          checked={now.loudness_lufs !== null}
+          onChange={(on) => void save({ ...now, loudness_lufs: on ? -14 : null })}
+        />
+      </Row>
+      <Row
+        label="Music quieter when you talk"
+        info="While your voice is heard, the music fades down, and back up half a second after you stop."
+      >
+        <Switch
+          label="Music quieter when you talk"
+          hideLabel
+          disabled={busy}
+          checked={duck !== null}
+          onChange={(on) =>
+            void save({ ...now, ducking: on ? { voices: [], music: [], depth_db: -12 } : null })
+          }
+        />
+      </Row>
+      {duck && (
+        <div className="flex flex-col gap-3 py-2">
+          {chips('voices', 'Your voice')}
+          {chips('music', 'Music')}
+          <Row label="How much quieter">
+            <Segmented
+              label="How much quieter"
+              value={String(duck.depth_db)}
+              options={DEPTHS.map((d) => ({ value: String(d.db), label: d.label }))}
+              onChange={(v) => void save({ ...now, ducking: { ...duck, depth_db: Number(v) } })}
+            />
+          </Row>
+        </div>
+      )}
+    </div>
   )
 }
 
