@@ -449,6 +449,10 @@ describe('RIST over two connections', () => {
       'rist://h:5000?secret=x&via=en7',
     )
     expect(withVia('rist://h:5000?via=en0', [])).toBe('rist://h:5000')
+    // Windows names have spaces: encoded, and read back as they were.
+    const spaced = withVia('rist://h:5000', ['Ethernet 2', 'Wi-Fi'])
+    expect(spaced).toBe('rist://h:5000?via=Ethernet%202,Wi-Fi')
+    expect(viaOf(spaced)).toEqual(['Ethernet 2', 'Wi-Fi'])
   })
   it("lists the demo computer's connections", async () => {
     const { api } = demo()

@@ -67,7 +67,8 @@ export function viaOf(url: string): string[] {
 export function withVia(url: string, via: string[]): string {
   const [base, q = ''] = url.split('?', 2) as [string, string?]
   const params = q.split('&').filter((kv) => kv && !/^via=/i.test(kv))
-  if (via.length > 0) params.push(`via=${via.join(',')}`)
+  // A name may have a space ("Ethernet 2"): each one encoded, the commas between kept.
+  if (via.length > 0) params.push(`via=${via.map(encodeURIComponent).join(',')}`)
   return params.length > 0 ? `${base}?${params.join('&')}` : base
 }
 
