@@ -1,7 +1,14 @@
 // Studio's live frames (lane, markers, counters, show, OBS health, BRB) folded into one
 // slice of the live store, so screens subscribe to just what they show.
 
-import type { GoLiveFrame, LaneItem, LiveFrame, ObsHealth, ShowRun } from '@ferrocast/api'
+import type {
+  GoLiveFrame,
+  LaneItem,
+  LiveAlert,
+  LiveFrame,
+  ObsHealth,
+  ShowRun,
+} from '@ferrocast/api'
 
 export interface StudioLive {
   /** `undefined` until a frame arrives (load it with the client). */
@@ -16,6 +23,8 @@ export interface StudioLive {
   counters: Record<string, number>
   /** Go live everywhere's health lines, `undefined` until a frame arrives. */
   golive: GoLiveFrame | undefined
+  /** The live watch's last word (a mistake while live, or that it's fixed). */
+  alert: LiveAlert | null
 }
 
 export const EMPTY_STUDIO: StudioLive = {
@@ -27,9 +36,19 @@ export const EMPTY_STUDIO: StudioLive = {
   markers: 0,
   counters: {},
   golive: undefined,
+  alert: null,
 }
 
-const TYPES = new Set(['lane', 'marker', 'counter', 'show', 'obs_health', 'brb', 'golive'])
+const TYPES = new Set([
+  'lane',
+  'marker',
+  'counter',
+  'show',
+  'obs_health',
+  'brb',
+  'golive',
+  'live_alert',
+])
 
 export function isStudioFrame(f: LiveFrame): boolean {
   return TYPES.has(f.type)
@@ -58,6 +77,8 @@ export function reduceStudio(s: StudioLive, f: LiveFrame): StudioLive {
       return { ...s, brb: f.data }
     case 'golive':
       return { ...s, golive: f.data }
+    case 'live_alert':
+      return { ...s, alert: f.data }
     default:
       return s
   }

@@ -40,6 +40,7 @@ import { parseRoute, useRoute } from './lib/router'
 import { Shell } from './components/Shell'
 import { Home } from './screens/Home'
 import { StudioGlobal } from './components/studio/moments'
+import { LiveAlertToasts } from './components/studio/live-alerts'
 import { RemoteGate } from './components/remote'
 
 // Home is in the first bundle; other screens load when first opened.
@@ -401,6 +402,7 @@ export function App() {
         </ScreenBoundary>
       </Shell>
       <StudioGlobal />
+      <LiveAlertToasts />
       <Toaster />
     </>
   )
