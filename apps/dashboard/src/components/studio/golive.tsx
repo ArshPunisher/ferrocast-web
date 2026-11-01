@@ -11,6 +11,7 @@ import {
   CaretRight,
   CheckCircle,
   Copy,
+  DeviceMobile,
   DotsSixVertical,
   Gauge,
   Info,
@@ -68,6 +69,7 @@ import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
 import { useProStatus } from '../../lib/pro-status'
 import { ProChip } from '../pro/ProChip'
+import { QrCode } from '../remote'
 import { PRO_LINE } from '../pro/ProPanel'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
@@ -203,6 +205,97 @@ export function GoLiveTab() {
         </div>
       </div>
     </>
+  )
+}
+
+/** What the phone stream is doing, in words. */
+const PHONE_INPUT: Record<string, { tone: 'ok' | 'warn' | 'neutral'; text: string }> = {
+  waiting: { tone: 'neutral', text: 'Waiting for your phone' },
+  live: { tone: 'ok', text: 'Live from your phone' },
+  away: { tone: 'warn', text: 'Signal lost: Be right back is on' },
+  ended: { tone: 'neutral', text: 'Ended' },
+}
+
+/** "Stream from your phone" (Bond, Pro): a link for the phone, no computer needed once made. */
+function PhoneStream({ names }: { names: Record<string, string> }) {
+  const api = useGoLive()
+  const now = useResource(() => api.irl(), [api])
+  const { run, busy } = useAction()
+  const link = now.data?.phone_url ?? null
+  useEffect(() => {
+    if (!link) return
+    const t = setInterval(now.reload, 3000)
+    return () => clearInterval(t)
+  }, [link, now.reload])
+  const start = () =>
+    void run('irl', () => api.startIrl(), { quiet: true }).then((r) => r && now.reload())
+  const end = () => {
+    if (!confirm('End the phone stream on every platform?')) return
+    void run('irl-end', () => api.endIrl().then(() => true), {
+      success: 'Phone stream ended.',
+    }).then((r) => r && now.reload())
+  }
+  const copy = () =>
+    link &&
+    void navigator.clipboard
+      .writeText(link)
+      .then(() => toast({ tone: 'ok', message: 'Link copied. Open it on your phone.' }))
+  const state = PHONE_INPUT[now.data?.input ?? 'waiting'] ?? PHONE_INPUT.waiting!
+  return (
+    <div className="flex flex-col gap-3 border-t border-line pt-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <DeviceMobile size={18} className="text-text-2" aria-hidden />
+        <span className="text-[14.5px] font-semibold text-text">Stream from your phone</span>
+        <InfoTip>
+          Scan the code with your phone: its camera goes live on the platforms ticked above, sent
+          from Ferrocast’s servers, so this computer can be off. Add the page to your home screen
+          for alerts when the signal drops.
+        </InfoTip>
+      </div>
+      {!link ? (
+        <Button
+          size="sm"
+          className="self-start"
+          icon={<DeviceMobile size={15} />}
+          busy={busy === 'irl'}
+          onClick={start}
+        >
+          Make a phone link
+        </Button>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="self-start rounded-panel bg-white p-2">
+            <QrCode text={link} size={168} label="QR code to stream from your phone" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Badge tone={state.tone} className="self-start">
+              {state.text}
+            </Badge>
+            <ul className="flex flex-col gap-1 text-[14px]">
+              {(now.data?.destinations ?? []).map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-2">
+                  <span className="truncate text-text">{names[d.id] ?? d.id}</span>
+                  <span className="shrink-0 text-text-2">
+                    {d.health.state === 'waiting' ? 'Waiting' : healthText(d.health, null).label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="ghost" icon={<Copy size={14} />} onClick={copy}>
+                Copy link
+              </Button>
+              <Button size="sm" variant="ghost" busy={busy === 'irl'} onClick={start}>
+                New link
+              </Button>
+              <Button size="sm" variant="danger-ghost" busy={busy === 'irl-end'} onClick={end}>
+                End
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -625,6 +718,9 @@ export function Platforms({
             </div>
             <ProChip className="mt-0.5 shrink-0" />
           </div>
+        )}
+        {!vertical && bondState === 'open' && (
+          <PhoneStream names={Object.fromEntries(merged.map((d) => [d.id, d.name]))} />
         )}
         {!vertical && bondState === 'locked' && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-3 text-[14.5px]">
