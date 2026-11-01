@@ -13,6 +13,14 @@ export interface AudioCare {
   loudness_lufs: number | null
 }
 
+/** The privacy guard: what a display capture leaves out (a Mac's, for now). */
+export interface PrivacyGuard {
+  /** macOS's notification banners; on unless turned off. */
+  hide_notifications: boolean
+  /** Apps whose windows never show, by name (as `apps().running` gives them) or bundle id. */
+  hide_apps: string[]
+}
+
 export interface StudioEngineStatus {
   /** OBS's engine can be used here (the desktop app, with OBS installed). */
   available: boolean
@@ -1052,6 +1060,10 @@ export function studioEngineApi(c: FerroClient) {
     audioCare: () => c.request<AudioCare>('GET', '/api/v1/studio/engine/audio-care'),
     setAudioCare: (care: AudioCare) =>
       c.request<AudioCare>('PUT', '/api/v1/studio/engine/audio-care', care),
+    /** The privacy guard, kept with the scenes. */
+    privacy: () => c.request<PrivacyGuard>('GET', '/api/v1/studio/engine/privacy'),
+    setPrivacy: (p: PrivacyGuard) =>
+      c.request<PrivacyGuard>('PUT', '/api/v1/studio/engine/privacy', p),
     /** Levels now, for these sounds (a meter starts on the first ask). */
     levels: (names: string[]) =>
       c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),

@@ -70,6 +70,9 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.setSceneTransition('Gameplay', { kind: 'cut_transition', ms: 0 }),
       () => api.screenshot('Gameplay'),
       () => api.editItem('Gameplay', 3, 'scale_lanczos'),
+      () => api.audioCare(),
+      () => api.privacy(),
+      () => api.setPrivacy({ hide_notifications: true, hide_apps: ['Mail'] }),
     ]) {
       const e = await call().then(
         () => null,
