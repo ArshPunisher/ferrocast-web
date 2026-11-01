@@ -34,6 +34,7 @@ import {
   healthText,
   mbps,
   onCanvas,
+  proPanelState,
   viaOf,
   withVia,
   type Canvas,
@@ -65,6 +66,9 @@ import { externalLink } from '../../lib/external'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
+import { useProStatus } from '../../lib/pro-status'
+import { ProChip } from '../pro/ProChip'
+import { PRO_LINE } from '../pro/ProPanel'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
@@ -463,6 +467,15 @@ export function Platforms({
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
     }).then((r) => r && onProtect?.(r.protect))
+  // Ferrocast Bond (Pro): shown where this relay has it.
+  const pro = useProStatus()
+  const bondState = proPanelState(pro, 'bond')
+  const bond = (on: boolean) =>
+    void run('bond', () => api.setBond(on), {
+      success: on
+        ? 'Ferrocast Bond sends your next stream.'
+        : 'Your next stream goes from this computer.',
+    }).then((r) => r && onSaved())
 
   const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
@@ -594,6 +607,38 @@ export function Platforms({
                 <ProtectionRule view={view} onSaved={onSaved} />
               </div>
             )}
+          </div>
+        )}
+        {!vertical && bondState === 'open' && (
+          <div className="flex items-start gap-2 border-t border-line pt-3">
+            <div className="min-w-0 flex-1">
+              <Switch
+                label="Ferrocast Bond"
+                description="Your platforms are sent from Ferrocast’s servers: this computer uploads one stream, over Wi-Fi and your phone at once. If it drops, a Be right back screen keeps your channels live for up to 10 minutes."
+                checked={!!view.bond}
+                disabled={busy === 'bond'}
+                onChange={bond}
+              />
+              {view.bond_sending && (
+                <p className="mt-1 text-[13.5px] text-text-2">Sending this stream now.</p>
+              )}
+            </div>
+            <ProChip className="mt-0.5 shrink-0" />
+          </div>
+        )}
+        {!vertical && bondState === 'locked' && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-3 text-[14.5px]">
+            <span className="font-semibold text-text">Ferrocast Bond</span>
+            <ProChip />
+            <span className="basis-full text-text-2">
+              Stream over Wi-Fi and your phone at once, held live if your PC drops. {PRO_LINE}{' '}
+              <a
+                href={href({ name: 'settings', section: 'pro' })}
+                className="font-semibold text-accent-text underline-offset-2 hover:underline"
+              >
+                Settings › Pro
+              </a>
+            </span>
           </div>
         )}
       </div>
