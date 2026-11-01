@@ -391,6 +391,11 @@ export interface ScenesConfig {
   hotkeys: string[]
   brb_scene: string | null
   brb_on_ads: boolean
+  /**
+   * While live in the Studio: BRB by itself when a Pre-flight camera has been black for a
+   * while, back when its picture returns.
+   */
+  brb_when_black?: boolean
   brb_mute: string[]
   clip_command: boolean
   clip_on_big_moments: boolean

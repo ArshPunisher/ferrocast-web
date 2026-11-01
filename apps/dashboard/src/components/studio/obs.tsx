@@ -369,7 +369,7 @@ export function SwitcherSettings({
               onChange={(e) =>
                 save({
                   brb_scene: e.target.value || null,
-                  ...(e.target.value ? {} : { brb_on_ads: false }),
+                  ...(e.target.value ? {} : { brb_on_ads: false, brb_when_black: false }),
                 })
               }
             >
@@ -389,6 +389,15 @@ export function SwitcherSettings({
           checked={c.brb_on_ads}
           onChange={(v) => save({ brb_on_ads: v })}
         />
+        {app !== 'OBS' && (
+          <Switch
+            label="Switch to BRB when a camera goes black"
+            description="While you're live, for the cameras in Pre-flight. Back when the picture returns."
+            disabled={!c.brb_scene}
+            checked={!!c.brb_when_black}
+            onChange={(v) => save({ brb_when_black: v })}
+          />
+        )}
         {/* Away (plan item 9): the Studio reads its own mics; OBS's aren't heard from here. */}
         {app !== 'OBS' && (
           <Field

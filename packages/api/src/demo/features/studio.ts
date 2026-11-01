@@ -1561,6 +1561,12 @@ export class DemoStudio {
       const next = { ...this.scenesCfg, ...requireObj(body) } as ScenesConfig
       if (next.hotkeys.length > 9)
         throw new HttpError(400, 'invalid', 'hotkeys: 9 at most (Alt+1 to Alt+9).')
+      if (next.brb_when_black && !next.brb_scene)
+        throw new HttpError(
+          400,
+          'invalid',
+          'brb_scene: pick the BRB scene to switch to when a camera goes black.',
+        )
       if (next.brb_on_ads && !next.brb_scene)
         throw new HttpError(
           400,
