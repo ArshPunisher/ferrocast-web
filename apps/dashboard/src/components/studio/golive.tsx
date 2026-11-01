@@ -18,8 +18,10 @@ import {
   Pause,
   Plus,
   Plug,
+  Pulse,
   Trash,
   Warning,
+  WarningCircle,
   ArrowSquareOut,
 } from '@phosphor-icons/react'
 import {
@@ -36,6 +38,7 @@ import {
   type DestinationView,
   type DirectKind,
   type GoLiveView,
+  type Reach,
   type Service,
   type UploadCheck,
 } from '@ferrocast/api'
@@ -432,6 +435,12 @@ export function Platforms({
       setRemoving(null)
       if (r) onSaved()
     })
+  // "Test connection" per destination: the last result, shown under its row.
+  const [tests, setTests] = useState<Record<string, Reach>>({})
+  const test = (d: DestinationView) =>
+    void run(`test:${d.id}`, () => api.testDestination(d.id).catch(reachFailed), {
+      quiet: true,
+    }).then((r) => r && setTests((t) => ({ ...t, [d.id]: r })))
   const protect = (on: boolean) =>
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
@@ -504,6 +513,20 @@ export function Platforms({
                       ? 'Paused'
                       : mbps(d.health?.kbps || plan)}
                 </span>
+                {(d.kind === 'custom' || d.connected) && (
+                  <IconButton
+                    label={`Test connection to ${d.name}`}
+                    size="sm"
+                    disabled={busy === `test:${d.id}`}
+                    onClick={() => test(d)}
+                  >
+                    {busy === `test:${d.id}` ? (
+                      <span className="fc-busy" aria-hidden />
+                    ) : (
+                      <Pulse size={15} />
+                    )}
+                  </IconButton>
+                )}
                 {d.kind === 'custom' && (
                   <IconButton
                     label={`Remove ${d.name}`}
@@ -522,6 +545,9 @@ export function Platforms({
                   onChange={(on) => toggle(d.id, on)}
                 />
               </div>
+              {tests[d.id] !== undefined && (
+                <ReachLine r={tests[d.id]!} className="col-span-2 col-start-3" />
+              )}
             </li>
           ))}
         </ul>
@@ -663,6 +689,34 @@ export function RowText({
   )
 }
 
+/** A test that couldn't run (a refused address) reads like one that failed. */
+function reachFailed(e: unknown): Reach {
+  return { ok: false, message: describeError(e).message }
+}
+
+/** How "Test connection" went, under the row or in the add dialog. */
+function ReachLine({ r, className }: { r: Reach; className?: string }) {
+  const Icon = r.ok ? CheckCircle : WarningCircle
+  return (
+    <p
+      role="status"
+      className={cx(
+        'm-0 flex items-start gap-1.5 text-[13.5px] leading-snug',
+        r.ok ? 'text-text-2' : 'text-danger',
+        className,
+      )}
+    >
+      <Icon
+        size={15}
+        weight="fill"
+        className={cx('mt-[2px] shrink-0', r.ok ? 'text-ok' : 'text-danger')}
+        aria-hidden
+      />
+      <span>{r.message}</span>
+    </p>
+  )
+}
+
 function Note({ children, warn }: { children: React.ReactNode; warn?: boolean }) {
   const Icon = warn ? Warning : Info
   return (
@@ -712,7 +766,15 @@ function AddDestination({
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
+  // The last "Test connection": cleared when the address or key changes.
+  const [reach, setReach] = useState<Reach | null>(null)
   const direct = directKind(url)
+  const tryIt = () => {
+    setReach(null)
+    void run('test', () => api.testAddress(url, key).catch(reachFailed), { quiet: true }).then(
+      (r) => r && setReach(r),
+    )
+  }
   const submit = () => {
     setErr(null)
     void run(
@@ -746,6 +808,9 @@ function AddDestination({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
+          <Button busy={busy === 'test'} disabled={!url.trim()} onClick={tryIt}>
+            Test
+          </Button>
           <Button
             variant="primary"
             busy={busy === 'add'}
@@ -798,7 +863,10 @@ function AddDestination({
               {...a}
               name="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value)
+                setReach(null)
+              }}
               placeholder="rtmps://live.example.com/app"
               inputMode="url"
               autoComplete="off"
@@ -819,7 +887,10 @@ function AddDestination({
                 name="stream-key"
                 value={key}
                 type={show ? 'text' : 'password'}
-                onChange={(e) => setKey(e.target.value)}
+                onChange={(e) => {
+                  setKey(e.target.value)
+                  setReach(null)
+                }}
                 autoComplete="off"
                 spellCheck={false}
                 className="min-w-0 flex-1 font-mono text-[14px]"
@@ -835,6 +906,7 @@ function AddDestination({
             {err.message}
           </p>
         )}
+        {reach && <ReachLine r={reach} />}
         <Note>
           <b>Video only.</b> Chat, alerts and the title don’t reach this one; Ferrocast just sends
           the stream there.
