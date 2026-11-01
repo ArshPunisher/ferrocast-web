@@ -1035,7 +1035,19 @@ function PicturePage({ s, set }: PageProps) {
           />
         </Row>
       </div>
-      <Heading info="On a Mac. Your screen captures leave these out, so a message never reaches the stream. Applies at once.">
+      <PrivacySection />
+    </>
+  )
+}
+
+/** The Privacy section, only where the computer can leave apps out (a Mac). */
+function PrivacySection() {
+  const { api } = useDesk()
+  const here = useResource(() => api.privacy(), [api])
+  if (here.data && here.data.supported === false) return null
+  return (
+    <>
+      <Heading info="Your screen captures leave these out, so a message never reaches the stream. Applies at once.">
         Privacy
       </Heading>
       <Privacy />

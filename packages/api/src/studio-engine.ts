@@ -19,6 +19,8 @@ export interface PrivacyGuard {
   hide_notifications: boolean
   /** Apps whose windows never show, by name (as `apps().running` gives them) or bundle id. */
   hide_apps: string[]
+  /** Leaving apps out is possible here (macOS): elsewhere the section isn't shown. */
+  supported?: boolean
 }
 
 export interface StudioEngineStatus {
