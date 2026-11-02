@@ -594,6 +594,8 @@ export interface EngineStats {
   /** The replay buffer when on: the last file saved, or why it stopped. */
   replay?: { active: boolean; last: string | null; error: string | null } | null
   virtualcam?: { active: boolean } | null
+  /** NDI output, while it sends: the name it's sent under. */
+  ndi?: { name: string } | null
   /** Captures on air that show nothing: macOS's Screen Recording off for Ferrocast, no picture
    * at all, or an all-black one (checked every 3 s). */
   captures?: EngineCaptureProblem[]
@@ -1184,6 +1186,12 @@ export function studioEngineApi(c: FerroClient) {
       c.request<{ active: boolean }>('POST', '/api/v1/studio/engine/virtualcam', {
         on,
         ...(source ? { source } : {}),
+      }),
+    /** What's on air sent on the local network as NDI (under `name`, default "Ferrocast"), or stopped. */
+    ndiOutput: (on: boolean, name?: string) =>
+      c.request<{ active: boolean; name: string | null }>('POST', '/api/v1/studio/engine/ndi', {
+        on,
+        ...(name ? { name } : {}),
       }),
     /** The recording goes on in a new file. */
     recordSplit: () => c.request<void>('POST', '/api/v1/studio/engine/record/split', {}),
