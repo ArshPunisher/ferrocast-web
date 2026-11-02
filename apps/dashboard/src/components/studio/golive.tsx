@@ -463,6 +463,10 @@ export function Platforms({
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
     }).then((r) => r && onProtect?.(r.protect))
+  const autoQuality = (on: boolean) =>
+    void run('auto-quality', () => api.setAutoQuality(on), {
+      success: on ? 'Auto quality is on.' : 'Auto quality is off.',
+    }).then((r) => r && onSaved())
 
   const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
@@ -594,6 +598,15 @@ export function Platforms({
                 <ProtectionRule view={view} onSaved={onSaved} />
               </div>
             )}
+            <div className="mt-3">
+              <Switch
+                label="Auto quality"
+                description="If your upload struggles, the stream’s quality drops a little so it stays smooth, then comes back by itself."
+                checked={view.auto_quality}
+                disabled={busy === 'auto-quality'}
+                onChange={autoQuality}
+              />
+            </div>
           </div>
         )}
       </div>

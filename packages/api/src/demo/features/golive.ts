@@ -111,6 +111,7 @@ export class DemoGoLive {
     per: {},
   }
   private aitumOk = false
+  private autoQuality = true
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
   private struggle = 0
@@ -386,6 +387,7 @@ export class DemoGoLive {
       upload: clone(this.upload),
       protect: this.protect,
       aitum_ok: this.aitumOk,
+      auto_quality: this.autoQuality,
       advanced: clone(this.advanced),
       cut: {
         source: this.source,
@@ -508,6 +510,12 @@ export class DemoGoLive {
       if (typeof b.ok !== 'boolean') throw new HttpError(400, 'invalid', 'ok: true or false.')
       this.aitumOk = b.ok
       return { destinations: clone(this.cfg), aitum_ok: this.aitumOk }
+    }
+    if (method === 'PUT' && path === 'auto-quality') {
+      const b = requireObj(body)
+      if (typeof b.on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+      this.autoQuality = b.on
+      return { destinations: clone(this.cfg), auto_quality: this.autoQuality }
     }
     if (method === 'POST' && seg[1] === 'resume' && seg.length === 3)
       return this.resume(seg[2] ?? '')

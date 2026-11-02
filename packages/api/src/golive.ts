@@ -223,6 +223,8 @@ export interface GoLiveView {
   protect: boolean
   /** The streamer said they run Aitum Multistream on purpose (hides the setup note). */
   aitum_ok: boolean
+  /** Auto quality: the Studio's stream lowers its bitrate when the upload struggles. */
+  auto_quality: boolean
   /** Where the vertical picture comes from, and the cut-from-stream layout. */
   cut: CutView
   /** Advanced mode's settings (A2.5). */
@@ -511,6 +513,13 @@ export function goliveApi(c: FerroClient) {
         'PUT',
         '/api/v1/golive/aitum',
         { ok },
+      ),
+    /** Auto quality on or off. */
+    setAutoQuality: (on: boolean) =>
+      c.request<{ destinations: DestinationConfig[]; auto_quality: boolean }>(
+        'PUT',
+        '/api/v1/golive/auto-quality',
+        { on },
       ),
     /** "Resume now" on a platform upload protection paused. */
     resume: (id: string) => post<void>(`/golive/resume/${encodeURIComponent(id)}`),
