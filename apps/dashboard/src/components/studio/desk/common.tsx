@@ -184,16 +184,17 @@ export const KIND_GROUPS: KindGroup[] = [
         key: 'camera',
         label: 'Camera',
         icon: Webcam,
-        kinds: ['macos-avcapture', 'av_capture_input_v2', 'dshow_input'],
-        device: ['device', 'video_device_id'],
+        kinds: ['macos-avcapture', 'av_capture_input_v2', 'dshow_input', 'v4l2_input'],
+        device: ['device', 'video_device_id', 'device_id'],
       },
       {
         key: 'screen',
         label: 'Screen',
         icon: Monitor,
-        kinds: ['screen_capture', 'monitor_capture'],
+        kinds: ['screen_capture', 'monitor_capture', 'xshm_input'],
         settings: { type: 0 },
-        device: ['display_uuid', 'monitor_id'],
+        // Ferrocore's keys (display on a Mac, monitor on Windows, screen on Linux), then OBS's.
+        device: ['display', 'monitor', 'screen', 'display_uuid', 'monitor_id'],
         fit: true,
       },
       {
@@ -231,14 +232,14 @@ export const KIND_GROUPS: KindGroup[] = [
         key: 'mic',
         label: 'Microphone',
         icon: Microphone,
-        kinds: ['coreaudio_input_capture', 'wasapi_input_capture'],
+        kinds: ['coreaudio_input_capture', 'wasapi_input_capture', 'pulse_input_capture'],
         device: ['device_id'],
       },
       {
         key: 'desktop',
         label: 'Desktop sound',
         icon: SpeakerHigh,
-        kinds: ['sck_audio_capture', 'wasapi_output_capture'],
+        kinds: ['sck_audio_capture', 'wasapi_output_capture', 'pulse_output_capture'],
         settings: { type: 0 },
       },
       {
