@@ -18,6 +18,7 @@ import {
   Power,
   ClockCounterClockwise,
   Scissors,
+  ShareNetwork,
   VideoCamera,
   Square,
 } from '@phosphor-icons/react'
@@ -564,6 +565,7 @@ function ControlBar({
     ])
   const replayOn = !!stats?.replay?.active
   const camOn = !!stats?.virtualcam?.active
+  const ndiOn = !!stats?.ndi
   const outputsMenu = (e: React.MouseEvent) =>
     openMenu(e, 'More outputs', [
       {
@@ -584,6 +586,17 @@ function ControlBar({
         onSelect: () =>
           void run('virtualcam', () => api.virtualCamera(!camOn), {
             success: camOn ? 'Virtual camera off.' : 'Virtual camera on: other apps can pick it.',
+          }),
+      },
+      {
+        label: 'NDI output',
+        icon: ShareNetwork,
+        checked: ndiOn,
+        onSelect: () =>
+          void run('ndi', () => api.ndiOutput(!ndiOn), {
+            success: ndiOn
+              ? 'NDI output off.'
+              : 'NDI output on: other computers on your network see "Ferrocast".',
           }),
       },
     ])
@@ -623,13 +636,17 @@ function ControlBar({
           <LayoutMenu onStatus={onStatus} />
           <button
             type="button"
-            aria-label="Replay buffer and virtual camera"
-            title="Replay buffer and virtual camera"
-            aria-pressed={replayOn || camOn}
-            className={cx(TOOL, 'rounded-r-[inherit]', (replayOn || camOn) && 'text-accent-text')}
+            aria-label="Replay buffer, virtual camera and NDI"
+            title="Replay buffer, virtual camera and NDI"
+            aria-pressed={replayOn || camOn || ndiOn}
+            className={cx(
+              TOOL,
+              'rounded-r-[inherit]',
+              (replayOn || camOn || ndiOn) && 'text-accent-text',
+            )}
             onClick={outputsMenu}
           >
-            <VideoCamera size={18} weight={replayOn || camOn ? 'fill' : 'regular'} />
+            <VideoCamera size={18} weight={replayOn || camOn || ndiOn ? 'fill' : 'regular'} />
           </button>
         </div>
         {recording && (

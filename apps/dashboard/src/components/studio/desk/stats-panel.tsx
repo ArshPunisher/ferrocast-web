@@ -7,6 +7,7 @@ import {
   ClockCounterClockwise,
   HardDrives,
   Record as RecordIcon,
+  ShareNetwork,
   VideoCamera,
   type Icon,
 } from '@phosphor-icons/react'
@@ -229,6 +230,14 @@ export function StatsDialog({
       icon: VideoCamera,
       on: !!stats?.virtualcam?.active,
       status: stats?.virtualcam?.active ? 'On' : 'Off',
+      rate: '–',
+      dropped: '–',
+    },
+    {
+      name: 'NDI',
+      icon: ShareNetwork,
+      on: !!stats?.ndi,
+      status: stats?.ndi ? `On (${stats.ndi.name})` : 'Off',
       rate: '–',
       dropped: '–',
     },
