@@ -577,34 +577,6 @@ function StreamPage({ s, set }: PageProps) {
                 ))}
             </Select>
           </Row>
-          {isMac && (
-            <Row
-              label="Ferrocast's own encoder"
-              sub="Beta"
-              info="Streams and records with Ferrocast's own encoder instead of OBS's. Same picture, steadier sound sync, and recordings that survive a crash. From your next stream or recording. A delay, the VOD track, a smaller size, pausing, splitting and extra sound tracks still use OBS's."
-            >
-              <Switch
-                label="Ferrocast's own encoder"
-                hideLabel
-                checked={!!s.own_encoder}
-                onChange={(own_encoder) => set({ own_encoder })}
-              />
-            </Row>
-          )}
-          {isMac && (
-            <Row
-              label="Ferrocast's own engine"
-              sub="Beta"
-              info="Ferrocast's own engine draws and mixes what you stream and record, not just encodes it. The preview stays the same. Sources it can't show yet are left out of the stream. Your scene changes and edits follow within half a second. From your next stream or recording."
-            >
-              <Switch
-                label="Ferrocast's own engine"
-                hideLabel
-                checked={!!s.own_drawing}
-                onChange={(own_drawing) => set({ own_drawing })}
-              />
-            </Row>
-          )}
           <Row label="Encoder" info="One you pick here wins over the choice above (HEVC, AV1…).">
             <EncoderSelect
               label="Encoder"
