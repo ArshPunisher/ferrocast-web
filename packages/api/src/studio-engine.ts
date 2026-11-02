@@ -577,6 +577,9 @@ export interface EngineStats {
     /** Frames the encoders skipped (encoding lag), and all given to them. */
     skipped?: number
     encoded?: number
+    /** Faults the engine caught and carried on from, and sources its watchdog started again. */
+    recovered?: number
+    restarts?: number
   }
   canvas: { width: number; height: number; fps: number }
   stream: EngineStreamStats | null

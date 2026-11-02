@@ -287,6 +287,27 @@ export function StatsDialog({
               behind (lower the quality or use the hardware encoder).
             </InfoTip>
           </p>
+          {(e.restarts ?? 0) + (e.recovered ?? 0) > 0 && (
+            <p className="m-0 flex flex-wrap items-center gap-1 text-[13.5px] text-text-2">
+              <span>
+                Fixed itself:{' '}
+                {[
+                  e.restarts
+                    ? `restarted ${e.restarts} stuck source${e.restarts === 1 ? '' : 's'}`
+                    : '',
+                  e.recovered ? `caught ${e.recovered} fault${e.recovered === 1 ? '' : 's'}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+                .
+              </span>
+              <InfoTip label="About fixing itself">
+                A camera or capture that stops sending is started again by itself, and a fault in
+                one source doesn’t stop the rest. If it keeps happening, check that source’s cable
+                or settings.
+              </InfoTip>
+            </p>
+          )}
           <div className="overflow-x-auto rounded-[14px] border border-line">
             <table className="w-full min-w-[440px] border-collapse text-[14px]">
               <thead>
