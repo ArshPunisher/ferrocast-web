@@ -493,21 +493,3 @@ describe('which servers the Studio sends to itself', () => {
     expect(directKind('rtmp://a/app')).toBeNull()
   })
 })
-
-describe('demo: streaming from a phone', () => {
-  it('makes a link for the ticked platforms, reads it back and ends it', async () => {
-    const engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
-    const api = goliveApi(
-      new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
-    )
-    expect((await api.irl()).phone_url).toBeNull()
-    const made = await api.startIrl()
-    expect(made.phone_url).toMatch(/\/irl#/)
-    const now = await api.irl()
-    expect(now.input).toBe('waiting')
-    expect(now.destinations?.length).toBeGreaterThan(0)
-    await api.endIrl()
-    expect((await api.irl()).phone_url).toBeNull()
-    engine.dispose()
-  })
-})

@@ -11,7 +11,6 @@ import {
   CaretRight,
   CheckCircle,
   Copy,
-  DeviceMobile,
   DotsSixVertical,
   Gauge,
   Info,
@@ -35,7 +34,6 @@ import {
   healthText,
   mbps,
   onCanvas,
-  proPanelState,
   viaOf,
   withVia,
   type Canvas,
@@ -67,10 +65,6 @@ import { externalLink } from '../../lib/external'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
-import { useProStatus } from '../../lib/pro-status'
-import { ProChip } from '../pro/ProChip'
-import { QrCode } from '../remote'
-import { PRO_LINE } from '../pro/ProPanel'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
@@ -205,97 +199,6 @@ export function GoLiveTab() {
         </div>
       </div>
     </>
-  )
-}
-
-/** What the phone stream is doing, in words. */
-const PHONE_INPUT: Record<string, { tone: 'ok' | 'warn' | 'neutral'; text: string }> = {
-  waiting: { tone: 'neutral', text: 'Waiting for your phone' },
-  live: { tone: 'ok', text: 'Live from your phone' },
-  away: { tone: 'warn', text: 'Signal lost: Be right back is on' },
-  ended: { tone: 'neutral', text: 'Ended' },
-}
-
-/** "Stream from your phone" (Bond, Pro): a link for the phone, no computer needed once made. */
-function PhoneStream({ names }: { names: Record<string, string> }) {
-  const api = useGoLive()
-  const now = useResource(() => api.irl(), [api])
-  const { run, busy } = useAction()
-  const link = now.data?.phone_url ?? null
-  useEffect(() => {
-    if (!link) return
-    const t = setInterval(now.reload, 3000)
-    return () => clearInterval(t)
-  }, [link, now.reload])
-  const start = () =>
-    void run('irl', () => api.startIrl(), { quiet: true }).then((r) => r && now.reload())
-  const end = () => {
-    if (!confirm('End the phone stream on every platform?')) return
-    void run('irl-end', () => api.endIrl().then(() => true), {
-      success: 'Phone stream ended.',
-    }).then((r) => r && now.reload())
-  }
-  const copy = () =>
-    link &&
-    void navigator.clipboard
-      .writeText(link)
-      .then(() => toast({ tone: 'ok', message: 'Link copied. Open it on your phone.' }))
-  const state = PHONE_INPUT[now.data?.input ?? 'waiting'] ?? PHONE_INPUT.waiting!
-  return (
-    <div className="flex flex-col gap-3 border-t border-line pt-3">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <DeviceMobile size={18} className="text-text-2" aria-hidden />
-        <span className="text-[14.5px] font-semibold text-text">Stream from your phone</span>
-        <InfoTip>
-          Scan the code with your phone: its camera goes live on the platforms ticked above, sent
-          from Ferrocast’s servers, so this computer can be off. Add the page to your home screen
-          for alerts when the signal drops.
-        </InfoTip>
-      </div>
-      {!link ? (
-        <Button
-          size="sm"
-          className="self-start"
-          icon={<DeviceMobile size={15} />}
-          busy={busy === 'irl'}
-          onClick={start}
-        >
-          Make a phone link
-        </Button>
-      ) : (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="self-start rounded-panel bg-white p-2">
-            <QrCode text={link} size={168} label="QR code to stream from your phone" />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <Badge tone={state.tone} className="self-start">
-              {state.text}
-            </Badge>
-            <ul className="flex flex-col gap-1 text-[14px]">
-              {(now.data?.destinations ?? []).map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate text-text">{names[d.id] ?? d.id}</span>
-                  <span className="shrink-0 text-text-2">
-                    {d.health.state === 'waiting' ? 'Waiting' : healthText(d.health, null).label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="ghost" icon={<Copy size={14} />} onClick={copy}>
-                Copy link
-              </Button>
-              <Button size="sm" variant="ghost" busy={busy === 'irl'} onClick={start}>
-                New link
-              </Button>
-              <Button size="sm" variant="danger-ghost" busy={busy === 'irl-end'} onClick={end}>
-                End
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -560,15 +463,6 @@ export function Platforms({
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
     }).then((r) => r && onProtect?.(r.protect))
-  // Ferrocast Bond (Pro): shown where this relay has it.
-  const pro = useProStatus()
-  const bondState = proPanelState(pro, 'bond')
-  const bond = (on: boolean) =>
-    void run('bond', () => api.setBond(on), {
-      success: on
-        ? 'Ferrocast Bond sends your next stream.'
-        : 'Your next stream goes from this computer.',
-    }).then((r) => r && onSaved())
 
   const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
@@ -700,41 +594,6 @@ export function Platforms({
                 <ProtectionRule view={view} onSaved={onSaved} />
               </div>
             )}
-          </div>
-        )}
-        {!vertical && bondState === 'open' && (
-          <div className="flex items-start gap-2 border-t border-line pt-3">
-            <div className="min-w-0 flex-1">
-              <Switch
-                label="Ferrocast Bond"
-                description="Your platforms are sent from Ferrocast’s servers: this computer uploads one stream, over Wi-Fi and your phone at once. If it drops, a Be right back screen keeps your channels live for up to 10 minutes."
-                checked={!!view.bond}
-                disabled={busy === 'bond'}
-                onChange={bond}
-              />
-              {view.bond_sending && (
-                <p className="mt-1 text-[13.5px] text-text-2">Sending this stream now.</p>
-              )}
-            </div>
-            <ProChip className="mt-0.5 shrink-0" />
-          </div>
-        )}
-        {!vertical && bondState === 'open' && (
-          <PhoneStream names={Object.fromEntries(merged.map((d) => [d.id, d.name]))} />
-        )}
-        {!vertical && bondState === 'locked' && (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-3 text-[14.5px]">
-            <span className="font-semibold text-text">Ferrocast Bond</span>
-            <ProChip />
-            <span className="basis-full text-text-2">
-              Stream over Wi-Fi and your phone at once, held live if your PC drops. {PRO_LINE}{' '}
-              <a
-                href={href({ name: 'settings', section: 'pro' })}
-                className="font-semibold text-accent-text underline-offset-2 hover:underline"
-              >
-                Settings › Pro
-              </a>
-            </span>
           </div>
         )}
       </div>
