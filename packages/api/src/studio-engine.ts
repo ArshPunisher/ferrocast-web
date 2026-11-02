@@ -582,6 +582,8 @@ export interface EngineStats {
     restarts?: number
   }
   canvas: { width: number; height: number; fps: number }
+  /** While the stream is live: its health out of 100 over the last ten seconds, and what costs most. */
+  health?: { score: number; verdict: 'great' | 'good' | 'shaky' | 'poor'; reason?: string }
   stream: EngineStreamStats | null
   record: EngineRecordStats | null
   /** The scene on air (switches made elsewhere show up here first). */

@@ -198,6 +198,14 @@ export function StudioStatusBar() {
   const slow = eng.fps > 0 && eng.fps < target * 0.95
   const dropped = stream?.dropped ?? 0
   const remux = stats.remux ?? null
+  const health = live ? (stats.health ?? null) : null
+  const healthNote =
+    health && health.score < 75 && health.reason
+      ? {
+          text: `${health.score < 50 ? 'Stream health is poor' : 'Stream health is shaky'}: ${health.reason}.`,
+          tone: health.score < 50 ? 'text-danger' : 'text-warn',
+        }
+      : null
   const note = stream?.reconnecting
     ? { text: 'Reconnecting…', tone: 'text-warn' }
     : stream?.error && !stream.active
@@ -208,7 +216,8 @@ export function StudioStatusBar() {
           ? { text: `Making an MP4… ${Math.round(remux.percent)}%`, tone: 'text-text-2' }
           : rec?.paused
             ? { text: 'Recording paused', tone: 'text-warn' }
-            : (strain ?? (capture ? { text: captureWords(capture), tone: 'text-warn' } : null))
+            : (strain ??
+              (capture ? { text: captureWords(capture), tone: 'text-warn' } : healthNote))
   return (
     <footer
       aria-label="Studio status"
@@ -259,6 +268,11 @@ export function StudioStatusBar() {
         <Cell label={live ? 'LIVE' : 'Live'} tone={live ? 'live' : undefined}>
           {clock(since ? at - since : 0)}
         </Cell>
+        {health && (
+          <Cell label="Health" tone={health.score < 75 ? 'warn' : undefined}>
+            {health.score}
+          </Cell>
+        )}
         <Cell label={recording ? 'REC' : 'Rec'} tone={recording ? 'live' : undefined}>
           {/* Time recorded (frames over the frame rate): pauses don't count. */}
           {clock(((rec?.frames ?? 0) / target) * 1000)}
