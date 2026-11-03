@@ -252,6 +252,15 @@ export function PreviewBox({ running }: { running: boolean }) {
     // with it, and the live picture comes back where things ended up once it settles.
     let resizing = 0
     let frozen = 0
+    // On a Mac the app's view of the whole stage follows the window by itself, in the same
+    // step as the window (as OBS's preview, a native widget in its window's layout), and the
+    // app fits the picture in it: no still is shown for a window resize, the live picture
+    // stays. The page's place for it, a beat behind, is sent when the resize settles.
+    // (Studio Mode's two boxes and the vertical picture beside the main one are the page's
+    // own and still take the still.)
+    const follows = /Mac/.test(navigator.userAgent) && !studio && !tall
+    let windowUntil = 0
+    let settle = 0
     let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
     const boxes = () =>
       [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
@@ -380,7 +389,8 @@ export function PreviewBox({ running }: { running: boolean }) {
         if (was !== undefined && was !== key) moved = true
       }
       const now = performance.now()
-      if (moved && now - changed < 120) resize()
+      if (follows && now < windowUntil) schedule()
+      else if (moved && now - changed < 120) resize()
       else schedule()
       if (moved) changed = now
     })
@@ -433,12 +443,23 @@ export function PreviewBox({ running }: { running: boolean }) {
       resizing = performance.now() + 180
       schedule()
     }
-    const onResize = resize
+    const onResize = () => {
+      if (!follows) return resize()
+      windowUntil = performance.now() + 300
+      window.clearTimeout(settle)
+      // Placed exactly once the window stops (the app leaves the page's boxes out meanwhile).
+      settle = window.setTimeout(() => {
+        last = ''
+        schedule()
+      }, 320)
+      schedule()
+    }
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
+      window.clearTimeout(settle)
       window.clearInterval(watch)
       dockWatch.disconnect()
       ro.disconnect()
