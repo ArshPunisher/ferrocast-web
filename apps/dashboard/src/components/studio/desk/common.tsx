@@ -210,7 +210,7 @@ export const KIND_GROUPS: KindGroup[] = [
         key: 'card',
         label: 'Capture card',
         icon: VideoCamera,
-        kinds: ['macos-avcapture-fast', 'dshow_input'],
+        kinds: ['macos-avcapture-fast', 'av_capture_input_v2', 'dshow_input'],
         device: ['device', 'video_device_id'],
         fit: true,
       },
