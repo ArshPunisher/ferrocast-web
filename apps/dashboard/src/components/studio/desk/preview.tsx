@@ -163,6 +163,41 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
   return holes.length > MAX_HOLES ? null : holes
 }
 
+/** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
+function viewBand(): { top: number; bottom: number } {
+  const top = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
+  const tabs = document.querySelector('[data-tab-bar]')?.getBoundingClientRect()
+  const bottom =
+    tabs && tabs.height > 0 ? Math.min(tabs.top, window.innerHeight) : window.innerHeight
+  return { top, bottom }
+}
+
+/**
+ * The holes that leave the picture out under the top bar and the tab bar, so a stage only
+ * partly in view still shows its live picture in the part you can see (a short window's
+ * narrow layout never fits the whole stage, and it stayed empty). Null: none of it shows.
+ * `edge` is how far the app's view reaches past the box (EDGE, or 0 for the whole stage).
+ */
+function clipToView(box: DOMRect, edge: number): Hole[] | null {
+  const { top, bottom } = viewBand()
+  if (box.bottom <= top || box.top >= bottom || box.width <= 1 || box.height <= 1) return null
+  const holes: Hole[] = []
+  const w = box.width + 2 * edge
+  if (box.top - edge < top) holes.push({ x: -edge, y: -edge, w, h: top - box.top + edge, r: 0 })
+  if (box.bottom + edge > bottom)
+    holes.push({ x: -edge, y: bottom - box.top, w, h: box.bottom + edge - bottom, r: 0 })
+  return holes
+}
+
+/** The menus and panels over the box and the parts out of view, or null to hide it all. */
+function cutOut(box: DOMRect, edge: number): Hole[] | null {
+  const clip = clipToView(box, edge)
+  const over = clip && overPreview(box, edge)
+  if (!clip || !over) return null
+  const holes = [...clip, ...over]
+  return holes.length > MAX_HOLES ? null : holes
+}
+
 /** Where the live picture goes: the app draws it exactly on this box (its view reaches EDGE past it for handles). In Studio
  * Mode there are two: the preview being edited, and what's on air, with the ways to switch
  * between them in the middle. */
@@ -201,12 +236,9 @@ export function PreviewBox({ running }: { running: boolean }) {
     const place = (box: HTMLElement | null): PreviewRect | null => {
       if (!box) return null
       const r = box.getBoundingClientRect()
-      // Hidden while partly under the top bar, off the window or under a menu or panel.
-      const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
-      const inView =
-        r.top - EDGE >= bar && r.bottom + EDGE <= window.innerHeight && r.width > 1 && r.height > 1
+      // Cut where the top bar, the tab bar, menus or panels lie over it; hidden off the window.
       const bg = bgOf(box.closest('[data-stage-bg]'))
-      const holes = inView ? overPreview(r) : null
+      const holes = cutOut(r, EDGE)
       return holes
         ? {
             x: r.left,
@@ -226,9 +258,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       const s = stage.getBoundingClientRect()
       const c = box.getBoundingClientRect()
       const bg = bgOf(stage)
-      const bar = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
-      const inView = s.top >= bar && s.bottom <= window.innerHeight && c.width > 1 && c.height > 1
-      const holes = inView ? overPreview(s, 0) : null
+      const holes = c.width > 1 && c.height > 1 ? cutOut(s, 0) : null
       return holes
         ? {
             x: s.left,

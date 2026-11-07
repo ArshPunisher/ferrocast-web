@@ -576,6 +576,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       {/* Phone tab bar */}
       <nav
         aria-label="Main"
+        data-tab-bar
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm lg:hidden"
       >
         <ul
