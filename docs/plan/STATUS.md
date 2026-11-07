@@ -1,5 +1,11 @@
 # Status
 
+## 7 Nov 2026 (Windows fixes, branch own-engine-only)
+
+- Studio preview in a short window: the narrow layout never fits the whole stage, so the live picture was never placed and the stage stayed gray. It's now placed whenever any of the stage shows, with holes cut under the top bar and the phone tab bar (`[data-tab-bar]`), the same way menus are cut out (`desk/preview.tsx`). Checked in the Windows app at 1000×700, 125%.
+- Windows installer images: `brand/build.mjs` now writes the NSIS sidebar and header BMPs (`brand/desktop/installer-*.bmp`, copied into the desktop app's icons).
+- Engine-side fixes the same day (Chrome window crash, iGPU lag, preview resize error) are in `../ferrocast/docs/plan/WINDOWS-NEXT.md`. Committed with plain `git commit` on the Windows PC (`tools/dated_commit.py` is a Mac path).
+
 ## 31 Oct 2026, night (guest cameras, branch windows-studio)
 
 - The guest's page `apps/dashboard/guest.html` (own small entry): camera and mic preview, name, pick camera and mic, Join, then mute, camera off and Leave; plain errors with what to do; 375 px and both themes checked. WebRTC logic in `src/guest/call.ts` (tested).
