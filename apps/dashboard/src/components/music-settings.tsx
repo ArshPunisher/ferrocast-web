@@ -2,9 +2,11 @@
 // motion backgrounds and sound elements on your screens. Shows what plays right now.
 
 import { useEffect, useMemo, useState } from 'react'
+import { FolderOpen } from '@phosphor-icons/react'
 import {
   describeError,
   musicApi,
+  studioEngineApi,
   type MusicConfig,
   type MusicView,
   type SongSource,
@@ -13,6 +15,8 @@ import { Badge, Button, Field, Input, Segmented, Select, Skeleton, toast } from 
 import { LoadError } from './Panel'
 import { useRigLists } from './studio/rig-lists'
 import { useClient, useResource } from '../lib/hooks'
+import { inDesktopApp } from '../lib/external'
+import { examplePath } from '../lib/os'
 
 /** Sources that carry sound, the Studio's and OBS's (listed first when picking the beat). */
 const AUDIO_KINDS = [
@@ -173,7 +177,7 @@ export function MusicSettings() {
           <Field
             label="Song file"
             className="min-w-0 flex-1"
-            hint="The .txt file Snip, Tuna or your player writes. Paste its full path."
+            hint="The .txt file Snip, Tuna or your player writes. Browse to it, or paste its full path."
             hintVisible={false}
             error={err}
           >
@@ -183,11 +187,31 @@ export function MusicSettings() {
                 value={file}
                 spellCheck={false}
                 autoComplete="off"
-                placeholder="/Users/you/Music/now-playing.txt"
+                placeholder={examplePath('Music', 'now-playing.txt')}
                 onChange={(e) => setFile(e.target.value)}
               />
             )}
           </Field>
+          {/* The computer's own file picker: nobody types a path. */}
+          {inDesktopApp() && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="sm:mt-[30px]"
+              onClick={() =>
+                void studioEngineApi(client)
+                  .pickFile('file', 'Text files (*.txt);;All files (*.*)')
+                  .then((got) => {
+                    if (typeof got.path !== 'string' || !got.path) return
+                    setFile(got.path)
+                    void save({ song: 'file', file: got.path })
+                  })
+                  .catch(() => toast({ tone: 'error', message: 'The file picker didn’t open.' }))
+              }
+            >
+              <FolderOpen size={16} weight="bold" /> Browse
+            </Button>
+          )}
           <Button type="submit" variant="secondary" busy={busy} className="sm:mt-[30px]">
             Use file
           </Button>
