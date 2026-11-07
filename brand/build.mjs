@@ -250,6 +250,89 @@ if (process.platform === 'darwin') {
   console.warn('brand: skipped desktop/icon.icns (needs macOS iconutil)')
 }
 
+// ---------------------------------------------------------------- Windows installer (NSIS)
+
+/** A 24-bit BMP (what NSIS shows) of `svg` drawn at `w`×`h` on `bg`. */
+function bmpOf(svg, w, h, bg) {
+  const img = new Resvg(svg, { fitTo: { mode: 'width', value: w }, background: bg }).render()
+  const rgba = img.pixels
+  const row = Math.ceil((w * 3) / 4) * 4
+  const data = Buffer.alloc(row * h)
+  for (let y = 0; y < h; y++) {
+    // BMP rows run bottom to top, each pixel blue, green, red.
+    const dst = (h - 1 - y) * row
+    for (let x = 0; x < w; x++) {
+      const s = (y * img.width + x) * 4
+      data[dst + x * 3] = rgba[s + 2]
+      data[dst + x * 3 + 1] = rgba[s + 1]
+      data[dst + x * 3 + 2] = rgba[s]
+    }
+  }
+  const head = Buffer.alloc(54)
+  head.write('BM', 0, 'ascii')
+  head.writeUInt32LE(54 + data.length, 2)
+  head.writeUInt32LE(54, 10)
+  head.writeUInt32LE(40, 14)
+  head.writeInt32LE(w, 18)
+  head.writeInt32LE(h, 22)
+  head.writeUInt16LE(1, 26)
+  head.writeUInt16LE(24, 28)
+  head.writeUInt32LE(data.length, 34)
+  head.writeInt32LE(2835, 38) // 72 dpi
+  head.writeInt32LE(2835, 42)
+  return Buffer.concat([head, data])
+}
+
+// Drawn at twice NSIS's 164×314 and 150×57: the installer fits them to the page, so they stay
+// sharp on a 125-200% screen instead of being stretched up.
+const INSTALLER_BG = '#0d0e11'
+const lockupOn = (paint, id, width) => {
+  const l = lockupSvg(paint, { id, height: 120 })
+  const [, , vw, vh] = l
+    .match(/viewBox="([^"]+)"/)[1]
+    .split(' ')
+    .map(Number)
+  return { svg: l, h: (width * vh) / vw }
+}
+// Welcome and Finish pages, left side: the tile's dark and the mark large (the pages' own text
+// names Ferrocast beside it).
+const side = (() => {
+  const W = 328
+  const H = 628
+  const mark = sparkShapes(dark)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="${TILE[0]}"/><stop offset="1" stop-color="${TILE[1]}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="${W / 2}" cy="230" r="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="${dark.molten}" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="${dark.molten}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#g)"/>
+  <rect width="${W}" height="${H}" fill="url(#glow)"/>
+  <g transform="translate(${W / 2} 230) scale(${(176 / 64).toFixed(4)}) translate(-32 -32)">${mark}</g>
+</svg>`
+})()
+// Top of the other pages, on the window's own light background: the wordmark (the page's
+// title and subtitle sit to its right).
+const header = (() => {
+  const W = 300
+  const H = 114
+  const word = lockupOn(light, 'ih-o', 236)
+  const inner = word.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
+  const vb = word.svg.match(/viewBox="([^"]+)"/)[1]
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+  <rect width="${W}" height="${H}" fill="#ffffff"/>
+  <svg x="32" y="${((H - word.h) / 2).toFixed(2)}" width="236" height="${word.h.toFixed(2)}" viewBox="${vb}">${inner}</svg>
+</svg>`
+})()
+writeFileSync(out('desktop/installer-sidebar.bmp'), bmpOf(side, 328, 628, INSTALLER_BG))
+writeFileSync(out('desktop/installer-header.bmp'), bmpOf(header, 300, 114, '#ffffff'))
+writeFileSync(out('png/installer-sidebar.png'), pngOf(side, 328))
+writeFileSync(out('png/installer-header.png'), pngOf(header, 300))
+
 // ---------------------------------------------------------------- previews
 
 writeFileSync(out('png/logo-mark-256.png'), pngOf(sparkSvg(dark, { size: 64 }), 256))
