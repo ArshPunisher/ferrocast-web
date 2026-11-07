@@ -15,6 +15,7 @@ import {
 import { describeError, type StudioSettings, type UploadCheck } from '@ferrocast/api'
 import { Button, Dialog, cx } from '@ferrocast/ui'
 import { useGoLive } from '../golive'
+import { hardwareEncoderName } from '../../../lib/os'
 
 export interface Recommendation {
   video_kbps: number
@@ -222,7 +223,7 @@ function Wizard({
             </b>
             <span className="text-[14px] text-text-2">
               {use === 'record'
-                ? 'High quality recording, Mac hardware encoder.'
+                ? `High quality recording, ${hardwareEncoderName()} encoder.`
                 : `${rec?.why ?? ''} Hardware encoder, so your game keeps the computer.`}
             </span>
           </div>

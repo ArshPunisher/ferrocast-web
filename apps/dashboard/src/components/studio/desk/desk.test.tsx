@@ -14,6 +14,7 @@ import { asksFirst, hasStreamInfo } from './desk'
 import { sourceFor } from './file-drop'
 import { levelOf, visibleLines } from './log-viewer'
 import { recommend } from './auto-config'
+import { shortcut } from '../../../lib/os'
 
 type Entry = Exclude<MenuItem, { sep: true }>
 
@@ -214,7 +215,7 @@ describe('history', () => {
       [false, 1],
       [false, 2],
     ])
-    expect(entries[2]?.hint).toBe('⌘Z')
+    expect(entries[2]?.hint).toBe(shortcut('Z'))
     const empty = historyMenu({ undo: [], redo: [] }, steps) as Entry[]
     expect(empty).toHaveLength(1)
     expect(empty[0]?.disabled).toBe(true)

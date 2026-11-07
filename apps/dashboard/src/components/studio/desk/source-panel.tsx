@@ -1165,7 +1165,7 @@ function FollowFace({ scene, item }: { scene: string; item: number }) {
         Follow
         <InfoTip label="About following">
           In the vertical picture, this slides sideways to keep your face (or the action in a game)
-          in the middle. Worked out on this Mac.
+          in the middle. Worked out on this computer.
         </InfoTip>
         {mine && (
           <span className="font-normal text-text-3">

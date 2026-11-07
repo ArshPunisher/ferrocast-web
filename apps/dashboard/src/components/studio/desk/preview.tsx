@@ -41,6 +41,7 @@ import {
 import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { shortcut } from '../../../lib/os'
 import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-input'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useEngine } from './common'
@@ -894,7 +895,7 @@ export function historyMenu(
     ...(list.undo.length
       ? list.undo.map((label, i) => ({
           label,
-          hint: i === 0 ? '⌘Z' : undefined,
+          hint: i === 0 ? shortcut('Z') : undefined,
           onSelect: () => steps(false, i + 1),
         }))
       : [{ label: 'Nothing to undo yet', disabled: true }]),
@@ -1715,7 +1716,7 @@ export function StageBar() {
         <span className="flex items-center">
           <IconButton
             size="sm"
-            label={history?.undo ? `Undo ${history.undo} (⌘Z)` : 'Nothing to undo'}
+            label={history?.undo ? `Undo ${history.undo} (${shortcut('Z')})` : 'Nothing to undo'}
             disabled={!history?.undo}
             onClick={() => step(false)}
           >
@@ -1723,7 +1724,9 @@ export function StageBar() {
           </IconButton>
           <IconButton
             size="sm"
-            label={history?.redo ? `Redo ${history.redo} (⇧⌘Z)` : 'Nothing to redo'}
+            label={
+              history?.redo ? `Redo ${history.redo} (${shortcut('Z', true)})` : 'Nothing to redo'
+            }
             disabled={!history?.redo}
             onClick={() => step(true)}
           >

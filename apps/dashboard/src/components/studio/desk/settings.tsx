@@ -7,6 +7,7 @@ import {
   CheckCircle,
   Broadcast,
   EyeSlash,
+  FolderOpen,
   GearSix,
   Keyboard,
   Monitor,
@@ -44,6 +45,8 @@ import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
+import { inDesktopApp } from '../../../lib/external'
+import { defaultRecordingsFolder, examplePath, hardwareEncoderName, os } from '../../../lib/os'
 
 export type Page = 'stream' | 'audio' | 'picture' | 'record' | 'keys' | 'general' | 'advanced'
 
@@ -74,7 +77,7 @@ export function SettingsDialog({
 }
 
 /** A Mac (the only place the drawing choice applies). */
-const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent)
+const isMac = os === 'mac'
 
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const { api, prefs } = useDesk()
@@ -472,14 +475,24 @@ function StreamPage({ s, set }: PageProps) {
           Your own: {sent[1]}p at {(s.video_kbps / 1000).toFixed(1)} Mbps.
         </p>
       )}
-      <Heading info="The encoder turns the picture into video. The Mac's own is light on the computer.">
+      <Heading
+        info={
+          isMac
+            ? "The encoder turns the picture into video. The Mac's own is light on the computer."
+            : 'The encoder turns the picture into video. Your graphics card’s own (NVIDIA NVENC, AMD or Intel Quick Sync) is light on the computer.'
+        }
+      >
         Encoder
       </Heading>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         <Choice
           on={s.encoder === 'hardware'}
-          title="Mac hardware"
-          note="Recommended. Keeps games smooth."
+          title={hardwareEncoderName()}
+          note={
+            isMac
+              ? 'Recommended. Keeps games smooth.'
+              : 'Recommended. NVIDIA, AMD or Intel; keeps games smooth.'
+          }
           onPick={() => set({ encoder: 'hardware' })}
         />
         <Choice
@@ -628,11 +641,17 @@ function AudioPage({ s, set }: PageProps) {
               }}
             >
               {!devices.data.devices.some((d) => d.id === 'default') && (
-                <option value="default">The Mac&apos;s output</option>
+                <option value="default">
+                  {isMac ? 'The Mac’s output' : 'The computer’s output'}
+                </option>
               )}
               {devices.data.devices.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.id === 'default' ? 'The Mac’s output' : d.name}
+                  {d.id === 'default'
+                    ? isMac
+                      ? 'The Mac’s output'
+                      : 'The computer’s output'
+                    : d.name}
                 </option>
               ))}
             </Select>
@@ -1118,8 +1137,8 @@ function Privacy() {
 }
 
 const FORMAT_LABEL: Record<EngineRecordFormat, string> = {
-  mp4: 'MP4 (safe if the Mac stops)',
-  mov: 'MOV (safe if the Mac stops)',
+  mp4: 'MP4 (safe if the computer stops)',
+  mov: 'MOV (safe if the computer stops)',
   fmp4: 'Fragmented MP4',
   fmov: 'Fragmented MOV',
   mkv: 'MKV',
@@ -1185,6 +1204,23 @@ function RecordPage({ s, set }: PageProps) {
     return `${spaces ? n : n.replace(/ /g, '_')}.${ext}`
   }, [pattern, spaces, ext, s])
   const [folder, setFolder] = useState(s.record_folder ?? '')
+  const { api } = useDesk()
+  const [picking, setPicking] = useState(false)
+  const pickFolder = async () => {
+    setPicking(true)
+    try {
+      const got = await api.pickFile('folder')
+      if (typeof got.path === 'string' && got.path) {
+        setFolder(got.path)
+        set({ record_folder: got.path })
+      }
+    } catch (e) {
+      const d = describeError(e)
+      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    } finally {
+      setPicking(false)
+    }
+  }
   const [namePattern, setNamePattern] = useState(pattern)
   // Follows the draft (Undo changes, or a value the engine saved).
   useEffect(() => setFolder(s.record_folder ?? ''), [s.record_folder])
@@ -1242,7 +1278,7 @@ function RecordPage({ s, set }: PageProps) {
       <div className="flex flex-col">
         <Row
           label="File type"
-          info="MP4 and MOV stay playable if the app or the Mac stops while recording. MKV, FLV and TS use OBS's own helper and can become MP4 when the recording ends."
+          info="MP4 and MOV stay playable if the app or the computer stops while recording. MKV, FLV and TS use OBS's own helper and can become MP4 when the recording ends."
         >
           <Select
             aria-label="File type"
@@ -1285,17 +1321,31 @@ function RecordPage({ s, set }: PageProps) {
             }}
           />
         </Row>
-        <Row label="Save to" sub={s.record_folder ? undefined : 'Movies › Ferrocast'}>
-          <Input
-            aria-label="Recordings folder"
-            name="record_folder"
-            placeholder="/Users/you/Movies/Ferrocast…"
-            autoComplete="off"
-            spellCheck={false}
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
-            onBlur={() => set({ record_folder: folder.trim() ? folder.trim() : null })}
-          />
+        <Row label="Save to" sub={s.record_folder ? undefined : defaultRecordingsFolder()}>
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label="Recordings folder"
+              name="record_folder"
+              placeholder={examplePath(isMac ? 'Movies' : 'Videos', 'Ferrocast')}
+              autoComplete="off"
+              spellCheck={false}
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              onBlur={() => set({ record_folder: folder.trim() ? folder.trim() : null })}
+            />
+            {/* The computer's own folder picker: nobody types a path. */}
+            {inDesktopApp() && (
+              <Button
+                type="button"
+                variant="secondary"
+                busy={picking}
+                onClick={() => void pickFolder()}
+                className="shrink-0"
+              >
+                <FolderOpen size={16} weight="bold" /> Browse
+              </Button>
+            )}
+          </div>
         </Row>
         <Row
           label="File names"
@@ -1427,17 +1477,28 @@ function RecordPage({ s, set }: PageProps) {
   )
 }
 
-/** "CmdOrCtrl+Shift+KeyL" → "⌘⇧L". */
-export function pretty(keys: string): string {
-  const sym: Record<string, string> = {
-    Cmd: '⌘',
-    Super: '⌘',
-    Ctrl: '⌃',
-    Control: '⌃',
-    Alt: '⌥',
-    Option: '⌥',
-    Shift: '⇧',
-  }
+/** "CmdOrCtrl+Shift+KeyL" → "⌘⇧L" on a Mac, "Ctrl Shift L" elsewhere. */
+export function pretty(keys: string, mac = isMac): string {
+  const sym: Record<string, string> = mac
+    ? {
+        CmdOrCtrl: '⌘',
+        CommandOrControl: '⌘',
+        Cmd: '⌘',
+        Super: '⌘',
+        Ctrl: '⌃',
+        Control: '⌃',
+        Alt: '⌥',
+        Option: '⌥',
+        Shift: '⇧',
+      }
+    : {
+        CmdOrCtrl: 'Ctrl',
+        CommandOrControl: 'Ctrl',
+        Cmd: 'Win',
+        Super: 'Win',
+        Control: 'Ctrl',
+        Option: 'Alt',
+      }
   return keys
     .split('+')
     .map((k) => sym[k] ?? k.replace(/^Key/, '').replace(/^Digit/, ''))
@@ -1620,7 +1681,9 @@ function KeysPage({ s, set }: PageProps) {
   }
   return (
     <>
-      <Heading info="They work while a game has the keyboard. Push to talk mutes the sound until held; push to mute is the other way round. On a Mac keyboard, hold fn with F1 to F12.">
+      <Heading
+        info={`They work while a game has the keyboard. Push to talk mutes the sound until held; push to mute is the other way round.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
+      >
         How they work
       </Heading>
       <Input

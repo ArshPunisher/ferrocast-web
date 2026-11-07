@@ -59,6 +59,7 @@ import {
 import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
@@ -332,7 +333,7 @@ export function SourcesDock() {
         {
           label: 'Edit transform',
           icon: SlidersHorizontal,
-          hint: '⌘E',
+          hint: shortcut('E'),
           onSelect: () => desk.setTransforming({ scene, id: item.id, name: item.name }),
         },
         {
