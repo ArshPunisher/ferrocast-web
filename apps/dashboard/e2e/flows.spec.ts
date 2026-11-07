@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { demo, open } from './helpers'
+import { demo, open, pastSetupQuestions } from './helpers'
 
 test.describe('home', () => {
   test('shows connections, the queue, stats and recent events', async ({ page }) => {
@@ -371,6 +371,7 @@ test.describe('first run', () => {
     // Waits on the simulated sign-in (a few seconds), so give slow CI runners room.
     test.slow()
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await pastSetupQuestions(page)
     await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
     await page
       .getByRole('listitem')

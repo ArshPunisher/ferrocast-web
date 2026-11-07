@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { open, pastSetupQuestions } from './helpers'
 
 test.use({ viewport: { width: 375, height: 812 } })
 
 test('first run: the look preview fits a 375 px phone as one picture', async ({ page }) => {
   await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+  await pastSetupQuestions(page)
   await page.getByRole('button', { name: 'Skip for now' }).click()
   const stage = page.getByRole('figure', { name: /Preview of the .+ look/ })
   await expect(stage).toBeVisible()

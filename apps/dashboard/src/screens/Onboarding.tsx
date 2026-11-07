@@ -21,7 +21,83 @@ import { go } from '../lib/router'
 import { useUsesObs } from '../lib/picture'
 import { addOverlayToStudio } from '../components/studio/desk/add-to-studio'
 
-const STEPS = ['Connect', 'Pick a look', 'Add to your stream'] as const
+/** What Ferrocast is mostly for (OBS's auto-configuration asks the same first). */
+type Use = 'stream' | 'record'
+
+/** The picture sizes offered, biggest first. */
+const SIZES = [
+  { id: '2160', label: '4K', w: 3840, h: 2160 },
+  { id: '1440', label: '1440p (2K)', w: 2560, h: 1440 },
+  { id: '1080', label: '1080p (Full HD)', w: 1920, h: 1080 },
+  { id: '720', label: '720p (HD)', w: 1280, h: 720 },
+] as const
+type Size = (typeof SIZES)[number]
+
+/**
+ * Video bitrate (kbps) for a size and frame rate: what Twitch and YouTube suggest for a
+ * stream (6 Mbps at 1080p60, Twitch's top), more for 1440p and 4K (YouTube's).
+ */
+export function bitrateFor(h: number, fps: number): number {
+  const at30: Record<number, number> = { 720: 3000, 1080: 4500, 1440: 9000, 2160: 20000 }
+  const at60: Record<number, number> = { 720: 4500, 1080: 6000, 1440: 13500, 2160: 30000 }
+  return (fps > 30 ? at60 : at30)[h] ?? 6000
+}
+
+/** The screen's own size in pixels (CSS size times its scaling). */
+function screenPixels(): { w: number; h: number } {
+  const d = window.devicePixelRatio || 1
+  return { w: Math.round(window.screen.width * d), h: Math.round(window.screen.height * d) }
+}
+
+/** The biggest offered size that fits the screen, if any does. */
+export function fitsScreen(screen: { w: number; h: number }): Size | undefined {
+  return SIZES.find((s) => s.w <= screen.w && s.h <= screen.h)
+}
+
+/** What the picture starts at: the screen's size, else 1080p. */
+export function sizeFor(screen: { w: number; h: number }): Size {
+  return fitsScreen(screen) ?? SIZES[2]
+}
+
+/** One pick of a radio group, as a card (the look picker's style). */
+function Choice({
+  name,
+  checked,
+  onPick,
+  title,
+  detail,
+  badge,
+}: {
+  name: string
+  checked: boolean
+  onPick: () => void
+  title: string
+  detail: string
+  badge?: string | undefined
+}) {
+  return (
+    <label
+      className={cx(
+        'flex cursor-pointer flex-col gap-1 rounded-[12px] border px-4 py-3 transition-colors has-[:focus-visible]:shadow-[var(--fc-focus)]',
+        checked ? 'fc-picked border-transparent' : 'border-line hover:border-line-strong',
+      )}
+    >
+      <input type="radio" name={name} className="sr-only" checked={checked} onChange={onPick} />
+      <span className="flex items-center gap-2">
+        <span className="text-[15px] font-bold text-text">{title}</span>
+        {badge && (
+          <span className="rounded-full border border-current px-2 py-px text-[12px] font-medium opacity-80">
+            {badge}
+          </span>
+        )}
+      </span>
+      <span className="text-[13.5px] leading-snug text-text-2">{detail}</span>
+    </label>
+  )
+}
+
+const STREAM_STEPS = ['Use', 'Picture', 'Connect', 'Pick a look', 'Add to your stream'] as const
+const RECORD_STEPS = ['Use', 'Picture'] as const
 
 function previewAlert() {
   const e = anySample('subscription')
@@ -78,9 +154,16 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     (p) => connectors?.[p].state === 'connected',
   )
   const main: Overlay | undefined = overlays.data?.[0]
+  // First what it's for and the picture (as OBS's auto-configuration), then the rest.
+  const [use, setUse] = useState<Use>('stream')
+  const screen = useMemo(screenPixels, [])
+  const [size, setSize] = useState<Size>(() => sizeFor(screen))
+  const [fps, setFps] = useState(60)
+  const [pictureDone, setPictureDone] = useState(false)
+  const steps = use === 'record' ? RECORD_STEPS : STREAM_STEPS
   // A step only gets its tick when it was really done: skipping "Connect" leaves it open.
   const [lookDone, setLookDone] = useState(false)
-  const stepDone = (i: number) => (i === 0 ? anyConnected : i === 1 ? lookDone : added)
+  const stepDone = (i: number) => [step > 0, pictureDone, anyConnected, lookDone, added][i] ?? false
 
   const goTo = (n: number) => {
     setDir(n > step ? 1 : -1)
@@ -99,6 +182,37 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     if (!saved) return
     overlays.set((p) => (p ?? []).map((o) => (o.id === saved.id ? saved : o)))
     setLookDone(true)
+    goTo(4)
+  }
+  // The picture and encoding for what it's for: the canvas at that size and rate, a bitrate
+  // that fits it, recordings at high quality when that's the point. The demo has no Studio.
+  const applyPicture = async () => {
+    const saved = demo
+      ? true
+      : await run('picture', async () => {
+          const s = await engine.studioSettings()
+          await engine.setStudioSettings({
+            ...s,
+            width: size.w,
+            height: size.h,
+            fps,
+            scale: null,
+            encoder: 'hardware',
+            video_kbps: bitrateFor(size.h, fps),
+            record_quality: use === 'record' ? 'high' : 'stream',
+          })
+          return true
+        })
+    if (!saved) return
+    setPictureDone(true)
+    if (use === 'record') {
+      // Nothing to connect or show on stream: straight to the Studio.
+      const ok = await run('finish', () => done(client.completeSetup()))
+      if (!ok) return
+      go({ name: 'studio' })
+      onDone()
+      return
+    }
     goTo(2)
   }
   const finish = () =>
@@ -130,7 +244,8 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
             Your stream, on your computer.
           </p>
           <p className="mt-3 max-w-[40ch] text-sm leading-relaxed text-text-2">
-            Alerts, chat and moderation for Twitch, YouTube and Kick. Three steps and you’re ready.
+            Streaming, recording, alerts and chat for Twitch, YouTube and Kick. A few questions and
+            you’re ready.
           </p>
         </div>
       </div>
@@ -143,7 +258,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
           {demo && <span className="text-[13.5px] text-text-3">Demo mode</span>}
         </div>
         <ol className="mt-8 flex items-center gap-2" aria-label="Setup progress">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <li
               key={s}
               className="flex items-center gap-2"
@@ -178,7 +293,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
               >
                 {s}
               </span>
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <span aria-hidden="true" className="h-px w-6 bg-line-strong sm:w-10" />
               )}
             </li>
@@ -204,6 +319,133 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       id="step-0"
                       className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
+                      What will you use Ferrocast for?
+                    </h1>
+                    <p className="mt-2 text-sm leading-relaxed text-text-2">
+                      Ferrocast sets up the picture and the encoding for it. You can change any of
+                      it later in the Studio’s settings.
+                    </p>
+                  </div>
+                  <div role="radiogroup" aria-label="Use" className="grid gap-2 sm:grid-cols-2">
+                    <Choice
+                      name="use"
+                      checked={use === 'stream'}
+                      onPick={() => setUse('stream')}
+                      title="Streaming"
+                      detail="Go live on Twitch, YouTube and Kick, with alerts and chat. Recordings use the same settings."
+                    />
+                    <Choice
+                      name="use"
+                      checked={use === 'record'}
+                      onPick={() => setUse('record')}
+                      title="Recording only"
+                      detail="Videos on this computer at high quality. No accounts or alerts needed."
+                    />
+                  </div>
+                  <div>
+                    <Button
+                      size="lg"
+                      variant="primary"
+                      onClick={() => goTo(1)}
+                      icon={<ArrowRight size={18} />}
+                      className="flex-row-reverse"
+                    >
+                      Continue
+                    </Button>
+                  </div>
+                </>
+              )}
+              {step === 1 && (
+                <>
+                  <div>
+                    <h1
+                      id="step-1"
+                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
+                    >
+                      Picture size and smoothness
+                    </h1>
+                    <p className="mt-2 text-sm leading-relaxed text-text-2">
+                      Your screen is {screen.w} × {screen.h}.{' '}
+                      {use === 'stream'
+                        ? 'Twitch and Kick show up to 1080p; YouTube takes 1440p and 4K.'
+                        : 'Bigger and smoother makes bigger files.'}
+                    </p>
+                  </div>
+                  <div
+                    role="radiogroup"
+                    aria-label="Picture size"
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
+                    {SIZES.map((s) => (
+                      <Choice
+                        key={s.id}
+                        name="size"
+                        checked={size.id === s.id}
+                        onPick={() => setSize(s)}
+                        title={s.label}
+                        badge={s.id === fitsScreen(screen)?.id ? 'Your screen' : undefined}
+                        detail={
+                          s.w > screen.w || s.h > screen.h
+                            ? `${s.w} × ${s.h}: bigger than your screen, so no sharper.`
+                            : use === 'stream' && s.h > 1080
+                              ? `${s.w} × ${s.h}: for YouTube; Twitch and Kick get it smaller.`
+                              : `${s.w} × ${s.h}`
+                        }
+                      />
+                    ))}
+                  </div>
+                  <div
+                    role="radiogroup"
+                    aria-label="Frames per second"
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
+                    <Choice
+                      name="fps"
+                      checked={fps === 60}
+                      onPick={() => setFps(60)}
+                      title="60 fps"
+                      detail="Smooth: games and fast movement."
+                    />
+                    <Choice
+                      name="fps"
+                      checked={fps === 30}
+                      onPick={() => setFps(30)}
+                      title="30 fps"
+                      detail="Lighter on the computer and the connection: talk and slower shows."
+                    />
+                  </div>
+                  <p className="text-[14px] text-text-3">
+                    {use === 'stream'
+                      ? `Streams at ${(bitrateFor(size.h, fps) / 1000).toLocaleString()} Mbps with your graphics card’s encoder.`
+                      : 'Records at high quality with your graphics card’s encoder.'}
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      size="lg"
+                      variant="ghost"
+                      icon={<ArrowLeft size={18} />}
+                      onClick={() => goTo(0)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="primary"
+                      busy={saving === 'picture' || saving === 'finish'}
+                      onClick={() => void applyPicture()}
+                    >
+                      {use === 'record' ? 'Done: open the Studio' : 'Use these settings'}
+                    </Button>
+                  </div>
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  <div>
+                    <h1
+                      id="step-2"
+                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
+                    >
                       Connect where you stream
                     </h1>
                     <p className="mt-2 text-sm leading-relaxed text-text-2">
@@ -224,8 +466,16 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   <div className="flex flex-wrap items-center gap-3">
                     <Button
                       size="lg"
-                      variant="primary"
+                      variant="ghost"
+                      icon={<ArrowLeft size={18} />}
                       onClick={() => goTo(1)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="primary"
+                      onClick={() => goTo(3)}
                       icon={<ArrowRight size={18} />}
                       className="flex-row-reverse"
                     >
@@ -239,11 +489,11 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   </div>
                 </>
               )}
-              {step === 1 && (
+              {step === 3 && (
                 <>
                   <div>
                     <h1
-                      id="step-1"
+                      id="step-3"
                       className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
                       Pick a look
@@ -295,7 +545,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       size="lg"
                       variant="ghost"
                       icon={<ArrowLeft size={18} />}
-                      onClick={() => goTo(0)}
+                      onClick={() => goTo(2)}
                     >
                       Back
                     </Button>
@@ -310,11 +560,11 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   </div>
                 </>
               )}
-              {step === 2 && (
+              {step === 4 && (
                 <>
                   <div>
                     <h1
-                      id="step-2"
+                      id="step-4"
                       className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
                     >
                       {usesObs ? 'Add it to OBS' : 'Add it to your Studio'}
@@ -377,7 +627,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                       size="lg"
                       variant="ghost"
                       icon={<ArrowLeft size={18} />}
-                      onClick={() => goTo(1)}
+                      onClick={() => goTo(3)}
                     >
                       Back
                     </Button>

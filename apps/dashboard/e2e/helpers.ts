@@ -20,6 +20,14 @@ export async function open(
   await expect(page.locator('#main')).toBeVisible()
 }
 
+/** First run: past "What will you use Ferrocast for?" (Streaming) and the picture (as
+ *  suggested), to "Connect where you stream". */
+export async function pastSetupQuestions(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: 'Use these settings' }).click()
+  await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
+}
+
 /** Waits until no CSS or Web Animation in the page is still running (a dialog's scale-in,
  *  a sheet sliding up), so sizes and colours are measured at rest. Infinite, paused and
  *  stopped animations are ignored: they never finish. */

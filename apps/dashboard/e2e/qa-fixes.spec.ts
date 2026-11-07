@@ -2,7 +2,7 @@
 // the held-message review, the layout editor's leave check, honest backups, plain counts.
 
 import { expect, test, type Page } from '@playwright/test'
-import { demo, fault, open } from './helpers'
+import { demo, fault, open, pastSetupQuestions } from './helpers'
 
 const chatLog = (page: Page) => page.getByRole('log', { name: 'Merged chat' })
 
@@ -220,14 +220,16 @@ test.describe('words', () => {
 
   test('skipping "Connect" in first run leaves it unticked', async ({ page }) => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await pastSetupQuestions(page)
     await page.getByRole('button', { name: 'Skip for now' }).click()
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps.first()).toContainText('(skipped)')
-    await expect(steps.nth(1)).toContainText('(current step)')
+    await expect(steps.nth(2)).toContainText('(skipped)')
+    await expect(steps.nth(3)).toContainText('(current step)')
   })
 
   test('the first connect says Connecting, not Reconnecting', async ({ page }) => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await pastSetupQuestions(page)
     const kick = page.getByRole('listitem').filter({ hasText: 'Kick' }).first()
     await kick.getByRole('button', { name: 'Connect' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
@@ -250,5 +252,34 @@ test.describe('home', () => {
     await expect(log.getByText('Flood39')).toBeAttached()
     const focused = await page.evaluate(() => document.activeElement?.textContent ?? '')
     expect(focused).toBe(name)
+  })
+})
+
+test.describe('first run asks what it is for first', () => {
+  test('streaming: the picture, then Connect', async ({ page }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await expect(
+      page.getByRole('heading', { name: 'What will you use Ferrocast for?' }),
+    ).toBeVisible()
+    await page.getByText('Streaming', { exact: true }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.getByRole('heading', { name: 'Picture size and smoothness' })).toBeVisible()
+    await page.getByText('720p (HD)', { exact: true }).click()
+    await page.getByText('30 fps', { exact: true }).click()
+    await expect(page.getByText('Streams at 3 Mbps')).toBeVisible()
+    await page.getByRole('button', { name: 'Use these settings' }).click()
+    await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
+    const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
+    await expect(steps).toHaveCount(5)
+  })
+
+  test('recording only: two steps, then the Studio', async ({ page }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await page.getByText('Recording only', { exact: true }).click()
+    const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
+    await expect(steps).toHaveCount(2)
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'Done: open the Studio' }).click()
+    await expect(page).toHaveURL(/#\/studio/)
   })
 })

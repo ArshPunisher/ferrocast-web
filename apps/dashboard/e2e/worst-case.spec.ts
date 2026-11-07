@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { open, pastSetupQuestions } from './helpers'
 
 // break-ui: the worst data a stream can throw at the dashboard.
 const NAMES = [
@@ -95,6 +95,7 @@ test('hostile names and messages render as text, without breaking the layout', a
 
 test('zero of everything still looks intentional', async ({ page }) => {
   await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+  await pastSetupQuestions(page)
   await page.getByRole('button', { name: 'Skip for now' }).click()
   await page.getByRole('button', { name: 'Use this look' }).click()
   await page.getByRole('button', { name: 'I’ll do it later' }).click()
