@@ -14,6 +14,7 @@ import {
 import { type EngineStats } from '@ferrocast/api'
 import { Dialog, InfoTip, cx } from '@ferrocast/ui'
 import { type EngineReading } from '../../../lib/engine-stats'
+import { loadHint, sourceRates, type SourceRate } from './source-load'
 
 /** Kbps between two byte counts `ms` apart (0 when it went back: a new stream or file). */
 export function kbpsBetween(before: number, after: number, ms: number): number {
@@ -61,6 +62,20 @@ function useRates(stats: EngineStats | null): Rates {
       stream: kbpsBetween(prev.stream, cur.stream, now - prev.at),
       record: kbpsBetween(prev.record, cur.record, now - prev.at),
     })
+  }, [stats])
+  return rates
+}
+
+/** Each source's pictures a second from the last two reads (the heaviest first). */
+function useSourceRates(stats: EngineStats | null): SourceRate[] {
+  const last = useRef<{ at: number; sources: NonNullable<EngineStats['sources']> } | null>(null)
+  const [rates, setRates] = useState<SourceRate[]>([])
+  useEffect(() => {
+    if (!stats?.sources) return
+    const now = performance.now()
+    const prev = last.current
+    last.current = { at: now, sources: stats.sources }
+    if (prev) setRates(sourceRates(prev.sources, stats.sources, now - prev.at))
   }, [stats])
   return rates
 }
@@ -176,6 +191,7 @@ export function StatsDialog({
 }) {
   const { stats, history, since, at, kbps } = reading
   const rates = useRates(stats)
+  const busiest = useSourceRates(stats).slice(0, 4)
   const e = stats?.engine
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
@@ -316,6 +332,44 @@ export function StatsDialog({
                 or settings.
               </InfoTip>
             </p>
+          )}
+          {busiest.length > 0 && (
+            <section aria-labelledby="busiest-sources" className="flex flex-col gap-2">
+              <h3
+                id="busiest-sources"
+                className="m-0 flex items-center gap-1 text-[12px] font-extrabold tracking-[0.03em] text-text-3 uppercase"
+              >
+                Busiest sources
+                <InfoTip label="About busiest sources">
+                  How many pictures each source hands the engine a second, and how big they are. The
+                  biggest and fastest cost the graphics card the most.
+                </InfoTip>
+              </h3>
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {busiest.map((b) => (
+                  <li key={b.name} className="flex items-center gap-3 text-[14px]">
+                    <span className="w-36 min-w-0 truncate font-semibold">{b.name}</span>
+                    <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-3">
+                      <span
+                        className="block h-full rounded-full bg-accent"
+                        style={{
+                          width: `${Math.max(4, (b.mpix / (busiest[0]?.mpix || 1)) * 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+                      {b.width}×{b.height} · {Math.round(b.fps)} fps
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {(() => {
+                const hint = stats ? loadHint(busiest[0], stats.canvas) : null
+                return hint ? (
+                  <p className="m-0 text-[13.5px] font-semibold text-warn">{hint}</p>
+                ) : null
+              })()}
+            </section>
           )}
           <div className="overflow-x-auto rounded-[14px] border border-line">
             <table className="w-full min-w-[440px] border-collapse text-[14px]">

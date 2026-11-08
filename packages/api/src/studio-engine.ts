@@ -580,6 +580,9 @@ export interface EngineStats {
     recovered?: number
     restarts?: number
   }
+  /** Pictures each source has sent to the card so far, and their size: the rate between two
+   * reads shows which keeps the engine busiest. */
+  sources?: { name: string; sent: number; width: number; height: number }[]
   canvas: { width: number; height: number; fps: number }
   /** While the stream is live: its health out of 100 over the last ten seconds, and what costs most. */
   health?: { score: number; verdict: 'great' | 'good' | 'shaky' | 'poor'; reason?: string }
