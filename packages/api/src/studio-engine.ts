@@ -105,6 +105,9 @@ export interface EngineOption {
   text_type?: 'multiline' | 'password' | 'info' | ''
   /** A text OBS shows in a fixed-width font (code, CSS). */
   monospace?: boolean
+  /** Shown only while the option `key` holds one of `values` (a Window Capture has no use
+   *  for the Display list). */
+  shown_when?: { key: string; values: (string | number | boolean)[] }
 }
 
 /** OBS's own settings for a source (the keys OBS saves in its scene collections). */
@@ -426,6 +429,9 @@ export interface StudioSettings {
   fps: number
   /** null: Movies/Ferrocast. */
   record_folder: string | null
+  /** Where recordings go when `record_folder` is null (this computer's Movies or Videos
+   *  folder's Ferrocast folder); shown, never saved. */
+  record_folder_default?: string
   record_format: EngineRecordFormat
   record_quality: 'stream' | 'high' | 'lossless' | 'custom'
   reconnect: boolean
@@ -831,6 +837,14 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/transition`, {
         transition,
       }),
+    /** A source's own picture now, before its filters, `w` pixels wide (64 to 640), with the
+     * source's real size: what the crop editor and the filter previews draw on. `image` is null
+     * until the source has a picture. */
+    sourcePicture: (name: string, w = 480) =>
+      c.request<{ image: string | null; width?: number; height?: number }>(
+        'GET',
+        `/api/v1/studio/engine/sources/${enc(name)}/picture?w=${w}`,
+      ),
     /** A PNG of a scene or source, saved where recordings go. */
     screenshot: (name: string) =>
       c.request<{ file: string }>(
