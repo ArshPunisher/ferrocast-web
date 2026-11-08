@@ -2,24 +2,43 @@
 // cameras, screens and mics to pick in one click; any kind can reuse a source from another
 // scene; sound devices can play in every scene. Every other kind OBS has is under "More".
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowClockwise,
   CheckCircle,
   Cube,
+  ListBullets,
   MagnifyingGlass,
   ShieldWarning,
+  SquaresFour,
 } from '@phosphor-icons/react'
-import { type EngineKind, type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Dialog, Field, InfoTip, Input, Skeleton, Switch, cx } from '@ferrocast/ui'
+import {
+  type EngineKind,
+  type EngineKinds,
+  type EngineOption,
+  type EngineSettings,
+  type EngineSourceUse,
+} from '@ferrocast/api'
+import {
+  Button,
+  Dialog,
+  Field,
+  IconButton,
+  InfoTip,
+  Input,
+  Skeleton,
+  Switch,
+  cx,
+} from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource } from '../../../lib/hooks'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, pickKind, useDesk, type KindEntry } from './common'
 import { GuestInvites } from './guests'
+import { readAhead, useKindForm } from './kind-cache'
 import { OptionsForm } from './options'
 
-interface Choice {
+export interface Choice {
   entry: KindEntry
   kind: string
   /** Its group's colour. */
@@ -148,8 +167,29 @@ function ScreenAccess() {
   )
 }
 
+/** The kinds whose forms list devices, as this engine names them (to read them ahead). */
+function deviceKinds(kinds: EngineKinds | null): string[] {
+  const out: string[] = []
+  for (const g of KIND_GROUPS)
+    for (const e of g.entries) {
+      const k = e.device ? pickKind(e, kinds) : null
+      if (k) out.push(k)
+    }
+  return out
+}
+
 export function AddSourceDialog() {
-  const { adding, setAdding, scene } = useDesk()
+  const { adding, setAdding, scene, api, kinds } = useDesk()
+  const open = adding !== null
+  // The cameras, screens and mics are read ahead, once the Studio has settled and again as the
+  // dialog opens, so picking a kind shows its list at once.
+  useEffect(() => {
+    if (!kinds.data || !inDesktopApp()) return
+    const ahead = deviceKinds(kinds.data)
+    if (open) return readAhead(api, ahead)
+    const t = window.setTimeout(() => readAhead(api, ahead), 2000)
+    return () => window.clearTimeout(t)
+  }, [api, kinds.data, open])
   return (
     <Dialog
       open={adding !== null}
@@ -262,18 +302,129 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
   )
 }
 
+/** The sources last read from this engine, so the form shows while they're read again. Only
+ * names in use come from it (the engine refuses a taken name anyway); the ones offered to
+ * reuse wait for the fresh list (CodeRabbit). */
+let lastSources: { api: unknown; list: EngineSourceUse[] } | null = null
+
+const VIEW_KEY = 'fc-add-source-view'
+type PickView = 'grid' | 'list'
+
+/** Devices as tiles or a list, remembered on this computer (owner, 8 Nov). */
+export function usePickView(): [PickView, (v: PickView) => void] {
+  const [view, setView] = useState<PickView>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'
+    } catch {
+      return 'grid'
+    }
+  })
+  const set = (v: PickView) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // Not kept (storage off): it still applies until the app closes.
+    }
+  }
+  return [view, set]
+}
+
+/** What each device kind is called when there's none, and what to try. */
+const NONE: Record<string, { title: string; tips: string[] }> = {
+  camera: {
+    title: 'No camera found',
+    tips: [
+      'Plug the camera in, or switch it on.',
+      'Close other apps using it (Zoom, Teams, the Camera app).',
+    ],
+  },
+  card: {
+    title: 'No capture card found',
+    tips: ['Plug the card in with its USB cable.', 'Close other apps using it.'],
+  },
+  screen: {
+    title: 'No screens to show',
+    tips: ['Allow Screen Recording for Ferrocast, then look again.'],
+  },
+  window: {
+    title: 'No windows to show',
+    tips: ['Open the window or game you want, then look again.', 'Minimised windows are left out.'],
+  },
+  mic: {
+    title: 'No microphone found',
+    tips: ['Plug the microphone in.', 'Check it is switched on in the computer’s sound settings.'],
+  },
+  app: {
+    title: 'No apps playing sound',
+    tips: ['Open the app you want to hear, then look again.'],
+  },
+}
+
+/** Nothing to pick: what's missing, what to try, and a button to look again. */
+export function NoDevices({
+  c,
+  checking,
+  onLook,
+}: {
+  c: Choice
+  checking: boolean
+  onLook: () => void
+}) {
+  const none = NONE[c.entry.key] ?? {
+    title: 'Nothing to pick',
+    tips: ['Plug it in, then look again.'],
+  }
+  return (
+    <div
+      role="status"
+      className="flex flex-col items-center gap-4 rounded-[14px] border border-dashed border-line-strong bg-inset px-6 py-9 text-center"
+    >
+      <KindTile icon={c.entry.icon} tone={c.tone} size={56} />
+      <div className="flex flex-col gap-1.5">
+        <p className="m-0 font-display text-[18px] font-extrabold text-text">{none.title}</p>
+        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14.5px] font-semibold text-text-2">
+          {none.tips.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      </div>
+      <Button type="button" variant="secondary" busy={checking} onClick={onLook}>
+        <ArrowClockwise size={16} weight="bold" /> Look again
+      </Button>
+    </div>
+  )
+}
+
 /** The right side: devices or settings for the kind, a name, and Add. */
 function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => void }) {
   const { api, allScenes, pictureScenes, audio, refresh, kinds } = useDesk()
   const { run, busy } = useAction()
   const isScene = !!c.entry.scene
-  const loaded = useResource(
+  // The form shows at once from what was read before; the devices are read again meanwhile.
+  const form = useKindForm(api, isScene ? null : c.kind)
+  const srcs = useResource(
     () =>
-      isScene
-        ? Promise.all([Promise.resolve([] as EngineOption[]), Promise.resolve({}), api.sources()])
-        : Promise.all([api.options(c.kind), api.defaults(c.kind), api.sources()]),
-    [api, c.kind, isScene],
+      api.sources().then((l) => {
+        lastSources = { api, list: l }
+        return l
+      }),
+    [api],
   )
+  const [view, setView] = usePickView()
+  // Back to the app after plugging a camera in or opening a window: look again by itself.
+  const reloadForm = form.reload
+  useEffect(() => {
+    const again = () => {
+      if (!document.hidden) reloadForm()
+    }
+    window.addEventListener('focus', again)
+    document.addEventListener('visibilitychange', again)
+    return () => {
+      window.removeEventListener('focus', again)
+      document.removeEventListener('visibilitychange', again)
+    }
+  }, [reloadForm])
   const overlays = useResource(
     (client) => (c.entry.overlays ? client.overlays() : Promise.resolve([])),
     [c.entry.overlays],
@@ -288,23 +439,27 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   const pairs = c.entry.key in BRINGS_SOUND
   const micEntry = KIND_GROUPS.flatMap((g) => g.entries).find((e) => e.key === 'mic')
   const micKind = pairs && micEntry ? pickKind(micEntry, kinds.data) : null
-  const micOpts = useResource(
-    () => (micKind ? api.options(micKind) : Promise.resolve([] as EngineOption[])),
-    [api, micKind],
-  )
+  const micForm = useKindForm(api, micKind)
   const [withSound, setWithSound] = useState(BRINGS_SOUND[c.entry.key] ?? false)
 
-  if (loaded.error && !loaded.data)
-    return <LoadError error={loaded.error} onRetry={loaded.reload} />
-  if (!loaded.data) return <Skeleton className="h-72" />
-  const [opts, defaults, sources] = loaded.data
+  const sourcesNow = srcs.data ?? (lastSources?.api === api ? lastSources.list : null)
+  if (form.error) return <LoadError error={form.error} onRetry={form.reload} />
+  if (srcs.error && !sourcesNow) return <LoadError error={srcs.error} onRetry={srcs.reload} />
+  const formNow: [EngineOption[], EngineSettings] | null = isScene ? [[], {}] : form.data
+  if (!formNow || !sourcesNow) return <Skeleton className="h-72" />
+  const [opts, defaults] = formNow
+  const sources = sourcesNow
   // Names are one list across both pictures.
   const sceneNames = new Set(allScenes.map((s) => s.name))
   const taken = new Set([...sources.map((s) => s.name), ...sceneNames])
   const dev = deviceOption(opts, c.entry.device)
+  // A kind that lists devices with none to list now (no camera plugged in): say so plainly
+  // instead of falling back to its settings form (owner, 8 Nov: "it shows a settings bar").
+  const noDevices =
+    !!c.entry.device && !c.entry.overlays && (!dev || dev.choices.every((l) => !l.trim()))
   const devName = dev && device !== null ? dev.choices[device] : null
   const shownName = name ?? freeName(devName ?? c.entry.label, taken)
-  const micDev = deviceOption(micOpts.data ?? [], micEntry?.device)
+  const micDev = deviceOption(micForm.data?.[0] ?? [], micEntry?.device)
   const soundName = devName && micDev ? pairedSound(devName, micDev.choices) : null
   // Scenes and sources share one set of names (as in OBS): say which one has it, and offer
   // a free one, right under the field (a toast would sit behind this dialog).
@@ -318,7 +473,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       pictureScenes
         .filter((s) => s.name !== scene)
         .map((s) => ({ name: s.name, where: `${s.items} sources` }))
-    : sources
+    : (srcs.data ?? [])
         .filter((s) => c.entry.kinds.includes(s.kind) && !s.scenes.includes(scene))
         .map((s) => ({ name: s.name, where: `In ${s.scenes.join(', ')}` }))
   // Sound devices heard everywhere go on a free global channel (desktop 1-2, mics 3-6).
@@ -439,30 +594,123 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           )}
         </>
       )}
+      {!!srcs.error && !srcs.data && <LoadError error={srcs.error} onRetry={srcs.reload} />}
       {NEEDS_SCREEN.has(c.entry.key) && <ScreenAccess />}
-      {dev && dev.choices.every((l) => !l.trim()) && (
-        <p className="m-0 rounded-[12px] border border-dashed border-line px-4 py-6 text-center text-[15px] font-semibold text-text-2">
-          {NEEDS_SCREEN.has(c.entry.key)
-            ? 'Nothing to pick. Open the window you want, or allow Screen Recording.'
-            : 'Nothing to pick. Plug it in, then open this again.'}
-        </p>
+      {noDevices && (
+        <NoDevices
+          c={c}
+          checking={form.checking}
+          onLook={() => {
+            form.reload()
+            srcs.reload()
+          }}
+        />
       )}
-      {dev && dev.choices.some((l) => l.trim()) && (
-        <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-          <legend className="mb-3 font-display text-[16px] font-extrabold text-text">
-            Pick one
-          </legend>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+      {dev && !noDevices && (
+        <div role="group" aria-labelledby="add-pick-one" className="flex flex-col gap-2.5">
+          <div className="mb-1 flex items-center gap-2">
+            <h4 id="add-pick-one" className="m-0 font-display text-[16px] font-extrabold text-text">
+              Pick one
+            </h4>
+            <span className="flex-1" />
+            {form.checking && (
+              <span
+                role="status"
+                className="flex items-center gap-1.5 text-[13px] font-semibold text-text-3"
+              >
+                <ArrowClockwise
+                  size={13}
+                  weight="bold"
+                  aria-hidden
+                  className="animate-spin motion-reduce:animate-none"
+                />
+                Looking for new ones
+              </span>
+            )}
+            <IconButton
+              size="sm"
+              label="Look again"
+              disabled={form.checking}
+              onClick={() => form.reload()}
+            >
+              <ArrowClockwise size={16} weight="bold" />
+            </IconButton>
+            <div
+              role="group"
+              aria-label="Show devices as"
+              className="inline-flex rounded-control border border-line bg-inset p-0.5"
+            >
+              {(
+                [
+                  ['grid', 'Tiles', SquaresFour],
+                  ['list', 'List', ListBullets],
+                ] as const
+              ).map(([v, label, Glyph]) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => setView(v)}
+                  className={cx(
+                    'grid size-8 place-items-center rounded-[8px] transition-colors duration-150 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                    view === v
+                      ? 'fc-picked shadow-[var(--fc-shadow-1)]'
+                      : 'text-text-2 hover:bg-surface-3 hover:text-text',
+                  )}
+                >
+                  <Glyph size={16} weight="bold" aria-hidden />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className={cx(
+              view === 'grid'
+                ? 'grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3'
+                : 'flex flex-col gap-1.5',
+            )}
+          >
             {dev.choices.map((label, i) => {
               if (!label.trim()) return null
               const on = device === i
+              const ring = on
+                ? { borderColor: c.tone, boxShadow: `0 0 0 1px ${c.tone}` }
+                : undefined
+              const check = on && (
+                <CheckCircle
+                  size={18}
+                  weight="fill"
+                  aria-hidden
+                  className="shrink-0"
+                  style={{ color: c.tone }}
+                />
+              )
+              if (view === 'list')
+                return (
+                  <button
+                    key={`${i}-${label}`}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setDevice(i)}
+                    style={ring}
+                    className="flex min-h-12 items-center gap-3 rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.99]"
+                  >
+                    <KindTile icon={Icon} tone={c.tone} size={30} />
+                    <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-text">
+                      {label}
+                    </span>
+                    {check}
+                  </button>
+                )
               return (
                 <button
                   key={`${i}-${label}`}
                   type="button"
                   aria-pressed={on}
                   onClick={() => setDevice(i)}
-                  style={on ? { borderColor: c.tone, boxShadow: `0 0 0 1px ${c.tone}` } : undefined}
+                  style={ring}
                   className="relative flex flex-col overflow-hidden rounded-[12px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
                 >
                   <span
@@ -478,21 +726,13 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-text">
                       {label}
                     </span>
-                    {on && (
-                      <CheckCircle
-                        size={18}
-                        weight="fill"
-                        aria-hidden
-                        className="shrink-0"
-                        style={{ color: c.tone }}
-                      />
-                    )}
+                    {check}
                   </span>
                 </button>
               )
             })}
           </div>
-        </fieldset>
+        </div>
       )}
       {c.entry.overlays && (
         <div className="flex flex-col gap-2.5">
@@ -560,7 +800,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )}
       {!isScene && !c.entry.overlays && (
         <>
-          {!dev && (
+          {!dev && !noDevices && (
             <details className="group rounded-control border border-line" open={!c.entry.device}>
               <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-accent-text">
                 Settings
@@ -610,7 +850,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             type="submit"
             variant="primary"
             busy={busy === 'add'}
-            disabled={!shownName.trim() || !!clash || (!!dev && device === null)}
+            disabled={!shownName.trim() || !!clash || noDevices || (!!dev && device === null)}
           >
             Add
           </Button>
