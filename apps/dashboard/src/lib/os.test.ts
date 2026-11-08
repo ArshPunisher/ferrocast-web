@@ -15,7 +15,9 @@ describe('the computer the dashboard is on', () => {
     expect(hardwareEncoderName('mac')).toBe('Mac hardware')
     expect(defaultRecordingsFolder('windows')).toBe('Videos › Ferrocast')
     expect(defaultRecordingsFolder('mac')).toBe('Movies › Ferrocast')
-    expect(examplePath('Videos', 'Ferrocast', 'windows')).toBe(String.raw`C:\Users\you\Videos\Ferrocast`)
+    expect(examplePath('Videos', 'Ferrocast', 'windows')).toBe(
+      String.raw`C:\Users\you\Videos\Ferrocast`,
+    )
     expect(shortcut('Z', true, 'windows')).toBe('Ctrl+Shift+Z')
     expect(shortcut('Z', true, 'mac')).toBe('⇧⌘Z')
   })
