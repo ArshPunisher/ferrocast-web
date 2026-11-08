@@ -1,5 +1,14 @@
 # Status
 
+## 8 Nov 2026, night (the Add dialog on Windows, branch own-engine-only)
+
+- Add to <scene> opens each kind at once: every device list (cameras, screens, windows, mics) is read ahead when the Studio settles and when the dialog opens, kept for the app's life, shown straight away and read again behind it (`desk/kind-cache.ts`, tested). A "Look again" button, and coming back to the app looks again by itself.
+- A kind with nothing plugged in says so ("No camera found", what to try, Look again) instead of falling back to its settings form; Add waits. Devices show as Tiles or a List, kept on this computer (`fc-add-source-view`).
+- The live picture over the dialog for seconds on Windows was the engine reading the camera list on the window's own thread; fixed there (`../ferrocast/docs/plan/WINDOWS-NEXT.md`, 8 Nov night).
+- New e2e against the real app: `e2e/studio-add-source.spec.ts` (Chromium + WebKit pass). All gates pass. `os.test.ts` reformatted (prettier).
+- Stats: "Busiest sources" (pictures a second and size per source, with a hint when one is bigger than the picture; `desk/source-load.ts`, tested).
+- Microsoft Store (the free answer to Smart App Control, `../ferrocast/docs/plan/MICROSOFT-STORE.md`): Settings › Updates says the Store keeps a Store copy up to date (`store` in `/updates`). The download page offers the Store first on Windows once `MS_STORE_URL` (`apps/site/src/data/company.ts`) is set; it's null until the listing is live.
+
 ## 7 Nov 2026 (Windows fixes, branch own-engine-only)
 
 - Studio preview in a short window: the narrow layout never fits the whole stage, so the live picture was never placed and the stage stayed gray. It's now placed whenever any of the stage shows, with holes cut under the top bar and the phone tab bar (`[data-tab-bar]`), the same way menus are cut out (`desk/preview.tsx`). Checked in the Windows app at 1000×700, 125%.
