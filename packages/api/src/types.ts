@@ -1444,6 +1444,8 @@ export interface UpdateInfo {
   published_at?: string | null
   /** The desktop app can download and install it (false in the headless app). Older engines leave it out. */
   can_install?: boolean
+  /** Installed from the Microsoft Store, which updates it (`can_install` is false then). */
+  store?: boolean
   checking?: boolean
   /** ms; when the last check finished. `null`: not checked yet (which is not "up to date"). */
   checked_at?: number | null

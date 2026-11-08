@@ -869,17 +869,24 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
                 <p className="mt-0.5 text-text-2">{u.error.hint}</p>
               </div>
             )}
-            {u.can_install === false && (
+            {u.store ? (
               <p className="text-[14.5px] text-text-2">
-                This copy of Ferrocast doesn’t update itself. Get new versions from{' '}
-                <a
-                  {...externalLink(DOWNLOAD_PAGE)}
-                  className="font-semibold text-accent-text hover:underline"
-                >
-                  the download page
-                </a>
-                .
+                The Microsoft Store keeps Ferrocast up to date. To get a new version now, open the
+                Store’s Downloads page and press Get updates.
               </p>
+            ) : (
+              u.can_install === false && (
+                <p className="text-[14.5px] text-text-2">
+                  This copy of Ferrocast doesn’t update itself. Get new versions from{' '}
+                  <a
+                    {...externalLink(DOWNLOAD_PAGE)}
+                    className="font-semibold text-accent-text hover:underline"
+                  >
+                    the download page
+                  </a>
+                  .
+                </p>
+              )
             )}
             {!mayCheck && (
               <p className="text-[14.5px] text-text-2">
