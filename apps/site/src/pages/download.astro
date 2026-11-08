@@ -5,7 +5,7 @@ import Bot from '../components/Bot.astro'
 import Icon from '../components/Icon.astro'
 import BrandMark from '../components/BrandMark.astro'
 import { PAGES } from '../data/pages'
-import { COMPANY, SITE } from '../data/company'
+import { COMPANY, MS_STORE_URL, SITE } from '../data/company'
 import { webPage } from '../data/schema'
 import { betaAhead, latestStable } from '../data/releases'
 import { kindOf, thanksPath } from '../data/downloads'
@@ -45,7 +45,9 @@ const platforms = [
     name: 'Windows',
     icon: 'windows-logo',
     builds: ['Windows 10 and 11, 64-bit'],
-    format: 'Installer for your user account, no admin needed',
+    format: MS_STORE_URL
+      ? 'From Microsoft Store, or an installer. No admin needed'
+      : 'Installer for your user account, no admin needed',
     tip: 'If SmartScreen warns, choose More info, then Run anyway. No admin rights needed.',
   },
   {
@@ -155,7 +157,42 @@ const filesFor = (os: string) => beta?.assets.filter((a) => a.os === os) ?? []
               ))}
             </ul>
             <p class="format">{p.format}</p>
-            {main ? (
+            {p.os === 'windows' && MS_STORE_URL ? (
+              <>
+                <p class="plan">
+                  Signed by Microsoft, so Windows never blocks it, and the Store keeps it up to
+                  date.
+                </p>
+                <div class="get">
+                  <a
+                    class="btn btn-secondary"
+                    href={MS_STORE_URL}
+                    rel="noopener"
+                    data-bot-excite
+                    data-dl-kind="store"
+                  >
+                    <Icon name="windows-logo" size={18} />
+                    Get it from Microsoft Store
+                  </a>
+                </div>
+                {main && (
+                  <p class="more">
+                    Or the{' '}
+                    <a
+                      href={thanksPath(main) ?? main.url}
+                      data-beta-download
+                      data-file={main.url}
+                      data-dl-kind={kindOf(main.url)}
+                      aria-label={`installer for ${p.name}`}
+                    >
+                      installer
+                    </a>
+                    {mb(main.size) && ` (${mb(main.size)})`}: if Windows warns, choose More info,
+                    then Run anyway.
+                  </p>
+                )}
+              </>
+            ) : main ? (
               <>
                 <p class="plan">{p.tip}</p>
                 <div class="get">

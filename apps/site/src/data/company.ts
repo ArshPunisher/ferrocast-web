@@ -72,6 +72,14 @@ export const SITE = {
   tagline: 'Free stream tools that run on your PC',
 } as const
 
+/**
+ * Ferrocast's Microsoft Store page (https://apps.microsoft.com/detail/<Store ID>), or null
+ * until the listing is live. When set, the download page offers the Store first on Windows:
+ * Microsoft signs Store apps, so Smart App Control and SmartScreen never stop them, and the
+ * Store keeps them up to date.
+ */
+export const MS_STORE_URL: string | null = null
+
 /** Rupee amount as people write it in India: ₹1,999. */
 /** How tax reads next to a price, from the GSTIN above. */
 export const taxNote = (): string =>
