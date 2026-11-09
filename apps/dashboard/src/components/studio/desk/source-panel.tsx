@@ -5,12 +5,14 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowClockwise,
+  ArrowCounterClockwise,
   CaretDown,
   CaretRight,
   CaretUp,
   Check,
   CursorClick,
   DotsSixVertical,
+  DotsThree,
   Funnel,
   Headphones,
   Plus,
@@ -58,6 +60,8 @@ import {
 } from './cleanmic'
 import { Meter, useLevels } from './mixer'
 import { OptionsForm } from './options'
+import { CaptureForm, FilterForm, hasMore } from './filter-forms'
+import { readDefaults } from './kind-cache'
 
 /** Sends edits once they've stopped changing for a moment. */
 function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: () => void) {
@@ -161,7 +165,8 @@ function Panel({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // An Escape something inside took first (closing the colour picker) isn't for the panel.
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -379,7 +384,7 @@ function Panel({
                 {a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}
               </section>
             )}
-            <Settings name={name} device={a ? 'Device settings' : 'Source settings'} />
+            <Settings name={name} kind={kind} device={a ? 'Device settings' : 'Source settings'} />
           </>
         )}
       </div>
@@ -749,6 +754,10 @@ function Filters({
   const { api, kinds } = useDesk()
   const { run, busy } = useAction()
   const [open, setOpen] = useState<string | null>(null)
+  // The open filter's extra settings (its header's More), and a count that redraws its form
+  // after Reset.
+  const [extra, setExtra] = useState(false)
+  const [fresh, setFresh] = useState(0)
   // A filter's trash asks once more (its settings go with it).
   const [sure, setSure] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -890,32 +899,85 @@ function Filters({
                     <button
                       type="button"
                       aria-expanded={open === f.name}
-                      onClick={() => setOpen(open === f.name ? null : f.name)}
+                      onClick={() => {
+                        setOpen(open === f.name ? null : f.name)
+                        setExtra(false)
+                      }}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
                       <span className="w-full truncate text-[14.5px] font-bold">{f.name}</span>
                       <span className="w-full truncate text-[13px] text-text-3">
-                        {entry && entry.label !== f.name ? entry.label : (entry?.help ?? f.kind)}
+                        {entry && entry.label !== f.name
+                          ? entry.label
+                          : (entry?.help ??
+                            // Not one of ours: the engine's name for it ("Color Key"), never
+                            // its id.
+                            kinds.data?.filters.find((k) => k.id === f.kind)?.name ??
+                            'Filter')}
                       </span>
                     </button>
-                    <IconButton
-                      size="sm"
-                      variant="ghost"
-                      className={cx(
-                        'hover:bg-danger-soft hover:text-danger',
-                        sure === f.name && 'bg-danger-soft text-danger',
-                      )}
-                      label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
+                    {open === f.name && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={`Reset ${f.name}`}
+                        disabled={busy !== null}
+                        onClick={() =>
+                          void act('reset', async () => {
+                            const d = await readDefaults(api, f.kind)
+                            await api.updateFilter(name, f.name, d)
+                            setFresh((n) => n + 1)
+                          })
+                        }
+                      >
+                        <ArrowCounterClockwise size={15} />
+                      </IconButton>
+                    )}
+                    {open === f.name && hasMore(f.kind) && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={
+                          extra ? `Fewer settings for ${f.name}` : `More settings for ${f.name}`
+                        }
+                        aria-expanded={extra}
+                        className={cx(extra && 'bg-surface-3 text-text')}
+                        onClick={() => setExtra(!extra)}
+                      >
+                        <DotsThree size={17} weight="bold" />
+                      </IconButton>
+                    )}
+                    {/* One button that asks once: the bin, then a red "Remove" to click again (9 Nov:
+                        a filled bin with only a tooltip looked stuck). The same element both
+                        times, so leaving it takes the question back. */}
+                    <button
+                      type="button"
+                      aria-label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
+                      title={sure === f.name ? undefined : `Remove ${f.name}`}
                       disabled={busy !== null}
                       onBlur={() => setSure(null)}
+                      onKeyDown={(e) => {
+                        // Escape takes the question back without closing the panel (CodeRabbit).
+                        if (e.key === 'Escape' && sure === f.name) {
+                          e.stopPropagation()
+                          setSure(null)
+                        }
+                      }}
                       onClick={() =>
                         sure === f.name
                           ? void act('rm', () => api.removeFilter(name, f.name))
                           : setSure(f.name)
                       }
+                      className={cx(
+                        'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[13px] font-bold outline-none transition-colors duration-150 focus-visible:shadow-[var(--fc-focus)] disabled:opacity-60',
+                        sure === f.name
+                          ? 'bg-danger-fill px-2.5 text-white'
+                          : 'w-8 text-text-3 hover:bg-danger-soft hover:text-danger',
+                      )}
                     >
-                      <Trash size={15} weight={sure === f.name ? 'fill' : 'regular'} />
-                    </IconButton>
+                      <Trash size={15} weight={sure === f.name ? 'bold' : 'regular'} aria-hidden />
+                      {sure === f.name && (busy === 'rm' ? 'Removing…' : 'Remove')}
+                    </button>
                     <Switch
                       label={`${f.name} on`}
                       hideLabel
@@ -928,8 +990,14 @@ function Filters({
                     />
                   </div>
                   {open === f.name && (
-                    <div className="border-t border-line p-3">
-                      <FilterSettings source={name} filter={f.name} />
+                    <div className="border-t border-line px-3 pt-2.5 pb-3">
+                      <FilterSettings
+                        key={fresh}
+                        source={name}
+                        filter={f.name}
+                        kind={f.kind}
+                        more={extra}
+                      />
                     </div>
                   )}
                 </div>
@@ -1358,24 +1426,48 @@ function Duck({ name, list }: { name: string; list: Resource<EngineFilter[]> }) 
   )
 }
 
-function FilterSettings({ source, filter }: { source: string; filter: string }) {
-  const { api } = useDesk()
+function FilterSettings({
+  source,
+  filter,
+  kind,
+  more,
+}: {
+  source: string
+  filter: string
+  kind: string
+  more: boolean
+}) {
+  const { api, refresh } = useDesk()
   const loaded = useResource(
     () => Promise.all([api.filterOptions(source, filter), api.filterSettings(source, filter)]),
     [api, source, filter],
   )
-  const [edits, set] = useApplied((e) => api.updateFilter(source, filter, e), loaded.reload)
+  // The scene's items too: a crop changes the source's size, so its outline on the canvas.
+  const [edits, set] = useApplied(
+    (e) => api.updateFilter(source, filter, e),
+    () => {
+      loaded.reload()
+      refresh()
+    },
+  )
   if (loaded.error && !loaded.data)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
   if (!loaded.data) return <Skeleton className="h-20" />
   return (
-    <OptionsForm opts={loaded.data[0]} values={{ ...loaded.data[1], ...edits }} onChange={set} />
+    <FilterForm
+      kind={kind}
+      more={more}
+      source={source}
+      opts={loaded.data[0]}
+      values={{ ...loaded.data[1], ...edits }}
+      onChange={set}
+    />
   )
 }
 
 /** Every setting OBS has for the source, applied as it changes, under `device` ("Device settings"
  * for a sound, else "Source settings"). */
-function Settings({ name, device }: { name: string; device: string }) {
+function Settings({ name, kind, device }: { name: string; kind: string; device: string }) {
   const { api } = useDesk()
   const loaded = useResource(
     () => Promise.all([api.sourceOptions(name), api.settings(name)]),
@@ -1389,8 +1481,15 @@ function Settings({ name, device }: { name: string; device: string }) {
         <LoadError error={loaded.error} onRetry={loaded.reload} />
       ) : !loaded.data ? (
         <Skeleton className="h-32" />
+      ) : kind === 'screen_capture' ? (
+        <CaptureForm
+          opts={loaded.data[0]}
+          values={{ ...loaded.data[1], ...edits }}
+          onChange={set}
+        />
       ) : (
         <OptionsForm
+          compact
           opts={loaded.data[0]}
           values={{ ...loaded.data[1], ...edits }}
           onChange={set}
