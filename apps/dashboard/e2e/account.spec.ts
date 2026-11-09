@@ -22,6 +22,8 @@ test.describe('Ferrocast account', () => {
       .click()
     await expect(bar(page)).toHaveAttribute('data-state', 'pending')
     await expect(bar(page).getByText('Finish in browser')).toBeVisible()
+    // When the browser didn't come up, the same line opens the sign-in page again.
+    await expect(bar(page).getByRole('button', { name: /Finish in browser/ })).toBeVisible()
     // The demo's browser comes back by itself.
     await expect(bar(page)).toHaveAttribute('data-state', 'signed_in')
     const acct = bar(page).getByRole('button', { name: /Kabir Sethi/ })

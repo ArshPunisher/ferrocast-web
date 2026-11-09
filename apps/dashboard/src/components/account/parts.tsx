@@ -111,6 +111,19 @@ export function GetProButton({ className = '' }: { className?: string }) {
   )
 }
 
+/** The sign-in page this window last asked for, so "Finish in browser" can open it again
+ *  when the browser didn't show it (owner, 10 Nov: a click that opened nothing). */
+let lastSignInUrl: { url: string; at: number } | null = null
+/** The engine waits 10 minutes for a sign-in (API.md); a link older than that has expired. */
+const SIGN_IN_LIFE_MS = 10 * 60_000
+
+/** Opens the sign-in page again; false when there's none to open (another window started it,
+ *  or it expired). */
+export function reopenSignIn(): boolean {
+  if (!lastSignInUrl || Date.now() - lastSignInUrl.at > SIGN_IN_LIFE_MS) return false
+  return openExternal(lastSignInUrl.url)
+}
+
 /**
  * Starts signing in: the app opens the browser (the engine waits for it), the web dashboard
  * goes to the relay's sign-in page. Errors come back as a toast with what to do.
@@ -124,6 +137,7 @@ export async function startSignIn(label?: string): Promise<boolean> {
       window.location.assign(url)
       return true
     }
+    lastSignInUrl = { url, at: Date.now() }
     openExternal(url)
     await reloadAccount()
     return true
@@ -138,6 +152,7 @@ export async function cancelSignIn(): Promise<void> {
   const api = accountApi()
   if (!api) return
   await api.cancelSignIn().catch(() => undefined)
+  lastSignInUrl = null
   await reloadAccount()
 }
 
@@ -146,6 +161,7 @@ export async function signOut(everywhere = false): Promise<boolean> {
   if (!api) return false
   try {
     await api.signOut(everywhere)
+    lastSignInUrl = null
     if (api.where === 'web') {
       // The web dashboard needs an account: back to the sign-in page.
       window.location.assign(`${window.location.origin}/login/?next=${encodeURIComponent('/app/')}`)
@@ -392,10 +408,21 @@ export function SidebarAccount({
           <span className="grid size-8 shrink-0 place-items-center rounded-full border border-dashed border-line-strong text-accent-text">
             <SpinnerGap size={16} className="motion-safe:animate-spin" aria-hidden />
           </span>
-          <Who
-            title={<span className="truncate">Finish in browser</span>}
-            sub="Waiting for sign-in"
-          />
+          {/* Clicking it opens the sign-in page again, for when the browser didn't come up. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!reopenSignIn())
+                toast({ tone: 'info', message: 'Sign in again', hint: 'Cancel, then press Sign in once more.' })
+            }}
+            title="Open the sign-in page again"
+            className="min-w-0 flex-1 rounded-[6px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          >
+            <Who
+              title={<span className="truncate">Finish in browser</span>}
+              sub={<span className="underline underline-offset-2">Open it again</span>}
+            />
+          </button>
           <button
             type="button"
             onClick={() => void cancelSignIn()}
