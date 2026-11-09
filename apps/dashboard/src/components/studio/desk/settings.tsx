@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Sparkle,
   SpeakerHigh,
+  Warning,
   X,
 } from '@phosphor-icons/react'
 import {
@@ -1194,7 +1195,72 @@ function RemuxButton() {
   )
 }
 
+/** Megabytes shown plainly: "46 MB", "1.2 GB". */
+export function sizeText(mb: number): string {
+  if (mb < 100) return `${Math.max(1, Math.round(mb))} MB`
+  // Rounded to tens, 995 would read "1000 MB": that's 1 GB.
+  if (mb < 995) return `${Math.round(mb / 10) * 10} MB`
+  const gb = mb / 1000
+  return `${gb < 10 ? Number(gb.toFixed(1)) : Math.round(gb)} GB`
+}
+
+/** Rough recording sizes per minute for these settings, in MB. Same as stream is the stream's
+ *  own bitrate; High (constant quality 16) and Lossless (x264 at 0) depend on what's on
+ *  screen, so they're estimates from the picture's size and frame rate: about 0.18 bits a
+ *  pixel for High, 0.6 to 1.8 for Lossless (a still screen to a busy game). */
+export function recordSizes(
+  s: Pick<StudioSettings, 'video_kbps' | 'audio_kbps' | 'width' | 'height' | 'fps'>,
+) {
+  const perMin = (bitsPerSecond: number) => (bitsPerSecond * 60) / 8 / 1_000_000
+  const pixels = Math.max(1, s.width) * Math.max(1, s.height) * Math.max(1, s.fps)
+  return {
+    stream: perMin((s.video_kbps + s.audio_kbps) * 1000),
+    high: perMin(pixels * 0.18),
+    lossless: [perMin(pixels * 0.6), perMin(pixels * 1.8)] as const,
+  }
+}
+
 function RecordPage({ s, set }: PageProps) {
+  const sizes = recordSizes(s)
+  const chip = s.encoder === 'hardware' ? 'your graphics chip' : 'your processor (x264)'
+  const QUALITY: Record<
+    'stream' | 'high' | 'lossless' | 'custom',
+    { minute: string; hour: string; facts: string[]; warn?: string }
+  > = {
+    stream: {
+      minute: sizeText(sizes.stream),
+      hour: sizeText(sizes.stream * 60),
+      facts: [
+        'Looks exactly like what your viewers saw.',
+        `Uses ${chip}. No extra work while live: it reuses the stream.`,
+        'Good for keeping a copy of each stream.',
+      ],
+    },
+    high: {
+      minute: sizeText(sizes.high),
+      hour: sizeText(sizes.high * 60),
+      facts: [
+        'Sharper than the stream. Text and fast motion stay clean when you pause.',
+        `Uses ${chip}, a little more than streaming.`,
+        'Best for editing videos and clips.',
+      ],
+    },
+    lossless: {
+      minute: `${sizeText(sizes.lossless[0])} to ${sizeText(sizes.lossless[1])}`,
+      hour: `${sizeText(sizes.lossless[0] * 60)} to ${sizeText(sizes.lossless[1] * 60)}`,
+      facts: [
+        'Every pixel exact. On screen it looks the same as High.',
+        'Only if an editor asks you for lossless files.',
+      ],
+      warn: 'Uses your processor (x264), not the graphics chip: while live, frames can drop.',
+    },
+    custom: {
+      minute: '',
+      hour: '',
+      facts: ['Pick the encoder and its settings yourself, as in OBS.'],
+    },
+  }
+  const picked = QUALITY[s.record_quality]
   const ext =
     s.record_format === 'fmp4' ? 'mp4' : s.record_format === 'fmov' ? 'mov' : s.record_format
   const pattern = s.record_name ?? '%CCYY-%MM-%DD %hh-%mm-%ss'
@@ -1203,7 +1269,9 @@ function RecordPage({ s, set }: PageProps) {
     const n = previewName(pattern, s)
     return `${spaces ? n : n.replace(/ /g, '_')}.${ext}`
   }, [pattern, spaces, ext, s])
-  const [folder, setFolder] = useState(s.record_folder ?? '')
+  // No folder set: the real default path shows, so you see where recordings go.
+  const defaultFolder = s.record_folder_default ?? ''
+  const [folder, setFolder] = useState(s.record_folder ?? defaultFolder)
   const { api } = useDesk()
   const [picking, setPicking] = useState(false)
   const pickFolder = async () => {
@@ -1223,7 +1291,7 @@ function RecordPage({ s, set }: PageProps) {
   }
   const [namePattern, setNamePattern] = useState(pattern)
   // Follows the draft (Undo changes, or a value the engine saved).
-  useEffect(() => setFolder(s.record_folder ?? ''), [s.record_folder])
+  useEffect(() => setFolder(s.record_folder ?? defaultFolder), [s.record_folder, defaultFolder])
   useEffect(() => setNamePattern(pattern), [pattern])
   const [muxer, setMuxer] = useState(s.record_muxer ?? '')
   useEffect(() => setMuxer(s.record_muxer ?? ''), [s.record_muxer])
@@ -1236,18 +1304,21 @@ function RecordPage({ s, set }: PageProps) {
         <Choice
           on={s.record_quality === 'stream'}
           title="Same as stream"
-          note="Small files"
+          sub={`${QUALITY.stream.minute} a minute`}
+          note="Smallest files"
           onPick={() => set({ record_quality: 'stream' })}
         />
         <Choice
           on={s.record_quality === 'high'}
           title="High"
+          sub={`${QUALITY.high.minute} a minute`}
           note="For editing"
           onPick={() => set({ record_quality: 'high' })}
         />
         <Choice
           on={s.record_quality === 'lossless'}
           title="Lossless"
+          sub={`${sizeText(sizes.lossless[0])}+ a minute`}
           note="Huge files"
           onPick={() => set({ record_quality: 'lossless' })}
         />
@@ -1257,6 +1328,34 @@ function RecordPage({ s, set }: PageProps) {
           note="Any encoder"
           onPick={() => set({ record_quality: 'custom' })}
         />
+      </div>
+      {/* What the picked quality means: size, what it costs the computer, when to use it. */}
+      <div
+        aria-live="polite"
+        className="flex flex-col gap-1.5 rounded-control border border-line bg-surface-2 px-3.5 py-3 text-[14px]"
+      >
+        {picked.hour && (
+          <span>
+            One hour of recording: <b className="tabular-nums">{picked.hour}</b>
+          </span>
+        )}
+        {picked.facts.map((f) => (
+          <span key={f} className="text-text-2">
+            {f}
+          </span>
+        ))}
+        {picked.warn && (
+          <span className="flex items-start gap-1.5 font-semibold text-warn">
+            <Warning size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
+            {picked.warn}
+          </span>
+        )}
+        {picked.hour && (
+          <span className="text-[12.5px] text-text-3">
+            Rough sizes for {s.width}×{s.height} at {s.fps} fps. A busy, moving picture makes bigger
+            files.
+          </span>
+        )}
       </div>
       {s.record_quality === 'custom' && (
         <div className="flex flex-col">
@@ -1321,7 +1420,16 @@ function RecordPage({ s, set }: PageProps) {
             }}
           />
         </Row>
-        <Row label="Save to" sub={s.record_folder ? undefined : defaultRecordingsFolder()}>
+        {/* A path is long: the box takes the row's full width under its label. */}
+        <div className="flex flex-col gap-2 border-t border-line py-2.5">
+          <span className="text-[14.5px]">
+            Save to
+            {!s.record_folder && (
+              <span className="block text-[13px] text-text-3">
+                The usual place{defaultFolder ? '' : `, ${defaultRecordingsFolder()}`}
+              </span>
+            )}
+          </span>
           <div className="flex items-center gap-2">
             <Input
               aria-label="Recordings folder"
@@ -1329,9 +1437,17 @@ function RecordPage({ s, set }: PageProps) {
               placeholder={examplePath(isMac ? 'Movies' : 'Videos', 'Ferrocast')}
               autoComplete="off"
               spellCheck={false}
+              className="min-w-0 flex-1"
+              title={folder}
               value={folder}
               onChange={(e) => setFolder(e.target.value)}
-              onBlur={() => set({ record_folder: folder.trim() ? folder.trim() : null })}
+              onBlur={() => {
+                const v = folder.trim()
+                // Emptied, or the usual place: no folder of its own (follows the default).
+                const next = !v || v === defaultFolder ? null : v
+                if (!v) setFolder(defaultFolder)
+                if (next !== (s.record_folder ?? null)) set({ record_folder: next })
+              }}
             />
             {/* The computer's own folder picker: nobody types a path. */}
             {inDesktopApp() && (
@@ -1346,7 +1462,7 @@ function RecordPage({ s, set }: PageProps) {
               </Button>
             )}
           </div>
-        </Row>
+        </div>
         <Row
           label="File names"
           sub={name}
