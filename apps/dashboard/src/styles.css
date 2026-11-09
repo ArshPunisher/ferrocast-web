@@ -254,6 +254,73 @@ input[type='range'] {
   box-shadow: var(--fc-focus);
 }
 
+/* A setting's slider in the compact source panel (owner's pick B, 9 Nov): a thin track,
+   filled between --from and --fill (set by the page), and a small white thumb. */
+.fc-slim {
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.fc-slim::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  /* Filled from --from (0, or where zero sits on a -/+ range) to --fill. */
+  background: linear-gradient(
+    to right,
+    var(--fc-line-strong) var(--from, 0%),
+    var(--fc-btn-primary) var(--from, 0%),
+    var(--fc-btn-primary) var(--fill, 0%),
+    var(--fc-line-strong) var(--fill, 0%)
+  );
+}
+.fc-slim::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--fc-btn-primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  transition: transform 120ms var(--fc-ease-out);
+}
+.fc-slim:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.fc-slim::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fc-line-strong);
+}
+.fc-slim::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fc-btn-primary);
+}
+.fc-slim::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--fc-btn-primary);
+}
+.fc-slim:focus-visible {
+  outline: none;
+}
+.fc-slim:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--fc-focus);
+}
+.fc-slim:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-slim::-webkit-slider-thumb {
+    transition: none;
+  }
+}
+
 /* A web panel's page would take the pointer from a panel being dragged or a divider. */
 body[data-dock-drag] iframe {
   pointer-events: none;

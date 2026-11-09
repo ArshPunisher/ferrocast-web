@@ -2,34 +2,213 @@
 // from its type (switch, list, number, colour, font, text, file). Used where a kind has no
 // purpose-built panel, and under "All settings" where it has one.
 
-import { useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { FolderOpen, Plus, Trash } from '@phosphor-icons/react'
 import { type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Field, IconButton, Input, Select, Switch, Textarea, cx } from '@ferrocast/ui'
+import {
+  Button,
+  Field,
+  IconButton,
+  InfoTip,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+  cx,
+} from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction } from '../../../lib/hooks'
 import { useEngine } from './common'
 
 interface FormProps {
   opts: EngineOption[]
+  /** The kind's whole form, when `opts` is only part of it (a "More" section): what decides
+   *  whether an option shows can sit in the other part. */
+  all?: EngineOption[] | undefined
   values: EngineSettings
   onChange?: ((key: string, value: unknown) => void) | undefined
   disabled?: boolean | undefined
+  /** One line per setting (label, then its control): for the narrow source panel. */
+  compact?: boolean | undefined
 }
 
 /** One generic form for any kind: every option OBS describes, drawn from its type. */
-export function OptionsForm({ opts, values, onChange, disabled }: FormProps) {
+export function OptionsForm({ opts, all, values, onChange, disabled, compact }: FormProps) {
   // Files come first: they're what a picture, video or slideshow needs before anything else.
   const isFile = (o: EngineOption) =>
     o.kind === 'path' || (o.kind === 'editable_list' && o.path === 'files')
-  const shown = opts.filter((o) => o.visible).sort((a, b) => Number(isFile(b)) - Number(isFile(a)))
+  const applies = (o: EngineOption) => {
+    const w = o.shown_when
+    if (!w) return true
+    const by = (all ?? opts).find((x) => x.key === w.key)
+    return !by || w.values.includes(valueOf(by, values) as string | number | boolean)
+  }
+  const shown = opts
+    .filter((o) => o.visible && applies(o))
+    .sort((a, b) => Number(isFile(b)) - Number(isFile(a)))
   if (shown.length === 0) return <p className="text-[14px] text-text-3">No options.</p>
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cx('flex flex-col', compact ? 'gap-2' : 'gap-3')}>
       {shown.map((o) => (
-        <OptionField key={o.key} o={o} values={values} onChange={onChange} disabled={disabled} />
+        <OptionField
+          key={o.key}
+          o={o}
+          values={values}
+          onChange={onChange}
+          disabled={disabled}
+          compact={compact}
+        />
       ))}
     </div>
+  )
+}
+
+/** An option's value: a key OBS left unset reads as zero, false or "" there (obs_data_get_*),
+ *  so it's shown (and decides what else shows) the same. */
+export function valueOf(o: EngineOption, values: Record<string, unknown>): unknown {
+  const raw = values[o.key]
+  if (raw !== undefined) return raw
+  if (o.kind === 'int' || o.kind === 'float') return 0
+  if (o.kind === 'bool') return false
+  if (o.kind === 'list') return o.values.find((x) => x === 0 || x === '' || x === false)
+  return undefined
+}
+
+/** A slider's number as people read it: a share of its range in percent when OBS gives it no
+ *  unit (a key's similarity of 400 of 1000 is 40%; a contrast of -4 to 4 is -100% to +100%),
+ *  else the number itself. */
+export function shownNumber(o: EngineOption, v: number): number {
+  const { min, max } = o
+  if (!o.slider || o.suffix || min === null || max === null || max <= min) return v
+  if (min < 0 && max > 0) return Math.round((v >= 0 ? v / max : v / -min) * 100)
+  return Math.round(((v - min) / (max - min)) * 100)
+}
+
+/** Back from what `shownNumber` shows to OBS's value, on the option's own steps. */
+export function storedNumber(o: EngineOption, shown: number): number {
+  const { min, max } = o
+  let v = shown
+  if (o.slider && !o.suffix && min !== null && max !== null && max > min) {
+    v =
+      min < 0 && max > 0
+        ? shown >= 0
+          ? (Math.min(shown, 100) / 100) * max
+          : (Math.max(shown, -100) / 100) * -min
+        : min + (Math.min(Math.max(shown, 0), 100) / 100) * (max - min)
+  }
+  if (min !== null) v = Math.max(min, v)
+  if (max !== null) v = Math.min(max, v)
+  const step = o.step ?? (o.kind === 'int' ? 1 : 0)
+  if (o.kind === 'int') return Math.round(v)
+  return step > 0 ? Math.round(v / step) * step : v
+}
+
+/** A number in the compact panel: a thin slider (when OBS draws one) and a small box with the
+ *  value, typed into without arrows; it's sent when you leave the box or press Enter. */
+function CompactNumber({
+  id,
+  o,
+  label,
+  value,
+  off,
+  set,
+}: {
+  id?: string
+  o: EngineOption
+  label: string
+  value: number | null
+  off: boolean
+  set: (v: unknown) => void
+}) {
+  const percent = o.slider && !o.suffix && o.min !== null && o.max !== null
+  const unit = percent ? '%' : o.suffix.trim()
+  const shown = value === null ? null : shownNumber(o, value)
+  const text =
+    shown === null ? '' : `${percent && shown > 0 && (o.min ?? 0) < 0 ? '+' : ''}${shown}`
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const n = Number(draft.replace(/[^0-9.+-]/g, ''))
+    if (draft.trim() !== '' && Number.isFinite(n)) set(storedNumber(o, n))
+    setDraft(null)
+  }
+  const slider = o.slider && o.min !== null && o.max !== null
+  // Filled from zero: on a -/+ range (contrast, saturation) from where 0 sits to the thumb.
+  const at = (n: number) =>
+    o.max !== null && o.min !== null && o.max > o.min ? ((n - o.min) / (o.max - o.min)) * 100 : 0
+  const zero = o.min !== null && o.min < 0 && o.max !== null && o.max > 0 ? at(0) : 0
+  const here = value === null ? zero : at(value)
+  const [from, fill] = [`${Math.min(zero, here)}%`, `${Math.max(zero, here)}%`]
+  return (
+    <>
+      {slider && (
+        <input
+          type="range"
+          aria-label={label}
+          aria-valuetext={text ? `${text}${unit ? ` ${unit}` : ''}` : undefined}
+          disabled={off}
+          min={o.min ?? 0}
+          max={o.max ?? 100}
+          step={o.step ?? (o.kind === 'int' ? 1 : 'any')}
+          value={value ?? o.min ?? 0}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            set(o.kind === 'int' ? Math.round(n) : n)
+          }}
+          className="fc-slim min-w-0 flex-1"
+          style={{ ['--from' as string]: from, ['--fill' as string]: fill }}
+        />
+      )}
+      <span
+        className={cx(
+          'flex h-7 shrink-0 items-center rounded-[7px] bg-surface-3 pr-1.5 focus-within:shadow-[var(--fc-focus)]',
+          slider ? 'w-[3.75rem]' : 'w-24',
+        )}
+      >
+        <input
+          id={id}
+          type="text"
+          inputMode={o.kind === 'int' && !percent ? 'numeric' : 'decimal'}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={off}
+          aria-label={slider ? `${label}, exact` : undefined}
+          value={draft ?? text}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') setDraft(null)
+          }}
+          className="h-full w-full min-w-0 bg-transparent pl-1.5 text-right font-mono text-[12.5px] text-text tabular-nums outline-none"
+        />
+        {unit && <span className="pl-0.5 text-[11px] text-text-3">{unit}</span>}
+      </span>
+    </>
+  )
+}
+
+type WrapProps = {
+  label: string
+  hint: string | undefined
+  children: (p: { id?: string; 'aria-describedby'?: string }) => ReactNode
+}
+
+/** The label above its control (the roomy form). */
+function FieldWrap({ label, hint, children }: WrapProps) {
+  return (
+    <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+      {children}
+    </Field>
+  )
+}
+
+/** The label beside its control (the compact form). */
+function CompactWrap({ label, hint, children }: WrapProps) {
+  return (
+    <Row label={label} hint={hint}>
+      {children}
+    </Row>
   )
 }
 
@@ -50,27 +229,48 @@ export function fromHex(hex: string, old: unknown): number {
 
 type Font = { face?: string; size?: number; style?: string; flags?: number }
 
+/** A compact setting: its label on the left, its control on the same line. */
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint: string | undefined
+  children: (p: { id: string }) => ReactNode
+}) {
+  const id = useId()
+  // The label never takes a second line (owner, 9 Nov): a long one ends in "…", whole on hover.
+  return (
+    <div className="grid min-h-8 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2.5">
+      <span className="flex min-w-0 items-center gap-1">
+        <label
+          htmlFor={id}
+          title={label}
+          className="min-w-0 truncate text-[13px] font-semibold whitespace-nowrap text-text-2"
+        >
+          {label}
+        </label>
+        {hint && <InfoTip label={`About ${label.toLowerCase()}`}>{hint}</InfoTip>}
+      </span>
+      <div className="flex min-w-0 items-center gap-2">{children({ id })}</div>
+    </div>
+  )
+}
+
 function OptionField({
   o,
   values,
   onChange,
   disabled,
-}: { o: EngineOption } & Omit<FormProps, 'opts'>) {
+  compact,
+}: { o: EngineOption } & Omit<FormProps, 'opts' | 'all'>) {
   // OBS's own wording names OBS where it means this app (macOS Screen Capture's "Hide OBS
   // from capture" leaves out the app the plugin runs in: here, Ferrocast's own windows).
   const label = (o.label || o.key).replace(/\bOBS\b(?= from capture)/, 'Ferrocast')
   const hint = o.help || undefined
   const off = disabled || !onChange || !o.enabled
-  // A key OBS left unset reads as zero, false or "" there (obs_data_get_*): show it the same.
-  const raw = values[o.key]
-  const v =
-    raw !== undefined
-      ? raw
-      : o.kind === 'int' || o.kind === 'float'
-        ? 0
-        : o.kind === 'list'
-          ? o.values.find((x) => x === 0 || x === '' || x === false)
-          : undefined
+  const v = valueOf(o, values)
   const set = (next: unknown) => onChange?.(o.key, next)
   switch (o.kind) {
     case 'bool':
@@ -85,10 +285,12 @@ function OptionField({
       )
     case 'list': {
       const at = o.values.findIndex((x) => x === v)
+      const Wrap = compact ? CompactWrap : FieldWrap
       return (
-        <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+        <Wrap label={label} hint={hint}>
           {(p) => (
             <Select
+              className={compact ? 'h-8! text-[13px]!' : undefined}
               {...p}
               disabled={off}
               value={at < 0 ? '' : String(at)}
@@ -104,7 +306,7 @@ function OptionField({
               ))}
             </Select>
           )}
-        </Field>
+        </Wrap>
       )
     }
     case 'group': {
@@ -134,6 +336,12 @@ function OptionField({
     case 'int':
     case 'float': {
       const num = typeof v === 'number' ? v : null
+      if (compact)
+        return (
+          <Row label={label} hint={hint}>
+            {(p) => <CompactNumber {...p} o={o} label={label} value={num} off={off} set={set} />}
+          </Row>
+        )
       const unit = o.suffix
       const round = (n: number) => (o.kind === 'int' ? Math.round(n) : n)
       const box = (p: { id?: string; 'aria-describedby'?: string }) => (
@@ -147,26 +355,35 @@ function OptionField({
             min={o.min ?? undefined}
             max={o.max ?? undefined}
             step={o.step ?? undefined}
-            className={o.slider ? 'w-24! text-right tabular-nums' : 'tabular-nums'}
+            className={cx(
+              'tabular-nums',
+              o.slider && 'w-24! text-right',
+              compact && 'h-8! w-[4.5rem]! px-2! text-right text-[13px]!',
+            )}
             onChange={(e) => {
               const n = e.target.valueAsNumber
               if (Number.isFinite(n)) set(round(n))
             }}
           />
-          {unit && <span className="shrink-0 text-[14px] text-text-3">{unit}</span>}
+          {unit && (
+            <span className={cx('shrink-0 text-text-3', compact ? 'text-[12.5px]' : 'text-[14px]')}>
+              {unit.trim()}
+            </span>
+          )}
         </div>
       )
+      const Wrap = compact ? CompactWrap : FieldWrap
       if (!o.slider || o.min === null || o.max === null)
         return (
-          <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+          <Wrap label={label} hint={hint}>
             {box}
-          </Field>
+          </Wrap>
         )
       // OBS shows it as a slider: a slider to drag, the exact number beside it.
       return (
-        <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+        <Wrap label={label} hint={hint}>
           {(p) => (
-            <div className="flex items-center gap-3">
+            <div className={cx('flex min-w-0 flex-1 items-center', compact ? 'gap-2' : 'gap-3')}>
               <input
                 type="range"
                 aria-label={label}
@@ -182,13 +399,14 @@ function OptionField({
               {box(p)}
             </div>
           )}
-        </Field>
+        </Wrap>
       )
     }
     case 'color':
-    case 'color_alpha':
+    case 'color_alpha': {
+      const Wrap = compact ? CompactWrap : FieldWrap
       return (
-        <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+        <Wrap label={label} hint={hint}>
           {(p) => (
             <Input
               {...p}
@@ -196,11 +414,12 @@ function OptionField({
               disabled={off}
               value={toHex(v)}
               onChange={(e) => set(fromHex(e.target.value, v))}
-              className="w-20! p-1"
+              className={compact ? 'h-7! w-12! rounded-[7px]! p-0.5' : 'w-20! p-1'}
             />
           )}
-        </Field>
+        </Wrap>
       )
+    }
     case 'font': {
       const font: Font = v && typeof v === 'object' ? (v as Font) : {}
       return (
