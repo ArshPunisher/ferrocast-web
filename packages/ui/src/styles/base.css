@@ -123,8 +123,8 @@ html:has(.fc-dialog[open]) {
 }
 
 /* What's picked (a source, a scene, a segmented choice): one solid colour everywhere, never
-   a faint tint (owner's pick D1 Graphite: dark grey in light mode, light grey in dark). Text
-   colours inside it follow, so labels stay readable on the fill. */
+   a faint tint: Ferrocast blue (owner, 10 Nov; it was D1 Graphite grey). Text colours inside
+   it follow, so labels stay readable on the fill. */
 .fc-picked {
   background-color: var(--fc-pick);
   color: var(--fc-on-pick);

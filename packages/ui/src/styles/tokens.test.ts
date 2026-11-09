@@ -58,7 +58,7 @@ describe('primary button tokens', () => {
   })
 })
 
-describe('what is picked (D1 Graphite)', () => {
+describe('what is picked (Ferrocast blue, 10 Nov; was D1 Graphite)', () => {
   // Each theme block sets the pick and its text together: every pair reads well (AAA).
   const blocks = [
     ...css.matchAll(
