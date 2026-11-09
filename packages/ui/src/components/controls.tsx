@@ -10,7 +10,7 @@ import {
 import { cx } from '../cx'
 import { InfoTip } from './infotip'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost'
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-ghost'
 type Size = 'sm' | 'md' | 'lg'
 
 const variants: Record<Variant, string> = {
@@ -18,6 +18,8 @@ const variants: Record<Variant, string> = {
     'bg-btn-primary text-on-btn-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_18px_-8px_var(--fc-btn-primary)] hover:bg-btn-primary-hover',
   // Tinted Molten, so a button reads as one and not as a grey field (owner, 29 Oct).
   secondary: 'bg-btn-soft text-molten-text hover:bg-btn-soft-hover',
+  // Settings rows (layout A, owner's pick 10 Nov): plain and outlined beside the row's text.
+  outline: 'border border-line-strong bg-surface-1 text-text hover:bg-surface-2',
   ghost: 'text-text-2 hover:text-text hover:bg-surface-3',
   danger:
     'bg-danger-fill text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-110',
