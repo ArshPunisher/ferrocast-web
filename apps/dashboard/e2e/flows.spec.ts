@@ -360,6 +360,8 @@ test.describe('tips and settings', () => {
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')
     // The TTS minimum's hint follows, without a reload.
     await page.getByRole('link', { name: 'Text-to-speech' }).click()
+    // The amounts show once reading aloud is on (Settings layout A, 10 Nov).
+    await page.getByRole('switch', { name: 'Read messages aloud' }).click()
     await expect(page.getByText('In USD (set in Appearance).')).toBeVisible()
     await page.getByRole('link', { name: 'Appearance' }).click()
     await expect(page.getByLabel('Main currency')).toHaveValue('USD')

@@ -23,6 +23,8 @@ test.describe('Ferrocast voices', () => {
     await expect(voice(page).locator('optgroup[label^="Ferrocast"]')).toHaveCount(0)
 
     await open(page, 'settings/tts', 'autoplay=0&latency=0&pro=open&pro_features=on')
+    // The voices show once reading aloud is on (Settings layout A, 10 Nov).
+    await turnOn(page)
     const line = tts(page).getByTestId('tts-pro-line')
     await expect(line).toContainText('part of Pro')
     await expect(line.getByRole('link', { name: 'Settings › Pro' })).toBeVisible()

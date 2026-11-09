@@ -3,10 +3,11 @@
 // overlays' URLs so OBS keeps working with this PC off. Both off by default.
 
 import { useState } from 'react'
-import { ArrowsClockwise, CloudArrowUp } from '@phosphor-icons/react'
+import { ArrowsClockwise, Cloud, CloudArrowUp } from '@phosphor-icons/react'
 import { cloudSyncApi, describeError, relativeTime, type CloudSyncView } from '@ferrocast/api'
 import { Button, Skeleton, Switch, toast } from '@ferrocast/ui'
 import { LoadError, Panel } from './Panel'
+import { SettingsHead } from './settings-kit'
 import { useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 
@@ -30,11 +31,13 @@ export function CloudSyncSettings() {
   const v = view.data
   return (
     <div id="settings-cloud" className="scroll-mt-20">
-      <Panel
-        id="s-cloud"
+      <SettingsHead
+        icon={Cloud}
+        tone="#0888b8"
         title="Cloud mode"
         description="Optional and free with a Ferrocast account. This PC works the same without it."
-      >
+      />
+      <Panel id="s-cloud">
         {view.error ? (
           <LoadError error={view.error} onRetry={view.reload} />
         ) : !v ? (

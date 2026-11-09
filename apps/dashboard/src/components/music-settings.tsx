@@ -1,7 +1,7 @@
 // Settings › Music (25 Oct): where the beat and the song come from, for the music pieces,
 // motion backgrounds and sound elements on your screens. Shows what plays right now.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { FolderOpen } from '@phosphor-icons/react'
 import {
   describeError,
@@ -13,6 +13,7 @@ import {
 } from '@ferrocast/api'
 import { Badge, Button, Field, Input, Segmented, Select, Skeleton, toast } from '@ferrocast/ui'
 import { LoadError } from './Panel'
+import { Group, Row } from './settings-kit'
 import { useRigLists } from './studio/rig-lists'
 import { useClient, useResource } from '../lib/hooks'
 import { inDesktopApp } from '../lib/external'
@@ -45,6 +46,7 @@ export function MusicSettings() {
   const [file, setFile] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const beatId = useId()
   /** Text file picked but no file saved yet (the refresh mustn't undo the choice). */
   const [wantFile, setWantFile] = useState(false)
   const view = res.data
@@ -94,138 +96,162 @@ export function MusicSettings() {
   const audio = list.filter((i) => AUDIO_KINDS.includes(i.kind))
   const other = list.filter((i) => !AUDIO_KINDS.includes(i.kind))
   const known = list.some((i) => i.name === config.beat_input)
+  const pickSong = (next: SongSource) => {
+    if (next === 'file' && !config.file) {
+      // Needs the file first: show the field, save once it's filled in.
+      setWantFile(true)
+      return
+    }
+    setWantFile(false)
+    void save({ song: next })
+  }
   return (
-    <div className="flex flex-col gap-4">
-      <NowPlaying view={view} />
-      <Field
-        label="Beat from"
-        hint="The sound your music plays through, often Desktop Audio."
-        hintVisible={false}
-        error={view.beat_problem}
+    <>
+      <Group
+        title="Now playing"
+        note={
+          !now.playing && (config.beat_input || config.song !== 'off')
+            ? 'Music pieces stay hidden until something plays.'
+            : undefined
+        }
       >
-        {(p) => (
-          <Select
-            {...p}
-            value={config.beat_input ?? ''}
-            disabled={busy}
-            onChange={(e) => void save({ beat_input: e.target.value || null })}
-          >
-            <option value="">No beat</option>
-            {config.beat_input && !known && (
-              <option value={config.beat_input}>{config.beat_input}</option>
-            )}
-            {audio.length > 0 && (
-              <optgroup label="Sound">
-                {audio.map((i) => (
-                  <option key={i.name}>{i.name}</option>
-                ))}
-              </optgroup>
-            )}
-            {other.length > 0 && (
-              <optgroup label="Other sources">
-                {other.map((i) => (
-                  <option key={i.name}>{i.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </Select>
-        )}
-      </Field>
-      {inputs.data && list.length === 0 && (
-        <p className="-mt-2 text-[14px] text-text-3">
-          {rig.app === 'OBS'
-            ? 'Connect OBS to pick a source.'
-            : 'Start the Studio in Go live to pick a sound.'}
-        </p>
-      )}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[14.5px] font-medium text-text-2">Song from</span>
-        <Segmented<SongSource>
+        <Row>
+          <NowPlaying view={view} />
+        </Row>
+        <Row
           label="Song from"
-          size="sm"
-          className="self-start"
-          value={song}
-          options={[
-            { value: 'off', label: 'Off' },
-            { value: 'player', label: 'Music player' },
-            { value: 'file', label: 'Text file' },
-          ]}
-          onChange={(next) => {
-            if (next === 'file' && !config.file) {
-              // Needs the file first: show the field, save once it's filled in.
-              setWantFile(true)
-              return
-            }
-            setWantFile(false)
-            void save({ song: next })
-          }}
+          description={
+            song === 'player'
+              ? 'Spotify or Music on a Mac, any player on Windows.'
+              : song === 'file'
+                ? 'A text file your player writes, like Snip or Tuna.'
+                : 'Where Ferrocast reads the song’s name.'
+          }
+          control={
+            <Segmented<SongSource>
+              label="Song from"
+              size="sm"
+              value={song}
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'player', label: 'Music player' },
+                { value: 'file', label: 'Text file' },
+              ]}
+              onChange={pickSong}
+            />
+          }
         />
-        {song === 'player' && (
-          <p className="text-[14px] text-text-3">
-            Spotify or Music on a Mac, any player on Windows.
-          </p>
-        )}
-      </div>
-      {song === 'file' && (
-        <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-start"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void save({ song: 'file', file: file.trim() || null })
-          }}
-        >
-          <Field
-            label="Song file"
-            className="min-w-0 flex-1"
-            hint="The .txt file Snip, Tuna or your player writes. Browse to it, or paste its full path."
-            hintVisible={false}
-            error={err}
-          >
-            {(p) => (
-              <Input
-                {...p}
-                value={file}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={examplePath('Music', 'now-playing.txt')}
-                onChange={(e) => setFile(e.target.value)}
-              />
-            )}
-          </Field>
-          {/* The computer's own file picker: nobody types a path. */}
-          {inDesktopApp() && (
-            <Button
-              type="button"
-              variant="secondary"
-              className="sm:mt-[30px]"
-              onClick={() =>
-                void studioEngineApi(client)
-                  .pickFile('file', 'Text files (*.txt);;All files (*.*)')
-                  .then((got) => {
-                    if (typeof got.path !== 'string' || !got.path) return
-                    setFile(got.path)
-                    void save({ song: 'file', file: got.path })
-                  })
-                  .catch(() => toast({ tone: 'error', message: 'The file picker didn’t open.' }))
-              }
+        {song === 'file' && (
+          <Row child>
+            <form
+              className="flex flex-col gap-2 sm:flex-row sm:items-start"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void save({ song: 'file', file: file.trim() || null })
+              }}
             >
-              <FolderOpen size={16} weight="bold" /> Browse
-            </Button>
-          )}
-          <Button type="submit" variant="secondary" busy={busy} className="sm:mt-[30px]">
-            Use file
-          </Button>
-        </form>
-      )}
-      {view.song_problem && config.song !== 'off' && (
-        <p className="text-[14px] text-warn" role="status">
-          {view.song_problem}
-        </p>
-      )}
-      {!now.playing && (config.beat_input || config.song !== 'off') && (
-        <p className="text-[14px] text-text-3">Music pieces stay hidden until something plays.</p>
-      )}
-    </div>
+              <Field
+                label="Song file"
+                className="min-w-0 flex-1"
+                hint="The .txt file Snip, Tuna or your player writes. Browse to it, or paste its full path."
+                hintVisible={false}
+                error={err}
+              >
+                {(p) => (
+                  <Input
+                    {...p}
+                    value={file}
+                    spellCheck={false}
+                    autoComplete="off"
+                    placeholder={examplePath('Music', 'now-playing.txt')}
+                    onChange={(e) => setFile(e.target.value)}
+                  />
+                )}
+              </Field>
+              {/* The computer's own file picker: nobody types a path. */}
+              {inDesktopApp() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="sm:mt-[30px]"
+                  onClick={() =>
+                    void studioEngineApi(client)
+                      .pickFile('file', 'Text files (*.txt);;All files (*.*)')
+                      .then((got) => {
+                        if (typeof got.path !== 'string' || !got.path) return
+                        setFile(got.path)
+                        void save({ song: 'file', file: got.path })
+                      })
+                      .catch(() =>
+                        toast({ tone: 'error', message: 'The file picker didn’t open.' }),
+                      )
+                  }
+                >
+                  <FolderOpen size={16} weight="bold" /> Browse
+                </Button>
+              )}
+              <Button type="submit" variant="outline" busy={busy} className="sm:mt-[30px]">
+                Use file
+              </Button>
+            </form>
+          </Row>
+        )}
+        {view.song_problem && config.song !== 'off' && (
+          <Row child>
+            <p className="text-[14px] text-warn" role="status">
+              {view.song_problem}
+            </p>
+          </Row>
+        )}
+      </Group>
+      <Group title="Beat" note="Music pieces and motion backgrounds on your screens move with it.">
+        <Row
+          label="Beat from"
+          htmlFor={beatId}
+          description={
+            view.beat_problem ? (
+              <span className="font-medium text-warn">{view.beat_problem}</span>
+            ) : inputs.data && list.length === 0 ? (
+              rig.app === 'OBS' ? (
+                'Connect OBS to pick a source.'
+              ) : (
+                'Start the Studio in Go live to pick a sound.'
+              )
+            ) : (
+              'The sound your music plays through, often Desktop Audio.'
+            )
+          }
+          control={
+            <Select
+              id={beatId}
+              className="w-56 max-w-full"
+              value={config.beat_input ?? ''}
+              disabled={busy}
+              onChange={(e) => void save({ beat_input: e.target.value || null })}
+            >
+              <option value="">No beat</option>
+              {config.beat_input && !known && (
+                <option value={config.beat_input}>{config.beat_input}</option>
+              )}
+              {audio.length > 0 && (
+                <optgroup label="Sound">
+                  {audio.map((i) => (
+                    <option key={i.name}>{i.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {other.length > 0 && (
+                <optgroup label="Other sources">
+                  {other.map((i) => (
+                    <option key={i.name}>{i.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </Select>
+          }
+        />
+      </Group>
+    </>
   )
 }
 
@@ -234,7 +260,7 @@ function NowPlaying({ view }: { view: MusicView }) {
   const { now } = view
   const song = [now.title, now.artist].filter(Boolean).join(' · ')
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-inset px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-3">
       <Badge tone={now.playing ? 'ok' : 'neutral'}>{now.playing ? 'Playing' : 'Quiet'}</Badge>
       <span className="min-w-0 flex-1 truncate text-[14.5px] text-text" title={song || undefined}>
         {song || (now.playing ? 'No song name' : 'Nothing playing')}

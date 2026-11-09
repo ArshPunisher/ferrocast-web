@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowClockwise,
   ArrowSquareIn,
@@ -31,18 +31,17 @@ import {
   Badge,
   Button,
   Dialog,
-  InfoTip,
   Field,
   Input,
   Segmented,
   Select,
   Skeleton,
-  Switch,
   copyText,
   cx,
   toast,
 } from '@ferrocast/ui'
-import { LoadError, PageHeader, Panel } from '../components/Panel'
+import { LoadError, PageHeader } from '../components/Panel'
+import { Group, Row, SettingsHead, SwitchRow } from '../components/settings-kit'
 import { AccountRow, useConnect } from '../components/accounts'
 import { stateCopy } from '../components/StatusStrip'
 import { THEME_EVENT } from '../components/Shell'
@@ -105,23 +104,51 @@ const ALIAS: Record<string, SectionId> = {
 }
 const isSection = (id: string | undefined): id is SectionId => SECTIONS.some(([s]) => s === id)
 
+/** Each page's icon tile colour (layout A): solids white reads on, one per page. */
+const TONE: Record<SectionId, string> = {
+  accounts: '#3d6fd8',
+  obs: '#4f5662',
+  cloud: '#0888b8',
+  music: '#c26a00',
+  tts: '#0888b8',
+  discord: '#5865f2',
+  appearance: '#c2417a',
+  data: '#0a8f5c',
+  updates: '#1f7f86',
+  pro: '#b35900',
+  advanced: '#5b6370',
+}
+
+/** One page of settings: its head (icon, title, one line), then its groups. */
 function Section({
   id,
   title,
   description,
+  aside,
   children,
 }: {
-  id: string
+  id: SectionId
   title: string
   description?: ReactNode
+  aside?: ReactNode
   children: ReactNode
 }) {
+  const item = SECTIONS.find(([s]) => s === id)
   return (
-    <div id={`settings-${id}`} className="scroll-mt-20">
-      {/* Inside, layouts follow the section's own width (it can be one of two columns). */}
-      <Panel title={title} description={description} id={`s-${id}`} bodyClassName="@container">
+    // Inside, layouts follow the page's own width.
+    <div id={`settings-${id}`} className="@container scroll-mt-20">
+      <div id={`s-${id}`}>
+        {item && (
+          <SettingsHead
+            icon={item[2]}
+            tone={TONE[id]}
+            title={title}
+            description={description}
+            aside={aside}
+          />
+        )}
         {children}
-      </Panel>
+      </div>
     </div>
   )
 }
@@ -138,17 +165,19 @@ function Accounts() {
       title="Accounts"
       description="Sign-ins stay on this computer, never in exports or logs."
     >
-      <ul className="flex flex-col gap-2">
-        {(['twitch', 'youtube', 'kick'] as const).map((p) => (
-          <AccountRow
-            key={p}
-            platform={p}
-            busy={busy === p}
-            onConnect={() => void connect(p)}
-            onDisconnect={() => setLeaving(p)}
-          />
-        ))}
-      </ul>
+      <Group title="Platforms" plain>
+        <ul className="flex flex-col gap-2">
+          {(['twitch', 'youtube', 'kick'] as const).map((p) => (
+            <AccountRow
+              key={p}
+              platform={p}
+              busy={busy === p}
+              onConnect={() => void connect(p)}
+              onDisconnect={() => setLeaving(p)}
+            />
+          ))}
+        </ul>
+      </Group>
       {dialog}
       <Dialog
         open={leaving !== null}
@@ -248,32 +277,7 @@ function Obs() {
   const auto = obs.data?.auto === true
   const saved = obs.data?.has_password === true
   return (
-    <Section
-      id="obs"
-      title="OBS"
-      description={
-        <>
-          Lets Ferrocast put overlays and themes into OBS. In OBS: Tools, WebSocket Server Settings,
-          tick “Enable WebSocket server”. OBS on another PC? Copy its “Show Connect Info” address
-          and password here.
-        </>
-      }
-    >
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium text-text-2">Status</span>
-        {conn && (
-          <Badge tone={stateCopy(conn).tone === 'ok' ? 'ok' : 'warn'}>
-            {stateCopy(conn).label}
-          </Badge>
-        )}
-        {conn?.state === 'connected' && obs.data?.version && (
-          <span className="text-text-3">OBS {obs.data.version}</span>
-        )}
-        {auto && <span className="text-text-3">Using OBS’s own settings</span>}
-      </div>
-      {conn && conn.state !== 'connected' && conn.detail && (
-        <p className="mb-4 text-[14.5px] text-text-2">{conn.detail}</p>
-      )}
+    <Section id="obs" title="OBS" description="Lets Ferrocast put overlays and themes into OBS.">
       <ObsAutoDetect
         key={detectKey}
         connected={conn?.state === 'connected'}
@@ -282,62 +286,91 @@ function Obs() {
           obsToast(o)
         }}
       />
-      <form
-        className="grid grid-cols-1 gap-3 @md:grid-cols-[1fr_120px]"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void save()
-        }}
+      <Group
+        title="Connection"
+        note="In OBS: Tools, WebSocket Server Settings, tick “Enable WebSocket server”. OBS on another PC? Copy its “Show Connect Info” address and password here."
       >
-        <Field label="Address">
-          {(p) => (
-            <Input
-              {...p}
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              autoComplete="off"
-            />
-          )}
-        </Field>
-        <Field label="Port">
-          {(p) => (
-            <Input
-              {...p}
-              type="number"
-              value={port}
-              onChange={(e) => setPort(Number(e.target.value) || 0)}
-            />
-          )}
-        </Field>
-        <Field
-          label="Password"
-          className="sm:col-span-2"
-          hint={
-            auto && saved
-              ? 'Read from OBS. Type one only to use a different password.'
-              : 'Stays on this computer, never shown or exported.'
+        <Row
+          label="Status"
+          description={
+            conn && conn.state !== 'connected' && conn.detail
+              ? conn.detail
+              : [
+                  conn?.state === 'connected' && obs.data?.version
+                    ? `OBS ${obs.data.version}`
+                    : null,
+                  auto ? 'Using OBS’s own settings' : null,
+                ]
+                  .filter(Boolean)
+                  .join('. ') || null
           }
-          error={err}
-        >
-          {(p) => (
-            <Input
-              {...p}
-              type="password"
-              value={password}
-              placeholder={
-                saved ? (auto ? 'From OBS. Type to replace' : 'Saved. Type to replace') : ''
+          control={
+            conn && (
+              <Badge tone={stateCopy(conn).tone === 'ok' ? 'ok' : 'warn'}>
+                {stateCopy(conn).label}
+              </Badge>
+            )
+          }
+        />
+        <Row>
+          <form
+            className="grid grid-cols-1 gap-3 @md:grid-cols-[1fr_120px]"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void save()
+            }}
+          >
+            <Field label="Address">
+              {(p) => (
+                <Input
+                  {...p}
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  autoComplete="off"
+                />
+              )}
+            </Field>
+            <Field label="Port">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  value={port}
+                  onChange={(e) => setPort(Number(e.target.value) || 0)}
+                />
+              )}
+            </Field>
+            <Field
+              label="Password"
+              className="sm:col-span-2"
+              hint={
+                auto && saved
+                  ? 'Read from OBS. Type one only to use a different password.'
+                  : 'Stays on this computer, never shown or exported.'
               }
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="off"
-            />
-          )}
-        </Field>
-        <div className="sm:col-span-2">
-          <Button type="submit" variant="primary" busy={busy}>
-            Connect OBS
-          </Button>
-        </div>
-      </form>
+              error={err}
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  type="password"
+                  value={password}
+                  placeholder={
+                    saved ? (auto ? 'From OBS. Type to replace' : 'Saved. Type to replace') : ''
+                  }
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="off"
+                />
+              )}
+            </Field>
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="primary" busy={busy}>
+                Connect OBS
+              </Button>
+            </div>
+          </form>
+        </Row>
+      </Group>
     </Section>
   )
 }
@@ -357,85 +390,95 @@ function Tts({ currency }: { currency?: string | undefined }) {
     <Section
       id="tts"
       title="Text-to-speech"
-      description="Off by default. Only messages that pass your rules are read."
+      description="Reads tip and chat messages aloud on stream. Off by default."
     >
       {res.error ? (
         <LoadError error={res.error} onRetry={res.reload} />
       ) : !t ? (
         <Skeleton className="h-40" />
       ) : (
-        <div className="flex flex-col gap-4">
-          <Switch
-            checked={t.enabled}
-            onChange={(enabled) => save({ ...t, enabled })}
-            label="Read messages aloud"
-            description="Messages on tips, Super Chats, Bits and subs, when the alert asks."
-          />
-          <div className="flex flex-col gap-4">
-            {!t.enabled && (
-              <p className="text-[14.5px] font-medium text-text-2">
-                Turn on “Read messages aloud” to change these.
-              </p>
-            )}
-            <Switch
-              checked={t.hold_for_approval}
-              disabled={!t.enabled}
-              onChange={(hold_for_approval) => save({ ...t, hold_for_approval })}
-              label="Ask me first"
-              description="Messages wait on Home until you press “Read it”."
+        <>
+          <Group>
+            <SwitchRow
+              checked={t.enabled}
+              onChange={(enabled) => save({ ...t, enabled })}
+              label="Read messages aloud"
+              description="Tips, Super Chats, Bits and subs, when the alert asks. Only messages that pass your rules."
             />
-            <Switch
-              checked={t.read_names}
-              disabled={!t.enabled}
-              onChange={(read_names) => save({ ...t, read_names })}
-              label="Read the sender’s name"
-            />
-            <TtsVoicePicker
-              systemVoice={t.voice}
-              voices={voices.data ?? []}
-              disabled={!t.enabled}
-              onSystemVoice={(voice) => save({ ...t, voice })}
-            />
-            <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
-              <Field
-                label="Minimum amount"
-                hint={
-                  (currency ?? t.currency)
-                    ? `In ${currency ?? t.currency} (set in Appearance).`
-                    : 'In your main currency (Appearance).'
-                }
-              >
-                {(p) => (
-                  <Input
-                    {...p}
-                    type="number"
-                    min={0}
-                    disabled={!t.enabled}
-                    value={t.min_amount}
-                    onChange={(e) =>
-                      res.set({ ...t, min_amount: Math.max(0, Number(e.target.value) || 0) })
-                    }
-                    onBlur={() => save(t)}
+          </Group>
+          {t.enabled ? (
+            <>
+              <Group title="How it reads">
+                <SwitchRow
+                  checked={t.hold_for_approval}
+                  onChange={(hold_for_approval) => save({ ...t, hold_for_approval })}
+                  label="Ask me first"
+                  description="Messages wait on Home until you press “Read it”."
+                />
+                <SwitchRow
+                  checked={t.read_names}
+                  onChange={(read_names) => save({ ...t, read_names })}
+                  label="Read the sender’s name"
+                  description="Their name, then the message."
+                />
+                <Row>
+                  <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
+                    <Field
+                      label="Minimum amount"
+                      hint={
+                        (currency ?? t.currency)
+                          ? `In ${currency ?? t.currency} (set in Appearance).`
+                          : 'In your main currency (Appearance).'
+                      }
+                    >
+                      {(p) => (
+                        <Input
+                          {...p}
+                          type="number"
+                          min={0}
+                          value={t.min_amount}
+                          onChange={(e) =>
+                            res.set({ ...t, min_amount: Math.max(0, Number(e.target.value) || 0) })
+                          }
+                          onBlur={() => save(t)}
+                        />
+                      )}
+                    </Field>
+                    <Field label="Longest message" hint="10 to 500 characters.">
+                      {(p) => (
+                        <Input
+                          {...p}
+                          type="number"
+                          min={10}
+                          max={500}
+                          value={t.max_chars}
+                          onChange={(e) =>
+                            res.set({ ...t, max_chars: Number(e.target.value) || 10 })
+                          }
+                          onBlur={() => save(t)}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                </Row>
+              </Group>
+              <Group title="Voices">
+                <Row>
+                  <TtsVoicePicker
+                    systemVoice={t.voice}
+                    voices={voices.data ?? []}
+                    disabled={false}
+                    onSystemVoice={(voice) => save({ ...t, voice })}
                   />
-                )}
-              </Field>
-              <Field label="Longest message" hint="10 to 500 characters.">
-                {(p) => (
-                  <Input
-                    {...p}
-                    type="number"
-                    min={10}
-                    max={500}
-                    disabled={!t.enabled}
-                    value={t.max_chars}
-                    onChange={(e) => res.set({ ...t, max_chars: Number(e.target.value) || 10 })}
-                    onBlur={() => save(t)}
-                  />
-                )}
-              </Field>
-            </div>
-          </div>
-        </div>
+                </Row>
+              </Group>
+            </>
+          ) : (
+            <p className="mx-1 text-[14px] text-text-3">
+              The voice, names and amounts show here when it’s on.
+            </p>
+          )}
+        </>
       )}
     </Section>
   )
@@ -476,6 +519,7 @@ function Appearance({
   settings: SettingsData
   save: (s: SettingsData) => void
 }) {
+  const currencyId = useId()
   const apply = (theme: SettingsData['theme']) => {
     const root = document.documentElement
     if (theme === 'system') delete root.dataset.theme
@@ -488,35 +532,43 @@ function Appearance({
     }
   }
   return (
-    <Section id="appearance" title="Appearance">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[14.5px] font-semibold text-text">Theme</span>
-          <Segmented
-            label="Theme"
-            value={settings.theme}
-            onChange={(theme) => {
-              apply(theme)
-              save({ ...settings, theme })
-            }}
-            options={[
-              { value: 'system', label: 'Match system' },
-              { value: 'dark', label: 'Dark' },
-              { value: 'light', label: 'Light' },
-            ]}
-          />
-        </div>
-        <Switch
+    <Section id="appearance" title="Appearance" description="How Ferrocast and your overlays look.">
+      <Group title="Dashboard">
+        <Row
+          label="Theme"
+          description="Match system follows your computer’s light or dark mode."
+          control={
+            <Segmented
+              label="Theme"
+              value={settings.theme}
+              onChange={(theme) => {
+                apply(theme)
+                save({ ...settings, theme })
+              }}
+              options={[
+                { value: 'system', label: 'Match system' },
+                { value: 'dark', label: 'Dark' },
+                { value: 'light', label: 'Light' },
+              ]}
+            />
+          }
+        />
+      </Group>
+      <Group title="On stream">
+        <SwitchRow
           checked={settings.low_motion_overlays}
           onChange={(low_motion_overlays) => save({ ...settings, low_motion_overlays })}
           label="Light overlays"
           description="Overlays fade instead of move. Helps if OBS stutters."
         />
-        <Field label="Main currency" hint="Tips in other currencies show as sent, never converted.">
-          {(p) => (
+        <Row
+          label="Main currency"
+          description="Tips in other currencies show as sent, never converted."
+          htmlFor={currencyId}
+          control={
             <Select
-              {...p}
-              className="sm:max-w-[16rem]"
+              id={currencyId}
+              className="w-40"
               value={settings.currency}
               onChange={(e) => save({ ...settings, currency: e.target.value })}
             >
@@ -529,9 +581,9 @@ function Appearance({
                 </option>
               ))}
             </Select>
-          )}
-        </Field>
-      </div>
+          }
+        />
+      </Group>
     </Section>
   )
 }
@@ -564,6 +616,7 @@ function Data() {
   const file = useRef<HTMLInputElement>(null)
   const [report, setReport] = useState<PackImportReport | null>(null)
   const [restore, setRestore] = useState<Backup | null>(null)
+  const [allBackups, setAllBackups] = useState(false)
   const exportAll = () =>
     void run(
       'export',
@@ -589,122 +642,123 @@ function Data() {
       title="Your data"
       description="Everything is stored on this computer. Take it with you any time."
     >
-      <div className="grid grid-cols-1 gap-5 @xl:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold text-text">Export everything</h3>
-            <InfoTip>One file with your {EXPORT_CONTENTS}.</InfoTip>
-          </div>
-          <Button
-            className="mt-1 self-start"
-            icon={<DownloadSimple size={16} />}
-            busy={busy === 'export'}
-            onClick={exportAll}
-          >
-            Export
-          </Button>
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold text-text">Bring your setup</h3>
-            <InfoTip>Commands, timers, points and tips. You review it first.</InfoTip>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-2">
-            <a
-              href={href({ name: 'import' })}
-              className="fc-press inline-flex h-10 items-center justify-center gap-2 rounded-control bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text border border-line-strong hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-            >
-              <ArrowSquareIn size={16} aria-hidden="true" />
-              From StreamElements or Streamlabs
-            </a>
-            <input
-              ref={file}
-              type="file"
-              accept=".ferropack,application/zip"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (f)
-                  void run('import', () => client.importPack(f, f.name)).then((r) => {
-                    if (!r) return
-                    setReport(r)
-                    backups.reload()
-                  })
-              }}
-            />
+      <Group title="Move your setup">
+        <Row
+          label="Export everything"
+          description={`One file with your ${EXPORT_CONTENTS}.`}
+          control={
             <Button
-              icon={<UploadSimple size={16} />}
-              busy={busy === 'import'}
-              onClick={() => file.current?.click()}
+              variant="outline"
+              icon={<DownloadSimple size={16} />}
+              busy={busy === 'export'}
+              onClick={exportAll}
             >
-              Ferrocast file
+              Export
             </Button>
-          </div>
-        </div>
-      </div>
-      <div className="mt-6 border-t border-line pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <h3 className="text-sm font-semibold text-text">Backups</h3>
-              <InfoTip>
-                Daily, and before every update or import. Keeps the last 7 daily backups and the
-                last 10 others.
-              </InfoTip>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            busy={busy === 'backup'}
-            onClick={() =>
-              void run('backup', () => client.backupNow(), { success: 'Backup taken.' }).then(
-                (list) => list && backups.set(list),
-              )
-            }
-          >
-            Back up now
-          </Button>
-        </div>
-        {backups.error ? (
-          <LoadError error={backups.error} onRetry={backups.reload} />
-        ) : !backups.data ? (
-          <Skeleton className="mt-3 h-20" />
-        ) : backups.data.length === 0 ? (
-          <p className="mt-3 text-[14.5px] text-text-2">
-            No backups yet. The first one comes soon after start.
-          </p>
-        ) : (
-          <ul className="mt-3 flex flex-col gap-1">
-            {backups.data.map((b) => (
-              <li
-                key={b.id}
-                className="flex items-center gap-3 rounded-control px-2 py-2 hover:bg-surface-2"
+          }
+        />
+        <Row
+          label="Bring your setup"
+          description="Commands, timers, points and tips. You review it first."
+          control={
+            <>
+              <a
+                href={href({ name: 'import' })}
+                className="fc-press inline-flex h-10 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface-1 px-4 text-sm font-semibold whitespace-nowrap text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 @md:flex-row @md:items-baseline @md:gap-2">
-                  <span className="text-[14.5px] text-text-2">
-                    {new Date(b.created_at).toLocaleString(undefined, {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  <span className="text-[14.5px] text-text-3">
-                    {BACKUP_REASON[b.reason] ?? BACKUP_REASON.other}
-                    {b.version ? ` · v${b.version}` : ''} · {formatBytes(b.bytes)}
-                  </span>
-                </span>
-                <Button size="sm" variant="ghost" onClick={() => setRestore(b)}>
-                  Restore
-                </Button>
-              </li>
+                <ArrowSquareIn size={16} aria-hidden="true" />
+                From StreamElements or Streamlabs
+              </a>
+              <input
+                ref={file}
+                type="file"
+                accept=".ferropack,application/zip"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  if (f)
+                    void run('import', () => client.importPack(f, f.name)).then((r) => {
+                      if (!r) return
+                      setReport(r)
+                      backups.reload()
+                    })
+                }}
+              />
+              <Button
+                variant="outline"
+                icon={<UploadSimple size={16} />}
+                busy={busy === 'import'}
+                onClick={() => file.current?.click()}
+              >
+                Ferrocast file
+              </Button>
+            </>
+          }
+        />
+      </Group>
+      <Group
+        title="Backups on this PC"
+        note="Daily, and before every update or import. Keeps the last 7 daily backups and the last 10 others."
+      >
+        <Row
+          label="Back up now"
+          description="Takes one right away."
+          control={
+            <Button
+              variant="outline"
+              busy={busy === 'backup'}
+              onClick={() =>
+                void run('backup', () => client.backupNow(), { success: 'Backup taken.' }).then(
+                  (list) => list && backups.set(list),
+                )
+              }
+            >
+              Back up now
+            </Button>
+          }
+        />
+        {backups.error ? (
+          <Row>
+            <LoadError error={backups.error} onRetry={backups.reload} />
+          </Row>
+        ) : !backups.data ? (
+          <Row>
+            <Skeleton className="h-20" />
+          </Row>
+        ) : backups.data.length === 0 ? (
+          <Row description="No backups yet. The first one comes soon after start." />
+        ) : (
+          <>
+            {(allBackups ? backups.data : backups.data.slice(0, 4)).map((b) => (
+              <Row
+                key={b.id}
+                label={new Date(b.created_at).toLocaleString(undefined, {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                description={`${BACKUP_REASON[b.reason] ?? BACKUP_REASON.other}${b.version ? ` · v${b.version}` : ''} · ${formatBytes(b.bytes)}`}
+                control={
+                  <Button size="sm" variant="ghost" onClick={() => setRestore(b)}>
+                    Restore
+                  </Button>
+                }
+              />
             ))}
-          </ul>
+            {backups.data.length > 4 && (
+              <Row>
+                <Button size="sm" variant="ghost" onClick={() => setAllBackups((a) => !a)}>
+                  {allBackups ? 'Show fewer' : `Show all ${backups.data.length}`}
+                </Button>
+              </Row>
+            )}
+          </>
         )}
-      </div>
+      </Group>
       <Dialog
         open={report !== null}
         onClose={() => setReport(null)}
@@ -805,9 +859,9 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
       title="Updates"
       description="Never forced, never while you’re live. You can always roll back."
     >
-      <div className="flex flex-col gap-4">
+      <Group title="This version">
         {u ? (
-          <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-3.5">
+          <div className="flex flex-col gap-3 px-4 py-3.5 sm:px-5">
             <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
               <div className="min-w-0 flex-1 text-sm text-text-2">
                 <p data-testid="update-status" aria-live="polite">
@@ -850,7 +904,7 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
                 {mayCheck && u.can_install !== false && u.checking !== undefined && (
                   <Button
                     size="sm"
-                    variant="secondary"
+                    variant="outline"
                     icon={<ArrowClockwise size={15} />}
                     busy={busy === 'check' || !!u.checking}
                     onClick={check}
@@ -895,11 +949,28 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
             )}
           </div>
         ) : loadError ? (
-          <LoadError error={loadError} onRetry={() => void refreshUpdate(client)} />
+          <Row>
+            <LoadError error={loadError} onRetry={() => void refreshUpdate(client)} />
+          </Row>
         ) : (
-          <Skeleton className="h-16" />
+          <Row>
+            <Skeleton className="h-16" />
+          </Row>
         )}
-        <Switch
+        {u && (
+          // The channel follows the installed build: no switch (a beta build also gets stable).
+          <Row
+            label={u.channel === 'beta' ? 'Beta version' : 'Stable version'}
+            description={
+              u.channel === 'beta'
+                ? 'Updates include betas and stable releases.'
+                : 'You get stable updates only.'
+            }
+          />
+        )}
+      </Group>
+      <Group title="When to update">
+        <SwitchRow
           checked={settings.never_update_while_live}
           onChange={(v) => {
             save({ ...settings, never_update_while_live: v })
@@ -907,24 +978,9 @@ function Updates({ settings, save }: { settings: SettingsData; save: (s: Setting
             window.setTimeout(() => void refreshUpdate(client), 600)
           }}
           label="Never update while I’m live"
+          description="A new version waits until your stream ends."
         />
-        {u && (
-          // The channel follows the installed build: no switch (a beta build also gets stable).
-          <p className="text-[14.5px] text-text-2">
-            {u.channel === 'beta' ? (
-              <>
-                <span className="font-semibold text-text">Beta version:</span> updates include betas
-                and stable releases.
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-text">Stable version:</span> you get stable
-                updates only.
-              </>
-            )}
-          </p>
-        )}
-      </div>
+      </Group>
     </Section>
   )
 }
@@ -944,53 +1000,71 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
         : 'Works on this computer only. For a phone, allow other devices and restart.'
     : null
   return (
-    <Section id="advanced" title="Advanced">
-      <div className="flex flex-col gap-4">
-        <Switch
+    <Section id="advanced" title="Advanced" description="How the app starts, and who can reach it.">
+      <Group title="Starting and closing">
+        <SwitchRow
           checked={settings.launch_at_login}
           onChange={(v) => save({ ...settings, launch_at_login: v })}
           label="Start Ferrocast when I log in"
         />
-        <Switch
+        <SwitchRow
           checked={settings.close_to_tray}
           onChange={(v) => save({ ...settings, close_to_tray: v })}
           label="Keep running in the tray when the window closes"
+          description="Alerts and chat keep working."
         />
-        <div className="flex flex-col gap-2">
-          <Switch
-            checked={settings.lan_access}
-            onChange={(v) => {
-              save({ ...settings, lan_access: v })
-              setLink(null)
-              toast({
-                key: 'lan',
-                tone: 'info',
-                message: v
-                  ? 'Other devices can connect after you restart Ferrocast.'
-                  : 'Only this computer can connect after you restart Ferrocast.',
-                hint: v ? 'Then make a link below and open it on the other device.' : null,
-              })
-            }}
-            label="Allow other devices on my network"
-            description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
-          />
-          {lanPending && (
+      </Group>
+      <Group title="Other devices">
+        <SwitchRow
+          checked={settings.lan_access}
+          onChange={(v) => {
+            save({ ...settings, lan_access: v })
+            setLink(null)
+            toast({
+              key: 'lan',
+              tone: 'info',
+              message: v
+                ? 'Other devices can connect after you restart Ferrocast.'
+                : 'Only this computer can connect after you restart Ferrocast.',
+              hint: v ? 'Then make a link below and open it on the other device.' : null,
+            })
+          }}
+          label="Allow other devices on my network"
+          description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
+        />
+        {lanPending && (
+          <Row child>
             <p role="status" className="text-[14.5px] font-medium text-warn">
               Restart Ferrocast to{' '}
               {settings.lan_access ? 'let other devices in' : 'close it to other devices'}.
             </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <p className="text-sm font-semibold text-text">Open in another browser</p>
-          <p className="text-[14.5px] text-text-3">One-time link, 2 minutes.</p>
-          {link ? (
+          </Row>
+        )}
+        <Row
+          label="Open in another browser"
+          description="One-time link, 2 minutes."
+          control={
+            link ? undefined : (
+              <Button
+                variant="outline"
+                busy={busy === 'pair'}
+                onClick={() =>
+                  void run('pair', () => client.pairCode()).then((r) => r && setLink(r))
+                }
+              >
+                Make a link
+              </Button>
+            )
+          }
+        >
+          {link && (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[14.5px] text-text-2">
                   {link.url}
                 </code>
                 <Button
+                  variant="outline"
                   onClick={() =>
                     void copyText(link.url).then(
                       (ok) => ok && toast({ tone: 'ok', message: 'Link copied. It works once.' }),
@@ -1011,17 +1085,9 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
                 </p>
               )}
             </div>
-          ) : (
-            <Button
-              className="self-start"
-              busy={busy === 'pair'}
-              onClick={() => void run('pair', () => client.pairCode()).then((r) => r && setLink(r))}
-            >
-              Make a link
-            </Button>
           )}
-        </div>
-      </div>
+        </Row>
+      </Group>
     </Section>
   )
 }
@@ -1079,7 +1145,7 @@ export function Settings({ section }: { section?: string | undefined }) {
                     className={cx(
                       'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
                       at === id
-                        ? 'bg-[color-mix(in_srgb,var(--fc-accent)_18%,transparent)] font-bold text-[var(--fc-molten-text)] shadow-[inset_3px_0_0_var(--fc-accent)]'
+                        ? 'bg-[var(--fc-accent-soft)] font-bold text-text shadow-[inset_3px_0_0_var(--fc-arc)] [&>svg]:text-accent-text'
                         : 'text-text-2 hover:bg-surface-2 hover:text-text',
                     )}
                   >
@@ -1107,7 +1173,7 @@ export function Settings({ section }: { section?: string | undefined }) {
             <Section
               id="music"
               title="Music"
-              description="Where the beat and the song come from, for music pieces and motion backgrounds on your screens."
+              description="Show the song that’s playing, and let your screens move to the beat."
             >
               <MusicSettings />
             </Section>
@@ -1122,7 +1188,11 @@ export function Settings({ section }: { section?: string | undefined }) {
                 title="Discord"
                 description="Tell your server when you go live. The webhook stays on this computer."
               >
-                <DiscordSettingsForm />
+                <Group title="Go-live post">
+                  <Row>
+                    <DiscordSettingsForm />
+                  </Row>
+                </Group>
               </Section>
               <DiscordPro />
             </>
@@ -1138,7 +1208,9 @@ export function Settings({ section }: { section?: string | undefined }) {
                 {at === 'data' && (
                   <>
                     <Data />
-                    <CloudBackups />
+                    <div className="mt-2">
+                      <CloudBackups />
+                    </div>
                   </>
                 )}
                 {at === 'updates' && <Updates settings={res.data} save={save} />}

@@ -118,6 +118,7 @@ export function TtsVoicePicker({ systemVoice, voices, disabled, onSystemVoice }:
           )}
         </Field>
         <Button
+          variant="outline"
           icon={<Play size={16} weight="fill" />}
           busy={busy === 'preview'}
           disabled={disabled}
