@@ -97,8 +97,6 @@ test('zero of everything still looks intentional', async ({ page }) => {
   await open(page, 'home', 'firstrun&autoplay=0&latency=0')
   await pastSetupQuestions(page)
   await page.getByRole('button', { name: 'Skip for now' }).click()
-  await page.getByRole('button', { name: 'Use this look' }).click()
-  await page.getByRole('button', { name: 'I’ll do it later' }).click()
   await expect(page.getByText('Nothing playing')).toBeVisible()
   await expect(page.getByText('Chat is quiet')).toBeVisible()
 })

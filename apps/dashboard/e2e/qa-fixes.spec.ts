@@ -218,13 +218,16 @@ test.describe('words', () => {
     await expect(twitch.locator('[aria-hidden=true]').getByText(/viewers?$/)).toBeVisible()
   })
 
-  test('skipping "Connect" in first run leaves it unticked', async ({ page }) => {
+  test('skipping "Connect" in first run finishes setup, unticked', async ({ page }) => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
     await pastSetupQuestions(page)
-    await page.getByRole('button', { name: 'Skip for now' }).click()
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps.nth(2)).toContainText('(skipped)')
-    await expect(steps.nth(3)).toContainText('(current step)')
+    await expect(steps.nth(2)).toContainText('(current step)')
+    await expect(steps.nth(2)).not.toContainText('done')
+    await page.getByRole('button', { name: 'Skip for now' }).click()
+    await expect(
+      page.getByRole('heading', { name: /You’re live|Ready when you are/ }),
+    ).toBeVisible()
   })
 
   test('the first connect says Connecting, not Reconnecting', async ({ page }) => {
@@ -270,7 +273,7 @@ test.describe('first run asks what it is for first', () => {
     await page.getByRole('button', { name: 'Use these settings' }).click()
     await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps).toHaveCount(5)
+    await expect(steps).toHaveCount(3)
   })
 
   test('recording only: two steps, then the Studio', async ({ page }) => {

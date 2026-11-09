@@ -1,25 +1,12 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, ArrowRight, Check, CopySimple, Play } from '@phosphor-icons/react'
-import {
-  DEFAULT_THEME,
-  anySample,
-  defaultRules,
-  renderAlert,
-  selectAlert,
-  studioEngineApi,
-  type Overlay,
-  type Theme,
-} from '@ferrocast/api'
-import { Button, Skeleton, SparkField, Wordmark, copyText, cx, toast } from '@ferrocast/ui'
+import { ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react'
+import { studioEngineApi } from '@ferrocast/api'
+import { Button, SparkField, Wordmark, cx } from '@ferrocast/ui'
 import { AccountRow, useConnect } from '../components/accounts'
-import { AlertStage } from '../components/AlertStage'
-import { ObsIcon, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { useLive } from '../lib/store'
 import { go } from '../lib/router'
-import { useUsesObs } from '../lib/picture'
-import { addOverlayToStudio } from '../components/studio/desk/add-to-studio'
 
 /** What Ferrocast is mostly for (OBS's auto-configuration asks the same first). */
 type Use = 'stream' | 'record'
@@ -96,15 +83,9 @@ function Choice({
   )
 }
 
-const STREAM_STEPS = ['Use', 'Picture', 'Connect', 'Pick a look', 'Add to your stream'] as const
+// Setup ends at Connect: the look and adding the overlay live in Overlays (owner, 10 Nov).
+const STREAM_STEPS = ['Use', 'Picture', 'Connect'] as const
 const RECORD_STEPS = ['Use', 'Picture'] as const
-
-function previewAlert() {
-  const e = anySample('subscription')
-  if (!e) return null
-  const sel = selectAlert(defaultRules(), e)
-  return sel ? renderAlert('onboarding', sel.rule, sel.variation, e) : null
-}
 
 function bgHex(): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--fc-bg').trim()
@@ -124,36 +105,13 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   const [dir, setDir] = useState(1)
   const connectors = useLive((s) => s.connectors)
   const { connect, busy, dialog } = useConnect()
-  const themes = useResource((c) => c.themes())
   const overlays = useResource((c) => c.overlays())
-  const [theme, setTheme] = useState(DEFAULT_THEME)
   const { run, busy: saving } = useAction()
-  const { add: addObs, busy: addingObs, guide } = useAddToObs()
-  const [added, setAdded] = useState(false)
-  // The overlay goes into Ferrocast's Studio (started if it isn't), or OBS for OBS users.
-  const usesObs = useUsesObs()
   const engine = useMemo(() => studioEngineApi(client), [client])
-  const { run: runStudio, busy: addingStudio } = useAction()
-  const add = (o: Overlay): Promise<boolean> =>
-    usesObs
-      ? addObs(o)
-      : runStudio(
-          'studio',
-          async () => {
-            if (!(await engine.status()).running) await engine.start()
-            const { current } = await engine.scenes()
-            await addOverlayToStudio(engine, o, current)
-            return true
-          },
-          { success: 'Added to the Studio. Open Studio, Go live to see it.' },
-        ).then((ok) => !!ok)
-  const adding = usesObs ? addingObs : addingStudio
-  const alert = useMemo(previewAlert, [])
   const bg = useMemo(bgHex, [])
   const anyConnected = (['twitch', 'youtube', 'kick'] as const).some(
     (p) => connectors?.[p].state === 'connected',
   )
-  const main: Overlay | undefined = overlays.data?.[0]
   // First what it's for and the picture (as OBS's auto-configuration), then the rest.
   const [use, setUse] = useState<Use>('stream')
   const screen = useMemo(screenPixels, [])
@@ -162,27 +120,11 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   const [pictureDone, setPictureDone] = useState(false)
   const steps = use === 'record' ? RECORD_STEPS : STREAM_STEPS
   // A step only gets its tick when it was really done: skipping "Connect" leaves it open.
-  const [lookDone, setLookDone] = useState(false)
-  const stepDone = (i: number) => [step > 0, pictureDone, anyConnected, lookDone, added][i] ?? false
+  const stepDone = (i: number) => [step > 0, pictureDone, anyConnected][i] ?? false
 
   const goTo = (n: number) => {
     setDir(n > step ? 1 : -1)
     setStep(n)
-  }
-  const applyTheme = async () => {
-    // A fresh install has no overlay yet: make the starter one, then give it the look.
-    const base = main ?? (await run('theme', () => client.createOverlay('Main', 'starter')))
-    if (!base) return
-    if (!main) overlays.set((p) => [...(p ?? []), base])
-    const next: Overlay = {
-      ...base,
-      widgets: base.widgets.map((w) => ({ ...w, config: { ...w.config, theme } }) as typeof w),
-    }
-    const saved = await run('theme', () => client.saveOverlay(next))
-    if (!saved) return
-    overlays.set((p) => (p ?? []).map((o) => (o.id === saved.id ? saved : o)))
-    setLookDone(true)
-    goTo(4)
   }
   // The picture and encoding for what it's for: the canvas at that size and rate, a bitrate
   // that fits it, recordings at high quality when that's the point. The demo has no Studio.
@@ -215,11 +157,22 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     }
     goTo(2)
   }
-  const finish = () =>
-    void run('finish', () => done(client.completeSetup())).then((ok) => ok && onDone())
+  // Ends setup. A fresh install also gets the starter overlay in the default look, quietly
+  // (it was made by the removed "Pick a look" step), so alerts and chat have somewhere to show.
+  const completeSetup = async () => {
+    if (overlays.data?.length === 0) {
+      try {
+        await client.createOverlay('Main', 'starter')
+      } catch {
+        // Not needed to finish: Overlays offers to make one.
+      }
+    }
+    return done(client.completeSetup())
+  }
+  const finish = () => void run('finish', completeSetup).then((ok) => ok && onDone())
   // Finishes setup and opens the importer (for people moving from StreamElements or Streamlabs).
   const finishToImport = () =>
-    void run('import', () => done(client.completeSetup())).then((ok) => {
+    void run('import', completeSetup).then((ok) => {
       if (!ok) return
       go({ name: 'import' })
       onDone()
@@ -475,170 +428,19 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                     <Button
                       size="lg"
                       variant="primary"
-                      onClick={() => goTo(3)}
+                      busy={saving === 'finish'}
+                      disabled={saving !== null}
+                      onClick={finish}
                       icon={<ArrowRight size={18} />}
                       className="flex-row-reverse"
                     >
-                      {anyConnected ? 'Continue' : 'Skip for now'}
+                      {anyConnected ? 'Finish' : 'Skip for now'}
                     </Button>
                     {!anyConnected && (
                       <span className="text-[14px] text-text-3">
                         You can connect later in Settings.
                       </span>
                     )}
-                  </div>
-                </>
-              )}
-              {step === 3 && (
-                <>
-                  <div>
-                    <h1
-                      id="step-3"
-                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
-                    >
-                      Pick a look
-                    </h1>
-                    <p className="mt-2 text-sm leading-relaxed text-text-2">
-                      This is how alerts and chat appear on stream. Change it any time. Each alert
-                      starts with its own sound; change it in Alerts or with an alert design.
-                    </p>
-                  </div>
-                  <AlertStage alert={alert} theme={theme} label={`Preview of the ${theme} look`} />
-                  {!themes.data ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <Skeleton key={i} className="h-16" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div
-                      role="radiogroup"
-                      aria-label="Look"
-                      className="grid grid-cols-2 gap-2 sm:grid-cols-5"
-                    >
-                      {themes.data.map((t: Theme) => (
-                        <label
-                          key={t.id}
-                          title={t.description}
-                          className={cx(
-                            'flex cursor-pointer flex-col gap-0.5 rounded-[12px] border px-3 py-2.5 transition-colors has-[:focus-visible]:shadow-[var(--fc-focus)]',
-                            theme === t.id
-                              ? 'fc-picked border-transparent'
-                              : 'border-line hover:border-line-strong',
-                          )}
-                        >
-                          <input
-                            type="radio"
-                            name="theme"
-                            className="sr-only"
-                            checked={theme === t.id}
-                            onChange={() => setTheme(t.id)}
-                          />
-                          {/* The preview above shows the look; its words are on hover. */}
-                          <span className="text-[15px] font-bold text-text">{t.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-3">
-                    <Button
-                      size="lg"
-                      variant="ghost"
-                      icon={<ArrowLeft size={18} />}
-                      onClick={() => goTo(2)}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant="primary"
-                      busy={saving === 'theme'}
-                      onClick={() => void applyTheme()}
-                    >
-                      Use this look
-                    </Button>
-                  </div>
-                </>
-              )}
-              {step === 4 && (
-                <>
-                  <div>
-                    <h1
-                      id="step-4"
-                      className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-balance sm:text-[32px]"
-                    >
-                      {usesObs ? 'Add it to OBS' : 'Add it to your Studio'}
-                    </h1>
-                    <p className="mt-2 text-sm leading-relaxed text-text-2">
-                      {usesObs
-                        ? 'Ferrocast puts your overlay into the current OBS scene. If OBS isn’t connected yet, copy the URL and paste it into a Browser source.'
-                        : 'Ferrocast starts its Studio and puts your overlay on top of your scene, its alert sounds on.'}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      size="lg"
-                      variant="primary"
-                      icon={
-                        added ? (
-                          <Check size={18} weight="bold" />
-                        ) : usesObs ? (
-                          <ObsIcon size={18} />
-                        ) : (
-                          <Play size={18} weight="fill" />
-                        )
-                      }
-                      disabled={!main}
-                      busy={adding !== null}
-                      onClick={() => main && void add(main).then((ok) => ok && setAdded(true))}
-                    >
-                      {added
-                        ? usesObs
-                          ? 'Added to OBS'
-                          : 'Added to the Studio'
-                        : usesObs
-                          ? 'Add to OBS'
-                          : 'Add to the Studio'}
-                    </Button>
-                    <Button
-                      size="lg"
-                      icon={<CopySimple size={18} />}
-                      disabled={!main}
-                      onClick={() =>
-                        main &&
-                        void copyText(main.url).then((ok) =>
-                          toast(
-                            ok
-                              ? {
-                                  tone: 'ok',
-                                  message: 'URL copied.',
-                                  hint: 'Add a Browser source, paste it, 1920 × 1080.',
-                                }
-                              : { tone: 'error', message: 'Couldn’t copy it.' },
-                          ),
-                        )
-                      }
-                    >
-                      Copy URL instead
-                    </Button>
-                  </div>
-                  <div className="flex gap-3 border-t border-line pt-5">
-                    <Button
-                      size="lg"
-                      variant="ghost"
-                      icon={<ArrowLeft size={18} />}
-                      onClick={() => goTo(3)}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant={added ? 'primary' : 'secondary'}
-                      busy={saving === 'finish'}
-                      onClick={finish}
-                    >
-                      {added ? 'Open my dashboard' : 'I’ll do it later'}
-                    </Button>
                   </div>
                   <p className="text-[14px] text-text-3">
                     Coming from StreamElements or Streamlabs?{' '}
@@ -658,7 +460,6 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
         </div>
       </main>
       {dialog}
-      {guide}
     </div>
   )
 }

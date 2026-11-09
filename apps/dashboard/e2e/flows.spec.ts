@@ -367,7 +367,7 @@ test.describe('tips and settings', () => {
 })
 
 test.describe('first run', () => {
-  test('connect, pick a look, add to OBS, done', async ({ page }) => {
+  test('connect, then finish: setup ends at Connect', async ({ page }) => {
     // Waits on the simulated sign-in (a few seconds), so give slow CI runners room.
     test.slow()
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
@@ -382,14 +382,11 @@ test.describe('first run', () => {
     await expect(page.getByRole('dialog')).toContainText('Connected', { timeout: 10_000 })
     // The dialog closes itself a moment after the account connects.
     await expect(page.getByRole('dialog', { name: /Twitch/ })).toBeHidden({ timeout: 5_000 })
-    await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByText('Arcade').click()
-    await page.getByRole('button', { name: 'Use this look' }).click()
-    await expect(page.getByRole('heading', { name: 'Add it to OBS' })).toBeVisible()
-    await page.getByRole('button', { name: 'Add to OBS' }).click()
-    await expect(page.getByRole('dialog', { name: 'Add it to OBS by hand' })).toBeVisible()
-    await page.getByRole('button', { name: 'Done' }).click()
-    await page.getByRole('button', { name: 'I’ll do it later' }).click()
+    // Three steps only: the look and adding the overlay are in Overlays (owner, 10 Nov).
+    await expect(
+      page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem'),
+    ).toHaveCount(3)
+    await page.getByRole('button', { name: 'Finish' }).click()
     await expect(
       page.getByRole('heading', { name: /You’re live|Ready when you are/ }),
     ).toBeVisible()
