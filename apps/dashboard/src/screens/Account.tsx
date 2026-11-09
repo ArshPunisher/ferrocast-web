@@ -53,6 +53,11 @@ export function Account() {
   )
 }
 
+/** Pro given forever (Control Center): the relay sets its end to the last moment of 9999. */
+export function isForever(end: number | null | undefined): boolean {
+  return !!end && new Date(end).getUTCFullYear() >= 9999
+}
+
 function NotSignedIn({ view }: { view: AccountView }) {
   const [busy, setBusy] = useState(false)
   if (view.state === 'pending')
@@ -125,7 +130,11 @@ function SignedIn({ view }: { view: AccountView }) {
   const renews = plan
     ? plan.renews && !plan.cancel_at_period_end
     : !!proView && !proView.cancel_at_period_end
-  const when = ends ? `${renews ? 'renews' : 'ends'} ${day(ends)}` : ''
+  const when = isForever(ends)
+    ? 'never ends'
+    : ends
+      ? `${renews ? 'renews' : 'ends'} ${day(ends)}`
+      : ''
   const name = accountName(view.account)
   return (
     <>
@@ -260,7 +269,7 @@ function Billing({
           <div>
             <dt className="text-[13.5px] text-text-3">{renews ? 'Renews' : 'Ends'}</dt>
             <dd className="text-[15.5px] font-semibold text-text">
-              {ends ? day(ends) : 'Not set'}
+              {isForever(ends) ? 'Never' : ends ? day(ends) : 'Not set'}
             </dd>
           </div>
           {pcs !== null && (
