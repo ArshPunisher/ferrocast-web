@@ -59,7 +59,9 @@ export interface AccountSession {
 export interface AccountApi {
   /** Where the account reads from: the app's engine or the web host. */
   readonly where: 'app' | 'web'
-  status(): Promise<AccountView>
+  /** The account now. `fresh` asks Ferrocast's servers rather than the app's copy from the
+   *  last 15 minutes (the web dashboard always asks them). */
+  status(fresh?: boolean): Promise<AccountView>
   /** The page to open in the browser to sign in. */
   signIn(label?: string): Promise<{ url: string }>
   cancelSignIn(): Promise<void>
@@ -99,7 +101,8 @@ export function sessionLine(s: Pick<AccountSession, 'kind' | 'label'>): string {
 export function appAccountApi(c: FerroClient): AccountApi {
   return {
     where: 'app',
-    status: () => c.request<AccountView>('GET', '/api/v1/pro/account'),
+    status: (fresh = false) =>
+      c.request<AccountView>('GET', `/api/v1/pro/account${fresh ? '?refresh=1' : ''}`),
     signIn: (label) =>
       c.request<{ url: string }>('POST', '/api/v1/pro/account/sign-in', label ? { label } : {}),
     cancelSignIn: () => c.request<void>('POST', '/api/v1/pro/account/sign-in/cancel', {}),
