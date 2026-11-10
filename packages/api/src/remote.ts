@@ -303,6 +303,8 @@ export const OWNER_HIDDEN_SETTINGS: readonly string[] = [
   'discord',
   'data',
   'pro',
+  // Plugins bring code: added and managed on the PC only (the routes refuse a phone too).
+  'plugins',
   'advanced',
   'remote',
 ]
