@@ -18,6 +18,7 @@ import {
   Plus,
   SquaresFour,
   Stack,
+  StackPlus,
   Trash,
 } from '@phosphor-icons/react'
 import { type EngineScene, type EngineTransition } from '@ferrocast/api'
@@ -96,6 +97,21 @@ function useSceneThumbs(names: string[], on: boolean): Record<string, string> {
   return thumbs
 }
 
+/** A scene's "Show over every scene" (Exeldro's Downstream Keyer, built in): ticked when it is
+ *  the top layer; choosing it again takes it off. */
+export function topLayerItem(
+  name: string,
+  top: string | null,
+  set: (scene: string | null) => void,
+): MenuItem {
+  return {
+    label: 'Show over every scene',
+    icon: StackPlus,
+    checked: top === name,
+    onSelect: () => set(top === name ? null : name),
+  }
+}
+
 export function ScenesDock() {
   const desk = useDesk()
   const { api, scenes, refresh, edit } = desk
@@ -112,6 +128,8 @@ export function ScenesDock() {
   const keys = desk.prefs.data?.hotkeys ?? {}
   const studio = !tall && !!scenes.data?.preview
   const current = (tall ? tall.current : scenes.data?.current) ?? ''
+  // The top layer is the main picture's (not the vertical one's).
+  const top = tall ? null : (scenes.data?.top_layer ?? null)
   const names = list?.map((s) => s.name) ?? []
   const at = names.indexOf(current)
 
@@ -213,6 +231,9 @@ export function ScenesDock() {
           })),
         ],
       },
+      ...(tall
+        ? []
+        : [topLayerItem(name, top, (next) => void act('top', () => api.setTopLayer(next)))]),
       { label: 'Screenshot', icon: Camera, onSelect: () => shoot(name) },
       ...(inDesktopApp()
         ? [
@@ -455,6 +476,15 @@ export function ScenesDock() {
                           tone={s.current ? 'var(--fc-danger)' : undefined}
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        {top === s.name && (
+                          <span
+                            title="Shown over every scene"
+                            className="shrink-0 text-accent-text"
+                          >
+                            <StackPlus size={15} weight="bold" aria-hidden />
+                            <span className="sr-only">Shown over every scene</span>
+                          </span>
+                        )}
                         {s.preview && !s.current && (
                           <span className="hidden text-[12px] font-bold text-accent-text @[240px]:inline">
                             Preview

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DECAY, Meter, decayed, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
+import { topLayerItem } from './scenes'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
@@ -453,3 +454,23 @@ describe('going live without stream info', () => {
     expect(hasStreamInfo({ per: { youtube: { title: 'Only here' } } })).toBe(true)
   })
 })
+describe('the top layer (Downstream Keyer, built in)', () => {
+  it('“Show over every scene” ticks the top layer and takes it off again', () => {
+    const set = vi.fn()
+    const off = topLayerItem('Logo', null, set) as Entry
+    expect(off.label).toBe('Show over every scene')
+    expect(off.checked).toBe(false)
+    off.onSelect?.()
+    expect(set).toHaveBeenLastCalledWith('Logo')
+    const on = topLayerItem('Logo', 'Logo', set) as Entry
+    expect(on.checked).toBe(true)
+    on.onSelect?.()
+    expect(set).toHaveBeenLastCalledWith(null)
+    // Another scene is the top layer: this one takes its place.
+    const other = topLayerItem('Frame', 'Logo', set) as Entry
+    expect(other.checked).toBe(false)
+    other.onSelect?.()
+    expect(set).toHaveBeenLastCalledWith('Frame')
+  })
+})
+

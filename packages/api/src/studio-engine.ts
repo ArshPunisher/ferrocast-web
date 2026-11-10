@@ -150,6 +150,8 @@ export interface EngineScenes {
   black?: boolean
   /** The vertical picture (its own scenes, 1080×1920), or null while it's off. */
   vertical?: EngineVertical | null
+  /** The scene shown over every scene on air (the top layer), or null. */
+  top_layer?: string | null
 }
 
 /** The vertical picture: a second canvas with scenes of its own, sharing sources. */
@@ -766,6 +768,9 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('POST', `/api/v1/studio/engine/scenes/${enc(scene)}/current`, {}),
     setTransition: (t: EngineTransition) =>
       c.request<void>('PUT', '/api/v1/studio/engine/transition', t),
+    /** Shows `scene` over every scene on air (the top layer), or none. */
+    setTopLayer: (scene: string | null) =>
+      c.request<void>('PUT', '/api/v1/studio/engine/top-layer', { scene }),
     items: (scene: string) =>
       c.request<EngineItem[]>('GET', `/api/v1/studio/engine/scenes/${enc(scene)}/items`),
     /** A new source on top of the scene; `fit` fits it to the screen. */
