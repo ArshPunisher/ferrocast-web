@@ -52,6 +52,12 @@ function freeName(base: string, taken: Set<string>): string {
 }
 
 /** The option listing devices, from the entry's candidates (or none). */
+/** What a copy (Source Clone) can show: every source, then the scenes but the one it goes
+ *  into (a scene can't hold a copy of itself). */
+export function cloneChoices(sources: string[], scenes: string[], into: string): string[] {
+  return [...sources, ...scenes.filter((n) => n !== into)]
+}
+
 function deviceOption(opts: EngineOption[], keys: string[] | undefined): EngineOption | null {
   if (!keys) return null
   for (const k of keys) {
@@ -332,6 +338,7 @@ export function usePickView(): [PickView, (v: PickView) => void] {
 
 /** What each device kind is called when there's none, and what to try. */
 const NONE: Record<string, { title: string; tips: string[] }> = {
+  clone: { title: 'Nothing to copy yet', tips: ['Add a source first, then copy it.'] },
   camera: {
     title: 'No camera found',
     tips: [
@@ -447,8 +454,22 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   if (srcs.error && !sourcesNow) return <LoadError error={srcs.error} onRetry={srcs.reload} />
   const formNow: [EngineOption[], EngineSettings] | null = isScene ? [[], {}] : form.data
   if (!formNow || !sourcesNow) return <Skeleton className="h-72" />
-  const [opts, defaults] = formNow
+  const [kindOpts, defaults] = formNow
   const sources = sourcesNow
+  // A copy picks what it shows from this collection: the sources, then the other scenes (not
+  // the one it goes into: a scene can't hold a copy of itself).
+  const opts =
+    c.entry.key === 'clone'
+      ? kindOpts.map((o) => {
+          if (o.key !== 'clone') return o
+          const names = cloneChoices(
+            sources.map((s) => s.name),
+            allScenes.map((s) => s.name),
+            scene,
+          )
+          return { ...o, choices: names, values: names }
+        })
+      : kindOpts
   // Names are one list across both pictures.
   const sceneNames = new Set(allScenes.map((s) => s.name))
   const taken = new Set([...sources.map((s) => s.name), ...sceneNames])
@@ -458,7 +479,12 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   const noDevices =
     !!c.entry.device && !c.entry.overlays && (!dev || dev.choices.every((l) => !l.trim()))
   const devName = dev && device !== null ? dev.choices[device] : null
-  const shownName = name ?? freeName(devName ?? c.entry.label, taken)
+  const shownName =
+    name ??
+    freeName(
+      c.entry.key === 'clone' && devName ? `${devName} copy` : (devName ?? c.entry.label),
+      taken,
+    )
   const micDev = deviceOption(micForm.data?.[0] ?? [], micEntry?.device)
   const soundName = devName && micDev ? pairedSound(devName, micDev.choices) : null
   // Scenes and sources share one set of names (as in OBS): say which one has it, and offer

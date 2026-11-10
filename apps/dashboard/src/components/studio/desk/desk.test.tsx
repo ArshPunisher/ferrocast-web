@@ -4,6 +4,7 @@ import { DECAY, Meter, decayed, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { topLayerItem } from './scenes'
 import { FILTER_OF } from './common'
+import { cloneChoices } from './add-source'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
@@ -455,6 +456,7 @@ describe('going live without stream info', () => {
     expect(hasStreamInfo({ per: { youtube: { title: 'Only here' } } })).toBe(true)
   })
 })
+
 describe('the top layer (Downstream Keyer, built in)', () => {
   it('“Show over every scene” ticks the top layer and takes it off again', () => {
     const set = vi.fn()
@@ -475,3 +477,23 @@ describe('the top layer (Downstream Keyer, built in)', () => {
   })
 })
 
+describe('Freeze (built in)', () => {
+  it('is among the filters, by either name', () => {
+    expect(FILTER_OF.ferrocast_freeze?.label).toBe('Freeze')
+    expect(FILTER_OF.freeze_filter?.label).toBe('Freeze')
+  })
+})
+
+describe('Source Clone (built in)', () => {
+  it('is among the sources, picked from a list like a camera', () => {
+    const copy = KIND_GROUPS.flatMap((g) => g.entries).find((e) => e.key === 'clone')
+    expect(copy?.kinds).toEqual(['ferrocast_clone', 'source-clone'])
+    expect(copy?.device).toEqual(['clone'])
+  })
+
+  it('picks from every source, then the scenes but the one it goes into', () => {
+    expect(cloneChoices(['Cam', 'Game'], ['Main', 'BRB'], 'Main')).toEqual(['Cam', 'Game', 'BRB'])
+    expect(cloneChoices([], ['Main'], 'Main')).toEqual([])
+    expect(cloneChoices(['Cam'], [], 'Main')).toEqual(['Cam'])
+  })
+})

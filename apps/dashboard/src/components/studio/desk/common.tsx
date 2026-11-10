@@ -12,6 +12,7 @@ import {
   CardsThree,
   ChatCircleText,
   CircleDashed,
+  CopySimple,
   Crop,
   Cube,
   Ear,
@@ -302,6 +303,14 @@ export const KIND_GROUPS: KindGroup[] = [
         fit: true,
       },
       { key: 'scene', label: 'Scene', icon: CardsThree, kinds: ['scene'], scene: true },
+      // Exeldro's Source Clone, built in: pick what it shows in its settings.
+      {
+        key: 'clone',
+        label: 'Copy of a source',
+        icon: CopySimple,
+        kinds: ['ferrocast_clone', 'source-clone'],
+        device: ['clone'],
+      },
     ],
   },
 ]
