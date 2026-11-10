@@ -10,6 +10,7 @@ import {
   DownloadSimple,
   MusicNotes,
   PaintBrush,
+  PuzzlePiece,
   SlidersHorizontal,
   Sparkle,
   SpeakerHigh,
@@ -59,6 +60,7 @@ import { CloudSyncSettings } from '../components/cloud-sync'
 import { TtsVoicePicker } from '../components/tts-voices'
 import { RemoteDevices } from '../components/remote'
 import { MusicSettings } from '../components/music-settings'
+import { PluginsSettings } from '../components/plugins-settings'
 import { useLive } from '../lib/store'
 import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
@@ -90,6 +92,7 @@ const GROUPS = [
       ['data', 'Your data', Database],
       ['updates', 'Updates', ArrowsClockwise],
       ['pro', 'Pro', Sparkle],
+      ['plugins', 'Plugins', PuzzlePiece],
       ['advanced', 'Advanced', SlidersHorizontal],
     ],
   },
@@ -116,6 +119,7 @@ const TONE: Record<SectionId, string> = {
   data: '#0a8f5c',
   updates: '#1f7f86',
   pro: '#b35900',
+  plugins: '#4a7a1f',
   advanced: '#5b6370',
 }
 
@@ -1176,6 +1180,15 @@ export function Settings({ section }: { section?: string | undefined }) {
               description="Show the song that’s playing, and let your screens move to the beat."
             >
               <MusicSettings />
+            </Section>
+          )}
+          {at === 'plugins' && (
+            <Section
+              id="plugins"
+              title="Plugins"
+              description="Effects others make for your picture."
+            >
+              <PluginsSettings />
             </Section>
           )}
           {/* A phone never changes the PC's sync (it's under /pro). */}
