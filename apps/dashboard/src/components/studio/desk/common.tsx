@@ -13,6 +13,7 @@ import {
   ChatCircleText,
   CircleDashed,
   CopySimple,
+  ClockCounterClockwise,
   Crop,
   Cube,
   Ear,
@@ -20,6 +21,8 @@ import {
   FilmStrip,
   FolderSimple,
   FrameCorners,
+  Globe,
+  Keyboard,
   GridFour,
   Image as ImageIcon,
   Microphone,
@@ -285,6 +288,13 @@ export const KIND_GROUPS: KindGroup[] = [
         fit: true,
       },
       { key: 'web', label: 'Browser', icon: Browser, kinds: ['ferrocast_web', 'browser_source'] },
+      // Each replay saved plays here (OBS's Replay Source, built in).
+      {
+        key: 'replay',
+        label: 'Instant replay',
+        icon: ClockCounterClockwise,
+        kinds: ['ferrocast_replay'],
+      },
     ],
   },
   {
@@ -309,6 +319,10 @@ export const KIND_GROUPS: KindGroup[] = [
       // Exeldro's Source Clone, built in: pick what it shows in its settings.
       // A "Starting in 4:59" countdown (the OBS countdown plugins, built in).
       { key: 'countdown', label: 'Countdown', icon: Timer, kinds: ['ferrocast_countdown'] },
+      // Text read from a web address every so often (the OBS URL/API source, built in).
+      { key: 'webtext', label: 'Web text', icon: Globe, kinds: ['ferrocast_web_text'] },
+      // Keys and mouse buttons lit while held (the OBS Input Overlay plugin, built in).
+      { key: 'inputs', label: 'Keys on screen', icon: Keyboard, kinds: ['ferrocast_inputs'] },
       // Bars that move with the sound (the OBS audio visualizer plugins, built in).
       { key: 'bars', label: 'Sound bars', icon: Equalizer, kinds: ['ferrocast_visualizer'] },
       {

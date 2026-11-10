@@ -529,3 +529,24 @@ describe('Sound bars (built in)', () => {
     expect(build?.entries.find((e) => e.key === 'bars')?.kinds).toEqual(['ferrocast_visualizer'])
   })
 })
+
+describe('Instant replay (built in)', () => {
+  it('is among the media sources', () => {
+    const media = KIND_GROUPS.find((g) => g.label === 'Media')
+    expect(media?.entries.find((e) => e.key === 'replay')?.kinds).toEqual(['ferrocast_replay'])
+  })
+})
+
+describe('Web text (built in)', () => {
+  it('is among the sources to build', () => {
+    const build = KIND_GROUPS.find((g) => g.label === 'Build')
+    expect(build?.entries.find((e) => e.key === 'webtext')?.kinds).toEqual(['ferrocast_web_text'])
+  })
+})
+
+describe('Keys on screen (built in)', () => {
+  it('is among the sources to build', () => {
+    const build = KIND_GROUPS.find((g) => g.label === 'Build')
+    expect(build?.entries.find((e) => e.key === 'inputs')?.kinds).toEqual(['ferrocast_inputs'])
+  })
+})
