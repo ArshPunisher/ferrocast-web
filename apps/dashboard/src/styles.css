@@ -269,8 +269,8 @@ input[type='range'] {
   background: linear-gradient(
     to right,
     var(--fc-line-strong) var(--from, 0%),
-    var(--fc-btn-primary) var(--from, 0%),
-    var(--fc-btn-primary) var(--fill, 0%),
+    var(--fc-arc) var(--from, 0%),
+    var(--fc-arc) var(--fill, 0%),
     var(--fc-line-strong) var(--fill, 0%)
   );
 }
@@ -281,7 +281,7 @@ input[type='range'] {
   margin-top: -6px;
   border-radius: 50%;
   background: #fff;
-  border: 1.5px solid var(--fc-btn-primary);
+  border: 1.5px solid var(--fc-arc);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
   transition: transform 120ms var(--fc-ease-out);
 }
@@ -296,14 +296,14 @@ input[type='range'] {
 .fc-slim::-moz-range-progress {
   height: 4px;
   border-radius: 999px;
-  background: var(--fc-btn-primary);
+  background: var(--fc-arc);
 }
 .fc-slim::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
   background: #fff;
-  border: 1.5px solid var(--fc-btn-primary);
+  border: 1.5px solid var(--fc-arc);
 }
 .fc-slim:focus-visible {
   outline: none;
@@ -335,7 +335,7 @@ body[data-dock-drag] iframe {
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  border-radius: 10px;
+  border-radius: 6px;
   font-weight: 700;
   white-space: nowrap;
   user-select: none;
@@ -502,4 +502,62 @@ body[data-dock-drag] iframe {
   .group\/row:not(:hover, :focus-within) .fc-quiet {
     display: none;
   }
+}
+
+/* The compact Studio (owner's pick "A joined", 10 Nov): rows 32 px with a line under each,
+   panels joined under grey heading bands. What's picked in its lists is a soft blue wash with
+   a blue edge (the mock-up the owner approved), not the solid fill used elsewhere, and keeps
+   its own colours: the kind tiles, On air in red, the counts in grey. */
+.fc-desk .fc-picked {
+  background-color: var(--fc-accent-soft);
+  color: var(--fc-text);
+  box-shadow: inset 2px 0 0 var(--fc-arc);
+}
+.fc-desk .fc-picked [data-kind-tile] {
+  color: var(--kt) !important;
+  background: color-mix(in oklab, var(--kt) 15%, transparent) !important;
+}
+.fc-desk .fc-picked .text-danger {
+  color: var(--fc-danger);
+}
+.fc-desk .fc-picked .text-accent-text {
+  color: var(--fc-accent-text);
+}
+.fc-desk .fc-picked .text-text-3 {
+  color: var(--fc-text-3);
+}
+.fc-desk .fc-picked .text-text-2 {
+  color: var(--fc-text-2);
+}
+.fc-desk .fc-picked [data-icon-button] {
+  color: var(--fc-text-2);
+}
+.fc-desk .fc-picked [data-icon-button]:not(:disabled):hover {
+  background-color: var(--fc-surface-3);
+  color: var(--fc-text);
+}
+.fc-desk .fc-picked kbd {
+  color: var(--fc-text-2) !important;
+  background: transparent !important;
+  border-color: var(--fc-line-strong) !important;
+}
+/* Icon buttons in a panel's heading or foot: 26 px, so the bars stay slim. */
+.fc-dock-bar [data-icon-button] {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+}
+/* A picked icon button (Hear in the mixer) keeps a plain wash, no row edge. */
+.fc-desk [data-icon-button].fc-picked {
+  box-shadow: none;
+}
+/* A switch's picked option in the Studio keeps the solid fill used everywhere else. */
+.fc-desk [role='radiogroup'] .fc-picked {
+  background-color: var(--fc-pick);
+  color: var(--fc-on-pick);
+  box-shadow: var(--fc-shadow-1);
+}
+/* An opened filter's options: a line between each, none under the last (the filter's own). */
+.fc-inset [data-row]:last-child {
+  border-bottom: 0;
 }

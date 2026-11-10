@@ -273,19 +273,19 @@ export function ScenesDock() {
 
   const nameInput = (
     <form
-      className={cx('py-1', !grid && 'flex items-center gap-2.5 px-1.5')}
+      className={cx('py-1', !grid && 'flex items-center gap-2.5 border-b border-line pr-2 pl-3')}
       onSubmit={(e) => {
         e.preventDefault()
         void commitName()
       }}
     >
       {/* The scene's icon stays while it's named, as in the list (owner, 28 Oct). */}
-      {!grid && <KindTile kind="scene" size={26} />}
+      {!grid && <KindTile kind="scene" size={20} />}
       <Input
         autoFocus
         data-autofocus
         aria-label={naming?.from ? `New name for ${naming.from}` : 'New scene name'}
-        className="h-8! min-w-0 flex-1 text-[14.5px]"
+        className="h-7! min-w-0 flex-1 rounded-[5px]! text-[13.5px]"
         maxLength={100}
         value={naming?.value ?? ''}
         onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
@@ -337,7 +337,7 @@ export function ScenesDock() {
         }
       />
       <div
-        className="min-h-0 flex-1 overflow-y-auto p-1.5"
+        className={cx('min-h-0 flex-1 overflow-y-auto', grid && 'p-1.5')}
         onContextMenu={(e) =>
           open(e, 'Scenes', [
             {
@@ -363,14 +363,14 @@ export function ScenesDock() {
         {scenes.error && !list ? (
           <LoadError error={scenes.error} onRetry={scenes.reload} />
         ) : !list ? (
-          <Skeleton className="h-28" />
+          <Skeleton className="m-1.5 h-28" />
         ) : (
           <ul
             className={cx(
               grid
                 ? 'grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-1.5'
                 : // Narrow (owner's pick N1): the extras go first, the name keeps its room.
-                  '@container flex flex-col gap-px',
+                  '@container flex flex-col',
             )}
             aria-label={
               studio ? 'Scenes, click to show in the preview' : 'Scenes, click to go on air'
@@ -412,7 +412,7 @@ export function ScenesDock() {
                       'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
                       grid
                         ? 'grid gap-1 rounded-[10px] border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
-                        : 'flex min-h-10 items-center gap-2.5 rounded-[9px] px-1.5 text-[14.5px] hover:bg-surface-2',
+                        : 'flex min-h-8 items-center gap-2.5 border-b border-line pr-2 pl-3 text-[13.5px] hover:bg-surface-2',
                       // What's picked: on air, or Studio Mode's preview being edited.
                       (studio ? s.preview : s.current) && 'fc-picked border-transparent',
                       // Studio Mode's preview in the list: the accent ring (on air keeps its red).
@@ -472,7 +472,7 @@ export function ScenesDock() {
                       <>
                         <KindTile
                           kind="scene"
-                          size={26}
+                          size={20}
                           tone={s.current ? 'var(--fc-danger)' : undefined}
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
@@ -515,7 +515,7 @@ export function ScenesDock() {
           </ul>
         )}
       </div>
-      <footer className="flex h-10 flex-none items-center gap-0.5 border-t border-line px-1.5">
+      <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
         <IconButton
           size="sm"
           label="Move the scene on air up"
@@ -557,6 +557,7 @@ export function ScenesDock() {
       {menu}
       <ImportObsDialog open={importing} onClose={() => setImporting(false)} />
       <Dialog
+        compact
         open={removing !== null}
         onClose={() => setRemoving(null)}
         size="sm"

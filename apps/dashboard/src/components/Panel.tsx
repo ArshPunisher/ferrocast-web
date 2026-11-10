@@ -83,25 +83,48 @@ export function PageHeader({
   description,
   actions,
   beside,
+  compact = false,
 }: {
   title: string
   description?: ReactNode
   actions?: ReactNode
   /** Right after the title on the same line (a screen's tabs), saving a row. */
   beside?: ReactNode
+  /** One slim row for a work screen (the Studio's desk): a smaller title, less space. */
+  compact?: boolean
 }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
+    <div
+      className={cx(
+        'flex flex-col',
+        compact
+          ? 'mb-2 gap-2 lg:flex-row lg:flex-wrap lg:items-center'
+          : 'mb-5 gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between',
+      )}
+    >
+      <div
+        className={cx(
+          'flex min-w-0 flex-wrap items-center',
+          compact ? 'gap-x-3 gap-y-2' : 'gap-x-5 gap-y-3',
+        )}
+      >
         <div className="flex min-w-0 items-center gap-1.5">
-          <h1 className="font-display text-[26px] font-extrabold tracking-[-0.025em] text-balance text-text sm:text-[32px]">
+          <h1
+            className={cx(
+              'font-display font-extrabold text-balance text-text',
+              compact
+                ? 'text-[20px] tracking-[-0.02em]'
+                : 'text-[26px] tracking-[-0.025em] sm:text-[32px]',
+            )}
+          >
             {title}
           </h1>
           {description && <InfoTip>{description}</InfoTip>}
         </div>
         {beside}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions &&
+        (compact ? actions : <div className="flex flex-wrap items-center gap-2">{actions}</div>)}
     </div>
   )
 }

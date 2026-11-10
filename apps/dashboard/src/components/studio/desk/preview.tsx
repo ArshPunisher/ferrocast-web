@@ -290,7 +290,6 @@ export function PreviewBox({ running }: { running: boolean }) {
     // (Studio Mode's two boxes and the vertical picture beside the main one are the page's
     // own and still take the still.)
     const follows = /Mac/.test(navigator.userAgent) && !studio && !tall
-    let windowUntil = 0
     let settle = 0
     let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
     const boxes = () =>
@@ -404,27 +403,12 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (!raf) raf = requestAnimationFrame(send)
     }
     schedule()
-    // The stage resized again soon after the last time: something is being dragged (a
-    // divider between panels, a panel's edge, the window). Then it's a resize like the
-    // window's: the still shows, as libobs only redraws at the next frame and a growing view
-    // shows black strips until then (owner's recording). A single change stays live.
-    let changed = 0
-    const sizes = new WeakMap<Element, string>()
-    const ro = new ResizeObserver((entries) => {
-      // Every entry is recorded (not stopping at the first change), so each keeps its size.
-      let moved = false
-      for (const e of entries) {
-        const key = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`
-        const was = sizes.get(e.target)
-        sizes.set(e.target, key)
-        if (was !== undefined && was !== key) moved = true
-      }
-      const now = performance.now()
-      if (follows && now < windowUntil) schedule()
-      else if (moved && now - changed < 120) resize()
-      else schedule()
-      if (moved) changed = now
-    })
+    // The stage resized (a divider between panels dragged, a panel's edge, a bar above it):
+    // the live picture follows it every frame. Ferrocast's own engine draws each frame at the
+    // view's new size, so the picture keeps playing and the vertical one stays beside it
+    // (owner's recording, 10 Nov: a still stood in during the drag, the timer stopped and the
+    // vertical picture vanished; that still was for libobs, which left black strips).
+    const ro = new ResizeObserver(schedule)
     ro.observe(el)
     if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
@@ -476,7 +460,6 @@ export function PreviewBox({ running }: { running: boolean }) {
     }
     const onResize = () => {
       if (!follows) return resize()
-      windowUntil = performance.now() + 300
       window.clearTimeout(settle)
       // Placed exactly once the window stops (the app leaves the page's boxes out meanwhile).
       settle = window.setTimeout(() => {
@@ -687,7 +670,7 @@ function PictureViewPick() {
           aria-pressed={pv.view === v}
           onClick={() => setPv({ view: v })}
           className={cx(
-            'grid size-8 place-items-center rounded-[7px] outline-none focus-visible:shadow-[var(--fc-focus)]',
+            'grid size-[26px] place-items-center rounded-[5px] outline-none focus-visible:shadow-[var(--fc-focus)]',
             pv.view === v
               ? 'bg-accent-soft text-accent-text'
               : 'text-text-2 hover:bg-surface-3 hover:text-text',
@@ -718,7 +701,7 @@ function VerticalToggle() {
     })
   return (
     <Button
-      size="sm"
+      size="xs"
       variant="ghost"
       aria-pressed={on}
       busy={busy === 'vertical'}
@@ -1491,7 +1474,7 @@ function ViewControls() {
               aria-pressed={pv.zoom === z}
               onClick={() => setPv({ zoom: z })}
               className={cx(
-                'h-8 rounded-[7px] px-2.5 text-[13.5px] font-bold outline-none focus-visible:shadow-[var(--fc-focus)]',
+                'h-[26px] rounded-[5px] px-2 text-[12.5px] font-semibold outline-none focus-visible:shadow-[var(--fc-focus)]',
                 pv.zoom === z
                   ? 'rounded-b-[3px] bg-surface-3 text-text shadow-[inset_0_-2px_0_var(--fc-accent-text)]'
                   : 'text-text-2 hover:bg-surface-3 hover:text-text',
@@ -1607,7 +1590,7 @@ export function StageBar() {
     // Parts show by the bar's own width (not the window's), so it stays on one line: the
     // name and the picture size only where there's room for them.
     <div className="@container flex-none border-t border-line bg-surface-1">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2.5 py-2 text-[14px] text-text-3 @[900px]:gap-x-3 @[900px]:px-3">
+      <div className="fc-dock-bar flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-[13px] text-text-3 @[900px]:gap-x-2.5 @[900px]:px-2.5">
         {/* The Scenes panel shows what's on air; here the name fits on wide screens. A set
             width, so the buttons after it stay put when the scene or picture changes. */}
         <span
@@ -1636,7 +1619,7 @@ export function StageBar() {
         <PictureViewPick />
         <span className="flex-1" />
         {t && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <label
               htmlFor="studio-transition"
               className="hidden whitespace-nowrap @[1240px]:inline"
@@ -1646,7 +1629,7 @@ export function StageBar() {
             <Select
               id="studio-transition"
               aria-label="Switch with"
-              className="h-8! w-auto! py-0! text-[14px]"
+              className="h-7! w-28! rounded-[5px]! py-0! pr-7! pl-2! text-[13px]!"
               value={t.kind}
               onChange={(e) => void set(e.target.value, t.ms)}
             >
@@ -1658,7 +1641,7 @@ export function StageBar() {
             </Select>
             {HAS_SETTINGS.has(t.kind) && (
               <IconButton
-                size="sm"
+                size="xs"
                 label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
                 onClick={() => setTuning(t.kind)}
               >
@@ -1667,7 +1650,7 @@ export function StageBar() {
             )}
             {/* A stinger lasts as long as its video. */}
             {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5">
                 <Input
                   aria-label="Transition length in milliseconds"
                   type="number"
@@ -1675,7 +1658,7 @@ export function StageBar() {
                   min={0}
                   max={20000}
                   step={50}
-                  className="h-8! w-20! py-0! text-right text-[14px] tabular-nums"
+                  className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
                   value={ms ?? t.ms}
                   onChange={(e) =>
                     setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
@@ -1752,6 +1735,7 @@ export function StageBar() {
 function TransitionSettingsDialog({ kind, onClose }: { kind: string | null; onClose: () => void }) {
   return (
     <Dialog
+      compact
       open={kind !== null}
       onClose={onClose}
       title={`${kind ? (TRANSITIONS[kind] ?? kind) : 'Transition'} settings`}

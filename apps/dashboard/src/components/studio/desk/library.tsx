@@ -213,20 +213,20 @@ export function LibraryBar() {
               })
             }
             className={cx(
-              'fc-press inline-flex h-10 max-w-[200px] shrink-0 items-center gap-2 rounded-[9px] bg-surface-1 pr-2.5 pl-2 text-[14.5px] font-bold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
+              'fc-press inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-[6px] bg-surface-1 pr-2 pl-1.5 text-[13px] font-semibold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
               busy === `switch:${kind}` && 'opacity-60',
             )}
           >
             <span
               aria-hidden
               className={cx(
-                'grid size-6 shrink-0 place-items-center rounded-[6px]',
+                'grid size-5 shrink-0 place-items-center rounded-[5px]',
                 kind === 'collections'
                   ? 'bg-accent-soft text-accent-text'
                   : 'bg-teal-soft text-teal',
               )}
             >
-              <Icon size={15} weight="bold" />
+              <Icon size={13} weight="bold" />
             </span>
             {/* The name shows on wide screens; smaller ones keep the bar on one line. */}
             <span className="hidden min-w-0 truncate xl:inline">{name}</span>
@@ -249,6 +249,7 @@ export function LibraryBar() {
       />
       {menu}
       <Dialog
+        compact
         open={naming !== null}
         onClose={() => setNaming(null)}
         size="sm"

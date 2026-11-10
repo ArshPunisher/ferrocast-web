@@ -81,7 +81,7 @@ export function AutoConfigDialog({
   onApply: (patch: Partial<StudioSettings>) => void
 }) {
   return (
-    <Dialog open={open} onClose={onClose} title="Set up for me" size="md">
+    <Dialog compact open={open} onClose={onClose} title="Set up for me" size="md">
       {open && <Wizard s={s} onApply={onApply} onClose={onClose} />}
     </Dialog>
   )

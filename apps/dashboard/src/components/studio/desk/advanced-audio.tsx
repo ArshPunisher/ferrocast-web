@@ -52,6 +52,7 @@ export function AdvancedAudio({ focus, onClose }: { focus: string | null; onClos
 
   return (
     <Dialog
+      compact
       open={open}
       onClose={onClose}
       size="xl"
@@ -84,7 +85,7 @@ export function AdvancedAudio({ focus, onClose }: { focus: string | null; onClos
         <div className="flex flex-col gap-2 lg:gap-0">
           <div
             aria-hidden
-            className="hidden grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] gap-3 border-b border-line px-2 pb-2 text-[13px] font-bold text-text-3 lg:grid"
+            className="hidden h-8 grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] items-center gap-3 border-b border-line-strong bg-dock-head px-2 text-[11px] font-bold tracking-[0.06em] text-text-3 uppercase lg:grid"
           >
             <span>Sound</span>
             <span>Volume</span>
@@ -141,12 +142,12 @@ function SoundRow({
     <div
       id={rowId(a.name)}
       className={cx(
-        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 lg:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] lg:items-center lg:gap-3 lg:rounded-none lg:border-0 lg:border-b lg:px-2 lg:py-2',
+        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 lg:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] lg:h-10 lg:items-center lg:gap-3 lg:rounded-none lg:border-0 lg:border-b lg:px-2 lg:py-0',
         focused && 'bg-accent/8',
       )}
     >
       <span
-        className="truncate text-[14.5px] font-semibold text-text sm:col-span-2 lg:col-span-1"
+        className="truncate text-[13px] font-semibold text-text sm:col-span-2 lg:col-span-1"
         title={a.name}
       >
         {a.name}
@@ -158,7 +159,7 @@ function SoundRow({
           inputMode="decimal"
           name="volume_db"
           autoComplete="off"
-          className="h-8! w-20 text-[14px] tabular-nums"
+          className="h-7! w-20 rounded-[5px]! px-2! font-mono text-[12px]! tabular-nums"
           value={volume}
           onChange={(e) => setVolume(e.target.value)}
           onBlur={commitVolume}
@@ -184,13 +185,17 @@ function SoundRow({
             step={0.01}
             aria-label={`Balance of ${a.name}`}
             aria-valuetext={balanceLabel(a.balance ?? 0.5)}
-            className="min-w-0 flex-1 accent-[var(--fc-accent)]"
+            className="fc-slim min-w-0 flex-1"
+            style={{
+              ['--from' as string]: `${Math.min(50, (a.balance ?? 0.5) * 100)}%`,
+              ['--fill' as string]: `${Math.max(50, (a.balance ?? 0.5) * 100)}%`,
+            }}
             value={a.balance ?? 0.5}
             disabled={!!a.mono}
             onChange={(e) => onChange({ balance: Number(e.target.value) })}
             onDoubleClick={() => onChange({ balance: 0.5 })}
           />
-          <span className="w-14 flex-none text-right text-[13px] font-semibold text-text-2 tabular-nums">
+          <span className="w-14 flex-none text-right font-mono text-[11.5px] text-text-2 tabular-nums">
             {balanceLabel(a.balance ?? 0.5)}
           </span>
         </span>
@@ -202,7 +207,7 @@ function SoundRow({
           inputMode="numeric"
           name="sync_ms"
           autoComplete="off"
-          className="h-8! w-24 text-[14px] tabular-nums"
+          className="h-7! w-24 rounded-[5px]! px-2! font-mono text-[12px]! tabular-nums"
           value={sync}
           onChange={(e) => setSync(e.target.value)}
           onBlur={commitSync}
@@ -213,7 +218,7 @@ function SoundRow({
         <span className={small}>Hear it</span>
         <Select
           aria-label={`Who hears ${a.name}`}
-          className="h-8! w-full text-[14px]"
+          className="h-7! w-full rounded-[5px]! py-0! pl-2! text-[12.5px]!"
           value={a.monitor}
           onChange={(e) => onChange({ monitor: e.target.value as EngineMonitor })}
         >
@@ -236,9 +241,9 @@ function SoundRow({
                 aria-pressed={on}
                 aria-label={`Track ${t}`}
                 className={cx(
-                  'grid size-9 touch-manipulation place-items-center lg:size-7 rounded-[6px] border text-[13px] font-bold tabular-nums transition-colors active:scale-[0.96]',
+                  'grid size-9 touch-manipulation place-items-center rounded-[5px] border font-mono text-[11.5px] font-semibold tabular-nums transition-colors active:scale-[0.96] lg:size-6',
                   on
-                    ? 'border-accent/60 bg-accent/20 text-text'
+                    ? 'border-accent-line bg-accent-soft text-accent-text'
                     : 'border-line bg-surface-2 text-text-3 hover:border-line-strong',
                 )}
                 onClick={() =>

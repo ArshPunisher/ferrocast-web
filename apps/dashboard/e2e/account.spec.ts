@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { open, openSidebar } from './helpers'
 
 const bar = (page: import('@playwright/test').Page) => page.getByTestId('account-bar')
 
 test.describe('Ferrocast account', () => {
   test.use({ viewport: { width: 1280, height: 860 } })
+  test.beforeEach(({ page }) => openSidebar(page))
 
   test('signs in through the browser from the sidebar, then the menu signs out', async ({
     page,

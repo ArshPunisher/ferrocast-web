@@ -2,7 +2,16 @@
 // like OBS (preview, Scenes, Sources, Audio) with the platforms beside it, and one button to
 // go live everywhere.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowCounterClockwise,
   CheckSquare,
@@ -44,7 +53,7 @@ import { useShow } from '../show'
 import { styleOf } from '../show-style'
 import { AddSourceDialog } from './add-source'
 import { FileDrop } from './file-drop'
-import { DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
+import { BarSlot, DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
 import { GoLiveDock } from './golive-dock'
 import {
   BUILT_INS,
@@ -116,7 +125,7 @@ export function StudioDesk({
   if (!s.running)
     return (
       <>
-        {lead && <div className="mb-3 flex">{lead}</div>}
+        {lead && <InBar className="mb-3 flex">{lead}</InBar>}
         <div className="flex min-h-[420px] flex-col overflow-hidden rounded-panel border border-line">
           <StageOff available={s.available} detail={s.detail} onStart={start} />
         </div>
@@ -605,14 +614,14 @@ function ControlBar({
       success: 'Replay saved with your recordings.',
     })
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2.5">
-      <div className="flex flex-wrap items-center gap-2.5">
+    <InBar className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {lead}
         <LibraryBar />
       </div>
       {/* Health and the actions stay together: short of room they move down as one, so Go
           live never ends up on a line of its own. */}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
         {stream?.error && !stream.active && (
           <span className="text-[14px] font-semibold text-danger" aria-live="polite">
             {stream.error}
@@ -622,7 +631,7 @@ function ControlBar({
         <div
           role="group"
           aria-label="Studio tools"
-          className="flex h-10 items-stretch divide-x divide-line rounded-control border border-line bg-surface-1"
+          className="flex h-8 items-stretch divide-x divide-line rounded-[6px] border border-line bg-surface-1"
         >
           <button
             type="button"
@@ -631,7 +640,7 @@ function ControlBar({
             className={cx(TOOL, 'rounded-l-[inherit]')}
             onClick={() => openSettings()}
           >
-            <GearSix size={18} />
+            <GearSix size={16} />
           </button>
           <LayoutMenu onStatus={onStatus} />
           <button
@@ -646,13 +655,14 @@ function ControlBar({
             )}
             onClick={outputsMenu}
           >
-            <VideoCamera size={18} weight={replayOn || camOn || ndiOn ? 'fill' : 'regular'} />
+            <VideoCamera size={16} weight={replayOn || camOn || ndiOn ? 'fill' : 'regular'} />
           </button>
         </div>
         {recording && (
           <Button
             variant="secondary"
-            className={cx('h-10', paused && 'bg-warn-soft! text-warn!')}
+            size="xs"
+            className={cx('h-8', paused && 'bg-warn-soft! text-warn!')}
             onClick={pause}
             aria-pressed={paused}
           >
@@ -663,7 +673,8 @@ function ControlBar({
         {replayOn && (
           <Button
             variant="secondary"
-            className="h-10"
+            size="xs"
+            className="h-8"
             busy={busy === 'save-replay'}
             onClick={saveReplay}
           >
@@ -674,7 +685,7 @@ function ControlBar({
         {recording && (
           <IconButton
             label="Chapter or a new file"
-            className="h-10! w-10!"
+            className="h-8! w-8! rounded-[6px]!"
             variant="ghost"
             onClick={recordMenu}
           >
@@ -712,6 +723,7 @@ function ControlBar({
           onClick={() => void pressStream()}
         />
         <Dialog
+          compact
           open={!!asked}
           onClose={() => setAsk(null)}
           title={asked?.title ?? ''}
@@ -740,7 +752,17 @@ function ControlBar({
           }
         />
       </div>
-    </div>
+    </InBar>
+  )
+}
+
+/** The bar's things in the page header's row when it gives one (`BarSlot`), else here. */
+export function InBar({ className, children }: { className: string; children: ReactNode }) {
+  const slot = useContext(BarSlot)
+  if (!slot) return <div className={className}>{children}</div>
+  return createPortal(
+    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">{children}</div>,
+    slot,
   )
 }
 
@@ -789,7 +811,7 @@ function Mini({ p }: { p: Preset }) {
 /** Presets, which panels show, lock, reset, and turning the Studio off. */
 /** An icon in the desk's tool group: square, no frame of its own (the group has it). */
 const TOOL =
-  'grid h-full w-10 place-items-center text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:relative focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none'
+  'grid h-full w-8 place-items-center text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:relative focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none'
 
 function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void }) {
   const api = useEngine()
@@ -841,7 +863,7 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
         onClick={() => setOpen((o) => !o)}
         className={cx(TOOL, open && 'bg-surface-3 text-text')}
       >
-        <LayoutIcon size={18} />
+        <LayoutIcon size={16} />
       </button>
       {open && (
         <div

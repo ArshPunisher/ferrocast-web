@@ -106,10 +106,12 @@ test.describe('go live everywhere', () => {
     const live = page.locator('#golive-live')
     await expect(live.getByText('Twitch: Live')).toBeVisible({ timeout: 8000 })
     await expect(live.getByText(/Kick: Reconnecting, try \d/)).toBeVisible()
-    // The pill at the top says so from any page.
+    // The pill at the top says so from any other page (the Studio has its own one-row header).
+    await page.goto('./?autoplay=0&latency=0#/home')
     await expect(
       page.getByRole('link', { name: /Kick:.*Go live: stream reconnecting/ }),
     ).toBeVisible()
+    await page.goto('./?autoplay=0&latency=0#/studio/golive')
     await live.getByRole('button', { name: 'Stop trying' }).click()
     await expect(
       panel(page, 'Your platforms').getByRole('switch', { name: 'Stream to Kick' }),
@@ -131,9 +133,11 @@ test.describe('go live everywhere', () => {
     ).toBeVisible()
     await expect(live.getByText(/Back in \d+ s at the earliest\./)).toBeVisible()
     await expect(live.getByText(/1 of 2 live · 1 paused/)).toBeVisible()
+    await page.goto('./?autoplay=0&latency=0#/home')
     await expect(
       page.getByRole('link', { name: /YouTube:.*stream paused to save upload/ }),
     ).toBeVisible()
+    await page.goto('./?autoplay=0&latency=0#/studio/golive')
     await live.getByRole('button', { name: 'Resume now' }).click()
     await expect(page.getByText('YouTube is coming back.')).toBeVisible()
     await expect(live.getByText('YouTube: Live')).toBeVisible()

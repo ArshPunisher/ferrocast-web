@@ -48,6 +48,7 @@ export function MissingFiles() {
         </div>
       )}
       <Dialog
+        compact
         open={open}
         onClose={() => setOpen(false)}
         size="lg"

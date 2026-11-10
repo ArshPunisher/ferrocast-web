@@ -14,7 +14,7 @@ type From = 'obs' | 'streamlabs'
 
 export function ImportObsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} onClose={onClose} size="lg" title="Import scenes">
+    <Dialog compact open={open} onClose={onClose} size="lg" title="Import scenes">
       {open && <Picker onDone={onClose} />}
     </Dialog>
   )

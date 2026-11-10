@@ -145,6 +145,13 @@ export interface Desk {
 
 const Ctx = createContext<Desk | null>(null)
 
+/**
+ * Where the Studio's bar (Record, Go live, the tools) is drawn: the page header's own row
+ * when the screen gives one (the compact Studio, owner's pick "A joined", 10 Nov), else above
+ * the panels as before.
+ */
+export const BarSlot = createContext<HTMLElement | null>(null)
+
 export function DeskProvider({ value, children }: { value: Desk; children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

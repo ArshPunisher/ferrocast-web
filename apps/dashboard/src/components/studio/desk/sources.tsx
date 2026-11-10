@@ -662,7 +662,7 @@ export function SourcesDock() {
     if (naming?.from === item.name)
       return (
         <form
-          className={cx('py-0.5 pr-1', child ? 'pl-7' : 'pl-1.5')}
+          className={cx('border-b border-line py-0.5 pr-1', child ? 'pl-8' : 'pl-2')}
           onSubmit={(e) => {
             e.preventDefault()
             void rename()
@@ -672,7 +672,7 @@ export function SourcesDock() {
             autoFocus
             data-autofocus
             aria-label={`New name for ${item.name}`}
-            className="h-8! text-[14.5px]"
+            className="h-7! rounded-[5px]! text-[13.5px]"
             maxLength={100}
             value={naming.value}
             onChange={(e) => setNaming((n) => n && { ...n, value: e.target.value })}
@@ -711,8 +711,8 @@ export function SourcesDock() {
           open(e, item.name, itemMenu(item))
         }}
         className={cx(
-          'group relative flex min-h-10 touch-none items-center gap-1 rounded-[9px] pr-1 text-[14.5px] transition-colors select-none hover:bg-surface-2',
-          child ? 'pl-7' : 'pl-1',
+          'group relative flex min-h-8 touch-none items-center gap-1 border-b border-line pr-1 text-[13.5px] transition-colors select-none hover:bg-surface-2',
+          child ? 'pl-8' : 'pl-2',
           // Its place in the list while it's carried: a dashed outline.
           dragging === item.id &&
             'bg-transparent opacity-50 outline-2 -outline-offset-2 outline-line-strong outline-dashed',
@@ -723,14 +723,14 @@ export function SourcesDock() {
           <span
             aria-hidden
             className={cx(
-              'pointer-events-none absolute right-1 left-1 h-[3px] rounded-full bg-accent',
+              'pointer-events-none absolute right-1 left-1 z-10 h-[3px] rounded-full bg-accent',
               marker === 'before' ? '-top-[2px]' : '-bottom-[2px]',
             )}
           />
         )}
         {item.group ? (
           <IconButton
-            size="sm"
+            size="xs"
             variant="ghost"
             data-no-drag
             label={isOpen ? `Fold ${item.name}` : `Unfold ${item.name}`}
@@ -770,9 +770,9 @@ export function SourcesDock() {
           onKeyDown={(e) => {
             if (e.key === 'F2') setNaming({ from: item.name, value: item.name })
           }}
-          className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 text-left"
+          className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <KindTile kind={item.group ? 'group' : item.kind} size={26} dim={!item.visible} />
+          <KindTile kind={item.group ? 'group' : item.kind} size={20} dim={!item.visible} />
           <span
             className={cx(
               'min-w-0 truncate font-semibold',
@@ -856,7 +856,7 @@ export function SourcesDock() {
       />
       <div
         ref={listRef}
-        className="min-h-0 flex-1 overflow-y-auto p-1.5"
+        className="min-h-0 flex-1 overflow-y-auto"
         onContextMenu={(e) => open(e, `Sources in ${scene}`, emptyMenu)}
         // A click on the list's empty space picks nothing, as in OBS.
         onPointerDown={(e) => {
@@ -866,19 +866,19 @@ export function SourcesDock() {
         {items.error && !list ? (
           <LoadError error={items.error} onRetry={items.reload} />
         ) : !list ? (
-          <Skeleton className="h-28" />
+          <Skeleton className="m-1.5 h-28" />
         ) : list.length === 0 ? (
-          <p className="m-0 p-2.5 text-[14.5px] font-medium text-text-2">
+          <p className="m-0 p-3 text-[13.5px] font-medium text-text-2">
             Empty. Press <Plus size={12} weight="bold" className="inline align-[-1px]" /> to add
             your camera, screen or a game.
           </p>
         ) : (
-          <ul className="@container flex flex-col gap-px" aria-label="Sources, top first">
+          <ul className="@container flex flex-col" aria-label="Sources, top first">
             {list.map((item) => (
               <li key={item.id}>
                 {row(item)}
                 {item.group && !closed.has(item.id) && item.children.length > 0 && (
-                  <ul className="flex flex-col gap-px">
+                  <ul className="flex flex-col">
                     {item.children.map((c) => (
                       <li key={c.id}>{row(c, true)}</li>
                     ))}
@@ -889,7 +889,7 @@ export function SourcesDock() {
           </ul>
         )}
       </div>
-      <footer className="flex h-10 flex-none items-center gap-0.5 border-t border-line px-1.5">
+      <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
         <IconButton
           size="sm"
           label={picked ? `Move ${picked.name} up` : 'Move up'}
@@ -936,6 +936,7 @@ export function SourcesDock() {
       </footer>
       {menu}
       <Dialog
+        compact
         open={removing !== null}
         onClose={() => setRemoving(null)}
         size="sm"

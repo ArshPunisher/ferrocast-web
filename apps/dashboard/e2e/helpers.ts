@@ -20,6 +20,11 @@ export async function open(
   await expect(page.locator('#main')).toBeVisible()
 }
 
+/** The sidebar open (it starts folded to icons): its account bar and update item show. */
+export async function openSidebar(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('fc-nav-folded', '0'))
+}
+
 /** First run: past "What will you use Ferrocast for?" (Streaming) and the picture (as
  *  suggested), to "Connect where you stream". */
 export async function pastSetupQuestions(page: Page): Promise<void> {

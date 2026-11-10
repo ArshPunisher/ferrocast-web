@@ -126,13 +126,13 @@ function ScreenAccess() {
   return (
     <div
       role="status"
-      className="flex flex-col gap-3 rounded-[12px] border border-[color-mix(in_oklab,var(--fc-warn)_45%,transparent)] bg-warn-soft p-4"
+      className="flex flex-col gap-3 rounded-[6px] border border-[color-mix(in_oklab,var(--fc-warn)_45%,transparent)] bg-warn-soft p-4"
     >
       <div className="flex items-center gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface-1 text-warn">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[6px] bg-surface-1 text-warn">
           <ShieldWarning size={20} weight="fill" aria-hidden />
         </span>
-        <p className="m-0 flex flex-1 items-center gap-1 text-[15.5px] font-bold text-text">
+        <p className="m-0 flex flex-1 items-center gap-1 text-[13px] font-bold text-text">
           Allow Screen Recording
           <InfoTip label="Why it asks again">
             Each Ferrocast update is new to macOS, so a switch that looks on can belong to an older
@@ -140,7 +140,7 @@ function ScreenAccess() {
           </InfoTip>
         </p>
       </div>
-      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[14.5px] font-semibold text-text-2">
+      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13px] font-semibold text-text-2">
         <li>Press Ask again, then Open System Settings.</li>
         <li>Switch Ferrocast on.</li>
         <li>Press Reopen.</li>
@@ -198,6 +198,7 @@ export function AddSourceDialog() {
   }, [api, kinds.data, open])
   return (
     <Dialog
+      compact
       open={adding !== null}
       onClose={() => setAdding(null)}
       size="xl"
@@ -244,20 +245,20 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
   if (kinds.error && !kinds.data) return <LoadError error={kinds.error} onRetry={kinds.reload} />
   if (!kinds.data) return <Skeleton className="h-80" />
   return (
-    <div className="-mx-1 flex flex-col gap-3 sm:grid sm:h-full sm:grid-cols-[240px_minmax(0,1fr)] sm:gap-5">
+    <div className="-mx-1 flex flex-col gap-3 sm:grid sm:h-full sm:grid-cols-[210px_minmax(0,1fr)] sm:gap-4">
       <nav aria-label="Kinds" className="flex min-h-0 flex-col gap-2">
         <div className="relative">
           <MagnifyingGlass
             size={15}
             aria-hidden
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-text-3"
           />
           <Input
             type="search"
             aria-label="Search kinds"
             data-keep-placeholder
             placeholder="Search…"
-            className="pl-9!"
+            className="h-8! rounded-[6px]! pl-8! text-[13px]!"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -270,7 +271,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
             if (!shown.length) return null
             return (
               <div key={g.label} className="flex gap-1 sm:flex-col sm:gap-px">
-                <h3 className="m-0 hidden px-2.5 pt-3 pb-1 text-[12px] font-extrabold tracking-wide text-text-2 uppercase sm:block">
+                <h3 className="m-0 hidden px-2 pt-2.5 pb-1 text-[10.5px] font-bold tracking-[0.07em] text-text-3 uppercase sm:block">
                   {g.label}
                 </h3>
                 {shown.map((c) => {
@@ -282,11 +283,11 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
                       aria-current={on ? 'true' : undefined}
                       onClick={() => setPick(c.entry.key)}
                       className={cx(
-                        'flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2 text-left text-[14.5px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
+                        'flex h-8 shrink-0 items-center gap-2.5 rounded-[5px] px-2 text-left text-[13px] font-semibold whitespace-nowrap text-text hover:bg-surface-2',
                         on && 'fc-picked',
                       )}
                     >
-                      <KindTile icon={c.entry.icon} tone={c.tone} size={26} />
+                      <KindTile icon={c.entry.icon} tone={c.tone} size={20} />
                       <span className="truncate">{c.entry.label}</span>
                     </button>
                   )
@@ -385,12 +386,12 @@ export function NoDevices({
   return (
     <div
       role="status"
-      className="flex flex-col items-center gap-4 rounded-[14px] border border-dashed border-line-strong bg-inset px-6 py-9 text-center"
+      className="flex flex-col items-center gap-4 rounded-[6px] border border-dashed border-line-strong bg-inset px-6 py-9 text-center"
     >
       <KindTile icon={c.entry.icon} tone={c.tone} size={56} />
       <div className="flex flex-col gap-1.5">
         <p className="m-0 font-display text-[18px] font-extrabold text-text">{none.title}</p>
-        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14.5px] font-semibold text-text-2">
+        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[13px] font-semibold text-text-2">
           {none.tips.map((t) => (
             <li key={t}>{t}</li>
           ))}
@@ -590,6 +591,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
               {(p) => (
                 <Input
                   {...p}
+                  className="h-8! rounded-[6px]! text-[13px]!"
                   value={shownName}
                   maxLength={100}
                   required
@@ -605,7 +607,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             <p
               id="add-name-clash"
               role="alert"
-              className="-mt-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] font-semibold text-danger"
+              className="-mt-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-semibold text-danger"
             >
               There&apos;s already a {clash} called &ldquo;{shownName.trim()}&rdquo;. Scenes and
               sources need different names.
@@ -635,7 +637,10 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       {dev && !noDevices && (
         <div role="group" aria-labelledby="add-pick-one" className="flex flex-col gap-2.5">
           <div className="mb-1 flex items-center gap-2">
-            <h4 id="add-pick-one" className="m-0 font-display text-[16px] font-extrabold text-text">
+            <h4
+              id="add-pick-one"
+              className="m-0 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase"
+            >
               Pick one
             </h4>
             <span className="flex-1" />
@@ -721,10 +726,10 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     aria-pressed={on}
                     onClick={() => setDevice(i)}
                     style={ring}
-                    className="flex min-h-12 items-center gap-3 rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.99]"
+                    className="flex min-h-10 items-center gap-3 rounded-[6px] border border-line bg-surface-2 px-3 py-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.99]"
                   >
                     <KindTile icon={Icon} tone={c.tone} size={30} />
-                    <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-text">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">
                       {label}
                     </span>
                     {check}
@@ -737,7 +742,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                   aria-pressed={on}
                   onClick={() => setDevice(i)}
                   style={ring}
-                  className="relative flex flex-col overflow-hidden rounded-[12px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
+                  className="relative flex flex-col overflow-hidden rounded-[6px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
                 >
                   <span
                     className="grid aspect-video place-items-center"
@@ -749,7 +754,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
                   </span>
                   <span className="flex items-center gap-2 px-3 py-2.5">
-                    <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-text">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">
                       {label}
                     </span>
                     {check}
@@ -768,22 +773,22 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           ) : !overlays.data ? (
             <Skeleton className="h-24" />
           ) : overlays.data.length === 0 ? (
-            <p className="m-0 text-[14.5px] text-text-2">
+            <p className="m-0 text-[13px] text-text-2">
               No overlays yet. Make one in Overlays, then add it here.
             </p>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
               {overlays.data.map((o) => (
                 <button
                   key={o.id}
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void addOverlay(o)}
-                  className="flex items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 py-3 text-left hover:border-line-strong active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-[6px] border border-line bg-surface-2 px-2.5 py-2 text-left hover:border-line-strong active:scale-[0.98]"
                 >
                   <KindTile icon={Icon} tone={c.tone} size={34} />
                   <span className="min-w-0">
-                    <b className="block truncate text-[14.5px] text-text">{o.name}</b>
+                    <b className="block truncate text-[13px] text-text">{o.name}</b>
                     <span className="block font-mono text-[13px] text-text-3 tabular-nums">
                       {o.width}×{o.height}
                     </span>
@@ -799,7 +804,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           <h4 className="m-0 font-display text-[16px] font-extrabold text-text">
             {isScene ? 'Show a scene inside this one' : 'Or use one you already have'}
           </h4>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
             {reuse.map((r) => {
               return (
                 <button
@@ -807,7 +812,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void addExisting(r.name)}
-                  className="flex items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 py-3 text-left hover:border-line-strong active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-[6px] border border-line bg-surface-2 px-2.5 py-2 text-left hover:border-line-strong active:scale-[0.98]"
                 >
                   {isScene ? (
                     <KindTile kind="scene" size={34} />
@@ -815,7 +820,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <KindTile icon={Icon} tone={c.tone} size={34} />
                   )}
                   <span className="min-w-0">
-                    <b className="block truncate text-[14.5px] text-text">{r.name}</b>
+                    <b className="block truncate text-[13px] text-text">{r.name}</b>
                     <span className="block truncate text-[13px] text-text-3">{r.where}</span>
                   </span>
                 </button>
@@ -828,7 +833,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         <>
           {!dev && !noDevices && (
             <details className="group rounded-control border border-line" open={!c.entry.device}>
-              <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-accent-text">
+              <summary className="cursor-pointer list-none px-3 py-2.5 text-[13px] font-semibold text-accent-text">
                 Settings
               </summary>
               <div className="border-t border-line p-3">

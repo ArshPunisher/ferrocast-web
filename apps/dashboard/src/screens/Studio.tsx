@@ -1,9 +1,11 @@
 // Studio: Go live everywhere, the show, stream info, OBS and moments, one tab each (API.md §4
 // "Studio" and "Go live everywhere").
 
+import { useState } from 'react'
 import { Segmented } from '@ferrocast/ui'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
+import { BarSlot } from '../components/studio/desk/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
 import { VerticalTab } from '../components/studio/vertical'
 import {
@@ -42,7 +44,12 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   const usesObs = useUsesObs()
   const tabs = usesObs ? TABS : TABS.filter((t) => t.value !== 'obs' && t.value !== 'vertical')
   const info = useResource(() => studio.streamInfo(), [studio])
-  const scenes = useResource(() => studio.obsScenes(), [studio])
+  // OBS's scenes only for its own tab: asked on every Studio page they failed without OBS (a
+  // 422 on each load); elsewhere the request just waits, never sent.
+  const scenes = useResource(
+    () => (section === 'obs' ? studio.obsScenes() : new Promise<never>(() => {})),
+    [studio, section === 'obs'],
+  )
   // The Show tab picks from the Studio's scenes and sounds (OBS's when OBS is the source).
   const rig = useRigLists()
   const switcher = useResource(() => studio.switcher(), [studio])
@@ -55,9 +62,24 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   ).length
   // Every tab uses the window's full width, so switching tabs (or Ferrocast / OBS) never jumps.
   useWidePage()
+  // Go live is a work screen: its header is one slim row, and the desk's bar (Record, Go live,
+  // the tools) sits in it rather than on a row of its own (owner's pick "A joined", 10 Nov).
+  const desk = section === 'golive' || section === 'engine' || (section === 'vertical' && !usesObs)
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   return (
-    <div>
+    <BarSlot.Provider value={desk ? slot : null}>
       <PageHeader
+        compact={desk}
+        {...(desk
+          ? {
+              actions: (
+                <div
+                  ref={setSlot}
+                  className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
+                />
+              ),
+            }
+          : {})}
         title="Studio"
         description={
           usesObs
@@ -72,6 +94,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
               section === 'engine' || (section === 'vertical' && !usesObs) ? 'golive' : section
             }
             options={tabs}
+            {...(desk ? { size: 'sm' as const } : {})}
             onChange={(s) => go({ name: 'studio', section: s })}
           />
         }
@@ -156,6 +179,6 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
           </div>
         </div>
       )}
-    </div>
+    </BarSlot.Provider>
   )
 }

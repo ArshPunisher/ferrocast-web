@@ -74,13 +74,43 @@ function Progress({ percent, className }: { percent: number | null; className?: 
  * Bottom of the sidebar (and the phone's More sheet): shows only when there's something to
  * do, so it never nags on an up-to-date app. Opens the update dialog.
  */
-export function UpdateNavItem({ onOpen, roomy = false }: { onOpen?: () => void; roomy?: boolean }) {
+export function UpdateNavItem({
+  onOpen,
+  roomy = false,
+  rail = false,
+}: {
+  onOpen?: () => void
+  roomy?: boolean
+  /** The folded sidebar: the icon alone, the words as its name and tooltip. */
+  rail?: boolean
+}) {
   const update = useLive((s) => s.update)
   const s = summarize(update)
   const reduce = useReducedMotion()
   const { title, detail } = navLine(s)
   const Icon =
     s.phase === 'failed' ? WarningCircle : s.phase === 'ready' ? ArrowClockwise : ArrowCircleUp
+  if (rail)
+    return s.show ? (
+      <button
+        type="button"
+        data-testid="update-nav"
+        aria-label={`${title}: ${detail}`}
+        title={`${title}: ${detail}`}
+        onClick={() => {
+          onOpen?.()
+          openUpdateDialog()
+        }}
+        className={cx(
+          'fc-press grid size-10 place-items-center rounded-[6px] border focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+          s.phase === 'failed'
+            ? 'border-warn/40 bg-warn-soft text-warn'
+            : 'border-accent-line bg-accent-soft text-accent-text',
+        )}
+      >
+        <Icon size={18} weight="bold" aria-hidden />
+      </button>
+    ) : null
   return (
     <AnimatePresence initial={false}>
       {s.show && (

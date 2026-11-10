@@ -88,7 +88,6 @@ export function clock(ms: number): string {
     .join(':')
 }
 
-/** Dropped frames as OBS shows them: the count and its share of all sent. */
 /** The encoder as people know it: the graphics card's maker, or software. Unknown ones as
  *  FFmpeg names them. */
 export function encoderName(id: string): string {
@@ -105,6 +104,7 @@ export function encoderName(id: string): string {
   return known[id] ?? id
 }
 
+/** Dropped frames as OBS shows them: the count and its share of all sent. */
 export function droppedText(dropped: number, frames: number): string {
   const pct = frames > 0 ? (dropped / frames) * 100 : 0
   return `${dropped} (${pct.toFixed(1)}%)`
@@ -277,7 +277,7 @@ export function StatsDialog({
     },
   ]
   return (
-    <Dialog open={open} onClose={onClose} title="Stats" size="md">
+    <Dialog compact open={open} onClose={onClose} title="Stats" size="md">
       {!e ? (
         <p className="m-0 text-[14.5px] text-text-2">Start the Studio to see its stats.</p>
       ) : (

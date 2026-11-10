@@ -107,6 +107,7 @@ export function WebDockDialog({
   }
   return (
     <Dialog
+      compact
       open={open}
       onClose={onClose}
       title={dock ? 'Web panel' : 'Add a web panel'}

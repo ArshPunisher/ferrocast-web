@@ -607,7 +607,10 @@ export function DockWorkspace({
     return (
       <Ctx.Provider value={api}>
         {top}
-        <div ref={ws} className="flex flex-col overflow-hidden border border-line bg-surface-1">
+        <div
+          ref={ws}
+          className="fc-desk flex flex-col overflow-hidden border border-line-strong bg-surface-1"
+        >
           {/* The picture keeps its 16:9 shape here (on wide screens it fits the space). */}
           <div
             data-stage
@@ -694,7 +697,7 @@ export function DockWorkspace({
         aria-label="Studio layout"
         // Square, as OBS's: the live picture is a square native view over the stage, and a
         // rounded corner beside it looked broken (owner, 28 Oct).
-        className="flex overflow-hidden border border-line bg-surface-1"
+        className="fc-desk flex overflow-hidden border border-line-strong bg-surface-1"
         style={height ? { height } : undefined}
       >
         {left}
@@ -816,7 +819,7 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
       data-pos={`${f.x},${f.y},${f.w},${f.h}`}
       role="region"
       aria-label={`${dockName(layout, id)} (floating)`}
-      className="fixed z-30 flex min-h-40 min-w-56 resize flex-col overflow-hidden rounded-panel border border-line-strong bg-surface-1 shadow-pop"
+      className="fc-desk fixed z-30 flex min-h-40 min-w-56 resize flex-col overflow-hidden rounded-[7px] border border-line-strong bg-surface-1 shadow-pop"
       style={{ left: f.x, top: f.y, width: f.w, height: f.h }}
     >
       {children}
@@ -924,7 +927,7 @@ function Divider({
       onPointerDown={down}
       onKeyDown={key}
       className={cx(
-        'relative z-10 flex-none touch-none bg-line outline-none after:absolute after:-inset-1 hover:bg-arc focus-visible:bg-arc',
+        'relative z-10 flex-none touch-none bg-line-strong outline-none after:absolute after:-inset-1 hover:bg-arc focus-visible:bg-arc',
         dir === 'col' ? 'w-px cursor-col-resize' : 'h-px cursor-row-resize',
         active && 'bg-arc',
         layout.locked && 'pointer-events-none',
@@ -978,13 +981,13 @@ export function DockHeader({
         if (movable) grab(id, e)
       }}
       className={cx(
-        '@container flex h-11 min-w-0 flex-none items-center gap-1.5 border-b border-line bg-surface-1 pr-1.5 select-none',
+        'fc-dock-bar @container flex h-[34px] min-w-0 flex-none items-center gap-1 border-b border-line-strong bg-dock-head pr-1 select-none',
         movable ? 'cursor-grab pl-1 active:cursor-grabbing' : 'pl-3',
       )}
     >
       {movable && (
-        <span aria-hidden className="grid h-6 w-[18px] place-items-center text-text-3">
-          <DotsSixVertical size={15} />
+        <span aria-hidden className="grid h-6 w-4 place-items-center text-text-3">
+          <DotsSixVertical size={13} />
         </span>
       )}
       {/* A short name stays whole (a long one, a web panel's, is cut at two thirds); on a
@@ -1004,7 +1007,7 @@ export function DockHeader({
               aria-selected={d === id}
               onClick={() => setLayout((l) => ({ ...l, on: { ...l.on, [host]: d } }))}
               className={cx(
-                '-mb-px shrink-0 border-b-2 px-2 font-display text-[15px] font-extrabold tracking-tight outline-none focus-visible:shadow-[var(--fc-focus)]',
+                '-mb-px shrink-0 border-b-2 px-2 font-display text-[13.5px] font-bold tracking-tight outline-none focus-visible:shadow-[var(--fc-focus)]',
                 d === id
                   ? 'border-text text-text'
                   : 'border-transparent text-text-3 hover:text-text',
@@ -1015,13 +1018,13 @@ export function DockHeader({
           ))}
         </div>
       ) : (
-        <h2 className="max-w-[65%] shrink-0 truncate font-display text-[17px] font-extrabold tracking-tight text-text">
+        <h2 className="max-w-[65%] shrink-0 truncate font-display text-[13.5px] font-bold tracking-tight text-text">
           {title ?? dockName(layout, id)}
         </h2>
       )}
       {info}
       <span className="min-w-0 flex-1" />
-      <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
         {actions}
       </div>
       {!narrow && <DockMenu id={id} />}

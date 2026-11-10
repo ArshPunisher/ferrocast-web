@@ -221,7 +221,7 @@ export function StudioStatusBar() {
   return (
     <footer
       aria-label="Studio status"
-      className="fixed right-0 bottom-0 left-60 z-40 hidden items-stretch border-t border-line bg-surface-1 text-[12.5px] lg:flex"
+      className="fixed right-0 bottom-0 left-[var(--fc-nav-w,15rem)] z-40 hidden items-stretch border-t border-line bg-surface-1 text-[12.5px] lg:flex"
       style={{ height: STATUS_BAR_PX }}
     >
       <span

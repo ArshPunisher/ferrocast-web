@@ -71,7 +71,7 @@ export function SettingsDialog({
   start?: Page | undefined
 }) {
   return (
-    <Dialog open={open} onClose={onClose} size="wide" flush title="Studio settings">
+    <Dialog compact open={open} onClose={onClose} size="wide" flush title="Studio settings">
       {open && <Settings start={start ?? 'stream'} onClose={onClose} />}
     </Dialog>
   )
@@ -138,7 +138,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
                 aria-current={on ? 'page' : undefined}
                 onClick={() => setPage(p.id)}
                 className={cx(
-                  'flex h-10 shrink-0 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] font-semibold whitespace-nowrap transition-colors',
+                  'flex h-8 shrink-0 items-center gap-2.5 rounded-[5px] px-2.5 text-left text-[13px] font-semibold whitespace-nowrap transition-colors',
                   on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
                 )}
               >
@@ -153,7 +153,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
           className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
         >
           {here && (
-            <h3 className="m-0 hidden font-display text-[22px] font-extrabold tracking-tight sm:block">
+            <h3 className="m-0 hidden font-display text-[17px] font-bold tracking-tight sm:block">
               {here.label}
             </h3>
           )}
@@ -194,7 +194,7 @@ interface PageProps {
 
 function Heading({ children, info }: { children: ReactNode; info?: string }) {
   return (
-    <h3 className="m-0 flex items-center gap-1 font-display text-[17px] font-extrabold tracking-tight">
+    <h3 className="m-0 flex items-center gap-1 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase">
       {children}
       {info && <InfoTip label={`About ${String(children).toLowerCase()}`}>{info}</InfoTip>}
     </h3>
@@ -231,7 +231,7 @@ function Choice({
       {on && (
         <CheckCircle size={18} weight="fill" aria-hidden className="absolute top-2.5 right-2.5" />
       )}
-      <b className="pr-6 font-display text-[16px]">{title}</b>
+      <b className="pr-6 font-display text-[14px]">{title}</b>
       {sub && <span className="font-mono text-[13.5px] text-text-2 tabular-nums">{sub}</span>}
       {note && <span className="text-[13.5px] text-text-3">{note}</span>}
     </button>
@@ -251,11 +251,11 @@ function Row({
   info?: string
 }) {
   return (
-    <div className="grid grid-cols-1 items-center gap-2 border-t border-line py-2.5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
-      <div className="flex items-center gap-1 text-[14.5px]">
+    <div className="grid min-h-9 grid-cols-1 items-center gap-2 border-t border-line py-1 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
+      <div className="flex items-center gap-1 text-[13px]">
         <span>
           {label}
-          {sub && <span className="block text-[13px] text-text-3">{sub}</span>}
+          {sub && <span className="block text-[11.5px] text-text-3">{sub}</span>}
         </span>
         {info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
       </div>
@@ -443,7 +443,7 @@ function StreamPage({ s, set }: PageProps) {
       >
         <Sparkle size={22} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
         <span className="flex flex-col">
-          <b className="font-display text-[16px] text-text">Set up for me</b>
+          <b className="font-display text-[14px] text-text">Set up for me</b>
           <span className="text-[13.5px] text-text-2">Tests your upload and picks for you.</span>
         </span>
       </button>
@@ -504,7 +504,7 @@ function StreamPage({ s, set }: PageProps) {
         />
       </div>
       <details className="rounded-control border border-line">
-        <summary className="cursor-pointer px-3.5 py-2.5 text-[14.5px] font-semibold text-accent-text">
+        <summary className="cursor-pointer px-3.5 py-2.5 text-[13px] font-semibold text-accent-text">
           More options
         </summary>
         <div className="border-t border-line px-3.5 py-1">
@@ -1093,7 +1093,7 @@ function Privacy() {
         />
       </Row>
       <div className="flex flex-col gap-2 border-t border-line py-2.5">
-        <span className="flex items-center gap-1 text-[14.5px]">
+        <span className="flex items-center gap-1 text-[13px]">
           Hide these apps
           <InfoTip label="About hiding apps">
             Their windows are cut out of a display capture, even when opened later. A window capture
@@ -1422,7 +1422,7 @@ function RecordPage({ s, set }: PageProps) {
         </Row>
         {/* A path is long: the box takes the row's full width under its label. */}
         <div className="flex flex-col gap-2 border-t border-line py-2.5">
-          <span className="text-[14.5px]">
+          <span className="text-[13px]">
             Save to
             {!s.record_folder && (
               <span className="block text-[13px] text-text-3">
@@ -1834,7 +1834,7 @@ function KeysPage({ s, set }: PageProps) {
               return (
                 <div
                   key={a.id}
-                  className="flex min-h-11 items-center gap-2 border-t border-line text-[14.5px]"
+                  className="flex min-h-9 items-center gap-2 border-t border-line text-[13px]"
                 >
                   <span className="min-w-0 flex-1 truncate" title={a.label}>
                     {a.label}

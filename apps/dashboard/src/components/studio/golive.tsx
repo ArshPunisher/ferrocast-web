@@ -69,7 +69,7 @@ import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useObsHealth } from './obs'
-import { StudioDesk } from './desk/desk'
+import { InBar, StudioDesk } from './desk/desk'
 
 export function useGoLive() {
   const client = useClient()
@@ -85,11 +85,12 @@ const NAMES: Record<Exclude<Service, 'custom'>, string> = {
 export function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
   return (
     <span
-      className="grid shrink-0 place-items-center rounded-[8px] bg-surface-3"
+      className="grid shrink-0 place-items-center bg-surface-3"
       // A light wash of the platform's own colour, so each row is known at a glance.
       style={{
         width: size,
         height: size,
+        borderRadius: size <= 22 ? 5 : 8,
         ...(kind !== 'custom' && {
           background: `color-mix(in srgb, var(--fc-${kind}) 14%, var(--fc-surface-1))`,
         }),
@@ -156,6 +157,8 @@ export function GoLiveTab() {
   const pick = (
     <Segmented
       label="Picture from"
+      // The same size as the Studio's tabs beside it in the one-row header.
+      size="sm"
       value={picture}
       options={[
         { value: 'ferrocast', label: 'Ferrocast' },
@@ -167,7 +170,7 @@ export function GoLiveTab() {
   if (picture === 'ferrocast') return <StudioDesk res={res} view={view} lead={pick} />
   return (
     <>
-      <div className="mb-4 flex">{pick}</div>
+      <InBar className="mb-4 flex">{pick}</InBar>
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
           {view.live && <LiveCard view={view} onSaved={res.reload} />}
@@ -648,16 +651,27 @@ export function askedKbps(rule: string): number | null {
 export function RowText({
   d,
   fixBitrate,
+  compact = false,
 }: {
   d: DestinationView
   /** The Studio streams: a button sets its video bitrate to what the warning asks for. */
   fixBitrate?: ((kbps: number) => void) | undefined
+  /** The compact Studio's Go live panel: smaller type. */
+  compact?: boolean
 }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   return (
     <div className="min-w-0">
-      <b className={cx('block truncate text-[15px]', !d.enabled && 'text-text-2')}>{d.name}</b>
-      <span className="block truncate text-[13.5px] text-text-3">
+      <b
+        className={cx(
+          'block truncate',
+          compact ? 'text-[13.5px] leading-tight font-semibold' : 'text-[15px]',
+          !d.enabled && 'text-text-2',
+        )}
+      >
+        {d.name}
+      </b>
+      <span className={cx('block truncate text-text-3', compact ? 'text-[12px]' : 'text-[13.5px]')}>
         {d.kind === 'custom' ? (
           d.direct ? (
             <>

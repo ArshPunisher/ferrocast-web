@@ -87,10 +87,10 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     })
   }
   const row = (d: DestinationView) => (
-    <li key={d.id} className="flex items-start gap-2.5 px-3 py-2.5">
-      <Logo kind={d.kind} />
+    <li key={d.id} className="flex items-center gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
+      <Logo kind={d.kind} size={20} />
       <div className="min-w-0 flex-1">
-        <RowText d={d} fixBitrate={fixBitrate} />
+        <RowText d={d} fixBitrate={fixBitrate} compact />
       </div>
       {/* At the top, lined up with the name, however long the notes below. */}
       <Switch
@@ -117,7 +117,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         actions={
           <>
             <Button
-              size="sm"
+              size="xs"
               variant="ghost"
               title="Test your upload and pick the bitrate for each platform, so the game and the stream both run smooth"
               onClick={() => setOptimizing(true)}
@@ -130,7 +130,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               label="Manage platforms"
               onClick={() => setManaging('main')}
             >
-              <GearSix size={17} />
+              <GearSix size={15} />
             </IconButton>
           </>
         }
@@ -158,7 +158,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             )}
             {/* Shown whatever the wide list holds: the Vertical tab sends people here. */}
             <section aria-label="Vertical platforms">
-              <h3 className="m-0 flex items-center gap-1.5 px-3 pt-2 pb-0.5 text-[12px] font-extrabold tracking-[0.06em] text-text-3 uppercase">
+              <h3 className="m-0 flex items-center gap-1.5 border-b border-line px-3 pt-2 pb-1.5 text-[11px] font-extrabold tracking-[0.06em] text-text-3 uppercase">
                 <DeviceMobile size={14} weight="bold" aria-hidden />
                 Vertical
                 <span className="ml-auto font-semibold tracking-normal normal-case">
@@ -169,7 +169,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               <button
                 type="button"
                 onClick={() => setManaging('vertical')}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] font-semibold text-text-3 hover:text-text"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-semibold text-text-3 hover:text-text"
               >
                 <Plus size={14} weight="bold" aria-hidden />
                 Add a vertical destination
@@ -179,6 +179,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         )}
       </div>
       <Dialog
+        compact
         open={managing !== null}
         onClose={() => setManaging(null)}
         size="lg"

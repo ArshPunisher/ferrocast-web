@@ -60,6 +60,7 @@ export function AddToStudioDialog({
 }) {
   return (
     <Dialog
+      compact
       open={overlay !== null}
       onClose={onClose}
       size="sm"

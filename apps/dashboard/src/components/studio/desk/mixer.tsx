@@ -425,14 +425,14 @@ interface ChannelProps {
 function MuteButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
   return (
     <IconButton
-      size="sm"
+      size="xs"
       variant="ghost"
       label={a.muted ? `Unmute ${a.name}` : `Mute ${a.name}`}
       aria-pressed={a.muted}
       className={cx(a.muted ? 'bg-danger-soft text-danger hover:bg-danger-soft' : 'text-text')}
       onClick={() => onAudio({ muted: !a.muted })}
     >
-      {a.muted ? <SpeakerSlash size={16} weight="bold" /> : <SpeakerHigh size={16} weight="bold" />}
+      {a.muted ? <SpeakerSlash size={15} weight="bold" /> : <SpeakerHigh size={15} weight="bold" />}
     </IconButton>
   )
 }
@@ -441,14 +441,14 @@ function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
   const hearing = a.monitor !== 'off'
   return (
     <IconButton
-      size="sm"
+      size="xs"
       variant="ghost"
       label={hearing ? `Stop hearing ${a.name}` : `Hear ${a.name} in your headphones`}
       aria-pressed={hearing}
       className={cx(hearing ? 'fc-picked hover:bg-[var(--fc-pick-hover)]' : 'text-text-3')}
       onClick={() => onAudio({ monitor: hearing ? 'off' : 'me_and_stream' })}
     >
-      <Headphones size={16} weight={hearing ? 'fill' : 'bold'} />
+      <Headphones size={15} weight={hearing ? 'fill' : 'bold'} />
     </IconButton>
   )
 }
@@ -461,14 +461,17 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
     <div
       onContextMenu={onMenu}
       className={cx(
-        'group/row rounded-[12px] border border-transparent px-2 pt-2 pb-1 transition-colors hover:border-line hover:bg-surface-2',
+        'group/row border-b border-line pt-1.5 pr-1.5 pb-1 pl-3 transition-colors hover:bg-surface-2',
         a.muted && 'bg-danger-soft/40',
       )}
     >
-      <div className="flex items-center gap-2 text-[14.5px]">
-        <KindTile kind={a.kind} size={26} dim={a.muted} />
+      <div className="flex items-center gap-2 text-[13.5px]">
+        <KindTile kind={a.kind} size={20} dim={a.muted} />
         <span
-          className={cx('min-w-0 flex-1 truncate font-bold', a.muted ? 'text-text-3' : 'text-text')}
+          className={cx(
+            'min-w-0 flex-1 truncate font-semibold',
+            a.muted ? 'text-text-3' : 'text-text',
+          )}
         >
           {a.name}
         </span>
@@ -493,7 +496,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         <span
           title="Volume: 0 dB is full (unchanged). The bar shows how loud it is."
           className={cx(
-            'flex shrink-0 items-baseline justify-end gap-1 text-right font-mono text-[13.5px] font-bold tabular-nums',
+            'flex shrink-0 items-baseline justify-end gap-1 text-right font-mono text-[12.5px] font-semibold tabular-nums',
             a.muted ? 'text-danger' : 'text-text',
           )}
         >
@@ -507,9 +510,9 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
           <span className="w-[8.5ch] whitespace-nowrap">{dbText(a)}</span>
         </span>
       </div>
-      <div className="mt-1 flex items-start gap-0.5">
+      <div className="mt-0.5 flex items-start gap-0.5">
         <MuteButton a={a} onAudio={onAudio} />
-        <div className="min-w-0 flex-1 pt-1">
+        <div className="min-w-0 flex-1 pt-0.5">
           <Meter
             level={level}
             muted={a.muted}
@@ -523,14 +526,14 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         </div>
         <HearButton a={a} onAudio={onAudio} />
         <IconButton
-          size="sm"
+          size="xs"
           variant="ghost"
           label={`More for ${a.name}`}
           onClick={onMenu}
           // Narrow (owner's pick N1): there on hover or focus; right-click opens it too.
           className="fc-quiet"
         >
-          <DotsThree size={16} weight="bold" />
+          <DotsThree size={15} weight="bold" />
         </IconButton>
       </div>
     </div>
@@ -784,7 +787,8 @@ export function AudioDock() {
       />
       <div
         className={cx(
-          'min-h-0 flex-1 p-1.5',
+          'min-h-0 flex-1',
+          prefs.vertical && 'p-1.5',
           prefs.vertical ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto',
         )}
         onContextMenu={(e) =>
@@ -812,9 +816,9 @@ export function AudioDock() {
         {error && !list ? (
           <LoadError error={error} onRetry={all ? every.reload : audio.reload} />
         ) : !list || !shown ? (
-          <Skeleton className="h-28" />
+          <Skeleton className="m-1.5 h-28" />
         ) : shown.length === 0 ? (
-          <p className="m-0 p-2.5 text-[14.5px] font-medium text-text-2">
+          <p className="m-0 p-3 text-[13.5px] font-medium text-text-2">
             {list.length > 0 ? 'Every sound here is hidden.' : 'No sound here yet.'}
           </p>
         ) : prefs.vertical ? (
@@ -825,19 +829,19 @@ export function AudioDock() {
             ))}
           </div>
         ) : (
-          <div className="@container flex flex-col gap-1">
+          <div className="@container flex flex-col">
             {shown.map((a) => (
               <Row key={a.name} {...props(a)} />
             ))}
           </div>
         )}
       </div>
-      <footer className="flex h-10 flex-none items-center gap-0.5 border-t border-line px-1.5">
-        <Button size="sm" variant="ghost" onClick={() => setAdding('mic')}>
+      <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
+        <Button size="xs" variant="ghost" onClick={() => setAdding('mic')}>
           <Plus size={14} weight="bold" /> Add sound
         </Button>
         {hiddenHere > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => setPrefs((p) => ({ ...p, hidden: [] }))}>
+          <Button size="xs" variant="ghost" onClick={() => setPrefs((p) => ({ ...p, hidden: [] }))}>
             <Eye size={14} weight="bold" /> {hiddenHere} hidden
           </Button>
         )}
@@ -862,6 +866,7 @@ export function AudioDock() {
       {menu}
       <AdvancedAudio focus={advanced} onClose={() => setAdvanced(null)} />
       <Dialog
+        compact
         open={naming !== null}
         onClose={() => setNaming(null)}
         size="sm"

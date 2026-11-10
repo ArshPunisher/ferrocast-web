@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowSquareOut,
@@ -15,13 +15,15 @@ import {
   House,
   Moon,
   SealCheck,
+  SidebarSimple,
+  UserCircle,
   ShieldCheck,
   SquaresFour,
   Sun,
   UsersThree,
   X,
 } from '@phosphor-icons/react'
-import { Dialog, Wordmark, cx, toast } from '@ferrocast/ui'
+import { Dialog, LogoMark, Wordmark, cx, toast } from '@ferrocast/ui'
 import {
   accountIsPro,
   describeError,
@@ -218,12 +220,15 @@ function NavLink({
   active,
   onNavigate,
   seam = false,
+  rail = false,
 }: {
   item: NavItem
   active: boolean
   onNavigate?: () => void
   /** Pro: the active item carries the two-tone seam. */
   seam?: boolean
+  /** The folded sidebar: the icon alone, its name as a tooltip (and for screen readers). */
+  rail?: boolean
 }) {
   const Icon = item.icon
   return (
@@ -231,8 +236,9 @@ function NavLink({
       href={href(item.route)}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
+      title={rail ? item.label : undefined}
       className={cx(
-        'fc-press group relative flex h-10 items-center gap-3 rounded-control px-3 text-[15px] font-semibold transition-colors duration-150',
+        'fc-press group relative flex h-10 items-center gap-3 rounded-[6px] px-3 text-[15px] font-semibold whitespace-nowrap transition-colors duration-150',
         'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
         // The current page is plain to see: a Molten wash, a bar at its edge, bold Molten text.
         active
@@ -243,17 +249,55 @@ function NavLink({
       {seam && active && (
         <span
           aria-hidden="true"
-          className="fc-seam absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-[3px]"
+          className={cx(
+            'fc-seam absolute top-2 bottom-2 w-[3px] rounded-r-[3px]',
+            rail ? '-left-2.5' : '-left-3',
+          )}
         />
       )}
       <Icon
         size={19}
         weight={active ? 'fill' : 'regular'}
-        className={active ? 'text-[var(--fc-molten-text)]' : ''}
+        className={cx('shrink-0', active && 'text-[var(--fc-molten-text)]')}
       />
-      {item.label}
+      <span className={cx(rail ? 'sr-only' : 'min-w-0 truncate')}>{item.label}</span>
     </a>
   )
+}
+
+const NAV_KEY = 'fc-nav-folded'
+
+/**
+ * The sidebar folds to a rail of icons and back when its logo is clicked (owner's pick
+ * "A joined", 10 Nov); remembered on this computer. Folded by default: the Studio gets the
+ * room. Its width is `--fc-nav-w` on the page, for the content and the Studio's status bar.
+ */
+function useNavFold(): [boolean, () => void] {
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  // Before paint, so the Studio's status bar never starts at the other width.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--fc-nav-w', folded ? '60px' : '15rem')
+    return () => {
+      root.style.removeProperty('--fc-nav-w')
+    }
+  }, [folded])
+  const flip = () =>
+    setFolded((f) => {
+      try {
+        localStorage.setItem(NAV_KEY, f ? '0' : '1')
+      } catch {
+        // Private windows: it still folds, just isn't remembered.
+      }
+      return !f
+    })
+  return [folded, flip]
 }
 
 /** The chrome "PRO" mark by the logo, once Pro is on. */
@@ -342,6 +386,8 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const wide = useIsWide()
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleTheme } = useTheme()
   const [more, setMore] = useState(false)
+  const [folded, flipNav] = useNavFold()
+  const studio = route.name === 'studio'
   const notices = useLive((s) => s.notices)
   const remote = useLive((s) => s.remote)
   const conn = useLive((s) => s.conn)
@@ -415,66 +461,143 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-bg px-3 pt-4 pb-3 lg:flex">
+      <aside
+        aria-label="Sidebar"
+        className={cx(
+          'fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden border-r border-line bg-bg pt-3 pb-3 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none lg:flex',
+          // From state, not the page variable: right on the first paint, no slide on load.
+          folded ? 'w-[60px] px-2.5' : 'w-60 px-3',
+        )}
+      >
         {isPro && (
           <motion.span
             // Remounts when the unlock closes, so the new `initial` draws it down once.
             key={seamDraw ? 'draw' : 'still'}
             aria-hidden="true"
             data-testid="pro-seam"
-            className="fc-seam pointer-events-none absolute inset-y-0 -right-px w-px origin-top opacity-85"
+            className="fc-seam pointer-events-none absolute inset-y-0 right-0 w-px origin-top opacity-85"
             initial={seamDraw && !reduce ? { scaleY: 0 } : false}
             animate={{ scaleY: 1 }}
             transition={{ duration: 0.7, delay: 0.12, ease: [0.65, 0, 0.35, 1] }}
           />
         )}
-        <div className="mb-6 flex items-center gap-2 px-2">
-          <a
-            href="#/home"
-            className="flex items-center focus-visible:outline-none"
-            aria-label="Ferrocast home"
+        <div className={cx('mb-5 flex items-center gap-2', folded ? 'px-0' : 'px-1')}>
+          {/* The logo folds the sidebar to icons and back (Home is the first item below). */}
+          <button
+            type="button"
+            onClick={flipNav}
+            aria-expanded={!folded}
+            aria-label={folded ? 'Show the menu' : 'Hide the menu'}
+            title={folded ? 'Show the menu' : 'Hide the menu'}
+            className={cx(
+              'fc-press group flex h-10 items-center gap-2 rounded-[6px] px-2 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              folded ? 'w-10 justify-center px-0' : 'min-w-0 flex-1',
+            )}
           >
-            <Wordmark size="sm" />
-          </a>
-          {isPro && <ProMark />}
+            {folded ? (
+              <LogoMark size={24} />
+            ) : (
+              <>
+                <Wordmark size="sm" />
+                <SidebarSimple
+                  size={17}
+                  aria-hidden
+                  className="ml-auto shrink-0 text-text-3 group-hover:text-text"
+                />
+              </>
+            )}
+          </button>
+          {isPro && !folded && <ProMark />}
         </div>
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {nav.map((i) => (
-            <NavLink key={i.label} item={i} active={isActive(i)} seam={isPro} />
+            <NavLink key={i.label} item={i} active={isActive(i)} seam={isPro} rail={folded} />
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-2 px-1">
-          {demo && <DemoNote />}
-          <UpdateNavItem />
-          {showAccount && account ? (
-            <SidebarAccount
-              view={account}
-              pro={isPro}
-              planLine={proView?.active ? proPlanLine(proView) : null}
-              utils={{ openInBrowser: browser.open, theme, toggleTheme, themePref, setThemePref }}
-            />
-          ) : (
-            <>
-              {isPro && proView && <AccountChip pro={proView} />}
-              <OpenInBrowser />
+        {folded ? (
+          <div className="mt-auto flex flex-col items-center gap-1">
+            {demo && (
+              // Folded, demo mode still says so: a small mark that opens the sidebar's note.
               <button
                 type="button"
-                onClick={toggleTheme}
-                className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[14.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                onClick={flipNav}
+                aria-label="Demo mode: a simulated stream"
+                title="Demo mode: a simulated stream"
+                className="fc-press mb-1 rounded-full border border-accent-line bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.06em] text-accent-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
-                <ThemeIcon size={17} />
-                {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                DEMO
               </button>
-            </>
-          )}
-        </div>
+            )}
+            <UpdateNavItem rail />
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              className="fc-press grid size-10 place-items-center rounded-[6px] text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <ThemeIcon size={18} />
+            </button>
+            {/* The account and Pro live in the open sidebar: this opens it. */}
+            <button
+              type="button"
+              onClick={flipNav}
+              aria-label={account?.state === 'signed_in' ? 'Your account' : 'Sign in and Pro'}
+              title={account?.state === 'signed_in' ? 'Your account' : 'Sign in and Pro'}
+              className="fc-press grid size-10 place-items-center rounded-[6px] text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              {account?.state === 'signed_in' ? (
+                <AccountAvatar view={account} pro={isPro} />
+              ) : (
+                <UserCircle size={22} />
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-auto flex flex-col gap-2 px-1">
+            {demo && <DemoNote />}
+            <UpdateNavItem />
+            {showAccount && account ? (
+              <SidebarAccount
+                view={account}
+                pro={isPro}
+                planLine={proView?.active ? proPlanLine(proView) : null}
+                utils={{ openInBrowser: browser.open, theme, toggleTheme, themePref, setThemePref }}
+              />
+            ) : (
+              <>
+                {isPro && proView && <AccountChip pro={proView} />}
+                <OpenInBrowser />
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="fc-press flex h-9 items-center gap-2.5 rounded-control px-2 text-[14.5px] font-medium text-text-3 hover:bg-surface-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                >
+                  <ThemeIcon size={17} />
+                  {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </aside>
 
-      <div className="lg:pl-60">
+      <div
+        className={cx(
+          'transition-[padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
+          folded ? 'lg:pl-[60px]' : 'lg:pl-60',
+        )}
+      >
         {/* Top bar */}
         <header
           ref={headerRef}
-          className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm"
+          className={cx(
+            'sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm',
+            // The Studio on a computer starts at its own one-row header (owner, 10 Nov): no
+            // platform strip or Panic above it. Hidden, not removed, so Panic's shortcut still
+            // works there.
+            studio && 'lg:hidden',
+          )}
         >
           {remote && <RemoteStrip remote={remote} />}
           <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
@@ -564,9 +687,12 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           className={cx(
             'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7',
             // Full-width screens (the Studio's desk fills the window) keep a small gap below.
-            wide
-              ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
-              : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
+            // The Studio's desk sits close to the window's edges, as a work screen.
+            studio && wide
+              ? 'max-w-none lg:px-3 lg:pt-2 lg:pb-[calc(0.5rem+var(--fc-statusbar,0px))]'
+              : wide
+                ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
+                : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
           )}
         >
           {children}

@@ -45,7 +45,7 @@ export function OnAirButton({
             <b />
           </span>
         )}
-        {tag} <span className="font-mono text-[13.5px] tabular-nums">{time}</span>
+        {tag} <span className="font-mono text-[12.5px] tabular-nums">{time}</span>
       </>
     )
   else if (state === 'starting') face = 'Starting…'
@@ -54,9 +54,9 @@ export function OnAirButton({
     face = (
       <>
         {kind === 'rec' ? (
-          <RecordIcon size={17} weight="bold" aria-hidden />
+          <RecordIcon size={15} weight="bold" aria-hidden />
         ) : (
-          <Broadcast size={17} weight="bold" aria-hidden />
+          <Broadcast size={15} weight="bold" aria-hidden />
         )}
         {idle}
       </>
@@ -79,12 +79,12 @@ export function OnAirButton({
       title={title ?? label}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={cx('fc-air', 'h-10 px-3.5 text-[15px]')}
+      className={cx('fc-air', 'h-8 px-3 text-[13.5px]')}
     >
       {face}
       {state === 'starting' && (
         <svg aria-hidden className="fc-air-trace" preserveAspectRatio="none" viewBox="0 0 100 100">
-          <rect x="1" y="1" width="98" height="98" rx="10" pathLength="200" />
+          <rect x="1" y="1" width="98" height="98" rx="6" pathLength="200" />
         </svg>
       )}
     </button>

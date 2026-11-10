@@ -37,7 +37,7 @@ const TONE: Record<LogLevel, string> = {
 
 export function LogDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} onClose={onClose} size="lg" title="Log">
+    <Dialog compact open={open} onClose={onClose} size="lg" title="Log">
       {open && <LogBody />}
     </Dialog>
   )

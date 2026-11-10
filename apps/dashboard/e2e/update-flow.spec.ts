@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { open, openSidebar } from './helpers'
 
 // The visible update flow (demo engine): the sidebar offers it, the dialog shows what's new,
 // Update now downloads with progress, then Restart to finish. Never while live.
 test('sidebar update: notes, progress, restart; blocked while live', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 860 })
+  await openSidebar(page)
   await open(page, 'home', 'autoplay=0&latency=0')
   const nav = page.locator('aside').getByTestId('update-nav')
   await expect(nav).toContainText('Update available')
