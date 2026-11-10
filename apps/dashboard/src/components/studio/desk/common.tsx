@@ -548,6 +548,9 @@ export const FILTERS: FilterEntry[] = [
   },
 ]
 
+/** Filters with nothing to set: their row is the whole of them (no body, no Reset). */
+export const NO_FORM = new Set(['ferrocast_freeze', 'freeze_filter'])
+
 export const FILTER_LABEL: Record<string, string> = Object.fromEntries(
   FILTERS.flatMap((f) => f.kinds.map((k) => [k, f.label])),
 )

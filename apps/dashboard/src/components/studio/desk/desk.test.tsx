@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { DECAY, Meter, decayed, meterPct, toDb, toPos } from './mixer'
 import { KIND_GROUPS, KindTile, PLAIN_TONE, kindTone } from './common'
 import { topLayerItem } from './scenes'
-import { FILTER_OF } from './common'
+import { FILTER_OF, NO_FORM } from './common'
 import { cloneChoices } from './add-source'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
@@ -495,5 +495,13 @@ describe('Source Clone (built in)', () => {
     expect(cloneChoices(['Cam', 'Game'], ['Main', 'BRB'], 'Main')).toEqual(['Cam', 'Game', 'BRB'])
     expect(cloneChoices([], ['Main'], 'Main')).toEqual([])
     expect(cloneChoices(['Cam'], [], 'Main')).toEqual(['Cam'])
+  })
+})
+
+describe('filters with nothing to set', () => {
+  it('Freeze is only its row: no body saying “No options”, no Reset', () => {
+    expect(NO_FORM.has('ferrocast_freeze')).toBe(true)
+    expect(NO_FORM.has('freeze_filter')).toBe(true)
+    expect(NO_FORM.has('chroma_key_filter_v2')).toBe(false)
   })
 })

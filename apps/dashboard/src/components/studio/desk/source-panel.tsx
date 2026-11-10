@@ -44,7 +44,15 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
-import { FILTERS, FILTER_OF, KindTile, SOUND_ONLY, useDesk, type DrawerTab } from './common'
+import {
+  FILTERS,
+  FILTER_OF,
+  KindTile,
+  NO_FORM,
+  SOUND_ONLY,
+  useDesk,
+  type DrawerTab,
+} from './common'
 import {
   DUCK_FILTER,
   VERDICT_WORDS,
@@ -898,9 +906,9 @@ function Filters({
                     </span>
                     <button
                       type="button"
-                      aria-expanded={open === f.name}
+                      aria-expanded={NO_FORM.has(f.kind) ? undefined : open === f.name}
                       onClick={() => {
-                        setOpen(open === f.name ? null : f.name)
+                        setOpen(open === f.name || NO_FORM.has(f.kind) ? null : f.name)
                         setExtra(false)
                       }}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
@@ -916,7 +924,7 @@ function Filters({
                             'Filter')}
                       </span>
                     </button>
-                    {open === f.name && (
+                    {open === f.name && !NO_FORM.has(f.kind) && (
                       <IconButton
                         size="sm"
                         variant="ghost"
@@ -989,7 +997,7 @@ function Filters({
                       }
                     />
                   </div>
-                  {open === f.name && (
+                  {open === f.name && !NO_FORM.has(f.kind) && (
                     <div className="border-t border-line px-3 pt-2.5 pb-3">
                       <FilterSettings
                         key={fresh}
