@@ -16,6 +16,7 @@ import {
   Crop,
   Cube,
   Ear,
+  Equalizer,
   FilmStrip,
   FolderSimple,
   FrameCorners,
@@ -308,6 +309,8 @@ export const KIND_GROUPS: KindGroup[] = [
       // Exeldro's Source Clone, built in: pick what it shows in its settings.
       // A "Starting in 4:59" countdown (the OBS countdown plugins, built in).
       { key: 'countdown', label: 'Countdown', icon: Timer, kinds: ['ferrocast_countdown'] },
+      // Bars that move with the sound (the OBS audio visualizer plugins, built in).
+      { key: 'bars', label: 'Sound bars', icon: Equalizer, kinds: ['ferrocast_visualizer'] },
       {
         key: 'clone',
         label: 'Copy of a source',

@@ -522,3 +522,10 @@ describe('Countdown (built in)', () => {
     expect(timer?.label).toBe('Countdown')
   })
 })
+
+describe('Sound bars (built in)', () => {
+  it('are among the sources to build', () => {
+    const build = KIND_GROUPS.find((g) => g.label === 'Build')
+    expect(build?.entries.find((e) => e.key === 'bars')?.kinds).toEqual(['ferrocast_visualizer'])
+  })
+})
