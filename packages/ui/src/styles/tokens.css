@@ -27,6 +27,8 @@
   --fc-stage: #23272e;
   --fc-line: #252a31;
   --fc-line-strong: #343a44;
+  /* A Studio panel's heading band and the line under it (owner's pick "A joined", 10 Nov). */
+  --fc-dock-head: #191c22;
 
   /* Text. All pass WCAG AA on --fc-bg and --fc-surface-2; the quieter two stay close to the
      main one so nothing reads faint (owner, 26 Oct). */
@@ -143,6 +145,7 @@
   --fc-stage: #e2e4ea;
   --fc-line: #dfe2e8;
   --fc-line-strong: #c9ced7;
+  --fc-dock-head: #e8ebef;
   --fc-text: #0e1014;
   --fc-text-2: #222832;
   --fc-text-3: #3c434e;
@@ -207,6 +210,7 @@
     --fc-stage: #e2e4ea;
     --fc-line: #dfe2e8;
     --fc-line-strong: #c9ced7;
+  --fc-dock-head: #e8ebef;
     --fc-text: #0e1014;
     --fc-text-2: #222832;
     --fc-text-3: #3c434e;

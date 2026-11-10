@@ -17,6 +17,9 @@ export interface DialogProps {
   flush?: boolean
   /** Bottom sheet on phones, centred card above 640 px. */
   sheetOnMobile?: boolean
+  /** The Studio's compact look (owner's pick, design A, 10 Nov): a grey heading band, a
+   *  smaller title, tighter padding, small corners. */
+  compact?: boolean
 }
 
 /** Open dialogs; the page under them doesn't scroll while any is open. */
@@ -58,6 +61,7 @@ export function Dialog({
   size = 'md',
   flush = false,
   sheetOnMobile = true,
+  compact = false,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -128,38 +132,78 @@ export function Dialog({
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className={cx(
               'pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop outline-none',
-              sheetOnMobile ? 'rounded-t-[20px] sm:rounded-panel' : 'mx-4 rounded-panel',
+              compact
+                ? sheetOnMobile
+                  ? 'rounded-t-[14px] sm:rounded-[7px]'
+                  : 'mx-4 rounded-[7px]'
+                : sheetOnMobile
+                  ? 'rounded-t-[20px] sm:rounded-panel'
+                  : 'mx-4 rounded-panel',
               width,
             )}
           >
-            <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3 sm:px-6">
+            <div
+              className={cx(
+                'flex justify-between',
+                compact
+                  ? 'min-h-11 flex-none items-center gap-3 border-b border-line-strong bg-dock-head py-2 pr-2 pl-4'
+                  : 'items-start gap-4 px-5 pt-5 pb-3 sm:px-6',
+              )}
+            >
               <div className="min-w-0">
-                <h2 className="font-display text-lg font-semibold tracking-tight text-text">
+                <h2
+                  className={cx(
+                    'font-display tracking-tight text-text',
+                    compact ? 'text-[15px] font-bold' : 'text-lg font-semibold',
+                  )}
+                >
                   {title}
                 </h2>
                 {description && (
-                  <div className="mt-1 text-sm leading-relaxed text-text-2">{description}</div>
+                  <div
+                    className={cx(
+                      'text-text-2',
+                      compact ? 'mt-0.5 text-[12.5px]' : 'mt-1 text-sm leading-relaxed',
+                    )}
+                  >
+                    {description}
+                  </div>
                 )}
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="fc-press -mt-1 -mr-2 inline-flex size-9 shrink-0 items-center justify-center rounded-control text-text-3 hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className={cx(
+                  'fc-press inline-flex shrink-0 items-center justify-center text-text-3 hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  compact ? 'size-7 rounded-[5px]' : '-mt-1 -mr-2 size-9 rounded-control',
+                )}
               >
-                <X size={18} />
+                <X size={compact ? 15 : 18} />
               </button>
             </div>
             {children &&
               (flush ? (
                 <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
               ) : (
-                <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 sm:px-6">
+                <div
+                  className={cx(
+                    'relative min-h-0 flex-1 overflow-y-auto overscroll-contain',
+                    compact ? 'px-4 py-3' : 'px-5 pb-5 sm:px-6',
+                  )}
+                >
                   {children}
                 </div>
               ))}
             {footer && (
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2 px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6">
+              <div
+                className={cx(
+                  'flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2',
+                  compact
+                    ? 'px-3 py-2 pb-[max(8px,env(safe-area-inset-bottom))] [&_button]:h-8 [&_button]:rounded-[6px] [&_button]:px-3 [&_button]:text-[13px]'
+                    : 'px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6',
+                )}
+              >
                 {footer}
               </div>
             )}

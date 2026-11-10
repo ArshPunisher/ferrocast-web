@@ -11,7 +11,7 @@ import { cx } from '../cx'
 import { InfoTip } from './infotip'
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-ghost'
-type Size = 'sm' | 'md' | 'lg'
+type Size = 'xs' | 'sm' | 'md' | 'lg'
 
 const variants: Record<Variant, string> = {
   primary:
@@ -27,6 +27,8 @@ const variants: Record<Variant, string> = {
 }
 
 const sizes: Record<Size, string> = {
+  // The compact Studio's bars and panels (owner's pick "A joined", 10 Nov).
+  xs: 'h-7 px-2.5 text-[13px] gap-1.5 rounded-[6px]!',
   sm: 'h-8 px-3 text-[14.5px] gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
   lg: 'h-12 px-5 text-[16px] gap-2.5',
@@ -81,7 +83,14 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   { label, variant = 'ghost', size = 'md', className, children, type, ...rest },
   ref,
 ) {
-  const dim = size === 'sm' ? 'size-8' : size === 'lg' ? 'size-12' : 'size-10'
+  const dim =
+    size === 'xs'
+      ? 'size-[26px] rounded-[5px]!'
+      : size === 'sm'
+        ? 'size-8'
+        : size === 'lg'
+          ? 'size-12'
+          : 'size-10'
   return (
     <button
       ref={ref}

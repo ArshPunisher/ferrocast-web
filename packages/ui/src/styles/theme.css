@@ -8,6 +8,7 @@
   --color-inset: var(--fc-surface-inset);
   --color-line: var(--fc-line);
   --color-line-strong: var(--fc-line-strong);
+  --color-dock-head: var(--fc-dock-head);
   --color-text: var(--fc-text);
   --color-text-2: var(--fc-text-2);
   --color-text-3: var(--fc-text-3);
