@@ -37,6 +37,20 @@ export function sandboxed(html: string): string {
   return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${csp}"><meta charset="utf-8">${html}`
 }
 
+/** Where the engine serves a panel's page (`GET /plugin-panel/{id}`), when this dashboard is
+ *  the engine's own (the app, or Open in browser); else null and the page goes in `srcdoc`.
+ *  A `srcdoc` frame is held to this page's policy too, which runs no inline scripts: in the
+ *  app no panel's buttons worked (10 Nov). The engine's page carries its own policy. */
+export function panelPageUrl(base: string, id: string, here: string): string | null {
+  try {
+    const engine = new URL(base || here, here)
+    if (engine.origin !== new URL(here).origin) return null
+    return `${engine.origin}/plugin-panel/${encodeURIComponent(id)}`
+  } catch {
+    return null
+  }
+}
+
 /** A panel plugin's page in a sandboxed frame: its own origin-less world, no network; it asks
  *  for steps by message and hears back whether they ran. */
 function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
@@ -44,6 +58,7 @@ function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
   const api = useMemo(() => pluginsApi(client), [client])
   const frame = useRef<HTMLIFrameElement>(null)
   const page = useResource(() => api.panel(p.id), [client, p.id])
+  const src = panelPageUrl(client.baseUrl, p.id, location.href)
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow
@@ -73,7 +88,7 @@ function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
           title={p.name}
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
-          srcDoc={sandboxed(page.data.html)}
+          {...(src ? { src } : { srcDoc: sandboxed(page.data.html) })}
           onLoad={() =>
             frame.current?.contentWindow?.postMessage(
               { type: 'hello', actions: page.data?.actions ?? [] },
