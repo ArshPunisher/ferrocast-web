@@ -29,6 +29,7 @@ import {
   Shapes,
   ShieldCheck,
   SlidersHorizontal,
+  Snowflake,
   Slideshow,
   Sparkle,
   SpeakerHigh,
@@ -529,6 +530,12 @@ export const FILTERS: FilterEntry[] = [
     label: 'Scroll',
     help: 'Moves it sideways or up, on a loop.',
     icon: ArrowsLeftRight,
+  },
+  {
+    kinds: ['ferrocast_freeze', 'freeze_filter'],
+    label: 'Freeze',
+    help: 'Holds the picture still. Switch it off to move again.',
+    icon: Snowflake,
   },
 ]
 
