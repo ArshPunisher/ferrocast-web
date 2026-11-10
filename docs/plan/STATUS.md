@@ -1,5 +1,11 @@
 # Status
 
+## 10 Nov 2026 (the 3.1.0 checks on the Windows PC, branch own-engine-only)
+
+- Panel plugins: their scripts never ran in the app. A `srcdoc` frame is held to the dashboard's own policy (`script-src 'self'`) as well as its own, so no panel button worked anywhere but the demo. The frame now loads the engine's `/plugin-panel/{id}` page (its own policy, still `sandbox="allow-scripts"`) when the dashboard is the engine's own; the demo keeps `srcdoc` (`plugins-settings.tsx` `panelPageUrl`, tested). Checked in WebView2: hello, a step and "done" go through; fetches and the parent stay closed.
+- Stats: "Encoder: NVIDIA graphics card" (or Intel, AMD, Software…) under the outputs while one runs, from the new `encoder` in `/studio/engine/stats` (`stats-panel.tsx` `encoderName`, tested).
+- Checked on Windows (WebView2, 125%): Settings layout at 100%/125%/short/375 px, Ferrocast blue picks, the 3-step setup, no Mac words left. Engine fixes and the rest of the run: `../ferrocast/docs/plan/WINDOWS-HANDOFF.md` §8.
+
 ## 8 Nov 2026, night (the Add dialog on Windows, branch own-engine-only)
 
 - Add to <scene> opens each kind at once: every device list (cameras, screens, windows, mics) is read ahead when the Studio settles and when the dialog opens, kept for the app's life, shown straight away and read again behind it (`desk/kind-cache.ts`, tested). A "Look again" button, and coming back to the app looks again by itself.
