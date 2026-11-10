@@ -1199,7 +1199,7 @@ export function Settings({ section }: { section?: string | undefined }) {
             <Section
               id="plugins"
               title="Plugins"
-              description="Effects others make for your picture."
+              description="Effects, logic and panels others make."
             >
               <PluginsSettings />
             </Section>

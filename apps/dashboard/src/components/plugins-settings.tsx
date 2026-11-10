@@ -1,13 +1,91 @@
 // Settings › Plugins (layout A): effects others make, added as a `.zip`. Safe by design (an
 // effect only changes the picture), checked by the PC before it's added.
 
-import { useRef, useState } from 'react'
-import { Trash, UploadSimple } from '@phosphor-icons/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AppWindow, Trash, UploadSimple } from '@phosphor-icons/react'
 import { describeError, pluginsApi, type Plugin } from '@ferrocast/api'
-import { Button, InfoTip, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
+import { Button, Dialog, IconButton, InfoTip, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
 import { LoadError } from './Panel'
 import { Group, Row } from './settings-kit'
 import { useClient, useResource } from '../lib/hooks'
+
+/** What each step a plugin may ask for is called, for "Can: …". */
+const ACTION_WORDS: Record<string, string> = {
+  scene: 'switch scenes',
+  show: 'show sources',
+  hide: 'hide sources',
+  filter: 'turn filters on or off',
+  save_replay: 'save the replay',
+  record: 'record',
+  chat: 'say in chat',
+}
+
+const KIND_WORDS: Record<string, string> = { effect: 'Effect', logic: 'Logic', panel: 'Panel' }
+
+/** "Can switch scenes and say in chat." (nothing for an effect). */
+export function canWords(actions: string[]): string | null {
+  const w = actions.map((a) => ACTION_WORDS[a] ?? a)
+  if (w.length === 0) return null
+  const list = w.length === 1 ? w[0] : `${w.slice(0, -1).join(', ')} and ${w[w.length - 1]}`
+  return `Can ${list}.`
+}
+
+/** The page, with nothing allowed but its own inline code: no network, no outside files. */
+export function sandboxed(html: string): string {
+  const csp =
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"
+  return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${csp}"><meta charset="utf-8">${html}`
+}
+
+/** A panel plugin's page in a sandboxed frame: its own origin-less world, no network; it asks
+ *  for steps by message and hears back whether they ran. */
+function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
+  const client = useClient()
+  const api = useMemo(() => pluginsApi(client), [client])
+  const frame = useRef<HTMLIFrameElement>(null)
+  const page = useResource(() => api.panel(p.id), [client, p.id])
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const win = frame.current?.contentWindow
+      // Only this panel's own frame (a sandboxed frame's origin is "null").
+      if (!win || e.source !== win) return
+      const data = e.data as { type?: unknown; step?: unknown } | null
+      if (!data || data.type !== 'act' || typeof data.step !== 'object' || data.step === null)
+        return
+      api.act(p.id, data.step).then(
+        () => win.postMessage({ type: 'done' }, '*'),
+        (err: unknown) =>
+          win.postMessage({ type: 'error', message: describeError(err).message }, '*'),
+      )
+    }
+    addEventListener('message', onMessage)
+    return () => removeEventListener('message', onMessage)
+  }, [api, p.id])
+  return (
+    <Dialog open onClose={onClose} title={p.name} size="lg">
+      {page.error ? (
+        <LoadError error={page.error} onRetry={page.reload} />
+      ) : !page.data ? (
+        <Skeleton className="h-64" />
+      ) : (
+        <iframe
+          ref={frame}
+          title={p.name}
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+          srcDoc={sandboxed(page.data.html)}
+          onLoad={() =>
+            frame.current?.contentWindow?.postMessage(
+              { type: 'hello', actions: page.data?.actions ?? [] },
+              '*',
+            )
+          }
+          className="h-[min(60vh,480px)] w-full rounded-control border border-line bg-white"
+        />
+      )}
+    </Dialog>
+  )
+}
 
 /** One plugin: its name and version, who made it and what it does, its switch and Remove. */
 function PluginRow({
@@ -22,7 +100,15 @@ function PluginRow({
   onRemove: () => void
 }) {
   const [sure, setSure] = useState(false)
-  const about = [p.author && `By ${p.author}`, p.description].filter(Boolean).join(' · ')
+  const [open, setOpen] = useState(false)
+  const about = [
+    KIND_WORDS[p.kind] ?? p.kind,
+    p.author && `By ${p.author}`,
+    p.description,
+    canWords(p.actions ?? []),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <Row
       label={
@@ -38,6 +124,17 @@ function PluginRow({
       }
       control={
         <>
+          {p.kind === 'panel' && (
+            <IconButton
+              size="sm"
+              label={`Open ${p.name}`}
+              disabled={busy || !p.on || !!p.problem}
+              onClick={() => setOpen(true)}
+            >
+              <AppWindow size={15} />
+            </IconButton>
+          )}
+          {open && <PanelDialog p={p} onClose={() => setOpen(false)} />}
           {/* Asks once: the bin, then a red "Remove" (as a filter's). */}
           <button
             type="button"
@@ -96,7 +193,10 @@ export function PluginsSettings() {
       toast({
         tone: 'ok',
         message: `${p.name} added.`,
-        hint: 'Find it in Effects, under a source’s filters.',
+        hint:
+          p.kind === 'effect'
+            ? 'Find it in Effects, under a source’s filters.'
+            : canWords(p.actions ?? []),
       })
     })
 
@@ -107,7 +207,8 @@ export function PluginsSettings() {
           <span className="flex items-center gap-1">
             Installed
             <InfoTip>
-              Plugins add effects to the picture. They can’t read your files, keys or accounts.
+              Effects for the picture, logic that answers events, and panels with buttons. They
+              can’t read your files, keys or accounts, and do only what they list.
             </InfoTip>
           </span>
         }
@@ -140,7 +241,8 @@ export function PluginsSettings() {
             <span className="flex items-center gap-1">
               Add a plugin
               <InfoTip>
-                For plugin makers: a .zip with a plugin.json and an effect.wgsl. Up to 2 MB.
+                For plugin makers: a .zip with a plugin.json and an effect (.wgsl), a module (.wasm)
+                or a panel (.html). Up to 2 MB.
               </InfoTip>
             </span>
           }

@@ -10,7 +10,9 @@ import { NOT_MINE, clone, requireObj, type Routed } from './host'
 
 const MAX_ENTRY = 512 * 1024
 const MAX_ENTRIES = 20
-const ALLOWED = ['json', 'wgsl', 'md', 'txt', 'png']
+const ALLOWED = ['json', 'wgsl', 'md', 'txt', 'png', 'wasm', 'html']
+const KIND_FILE: Record<string, string> = { effect: 'wgsl', logic: 'wasm', panel: 'html' }
+const ACTIONS = ['scene', 'show', 'hide', 'filter', 'save_replay', 'record', 'chat']
 const ID = /^[a-z][a-z0-9._-]{2,63}$/
 
 /** The plugin the demo starts with. */
@@ -21,20 +23,48 @@ const SAMPLE: Plugin = {
   author: 'Ferrocast',
   description: 'Thin lines across the picture, like an old monitor.',
   kind: 'effect',
+  actions: [],
   on: true,
   problem: null,
 }
+
+/** A panel the demo starts with: two buttons. */
+const PANEL: Plugin = {
+  id: 'com.ferrocast.sample.buttons',
+  name: 'Big buttons',
+  version: '1.0.0',
+  author: 'Ferrocast',
+  description: 'Two big buttons for your stream deck screen.',
+  kind: 'panel',
+  actions: ['save_replay', 'scene'],
+  on: true,
+  problem: null,
+}
+
+const PANEL_HTML = `<!doctype html><style>body{font:600 15px system-ui;margin:12px;display:flex;gap:8px;color:#222}button{flex:1;padding:18px;border-radius:12px;border:0;background:#1f5aff;color:#fff;font:inherit}</style>
+<button id=r>Save replay</button><button id=s>Go to BRB</button><p id=o></p>
+<script>
+const say=(t)=>document.getElementById('o').textContent=t
+r.onclick=()=>parent.postMessage({type:'act',step:{type:'save_replay'}},'*')
+s.onclick=()=>parent.postMessage({type:'act',step:{type:'scene',name:'BRB'}},'*')
+addEventListener('message',(e)=>{if(e.data&&e.data.type==='done')say('Done.');if(e.data&&e.data.type==='error')say(e.data.message)})
+</script>`
 
 function refused(status: number, code: string, message: string, hint: string): HttpError {
   return new HttpError(status, code, message, hint)
 }
 
 export class DemoPlugins {
-  private list: Plugin[] = [clone(SAMPLE)]
+  private list: Plugin[] = [clone(PANEL), clone(SAMPLE)]
+  private pages = new Map<string, { html: string; actions: string[] }>([
+    [PANEL.id, { html: PANEL_HTML, actions: PANEL.actions }],
+  ])
 
   /** The effects of the plugins that are on (the Effect list shows them). */
   effects(): { id: string; name: string }[] {
-    return this.list.filter((p) => p.on && !p.problem).map((p) => ({ id: p.id, name: p.name }))
+    return this.list
+      .filter((p) => p.on && !p.problem && p.kind === 'effect')
+      .map((p) => ({ id: p.id, name: p.name }))
   }
 
   private find(id: string): Plugin {
@@ -95,7 +125,7 @@ export class DemoPlugins {
         throw refused(
           415,
           'plugin_file_type',
-          `The plugin holds "${name}"; plugins hold only .json, .wgsl, .md, .txt and .png files.`,
+          `The plugin holds "${name}"; plugins hold only .json, .wgsl, .wasm, .html, .md, .txt and .png files.`,
           'Plugins can’t bring programs. Ask its maker for an effect plugin.',
         )
       const bytes = entries[raw] ?? new Uint8Array()
@@ -130,11 +160,62 @@ export class DemoPlugins {
       throw wrong('its name is empty or longer than 60 characters')
     if (!text('version').trim() || text('version').length > 20)
       throw wrong('its version is empty or longer than 20 characters')
-    if (text('kind') !== 'effect')
-      throw wrong(`it’s a "${text('kind')}" plugin; this Ferrocast takes effect plugins`)
-    const effect = files.get(text('effect'))
-    if (!text('effect').endsWith('.wgsl') || !effect)
-      throw notOne(`its effect "${text('effect')}" isn’t in it`)
+    const kind = text('kind')
+    const ext = KIND_FILE[kind]
+    if (!ext)
+      throw wrong(`it’s a "${kind}" plugin; this Ferrocast takes effect, logic and panel plugins`)
+    const actions = Array.isArray(m.actions) ? (m.actions as unknown[]).map(String) : []
+    if (kind === 'effect' && actions.length) throw wrong('an effect can’t ask for actions')
+    const bad = actions.find((a) => !ACTIONS.includes(a))
+    if (bad) throw wrong(`it asks for "${bad}", which isn’t an action plugins can have`)
+    for (const n of files.keys()) {
+      const e = n.split('.').pop()?.toLowerCase() ?? ''
+      if (!['json', 'md', 'txt', 'png', ext].includes(e))
+        throw refused(
+          415,
+          'plugin_file_type',
+          `The plugin holds "${n}", which a ${kind} plugin doesn’t use.`,
+          'Ask its maker for a plugin without it.',
+        )
+    }
+    const key = kind === 'logic' ? 'module' : kind === 'panel' ? 'panel' : 'effect'
+    const main = files.get(text(key))
+    if (!text(key).endsWith(`.${ext}`) || !main)
+      throw notOne(`its ${kind} "${text(key)}" isn’t in it`)
+    const done = (): Plugin => {
+      const p: Plugin = {
+        id: text('id'),
+        name: text('name'),
+        version: text('version'),
+        author: text('author').slice(0, 60),
+        description: text('description').slice(0, 200),
+        kind,
+        actions,
+        on: true,
+        problem: null,
+      }
+      this.list = [...this.list.filter((x) => x.id !== p.id), p].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      )
+      return clone(p)
+    }
+    if (kind === 'logic') {
+      // The PC loads the module in its sandbox; the demo checks it's WebAssembly at all.
+      const magic = [0, 0x61, 0x73, 0x6d]
+      if (!magic.every((b, i) => main[i] === b))
+        throw refused(
+          422,
+          'plugin_module_broken',
+          'The plugin’s module doesn’t work: its module isn’t WebAssembly.',
+          'Ask its maker for a version that does.',
+        )
+      return done()
+    }
+    if (kind === 'panel') {
+      this.pages.set(text('id'), { html: strFromU8(main), actions })
+      return done()
+    }
+    const effect = main
     const code = strFromU8(effect).replace(/\/\/.*$/gm, '')
     const broken = (why: string) =>
       refused(
@@ -146,20 +227,7 @@ export class DemoPlugins {
     if (/\b(loop|while)\b/.test(code))
       throw broken('it uses loop or while; plugin effects use only for loops with a fixed count')
     if (!/\bfn\s+effect\s*\(/.test(code)) throw broken('it has no effect function')
-    const p: Plugin = {
-      id: text('id'),
-      name: text('name'),
-      version: text('version'),
-      author: text('author').slice(0, 60),
-      description: text('description').slice(0, 200),
-      kind: 'effect',
-      on: true,
-      problem: null,
-    }
-    this.list = [...this.list.filter((x) => x.id !== p.id), p].sort((a, b) =>
-      a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-    )
-    return clone(p)
+    return done()
   }
 
   route(method: string, seg: string[], body: unknown): Routed | Promise<Routed> {
@@ -173,9 +241,31 @@ export class DemoPlugins {
       p.on = b.on
       return clone(p)
     }
+    if (seg.length === 3 && seg[2] === 'panel' && method === 'GET') {
+      const p = this.find(seg[1] ?? '')
+      const page = this.pages.get(p.id)
+      if (p.kind !== 'panel' || !page) return this.find('')
+      if (!p.on) throw new HttpError(422, 'unavailable', `${p.name} is off: turn it on first.`)
+      return clone(page)
+    }
+    if (seg.length === 3 && seg[2] === 'act' && method === 'POST') {
+      const p = this.find(seg[1] ?? '')
+      if (p.kind !== 'panel') return this.find('')
+      if (!p.on) throw new HttpError(422, 'unavailable', `${p.name} is off: turn it on first.`)
+      const type = String(requireObj(body).type ?? '')
+      if (!p.actions.includes(type))
+        throw new HttpError(
+          403,
+          'plugin_not_allowed',
+          `${p.name} isn’t allowed to do "${type}".`,
+          'Its plugin.json lists what it may do; ask its maker.',
+        )
+      return null
+    }
     if (seg.length === 2 && method === 'DELETE') {
       this.find(seg[1] ?? '')
       this.list = this.list.filter((x) => x.id !== seg[1])
+      this.pages.delete(seg[1] ?? '')
       return null
     }
     return NOT_MINE

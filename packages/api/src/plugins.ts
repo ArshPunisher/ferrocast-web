@@ -10,8 +10,10 @@ export interface Plugin {
   version: string
   author: string
   description: string
-  /** What it is: "effect" so far. */
+  /** What it is: "effect", "logic" (told about events) or "panel" (a page here). */
   kind: string
+  /** The steps it may do (a logic plugin's or panel's), as Automations names them. */
+  actions: string[]
   on: boolean
   /** Why it can't run now, or null. */
   problem: string | null
@@ -33,5 +35,14 @@ export function pluginsApi(client: FerroClient) {
       client.request<Plugin>('PUT', `/api/v1/plugins/${encodeURIComponent(id)}`, { on }),
     remove: (id: string) =>
       client.request<void>('DELETE', `/api/v1/plugins/${encodeURIComponent(id)}`),
+    /** A panel plugin's page, for a sandboxed frame. */
+    panel: (id: string) =>
+      client.request<{ html: string; actions: string[] }>(
+        'GET',
+        `/api/v1/plugins/${encodeURIComponent(id)}/panel`,
+      ),
+    /** A step a panel asked for (checked against what its plugin may do). */
+    act: (id: string, step: unknown) =>
+      client.request<void>('POST', `/api/v1/plugins/${encodeURIComponent(id)}/act`, step),
   }
 }

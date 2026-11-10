@@ -79,8 +79,8 @@ test('a file that isn’t a good plugin says why and adds nothing', async ({ pag
     await addFile(page, name, buffer)
     await expect(toasts(page).getByText(message).last()).toBeVisible()
   }
-  // Only the sample is there.
-  await expect(p.getByRole('switch')).toHaveCount(1)
+  // Only the samples are there.
+  await expect(p.getByRole('switch')).toHaveCount(2)
 })
 
 test('fits a 375 px phone', async ({ page }) => {
@@ -89,4 +89,51 @@ test('fits a 375 px phone', async ({ page }) => {
   await expect(page$(page).getByText('Scanlines')).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
   expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('a logic plugin says what it may do; a panel opens in a sandbox and asks for steps', async ({
+  page,
+}) => {
+  await open(page, 'settings/plugins', 'autoplay=0&latency=0')
+  const p = page$(page)
+  await expect(p.getByText('Big buttons', { exact: true })).toBeVisible()
+  // A logic plugin: a WebAssembly module and the steps it may ask for, shown.
+  const manifest = JSON.stringify({
+    id: 'com.ana.raid',
+    name: 'Raid scene',
+    version: '1.0.0',
+    kind: 'logic',
+    module: 'plugin.wasm',
+    actions: ['scene', 'chat'],
+  })
+  const wasm = new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0])
+  const zip = (files: Record<string, Uint8Array>) => Buffer.from(zipSync(files))
+  await addFile(page, 'raid.zip', zip({ 'plugin.json': strToU8(manifest), 'plugin.wasm': wasm }))
+  await expect(toasts(page).getByText('Raid scene added.')).toBeVisible()
+  await expect(p.getByText(/Logic · Can switch scenes and say in chat\./)).toBeVisible()
+  // Not WebAssembly, or asking for what plugins can't have: refused with why.
+  await addFile(
+    page,
+    'bad.zip',
+    zip({ 'plugin.json': strToU8(manifest.replace('raid', 'bad')), 'plugin.wasm': strToU8('MZ') }),
+  )
+  await expect(toasts(page).getByText(/isn’t WebAssembly/)).toBeVisible()
+  await addFile(
+    page,
+    'greedy.zip',
+    zip({
+      'plugin.json': strToU8(manifest.replace('"chat"', '"secrets"').replace('raid', 'greedy')),
+      'plugin.wasm': wasm,
+    }),
+  )
+  await expect(toasts(page).getByText(/isn’t an action plugins can have/)).toBeVisible()
+  // The panel: its page in a sandboxed frame, with no network.
+  await p.getByRole('button', { name: 'Open Big buttons' }).click()
+  const frame = page.frameLocator('iframe[title="Big buttons"]')
+  const el = page.locator('iframe[title="Big buttons"]')
+  await expect(el).toHaveAttribute('sandbox', 'allow-scripts')
+  await expect(el).toHaveAttribute('srcdoc', /Content-Security-Policy.*default-src 'none'/)
+  // A step it listed runs; the page hears "done".
+  await frame.getByRole('button', { name: 'Save replay' }).click()
+  await expect(frame.getByText('Done.')).toBeVisible()
 })
