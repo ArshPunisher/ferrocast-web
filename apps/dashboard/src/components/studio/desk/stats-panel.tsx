@@ -89,6 +89,22 @@ export function clock(ms: number): string {
 }
 
 /** Dropped frames as OBS shows them: the count and its share of all sent. */
+/** The encoder as people know it: the graphics card's maker, or software. Unknown ones as
+ *  FFmpeg names them. */
+export function encoderName(id: string): string {
+  const known: Record<string, string> = {
+    h264_nvenc: 'NVIDIA graphics card',
+    hevc_nvenc: 'NVIDIA graphics card',
+    h264_qsv: 'Intel graphics',
+    h264_amf: 'AMD graphics card',
+    h264_mf: 'Windows (Media Foundation)',
+    libx264: 'Software (x264)',
+    VideoToolbox: 'Mac hardware',
+    h264_videotoolbox: 'Mac hardware',
+  }
+  return known[id] ?? id
+}
+
 export function droppedText(dropped: number, frames: number): string {
   const pct = frames > 0 ? (dropped / frames) * 100 : 0
   return `${dropped} (${pct.toFixed(1)}%)`
@@ -195,6 +211,8 @@ export function StatsDialog({
   const e = stats?.engine
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
+  // Which encoder makes the pictures, while something streams or records.
+  const encoder = stream?.encoder ?? rec?.encoder ?? null
   const free = stats?.disk_free_mb ?? 0
   const fps = stats?.canvas.fps || 30
   const recRate = rec?.active ? rates.record : 0
@@ -428,6 +446,9 @@ export function StatsDialog({
               </tbody>
             </table>
           </div>
+          {encoder && (
+            <p className="m-0 text-[13.5px] text-text-2">Encoder: {encoderName(encoder)}</p>
+          )}
         </div>
       )}
     </Dialog>

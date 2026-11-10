@@ -377,6 +377,8 @@ export interface EngineStreamStats {
   frames: number
   dropped: number
   error: string | null
+  /** Which encoder makes the pictures ("h264_nvenc", "VideoToolbox"…), null when not known. */
+  encoder?: string | null
 }
 
 /** How the Studio streams, records and runs (every field has a default). */
@@ -513,6 +515,8 @@ export interface EngineRecordStats {
   file: string
   seconds: number
   error: string | null
+  /** Which encoder makes the pictures ("h264_nvenc", "VideoToolbox"…), null when not known. */
+  encoder?: string | null
 }
 
 /** Live captions (Mac first): what macOS allows, and what was last heard. */
