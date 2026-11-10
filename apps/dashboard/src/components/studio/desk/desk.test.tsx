@@ -513,3 +513,12 @@ describe('the effects gallery (Shaderfilter, built in)', () => {
     expect(fx?.settings).toEqual({ preset: 'crt', param1: 0.6, param2: 0.5 })
   })
 })
+
+describe('Countdown (built in)', () => {
+  it('is among the sources to build', () => {
+    const build = KIND_GROUPS.find((g) => g.label === 'Build')
+    const timer = build?.entries.find((e) => e.key === 'countdown')
+    expect(timer?.kinds).toEqual(['ferrocast_countdown'])
+    expect(timer?.label).toBe('Countdown')
+  })
+})

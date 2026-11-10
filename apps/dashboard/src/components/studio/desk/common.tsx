@@ -38,6 +38,7 @@ import {
   Stack,
   Swatches,
   TextT,
+  Timer,
   UserFocus,
   UserSquare,
   UsersThree,
@@ -305,6 +306,8 @@ export const KIND_GROUPS: KindGroup[] = [
       },
       { key: 'scene', label: 'Scene', icon: CardsThree, kinds: ['scene'], scene: true },
       // Exeldro's Source Clone, built in: pick what it shows in its settings.
+      // A "Starting in 4:59" countdown (the OBS countdown plugins, built in).
+      { key: 'countdown', label: 'Countdown', icon: Timer, kinds: ['ferrocast_countdown'] },
       {
         key: 'clone',
         label: 'Copy of a source',
