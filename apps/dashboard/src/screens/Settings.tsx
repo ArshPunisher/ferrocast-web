@@ -11,6 +11,7 @@ import {
   MusicNotes,
   PaintBrush,
   PuzzlePiece,
+  Lightning,
   SlidersHorizontal,
   Sparkle,
   SpeakerHigh,
@@ -60,6 +61,7 @@ import { CloudSyncSettings } from '../components/cloud-sync'
 import { TtsVoicePicker } from '../components/tts-voices'
 import { RemoteDevices } from '../components/remote'
 import { MusicSettings } from '../components/music-settings'
+import { AutomationsSettings } from '../components/automations-settings'
 import { PluginsSettings } from '../components/plugins-settings'
 import { useLive } from '../lib/store'
 import { useWidePage } from '../lib/wide'
@@ -83,6 +85,7 @@ const GROUPS = [
       ['music', 'Music', MusicNotes],
       ['tts', 'Text-to-speech', SpeakerHigh],
       ['discord', 'Discord', DiscordLogo],
+      ['automations', 'Automations', Lightning],
     ],
   },
   {
@@ -119,6 +122,7 @@ const TONE: Record<SectionId, string> = {
   data: '#0a8f5c',
   updates: '#1f7f86',
   pro: '#b35900',
+  automations: '#7a4fd0',
   plugins: '#4a7a1f',
   advanced: '#5b6370',
 }
@@ -1180,6 +1184,15 @@ export function Settings({ section }: { section?: string | undefined }) {
               description="Show the song that’s playing, and let your screens move to the beat."
             >
               <MusicSettings />
+            </Section>
+          )}
+          {at === 'automations' && (
+            <Section
+              id="automations"
+              title="Automations"
+              description="When something happens, do something."
+            >
+              <AutomationsSettings />
             </Section>
           )}
           {at === 'plugins' && (

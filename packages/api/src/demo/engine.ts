@@ -71,6 +71,7 @@ import { HttpError } from './http-error'
 import { NOT_MINE, type DemoFeature, type DemoHost } from './features/host'
 import { DemoCloud, type DemoCloudSetup } from './features/cloud-mode'
 import { DemoCloudSync } from './features/cloud-sync'
+import { DemoAutomations } from './features/automations'
 import { DemoPlugins } from './features/plugins'
 import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
@@ -415,6 +416,8 @@ export class DemoEngine {
   readonly cloud: DemoCloud | null
   /** Installed plugins (`/plugins`). */
   readonly plugins = new DemoPlugins()
+  /** "When X, do Y" rules (`/automations`). */
+  readonly automations = new DemoAutomations()
   /** The app's cloud sync and "Use cloud overlays" (`/pro/cloud`). */
   readonly cloudSync = new DemoCloudSync(
     () => this.account.view().state === 'signed_in',
@@ -1697,6 +1700,7 @@ export class DemoEngine {
       ...(this.cloud ? [this.cloud as DemoFeature] : []),
       this.cloudSync,
       this.plugins,
+      this.automations,
       this.account,
       this.loyalty,
       this.polls,
