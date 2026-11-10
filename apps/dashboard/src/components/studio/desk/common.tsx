@@ -24,6 +24,7 @@ import {
   Microphone,
   MicrophoneSlash,
   Monitor,
+  MagicWand,
   Moon,
   Palette,
   SelectionBackground,
@@ -408,6 +409,8 @@ export interface FilterEntry {
   audio?: boolean
   /** Its picture in the drawer. */
   icon: Icon
+  /** What it starts with when added (else its kind's defaults). */
+  settings?: Record<string, unknown>
 }
 
 export const FILTERS: FilterEntry[] = [
@@ -539,6 +542,14 @@ export const FILTERS: FilterEntry[] = [
     label: 'Scroll',
     help: 'Moves it sideways or up, on a loop.',
     icon: ArrowsLeftRight,
+  },
+  {
+    // The shader gallery (OBS's Shaderfilter, built in): a ready-made look to start with.
+    kinds: ['ferrocast_shader'],
+    label: 'Effects',
+    help: 'CRT, pixelate, glitch, old film and more.',
+    icon: MagicWand,
+    settings: { preset: 'crt', param1: 0.6, param2: 0.5 },
   },
   {
     kinds: ['ferrocast_freeze', 'freeze_filter'],

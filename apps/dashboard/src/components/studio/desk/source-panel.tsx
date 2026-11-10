@@ -794,7 +794,12 @@ function Filters({
   const add = async (kind: string, label: string) => {
     let n = label
     for (let i = 2; taken.has(n); i++) n = `${label} ${i}`
-    if (await act('add', () => api.addFilter(name, { kind, name: n }))) {
+    const start = FILTER_OF[kind]?.settings
+    if (
+      await act('add', () =>
+        api.addFilter(name, { kind, name: n, ...(start ? { settings: start } : {}) }),
+      )
+    ) {
       setOpen(n)
       setAdding(false)
       setFind('')

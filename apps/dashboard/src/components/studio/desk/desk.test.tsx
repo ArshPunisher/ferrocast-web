@@ -505,3 +505,11 @@ describe('filters with nothing to set', () => {
     expect(NO_FORM.has('chroma_key_filter_v2')).toBe(false)
   })
 })
+
+describe('the effects gallery (Shaderfilter, built in)', () => {
+  it('“Effects” starts on a ready-made look, not an empty shader', () => {
+    const fx = FILTER_OF.ferrocast_shader
+    expect(fx?.label).toBe('Effects')
+    expect(fx?.settings).toEqual({ preset: 'crt', param1: 0.6, param2: 0.5 })
+  })
+})
