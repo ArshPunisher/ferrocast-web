@@ -5,7 +5,7 @@
  * Everything OBS has stays reachable; only the order and the words change.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   AppWindow,
   ArrowCounterClockwise,
@@ -13,12 +13,13 @@ import {
   Monitor,
   SquaresFour,
   Warning,
+  X,
 } from '@phosphor-icons/react'
 import { type EngineOption, type EngineSettings } from '@ferrocast/api'
-import { Button, Input, cx } from '@ferrocast/ui'
+import { Button, InfoTip, Input, cx } from '@ferrocast/ui'
 import { useDesk } from './common'
 import { meterPct, useLevels } from './mixer'
-import { OptionsForm, fromHex, shownNumber, toHex, valueOf } from './options'
+import { OptionsForm, RowLook, fromHex, shownNumber, toHex, valueOf } from './options'
 
 type Change = (key: string, value: unknown) => void
 
@@ -55,13 +56,14 @@ function MainAndMore({
       const w = rename.find((r) => r.key === o.key)
       return w ? { ...o, label: w.label, help: w.help ?? o.help } : o
     })
+  const plain = useContext(RowLook) === 'plain'
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cx('flex flex-col', plain && 'gap-2')}>
       {first.length > 0 && (
         <OptionsForm compact opts={first} all={opts} values={values} onChange={onChange} />
       )}
       {more && rest.some((o) => o.visible) && (
-        <div className="border-t border-line pt-2">
+        <div className={cx(plain && 'border-t border-line pt-2')}>
           <OptionsForm compact opts={rest} all={opts} values={values} onChange={onChange} />
         </div>
       )}
@@ -71,11 +73,21 @@ function MainAndMore({
 
 /** A line of the compact panel built by hand: its label, then its control (as OptionsForm's). */
 function Line({ label, children }: { label: string; children: ReactNode }) {
+  const look = useContext(RowLook)
   return (
-    <div className="grid min-h-8 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2.5">
+    <div
+      data-row
+      className={cx(
+        'grid items-center gap-x-2.5',
+        look === 'lined' &&
+          'h-9 grid-cols-[7.75rem_minmax(0,1fr)] border-b border-line pr-2.5 pl-3',
+        look === 'inset' && 'h-9 grid-cols-[7.5rem_minmax(0,1fr)] border-b border-line',
+        look === 'plain' && 'min-h-8 grid-cols-[6.5rem_minmax(0,1fr)]',
+      )}
+    >
       <span
         title={label}
-        className="truncate text-[13px] font-semibold whitespace-nowrap text-text-2"
+        className="truncate text-[12.5px] font-semibold whitespace-nowrap text-text-2"
       >
         {label}
       </span>
@@ -125,25 +137,212 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
     { key: 'display', label: 'Screen' },
     { key: 'window', label: 'Window' },
     { key: 'application', label: 'App' },
-    { key: 'show_cursor', label: 'Show the mouse arrow', help: 'In your stream and recordings' },
+    { key: 'show_cursor', label: 'Show the pointer', help: 'In your stream and recordings' },
   ]).concat(
     // Anything else this form gains later still shows.
     opts.filter(
-      (o) => !['type', 'display', 'window', 'application', 'show_cursor'].includes(o.key),
+      // Leave out is drawn by hand in the drawer.
+      (o) =>
+        !['type', 'display', 'window', 'application', 'show_cursor', 'exclude_apps'].includes(
+          o.key,
+        ),
     ),
   )
   const heading = useId()
+  const look = useContext(RowLook)
+  const lined = look === 'lined'
+  // The drawer (design A, #2): Capture as a small choice with icons, each screen as a card,
+  // then the window or app and the pointer as lines.
+  if (lined) {
+    const display = rest.find((o) => o.key === 'display')
+    const showsDisplay =
+      !!display &&
+      display.visible &&
+      (!display.shown_when || display.shown_when.values.includes(now as number))
+    const others = rest.filter((o) => o.key !== 'display')
+    const leave = opts.find((o) => o.key === 'exclude_apps')
+    const showsLeave =
+      !!leave &&
+      leave.visible &&
+      (!leave.shown_when || leave.shown_when.values.includes(now as number))
+    // Apps by bundle id with their names, from the App list the engine fills in.
+    const appList = opts.find((o) => o.key === 'application')
+    const appName = (id: string) =>
+      appList?.choices[appList.values.findIndex((v) => v === id)] ?? id
+    const left: string[] = Array.isArray(values.exclude_apps)
+      ? (values.exclude_apps as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+      : []
+    const at = display ? valueOf(display, values) : null
+    return (
+      <div className="flex flex-col">
+        {type && (
+          <div className="grid h-9 grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-x-2.5 border-b border-line pr-2.5 pl-3">
+            <span className="flex items-center gap-1 text-[12.5px] font-semibold text-text-2">
+              Capture
+              <InfoTip label="About capture">{method.help}</InfoTip>
+            </span>
+            <div
+              role="radiogroup"
+              aria-label="What to show"
+              className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+            >
+              {METHODS.map((m) => {
+                const on = m.value === method.value
+                const Icon = m.icon
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    title={m.help}
+                    onClick={() => onChange('type', m.value)}
+                    className={cx(
+                      'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-[4px] text-[12px] font-semibold outline-none focus-visible:shadow-[var(--fc-focus)]',
+                      on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
+                    )}
+                  >
+                    <Icon size={13} weight="bold" aria-hidden />
+                    <span className="truncate">{m.label.replace(/^(Whole|One) /, '')}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {showsDisplay && display && (
+          <div className="border-b border-line px-3 py-2.5">
+            <div role="radiogroup" aria-label="Screen" className="grid grid-cols-2 gap-1.5">
+              {display.choices.map((label, i) => {
+                const on = display.values[i] === at
+                // "BenQ EW270Q: 2560x1440 @ 2560,0": its name, then its size.
+                const [name = label, size = ''] = label.split(/:\s*(?=\d+x\d+)/)
+                const px = size.match(/(\d+)x(\d+)/)
+                return (
+                  <button
+                    key={String(display.values[i])}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    title={label}
+                    onClick={() => onChange('display', display.values[i])}
+                    className={cx(
+                      'flex min-w-0 flex-col gap-1 rounded-[6px] border p-1.5 text-left outline-none focus-visible:shadow-[var(--fc-focus)]',
+                      on
+                        ? 'border-arc shadow-[inset_0_0_0_1px_var(--fc-arc)]'
+                        : 'border-line hover:border-line-strong',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cx(
+                        'grid aspect-video place-items-center rounded-[4px]',
+                        on ? 'bg-accent-soft text-accent-text' : 'bg-surface-3 text-text-3',
+                      )}
+                    >
+                      <Monitor size={22} weight={on ? 'fill' : 'regular'} />
+                    </span>
+                    <span className="truncate text-[11.5px] font-semibold text-text">{name}</span>
+                    {px && (
+                      <span className="font-mono text-[10.5px] text-text-3 tabular-nums">
+                        {px[1]}×{px[2]}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        <OptionsForm compact opts={others} all={opts} values={values} onChange={onChange} />
+        {showsLeave && (
+          <div className="border-b border-line">
+            {/* One 36px row: the label, how many, and + App; the apps wrap below it (a row of
+                chips scrolled sideways and cut + App off, owner 11 Nov). */}
+            <div className="grid h-9 grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-x-2.5 pr-2.5 pl-3">
+              <span className="flex items-center gap-1 text-[12.5px] font-semibold text-text-2">
+                Leave out
+                <InfoTip label="About leaving apps out">
+                  These apps never show on stream, even on top. Privacy in Studio settings hides
+                  apps from every capture.
+                </InfoTip>
+              </span>
+              <div className="flex min-w-0 items-center justify-end gap-2">
+                <span className="truncate text-[12px] text-text-3">
+                  {left.length === 0
+                    ? 'Nothing'
+                    : left.length === 1
+                      ? '1 app'
+                      : `${left.length} apps`}
+                </span>
+                {appList && (
+                  <select
+                    aria-label="Leave out an app"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) onChange('exclude_apps', [...left, e.target.value])
+                    }}
+                    className="fc-select h-7 w-auto shrink-0 cursor-pointer appearance-none rounded-[6px] border border-line bg-surface-2 pr-7 pl-2.5 text-[12px] font-semibold text-text outline-none [background-position:right_8px_center] focus-visible:shadow-[var(--fc-focus)]"
+                  >
+                    <option value="">+ App</option>
+                    {appList.choices.map((c, i) => {
+                      const v = String(appList.values[i])
+                      return v && !left.includes(v) ? (
+                        <option key={v} value={v}>
+                          {c}
+                        </option>
+                      ) : null
+                    })}
+                  </select>
+                )}
+              </div>
+            </div>
+            {left.length > 0 && (
+              <ul
+                className="m-0 flex list-none flex-wrap gap-1.5 px-3 pb-2.5"
+                aria-label="Apps left out"
+              >
+                {left.map((id) => (
+                  <li
+                    key={id}
+                    className="inline-flex h-7 max-w-full items-center gap-1 rounded-[6px] border border-line-strong bg-surface-2 pr-1 pl-2.5 text-[12px] font-semibold"
+                  >
+                    <span className="min-w-0 truncate" title={id}>
+                      {appName(id)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Show ${appName(id)} again`}
+                      onClick={() =>
+                        onChange(
+                          'exclude_apps',
+                          left.filter((x) => x !== id),
+                        )
+                      }
+                      className="grid size-5 shrink-0 place-items-center rounded-[4px] text-text-3 outline-none hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)]"
+                    >
+                      <X size={11} weight="bold" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className={cx('flex flex-col', look === 'plain' ? 'gap-2.5' : 'gap-0')}>
       {type && (
-        <div className="flex flex-col gap-1.5">
-          <span id={heading} className="text-[14px] font-bold text-text-2">
+        <div className={cx('flex flex-col gap-1.5', lined && 'border-b border-line px-3 py-2.5')}>
+          <span id={heading} className="text-[12.5px] font-semibold text-text-2">
             What to show
           </span>
           <div
             role="radiogroup"
             aria-labelledby={heading}
-            className="grid grid-cols-3 gap-1 rounded-control border border-line bg-inset p-1"
+            className="grid grid-cols-3 gap-1 rounded-[6px] border border-line bg-inset p-0.5"
           >
             {METHODS.map((m) => {
               const on = m.value === method.value
@@ -156,7 +355,7 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
                   aria-checked={on}
                   onClick={() => onChange('type', m.value)}
                   className={cx(
-                    'flex min-w-0 flex-col items-center gap-1 rounded-[8px] px-1 py-2 text-[13.5px] font-semibold outline-none transition-colors duration-150 focus-visible:shadow-[var(--fc-focus)]',
+                    'flex min-w-0 flex-col items-center gap-1 rounded-[5px] px-1 py-1.5 text-[12.5px] font-semibold outline-none transition-colors duration-150 focus-visible:shadow-[var(--fc-focus)]',
                     on
                       ? 'fc-picked font-bold shadow-[var(--fc-shadow-1)]'
                       : 'text-text-2 hover:bg-surface-3 hover:text-text',
@@ -168,7 +367,7 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
               )
             })}
           </div>
-          <p className="m-0 text-[13px] text-text-3">{method.help}</p>
+          <p className="m-0 text-[12px] text-text-3">{method.help}</p>
         </div>
       )}
       <OptionsForm compact opts={rest} all={opts} values={values} onChange={onChange} />

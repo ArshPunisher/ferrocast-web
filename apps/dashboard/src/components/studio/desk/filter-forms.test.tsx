@@ -11,7 +11,8 @@ import {
   safeSimilarity,
   startingSimilarity,
 } from './filter-forms'
-import { shownNumber, storedNumber } from './options'
+import { RowLook, shownNumber, storedNumber } from './options'
+import { bytes } from './kind-settings'
 import { recordSizes, sizeText } from './settings'
 
 const size = { w: 2560, h: 1440 }
@@ -136,6 +137,7 @@ const captureForm = [
     shown_when: { key: 'type', values: [2] },
   }),
   opt({ key: 'show_cursor', kind: 'bool' }),
+  opt({ key: 'exclude_apps', kind: 'editable_list', shown_when: { key: 'type', values: [0] } }),
 ]
 
 const drawn = (type: number) =>
@@ -158,7 +160,7 @@ describe('screen capture form', () => {
     expect(drawn(0)).not.toContain('>Window<')
     expect(drawn(2)).toContain('>Screen<')
     expect(drawn(2)).toContain('>App<')
-    for (const t of [0, 1, 2]) expect(drawn(t)).toContain('Show the mouse arrow')
+    for (const t of [0, 1, 2]) expect(drawn(t)).toContain('Show the pointer')
   })
 })
 
@@ -252,5 +254,37 @@ describe('each key colour starts at its own strength', () => {
     expect(startingSimilarity('#00ff00')).toBe(400)
     expect(startingSimilarity('#0099ff')).toBe(256)
     expect(startingSimilarity('#91ff3d')).toBe(232)
+  })
+})
+
+describe('screen capture in the drawer (design A)', () => {
+  const lined = (values: Record<string, unknown>) =>
+    renderToStaticMarkup(
+      createElement(
+        RowLook.Provider,
+        { value: 'lined' },
+        createElement(CaptureForm, { opts: captureForm, values, onChange: () => {} }),
+      ),
+    )
+
+  it('leaves apps out of a whole screen, named as people know them', () => {
+    const html = lined({ type: 0, exclude_apps: ['com.google.Chrome'] })
+    expect(html).toContain('>Leave out<')
+    expect(html).toContain('>Chrome<')
+    expect(html).toContain('aria-label="Show Chrome again"')
+    // An app already left out isn't offered again.
+    expect(html).not.toMatch(/<option value="com.google.Chrome">/)
+  })
+
+  it('has no Leave out for one window', () => {
+    expect(lined({ type: 1 })).not.toContain('>Leave out<')
+  })
+})
+
+describe('a file size as people read it', () => {
+  it('rounds to the unit that fits', () => {
+    expect(bytes(512)).toBe('512 B')
+    expect(bytes(48_200_000)).toBe('48 MB')
+    expect(bytes(1_234_000_000)).toBe('1.2 GB')
   })
 })

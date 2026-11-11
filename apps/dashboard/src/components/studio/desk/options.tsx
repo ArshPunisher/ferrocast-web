@@ -2,7 +2,7 @@
 // from its type (switch, list, number, colour, font, text, file). Used where a kind has no
 // purpose-built panel, and under "All settings" where it has one.
 
-import { useId, useState, type ReactNode } from 'react'
+import { createContext, useContext, useId, useState, type ReactNode } from 'react'
 import { FolderOpen, Plus, Trash } from '@phosphor-icons/react'
 import { type EngineOption, type EngineSettings } from '@ferrocast/api'
 import {
@@ -19,6 +19,7 @@ import {
 import { inDesktopApp } from '../../../lib/external'
 import { useAction } from '../../../lib/hooks'
 import { useEngine } from './common'
+import { Seg } from './drawer-kit'
 
 interface FormProps {
   opts: EngineOption[]
@@ -32,6 +33,25 @@ interface FormProps {
   compact?: boolean | undefined
 }
 
+/**
+ * How compact rows are drawn (owner's pick, source drawer design A, 10 Nov): `lined` in the
+ * drawer's Settings tab, each setting one 36 px line across the drawer with a line under it;
+ * `plain` inside an opened filter's grey box.
+ */
+export const RowLook = createContext<'lined' | 'inset' | 'plain'>('plain')
+
+/** In lined rows, what isn't one line (a box of text, a list, a note) gets its own padded
+ *  block across the drawer, never a stretched row. */
+function Block({ children }: { children: ReactNode }) {
+  const look = useContext(RowLook)
+  if (look === 'plain') return children
+  return (
+    <div data-row className={cx('border-b border-line py-2.5', look === 'lined' && 'px-3')}>
+      {children}
+    </div>
+  )
+}
+
 /** One generic form for any kind: every option OBS describes, drawn from its type. */
 export function OptionsForm({ opts, all, values, onChange, disabled, compact }: FormProps) {
   // Files come first: they're what a picture, video or slideshow needs before anything else.
@@ -43,12 +63,20 @@ export function OptionsForm({ opts, all, values, onChange, disabled, compact }: 
     const by = (all ?? opts).find((x) => x.key === w.key)
     return !by || w.values.includes(valueOf(by, values) as string | number | boolean)
   }
+  const lined = useContext(RowLook) !== 'plain'
   const shown = opts
     .filter((o) => o.visible && applies(o))
     .sort((a, b) => Number(isFile(b)) - Number(isFile(a)))
-  if (shown.length === 0) return <p className="text-[14px] text-text-3">No options.</p>
+  // Part of a bigger form (a section of the drawer) with nothing showing now: nothing at all.
+  if (shown.length === 0 && all) return null
+  if (shown.length === 0)
+    return (
+      <Block>
+        <p className="m-0 text-[13px] text-text-3">No options.</p>
+      </Block>
+    )
   return (
-    <div className={cx('flex flex-col', compact ? 'gap-2' : 'gap-3')}>
+    <div className={cx('flex flex-col', compact ? (lined ? 'gap-0' : 'gap-2') : 'gap-3')}>
       {shown.map((o) => (
         <OptionField
           key={o.key}
@@ -212,6 +240,15 @@ function CompactWrap({ label, hint, children }: WrapProps) {
   )
 }
 
+/** Quick colours beside a colour's own picker: white, black, and the brand's three. */
+const SWATCHES = [
+  { hex: '#ffffff', name: 'White' },
+  { hex: '#000000', name: 'Black' },
+  { hex: '#ffa424', name: 'Molten' },
+  { hex: '#33d4ff', name: 'Arc' },
+  { hex: '#3ddc84', name: 'Green' },
+]
+
 /** OBS keeps colours as 0xAABBGGRR. */
 export function toHex(v: unknown): string {
   const n = typeof v === 'number' ? v >>> 0 : 0
@@ -240,14 +277,26 @@ function Row({
   children: (p: { id: string }) => ReactNode
 }) {
   const id = useId()
+  const look = useContext(RowLook)
   // The label never takes a second line (owner, 9 Nov): a long one ends in "…", whole on hover.
+  // Lined: exactly one 36 px line, whatever is in it (owner, 10 Nov).
   return (
-    <div className="grid min-h-8 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2.5">
+    <div
+      data-row
+      className={cx(
+        'grid items-center gap-x-2.5',
+        look === 'lined' &&
+          'h-9 grid-cols-[7.75rem_minmax(0,1fr)] border-b border-line pr-2.5 pl-3',
+        // Inside an opened filter: the same lines, from the filter's name across.
+        look === 'inset' && 'h-9 grid-cols-[7.5rem_minmax(0,1fr)] border-b border-line',
+        look === 'plain' && 'min-h-8 grid-cols-[6.5rem_minmax(0,1fr)]',
+      )}
+    >
       <span className="flex min-w-0 items-center gap-1">
         <label
           htmlFor={id}
           title={label}
-          className="min-w-0 truncate text-[13px] font-semibold whitespace-nowrap text-text-2"
+          className="min-w-0 truncate text-[12.5px] font-semibold whitespace-nowrap text-text-2"
         >
           {label}
         </label>
@@ -274,6 +323,23 @@ function OptionField({
   const set = (next: unknown) => onChange?.(o.key, next)
   switch (o.kind) {
     case 'bool':
+      if (compact)
+        return (
+          <Row label={label} hint={hint}>
+            {(p) => (
+              <span className="ml-auto">
+                <Switch
+                  id={p.id}
+                  label={label}
+                  hideLabel
+                  checked={v === true}
+                  onChange={set}
+                  disabled={off}
+                />
+              </span>
+            )}
+          </Row>
+        )
       return (
         <Switch
           label={label}
@@ -285,12 +351,33 @@ function OptionField({
       )
     case 'list': {
       const at = o.values.findIndex((x) => x === v)
+      // A few short choices: a segmented choice on its line, as in the design (Count: For a
+      // set time / Until a time).
+      if (
+        compact &&
+        o.choices.length >= 2 &&
+        o.choices.length <= 4 &&
+        o.choices.every((c) => c.length <= 16)
+      )
+        return (
+          <Row label={label} hint={hint}>
+            {() => (
+              <Seg
+                label={label}
+                value={at < 0 ? null : at}
+                disabled={off}
+                options={o.choices.map((c, i) => ({ value: i, label: c, title: c }))}
+                onChange={(i) => set(o.values[i])}
+              />
+            )}
+          </Row>
+        )
       const Wrap = compact ? CompactWrap : FieldWrap
       return (
         <Wrap label={label} hint={hint}>
           {(p) => (
             <Select
-              className={compact ? 'h-8! text-[13px]!' : undefined}
+              className={compact ? 'h-7! rounded-[5px]! py-0! pl-2! text-[12.5px]!' : undefined}
               {...p}
               disabled={off}
               value={at < 0 ? '' : String(at)}
@@ -312,6 +399,28 @@ function OptionField({
     case 'group': {
       // A checkable group is off until switched on; its options wait until then.
       const on = !o.checkable || v === true
+      if (compact)
+        return (
+          <fieldset className="m-0 flex flex-col border-0 p-0">
+            <legend className="contents">
+              <span className="flex h-[30px] items-center gap-2 border-b border-line bg-surface-2 pr-2.5 pl-3 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase">
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {o.checkable && (
+                  <Switch label={label} hideLabel checked={on} onChange={set} disabled={off} />
+                )}
+              </span>
+            </legend>
+            {on && (
+              <OptionsForm
+                compact
+                opts={o.group}
+                values={values}
+                onChange={onChange}
+                disabled={disabled}
+              />
+            )}
+          </fieldset>
+        )
       return (
         <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
           <legend className="px-1 text-[14px] font-semibold">
@@ -329,9 +438,17 @@ function OptionField({
     }
     case 'button':
       return (
-        <Button type="button" variant="secondary" disabled className="self-start">
-          {label}
-        </Button>
+        <Block>
+          <Button
+            type="button"
+            variant="secondary"
+            size={compact ? 'xs' : 'md'}
+            disabled
+            className="self-start"
+          >
+            {label}
+          </Button>
+        </Block>
       )
     case 'int':
     case 'float': {
@@ -405,6 +522,45 @@ function OptionField({
     case 'color':
     case 'color_alpha': {
       const Wrap = compact ? CompactWrap : FieldWrap
+      if (compact)
+        return (
+          <Row label={label} hint={hint}>
+            {(p) => (
+              <>
+                <Input
+                  {...p}
+                  type="color"
+                  disabled={off}
+                  value={toHex(v)}
+                  onChange={(e) => set(fromHex(e.target.value, v))}
+                  className="h-7! w-10! shrink-0 rounded-[5px]! p-0.5"
+                />
+                <span role="group" aria-label={`${label}: quick picks`} className="flex gap-1">
+                  {SWATCHES.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      aria-label={`${label}: ${c.name}`}
+                      aria-pressed={toHex(v) === c.hex}
+                      title={c.name}
+                      disabled={off}
+                      onClick={() => set(fromHex(c.hex, v))}
+                      className={cx(
+                        'size-[18px] shrink-0 rounded-[4px] border border-line-strong outline-none focus-visible:shadow-[var(--fc-focus)]',
+                        toHex(v) === c.hex &&
+                          'shadow-[0_0_0_2px_var(--fc-surface-1),0_0_0_3.5px_var(--fc-arc)]',
+                      )}
+                      style={{ background: c.hex }}
+                    />
+                  ))}
+                </span>
+                <span className="ml-auto font-mono text-[12px] text-text-2 uppercase tabular-nums">
+                  {toHex(v)}
+                </span>
+              </>
+            )}
+          </Row>
+        )
       return (
         <Wrap label={label} hint={hint}>
           {(p) => (
@@ -414,7 +570,7 @@ function OptionField({
               disabled={off}
               value={toHex(v)}
               onChange={(e) => set(fromHex(e.target.value, v))}
-              className={compact ? 'h-7! w-12! rounded-[7px]! p-0.5' : 'w-20! p-1'}
+              className={compact ? 'h-7! w-10! shrink-0 rounded-[5px]! p-0.5' : 'w-20! p-1'}
             />
           )}
         </Wrap>
@@ -422,6 +578,67 @@ function OptionField({
     }
     case 'font': {
       const font: Font = v && typeof v === 'object' ? (v as Font) : {}
+      if (compact)
+        return (
+          <Row label={label} hint={hint}>
+            {(p) => (
+              <>
+                <Input
+                  {...p}
+                  disabled={off}
+                  value={font.face ?? ''}
+                  autoComplete="off"
+                  className="h-7! min-w-0 flex-1 rounded-[5px]! px-2! text-[12.5px]!"
+                  onChange={(e) => set({ ...font, face: e.target.value })}
+                />
+                <span role="group" aria-label={`${label}: style`} className="flex shrink-0 gap-0.5">
+                  {(
+                    [
+                      [1, 'B', 'Bold', 'font-bold'],
+                      [2, 'I', 'Italic', 'italic'],
+                    ] as const
+                  ).map(([bit, letter, name, look]) => {
+                    const on = ((font.flags ?? 0) & bit) !== 0
+                    return (
+                      <button
+                        key={bit}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={`${label}: ${name.toLowerCase()}`}
+                        title={name}
+                        disabled={off}
+                        onClick={() => set({ ...font, flags: (font.flags ?? 0) ^ bit })}
+                        className={cx(
+                          'grid size-7 place-items-center rounded-[5px] border text-[13px] outline-none focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50',
+                          look,
+                          on
+                            ? 'fc-picked border-transparent'
+                            : 'border-line bg-surface-2 text-text-2 hover:border-line-strong',
+                        )}
+                      >
+                        {letter}
+                      </button>
+                    )
+                  })}
+                </span>
+                <Input
+                  aria-label={`${label}: size`}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={1000}
+                  disabled={off}
+                  value={font.size ?? ''}
+                  className="h-7! w-16! shrink-0 rounded-[5px]! px-2! text-right font-mono text-[12px]! tabular-nums"
+                  onChange={(e) => {
+                    const n = e.target.valueAsNumber
+                    if (Number.isFinite(n) && n > 0) set({ ...font, size: Math.round(n) })
+                  }}
+                />
+              </>
+            )}
+          </Row>
+        )
       return (
         <fieldset className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
           <legend className="sr-only">{label}</legend>
@@ -457,42 +674,39 @@ function OptionField({
       )
     }
     case 'path':
-      return <PathField o={o} label={label} hint={hint} value={v} off={off} set={set} />
+      return (
+        <PathField
+          o={o}
+          label={label}
+          hint={hint}
+          value={v}
+          off={off}
+          set={set}
+          compact={!!compact}
+        />
+      )
     case 'editable_list':
-      return <ListField o={o} label={label} hint={hint} value={v} off={off} set={set} />
+      return (
+        <Block>
+          <ListField
+            o={o}
+            label={label}
+            hint={hint}
+            value={v}
+            off={off}
+            set={set}
+            compact={!!compact}
+          />
+        </Block>
+      )
     case 'text': {
       const text = typeof v === 'string' ? v : ''
       // OBS's text kinds: a box for several lines (Custom CSS, a text source), a hidden
       // password, read-only info, or one line.
-      if (o.text_type === 'info') {
+      if (compact && o.text_type !== 'info' && o.text_type !== 'multiline')
         return (
-          <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+          <Row label={label} hint={hint}>
             {(p) => (
-              <p id={p.id} className="m-0 text-[14px] whitespace-pre-wrap text-text-2">
-                {text}
-              </p>
-            )}
-          </Field>
-        )
-      }
-      return (
-        <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
-          {(p) =>
-            o.text_type === 'multiline' ? (
-              <Textarea
-                {...p}
-                disabled={off}
-                value={text}
-                rows={o.monospace ? 6 : 4}
-                autoComplete="off"
-                spellCheck={!o.monospace}
-                className={cx(
-                  'min-h-24 resize-y',
-                  o.monospace && 'font-mono text-[13px] leading-relaxed',
-                )}
-                onChange={(e) => set(e.target.value)}
-              />
-            ) : (
               <Input
                 {...p}
                 type={o.text_type === 'password' ? 'password' : 'text'}
@@ -500,11 +714,57 @@ function OptionField({
                 value={text}
                 autoComplete="off"
                 spellCheck={o.text_type !== 'password'}
+                className="h-7! rounded-[5px]! px-2! text-[12.5px]!"
                 onChange={(e) => set(e.target.value)}
               />
-            )
-          }
-        </Field>
+            )}
+          </Row>
+        )
+      if (o.text_type === 'info') {
+        return (
+          <Block>
+            <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+              {(p) => (
+                <p id={p.id} className="m-0 text-[13px] whitespace-pre-wrap text-text-2">
+                  {text}
+                </p>
+              )}
+            </Field>
+          </Block>
+        )
+      }
+      return (
+        <Block>
+          <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
+            {(p) =>
+              o.text_type === 'multiline' ? (
+                <Textarea
+                  {...p}
+                  disabled={off}
+                  value={text}
+                  rows={compact ? (o.monospace ? 5 : 3) : o.monospace ? 6 : 4}
+                  autoComplete="off"
+                  spellCheck={!o.monospace}
+                  className={cx(
+                    compact ? 'min-h-16 resize-y px-2.5! py-2! text-[13px]!' : 'min-h-24 resize-y',
+                    o.monospace && 'font-mono text-[13px] leading-relaxed',
+                  )}
+                  onChange={(e) => set(e.target.value)}
+                />
+              ) : (
+                <Input
+                  {...p}
+                  type={o.text_type === 'password' ? 'password' : 'text'}
+                  disabled={off}
+                  value={text}
+                  autoComplete="off"
+                  spellCheck={o.text_type !== 'password'}
+                  onChange={(e) => set(e.target.value)}
+                />
+              )
+            }
+          </Field>
+        </Block>
       )
     }
     default:
@@ -527,7 +787,15 @@ interface FieldProps {
 }
 
 /** A file or folder: its path, and Browse for the computer's own file dialog (in the app). */
-function PathField({ o, label, hint, value, off, set }: FieldProps) {
+function PathField({
+  o,
+  label,
+  hint,
+  value,
+  off,
+  set,
+  compact = false,
+}: FieldProps & { compact?: boolean }) {
   const api = useEngine()
   const { busy, run } = useAction()
   const kind = o.path === 'save' || o.path === 'folder' ? o.path : 'file'
@@ -535,6 +803,39 @@ function PathField({ o, label, hint, value, off, set }: FieldProps) {
     const r = await run('browse', () => api.pickFile(kind, o.filter ?? ''))
     if (r?.path) set(r.path)
   }
+  if (compact)
+    return (
+      <Row label={label} hint={hint}>
+        {(p) => (
+          <>
+            <Input
+              {...p}
+              disabled={off}
+              value={typeof value === 'string' ? value : ''}
+              title={typeof value === 'string' ? value : undefined}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={kind === 'folder' ? 'A folder' : 'A file'}
+              className="h-7! min-w-0 flex-1 rounded-[5px]! px-2! font-mono text-[11.5px]!"
+              onChange={(e) => set(e.target.value)}
+            />
+            {inDesktopApp() && (
+              <IconButton
+                size="xs"
+                variant="ghost"
+                label={
+                  kind === 'folder' ? `Pick a folder for ${label}` : `Pick a file for ${label}`
+                }
+                disabled={off || busy === 'browse'}
+                onClick={() => void browse()}
+              >
+                <FolderOpen size={15} weight="bold" />
+              </IconButton>
+            )}
+          </>
+        )}
+      </Row>
+    )
   return (
     <Field label={label} {...(hint ? { hint } : {})} hintVisible={false}>
       {(p) => (
@@ -571,7 +872,15 @@ function PathField({ o, label, hint, value, off, set }: FieldProps) {
 type Entry = { value: string; hidden?: boolean; selected?: boolean }
 
 /** OBS's editable list (a Slideshow's pictures, a list of words): add, remove, reorder. */
-function ListField({ o, label, hint, value, off, set }: FieldProps) {
+function ListField({
+  o,
+  label,
+  hint,
+  value,
+  off,
+  set,
+  compact = false,
+}: FieldProps & { compact?: boolean }) {
   const api = useEngine()
   const { busy, run } = useAction()
   const [typed, setTyped] = useState('')
@@ -592,22 +901,57 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
   }
   const name = (v: string) => (files ? (v.split(/[\\/]/).pop() ?? v) : v)
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1.5 text-[14px] font-semibold text-text">{label}</legend>
-      {hint && <p className="m-0 text-[13.5px] text-text-3">{hint}</p>}
+    <fieldset className={cx('flex flex-col', compact ? 'gap-1.5' : 'gap-2')}>
+      <legend
+        className={cx(
+          'flex items-center gap-1',
+          compact
+            ? 'mb-1.5 text-[12.5px] font-semibold text-text-2'
+            : 'mb-1.5 text-[14px] font-semibold text-text',
+        )}
+      >
+        {label}
+        {compact && list.length > 0 && (
+          <span className="font-mono text-[10.5px] text-text-3">{list.length}</span>
+        )}
+        {compact && hint && <InfoTip label={`About ${label.toLowerCase()}`}>{hint}</InfoTip>}
+      </legend>
+      {!compact && hint && <p className="m-0 text-[13.5px] text-text-3">{hint}</p>}
       {list.length > 0 ? (
-        <ol className="m-0 flex list-none flex-col divide-y divide-line rounded-control border border-line p-0">
+        <ol
+          className={cx(
+            'm-0 flex list-none flex-col divide-y divide-line border border-line p-0',
+            compact ? 'rounded-[6px]' : 'rounded-control',
+          )}
+        >
           {list.map((e, i) => (
-            <li key={`${i}-${e.value}`} className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
-              <span className="w-5 shrink-0 text-right text-[13px] font-semibold text-text-3 tabular-nums">
+            <li
+              key={`${i}-${e.value}`}
+              className={cx(
+                'flex items-center gap-2 pr-1.5',
+                compact ? 'h-8 pl-2.5' : 'py-1.5 pl-3',
+              )}
+            >
+              <span
+                className={cx(
+                  'w-5 shrink-0 text-right font-semibold text-text-3 tabular-nums',
+                  compact ? 'font-mono text-[11px]' : 'text-[13px]',
+                )}
+              >
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium" title={e.value}>
+              <span
+                className={cx(
+                  'min-w-0 flex-1 truncate font-medium',
+                  compact ? 'text-[12.5px]' : 'text-[14.5px]',
+                )}
+                title={e.value}
+              >
                 {name(e.value)}
               </span>
               <IconButton
                 label={`Remove ${name(e.value)}`}
-                size="sm"
+                size={compact ? 'xs' : 'sm'}
                 disabled={off}
                 onClick={() => set(list.filter((_, j) => j !== i))}
               >
@@ -617,12 +961,20 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
           ))}
         </ol>
       ) : (
-        <p className="m-0 rounded-control border border-dashed border-line px-3 py-4 text-center text-[14px] font-medium text-text-3">
+        <p
+          className={cx(
+            'm-0 border border-dashed border-line text-center font-medium text-text-3',
+            compact
+              ? 'rounded-[6px] px-3 py-2.5 text-[12.5px]'
+              : 'rounded-control px-3 py-4 text-[14px]',
+          )}
+        >
           {files ? 'No files yet.' : 'Nothing yet.'}
         </p>
       )}
-      <div className="flex items-center gap-2">
+      <div className={cx('flex items-center', compact ? 'gap-1.5' : 'gap-2')}>
         <Input
+          className={compact ? 'h-7! rounded-[5px]! px-2! text-[12.5px]!' : undefined}
           aria-label={files ? `Add a file path or address to ${label}` : `Add to ${label}`}
           disabled={off}
           value={typed}
@@ -640,6 +992,7 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
         />
         <IconButton
           label="Add"
+          size={compact ? 'xs' : 'md'}
           disabled={off || !typed.trim()}
           onClick={() => {
             add([typed])
@@ -652,12 +1005,13 @@ function ListField({ o, label, hint, value, off, set }: FieldProps) {
           <Button
             type="button"
             variant="secondary"
+            size={compact ? 'xs' : 'md'}
             disabled={off}
             busy={busy === 'browse'}
             onClick={() => void browse()}
             className="shrink-0"
           >
-            <FolderOpen size={16} weight="bold" /> Add files
+            <FolderOpen size={compact ? 14 : 16} weight="bold" /> Add files
           </Button>
         )}
       </div>

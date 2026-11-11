@@ -81,7 +81,6 @@ import { clock } from './stats-panel'
 import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
-import { TransformDialog } from './transform'
 import { ReadyCheck } from './ready-check'
 
 export function StudioDesk({
@@ -215,7 +214,15 @@ function Running({
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
-  const [transforming, setTransforming] = useState<Desk['transforming']>(null)
+  // Edit transform (⌘E, the menu, a double-click) opens the source's drawer on Position: one
+  // place for where it sits, its size, box and crop (owner, 10 Nov).
+  const transforming: Desk['transforming'] = null
+  const setTransforming = useCallback(
+    (t: Desk['transforming']) => {
+      if (t) edit(t.name, 'position')
+    },
+    [edit],
+  )
   const [library, setLibrary] = useState(0)
   const [transformClip, setTransformClip] = useState<Desk['transformClip']>(null)
   // A source can change size by itself (a captured window resized): its frame is read again
@@ -375,13 +382,6 @@ function Running({
         onClose={() => setSettingsAt(null)}
       />
       <SourcePanel />
-      <TransformDialog
-        target={transforming}
-        onClose={() => {
-          setTransforming(null)
-          reloadItems()
-        }}
-      />
     </DeskProvider>
   )
 }

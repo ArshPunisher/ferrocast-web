@@ -230,11 +230,21 @@ export interface EngineItem {
 export type EngineMediaAct =
   'play' | 'pause' | 'play_pause' | 'restart' | 'stop' | 'next' | 'previous'
 
+/** How a source is doing, for its drawer (API.md: …/sources/{name}/status). */
+export interface EngineSourceStatus {
+  /** A Web text's last read: when (ms since 1970), what it showed, why it failed (or null). */
+  web_text?: { at_ms: number; value: string | null; error: string | null } | null
+  /** A Browser source on the web: whether its address answers now. */
+  page?: { ok: boolean; error: string | null }
+}
+
 /** Where a video, playlist or slideshow is. */
 export interface EngineMedia {
   state: 'none' | 'playing' | 'opening' | 'buffering' | 'paused' | 'stopped' | 'ended' | 'error'
   time_ms: number
   duration_ms: number
+  /** The file's size, bytes, when it's one file on this computer. */
+  file_bytes?: number
 }
 
 export const ENGINE_BLENDS = [
@@ -854,6 +864,9 @@ export function studioEngineApi(c: FerroClient) {
         'GET',
         `/api/v1/studio/engine/sources/${enc(name)}/picture?w=${w}`,
       ),
+    /** How a source is doing: a Web text's last read, whether a Browser source's page loads. */
+    sourceStatus: (name: string) =>
+      c.request<EngineSourceStatus>('GET', `/api/v1/studio/engine/sources/${enc(name)}/status`),
     /** A PNG of a scene or source, saved where recordings go. */
     screenshot: (name: string) =>
       c.request<{ file: string }>(

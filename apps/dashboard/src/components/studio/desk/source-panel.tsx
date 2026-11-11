@@ -8,18 +8,21 @@ import {
   ArrowCounterClockwise,
   CaretDown,
   CaretRight,
-  CaretUp,
   Check,
   CursorClick,
   DotsSixVertical,
   DotsThree,
+  Eye,
+  EyeSlash,
   Funnel,
-  Headphones,
+  MagicWand,
+  Monitor,
   Plus,
   Sparkle,
   SpeakerHigh,
-  SpeakerSlash,
+  SquaresFour,
   Trash,
+  Waveform,
   X,
 } from '@phosphor-icons/react'
 import {
@@ -28,7 +31,7 @@ import {
   type EngineFilter,
   type EngineFollow,
   type EngineLevel,
-  type EngineMonitor,
+  type EngineAudioChange,
   type EngineSettings,
 } from '@ferrocast/api'
 import {
@@ -50,6 +53,7 @@ import {
   KindTile,
   NO_FORM,
   SOUND_ONLY,
+  filterTone,
   useDesk,
   type DrawerTab,
 } from './common'
@@ -67,13 +71,24 @@ import {
   type VoiceStyle,
 } from './cleanmic'
 import { Meter, useLevels } from './mixer'
-import { OptionsForm } from './options'
+import { RowLook } from './options'
+import { Band, Pad, PositionTab, Prop, SoundRows } from './drawer-kit'
+import { KindSettings } from './kind-settings'
 import { CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
 
-/** Sends edits once they've stopped changing for a moment. */
-function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: () => void) {
+/** Sends edits once they've stopped changing for a moment. `fresh` is the settings as last
+ *  read: an edit that went through is shown until they're read again, so the old value never
+ *  flashes back between the two (owner, 11 Nov: Screen → Window went back, then forward). */
+function useApplied(
+  apply: (edits: EngineSettings) => Promise<unknown>,
+  after: () => void,
+  fresh: unknown,
+) {
   const [edits, setEdits] = useState<EngineSettings>({})
+  // Sent and taken, until the settings are read again.
+  const [taken, setTaken] = useState<EngineSettings>({})
+  useEffect(() => setTaken({}), [fresh])
   const applyRef = useRef(apply)
   applyRef.current = apply
   const afterRef = useRef(after)
@@ -99,6 +114,7 @@ function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: (
       const sent = edits
       void applyRef
         .current(sent)
+        .then(() => setTaken((t) => ({ ...t, ...sent })))
         .catch((err: unknown) => {
           // Not applied: say why, and show the engine's own values again.
           const d = describeError(err)
@@ -112,7 +128,10 @@ function useApplied(apply: (edits: EngineSettings) => Promise<unknown>, after: (
     }, 350)
     return () => clearTimeout(t)
   }, [edits])
-  return [edits, (k: string, v: unknown) => setEdits((p) => ({ ...p, [k]: v }))] as const
+  return [
+    { ...taken, ...edits },
+    (k: string, v: unknown) => setEdits((p) => ({ ...p, [k]: v })),
+  ] as const
 }
 
 export function SourcePanel() {
@@ -190,29 +209,27 @@ function Panel({
       edit(to, shown)
     } else setRename(name)
   }
-  const setAudio = (patch: { volume_db?: number; muted?: boolean; monitor?: EngineMonitor }) => {
+  const setAudio = (patch: EngineAudioChange) => {
     audio.set((list) => (list ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
     void run('audio', () => api.setAudio(name, patch))
   }
 
-  // Two tabs (owner's pick F1, 29 Oct): the sound and the filters in one, then where it plays
-  // with its own settings. A sound opens on the first, anything else on Settings; "Filters"
-  // from a menu opens the first at its filters.
-  const tabs: { id: 'sound' | 'settings'; label: string; count?: number }[] = [
+  // Four tabs (owner's pick, design A, 10 Nov): Filters, Settings, then Position for a picture
+  // in this scene and Sound for anything with sound. A sound opens on Sound, anything else on
+  // Settings; "Filters" from a menu opens Filters.
+  const picture = !SOUND_ONLY.has(kind)
+  const tabs: { id: Tab; label: string; count?: number }[] = [
     {
-      id: 'sound',
-      label: a ? 'Sound & filters' : 'Filters',
+      id: 'filters',
+      label: 'Filters',
       ...(filters.data?.length ? { count: filters.data.length } : {}),
     },
     { id: 'settings', label: 'Settings' },
+    ...(item && picture ? [{ id: 'position' as const, label: 'Position' }] : []),
+    ...(a ? [{ id: 'sound' as const, label: 'Sound' }] : []),
   ]
-  const shown: 'sound' | 'settings' =
-    tab === 'settings'
-      ? 'settings'
-      : tab === 'sound' || tab === 'filters' || a
-        ? 'sound'
-        : 'settings'
-  const picture = !SOUND_ONLY.has(kind)
+  const wanted: Tab = tab ?? (a && !picture ? 'sound' : 'settings')
+  const shown: Tab = tabs.some((t) => t.id === wanted) ? wanted : 'settings'
   const kindName = kinds.data?.inputs.find((k) => k.id === kind)?.name
   const panelId = `source-tab-${shown}`
 
@@ -221,14 +238,14 @@ function Panel({
       ref={panel}
       data-over-preview
       aria-label={`${name} settings`}
-      className="fixed top-0 right-0 bottom-[var(--fc-statusbar,0px)] z-40 flex w-full max-w-[540px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
+      className="fixed top-0 right-0 bottom-[var(--fc-statusbar,0px)] z-40 flex w-full max-w-[420px] flex-col border-l border-line-strong bg-surface-1 shadow-pop"
     >
-      <header className="flex items-center gap-3 py-3 pr-3 pl-4">
-        <KindTile kind={kind} size={40} />
+      <header className="flex items-center gap-2.5 py-2.5 pr-2 pl-3">
+        <KindTile kind={kind} size={28} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Input
             aria-label="Name"
-            className="-ml-2 h-8! min-w-0 border-transparent! bg-transparent! px-2! font-display text-[18px]! font-bold hover:border-line-strong!"
+            className="-ml-1.5 h-7! min-w-0 rounded-[5px]! border-transparent! bg-transparent! px-1.5! font-display text-[14.5px]! font-bold hover:border-line-strong!"
             maxLength={100}
             value={rename}
             onChange={(e) => setRename(e.target.value)}
@@ -237,19 +254,36 @@ function Panel({
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             }}
           />
-          <span className="truncate text-[13px] text-text-3">
-            {[kindName, a?.channel ? 'plays in every scene' : null].filter(Boolean).join(' · ') ||
-              '\u00a0'}
+          <span className="truncate text-[11.5px] text-text-3">
+            {[kindName, a?.channel ? 'Every scene' : item ? scene : null]
+              .filter(Boolean)
+              .join(' · ') || '\u00a0'}
           </span>
         </div>
-        <IconButton label="Close" onClick={onClose}>
-          <X size={18} />
+        {item && (
+          <IconButton
+            size="xs"
+            variant="ghost"
+            label={item.visible ? `Hide ${name}` : `Show ${name}`}
+            disabled={busy !== null}
+            className={cx(!item.visible && 'text-text-3')}
+            onClick={() =>
+              void run('eye', () =>
+                done(api.editItem(scene, item.id, item.visible ? 'hide' : 'show')),
+              ).then((ok) => ok && refresh())
+            }
+          >
+            {item.visible ? <Eye size={15} /> : <EyeSlash size={15} />}
+          </IconButton>
+        )}
+        <IconButton size="xs" label="Close" onClick={onClose}>
+          <X size={15} />
         </IconButton>
       </header>
       <div
         role="tablist"
         aria-label={`${name} settings`}
-        className="flex gap-1 border-b border-line px-3"
+        className="flex h-[34px] flex-none gap-0.5 border-y border-line-strong bg-dock-head px-1.5"
         onKeyDown={(e) => {
           // Left and right move between the tabs, as tabs do.
           const at = tabs.findIndex((t) => t.id === shown)
@@ -273,15 +307,20 @@ function Panel({
             tabIndex={shown === t.id ? 0 : -1}
             onClick={() => setTab(t.id)}
             className={cx(
-              '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[14.5px] font-bold outline-none focus-visible:shadow-[var(--fc-focus)]',
+              '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 text-[12.5px] font-semibold outline-none focus-visible:shadow-[var(--fc-focus)]',
               shown === t.id
-                ? 'border-text text-text'
+                ? 'border-arc text-text'
                 : 'border-transparent text-text-3 hover:text-text',
             )}
           >
             {t.label}
             {t.count !== undefined && (
-              <span className="rounded-full bg-surface-3 px-1.5 font-mono text-[11.5px] text-text-2 tabular-nums">
+              <span
+                className={cx(
+                  'rounded-full px-1.5 font-mono text-[10.5px] tabular-nums',
+                  shown === t.id ? 'bg-accent-soft text-accent-text' : 'bg-surface-3 text-text-2',
+                )}
+              >
                 {t.count}
               </span>
             )}
@@ -292,69 +331,42 @@ function Panel({
         id={panelId}
         role="tabpanel"
         aria-labelledby={`tab-${shown}`}
-        className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
       >
         {shown === 'sound' && a && (
-          <section
-            aria-label="Sound"
-            className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3"
-          >
-            <div className="flex items-center gap-2">
-              <IconButton
-                size="sm"
-                label={a.muted ? `Unmute ${name}` : `Mute ${name}`}
-                aria-pressed={a.muted}
-                variant={a.muted ? 'danger-ghost' : 'ghost'}
-                className={cx(a.muted ? 'bg-danger-soft' : 'bg-surface-3 text-text')}
-                onClick={() => setAudio({ muted: !a.muted })}
-              >
-                {a.muted ? <SpeakerSlash size={17} weight="bold" /> : <SpeakerHigh size={17} />}
-              </IconButton>
-              <span className={cx('text-[14.5px] font-bold', a.muted && 'text-danger')}>
-                {a.muted ? 'Muted' : 'Volume'}
-              </span>
-              <span className="ml-auto font-mono text-[13.5px] text-text-2 tabular-nums">
-                {`${a.volume_db.toFixed(1)} dB`}
-              </span>
-            </div>
-            <Meter
-              tall
-              level={levels[name]}
-              muted={a.muted}
-              volumeDb={a.volume_db}
-              label={`${name} volume`}
-              onVolume={(d) => setAudio({ volume_db: Math.round(d * 10) / 10 })}
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-sm font-semibold">
-                <Headphones size={16} aria-hidden />
-                Hear it
-                <InfoTip label="About hearing it">
-                  Off: only the stream hears it. Only me: your headphones, not the stream or the
-                  recording. Me and stream: both.
-                </InfoTip>
-              </span>
-              <Segmented
-                label="Hear it"
-                value={a.monitor}
-                options={[
-                  { value: 'off', label: 'Off' },
-                  { value: 'only_me', label: 'Only me' },
-                  { value: 'me_and_stream', label: 'Me and stream' },
-                ]}
-                onChange={(monitor) => setAudio({ monitor })}
-              />
-            </div>
+          <RowLook.Provider value="lined">
+            <section aria-label="Sound" className="flex flex-col">
+              <Band icon={SpeakerHigh} tone="var(--fc-ok)" title="Sound" />
+              <Pad>
+                <Meter
+                  tall
+                  scale
+                  level={levels[name]}
+                  muted={a.muted}
+                  volumeDb={a.volume_db}
+                  label={`${name} volume`}
+                  onVolume={(d) => setAudio({ volume_db: Math.round(d * 10) / 10 })}
+                />
+              </Pad>
+              <SoundRows a={a} onAudio={setAudio} />
+              {!MIC_KINDS.has(kind) && <Duck name={name} list={filters} />}
+            </section>
+            <section aria-label="Plays in" className="flex flex-col">
+              <Band icon={SquaresFour} tone="var(--fc-accent-text)" title="Plays in" />
+              <Pad>{a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}</Pad>
+            </section>
             {MIC_KINDS.has(kind) && (
-              <>
-                <CleanMic name={name} level={levels[name]} list={filters} />
-                <VoiceStyleRow name={name} list={filters} />
-              </>
+              <section aria-label="Clean up" className="flex flex-col">
+                <Band icon={Waveform} tone="var(--fc-ok)" title="Clean up" />
+                <Pad className="flex flex-col gap-2.5">
+                  <CleanMic name={name} level={levels[name]} list={filters} />
+                  <VoiceStyleRow name={name} list={filters} />
+                </Pad>
+              </section>
             )}
-            {!MIC_KINDS.has(kind) && <Duck name={name} list={filters} />}
-          </section>
+          </RowLook.Provider>
         )}
-        {shown === 'sound' && (
+        {shown === 'filters' && (
           <Filters
             name={name}
             picture={picture}
@@ -363,42 +375,43 @@ function Panel({
             reveal={first === 'filters'}
           />
         )}
+        {shown === 'position' && item && <PositionTab scene={scene} item={item} />}
         {shown === 'settings' && (
-          <>
+          <RowLook.Provider value="lined">
             {/* Smart vertical (plan item 8): a picture in a vertical scene can follow a face. */}
             {canvas === 'vertical' && picture && item && (
-              <FollowFace scene={scene} item={item.id} />
+              <Pad>
+                <FollowFace scene={scene} item={item.id} />
+              </Pad>
             )}
+            <Settings name={name} kind={kind} />
             {kind === 'ferrocast_web' && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5">
                 <Button
-                  variant="primary"
-                  busy={busy === 'interact'}
-                  onClick={() => void run('interact', () => done(api.web(name, 'interact')))}
-                >
-                  <CursorClick size={16} weight="bold" /> Interact
-                </Button>
-                <Button
-                  variant="secondary"
+                  size="xs"
+                  variant="outline"
                   busy={busy === 'reload'}
                   onClick={() => void run('reload', () => done(api.web(name, 'reload')))}
                 >
-                  <ArrowClockwise size={16} weight="bold" /> Reload
+                  <ArrowClockwise size={14} weight="bold" /> Reload
+                </Button>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  busy={busy === 'interact'}
+                  onClick={() => void run('interact', () => done(api.web(name, 'interact')))}
+                >
+                  <CursorClick size={14} weight="bold" /> Click on it
                 </Button>
               </div>
             )}
-            {a && (
-              <section aria-label="Plays in" className="flex flex-col gap-2">
-                {a.channel ? <EverywhereIn sound={a} /> : <PlaysIn name={name} />}
-              </section>
-            )}
-            <Settings name={name} kind={kind} device={a ? 'Device settings' : 'Source settings'} />
-          </>
+          </RowLook.Provider>
         )}
       </div>
-      <footer className="flex items-center gap-2 border-t border-line px-4 py-3">
+      <footer className="flex h-[46px] flex-none items-center gap-2 border-t border-line pr-2 pl-1.5">
         {item ? (
           <Button
+            size="xs"
             variant="ghost"
             className="text-danger hover:bg-danger-soft"
             busy={busy === 'remove'}
@@ -419,6 +432,7 @@ function Panel({
           </Button>
         ) : a?.channel ? (
           <Button
+            size="xs"
             variant="ghost"
             className="text-danger hover:bg-danger-soft"
             busy={busy === 'remove'}
@@ -439,7 +453,7 @@ function Panel({
           </Button>
         ) : null}
         <span className="flex-1" />
-        <Button variant="primary" onClick={onClose}>
+        <Button size="xs" variant="primary" onClick={onClose}>
           Done
         </Button>
       </footer>
@@ -525,26 +539,23 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
       disabled={busy !== null}
       onClick={onPick}
       className={cx(
-        'flex min-h-11 items-center gap-3 rounded-[11px] border px-3.5 text-left text-[14.5px] font-bold transition-colors',
-        on ? 'fc-picked border-transparent' : 'border-line text-text-2 hover:bg-surface-2',
+        'flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[4px] px-2 text-[12px] font-semibold transition-colors outline-none focus-visible:shadow-[var(--fc-focus)]',
+        on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
       )}
     >
-      <span
-        aria-hidden
-        className={cx(
-          'size-5 shrink-0 rounded-full border-2',
-          on ? 'border-[6px] border-current' : 'border-line-strong',
-        )}
-      />
-      <span className="flex-1">{label}</span>
+      <span className="truncate">{label}</span>
     </button>
   )
   return (
-    <div className="flex flex-col gap-2.5">
-      <span id="plays-in-all" className="text-[14px] font-semibold text-text-2">
+    <div className="flex flex-col gap-2">
+      <span id="plays-in-all" className="sr-only">
         Plays in
       </span>
-      <div role="radiogroup" aria-labelledby="plays-in-all" className="grid grid-cols-2 gap-2">
+      <div
+        role="radiogroup"
+        aria-labelledby="plays-in-all"
+        className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+      >
         {option(!choosing, 'Every scene', () => {
           setChoosing(false)
           setPicked([])
@@ -553,7 +564,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
       </div>
       {choosing && (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {all.map((n) => {
               const on = picked.includes(n)
               return (
@@ -564,7 +575,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
                   title={n}
                   onClick={() => setPicked((p) => (on ? p.filter((x) => x !== n) : [...p, n]))}
                   className={cx(
-                    'flex min-h-9 min-w-0 items-center gap-2 rounded-[10px] border px-2.5 text-left text-[13.5px] transition-colors',
+                    'flex h-7 min-w-0 items-center gap-1.5 rounded-[5px] border px-2 text-left text-[12px] transition-colors',
                     on
                       ? 'fc-picked border-transparent font-extrabold'
                       : 'border-line font-semibold text-text-2 hover:bg-surface-2',
@@ -573,7 +584,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
                   <span
                     aria-hidden
                     className={cx(
-                      'grid size-[18px] shrink-0 place-items-center rounded-[5px] border-2',
+                      'grid size-[14px] shrink-0 place-items-center rounded-[3px] border-[1.5px]',
                       on ? 'border-current' : 'border-line-strong',
                     )}
                   >
@@ -585,6 +596,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
             })}
           </div>
           <Button
+            size="xs"
             variant="primary"
             className="self-start"
             disabled={picked.length === 0}
@@ -647,35 +659,30 @@ function PlaysIn({ name }: { name: string }) {
       disabled={off}
       onClick={onPick}
       className={cx(
-        'flex min-h-11 items-center gap-3 rounded-[11px] border px-3.5 text-left text-[14.5px] font-bold transition-colors',
-        on
-          ? 'border-[var(--fc-accent)] bg-[color-mix(in_srgb,var(--fc-accent)_9%,transparent)] text-text'
-          : 'border-line text-text-2 hover:bg-surface-2',
+        'flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[4px] px-2 text-[12px] font-semibold transition-colors outline-none focus-visible:shadow-[var(--fc-focus)]',
+        on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
       )}
     >
-      <span
-        aria-hidden
-        className={cx(
-          'size-5 shrink-0 rounded-full border-2',
-          on ? 'border-[6px] border-[var(--fc-accent)]' : 'border-line-strong',
-        )}
-      />
-      <span className="flex-1">{label}</span>
+      <span className="truncate">{label}</span>
       {extra}
     </button>
   )
   return (
-    <div className="flex flex-col gap-2.5">
-      <span id="plays-in" className="text-[14px] font-semibold text-text-2">
+    <div className="flex flex-col gap-2">
+      <span id="plays-in" className="sr-only">
         Plays in
       </span>
-      <div role="radiogroup" aria-labelledby="plays-in" className="grid grid-cols-2 gap-2">
+      <div
+        role="radiogroup"
+        aria-labelledby="plays-in"
+        className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+      >
         {option(everywhere && !choosing, 'Every scene', () => void addEverywhere())}
         {option(
           showTiles,
           'Some scenes',
           () => setChoosing(true),
-          <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[12.5px] font-bold text-ok">
+          <span className="rounded-full bg-ok-soft px-1.5 font-mono text-[10.5px] font-bold text-ok">
             {mine.length} picked
           </span>,
         )}
@@ -685,13 +692,13 @@ function PlaysIn({ name }: { name: string }) {
           <section
             key={g.title}
             aria-label={g.title}
-            className="overflow-hidden rounded-[11px] border border-line"
+            className="overflow-hidden rounded-[6px] border border-line"
           >
-            <h3 className="m-0 flex items-center bg-surface-2 px-3.5 py-2 text-[14px] font-extrabold text-text">
+            <h3 className="m-0 flex items-center bg-surface-2 px-2.5 py-1.5 text-[11px] font-bold tracking-[0.06em] text-text-2 uppercase">
               {g.title}
-              <span className="ml-auto text-[12.5px] font-bold text-text-3">{g.scenes.length}</span>
+              <span className="ml-auto font-mono text-[10.5px] text-text-3">{g.scenes.length}</span>
             </h3>
-            <div className="grid grid-cols-2 gap-2 p-2.5">
+            <div className="grid grid-cols-2 gap-1.5 p-1.5">
               {g.scenes.map((s) => {
                 const on = mine.includes(s.name)
                 return (
@@ -703,7 +710,7 @@ function PlaysIn({ name }: { name: string }) {
                     disabled={off}
                     onClick={() => void toggle(s.name, !on)}
                     className={cx(
-                      'flex min-h-9 min-w-0 items-center gap-2 rounded-[10px] border px-2.5 text-left text-[13.5px] transition-colors',
+                      'flex h-7 min-w-0 items-center gap-1.5 rounded-[5px] border px-2 text-left text-[12px] transition-colors',
                       on
                         ? 'border-[var(--fc-accent)] bg-[color-mix(in_srgb,var(--fc-accent)_9%,transparent)] font-extrabold text-text'
                         : 'border-line font-semibold text-text-2 hover:bg-surface-2',
@@ -712,7 +719,7 @@ function PlaysIn({ name }: { name: string }) {
                     <span
                       aria-hidden
                       className={cx(
-                        'grid size-[18px] shrink-0 place-items-center rounded-[5px] border-2',
+                        'grid size-[14px] shrink-0 place-items-center rounded-[3px] border-[1.5px]',
                         on
                           ? 'border-[var(--fc-btn-primary)] bg-[var(--fc-btn-primary)] text-white'
                           : 'border-line-strong',
@@ -766,9 +773,8 @@ function Filters({
   // after Reset.
   const [extra, setExtra] = useState(false)
   const [fresh, setFresh] = useState(0)
-  // A filter's trash asks once more (its settings go with it).
-  const [sure, setSure] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const addId = useId()
   const [find, setFind] = useState('')
   const [only, setOnly] = useState<'all' | 'picture' | 'sound'>('all')
   const [more, setMore] = useState(false)
@@ -805,6 +811,59 @@ function Filters({
       setFind('')
     }
   }
+  // Removed at once; Undo adds it back with its settings, on or off as it was, in its place.
+  // Its settings are read first: without them Undo couldn't bring it back, so it stays.
+  const removing = useRef(false)
+  const remove = async (f: EngineFilter, at: number) => {
+    // A second click while the first is still reading its settings does nothing.
+    if (removing.current) return
+    removing.current = true
+    try {
+      await removeNow(f, at)
+    } finally {
+      removing.current = false
+    }
+  }
+  const removeNow = async (f: EngineFilter, at: number) => {
+    const settings = await api.filterSettings(name, f.name).catch(() => null)
+    if (!settings) {
+      toast({
+        tone: 'error',
+        message: `${f.name} wasn't removed.`,
+        hint: "Its settings couldn't be read, so it couldn't be brought back. Try again.",
+      })
+      return
+    }
+    if (!(await act('rm', () => api.removeFilter(name, f.name)))) return
+    if (open === f.name) setOpen(null)
+    const undo = async () => {
+      if (!(await act('undo', () => api.addFilter(name, { kind: f.kind, name: f.name, settings }))))
+        return
+      try {
+        if (!f.enabled) await api.editFilter(name, f.name, 'disable')
+        // Added at the bottom: back up to where it was, counted on the list as it is now
+        // (others may have changed since).
+        const now = await api.filters(name)
+        const steps = Math.max(0, now.length - 1 - at)
+        for (let k = 0; k < steps; k++) await api.editFilter(name, f.name, 'up')
+      } catch {
+        toast({
+          tone: 'warn',
+          message: `${f.name} is back, but not quite as it was.`,
+          hint: 'Check its switch, and drag it to its place.',
+        })
+      } finally {
+        list.reload()
+      }
+    }
+    toast({
+      tone: 'info',
+      key: `filter-removed:${name}`,
+      message: `${f.name} removed.`,
+      duration: 6000,
+      action: { label: 'Undo', run: () => void undo() },
+    })
+  }
   // Moves a filter `by` places (negative: up), one step at a time as the engine moves them.
   const move = (f: string, by: number) =>
     void act('move', async () => {
@@ -822,22 +881,41 @@ function Filters({
     return at < 0 ? els.length : at
   }
   return (
-    <section ref={section} aria-label="Filters" className="flex scroll-mt-4 flex-col gap-3">
-      <div className="flex flex-col gap-2">
-        <h3 className="m-0 flex items-center gap-1 font-display text-[14px] font-extrabold text-text-2">
-          Filters on it
-          <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
-        </h3>
+    <section ref={section} aria-label="Filters" className="flex scroll-mt-4 flex-col">
+      <div className="flex flex-col">
+        <Band
+          icon={MagicWand}
+          tone="var(--fc-twitch)"
+          title={
+            <span className="inline-flex items-center gap-1">
+              Filters on it
+              <InfoTip label="About filters">They run in order, top to bottom.</InfoTip>
+            </span>
+          }
+        >
+          <Button
+            size="xs"
+            variant="secondary"
+            className="h-[22px]! px-2! text-[11.5px]! tracking-normal normal-case"
+            aria-expanded={adding}
+            aria-controls={addId}
+            onClick={() => setAdding(!adding)}
+          >
+            <Plus size={13} weight="bold" /> Add a filter
+          </Button>
+        </Band>
         {list.error && !list.data ? (
-          <LoadError error={list.error} onRetry={list.reload} />
+          <div className="p-3">
+            <LoadError error={list.error} onRetry={list.reload} />
+          </div>
         ) : !list.data ? (
-          <Skeleton className="h-16" />
+          <Skeleton className="m-3 h-16" />
         ) : filters.length === 0 ? (
-          <p className="m-0 rounded-control border border-dashed border-line-strong px-3 py-3 text-[14px] text-text-3">
+          <p className="m-0 border-b border-line px-3 py-2.5 text-[12.5px] text-text-3">
             None yet.
           </p>
         ) : (
-          <div ref={rows} className="flex flex-col gap-1.5">
+          <div ref={rows} className="flex flex-col">
             {filters.map((f, i) => {
               const entry = FILTER_OF[f.kind]
               const FIcon = entry?.icon ?? Funnel
@@ -850,31 +928,32 @@ function Filters({
                   key={f.name}
                   data-filter-row
                   className={cx(
-                    'relative rounded-[12px] border border-line bg-surface-2',
+                    'relative border-b border-line',
                     !f.enabled && 'opacity-60',
-                    drag?.from === i && 'ring-2 ring-accent-line',
+                    drag?.from === i && 'bg-accent-soft',
+                    open === f.name && 'bg-accent-soft shadow-[inset_2px_0_0_var(--fc-arc)]',
                   )}
                 >
                   {lineAbove && (
                     <span
                       aria-hidden
-                      className="absolute inset-x-1 -top-[5px] h-[3px] rounded-full bg-accent-text"
+                      className="absolute inset-x-1 -top-[2px] z-10 h-[3px] rounded-full bg-accent-text"
                     />
                   )}
                   {lineBelow && (
                     <span
                       aria-hidden
-                      className="absolute inset-x-1 -bottom-[5px] h-[3px] rounded-full bg-accent-text"
+                      className="absolute inset-x-1 -bottom-[2px] z-10 h-[3px] rounded-full bg-accent-text"
                     />
                   )}
-                  <div className="flex items-center gap-2 py-1.5 pr-2 pl-1">
+                  <div className="flex h-10 items-center gap-2 pr-2 pl-1">
                     <button
                       type="button"
                       aria-label={`Move ${f.name}: drag, or press the up and down arrows`}
                       // Not disabled while a move is sent: that would drop the keyboard's
                       // place on it after each step (CodeRabbit).
                       aria-disabled={busy !== null || undefined}
-                      className="grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center rounded-[6px] text-text-3 outline-none hover:text-text focus-visible:shadow-[var(--fc-focus)] active:cursor-grabbing"
+                      className="grid h-8 w-5 shrink-0 cursor-grab touch-none place-items-center rounded-[5px] text-text-3 outline-none hover:text-text focus-visible:shadow-[var(--fc-focus)] active:cursor-grabbing"
                       onKeyDown={(e) => {
                         const by = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
                         if (!by || i + by < 0 || i + by >= filters.length) return
@@ -901,13 +980,17 @@ function Filters({
                       }}
                       onPointerCancel={() => setDrag(null)}
                     >
-                      <DotsSixVertical size={16} weight="bold" />
+                      <DotsSixVertical size={14} weight="bold" />
                     </button>
                     <span
                       aria-hidden
-                      className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent-text"
+                      className="grid size-5 shrink-0 place-items-center rounded-[5px]"
+                      style={{
+                        color: filterTone(entry),
+                        background: `color-mix(in oklab, ${filterTone(entry)} 15%, transparent)`,
+                      }}
                     >
-                      <FIcon size={17} />
+                      <FIcon size={12} weight="bold" />
                     </span>
                     <button
                       type="button"
@@ -918,8 +1001,10 @@ function Filters({
                       }}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
-                      <span className="w-full truncate text-[14.5px] font-bold">{f.name}</span>
-                      <span className="w-full truncate text-[13px] text-text-3">
+                      <span className="w-full truncate text-[13px] leading-tight font-semibold">
+                        {f.name}
+                      </span>
+                      <span className="w-full truncate text-[11px] leading-tight text-text-3">
                         {entry && entry.label !== f.name
                           ? entry.label
                           : (entry?.help ??
@@ -931,7 +1016,7 @@ function Filters({
                     </button>
                     {open === f.name && !NO_FORM.has(f.kind) && (
                       <IconButton
-                        size="sm"
+                        size="xs"
                         variant="ghost"
                         label={`Reset ${f.name}`}
                         disabled={busy !== null}
@@ -948,7 +1033,7 @@ function Filters({
                     )}
                     {open === f.name && hasMore(f.kind) && (
                       <IconButton
-                        size="sm"
+                        size="xs"
                         variant="ghost"
                         label={
                           extra ? `Fewer settings for ${f.name}` : `More settings for ${f.name}`
@@ -960,37 +1045,18 @@ function Filters({
                         <DotsThree size={17} weight="bold" />
                       </IconButton>
                     )}
-                    {/* One button that asks once: the bin, then a red "Remove" to click again (9 Nov:
-                        a filled bin with only a tooltip looked stuck). The same element both
-                        times, so leaving it takes the question back. */}
-                    <button
-                      type="button"
-                      aria-label={sure === f.name ? `Sure? Remove ${f.name}` : `Remove ${f.name}`}
-                      title={sure === f.name ? undefined : `Remove ${f.name}`}
+                    {/* The bin removes it at once; the toast's Undo puts it back as it was
+                        (owner, 10 Nov: no red "Remove" button to click again). */}
+                    <IconButton
+                      size="xs"
+                      variant="ghost"
+                      label={`Remove ${f.name}`}
                       disabled={busy !== null}
-                      onBlur={() => setSure(null)}
-                      onKeyDown={(e) => {
-                        // Escape takes the question back without closing the panel (CodeRabbit).
-                        if (e.key === 'Escape' && sure === f.name) {
-                          e.stopPropagation()
-                          setSure(null)
-                        }
-                      }}
-                      onClick={() =>
-                        sure === f.name
-                          ? void act('rm', () => api.removeFilter(name, f.name))
-                          : setSure(f.name)
-                      }
-                      className={cx(
-                        'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[13px] font-bold outline-none transition-colors duration-150 focus-visible:shadow-[var(--fc-focus)] disabled:opacity-60',
-                        sure === f.name
-                          ? 'bg-danger-fill px-2.5 text-white'
-                          : 'w-8 text-text-3 hover:bg-danger-soft hover:text-danger',
-                      )}
+                      className="text-text-3 hover:bg-danger-soft hover:text-danger"
+                      onClick={() => void remove(f, i)}
                     >
-                      <Trash size={15} weight={sure === f.name ? 'bold' : 'regular'} aria-hidden />
-                      {sure === f.name && (busy === 'rm' ? 'Removing…' : 'Remove')}
-                    </button>
+                      <Trash size={14} aria-hidden />
+                    </IconButton>
                     <Switch
                       label={`${f.name} on`}
                       hideLabel
@@ -1003,14 +1069,16 @@ function Filters({
                     />
                   </div>
                   {open === f.name && !NO_FORM.has(f.kind) && (
-                    <div className="border-t border-line px-3 pt-2.5 pb-3">
-                      <FilterSettings
-                        key={fresh}
-                        source={name}
-                        filter={f.name}
-                        kind={f.kind}
-                        more={extra}
-                      />
+                    <div className="fc-inset border-t border-line bg-surface-2 py-0.5 pr-2.5 pl-9">
+                      <RowLook.Provider value="inset">
+                        <FilterSettings
+                          key={fresh}
+                          source={name}
+                          filter={f.name}
+                          kind={f.kind}
+                          more={extra}
+                        />
+                      </RowLook.Provider>
                     </div>
                   )}
                 </div>
@@ -1020,8 +1088,8 @@ function Filters({
         )}
       </div>
       <AddFilter
+        id={addId}
         open={adding}
-        onOpen={setAdding}
         find={find}
         onFind={setFind}
         only={both ? only : 'all'}
@@ -1048,8 +1116,8 @@ interface FilterPick {
 
 /** "Add a filter" and the picker it opens under itself. */
 function AddFilter({
+  id,
   open,
-  onOpen,
   find,
   onFind,
   only,
@@ -1061,8 +1129,9 @@ function AddFilter({
   others,
   onAdd,
 }: {
+  /** The panel's id: the band's "Add a filter" button opens it. */
+  id: string
   open: boolean
-  onOpen: (open: boolean) => void
   find: string
   onFind: (q: string) => void
   only: 'all' | 'picture' | 'sound'
@@ -1075,44 +1144,48 @@ function AddFilter({
   others: FilterPick[]
   onAdd: (kind: string, label: string) => void
 }) {
-  const id = useId()
   const q = find.trim().toLowerCase()
   const match = (p: FilterPick) => !q || `${p.label} ${p.help ?? ''}`.toLowerCase().includes(q)
   const pics = only === 'sound' ? [] : curated.filter((p) => !p.audio && match(p))
   const sounds = only === 'picture' ? [] : curated.filter((p) => p.audio && match(p))
   const rest = others.filter(match)
+  // One line each (owner's pick, design A, 10 Nov): its coloured icon, name, a short word on
+  // what it does, then + (or "On it").
   const row = (p: FilterPick) => {
     const Icon = p.icon ?? Funnel
+    const tone = p.audio ? 'var(--fc-ok)' : filterTone(FILTER_OF[p.kind])
     return (
       <button
         key={p.kind}
         type="button"
         disabled={busy}
         aria-label={`Add ${p.label}${p.on ? ' (it has one already)' : ''}`}
+        title={p.help}
         onClick={() => onAdd(p.kind, p.label)}
-        className="group flex min-w-0 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left outline-none hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50"
+        className="group flex h-[34px] min-w-0 items-center gap-2.5 border-b border-line pr-2.5 pl-3 text-left outline-none hover:bg-surface-2 focus-visible:shadow-[inset_0_0_0_2px_var(--fc-accent-text)] disabled:opacity-50"
       >
         <span
           aria-hidden
-          className={cx(
-            'grid size-8 shrink-0 place-items-center rounded-[9px]',
-            p.audio ? 'bg-ok-soft text-ok' : 'bg-accent-soft text-accent-text',
-          )}
+          className="grid size-5 shrink-0 place-items-center rounded-[5px]"
+          style={{ color: tone, background: `color-mix(in oklab, ${tone} 15%, transparent)` }}
         >
-          <Icon size={17} />
+          <Icon size={12} weight="bold" />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[14px] font-bold">{p.label}</span>
-          {p.help && <span className="truncate text-[12.5px] text-text-3">{p.help}</span>}
-        </span>
+        <span className="shrink-0 truncate text-[12.5px] font-semibold">{p.label}</span>
+        {p.help && (
+          <span className="min-w-0 flex-1 truncate text-[11px] text-text-3">{p.help}</span>
+        )}
+        {!p.help && <span className="flex-1" />}
         {p.on ? (
-          <span className="shrink-0 text-[12.5px] font-bold text-ok">On it</span>
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-ok">
+            <Check size={12} weight="bold" aria-hidden /> On it
+          </span>
         ) : (
           <Plus
-            size={16}
+            size={15}
             weight="bold"
             aria-hidden
-            className="shrink-0 text-text-3 group-hover:text-text"
+            className="shrink-0 text-accent-text opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
           />
         )}
       </button>
@@ -1120,69 +1193,62 @@ function AddFilter({
   }
   const group = (title: string, picks: FilterPick[]) =>
     picks.length > 0 && (
-      <div className="flex flex-col gap-1">
-        <h4 className="m-0 flex items-center gap-2 text-[11.5px] font-extrabold tracking-[0.07em] text-text-3 uppercase after:h-px after:flex-1 after:bg-line">
+      <div className="flex flex-col">
+        <h4 className="m-0 flex h-[26px] items-center border-b border-line bg-surface-2 px-3 text-[10.5px] font-bold tracking-[0.07em] text-text-3 uppercase">
           {title}
         </h4>
-        <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2">{picks.map(row)}</div>
+        {picks.map(row)}
       </div>
     )
   return (
-    <div className="flex flex-col gap-2">
-      <div>
-        <Button
-          variant="secondary"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => onOpen(!open)}
-        >
-          <Plus size={16} weight="bold" /> Add a filter
-          {open ? <CaretUp size={13} weight="bold" /> : <CaretDown size={13} weight="bold" />}
-        </Button>
-      </div>
+    <div className="flex flex-col">
       {open && (
         <div
           id={id}
           role="group"
           aria-label="Add a filter"
-          className="flex flex-col gap-2.5 rounded-[14px] border border-line-strong bg-surface-1 p-2.5 shadow-pop"
+          className="flex flex-col border-b border-line-strong"
         >
-          <Input
-            aria-label="Find a filter"
-            data-keep-placeholder
-            placeholder="Find a filter"
-            value={find}
-            autoFocus
-            onChange={(e) => onFind(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' && find) {
-                // Clears the search first; the next Escape closes the drawer.
-                e.stopPropagation()
-                onFind('')
-              }
-            }}
-          />
-          {onOnly && (
-            <Segmented
-              label="Show"
-              value={only}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'picture', label: 'Picture' },
-                { value: 'sound', label: 'Sound' },
-              ]}
-              onChange={onOnly}
+          <div className="flex flex-col gap-2 border-b border-line px-3 py-2">
+            <Input
+              aria-label="Find a filter"
+              data-keep-placeholder
+              placeholder="Find a filter"
+              className="h-[30px]! rounded-[6px]! px-2.5! text-[12.5px]!"
+              value={find}
+              autoFocus
+              onChange={(e) => onFind(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && find) {
+                  // Clears the search first; the next Escape closes the drawer.
+                  e.stopPropagation()
+                  onFind('')
+                }
+              }}
             />
-          )}
+            {onOnly && (
+              <Segmented
+                label="Show"
+                size="sm"
+                value={only}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'picture', label: 'Picture' },
+                  { value: 'sound', label: 'Sound' },
+                ]}
+                onChange={onOnly}
+              />
+            )}
+          </div>
           {group('Picture', pics)}
           {group('Sound', sounds)}
           {rest.length > 0 && (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col">
               <button
                 type="button"
                 aria-expanded={more || !!q}
                 onClick={() => onMore(!more)}
-                className="flex items-center gap-2 rounded-[8px] px-2 py-2 text-left text-[13.5px] font-bold text-text-2 outline-none hover:text-text focus-visible:shadow-[var(--fc-focus)]"
+                className="flex h-[34px] items-center gap-2 border-b border-line px-3 text-left text-[12.5px] font-semibold text-text-2 outline-none hover:text-text focus-visible:shadow-[inset_0_0_0_2px_var(--fc-accent-text)]"
               >
                 {more || q ? (
                   <CaretDown size={14} weight="bold" />
@@ -1191,13 +1257,11 @@ function AddFilter({
                 )}
                 {rest.length} more (OBS's own)
               </button>
-              {(more || !!q) && (
-                <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2">{rest.map(row)}</div>
-              )}
+              {(more || !!q) && rest.map(row)}
             </div>
           )}
           {pics.length + sounds.length + rest.length === 0 && (
-            <p className="m-0 px-2 py-2 text-[14px] text-text-3">No filter called that.</p>
+            <p className="m-0 px-3 py-2.5 text-[12.5px] text-text-3">No filter called that.</p>
           )}
         </div>
       )}
@@ -1419,23 +1483,27 @@ function Duck({ name, list }: { name: string; list: Resource<EngineFilter[]> }) 
     list.reload()
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-      <span className="flex items-center gap-1.5 text-sm font-semibold">
-        Lower it when I talk
-        <InfoTip label="About lowering it">
-          {mic
-            ? `It drops while ${mic} hears you, and comes back when you stop.`
-            : 'It drops while your mic hears you, and comes back when you stop.'}
-        </InfoTip>
-      </span>
-      <Switch
-        label="Lower it when I talk"
-        hideLabel
-        checked={on}
-        disabled={busy === 'duck'}
-        onChange={(to) => void toggle(to)}
-      />
-    </div>
+    <Prop
+      label="Lower when I talk"
+      hint={
+        mic
+          ? `It drops while ${mic} hears you, and comes back when you stop.`
+          : 'It drops while your mic hears you, and comes back when you stop.'
+      }
+    >
+      {(id) => (
+        <span className="ml-auto">
+          <Switch
+            id={id}
+            label="Lower it when I talk"
+            hideLabel
+            checked={on}
+            disabled={busy === 'duck'}
+            onChange={(to) => void toggle(to)}
+          />
+        </span>
+      )}
+    </Prop>
   )
 }
 
@@ -1462,6 +1530,7 @@ function FilterSettings({
       loaded.reload()
       refresh()
     },
+    loaded.data,
   )
   if (loaded.error && !loaded.data)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
@@ -1478,36 +1547,30 @@ function FilterSettings({
   )
 }
 
-/** Every setting OBS has for the source, applied as it changes, under `device` ("Device settings"
- * for a sound, else "Source settings"). */
-function Settings({ name, kind, device }: { name: string; kind: string; device: string }) {
+/** Every setting the source has, applied as it changes, laid out for its kind. */
+function Settings({ name, kind }: { name: string; kind: string }) {
   const { api } = useDesk()
   const loaded = useResource(
     () => Promise.all([api.sourceOptions(name), api.settings(name)]),
     [api, name],
   )
-  const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload)
-  return (
-    <section aria-label="All settings" className="flex flex-col gap-2">
-      <h3 className="m-0 font-display text-[14px] font-extrabold text-text-2">{device}</h3>
-      {loaded.error && !loaded.data ? (
+  const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload, loaded.data)
+  if (loaded.error && !loaded.data)
+    return (
+      <Pad>
         <LoadError error={loaded.error} onRetry={loaded.reload} />
-      ) : !loaded.data ? (
-        <Skeleton className="h-32" />
-      ) : kind === 'screen_capture' ? (
-        <CaptureForm
-          opts={loaded.data[0]}
-          values={{ ...loaded.data[1], ...edits }}
-          onChange={set}
-        />
-      ) : (
-        <OptionsForm
-          compact
-          opts={loaded.data[0]}
-          values={{ ...loaded.data[1], ...edits }}
-          onChange={set}
-        />
-      )}
-    </section>
+      </Pad>
+    )
+  if (!loaded.data) return <Skeleton className="m-3 h-32" />
+  const values = { ...loaded.data[1], ...edits }
+  if (kind === 'screen_capture')
+    return (
+      <section aria-label="What to show" className="flex flex-col">
+        <Band icon={Monitor} tone="var(--fc-accent-text)" title="What to show" />
+        <CaptureForm opts={loaded.data[0]} values={values} onChange={set} />
+      </section>
+    )
+  return (
+    <KindSettings name={name} kind={kind} opts={loaded.data[0]} values={values} onChange={set} />
   )
 }

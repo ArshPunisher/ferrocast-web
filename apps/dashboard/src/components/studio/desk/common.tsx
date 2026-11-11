@@ -411,7 +411,7 @@ export function pickKind(e: KindEntry, kinds: EngineKinds | null): string | null
 
 /** The source drawer's tabs. */
 /** The drawer's tabs: Sound & filters, Settings. `filters` opens the first one at its filters. */
-export type DrawerTab = 'sound' | 'filters' | 'settings'
+export type DrawerTab = 'sound' | 'filters' | 'settings' | 'position'
 
 /** Sources with sound and no picture: they get no picture filters (every other source has a
  * picture, and a screen or window capture may have sound too). */
@@ -587,6 +587,35 @@ export const FILTERS: FilterEntry[] = [
 ]
 
 /** Filters with nothing to set: their row is the whole of them (no body, no Reset). */
+const TONE_OF_FILTER: Record<string, string> = {
+  'Green screen': 'var(--fc-molten-text)',
+  'Remove background': 'var(--fc-molten-text)',
+  Crop: 'var(--fc-accent-text)',
+  'Blur or pixelate an area': 'var(--fc-accent-text)',
+  Sharpen: 'var(--fc-accent-text)',
+  'Rounded corners': 'var(--fc-warn)',
+  Border: 'var(--fc-warn)',
+  'Shadow and glow': 'var(--fc-warn)',
+  Shape: 'var(--fc-warn)',
+  'Shape or mask': 'var(--fc-warn)',
+  'Colour look': 'var(--fc-twitch)',
+  Colour: 'var(--fc-twitch)',
+  Scroll: 'var(--fc-ok)',
+  Freeze: 'var(--fc-ok)',
+  Effects: 'var(--fc-teal)',
+}
+
+/**
+ * A filter's colour in the drawer, by what it does (owner's pick, design A, 10 Nov): keying
+ * orange, picture blue, shape yellow, colour violet, motion and sound green, effects teal;
+ * OBS's own grey.
+ */
+export function filterTone(e: FilterEntry | undefined): string {
+  if (!e) return 'var(--fc-text-3)'
+  if (e.audio) return 'var(--fc-ok)'
+  return TONE_OF_FILTER[e.label] ?? 'var(--fc-accent-text)'
+}
+
 export const NO_FORM = new Set(['ferrocast_freeze', 'freeze_filter'])
 
 export const FILTER_LABEL: Record<string, string> = Object.fromEntries(

@@ -18,7 +18,7 @@ import { LoadError } from '../../Panel'
 import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 
-const BOUNDS_LABEL: Record<EngineBounds, string> = {
+export const BOUNDS_LABEL: Record<EngineBounds, string> = {
   none: 'None',
   stretch: 'Stretch to the box',
   fit: 'Fit inside the box',
@@ -186,6 +186,7 @@ export function TransformDialog({
 }) {
   return (
     <Dialog
+      compact
       open={target !== null}
       onClose={onClose}
       size="lg"
