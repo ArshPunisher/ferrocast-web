@@ -100,10 +100,12 @@ export interface Call {
  */
 export async function iceServers(token: string, post: typeof fetch = fetch): Promise<RTCIceServer[]> {
   try {
+    // A relay that doesn't answer never holds the guest up: public STUN after 3 s.
     const res = await post('/g/v1/ice', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(3000),
     })
     if (!res.ok) return ICE_SERVERS
     const body = (await res.json().catch(() => null)) as { iceServers?: unknown } | null
