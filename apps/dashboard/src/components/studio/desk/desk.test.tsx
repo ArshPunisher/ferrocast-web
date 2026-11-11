@@ -83,7 +83,9 @@ describe('kind colours', () => {
     for (const g of KIND_GROUPS)
       for (const e of g.entries)
         for (const k of e.kinds) if (k !== 'scene') expect(kindTone(k)).toBeTruthy()
-    expect(kindTone('macos-avcapture')).toBe('var(--fc-accent-text)')
+    expect(kindTone('macos-avcapture')).toBe('var(--fc-twitch)')
+    expect(kindTone('screen_capture')).toBe('var(--fc-accent-text)')
+    expect(kindTone('image_source')).toBe('var(--fc-pink)')
     expect(kindTone('coreaudio_input_capture')).toBe('var(--fc-ok)')
     expect(kindTone('some_plugin_audio_thing')).toBe('var(--fc-ok)')
     expect(kindTone('some_plugin_thing')).toBe(PLAIN_TONE)
@@ -92,7 +94,7 @@ describe('kind colours', () => {
 
   it('a tile greys out when dimmed', () => {
     expect(renderToStaticMarkup(<KindTile kind="macos-avcapture" />)).toContain(
-      'color:var(--fc-accent-text)',
+      'color:var(--fc-twitch)',
     )
     expect(renderToStaticMarkup(<KindTile kind="macos-avcapture" dim />)).toContain(
       'color:var(--fc-text-3)',

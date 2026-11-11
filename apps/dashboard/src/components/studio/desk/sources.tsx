@@ -61,7 +61,7 @@ import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
-import { KindTile, useDesk } from './common'
+import { KindGlyph, useDesk } from './common'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 import { addsToPick } from './stage-edit'
@@ -772,7 +772,7 @@ export function SourcesDock() {
           }}
           className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <KindTile kind={item.group ? 'group' : item.kind} size={20} dim={!item.visible} />
+          <KindGlyph kind={item.group ? 'group' : item.kind} dim={!item.visible} />
           <span
             className={cx(
               'min-w-0 truncate font-semibold',
@@ -788,34 +788,38 @@ export function SourcesDock() {
           )}
         </button>
         <IconButton
-          size="sm"
+          size="xs"
           variant="ghost"
           data-no-drag
           label={item.visible ? `Hide ${item.name}` : `Show ${item.name}`}
           disabled={busy !== null}
-          className={cx(
-            !item.visible && 'text-text-3',
-            // Narrow (owner's pick N1): shown on hover or focus, or while it says something.
-            item.visible && !on && quiet,
-          )}
+          // Narrow (owner's pick N1): shown on hover or focus, or while it says something.
+          className={cx(item.visible && !on && quiet)}
           onClick={() => void act(item, item.visible ? 'hide' : 'show')}
         >
-          {item.visible ? <Eye size={16} weight="bold" /> : <EyeSlash size={16} />}
+          {/* Filled, quiet grey; blue on the picked row (owner's pick F2, 11 Nov). The colour
+              sits on the icon: the button's own would win. */}
+          {item.visible ? (
+            <Eye size={16} weight="fill" className={on ? 'text-accent-text' : 'text-text-3'} />
+          ) : (
+            <EyeSlash size={16} weight="fill" className="text-text-3" />
+          )}
         </IconButton>
         <IconButton
-          size="sm"
+          size="xs"
           variant="ghost"
           data-no-drag
           label={item.locked ? `Unlock ${item.name}` : `Lock ${item.name}`}
           aria-pressed={item.locked}
-          className={cx(
-            item.locked ? 'text-accent-text' : 'text-text-3',
-            !item.locked && !on && quiet,
-          )}
+          className={cx(!item.locked && !on && quiet)}
           disabled={busy !== null}
           onClick={() => void act(item, item.locked ? 'unlock' : 'lock')}
         >
-          {item.locked ? <LockSimple size={16} weight="bold" /> : <LockSimpleOpen size={16} />}
+          {item.locked ? (
+            <LockSimple size={15} weight="fill" className="text-text-2" />
+          ) : (
+            <LockSimpleOpen size={15} weight="fill" className="text-text-3 opacity-50" />
+          )}
         </IconButton>
       </div>
     )
@@ -833,7 +837,7 @@ export function SourcesDock() {
             const it = flat.find((i) => i.id === dragging)
             return it ? (
               <>
-                <KindTile kind={it.group ? 'group' : it.kind} size={24} />
+                <KindGlyph kind={it.group ? 'group' : it.kind} size={20} />
                 <span className="truncate">{it.name}</span>
               </>
             ) : null

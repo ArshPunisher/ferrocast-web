@@ -1,7 +1,7 @@
 // What every part of the Studio shares: the engine's API, the scene being shown and its
 // sources and sounds, and the friendly names and icons for OBS's kinds of source and filter.
 
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react'
 import {
   AppWindow,
   ArrowsInLineVertical,
@@ -182,6 +182,8 @@ export interface KindEntry {
   overlays?: boolean
   /** Guest links instead of a source to add (a guest adds their own when they join). */
   guest?: boolean
+  /** Its own colour, when not its group's (cameras violet among the captures). */
+  tone?: string
 }
 
 export interface KindGroup {
@@ -200,6 +202,7 @@ export const KIND_GROUPS: KindGroup[] = [
         key: 'camera',
         label: 'Camera',
         icon: Webcam,
+        tone: 'var(--fc-twitch)',
         kinds: ['macos-avcapture', 'av_capture_input_v2', 'dshow_input', 'v4l2_input'],
         device: ['device', 'video_device_id', 'device_id'],
       },
@@ -226,6 +229,7 @@ export const KIND_GROUPS: KindGroup[] = [
         key: 'card',
         label: 'Capture card',
         icon: VideoCamera,
+        tone: 'var(--fc-twitch)',
         kinds: ['macos-avcapture-fast', 'av_capture_input_v2', 'dshow_input'],
         device: ['device', 'video_device_id'],
         fit: true,
@@ -284,7 +288,7 @@ export const KIND_GROUPS: KindGroup[] = [
   },
   {
     label: 'Media',
-    tone: 'var(--fc-twitch)',
+    tone: 'var(--fc-pink)',
     entries: [
       { key: 'image', label: 'Image', icon: ImageIcon, kinds: ['image_source'] },
       { key: 'video', label: 'Video', icon: FilmStrip, kinds: ['ffmpeg_source', 'vlc_source'] },
@@ -295,7 +299,13 @@ export const KIND_GROUPS: KindGroup[] = [
         kinds: ['slideshow_v2', 'slideshow'],
         fit: true,
       },
-      { key: 'web', label: 'Browser', icon: Browser, kinds: ['ferrocast_web', 'browser_source'] },
+      {
+        key: 'web',
+        label: 'Browser',
+        icon: Browser,
+        kinds: ['ferrocast_web', 'browser_source'],
+        tone: 'var(--fc-accent-text)',
+      },
       // Each replay saved plays here (OBS's Replay Source, built in).
       {
         key: 'replay',
@@ -348,7 +358,7 @@ const ICONS: Record<string, Icon> = Object.fromEntries(
   KIND_GROUPS.flatMap((g) => g.entries.flatMap((e) => e.kinds.map((k) => [k, e.icon]))),
 )
 const TONES: Record<string, string> = Object.fromEntries(
-  KIND_GROUPS.flatMap((g) => g.entries.flatMap((e) => e.kinds.map((k) => [k, g.tone]))),
+  KIND_GROUPS.flatMap((g) => g.entries.flatMap((e) => e.kinds.map((k) => [k, e.tone ?? g.tone]))),
 )
 /** Colour for the kinds "More" lists and anything unknown. */
 export const PLAIN_TONE = 'var(--fc-text-2)'
@@ -380,16 +390,45 @@ export function KindTile({
     <span
       aria-hidden
       data-kind-tile
-      className="grid shrink-0 place-items-center rounded-[8px]"
-      style={{
-        width: size,
-        height: size,
-        color: c,
-        background: `color-mix(in oklab, ${c} 15%, transparent)`,
-      }}
+      className="grid shrink-0 place-items-center rounded-[6px]"
+      style={
+        {
+          width: size,
+          height: size,
+          color: c,
+          background: `color-mix(in oklab, ${c} 15%, transparent)`,
+          // Its own colour again on a picked row in the Studio (styles.css, .fc-desk).
+          '--kt': c,
+        } as CSSProperties
+      }
     >
       <I size={Math.round(size * 0.58)} weight="bold" />
     </span>
+  )
+}
+
+/** A source's kind as a bare two-tone icon in its colour (the Sources list, owner's pick F2,
+ * 11 Nov): a light fill inside a line, both in the kind's colour. */
+export function KindGlyph({
+  kind,
+  size = 17,
+  dim,
+}: {
+  kind: string
+  size?: number
+  /** Hidden: greyed. */
+  dim?: boolean | undefined
+}) {
+  const I = kindIcon(kind)
+  return (
+    <I
+      aria-hidden
+      data-kind-glyph
+      size={size}
+      weight="duotone"
+      className={dim ? 'shrink-0 opacity-45' : 'shrink-0'}
+      style={{ color: dim ? 'var(--fc-text-3)' : kindTone(kind) }}
+    />
   )
 }
 

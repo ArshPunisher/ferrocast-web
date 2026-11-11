@@ -88,6 +88,8 @@
 
   /* Platform marks. */
   --fc-twitch: #a970ff;
+  /* Pictures and video among a scene's sources (the Studio's kind colours). */
+  --fc-pink: #ff7ab6;
   --fc-youtube: #ff3b4e;
   --fc-kick: #53fc18;
   --fc-tips: #f2b84b;
@@ -172,6 +174,7 @@
   --fc-danger-fill: #c42339;
   --fc-danger-soft: rgb(196 35 57 / 0.09);
   --fc-twitch: #7d3be3;
+  --fc-pink: #b8327a;
   --fc-youtube: #e0001f;
   --fc-kick: #23a100;
   --fc-tips: #946200;
@@ -234,6 +237,7 @@
     --fc-danger-fill: #c42339;
     --fc-danger-soft: rgb(196 35 57 / 0.09);
     --fc-twitch: #7d3be3;
+    --fc-pink: #b8327a;
     --fc-youtube: #e0001f;
     --fc-kick: #23a100;
     --fc-tips: #946200;
