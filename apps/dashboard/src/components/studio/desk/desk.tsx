@@ -202,6 +202,15 @@ function Running({
     setEditing(name)
     setEditTab(tab ?? null)
   }, [])
+  // Stats' "Settings" on its heaviest source (Stats lives outside the Studio, so it asks).
+  useEffect(() => {
+    const on = (e: Event) => {
+      const name = (e as CustomEvent<unknown>).detail
+      if (typeof name === 'string' && name) edit(name, 'settings')
+    }
+    window.addEventListener('fc-edit-source', on)
+    return () => window.removeEventListener('fc-edit-source', on)
+  }, [edit])
   const itemMenu = useRef<((e: React.MouseEvent, id: number | null) => void) | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [stats, setStats] = useState<EngineStats | null>(null)

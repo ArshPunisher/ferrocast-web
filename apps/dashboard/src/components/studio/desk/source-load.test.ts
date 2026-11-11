@@ -31,9 +31,11 @@ describe('what keeps the engine busiest', () => {
   it('says when a source is bigger than the picture, or simply heavy', () => {
     const canvas = { width: 1920, height: 1080 }
     const big = sourceRates([l('Cam', 0, 3840, 2160)], [l('Cam', 30, 3840, 2160)], 1000)[0]
-    expect(loadHint(big, canvas)).toMatch(/Cam sends 3840×2160, bigger than your 1920×1080/)
+    expect(loadHint(big, canvas)).toBe(
+      'It sends 3840×2160, bigger than your 1920×1080 picture: set it to 1920×1080.',
+    )
     const fast = sourceRates([l('Cam', 0)], [l('Cam', 60)], 1000)[0]
-    expect(loadHint(fast, canvas)).toMatch(/Cam sends the most \(1920×1080 at 60 fps\)/)
+    expect(loadHint(fast, canvas)).toBe('Lower its size or frame rate if the stream stutters.')
     const light = sourceRates([l('Cam', 0)], [l('Cam', 30)], 1000)[0]
     expect(loadHint(light, canvas)).toBeNull()
     expect(loadHint(undefined, canvas)).toBeNull()

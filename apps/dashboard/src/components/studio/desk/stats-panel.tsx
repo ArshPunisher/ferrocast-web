@@ -4,6 +4,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Broadcast,
+  Gauge,
+  Lightning,
+  SlidersHorizontal,
   ClockCounterClockwise,
   HardDrives,
   Record as RecordIcon,
@@ -15,6 +18,7 @@ import { type EngineStats } from '@ferrocast/api'
 import { Dialog, InfoTip, cx } from '@ferrocast/ui'
 import { type EngineReading } from '../../../lib/engine-stats'
 import { loadHint, sourceRates, type SourceRate } from './source-load'
+import { KindTile, useEngine } from './common'
 
 /** Kbps between two byte counts `ms` apart (0 when it went back: a new stream or file). */
 export function kbpsBetween(before: number, after: number, ms: number): number {
@@ -196,6 +200,24 @@ function Box({ label, value, bad }: { label: string; value: string; bad?: boolea
 
 /** OBS's Stats, clearer (owner's pick S3): a minute of CPU and drawing time as graphs, the
  * key numbers in boxes, and a table of the outputs. */
+/** Each source's kind by name (for its icon), read while `on`; empty until it answers. */
+function useSourceKinds(on: boolean): Map<string, string> {
+  const api = useEngine()
+  const [kinds, setKinds] = useState<Map<string, string>>(new Map())
+  useEffect(() => {
+    if (!on) return
+    let live = true
+    api.sources().then(
+      (list) => live && setKinds(new Map(list.map((u) => [u.name, u.kind]))),
+      () => undefined,
+    )
+    return () => {
+      live = false
+    }
+  }, [api, on])
+  return kinds
+}
+
 export function StatsDialog({
   open,
   onClose,
@@ -208,6 +230,8 @@ export function StatsDialog({
   const { stats, history, since, at, kbps } = reading
   const rates = useRates(stats)
   const busiest = useSourceRates(stats).slice(0, 4)
+  const hint = stats ? loadHint(busiest[0], stats.canvas) : null
+  const kinds = useSourceKinds(open && busiest.length > 0)
   const e = stats?.engine
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
@@ -363,30 +387,67 @@ export function StatsDialog({
                   biggest and fastest cost the graphics card the most.
                 </InfoTip>
               </h3>
-              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                {busiest.map((b) => (
-                  <li key={b.name} className="flex items-center gap-3 text-[14px]">
-                    <span className="w-36 min-w-0 truncate font-semibold">{b.name}</span>
-                    <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-3">
-                      <span
-                        className="block h-full rounded-full bg-accent"
-                        style={{
-                          width: `${Math.max(4, (b.mpix / (busiest[0]?.mpix || 1)) * 100)}%`,
-                        }}
-                      />
-                    </span>
-                    <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
-                      {b.width}×{b.height} · {Math.round(b.fps)} fps
-                    </span>
-                  </li>
-                ))}
+              {/* Each source with its kind's icon, a line between rows, its share as a bar,
+                  the heaviest tagged; a short card says what to do (owner's pick W1 with W2's
+                  icons and rows, 11 Nov). */}
+              <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
+                {busiest.map((b, i) => {
+                  const heavy = i === 0 && hint !== null
+                  return (
+                    <li key={b.name} className="flex items-center gap-3 py-2 text-[14px]">
+                      <span className="flex w-44 min-w-0 items-center gap-2">
+                        <KindTile kind={kinds.get(b.name)} size={22} />
+                        <span className="min-w-0 truncate font-semibold">{b.name}</span>
+                        {heavy && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11.5px] font-bold text-warn">
+                            <Lightning size={11} weight="fill" aria-hidden />
+                            Heavy
+                          </span>
+                        )}
+                      </span>
+                      <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-3">
+                        <span
+                          className={cx(
+                            'block h-full rounded-full',
+                            heavy ? 'bg-[var(--fc-btn-primary)]' : 'bg-arc',
+                          )}
+                          style={{
+                            width: `${Math.max(4, (b.mpix / (busiest[0]?.mpix || 1)) * 100)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+                        {b.width}×{b.height} · {Math.round(b.fps)} fps
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
-              {(() => {
-                const hint = stats ? loadHint(busiest[0], stats.canvas) : null
-                return hint ? (
-                  <p className="m-0 text-[13.5px] font-semibold text-warn">{hint}</p>
-                ) : null
-              })()}
+              {hint && busiest[0] && (
+                <div className="flex items-center gap-3 rounded-[8px] border border-warn/30 bg-warn-soft px-3 py-2.5">
+                  <Gauge size={18} weight="fill" className="shrink-0 text-warn" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="m-0 truncate text-[13.5px] font-bold text-text">
+                      {busiest[0].name} is the heaviest
+                    </p>
+                    <p className="m-0 text-[12.5px] text-text-2">{hint}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // The Studio opens that source's settings (Stats lives outside it).
+                      const name = busiest[0]?.name
+                      if (name)
+                        window.dispatchEvent(new CustomEvent('fc-edit-source', { detail: name }))
+                      onClose()
+                    }}
+                    className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-line-strong bg-surface-1 px-2.5 text-[13px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                  >
+                    <SlidersHorizontal size={14} aria-hidden />
+                    Settings
+                  </button>
+                </div>
+              )}
             </section>
           )}
           <div className="overflow-x-auto rounded-[14px] border border-line">

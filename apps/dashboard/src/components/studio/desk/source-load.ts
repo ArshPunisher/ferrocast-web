@@ -33,7 +33,8 @@ export function sourceRates(prev: readonly Load[], cur: readonly Load[], ms: num
 /** About 1080p at 60 fps: above this one source alone is a real load. */
 const HEAVY_MPIX = 120
 
-/** One sentence about the heaviest source when it's worth saying, else null. */
+/** One short line about the heaviest source when it's worth saying, else null. Stats names
+ *  the source above it, so the line doesn't (owner's pick W1, 11 Nov). */
 export function loadHint(
   top: SourceRate | undefined,
   canvas: { width: number; height: number },
@@ -41,8 +42,7 @@ export function loadHint(
   if (!top) return null
   const size = `${top.width}×${top.height}`
   if (top.width * top.height > canvas.width * canvas.height * 1.5)
-    return `${top.name} sends ${size}, bigger than your ${canvas.width}×${canvas.height} picture. Setting it to ${canvas.width}×${canvas.height} in its settings saves the graphics card.`
-  if (top.mpix > HEAVY_MPIX)
-    return `${top.name} sends the most (${size} at ${Math.round(top.fps)} fps). If the stream struggles, lower its size or frame rate in its settings.`
+    return `It sends ${size}, bigger than your ${canvas.width}×${canvas.height} picture: set it to ${canvas.width}×${canvas.height}.`
+  if (top.mpix > HEAVY_MPIX) return 'Lower its size or frame rate if the stream stutters.'
   return null
 }
