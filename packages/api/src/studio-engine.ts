@@ -1030,16 +1030,9 @@ export function studioEngineApi(c: FerroClient) {
       c.request<{ undo: string[]; redo: string[] }>('GET', '/api/v1/studio/engine/history'),
     /** Outlines an item in the preview (and `also` these, picked with it), or nothing; with
      * `frames`, every source of the scene gets a thin outline in its own colour too
-     * (`frameColor`); with `guides`, the picked one's distances to the canvas edges (while
-     * it's dragged). */
+     * (`frameColor`). */
     select: (
-      pick: {
-        scene: string
-        id: number | null
-        frames?: boolean
-        also?: number[]
-        guides?: boolean
-      } | null,
+      pick: { scene: string; id: number | null; frames?: boolean; also?: number[] } | null,
     ) =>
       c.request<void>(
         'PUT',

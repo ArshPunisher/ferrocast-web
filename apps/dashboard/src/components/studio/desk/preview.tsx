@@ -1061,9 +1061,6 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
   // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
   const [over, setOver] = useState(false)
-  // A source being moved: the engine draws its distances to the canvas edges (OBS's spacing
-  // helpers) until it's let go.
-  const [guiding, setGuiding] = useState(false)
   const sending = useRef<{ busy: boolean; next: Map<number, Job> }>({
     busy: false,
     next: new Map(),
@@ -1078,9 +1075,9 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     const pickNone = selected === null && !frames
     const more = alsoKey ? alsoKey.split(',').map(Number) : []
     void api
-      .select(pickNone ? null : { scene, id: selected, frames, also: more, guides: guiding })
+      .select(pickNone ? null : { scene, id: selected, frames, also: more })
       .catch(() => undefined)
-  }, [api, on, scene, selected, alsoKey, pv.frames, over, guiding])
+  }, [api, on, scene, selected, alsoKey, pv.frames, over])
   useEffect(() => {
     if (!on) return
     return () => void api.select(null).catch(() => undefined)
@@ -1161,7 +1158,6 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     }
   }
   const finish = (h: Held | null) => {
-    setGuiding(false)
     if (!h?.moved) return
     if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true })
     else if (h.last) moveAll(h, h.last, true)
@@ -1293,7 +1289,6 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       }
       const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
       if (!h.moved && Math.hypot(d.x, d.y) < w.still) return
-      if (!h.moved && !h.crop) setGuiding(true)
       h.moved = true
       if (h.crop) {
         if (h.crop === 'reading') return
