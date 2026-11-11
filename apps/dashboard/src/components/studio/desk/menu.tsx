@@ -28,6 +28,8 @@ import { cx } from '@ferrocast/ui'
 
 export type MenuItem =
   | { sep: true }
+  /** A small title over the rows after it ("Move into"). */
+  | { heading: string }
   | {
       label: string
       icon?: Icon
@@ -40,10 +42,16 @@ export type MenuItem =
       checked?: boolean
       /** A shortcut shown on the right. */
       hint?: string
+      /** The icon filled in this colour (a group's folder). */
+      tone?: string
+      /** A tick on the right, keeping the icon (the place it's in now). */
+      here?: boolean
     }
 
-type Entry = Exclude<MenuItem, { sep: true }>
-const isSep = (m: MenuItem): m is { sep: true } => 'sep' in m
+type Entry = Exclude<MenuItem, { sep: true } | { heading: string }>
+/** A line or a heading: not a row that can be picked. */
+const isSep = (m: MenuItem): m is { sep: true } | { heading: string } =>
+  'sep' in m || 'heading' in m
 
 /** A narrow title row on top of a menu (owner's pick M1, 29 Oct): what it lists, how many. */
 export interface MenuHead {
@@ -236,6 +244,16 @@ function MenuList({
         </div>
       )}
       {items.map((m, i) => {
+        if ('heading' in m)
+          return (
+            <div
+              key={`head-${i}`}
+              role="presentation"
+              className="px-2 pt-1.5 pb-1 text-[12px] font-bold text-text-3 select-none"
+            >
+              {m.heading}
+            </div>
+          )
         if (isSep(m)) return <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-line" />
         const e = m as Entry
         const Ic = e.icon
@@ -243,8 +261,14 @@ function MenuList({
         return (
           <div
             key={`${e.label}-${i}`}
-            role={e.checked !== undefined ? 'menuitemcheckbox' : 'menuitem'}
-            aria-checked={e.checked !== undefined ? e.checked : undefined}
+            role={
+              e.checked !== undefined
+                ? 'menuitemcheckbox'
+                : e.here !== undefined
+                  ? 'menuitemradio'
+                  : 'menuitem'
+            }
+            aria-checked={e.checked ?? e.here}
             aria-disabled={e.disabled || undefined}
             aria-haspopup={hasSub ? 'menu' : undefined}
             aria-expanded={hasSub ? sub?.i === i : undefined}
@@ -296,9 +320,10 @@ function MenuList({
               ) : Ic ? (
                 <Ic
                   size={15}
-                  weight="bold"
+                  weight={e.tone ? 'fill' : 'bold'}
+                  style={e.tone ? { color: e.tone } : undefined}
                   className={
-                    e.danger
+                    e.danger || e.tone
                       ? ''
                       : 'text-text-2 group-focus:text-inherit group-aria-expanded:text-inherit'
                   }
@@ -306,6 +331,13 @@ function MenuList({
               ) : null}
             </span>
             <span className="min-w-0 flex-1 truncate">{e.label}</span>
+            {e.here && (
+              <Check
+                size={14}
+                weight="bold"
+                className="shrink-0 text-accent-text group-focus:text-inherit"
+              />
+            )}
             {e.hint && (
               <span className="font-mono text-[12px] font-medium text-text-3 group-focus:text-inherit">
                 {e.hint}

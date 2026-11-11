@@ -37,6 +37,8 @@ import {
   PencilSimple,
   Play,
   Plus,
+  FolderSimple,
+  Minus,
   Record as RecordIcon,
   SkipBack,
   SkipForward,
@@ -56,7 +58,7 @@ import {
   type EngineItemEdit,
   type EngineProjector,
 } from '@ferrocast/api'
-import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
+import { ConfirmDialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { shortcut } from '../../../lib/os'
@@ -66,6 +68,15 @@ import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 import { addsToPick } from './stage-edit'
 import { TRANSITIONS } from './preview'
+
+/** A group's folder colour in menus, by its place in the list. */
+const GROUP_TONES = [
+  'var(--fc-arc)',
+  'var(--fc-pink)',
+  'var(--fc-teal)',
+  'var(--fc-twitch)',
+  'var(--fc-warn)',
+]
 
 const SCALE_LABEL: Record<(typeof ENGINE_SCALE_FILTERS)[number], string> = {
   off: 'Off',
@@ -526,7 +537,7 @@ export function SourcesDock() {
           icon: Stack,
           items: [
             {
-              label: 'Into a new group',
+              label: 'New group',
               icon: Plus,
               onSelect: () =>
                 grouping(async () => {
@@ -535,17 +546,23 @@ export function SourcesDock() {
                   select(g.id)
                 }),
             },
-            ...(groups.length ? [{ sep: true as const }] : []),
-            ...groups.map((g) => ({
-              label: `Into ${g.name}`,
-              checked: parentOf(item.id)?.id === g.id,
+            // The groups as folders, each its own colour, with how much is in it; a tick on
+            // the one it's in (owner's pick G1 with G3's icons, 11 Nov).
+            ...(groups.length ? [{ sep: true as const }, { heading: 'Move into' }] : []),
+            ...groups.map((g, k) => ({
+              label: g.name,
+              icon: FolderSimple,
+              tone: GROUP_TONES[k % GROUP_TONES.length] ?? 'var(--fc-arc)',
+              hint: `${g.children.length} inside`,
+              here: parentOf(item.id)?.id === g.id,
               onSelect: () => grouping(() => api.setGroup(scene, item.id, g.id)),
             })),
             ...(parentOf(item.id)
               ? [
                   { sep: true as const },
                   {
-                    label: 'Out of the group',
+                    label: 'Not in a group',
+                    icon: Minus,
                     onSelect: () => grouping(() => api.setGroup(scene, item.id, null)),
                   },
                 ]
@@ -658,6 +675,13 @@ export function SourcesDock() {
 
   const row = (item: EngineItem, child = false) => {
     const isOpen = !closed.has(item.id)
+    const fold = () =>
+      setClosed((s) => {
+        const n = new Set(s)
+        if (isOpen) n.add(item.id)
+        else n.delete(item.id)
+        return n
+      })
     const on = selected === item.id || also.includes(item.id)
     if (naming?.from === item.name)
       return (
@@ -734,14 +758,7 @@ export function SourcesDock() {
             variant="ghost"
             data-no-drag
             label={isOpen ? `Fold ${item.name}` : `Unfold ${item.name}`}
-            onClick={() =>
-              setClosed((s) => {
-                const n = new Set(s)
-                if (isOpen) n.add(item.id)
-                else n.delete(item.id)
-                return n
-              })
-            }
+            onClick={fold}
           >
             {isOpen ? <CaretDown size={13} /> : <CaretRight size={13} />}
           </IconButton>
@@ -764,9 +781,11 @@ export function SourcesDock() {
                   ...(closed.has(g.id) ? [] : g.children.map((c) => c.id)),
                 ]),
               )
-            else select(on && also.length === 0 ? null : item.id)
+            // A click picks it; clicking it again keeps it picked (owner, 11 Nov).
+            else select(item.id)
           }}
-          onDoubleClick={() => edit(item.name)}
+          // A group's row opens and folds it (owner, 11 Nov); any other opens its settings.
+          onDoubleClick={() => (item.group ? fold() : edit(item.name))}
           onKeyDown={(e) => {
             if (e.key === 'F2') setNaming({ from: item.name, value: item.name })
           }}
@@ -939,30 +958,16 @@ export function SourcesDock() {
         </IconButton>
       </footer>
       {menu}
-      <Dialog
-        compact
+      <ConfirmDialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
-        size="sm"
-        title={`Remove ${removing?.name ?? ''}?`}
-        description={`It leaves ${scene}. Other scenes keep it.`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRemoving(null)}>
-              Keep it
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                const it = removing
-                setRemoving(null)
-                if (it) void act(it, 'remove')
-              }}
-            >
-              Remove
-            </Button>
-          </>
-        }
+        title={`Remove ${removing?.name ?? ''} from ${scene}?`}
+        description="Other scenes keep it."
+        confirm="Remove"
+        onConfirm={() => {
+          const it = removing
+          if (it) void act(it, 'remove')
+        }}
       />
     </section>
   )

@@ -19,7 +19,7 @@ import { levelOf, visibleLines } from './log-viewer'
 import { recommend } from './auto-config'
 import { shortcut } from '../../../lib/os'
 
-type Entry = Exclude<MenuItem, { sep: true }>
+type Entry = Exclude<MenuItem, { sep: true } | { heading: string }>
 
 describe('the mixer', () => {
   it('fader positions and dB go both ways like OBS (cubic)', () => {
