@@ -95,6 +95,28 @@ export interface Call {
 }
 
 /**
+ * The relay's ICE servers for this call: STUN, and TURN when the relay has it (so a guest and
+ * a streamer both on strict networks still connect). Public STUN when the relay can't say.
+ */
+export async function iceServers(token: string, post: typeof fetch = fetch): Promise<RTCIceServer[]> {
+  try {
+    const res = await post('/g/v1/ice', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    if (!res.ok) return ICE_SERVERS
+    const body = (await res.json().catch(() => null)) as { iceServers?: unknown } | null
+    const list = Array.isArray(body?.iceServers)
+      ? (body.iceServers as RTCIceServer[]).filter((x) => x && typeof x === 'object' && 'urls' in x)
+      : []
+    return list.length ? list : ICE_SERVERS
+  } catch {
+    return ICE_SERVERS
+  }
+}
+
+/**
  * Joins: sends the camera and mic, posts the offer through the relay, applies the answer.
  * Throws a `CallError` when the relay or the streamer's PC says no.
  */
@@ -104,7 +126,7 @@ export async function join(
   media: MediaStream,
   post: typeof fetch = fetch,
 ): Promise<Call> {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+  const pc = new RTCPeerConnection({ iceServers: await iceServers(token, post) })
   const call: Call = { pc }
   try {
     for (const track of media.getTracks()) {

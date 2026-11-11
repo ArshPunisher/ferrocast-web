@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeJoinError, describeMediaError, inviteToken } from './call'
+import { ICE_SERVERS, describeJoinError, describeMediaError, iceServers, inviteToken } from './call'
 
 describe('a guest link', () => {
   it('takes the token after #, and nothing that could be anything else', () => {
@@ -39,5 +39,23 @@ describe('what a guest is told', () => {
       'Another app is using your camera or mic.',
     )
     expect(describeMediaError(new Error('?')).hint).toBe('Reload the page and try again.')
+  })
+})
+
+describe("a guest's ICE servers", () => {
+  const answer = (status: number, body: unknown) =>
+    (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+  it("takes the relay's list, TURN included", async () => {
+    const turn = { urls: ['turn:turn.example:3478'], username: 'u', credential: 'c' }
+    const list = await iceServers('tok', answer(200, { iceServers: [ICE_SERVERS[0], turn, { nope: 1 }] }))
+    expect(list).toEqual([ICE_SERVERS[0], turn])
+  })
+  it('falls back to public STUN when the relay says no or is away', async () => {
+    expect(await iceServers('tok', answer(404, { error: {} }))).toEqual(ICE_SERVERS)
+    expect(await iceServers('tok', answer(200, { iceServers: [] }))).toEqual(ICE_SERVERS)
+    const away = (async () => {
+      throw new Error('offline')
+    }) as unknown as typeof fetch
+    expect(await iceServers('tok', away)).toEqual(ICE_SERVERS)
   })
 })
