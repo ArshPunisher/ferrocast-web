@@ -580,35 +580,42 @@ export function PreviewBox({ running }: { running: boolean }) {
         </div>
       </div>
     )
-  // Studio Mode: two 16:9 boxes side by side with the switch between them.
-  const half = 'w-[min(calc((100cqw-150px)/2),calc((100cqh-36px)*16/9))]'
+  // Studio Mode (owner's pick B, 11 Nov): the two pictures side by side as big as they fit,
+  // every control in one bar under them. The app's view of each reaches EDGE (10) past its
+  // box for the handles, so everything round a box keeps at least that clear: 24 between the
+  // two, 12 to the label above and to the bar below (owner's recording, 11 Nov: the picture
+  // ran over the bar and each other). Widths take off the 24 of padding and the 24 between;
+  // heights the padding, the label (18), its gap and the bar (40).
+  const half = 'w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
   return (
     <div
       data-stage-bg
-      className="flex min-h-16 flex-1 items-center justify-center gap-3 bg-[var(--fc-stage)] p-3 [container-type:size]"
+      className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:size]"
     >
-      <figure className="m-0 flex flex-col gap-3">
-        <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-text-2">
-          <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
-          Preview: {scenes.data?.preview}
-        </figcaption>
-        <div
-          ref={ref}
-          aria-label="Studio Mode preview: edit here, then send it on air. Click a source to pick it, drag to move it, drag a handle to resize it."
-          className={cx(screen, half)}
-          {...editing}
-        >
-          {!desktop && 'The live picture shows in the Ferrocast app.'}
-        </div>
-      </figure>
-      <SwitchColumn />
-      <figure className="m-0 flex flex-col gap-3">
-        <figcaption className="flex items-center gap-1.5 text-[13px] font-bold text-danger">
-          <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
-          On air: {scenes.data?.current}
-        </figcaption>
-        <div ref={programRef} aria-label="What's on air" className={cx(screen, half)} />
-      </figure>
+      <div className="flex min-h-0 flex-1 items-center justify-center gap-6 p-3">
+        <figure className="m-0 flex flex-col gap-3">
+          <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-text-2">
+            <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
+            Preview: {scenes.data?.preview}
+          </figcaption>
+          <div
+            ref={ref}
+            aria-label="Studio Mode preview: edit here, then send it on air. Click a source to pick it, drag to move it, drag a handle to resize it."
+            className={cx(screen, half)}
+            {...editing}
+          >
+            {!desktop && 'The live picture shows in the Ferrocast app.'}
+          </div>
+        </figure>
+        <figure className="m-0 flex flex-col gap-3">
+          <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-danger">
+            <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
+            On air: {scenes.data?.current}
+          </figcaption>
+          <div ref={programRef} aria-label="What's on air" className={cx(screen, half)} />
+        </figure>
+      </div>
+      <SwitchBar />
     </div>
   )
 }
@@ -730,7 +737,7 @@ const STUDIO_DEFAULTS: EngineStudioOptions = {
 /** Studio Mode's middle: Transition (the scene's own way in, or the Studio's), the T-bar,
  * swap, fade to black, and OBS's quick transitions, each one click. Right-click a quick one to
  * remove it; + adds one. */
-function SwitchColumn() {
+function SwitchBar() {
   const { api, scenes, refresh } = useDesk()
   const { run, busy } = useAction()
   const { open, menu } = useContextMenu()
@@ -787,47 +794,17 @@ function SwitchColumn() {
         onSelect: () => setOptions({ double_click: !options.double_click }),
       },
     ])
-  // Centred when it fits; scrolls inside the stage when the stage is short.
+  // One 36px bar under the two pictures: quick transitions, the T-bar, swap, black, options,
+  // and Transition at the end, where the eye lands.
   return (
-    <div className="flex w-[130px] flex-none flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin]">
-      <div className="my-auto flex flex-col items-stretch gap-1.5 px-0.5 py-1">
-        <Button variant="primary" busy={busy === 'go'} onClick={() => go()}>
-          <ArrowFatRight size={16} weight="fill" /> Transition
-        </Button>
-        <TBar />
-        <div className="flex flex-wrap items-center justify-center gap-0.5">
-          <IconButton
-            size="sm"
-            label="Swap the preview and what's on air"
-            onClick={() =>
-              void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())
-            }
-          >
-            <ArrowsLeftRight size={15} weight="bold" />
-          </IconButton>
-          <IconButton
-            size="sm"
-            label={black ? 'Fade back from black' : 'Fade to black'}
-            aria-pressed={black}
-            className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
-            onClick={() =>
-              void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
-            }
-          >
-            <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
-          </IconButton>
-          <IconButton size="sm" label="Studio Mode options" onClick={optionsMenu}>
-            <DotsThree size={16} weight="bold" />
-          </IconButton>
-        </div>
-        <span className="mt-1 text-center text-[12px] font-bold tracking-wide text-text-3 uppercase">
-          Quick
-        </span>
+    <div className="fc-dock-bar flex h-10 flex-none items-center gap-2 border-t border-line-strong bg-surface-1 px-2.5">
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {quick.map((q, i) => (
           <Button
             key={`${q.kind}-${q.ms}-${i}`}
-            variant="secondary"
-            size="sm"
+            variant="outline"
+            size="xs"
+            className="shrink-0"
             title="Right-click to remove"
             onClick={() => go(q)}
             onContextMenu={(e) =>
@@ -846,15 +823,50 @@ function SwitchColumn() {
         ))}
         {quick.length < 10 && (
           <IconButton
-            size="sm"
+            size="xs"
             label="Add a quick transition"
-            className="self-center"
+            className="shrink-0"
             onClick={adding}
           >
-            <Plus size={15} weight="bold" />
+            <Plus size={14} weight="bold" />
           </IconButton>
         )}
       </div>
+      <span aria-hidden className="h-5 w-px flex-none bg-line-strong" />
+      <div className="w-[min(220px,22%)] min-w-24 flex-none">
+        <TBar />
+      </div>
+      <span className="flex-1" />
+      <IconButton
+        size="xs"
+        label="Swap the preview and what's on air"
+        onClick={() => void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())}
+      >
+        <ArrowsLeftRight size={15} weight="bold" />
+      </IconButton>
+      <IconButton
+        size="xs"
+        label={black ? 'Fade back from black' : 'Fade to black'}
+        aria-pressed={black}
+        className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
+        onClick={() =>
+          void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
+        }
+      >
+        <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
+      </IconButton>
+      <IconButton size="xs" label="Studio Mode options" onClick={optionsMenu}>
+        <DotsThree size={16} weight="bold" />
+      </IconButton>
+      <Button
+        variant="primary"
+        size="xs"
+        className="flex-none"
+        busy={busy === 'go'}
+        onClick={() => go()}
+      >
+        <ArrowFatRight size={14} weight="fill" /> Transition
+      </Button>
       {menu}
     </div>
   )
