@@ -288,6 +288,24 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   />
                 </Row>
               )}
+              {dest?.kind === 'twitch' && dest.canvas !== 'vertical' && (
+                <Row
+                  label="Enhanced Broadcasting"
+                  hint="The Studio sends Twitch more qualities so every viewer can pick one. From the next time you go live; uses more of your computer and upload."
+                >
+                  <Switch
+                    label="Enhanced Broadcasting"
+                    hideLabel
+                    checked={!!dest.enhanced}
+                    disabled={busy === 'enhanced'}
+                    onChange={(on) =>
+                      void run('enhanced', () => api.setEnhanced(dest.id, on).then(() => true)).then(
+                        (x) => x && onSaved(),
+                      )
+                    }
+                  />
+                </Row>
+              )}
               {dest?.direct === 'whip' && (
                 <Row
                   label="Simulcast"

@@ -331,6 +331,7 @@ export class DemoGoLive {
         rules: d.enabled ? this.rules(d.kind, vertical ? vs : s, vertical) : [],
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),
         ...(d.light ? { light: true } : {}),
+        ...(d.enhanced ? { enhanced: true } : {}),
         ...(backs ? { standby_for: nameOf(backs) } : {}),
       }
     })
@@ -352,6 +353,19 @@ export class DemoGoLive {
       )
     if (on) d.light = true
     else delete d.light
+    return { destinations: clone(this.cfg) }
+  }
+
+  /** As the engine: Twitch's main picture only; off isn't saved. */
+  private setEnhanced(id: string, body: unknown): { destinations: DestinationConfig[] } {
+    const on = (body as { on?: unknown } | null)?.on
+    if (typeof on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+    const d = this.cfg.find((x) => x.id === id)
+    if (!d) throw new HttpError(404, 'not_found', 'There is no such destination.')
+    if (on && (d.kind !== 'twitch' || (d.canvas ?? 'main') !== 'main'))
+      throw new HttpError(422, 'invalid', "enhanced: Twitch's main picture only.")
+    if (on) d.enhanced = true
+    else delete d.enhanced
     return { destinations: clone(this.cfg) }
   }
 
@@ -451,6 +465,8 @@ export class DemoGoLive {
       return this.remove(seg[2] ?? '')
     if (method === 'PUT' && seg[1] === 'destinations' && seg[3] === 'light' && seg.length === 4)
       return this.setLight(seg[2] ?? '', body)
+    if (method === 'PUT' && seg[1] === 'destinations' && seg[3] === 'enhanced' && seg.length === 4)
+      return this.setEnhanced(seg[2] ?? '', body)
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()

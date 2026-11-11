@@ -22,6 +22,8 @@ export interface DestinationConfig {
   canvas?: Canvas
   /** Takes the Ferrocast Studio's lighter stream (720p); left out when not. */
   light?: boolean
+  /** Twitch Enhanced Broadcasting (Twitch, main picture); left out when off. */
+  enhanced?: boolean
 }
 
 export type PushState =
@@ -131,6 +133,8 @@ export interface DestinationView {
   direct?: DirectKind
   /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
   light?: boolean
+  /** Twitch Enhanced Broadcasting is on (from the next Studio stream); absent when not. */
+  enhanced?: boolean
   /**
    * On the lighter stream for now: its route fell behind while the others kept up. It tries
    * the full stream again by itself.
@@ -468,6 +472,14 @@ export function goliveApi(c: FerroClient) {
         {
           on,
         },
+      ),
+    /** Twitch Enhanced Broadcasting for this destination (Twitch, main picture), from the
+     * next time the Studio goes live. */
+    setEnhanced: (id: string, on: boolean) =>
+      c.request<{ destinations: DestinationConfig[] }>(
+        'PUT',
+        `/api/v1/golive/destinations/${encodeURIComponent(id)}/enhanced`,
+        { on },
       ),
     removeCustom: (id: string) =>
       c.request<void>('DELETE', `/api/v1/golive/destinations/${encodeURIComponent(id)}`),

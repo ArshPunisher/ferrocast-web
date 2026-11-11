@@ -98,6 +98,16 @@ describe('demo: Go live everywhere', () => {
     expect((await api.view()).destinations).toHaveLength(4)
   })
 
+  it("Enhanced Broadcasting is Twitch's main picture only, and shows in the view", async () => {
+    const { api } = demo()
+    const saved = await api.setEnhanced('twitch', true)
+    expect(saved.destinations.find((d) => d.id === 'twitch')?.enhanced).toBe(true)
+    expect((await api.view()).destinations.find((d) => d.id === 'twitch')?.enhanced).toBe(true)
+    expect((await refusal(api.setEnhanced('youtube', true))).status).toBe(422)
+    const off = await api.setEnhanced('twitch', false)
+    expect(off.destinations.every((d) => !d.enhanced)).toBe(true)
+  })
+
   it('points OBS here and puts it back, never while OBS streams', async () => {
     const { api, studio } = demo()
     const nothing = await refusal(api.restoreObs())
