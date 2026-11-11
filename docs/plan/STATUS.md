@@ -2,7 +2,18 @@
 
 ## 11 Nov 2026 (VST plugins, plugin catalog, Studio compact, branch own-engine-only; uncommitted)
 
-Later on 11 Nov (uncommitted):
+Morning of 11 Nov (owner away, "do all"; committed):
+
+- **Transition bar S2** (owner's pick): blue-to-red line on top, each end tinted by its side.
+- **Twitch Enhanced Broadcasting switch** in Go live › Twitch (engine fetches Twitch's plan and
+  sends its qualities to Twitch only; needs the owner's live test).
+- **Guest TURN:** the guest page asks the relay for ICE servers first (TURN once the relay has
+  its key), STUN as before otherwise.
+- **Screen cards** in Add a source show the real screen (Mac).
+- **Px guides removed** from dragging (the owner found resizing lagged).
+- Site deployed (features page live, `/app/` moved to this branch's dashboard).
+
+Earlier on 11 Nov (committed since):
 
 - **Features page redone (site, design A as picked).** The 3D glass story is gone. Now: a
   "why" strip, a Find-a-feature index (group chips dim the others, a card jumps to its
