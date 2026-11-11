@@ -824,14 +824,8 @@ export class DemoGoLive {
   }
 
   private check(): UploadCheck {
+    // Nothing ticked still measures the upload, as the engine does (Set up for me asks first).
     const ticked = this.cfg.filter((d) => d.enabled)
-    if (ticked.length === 0)
-      throw new HttpError(
-        422,
-        'golive_none',
-        'No platform is ticked.',
-        'Tick at least one platform, then check again.',
-      )
     const need = this.live() ? 6100 : 6160
     const rows = ticked.map((d) => {
       const custom = d.kind === 'custom'

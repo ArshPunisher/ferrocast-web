@@ -139,7 +139,9 @@ describe('demo: Go live everywhere', () => {
       { id: 'kick', enabled: false },
       { id: 'youtube_vertical', enabled: false },
     ])
-    expect((await refusal(api.uploadCheck())).code).toBe('golive_none')
+    const none = await api.uploadCheck()
+    expect(none.rows).toEqual([])
+    expect(none.verdict.message).toBe('Your upload is 9.0 Mbps. Turn on a platform to check it.')
   })
 })
 
