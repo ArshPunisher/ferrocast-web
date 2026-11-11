@@ -25,6 +25,7 @@ import {
   Skeleton,
   Switch,
   Textarea,
+  cx,
   toast,
 } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
@@ -624,6 +625,95 @@ export function PreflightPanel({ id }: { id?: string } = {}) {
         <PreflightList pf={pf.data} onFixed={(p) => pf.set(p)} />
       )}
     </Panel>
+  )
+}
+
+/** Pre-flight as one line (owner's pick A, 11 Nov): what to fix, with the list a click away. */
+export function PreflightStrip({ pf, id }: { pf: Resource<Preflight>; id?: string }) {
+  const studio = useStudio()
+  const [open, setOpen] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const listId = `${id ?? 'preflight'}-list`
+  const recheck = () => {
+    setChecking(true)
+    studio
+      .preflight()
+      .then((p) => {
+        pf.set(p)
+        const n = p.checks.filter((c) => c.status === 'fail' || c.status === 'warn').length
+        toast({
+          key: 'preflight',
+          tone: n ? 'warn' : 'ok',
+          message: n ? `${n} ${n === 1 ? 'thing' : 'things'} to fix.` : 'All checks passed.',
+        })
+      })
+      .catch((e: unknown) => {
+        const d = describeError(e)
+        toast({ key: 'preflight', tone: 'error', message: d.message, hint: d.hint })
+      })
+      .finally(() => setChecking(false))
+  }
+  if (pf.error) return <LoadError error={pf.error} onRetry={pf.reload} />
+  if (!pf.data) return <Skeleton className="h-14" />
+  const issues = pf.data.checks.filter((c) => c.status === 'fail' || c.status === 'warn')
+  const n = issues.length
+  const status = issues.some((c) => c.status === 'fail') ? 'fail' : n ? 'warn' : 'ok'
+  return (
+    <section
+      {...(id ? { id } : {})}
+      aria-label="Pre-flight"
+      className={cx(
+        'scroll-mt-4 overflow-hidden rounded-panel border',
+        n ? 'border-warn/40 bg-warn-soft' : 'border-line bg-surface-1 shadow-1',
+      )}
+    >
+      <div className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 sm:px-5">
+        <StatusIcon status={status} />
+        <p className="min-w-0 flex-1 text-[15px] font-semibold text-text">
+          {n ? (
+            <>
+              <span className="sm:hidden">{n} to fix</span>
+              <span className="hidden sm:inline">
+                {n} {n === 1 ? 'thing' : 'things'} to fix before you go live
+              </span>
+            </>
+          ) : (
+            `All ${pf.data.checks.length} checks passed`
+          )}
+          {n > 0 && (
+            <span className="hidden font-normal text-text-2 sm:inline">
+              {' · '}
+              {issues.map((c) => c.label).join(', ')}
+            </span>
+          )}
+        </p>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<ArrowsClockwise size={14} />}
+            busy={checking}
+            onClick={recheck}
+          >
+            Check again
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((o) => !o)}
+          >
+            {open ? 'Hide' : n ? 'Show' : 'Details'}
+          </Button>
+        </div>
+      </div>
+      {open && (
+        <div id={listId} className="border-t border-line bg-surface-1 px-4 pt-1 pb-3 sm:px-5">
+          <PreflightList pf={pf.data} onFixed={(p) => pf.set(p)} />
+        </div>
+      )}
+    </section>
   )
 }
 

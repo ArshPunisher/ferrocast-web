@@ -15,7 +15,13 @@ import {
   MomentsTimeline,
 } from '../components/studio/moments'
 import { HealthPanel, ScenesPanel, SwitcherSettings } from '../components/studio/obs'
-import { PreflightPanel, ShowPanel, ShowSettings, useShow } from '../components/studio/show'
+import {
+  PreflightPanel,
+  PreflightStrip,
+  ShowPanel,
+  ShowSettings,
+  useShow,
+} from '../components/studio/show'
 import { StreamInfoEditor } from '../components/studio/stream-info'
 import { useResource } from '../lib/hooks'
 import { go, type StudioSection } from '../lib/router'
@@ -57,9 +63,6 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   const showCfg = useResource(() => studio.showConfig(), [studio])
   const [show] = useShow()
   const preflight = useResource(() => studio.preflight(), [studio])
-  const problems = (preflight.data?.checks ?? []).filter(
-    (c) => c.status === 'fail' || c.status === 'warn',
-  ).length
   // Every tab uses the window's full width, so switching tabs (or Ferrocast / OBS) never jumps.
   useWidePage()
   // Go live is a work screen: its header is one slim row, and the desk's bar (Record, Go live,
@@ -105,44 +108,41 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         <GoLiveTab />
       )}
       {section === 'vertical' && usesObs && <VerticalTab />}
-      {section === 'show' && (
+      {section === 'show' && !usesObs && (
+        // The Studio's show (owner's pick A, 11 Nov): one column, Pre-flight as a line on top,
+        // how the stream starts, then the settings in groups.
+        <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4">
+          <GoingToLine />
+          <PreflightStrip id="preflight" pf={preflight} />
+          {show && show.phase !== 'ended' && <ShowPanel presets={info.data?.presets ?? []} />}
+          {/* Pick how the stream starts; Go live runs it (owner's pick D1/P1, 30 Oct). */}
+          <ShowStylePicker
+            cfg={showCfg}
+            names={rig.scenes.data?.scenes.map((s) => s.name) ?? []}
+            checks={0}
+            onChecks={() => {}}
+          >
+            <ShowSettings presets={info.data?.presets ?? []} rig={rig} cfg={showCfg} goLive />
+          </ShowStylePicker>
+          <h2 className="mt-3 px-1 text-[14px] font-bold text-text-3">During the stream</h2>
+          <SwitcherSettings
+            scenes={rig.scenes.data}
+            inputs={rig.inputs.data}
+            app={rig.app}
+            cfg={switcher}
+          />
+          <LiveCaptions inputs={rig.inputs.data} cfg={switcher} />
+        </div>
+      )}
+      {section === 'show' && usesObs && (
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-5">
             <GoingToLine />
-            {/* A show running (its countdown can be skipped or cancelled there): its panel. */}
-            {(usesObs || (show && show.phase !== 'ended')) && (
-              <ShowPanel presets={info.data?.presets ?? []} />
-            )}
-            {usesObs ? null : (
-              // The Studio (owner's pick D1/P1, 30 Oct): pick how the stream starts; Go live
-              // runs it, so there's no Start show or Start streaming here.
-              <ShowStylePicker
-                cfg={showCfg}
-                names={rig.scenes.data?.scenes.map((s) => s.name) ?? []}
-                checks={problems}
-                onChecks={() =>
-                  document
-                    .getElementById('preflight')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-              >
-                <ShowSettings presets={info.data?.presets ?? []} rig={rig} cfg={showCfg} goLive />
-              </ShowStylePicker>
-            )}
+            <ShowPanel presets={info.data?.presets ?? []} />
           </div>
           <div className="flex flex-col gap-5">
             <PreflightPanel id="preflight" />
-            {usesObs && <ShowSettings presets={info.data?.presets ?? []} rig={rig} />}
-            {/* BRB, !scene and shortcuts: in the OBS tab for OBS, here for the Studio. */}
-            {!usesObs && (
-              <SwitcherSettings
-                scenes={rig.scenes.data}
-                inputs={rig.inputs.data}
-                app={rig.app}
-                cfg={switcher}
-              />
-            )}
-            {!usesObs && <LiveCaptions inputs={rig.inputs.data} cfg={switcher} />}
+            <ShowSettings presets={info.data?.presets ?? []} rig={rig} />
           </div>
         </div>
       )}

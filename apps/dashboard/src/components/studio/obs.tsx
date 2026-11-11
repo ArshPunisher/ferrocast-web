@@ -1,8 +1,17 @@
 // OBS helpers: health, scene switching with sources, clip that, BRB and the switcher's
 // settings (chat !scene allow-list, BRB, ads, hotkeys).
 
-import { useEffect, useState } from 'react'
-import { Coffee, GameController, Lightning, Plus, Scissors, Trash } from '@phosphor-icons/react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
+import {
+  Coffee,
+  FilmStrip,
+  GameController,
+  Lightning,
+  Plus,
+  Scissors,
+  SquaresFour,
+  Trash,
+} from '@phosphor-icons/react'
 import {
   type EventRule,
   type ObsHealth,
@@ -15,6 +24,7 @@ import {
   Button,
   Field,
   IconButton,
+  InfoTip,
   Input,
   Kbd,
   Select,
@@ -302,204 +312,246 @@ export function SwitcherSettings({
   const toggle = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
   const audio = (inputs ?? []).filter((i) => MIC_KIND.test(i.kind))
+  const chip =
+    'inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2'
   return (
-    <Panel title="Scene switcher" description="Saved as you change it.">
-      <div className="flex flex-col gap-4">
-        <Switch
-          label="Mods can switch scenes from chat"
-          description="!scene <name>, !brb and !back, for the scenes ticked below."
-          checked={c.chat_enabled}
-          onChange={(v) => save({ chat_enabled: v })}
-        />
-        <fieldset>
-          <legend className="text-[14.5px] font-medium text-text-2">
-            Scenes mods may switch to
-          </legend>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {names.map((n) => (
-              <label
-                key={n}
-                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2"
-              >
-                <input
-                  type="checkbox"
-                  className="accent-[var(--fc-arc)]"
-                  checked={c.chat_allowed.includes(n)}
-                  onChange={() => save({ chat_allowed: toggle(c.chat_allowed, n) })}
-                />
-                {n}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend className="text-[14.5px] font-medium text-text-2">
-            Keyboard shortcuts in the dashboard
-          </legend>
-          <p className="mt-0.5 text-[14.5px] text-text-3">
-            Ticked scenes get Alt+1, Alt+2 and on, in tick order.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {names.map((n) => {
-              const i = c.hotkeys.indexOf(n)
-              return (
-                <label
-                  key={n}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2"
-                >
-                  <input
-                    type="checkbox"
-                    className="accent-[var(--fc-arc)]"
-                    checked={i >= 0}
-                    disabled={i < 0 && c.hotkeys.length >= 9}
-                    onChange={() => save({ hotkeys: toggle(c.hotkeys, n) })}
-                  />
-                  {n}
-                  {i >= 0 && <Kbd>Alt+{i + 1}</Kbd>}
-                </label>
-              )
-            })}
-          </div>
-        </fieldset>
-        <Field label="BRB scene">
-          {(p) => (
-            <Select
-              {...p}
-              value={c.brb_scene ?? ''}
-              onChange={(e) =>
-                save({
-                  brb_scene: e.target.value || null,
-                  ...(e.target.value ? {} : { brb_on_ads: false, brb_when_black: false }),
-                })
-              }
-            >
-              <option value="">None</option>
-              {names.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Switch
-          label="Switch to BRB during Twitch ads"
-          description="And back when the ad ends."
-          disabled={!c.brb_scene}
-          checked={c.brb_on_ads}
-          onChange={(v) => save({ brb_on_ads: v })}
-        />
-        {app !== 'OBS' && (
-          <Switch
-            label="Switch to BRB when a camera goes black"
-            description="While you're live, for the cameras in Pre-flight. Back when the picture returns."
-            disabled={!c.brb_scene}
-            checked={!!c.brb_when_black}
-            onChange={(v) => save({ brb_when_black: v })}
-          />
-        )}
-        {/* Away (plan item 9): the Studio reads its own mics; OBS's aren't heard from here. */}
-        {app !== 'OBS' && (
-          <Field
-            label="Away"
-            hint="While you're live: BRB after this long without a word on your mics (the mics in Pre-flight), and back when you talk. Your mic stays on during it, so Ferrocast hears you come back."
+    <>
+      <Panel title="Breaks" icon={<Coffee weight="fill" />} tone="var(--fc-warn)">
+        <div className={ROWS}>
+          <SelectRow
+            label="BRB scene"
+            hint="Shown while you're away. Pick one to turn on the switches below."
           >
             {(p) => (
               <Select
                 {...p}
-                disabled={!c.brb_scene}
-                value={String(c.away_minutes)}
-                onChange={(e) => save({ away_minutes: Number(e.target.value) })}
+                value={c.brb_scene ?? ''}
+                onChange={(e) =>
+                  save({
+                    brb_scene: e.target.value || null,
+                    ...(e.target.value ? {} : { brb_on_ads: false, brb_when_black: false }),
+                  })
+                }
               >
-                <option value="0">Off</option>
-                {[2, 3, 5, 10].map((m) => (
-                  <option key={m} value={m}>
-                    After {m} minutes quiet
+                <option value="">None</option>
+                {names.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
                   </option>
                 ))}
               </Select>
             )}
-          </Field>
-        )}
-        {app !== 'OBS' && (
-          <GameScenes
-            list={c.game_scenes ?? []}
-            names={names}
-            onChange={(game_scenes) => save({ game_scenes })}
+          </SelectRow>
+          <Switch
+            label="During Twitch ads"
+            description="BRB while an ad plays, and back when it ends."
+            disabled={!c.brb_scene}
+            checked={c.brb_on_ads}
+            onChange={(v) => save({ brb_on_ads: v })}
           />
-        )}
-        <EventRules
-          list={c.event_rules ?? []}
-          scenes={names}
-          sources={[
-            ...new Set((scenes?.scenes ?? []).flatMap((s) => s.items.map((i) => i.source))),
-          ]}
-          onChange={(event_rules) => save({ event_rules })}
-        />
-        {audio.length > 0 && (
-          <fieldset>
-            <legend className="text-[14.5px] font-medium text-text-2">Mute on BRB</legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {audio.map((i) => (
-                <label
-                  key={i.name}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[14.5px] text-text-2"
+          {app !== 'OBS' && (
+            <Switch
+              label="When a camera goes black"
+              description="While you're live, for the cameras in Pre-flight. Back when the picture returns."
+              disabled={!c.brb_scene}
+              checked={!!c.brb_when_black}
+              onChange={(v) => save({ brb_when_black: v })}
+            />
+          )}
+          {/* Away (plan item 9): the Studio reads its own mics; OBS's aren't heard from here. */}
+          {app !== 'OBS' && (
+            <SelectRow
+              label="When you go quiet"
+              hint="While you're live: BRB after this long without a word on your mics (the mics in Pre-flight), and back when you talk. Your mic stays on during it, so Ferrocast hears you come back."
+            >
+              {(p) => (
+                <Select
+                  {...p}
+                  disabled={!c.brb_scene}
+                  value={String(c.away_minutes)}
+                  onChange={(e) => save({ away_minutes: Number(e.target.value) })}
                 >
-                  <input
-                    type="checkbox"
-                    className="accent-[var(--fc-arc)]"
-                    checked={c.brb_mute.includes(i.name)}
-                    onChange={() => save({ brb_mute: toggle(c.brb_mute, i.name) })}
-                  />
-                  {i.name}
-                </label>
-              ))}
+                  <option value="0">Off</option>
+                  {[2, 3, 5, 10].map((m) => (
+                    <option key={m} value={m}>
+                      After {m} minutes
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </SelectRow>
+          )}
+          {audio.length > 0 && (
+            <fieldset>
+              <legend className="text-sm font-medium text-text">Mute on BRB</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {audio.map((i) => (
+                  <label key={i.name} className={chip}>
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--fc-arc)]"
+                      checked={c.brb_mute.includes(i.name)}
+                      onChange={() => save({ brb_mute: toggle(c.brb_mute, i.name) })}
+                    />
+                    {i.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+        </div>
+      </Panel>
+      <Panel
+        title="Scene control"
+        description="Saved as you change it."
+        icon={<SquaresFour weight="fill" />}
+      >
+        <div className={ROWS}>
+          <div className="flex flex-col gap-3">
+            <Switch
+              label="Mods switch scenes from chat"
+              description="!scene <name>, !brb and !back, for the scenes ticked here."
+              checked={c.chat_enabled}
+              onChange={(v) => save({ chat_enabled: v })}
+            />
+            {c.chat_enabled && names.length > 0 && (
+              <fieldset>
+                <legend className="sr-only">Scenes mods may switch to</legend>
+                <div className="flex flex-wrap gap-2">
+                  {names.map((n) => (
+                    <label key={n} className={chip}>
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--fc-arc)]"
+                        checked={c.chat_allowed.includes(n)}
+                        onChange={() => save({ chat_allowed: toggle(c.chat_allowed, n) })}
+                      />
+                      {n}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+          </div>
+          {names.length > 0 && (
+            <fieldset>
+              <legend className="flex items-center gap-1 text-sm font-medium text-text">
+                Keyboard shortcuts
+                <InfoTip>Ticked scenes get Alt+1, Alt+2 and on, in tick order.</InfoTip>
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {names.map((n) => {
+                  const i = c.hotkeys.indexOf(n)
+                  return (
+                    <label key={n} className={chip}>
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--fc-arc)]"
+                        checked={i >= 0}
+                        disabled={i < 0 && c.hotkeys.length >= 9}
+                        onChange={() => save({ hotkeys: toggle(c.hotkeys, n) })}
+                      />
+                      {n}
+                      {i >= 0 && <Kbd>Alt+{i + 1}</Kbd>}
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
+          )}
+          {app !== 'OBS' && (
+            <GameScenes
+              list={c.game_scenes ?? []}
+              names={names}
+              onChange={(game_scenes) => save({ game_scenes })}
+            />
+          )}
+          <EventRules
+            list={c.event_rules ?? []}
+            scenes={names}
+            sources={[
+              ...new Set((scenes?.scenes ?? []).flatMap((s) => s.items.map((i) => i.source))),
+            ]}
+            onChange={(event_rules) => save({ event_rules })}
+          />
+          {!scenes && (
+            <div>
+              <Badge tone="warn">
+                {app === 'OBS'
+                  ? 'OBS isn’t connected: scene lists are from your settings.'
+                  : 'Start the Studio to see its scenes here.'}
+              </Badge>
             </div>
-          </fieldset>
-        )}
-        <Switch
-          label="Mods can type !clip"
-          description={`Saves ${app === 'OBS' ? 'OBS’s' : 'the Studio’s'} replay buffer, at most every 20 seconds.`}
-          checked={c.clip_command}
-          onChange={(v) => save({ clip_command: v })}
-        />
-        <Switch
-          label="Clip big moments by itself"
-          description="Big tips, raids and chat spikes save the replay buffer."
-          checked={c.clip_on_big_moments}
-          onChange={(v) => save({ clip_on_big_moments: v })}
-        />
-        <Switch
-          label="Make a vertical copy of each clip"
-          description="1080×1920 for Shorts, TikTok and Reels, saved beside the clip. The first time, Ferrocast downloads ffmpeg (about 30 MB)."
-          checked={c.vertical_clips}
-          onChange={(v) => save({ vertical_clips: v })}
-        />
-        {app !== 'OBS' && c.vertical_clips && (
+          )}
+        </div>
+      </Panel>
+      <Panel title="Clips" icon={<FilmStrip weight="fill" />} tone="var(--fc-pink)">
+        <div className={ROWS}>
           <Switch
-            label="Fill the frame"
-            description="Follows your face when the camera fills the picture, else the action, instead of the whole clip over a blurred copy. On a Mac."
-            checked={c.vertical_fill ?? false}
-            onChange={(v) => save({ vertical_fill: v })}
+            label="Mods can type !clip"
+            description={`Saves ${app === 'OBS' ? 'OBS’s' : 'the Studio’s'} replay buffer, at most every 20 seconds.`}
+            checked={c.clip_command}
+            onChange={(v) => save({ clip_command: v })}
           />
-        )}
-        {app !== 'OBS' && (
           <Switch
-            label="Add subtitles to clips"
-            description="A subtitle file beside each clip, and the words burned into its vertical copy (most Shorts are watched muted). Made on this computer with the speech model from Live captions: download one there first."
-            checked={c.clip_captions ?? false}
-            onChange={(v) => save({ clip_captions: v })}
+            label="Clip big moments by itself"
+            description="Big tips, raids and chat spikes save the replay buffer."
+            checked={c.clip_on_big_moments}
+            onChange={(v) => save({ clip_on_big_moments: v })}
           />
-        )}
-        {!scenes && (
-          <Badge tone="warn">
-            {app === 'OBS'
-              ? 'OBS isn’t connected: scene lists are from your settings.'
-              : 'Start the Studio to see its scenes here.'}
-          </Badge>
-        )}
+          <Switch
+            label="Vertical copy"
+            description="1080×1920 for Shorts, TikTok and Reels, saved beside the clip. The first time, Ferrocast downloads ffmpeg (about 30 MB)."
+            checked={c.vertical_clips}
+            onChange={(v) => save({ vertical_clips: v })}
+          />
+          {app !== 'OBS' && c.vertical_clips && (
+            <Switch
+              label="Fill the frame"
+              description="Follows your face when the camera fills the picture, else the action, instead of the whole clip over a blurred copy. On a Mac."
+              checked={c.vertical_fill ?? false}
+              onChange={(v) => save({ vertical_fill: v })}
+            />
+          )}
+          {app !== 'OBS' && (
+            <Switch
+              label="Subtitles"
+              description="A subtitle file beside each clip, and the words burned into its vertical copy (most Shorts are watched muted). Made on this computer with the speech model from Live captions: download one there first."
+              checked={c.clip_captions ?? false}
+              onChange={(v) => save({ clip_captions: v })}
+            />
+          )}
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+/** Rows in a card, a line between each. */
+const ROWS =
+  'flex flex-col divide-y divide-line [&>*]:py-3.5 [&>*:first-child]:pt-1 [&>*:last-child]:pb-1'
+
+/** A label on the left, its menu on the right (under it on a phone); the hint behind (i). */
+function SelectRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: (p: { id: string }) => ReactNode
+}) {
+  const id = useId()
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <label htmlFor={id} className="text-sm font-medium text-text">
+          {label}
+        </label>
+        {hint && <InfoTip>{hint}</InfoTip>}
       </div>
-    </Panel>
+      <div className="w-full sm:w-60">{children({ id })}</div>
+    </div>
   )
 }
 
@@ -534,12 +586,10 @@ function GameScenes({
   const free = running.find((a) => !list.some((g) => g.app === a))
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="flex items-center gap-1.5 text-[14.5px] font-medium text-text-2">
+      <legend className="flex items-center gap-1.5 text-sm font-medium text-text">
         <GameController size={16} aria-hidden />A scene per game
+        <InfoTip>When the game comes to the front, its scene goes on air (never over BRB).</InfoTip>
       </legend>
-      <p className="text-[14.5px] text-text-3">
-        When the game comes to the front, its scene goes on air (never over BRB).
-      </p>
       {list.map((g, i) => (
         <div
           key={i}
@@ -612,13 +662,11 @@ function EventRules({
     Math.min(hi, Math.max(lo, Math.round(Number(v) || 0)))
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="flex items-center gap-1.5 text-[14.5px] font-medium text-text-2">
+      <legend className="flex items-center gap-1.5 text-sm font-medium text-text">
         <Lightning size={16} aria-hidden />
         When something happens
+        <InfoTip>Puts a scene on air or shows a source for a while, then back as it was.</InfoTip>
       </legend>
-      <p className="text-[14.5px] text-text-3">
-        Puts a scene on air or shows a source for a while, then back as it was.
-      </p>
       {list.map((r, i) => {
         const when = WHEN.find((w) => w.value === r.when)
         const target = r.scene !== undefined ? 'scene' : 'source'
