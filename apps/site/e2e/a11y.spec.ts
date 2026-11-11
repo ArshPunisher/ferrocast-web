@@ -72,7 +72,7 @@ test('theme button cycles System, Light, Dark; a choice is remembered and never 
 
 test('reduced motion: videos never autoplay', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/features/')
+  await page.goto('/features/alerts/')
   await page.locator('.video-slot').first().scrollIntoViewIfNeeded()
   await page.waitForTimeout(800)
   const playing = await page.evaluate(() =>
@@ -103,7 +103,7 @@ for (const [path, name] of [
 }
 
 test('every looping video can be paused and stays paused', async ({ page }) => {
-  await page.goto('/features/')
+  await page.goto('/features/alerts/')
   const slot = page.locator('.video-slot').first()
   await slot.scrollIntoViewIfNeeded()
   const video = slot.locator('video')

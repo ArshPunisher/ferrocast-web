@@ -1,204 +1,1000 @@
 ---
+// The features page: a "why" strip, an index of every feature (filter by group, click to
+// jump), then each feature with a real screenshot and three steps. Little text: people look.
+// A screenshot grows to fill the screen when clicked; a click, a scroll or Esc puts it back.
 import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
-import VideoSlot from '../../components/VideoSlot.astro'
 import Icon from '../../components/Icon.astro'
-import Story from '../../components/Story.astro'
-import Beat from '../../components/Beat.astro'
 import { PAGES } from '../../data/pages'
-import { FEATURES } from '../../data/features'
 import { SITE } from '../../data/company'
+import { BIG, GROUPS, SMALL, WHY, type BigFeature, type GroupKey } from '../../data/showcase'
 
 const page = PAGES.features
+const all = [...BIG, ...SMALL]
 const itemList = {
   '@context': 'https://schema.org',
   '@type': 'ItemList',
   name: 'Ferrocast features',
-  itemListElement: FEATURES.map((f, i) => ({
+  itemListElement: all.map((f, i) => ({
     '@type': 'ListItem',
     position: i + 1,
-    name: PAGES[f.key].crumb,
-    url: new URL(PAGES[f.key].path, SITE.url).href,
+    name: f.name,
+    url: new URL(`${page.path}#${f.id}`, SITE.url).href,
   })),
 }
+const groupOf = (g: GroupKey) => GROUPS.find((x) => x.key === g)!
+// Four layouts in turn, so no two features next to each other look the same.
+const LAYOUTS = ['split', 'wide', 'split rev', 'wide steps-first'] as const
+const layoutOf = (n: number) => LAYOUTS[n % LAYOUTS.length] ?? 'split'
+const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [1440, 900])
 ---
 
 <Base page={page} schema={[itemList]}>
-  <section class="head">
-    <div class="container head-grid">
-      <div class="head-copy">
-        <Breadcrumbs page={page} />
-        <h1 class="display-2">Everything a stream needs between OBS and your chat.</h1>
-        <p class="lede">
-          Alerts, overlays, merged chat, moderation, a bot and tips in one free app that runs on
-          your computer.
-        </p>
-      </div>
-      <div class="reveal">
-        <VideoSlot
-          name="hero-loop"
-          label="Ferrocast's Spark mark reacting to a new follower alert"
-        />
-      </div>
-    </div>
-  </section>
-
-  <section class="glass-story" aria-label="Everything in one dashboard">
-    <div class="container">
-      <Story kind="glass" side="right">
-        <Beat kind="glass" n={1} id="pieces" chapter="Every piece">
-          <h2 class="display-2">Every tool you stream with.</h2>
-          <p class="lede">
-            Alerts, tips, goals, merged chat and moderation. Each one works for Twitch, YouTube and
-            Kick at the same time.
-          </p>
-        </Beat>
-        <Beat kind="glass" n={2} id="test-one" chapter="Test one">
-          <h2 class="display-2">Try any piece on its own.</h2>
-          <p class="lede">
-            Fire a sample alert with one click, with nothing connected, and see exactly what OBS
-            will show.
-          </p>
-        </Beat>
-        <Beat kind="glass" n={3} id="one-dashboard" chapter="One dashboard">
-          <h2 class="display-2">Then they lock into one window.</h2>
-          <p class="lede">
-            Everything sits in one dashboard on your PC, so the things you do mid-stream are a click
-            or two away.
-          </p>
-        </Beat>
-      </Story>
-    </div>
-  </section>
-
-  <section class="section tiles-wrap" id="all-features" data-chapter="All features">
-    <div class="container">
-      <h2 class="sr-only">All features</h2>
-      <ul class="tiles">
-        {FEATURES.map((f, i) => (
-          <li class:list={['tile reveal', `t${i}`]} style={`--i: ${i % 3}`}>
-            <a href={PAGES[f.key].path}>
-              <Icon name={f.icon} size={i < 2 ? 34 : 26} />
-              <h3>{PAGES[f.key].crumb}</h3>
-              <p>{f.summary}</p>
-              <span class="more">
-                Learn more <Icon name="arrow-right" size={16} />
-              </span>
+  <div class="fx">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <Breadcrumbs page={page} />
+          <h1 class="display-2">Your whole stream. <em>One free app.</em></h1>
+          <p class="lede">Go live, run alerts, chat and moderation from your own computer.</p>
+          <div class="cta">
+            <a class="btn primary" href={PAGES.download.path}>
+              <Icon name="download-simple" weight="bold" size={18} />Download
             </a>
-          </li>
+            <a class="btn ghost" href="#index">
+              <Icon name="squares-four" weight="bold" size={18} />Browse features
+            </a>
+          </div>
+        </div>
+        <button class="shot reveal" type="button" data-title="The Studio" aria-label="See the Studio big">
+          <img
+            src="/media/features/studio-desk.webp"
+            width="1600"
+            height="950"
+            alt="The Ferrocast Studio: scenes, sources, sound and a source's filters"
+            fetchpriority="high"
+          />
+        </button>
+      </div>
+    </section>
+
+    <section class="why" aria-label="Why Ferrocast">
+      <div class="container">
+        <ul class="why-row">
+          {WHY.map((w) => (
+            <li>
+              <Icon name={w.icon} weight="bold" size={20} />
+              <b>{w.big}</b>
+              <span>{w.small}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <section class="index" id="index" aria-labelledby="index-h">
+      <div class="container">
+        <h2 id="index-h">Find a feature</h2>
+        <p class="sub">Pick one to jump straight to it.</p>
+        <div class="chips" role="group" aria-label="Show features about">
+          <button class="chip" type="button" aria-pressed="true" data-g="all" style="--c: var(--fx-t2)">
+            <Icon name="squares-four" weight="bold" size={16} />All
+          </button>
+          {GROUPS.map((g) => (
+            <button class="chip" type="button" aria-pressed="false" data-g={g.key} style={`--c: var(--fx-${g.key})`}>
+              <Icon name={g.icon} weight="bold" size={16} />
+              {g.name}
+            </button>
+          ))}
+        </div>
+        <ul class="cards">
+          {all.map((f) => (
+            <li data-g={f.group}>
+              <a class="card" href={`#${f.id}`} style={`--c: var(--fx-${f.group})`}>
+                <span class="ic">
+                  <Icon name={f.icon} weight="bold" size={21} />
+                </span>
+                <b>{f.name}</b>
+                {'hint' in f && <span>{f.hint}</span>}
+                {f.isNew && <em class="new">New</em>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <div class="container body">
+      <nav class="side" aria-label="Features on this page">
+        {BIG.map((f) => (
+          <a href={`#${f.id}`} style={`--c: var(--fx-${f.group})`}>
+            <Icon name={f.icon} weight="bold" size={15} />
+            {f.name}
+          </a>
         ))}
-      </ul>
+        <a href="#more" style="--c: var(--fx-studio)">
+          <Icon name="dots-three-circle" weight="bold" size={15} />And more
+        </a>
+      </nav>
+
+      <div class="feats">
+        {BIG.map((f, n) => {
+          const layout = layoutOf(n)
+          const [w, h] = size(f)
+          const head = (
+            <div class="txt">
+              <p class="grp">
+                <Icon name={groupOf(f.group).icon} weight="bold" size={15} />
+                {groupOf(f.group).name}
+                {f.isNew && <em class="new2">New</em>}
+              </p>
+              <h2 id={`${f.id}-h`}>{f.name}</h2>
+              <p class="one">{f.one}</p>
+              {f.page && (
+                <a class="more" href={PAGES[f.page].path}>
+                  More about {PAGES[f.page].crumb.toLowerCase()}
+                  <Icon name="arrow-right" size={16} />
+                </a>
+              )}
+            </div>
+          )
+          const shot = (
+            <button class="shot crop reveal" type="button" data-title={f.name} aria-label={`See ${f.name} big`} style={`--pos: ${f.pos}`}>
+              <img loading="lazy" decoding="async" src={`/media/features/${f.shot}`} width={w} height={h} alt={`${f.name} in Ferrocast`} />
+            </button>
+          )
+          const steps = (
+            <ol class="steps">
+              {f.steps.map(([ic, t, s]) => (
+                <li>
+                  <span class="si">
+                    <Icon name={ic} weight="bold" size={17} />
+                  </span>
+                  <span>
+                    <b>{t}</b>
+                    <small>{s}</small>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )
+          return (
+            <section class="feat" id={f.id} style={`--c: var(--fx-${f.group})`} aria-labelledby={`${f.id}-h`}>
+              {layout.startsWith('split') ? (
+                <>
+                  <div class:list={['split', { rev: layout === 'split rev' }]}>
+                    {head}
+                    {shot}
+                  </div>
+                  {steps}
+                </>
+              ) : layout === 'wide' ? (
+                <>
+                  {head}
+                  {shot}
+                  {steps}
+                </>
+              ) : (
+                <>
+                  {head}
+                  {steps}
+                  {shot}
+                </>
+              )}
+            </section>
+          )
+        })}
+
+        <section class="feat" id="more" aria-labelledby="more-h">
+          <h2 id="more-h">And more</h2>
+          <ul class="minis">
+            {SMALL.map((f) => (
+              <li class="mini reveal" id={f.id} style={`--c: var(--fx-${f.group})`}>
+                <Icon name={f.icon} weight="bold" size={24} />
+                <div>
+                  <b>
+                    {f.name}
+                    {f.isNew && <em class="new2">New</em>}
+                  </b>
+                  <span>{f.one}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </div>
-  </section>
+
+    <section class="end">
+      <div class="container">
+        <h2>Free, open source, yours.</h2>
+        <p>Mac and Windows. Nothing to sign up for to start.</p>
+        <a class="btn primary" href={PAGES.download.path}>
+          <Icon name="download-simple" weight="bold" size={18} />Download
+        </a>
+      </div>
+    </section>
+
+    <dialog class="zoom" id="zoom" aria-label="Screenshot, big. Click, scroll or press Escape to go back.">
+      <img id="zoom-img" alt="" />
+    </dialog>
+  </div>
 </Base>
 
+<script>
+  // Find a feature: the chips dim the other groups' cards.
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('.fx .chip')]
+  const cards = [...document.querySelectorAll<HTMLLIElement>('.fx .cards > li')]
+  for (const chip of chips) {
+    chip.addEventListener('click', () => {
+      const g = chip.dataset.g
+      for (const c of chips) c.setAttribute('aria-pressed', String(c === chip))
+      for (const c of cards) {
+        const off = g !== 'all' && c.dataset.g !== g
+        c.classList.toggle('dim', off)
+        c.querySelector('a')?.setAttribute('tabindex', off ? '-1' : '0')
+      }
+    })
+  }
+
+  // A card jumps to its feature and makes it glow a moment.
+  for (const a of document.querySelectorAll<HTMLAnchorElement>('.fx .card')) {
+    a.addEventListener('click', () => {
+      const t = document.getElementById(a.hash.slice(1))
+      if (!t) return
+      window.setTimeout(() => {
+        t.classList.remove('flash')
+        void t.offsetWidth
+        t.classList.add('flash')
+      }, 450)
+    })
+  }
+
+  // A jump on this page always lands: the site's scroll scripts measure the page in its
+  // first second, and that stops a smooth scroll half way. When the scroll ends short of its
+  // target, it goes the rest of the way.
+  for (const a of document.querySelectorAll<HTMLAnchorElement>('.fx a[href^="#"]')) {
+    a.addEventListener('click', () => {
+      const t = document.getElementById(a.hash.slice(1))
+      if (!t) return
+      const until = performance.now() + 3000
+      let tries = 0
+      const landed = () => {
+        const top = t.getBoundingClientRect().top
+        return top >= -8 && top <= window.innerHeight * 0.4
+      }
+      let timer = 0
+      const stop = () => {
+        window.clearTimeout(timer)
+        window.removeEventListener('scrollend', check)
+        for (const e of ['wheel', 'touchstart', 'keydown'] as const)
+          window.removeEventListener(e, stop)
+      }
+      const check = () => {
+        if (landed() || tries >= 3 || performance.now() > until) return stop()
+        tries += 1
+        t.scrollIntoView()
+      }
+      window.addEventListener('scrollend', check)
+      // The reader scrolling on their own wins: never pull them back.
+      for (const e of ['wheel', 'touchstart', 'keydown'] as const)
+        window.addEventListener(e, stop, { passive: true })
+      // Browsers without scrollend: one look once a scroll would have finished.
+      timer = window.setTimeout(check, 1600)
+    })
+  }
+
+  // The side index follows the feature on screen.
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('.fx .side a')]
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue
+          for (const l of links) {
+            const on = l.hash === `#${e.target.id}`
+            l.classList.toggle('on', on)
+            if (on) l.setAttribute('aria-current', 'location')
+            else l.removeAttribute('aria-current')
+            // The phone's row of links scrolls to keep the current one in view.
+            if (on && l.parentElement && l.parentElement.scrollWidth > l.parentElement.clientWidth)
+              l.parentElement.scrollTo({ left: l.offsetLeft - 16, behavior: calm ? 'auto' : 'smooth' })
+          }
+        }
+      },
+      { rootMargin: '-40% 0px -55% 0px' },
+    )
+    for (const s of document.querySelectorAll('.fx .feat')) io.observe(s)
+  }
+
+  // A screenshot grows out of its place to fill the screen, and nothing else shows. A click,
+  // a scroll or Escape puts it back.
+  const zoom = document.getElementById('zoom') as HTMLDialogElement | null
+  const big = document.getElementById('zoom-img') as HTMLImageElement | null
+  const calmZoom = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  let from: HTMLButtonElement | null = null
+  let closing = false
+  // Where the small one is, as a move and a scale of the big one.
+  const offset = (small: DOMRect, large: DOMRect) => {
+    const k = small.width / Math.max(1, large.width)
+    const dx = small.left + small.width / 2 - (large.left + large.width / 2)
+    const dy = small.top + small.height / 2 - (large.top + large.height / 2)
+    return `translate(${dx}px, ${dy}px) scale(${k})`
+  }
+  const grow = (shot: HTMLButtonElement) => {
+    const pic = shot.querySelector('img')
+    if (!zoom || !big || !pic || zoom.open) return
+    from = shot
+    closing = false
+    big.src = pic.currentSrc || pic.src
+    big.alt = pic.alt
+    zoom.showModal()
+    requestAnimationFrame(() => zoom.classList.add('on'))
+    if (calmZoom) return
+    const start = offset(shot.getBoundingClientRect(), big.getBoundingClientRect())
+    big.animate([{ transform: start }, { transform: 'none' }], {
+      duration: 420,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+    })
+  }
+  const shrink = () => {
+    if (!zoom || !big || !zoom.open || closing) return
+    closing = true
+    zoom.classList.remove('on')
+    const done = () => {
+      zoom.close()
+      from?.focus({ preventScroll: true })
+    }
+    if (calmZoom || !from) return done()
+    const end = offset(from.getBoundingClientRect(), big.getBoundingClientRect())
+    big
+      .animate([{ transform: 'none' }, { transform: end }], {
+        duration: 320,
+        easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
+        fill: 'forwards',
+      })
+      .finished.then(done, done)
+  }
+  for (const s of document.querySelectorAll<HTMLButtonElement>('.fx .shot'))
+    s.addEventListener('click', () => grow(s))
+  zoom?.addEventListener('click', shrink)
+  zoom?.addEventListener('wheel', shrink, { passive: true })
+  zoom?.addEventListener('touchmove', shrink, { passive: true })
+  zoom?.addEventListener('cancel', (e) => {
+    e.preventDefault()
+    shrink()
+  })
+  zoom?.addEventListener('keydown', (e) => {
+    if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' ', 'Enter', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault()
+      shrink()
+    }
+  })
+  // Gone the moment it closes, so the next one never starts from the last one's end.
+  zoom?.addEventListener('close', () => big?.getAnimations().forEach((a) => a.cancel()))
+</script>
+
 <style>
-  .head {
-    padding-block: 40px 0;
+  /* Each group's colour. Dark first; light themes get deeper ones that read on white. */
+  .fx {
+    --fx-live: #3ddc84;
+    --fx-studio: #33d4ff;
+    --fx-alerts: #ffa424;
+    --fx-chat: #b18cff;
+    --fx-plug: #ff7ab6;
+    --fx-t2: var(--fc-text-2);
   }
-  .glass-story {
-    margin-top: 56px;
-    border-top: 1px solid var(--fc-line);
-    padding-block: 24px;
+  :global(:root[data-theme='light']) .fx {
+    --fx-live: #14834a;
+    --fx-studio: #0888b8;
+    --fx-alerts: #b35900;
+    --fx-chat: #7a4fd0;
+    --fx-plug: #b8327a;
   }
-  @media (min-width: 960px) {
-    .glass-story {
-      margin-top: 72px;
-      padding-block: 40px;
+  @media (prefers-color-scheme: light) {
+    :global(:root:not([data-theme='dark']):not([data-theme='light'])) .fx {
+      --fx-live: #14834a;
+      --fx-studio: #0888b8;
+      --fx-alerts: #b35900;
+      --fx-chat: #7a4fd0;
+      --fx-plug: #b8327a;
     }
   }
-  .head-grid {
+
+  ul,
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 18px;
+    border-radius: var(--fc-radius-control);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background var(--fc-dur-2),
+      transform var(--fc-dur-1);
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn.primary {
+    background: var(--fc-btn-primary);
+    color: var(--fc-on-btn-primary);
+  }
+  .btn.ghost {
+    border: 1px solid var(--fc-line-strong);
+    color: var(--fc-text);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn.primary:hover {
+      background: var(--fc-btn-primary-hover);
+    }
+    .btn.ghost:hover {
+      background: var(--fc-surface-2);
+    }
+  }
+
+  /* Hero */
+  .hero {
+    padding-block: 40px 32px;
+  }
+  .hero-grid {
     display: grid;
     gap: 32px;
     align-items: center;
   }
-  .head-copy {
+  .hero-copy {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--fc-molten-text);
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 6px;
   }
   @media (min-width: 900px) {
-    .head {
-      padding-top: 72px;
+    .hero {
+      padding-top: 64px;
     }
-    .head-grid {
-      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-      gap: 56px;
+    .hero-grid {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      gap: 48px;
     }
   }
-  .tiles {
-    list-style: none;
-    margin: 0;
+
+  /* Screenshots: click for the big view */
+  .shot {
+    position: relative;
+    display: block;
+    width: 100%;
     padding: 0;
-    display: grid;
-    gap: 12px;
+    border: 1px solid var(--fc-line-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--fc-surface-1);
+    box-shadow: var(--fc-shadow-pop);
+    cursor: zoom-in;
   }
-  .tile a {
+  .shot img {
+    width: 100%;
+    height: auto;
+  }
+  .shot::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgb(10 11 13 / 0.75)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%23fff'%3E%3Cpath d='M216 48v48a8 8 0 0 1-16 0V67.3l-42.3 42.4a8 8 0 0 1-11.4-11.4L188.7 56H160a8 8 0 0 1 0-16h48a8 8 0 0 1 8 8ZM98.3 146.3 56 188.7V160a8 8 0 0 0-16 0v48a8 8 0 0 0 8 8h48a8 8 0 0 0 0-16H67.3l42.4-42.3a8 8 0 0 0-11.4-11.4Z'/%3E%3C/svg%3E")
+      center / 16px no-repeat;
+    opacity: 0;
+    transition: opacity var(--fc-dur-2);
+  }
+  .shot:focus-visible::after {
+    opacity: 1;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .shot:hover::after {
+      opacity: 1;
+    }
+  }
+  /* Touch screens can't hover: the sign is always there. */
+  @media (hover: none) {
+    .shot::after {
+      opacity: 1;
+    }
+  }
+  .crop {
+    aspect-ratio: 16 / 9;
+  }
+  .crop img {
+    height: 100%;
+    object-fit: cover;
+    object-position: var(--pos, 50% 0);
+  }
+
+  /* Why */
+  .why {
+    padding-block: 8px 24px;
+  }
+  .why-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid var(--fc-line);
+    border-radius: var(--fc-radius-panel);
+    overflow: hidden;
+    background: var(--fc-surface-1);
+  }
+  .why-row li {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 16px;
+    border-right: 1px solid var(--fc-line);
+    border-bottom: 1px solid var(--fc-line);
+    color: var(--fc-molten-text);
+  }
+  .why-row b {
+    font: 800 1.375rem / 1.1 var(--fc-font-display);
+    letter-spacing: -0.02em;
+    color: var(--fc-text);
+  }
+  .why-row span {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--fc-text-3);
+  }
+  @media (min-width: 700px) {
+    .why-row {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1100px) {
+    .why-row {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .why-row li {
+      border-bottom: 0;
+    }
+  }
+
+  /* Index */
+  .index {
+    padding-block: 48px 16px;
+  }
+  .index h2 {
+    font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  }
+  .sub {
+    margin-top: 8px;
+    color: var(--fc-text-3);
+  }
+  .chips {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
+  }
+  :global(.js) .chips {
+    display: flex;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: var(--fc-radius-pill);
+    border: 1px solid var(--fc-line-strong);
+    background: none;
+    font: inherit;
+    font-weight: 650;
+    font-size: 0.875rem;
+    color: var(--fc-text-2);
+    cursor: pointer;
+    transition:
+      background var(--fc-dur-2),
+      border-color var(--fc-dur-2);
+  }
+  .chip :global(svg) {
+    color: var(--c);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--fc-surface-3);
+    color: var(--fc-text);
+    border-color: var(--c);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 24px;
+  }
+  @media (min-width: 640px) {
+    .cards {
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+    }
+  }
+  .cards > li {
+    transition: opacity var(--fc-dur-3);
+  }
+  .cards > li.dim {
+    opacity: 0.22;
+  }
+  .cards > li.dim .card {
+    pointer-events: none;
+  }
+  .card {
+    position: relative;
     height: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 24px;
-    border-radius: var(--fc-radius-panel);
+    padding: 16px;
+    border-radius: 14px;
     border: 1px solid var(--fc-line);
     background: var(--fc-surface-1);
     color: var(--fc-text);
     text-decoration: none;
     transition:
-      border-color 200ms var(--fc-ease-out),
-      transform 200ms var(--fc-ease-out);
+      transform var(--fc-dur-3) var(--fc-ease-out),
+      border-color var(--fc-dur-2),
+      box-shadow var(--fc-dur-3);
   }
-  .tile a > :global(svg) {
-    color: var(--fc-accent-text);
-    margin-bottom: 6px;
+  .card .ic {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    color: var(--c);
+    background: color-mix(in oklab, var(--c) 15%, transparent);
   }
-  .tile h3 {
-    font-size: 1.3rem;
+  .card b {
+    font: 700 1rem / 1.2 var(--fc-font-display);
+    letter-spacing: -0.01em;
   }
-  .tile p {
-    color: var(--fc-text-2);
-    font-size: var(--fc-body-s);
+  .card span:not(.ic) {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: var(--fc-text-3);
   }
-  .more {
-    margin-top: auto;
-    padding-top: 8px;
+  .new,
+  .new2 {
+    font: 600 0.6875rem var(--fc-font-mono);
+    font-style: normal;
+    color: var(--fx-plug);
+  }
+  .new {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  .new2 {
+    margin-left: 8px;
+  }
+  .card:focus-visible {
+    border-color: var(--c);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: var(--c);
+      box-shadow: 0 20px 40px -18px color-mix(in oklab, var(--c) 45%, transparent);
+    }
+  }
+
+  /* Side index + features */
+  .body {
+    display: grid;
+    gap: 24px;
+    padding-block: 32px 64px;
+  }
+  .side {
+    position: sticky;
+    top: 64px;
+    z-index: 5;
+    display: flex;
+    gap: 6px;
+    margin-inline: -16px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--fc-bg);
+    border-bottom: 1px solid var(--fc-line);
+  }
+  .side::-webkit-scrollbar {
+    display: none;
+  }
+  .side a {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--fc-line-strong);
+    border-radius: var(--fc-radius-pill);
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--fc-text-3);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background var(--fc-dur-1),
+      color var(--fc-dur-1),
+      border-color var(--fc-dur-1);
+  }
+  .side a :global(svg) {
+    color: var(--c);
+  }
+  .side a.on {
+    color: var(--fc-text);
+    background: var(--fc-surface-3);
+    border-color: var(--c);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .side a:hover {
+      color: var(--fc-text);
+      background: var(--fc-surface-2);
+    }
+  }
+  @media (min-width: 1024px) {
+    .body {
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 48px;
+      padding-top: 40px;
+    }
+    .side {
+      top: 96px;
+      align-self: start;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      max-height: calc(100dvh - 120px);
+      overflow: auto;
+      border: 0;
+      background: none;
+    }
+    .side a {
+      border: 0;
+      border-radius: 8px;
+      padding: 0 10px;
+    }
+    .side a.on {
+      box-shadow: inset 3px 0 0 var(--c);
+    }
+  }
+
+  .feat {
+    padding-bottom: 56px;
+    margin-bottom: 56px;
+    border-bottom: 1px solid var(--fc-line);
+    border-radius: 4px;
+  }
+  .feat:last-child {
+    border: 0;
+    margin-bottom: 0;
+  }
+  .grp {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    color: var(--c);
+  }
+  .feat h2 {
+    margin-top: 8px;
+    font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  }
+  .one {
+    margin-top: 10px;
+    max-width: 46ch;
+    font-size: 1.0625rem;
+    color: var(--fc-text-2);
+  }
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    margin-top: 6px;
+    font-weight: 650;
     font-size: 0.9375rem;
     color: var(--fc-accent-text);
+    text-decoration: none;
   }
-  .t0 a {
-    background:
-      radial-gradient(70% 80% at 85% 10%, rgb(52 97 245 / 0.22), transparent 70%),
-      var(--fc-surface-1);
+  .more:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
-  .t1 a {
-    background: linear-gradient(200deg, var(--fc-surface-2), var(--fc-surface-1) 70%);
+  .feat > .shot,
+  .feat > .steps {
+    margin-top: 22px;
   }
-  .t0 h3,
-  .t1 h3 {
-    font-size: 1.75rem;
+  .split {
+    display: grid;
+    gap: 22px;
+    align-items: center;
   }
-  @media (hover: hover) and (pointer: fine) {
-    .tile a:hover {
-      border-color: var(--fc-line-strong);
-      transform: translateY(-2px);
+  @media (min-width: 900px) {
+    .split {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      gap: 32px;
+    }
+    .split.rev {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
+    .split.rev .txt {
+      order: 2;
     }
   }
-  @media (min-width: 768px) {
-    .tiles {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+  .split + .steps {
+    margin-top: 22px;
+  }
+  .steps {
+    display: grid;
+    gap: 10px;
+  }
+  @media (min-width: 700px) {
+    .steps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
     }
-    .t0,
-    .t1 {
-      grid-column: span 2;
+  }
+  .steps li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+  }
+  .si {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: var(--c);
+    background: color-mix(in oklab, var(--c) 14%, transparent);
+  }
+  .steps b {
+    display: block;
+    font-size: 0.9375rem;
+  }
+  .steps small {
+    font-size: 0.8125rem;
+    color: var(--fc-text-3);
+  }
+
+  .minis {
+    display: grid;
+    gap: 12px;
+    margin-top: 22px;
+  }
+  @media (min-width: 600px) {
+    .minis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .t0 a,
-    .t1 a {
-      min-height: 280px;
-      padding: 32px;
+  }
+  @media (min-width: 1100px) {
+    .minis {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+  }
+  .mini {
+    display: flex;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+  }
+  .mini > :global(svg) {
+    flex: none;
+    margin-top: 2px;
+    color: var(--c);
+  }
+  .mini b {
+    display: block;
+    font: 700 1rem / 1.25 var(--fc-font-display);
+  }
+  .mini span {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.875rem;
+    color: var(--fc-text-3);
+  }
+
+  .end {
+    padding-block: 56px 72px;
+    border-top: 1px solid var(--fc-line);
+  }
+  .end h2 {
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
+  }
+  .end p {
+    margin: 10px 0 22px;
+    color: var(--fc-text-2);
+  }
+
+  /* A card's jump makes its feature glow a moment. */
+  @media (prefers-reduced-motion: no-preference) {
+    .flash {
+      animation: flash 1.2s ease-out;
+    }
+    @keyframes flash {
+      from {
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--c, var(--fx-studio)) 55%, transparent);
+      }
+      to {
+        box-shadow: 0 0 0 22px transparent;
+      }
+    }
+  }
+
+  /* The big view: only the screenshot, on a dark shade. */
+  .zoom {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    background: rgb(6 7 9 / 0);
+    outline: none;
+    cursor: zoom-out;
+    overflow: hidden;
+    transition: background-color 320ms var(--fc-ease-out);
+  }
+  .zoom.on {
+    background: rgb(6 7 9 / 1);
+  }
+  .zoom[open] {
+    display: grid;
+    place-items: center;
+  }
+  .zoom::backdrop {
+    background: transparent;
+  }
+  /* The page under it stays put. */
+  :global(html:has(.zoom[open])) {
+    overflow: hidden;
+  }
+  .zoom img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 30px 90px -20px rgb(0 0 0 / 0.8);
+    transform-origin: center;
+    will-change: transform;
   }
 </style>
