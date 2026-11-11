@@ -1,5 +1,34 @@
 # Status
 
+## 11 Nov 2026 (VST plugins, plugin catalog, Studio compact, branch own-engine-only; uncommitted)
+
+Later on 11 Nov (uncommitted):
+
+- **Features page redone (site, design A as picked).** The 3D glass story is gone. Now: a
+  "why" strip, a Find-a-feature index (group chips dim the others, a card jumps to its
+  feature), a sticky side index (a row of pills on phones), ten features with a real dark
+  screenshot and three steps each, then twelve smaller ones. Click a screenshot and it grows
+  out of its place to fill the screen with nothing else on it (owner: no title, buttons or
+  arrows); a click, a scroll or Esc shrinks it back.
+  Data in `apps/site/src/data/showcase.ts`, shots in `public/media/features/*.webp`. A jump
+  in the page's first second used to stop half way (the scroll rail measuring the page);
+  it now finishes. New `e2e/features.spec.ts`; the two video tests moved to /features/alerts/.
+  Before it goes live: the catalog must be open (the plugins section shows it), and a Studio
+  screenshot with a real scene would beat the test one.
+- **Pixel guides while dragging** (`select({ guides })`): the engine draws red lines from the
+  dragged source to each canvas edge with the distance in px, as OBS's spacing helpers.
+- **Source icons F2 (owner's pick):** the Sources list shows each kind as a two-tone icon in
+  its colour (cameras violet, pictures and video pink `--fc-pink`, screens and web blue,
+  sound green, folders and build kinds amber); eye and lock filled, grey, the eye blue on
+  the picked row. "Add a source" uses the same kind colours.
+- CodeRabbit fixes: Escape in a number box no longer closes the drawer; Fit, Fill and Reset
+  refresh the canvas outline; the Some-scenes picker wraps in a grid.
+
+- VST plugins (Mac): "VST plugin" in Add a filter (sound). `desk/vst-form.tsx`: pick from the plugins found (`/studio/engine/vst/plugins`, Look again), Open its own window, running or why not as a slim red strip; its settings are saved into the filter whenever its window changes them (looked at every 2 s while the drawer is open, and once more as it closes). The engine runs each in a locked-down helper (`../ferrocast/docs/plan/VST.md`); where it can't, the drawer says why.
+- Plugin catalog: Settings › Plugins › Catalog (`CatalogGroup`): Install or Update in a click, Installed marked, refresh in its header; "opens soon" until the engine has the owner's catalog key (`../ferrocast/docs/plan/CATALOG.md`). Demo has a two-plugin catalog. e2e: adds one, updates one.
+- Panel plugins: a panel that sends its frame to another page is closed and no longer heard (a second load of its frame).
+- Also in this batch: the compact Studio (owner's picks 10 Nov: joined panels, grey heading bands, folding sidebar), the source drawer in design A (36 px rows, Filters / Settings / Position / Sound) and compact dialogs. Tests: unit 255, plugins e2e 12.
+
 ## 10 Nov 2026 (the 3.1.0 checks on the Windows PC, branch own-engine-only)
 
 - Panel plugins: their scripts never ran in the app. A `srcdoc` frame is held to the dashboard's own policy (`script-src 'self'`) as well as its own, so no panel button worked anywhere but the demo. The frame now loads the engine's `/plugin-panel/{id}` page (its own policy, still `sandbox="allow-scripts"`) when the dashboard is the engine's own; the demo keeps `srcdoc` (`plugins-settings.tsx` `panelPageUrl`, tested). Checked in WebView2: hello, a step and "done" go through; fetches and the parent stay closed.
