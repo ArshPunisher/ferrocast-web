@@ -214,6 +214,117 @@ export function Dialog({
   )
 }
 
+export interface ConfirmProps {
+  open: boolean
+  onClose: () => void
+  /** The question: "Remove Webcam from Main?" */
+  title: string
+  /** One short line under it. */
+  description?: ReactNode
+  /** The button that does it ("Remove"); red unless `danger` is false. */
+  confirm: string
+  /** The one that doesn't ("Keep"). */
+  cancel?: string
+  onConfirm: () => void
+  danger?: boolean
+}
+
+/**
+ * A small yes-or-no card in the middle of the window (owner's pick C3, 11 Nov): the question,
+ * one line, and two buttons side by side. A native modal dialog, so the page and the Studio's
+ * picture dim under it, Escape and a click outside keep things as they are.
+ */
+export function ConfirmDialog({
+  open,
+  onClose,
+  title,
+  description,
+  confirm,
+  cancel = 'Keep',
+  onConfirm,
+  danger = true,
+}: ConfirmProps) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const reduce = useReducedMotion()
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    if (open && !d.open) {
+      d.showModal()
+      // The safe button first: Enter keeps it, as a slip shouldn't remove anything.
+      d.querySelector<HTMLButtonElement>('[data-cancel]')?.focus()
+    }
+    if (!open && d.open) d.close()
+  }, [open])
+  useEffect(() => (open ? lockPageScroll() : undefined), [open])
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    const onCancel = (e: Event) => {
+      e.preventDefault()
+      onClose()
+    }
+    d.addEventListener('cancel', onCancel)
+    return () => d.removeEventListener('cancel', onCancel)
+  }, [onClose])
+  return (
+    <dialog
+      ref={ref}
+      aria-label={title}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+      className="fc-dialog m-0 h-dvh max-h-none w-screen max-w-none bg-transparent p-0 text-text backdrop:bg-[rgb(4_5_8/0.62)]"
+    >
+      {open && (
+        <div className="pointer-events-none flex h-full w-full items-center justify-center p-4">
+          <motion.div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="fc-confirm-title"
+            // The Studio's live picture leaves itself out under this card.
+            data-over-preview
+            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-auto w-full max-w-[300px] rounded-[12px] border border-line-strong bg-surface-1 p-4 shadow-pop"
+          >
+            <h2 id="fc-confirm-title" className="text-[15px] font-bold text-balance text-text">
+              {title}
+            </h2>
+            {description && <p className="mt-1 text-[13.5px] text-text-3">{description}</p>}
+            <div className="mt-3.5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-cancel
+                onClick={onClose}
+                className="fc-press h-9 rounded-[8px] border border-line-strong bg-surface-1 text-[14px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              >
+                {cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose()
+                  onConfirm()
+                }}
+                className={cx(
+                  'fc-press h-9 rounded-[8px] text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  danger
+                    ? 'bg-danger-fill text-white hover:brightness-110'
+                    : 'bg-[var(--fc-btn-primary)] text-[var(--fc-on-btn-primary)] hover:bg-[var(--fc-btn-primary-hover)]',
+                )}
+              >
+                {confirm}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </dialog>
+  )
+}
+
 export interface SheetProps {
   open: boolean
   onClose: () => void

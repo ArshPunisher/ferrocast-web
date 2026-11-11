@@ -22,7 +22,7 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { type EngineScene, type EngineTransition } from '@ferrocast/api'
-import { Button, Dialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
+import { ConfirmDialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { done, useAction } from '../../../lib/hooks'
@@ -556,31 +556,16 @@ export function ScenesDock() {
       </footer>
       {menu}
       <ImportObsDialog open={importing} onClose={() => setImporting(false)} />
-      <Dialog
-        compact
+      <ConfirmDialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
-        size="sm"
-        title={`Remove ${removing ?? ''}?`}
+        title={`Remove the scene ${removing ?? ''}?`}
         description="Its sources stay in the other scenes they're in."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRemoving(null)}>
-              Keep it
-            </Button>
-            <Button
-              variant="danger"
-              busy={busy === 'remove'}
-              onClick={() => {
-                const s = removing
-                setRemoving(null)
-                if (s) void act('remove', () => api.removeScene(s))
-              }}
-            >
-              Remove
-            </Button>
-          </>
-        }
+        confirm="Remove"
+        onConfirm={() => {
+          const s = removing
+          if (s) void act('remove', () => api.removeScene(s))
+        }}
       />
     </section>
   )
