@@ -1,8 +1,18 @@
 // Settings › Plugins (layout A): effects others make, added as a `.zip`. Safe by design (an
 // effect only changes the picture), checked by the PC before it's added.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { AppWindow, ArrowClockwise, Check, Trash, UploadSimple } from '@phosphor-icons/react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  AppWindow,
+  ArrowClockwise,
+  Check,
+  FileZip,
+  Lightning,
+  Monitor,
+  Package,
+  SquaresFour,
+  Trash,
+} from '@phosphor-icons/react'
 import {
   ApiError,
   describeError,
@@ -27,6 +37,29 @@ const ACTION_WORDS: Record<string, string> = {
 }
 
 const KIND_WORDS: Record<string, string> = { effect: 'Effect', logic: 'Logic', panel: 'Panel' }
+
+/** A plugin's kind as a small tinted tile (owner's pick P4, 11 Nov): effects pink, logic
+ *  blue, panels teal. */
+const KIND_TILE: Record<string, { Icon: typeof Monitor; tone: string }> = {
+  effect: { Icon: Monitor, tone: 'var(--fc-pink)' },
+  logic: { Icon: Lightning, tone: 'var(--fc-arc)' },
+  panel: { Icon: SquaresFour, tone: 'var(--fc-teal)' },
+}
+
+function Tile({ kind }: { kind: string | null }) {
+  const k = kind ? KIND_TILE[kind] : undefined
+  const Icon = k?.Icon ?? (kind === null ? FileZip : Package)
+  const tone = k?.tone ?? 'var(--fc-text-3)'
+  return (
+    <span
+      aria-hidden
+      className="grid size-9 shrink-0 place-items-center rounded-[10px] text-[18px]"
+      style={{ color: tone, background: `color-mix(in srgb, ${tone} 13%, transparent)` }}
+    >
+      <Icon weight={k ? 'fill' : 'regular'} />
+    </span>
+  )
+}
 
 /** "Can switch scenes and say in chat." (nothing for an effect). */
 export function canWords(actions: string[]): string | null {
@@ -142,6 +175,7 @@ function PluginRow({
     .join(' · ')
   return (
     <Row
+      icon={<Tile kind={p.kind} />}
       label={
         <span className="flex items-baseline gap-2">
           <span className="truncate">{p.name}</span>
@@ -215,7 +249,10 @@ function CatalogGroup({
   busy,
   run,
   installed,
+  last,
 }: {
+  /** The row after the list: adding one from its file. */
+  last: ReactNode
   busy: string | null
   run: (key: string, f: () => Promise<unknown>) => Promise<void>
   /** What's installed, as one key: the catalog's marks follow it (a removal, a file added). */
@@ -283,6 +320,7 @@ function CatalogGroup({
         cat.data.plugins.map((p) => (
           <Row
             key={p.id}
+            icon={<Tile kind={p.kind} />}
             label={
               <span className="flex items-baseline gap-2">
                 <span className="truncate">{p.name}</span>
@@ -312,6 +350,7 @@ function CatalogGroup({
           />
         ))
       )}
+      {last}
     </Group>
   )
 }
@@ -372,7 +411,10 @@ export function PluginsSettings() {
             <Skeleton className="h-12" />
           </Row>
         ) : list.data.length === 0 ? (
-          <Row description="No plugins yet." />
+          <Row
+            icon={<Tile kind="none" />}
+            description="Nothing installed yet. Pick one from the catalog below."
+          />
         ) : (
           list.data.map((p) => (
             <PluginRow
@@ -389,46 +431,49 @@ export function PluginsSettings() {
         busy={busy}
         run={run}
         installed={list.data?.map((p) => `${p.id}@${p.version}`).join(',') ?? ''}
+        last={
+          <Row
+            icon={<Tile kind={null} />}
+            label={
+              <span className="flex items-center gap-1">
+                From a file
+                <InfoTip>
+                  For plugin makers: a .zip with a plugin.json and an effect (.wgsl), a module
+                  (.wasm) or a panel (.html). Up to 2 MB.
+                </InfoTip>
+              </span>
+            }
+            description="A .zip from its maker, checked first."
+            control={
+              <>
+                <input
+                  ref={file}
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    if (f) add(f)
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-accent-text!"
+                  busy={busy === 'add'}
+                  disabled={busy !== null && busy !== 'add'}
+                  onClick={() => file.current?.click()}
+                >
+                  Choose
+                </Button>
+              </>
+            }
+          />
+        }
       />
-      <Group>
-        <Row
-          label={
-            <span className="flex items-center gap-1">
-              Add a plugin
-              <InfoTip>
-                For plugin makers: a .zip with a plugin.json and an effect (.wgsl), a module (.wasm)
-                or a panel (.html). Up to 2 MB.
-              </InfoTip>
-            </span>
-          }
-          description="A .zip from its maker. It’s checked before it’s added."
-          control={
-            <>
-              <input
-                ref={file}
-                type="file"
-                accept=".zip,application/zip"
-                className="sr-only"
-                tabIndex={-1}
-                aria-hidden="true"
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  e.target.value = ''
-                  if (f) add(f)
-                }}
-              />
-              <Button
-                variant="outline"
-                icon={<UploadSimple size={16} />}
-                busy={busy === 'add'}
-                onClick={() => file.current?.click()}
-              >
-                Choose file
-              </Button>
-            </>
-          }
-        />
-      </Group>
     </>
   )
 }

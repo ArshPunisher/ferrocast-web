@@ -95,6 +95,7 @@ export function Row({
   children,
   child,
   className,
+  icon,
 }: {
   label?: ReactNode
   description?: ReactNode
@@ -103,17 +104,29 @@ export function Row({
   children?: ReactNode
   child?: boolean | undefined
   className?: string | undefined
+  /** A small tile before the name (what kind of thing the row is). */
+  icon?: ReactNode
 }) {
-  const head = label && (
-    <div className="min-w-0 flex-[1_1_220px]">
-      {htmlFor ? (
-        <label htmlFor={htmlFor} className="block text-[15px] font-semibold text-text">
-          {label}
-        </label>
-      ) : (
-        <div className="text-[15px] font-semibold text-text">{label}</div>
+  // A row with only its short line (an empty list's "Nothing yet.") still shows it.
+  const text = (label || description) && (
+    <div className="min-w-0 flex-1">
+      {label &&
+        (htmlFor ? (
+          <label htmlFor={htmlFor} className="block text-[15px] font-semibold text-text">
+            {label}
+          </label>
+        ) : (
+          <div className="text-[15px] font-semibold text-text">{label}</div>
+        ))}
+      {description && (
+        <div className={cx('text-[14px] text-text-3', !!label && 'mt-0.5')}>{description}</div>
       )}
-      {description && <div className="mt-0.5 text-[14px] text-text-3">{description}</div>}
+    </div>
+  )
+  const head = text && (
+    <div className="flex min-w-0 flex-[1_1_220px] items-start gap-3 sm:items-center">
+      {icon}
+      {text}
     </div>
   )
   return (
