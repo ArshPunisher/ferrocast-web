@@ -96,7 +96,8 @@ test('a logic plugin says what it may do; a panel opens in a sandbox and asks fo
 }) => {
   await open(page, 'settings/plugins', 'autoplay=0&latency=0')
   const p = page$(page)
-  await expect(p.getByText('Big buttons', { exact: true })).toBeVisible()
+  // Installed, and in the catalog with a later version: the first is the installed one.
+  await expect(p.getByText('Big buttons', { exact: true }).first()).toBeVisible()
   // A logic plugin: a WebAssembly module and the steps it may ask for, shown.
   const manifest = JSON.stringify({
     id: 'com.ana.raid',

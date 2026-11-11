@@ -2,8 +2,14 @@
 // effect only changes the picture), checked by the PC before it's added.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AppWindow, Trash, UploadSimple } from '@phosphor-icons/react'
-import { describeError, pluginsApi, type Plugin } from '@ferrocast/api'
+import { AppWindow, ArrowClockwise, Check, Trash, UploadSimple } from '@phosphor-icons/react'
+import {
+  ApiError,
+  describeError,
+  pluginsApi,
+  type CatalogPlugin,
+  type Plugin,
+} from '@ferrocast/api'
 import { Button, Dialog, IconButton, InfoTip, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
 import { LoadError } from './Panel'
 import { Group, Row } from './settings-kit'
@@ -191,6 +197,125 @@ function PluginRow({
   )
 }
 
+/** What a catalog plugin is, in one line: its kind, maker, what it does and may do. */
+export function catalogAbout(p: CatalogPlugin): string {
+  return [
+    KIND_WORDS[p.kind] ?? p.kind,
+    p.author && `By ${p.author}`,
+    p.description,
+    canWords(p.actions ?? []),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Ferrocast's catalog: install a plugin, or update one, in one click. Each is checked first:
+ *  the list is signed by Ferrocast, the file must be the one it lists. */
+function CatalogGroup({
+  busy,
+  run,
+  installed,
+}: {
+  busy: string | null
+  run: (key: string, f: () => Promise<unknown>) => Promise<void>
+  /** What's installed, as one key: the catalog's marks follow it (a removal, a file added). */
+  installed: string
+}) {
+  const client = useClient()
+  const api = useMemo(() => pluginsApi(client), [client])
+  const cat = useResource(() => api.catalog(), [api, installed])
+  const closed = cat.error instanceof ApiError && cat.error.code === 'catalog_not_open'
+  const install = (p: CatalogPlugin) =>
+    void run(`cat:${p.id}`, async () => {
+      const got = await api.installFromCatalog(p.id)
+      toast({
+        tone: 'ok',
+        message: p.installed ? `${got.name} updated to ${got.version}.` : `${got.name} added.`,
+        hint:
+          got.kind === 'effect'
+            ? 'Find it in Effects, under a source’s filters.'
+            : canWords(got.actions ?? []),
+      })
+      cat.reload()
+    })
+  return (
+    <Group
+      title={
+        <span className="flex w-full items-center gap-1">
+          Catalog
+          <InfoTip>
+            Plugins from Ferrocast’s list. The list is signed by Ferrocast and each file is checked
+            against it before it’s added.
+          </InfoTip>
+          {!closed && (
+            <IconButton
+              size="xs"
+              variant="ghost"
+              label="Look at the catalog again"
+              className="ml-auto"
+              disabled={busy !== null || cat.loading}
+              onClick={() =>
+                void api.catalog(true).then(
+                  () => cat.reload(),
+                  () => cat.reload(),
+                )
+              }
+            >
+              <ArrowClockwise size={13} weight="bold" />
+            </IconButton>
+          )}
+        </span>
+      }
+    >
+      {closed ? (
+        <Row description="The catalog opens soon. Add a plugin from its file for now." />
+      ) : cat.error && !cat.data ? (
+        <Row>
+          <LoadError error={cat.error} onRetry={cat.reload} />
+        </Row>
+      ) : !cat.data ? (
+        <Row>
+          <Skeleton className="h-12" />
+        </Row>
+      ) : cat.data.plugins.length === 0 ? (
+        <Row description="Nothing in the catalog yet." />
+      ) : (
+        cat.data.plugins.map((p) => (
+          <Row
+            key={p.id}
+            label={
+              <span className="flex items-baseline gap-2">
+                <span className="truncate">{p.name}</span>
+                <span className="shrink-0 font-mono text-[12.5px] font-medium text-text-3">
+                  {p.version}
+                </span>
+              </span>
+            }
+            description={catalogAbout(p) || null}
+            control={
+              p.installed && !p.update ? (
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-text-2">
+                  <Check size={14} weight="bold" aria-hidden /> Installed
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={p.update ? 'primary' : 'outline'}
+                  busy={busy === `cat:${p.id}`}
+                  disabled={busy !== null}
+                  onClick={() => install(p)}
+                >
+                  {p.update ? 'Update' : 'Install'}
+                </Button>
+              )
+            }
+          />
+        ))
+      )}
+    </Group>
+  )
+}
+
 export function PluginsSettings() {
   const client = useClient()
   const api = pluginsApi(client)
@@ -260,6 +385,11 @@ export function PluginsSettings() {
           ))
         )}
       </Group>
+      <CatalogGroup
+        busy={busy}
+        run={run}
+        installed={list.data?.map((p) => `${p.id}@${p.version}`).join(',') ?? ''}
+      />
       <Group>
         <Row
           label={

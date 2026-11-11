@@ -41,6 +41,30 @@ const PANEL: Plugin = {
   problem: null,
 }
 
+/** The demo's catalog: one plugin to add, and a newer Big buttons. */
+const CATALOG: Omit<Plugin, 'on' | 'problem'>[] = [
+  {
+    id: 'com.ferrocast.grain',
+    name: 'Film grain',
+    version: '1.0.0',
+    author: 'Ferrocast',
+    description: 'Soft moving grain, like old film.',
+    kind: 'effect',
+    actions: [],
+  },
+  { ...PANEL, version: '1.1.0', description: 'Two big buttons, now in your colour.' },
+]
+
+/** Which of two versions is later (numbers dot by dot). */
+function newer(a: string, b: string): boolean {
+  const n = (v: string) => v.split('.').map((x) => Number(x) || 0)
+  const [x, y] = [n(a), n(b)]
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0)
+  }
+  return false
+}
+
 const PANEL_HTML = `<!doctype html><style>body{font:600 15px system-ui;margin:12px;display:flex;gap:8px;color:#222}button{flex:1;padding:18px;border-radius:12px;border:0;background:#1f5aff;color:#fff;font:inherit}</style>
 <button id=r>Save replay</button><button id=s>Go to BRB</button><p id=o></p>
 <script>
@@ -230,8 +254,45 @@ export class DemoPlugins {
     return done()
   }
 
+  /** The catalog, each plugin marked installed (its version here) and update. */
+  private catalog() {
+    return {
+      plugins: CATALOG.map((c) => {
+        const here = this.list.find((p) => p.id === c.id)
+        return {
+          ...clone(c),
+          size: 2048,
+          installed: here?.version ?? null,
+          update: here ? newer(c.version, here.version) : false,
+        }
+      }),
+    }
+  }
+
+  private installFromCatalog(body: unknown): Plugin {
+    const id = String(requireObj(body).id ?? '')
+    const c = CATALOG.find((x) => x.id === id)
+    if (!c)
+      throw refused(
+        404,
+        'catalog_no_plugin',
+        `The catalog has no plugin called ${id}.`,
+        'Look again.',
+      )
+    const p: Plugin = { ...clone(c), on: true, problem: null }
+    this.list = [...this.list.filter((x) => x.id !== id), p]
+    if (c.kind === 'panel') this.pages.set(id, { html: PANEL_HTML, actions: c.actions })
+    return clone(p)
+  }
+
   route(method: string, seg: string[], body: unknown): Routed | Promise<Routed> {
     if (seg[0] !== 'plugins') return NOT_MINE
+    if (seg[1] === 'catalog') {
+      if (seg.length === 2 && method === 'GET') return this.catalog()
+      if (seg.length === 3 && seg[2] === 'install' && method === 'POST')
+        return this.installFromCatalog(body)
+      return NOT_MINE
+    }
     if (seg.length === 1 && method === 'GET') return clone(this.list)
     if (seg.length === 1 && method === 'POST') return this.install(body)
     if (seg.length === 2 && method === 'PUT') {
