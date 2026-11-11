@@ -230,6 +230,33 @@ export interface EngineItem {
 export type EngineMediaAct =
   'play' | 'pause' | 'play_pause' | 'restart' | 'stop' | 'next' | 'previous'
 
+/** A VST3 sound plugin found on this computer. */
+export interface EngineVstPlugin {
+  /** Its bundle (`….vst3`). */
+  path: string
+  /** Its class id, 32 hex digits. */
+  cid: string
+  name: string
+  vendor: string
+  /** Its own categories ("Fx|Reverb"). */
+  kinds: string
+}
+
+/** The plugins found, and whether they run on this system (`why` says when not). */
+export interface EngineVstPlugins {
+  available: boolean
+  why: string | null
+  plugins: EngineVstPlugin[]
+}
+
+/** A VST filter's plugin now. */
+export interface EngineVstStatus {
+  running: boolean
+  problem: string | null
+  /** Its window changed something since its state was last saved. */
+  changed: boolean
+}
+
 /** How a source is doing, for its drawer (API.md: …/sources/{name}/status). */
 export interface EngineSourceStatus {
   /** A Web text's last read: when (ms since 1970), what it showed, why it failed (or null). */
@@ -867,6 +894,25 @@ export function studioEngineApi(c: FerroClient) {
     /** How a source is doing: a Web text's last read, whether a Browser source's page loads. */
     sourceStatus: (name: string) =>
       c.request<EngineSourceStatus>('GET', `/api/v1/studio/engine/sources/${enc(name)}/status`),
+    /** The VST3 sound plugins on this computer (looked for once; `rescan` looks again). */
+    vstPlugins: (rescan = false) =>
+      c.request<EngineVstPlugins>(
+        'GET',
+        `/api/v1/studio/engine/vst/plugins${rescan ? '?rescan=true' : ''}`,
+      ),
+    /** A VST filter's plugin: running, why not, and whether its window changed something. */
+    vstStatus: (name: string, filter: string) =>
+      c.request<EngineVstStatus>(
+        'GET',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/vst`,
+      ),
+    /** Opens or closes a VST filter's own window, or saves its state into the filter. */
+    vstAct: (name: string, filter: string, what: 'open' | 'close' | 'save') =>
+      c.request<{ saved?: boolean }>(
+        'POST',
+        `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/vst`,
+        { do: what },
+      ),
     /** A PNG of a scene or source, saved where recordings go. */
     screenshot: (name: string) =>
       c.request<{ file: string }>(

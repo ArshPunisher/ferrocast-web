@@ -47,6 +47,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
+import { VstForm } from './vst-form'
 import {
   FILTERS,
   FILTER_OF,
@@ -1535,6 +1536,15 @@ function FilterSettings({
   if (loaded.error && !loaded.data)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
   if (!loaded.data) return <Skeleton className="h-20" />
+  if (kind === 'ferrocast_vst')
+    return (
+      <VstForm
+        source={source}
+        filter={filter}
+        values={{ ...loaded.data[1], ...edits }}
+        onChange={set}
+      />
+    )
   return (
     <FilterForm
       kind={kind}

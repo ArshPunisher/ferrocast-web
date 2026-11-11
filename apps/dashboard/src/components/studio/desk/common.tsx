@@ -50,6 +50,7 @@ import {
   Waveform,
   Webcam,
   type Icon,
+  Plugs,
 } from '@phosphor-icons/react'
 import {
   studioEngineApi,
@@ -454,6 +455,13 @@ export const FILTERS: FilterEntry[] = [
     help: 'Loud keyboards, busy rooms. Keeps your voice natural.',
     audio: true,
     icon: Ear,
+  },
+  {
+    kinds: ['ferrocast_vst'],
+    label: 'VST plugin',
+    help: 'A sound plugin of your own, kept apart so it can’t stop your stream.',
+    audio: true,
+    icon: Plugs,
   },
   {
     kinds: ['noise_gate_filter'],
