@@ -794,10 +794,18 @@ function SwitchBar() {
         onSelect: () => setOptions({ double_click: !options.double_click }),
       },
     ])
-  // One 36px bar under the two pictures: quick transitions, the T-bar, swap, black, options,
-  // and Transition at the end, where the eye lands.
+  // One 40px bar under the two pictures: quick transitions, the T-bar, swap, black, options,
+  // and Transition at the end, where the eye lands. Set apart from the panels (owner's pick S2,
+  // 11 Nov): a line along the top from Preview's blue to On air's red, each end tinted by its
+  // side, as the pictures above.
   return (
-    <div className="fc-dock-bar flex h-10 flex-none items-center gap-2 border-t border-line-strong bg-surface-1 px-2.5">
+    <div
+      className="relative flex h-10 flex-none items-center gap-2 px-2.5 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-[linear-gradient(90deg,var(--fc-arc),var(--fc-danger))] before:content-['']"
+      style={{
+        background:
+          'linear-gradient(90deg, var(--fc-accent-soft) 0%, transparent 45%, transparent 55%, var(--fc-danger-soft) 100%), var(--fc-surface-1)',
+      }}
+    >
       <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {quick.map((q, i) => (
           <Button
