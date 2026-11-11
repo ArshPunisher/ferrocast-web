@@ -98,7 +98,10 @@ export interface Call {
  * The relay's ICE servers for this call: STUN, and TURN when the relay has it (so a guest and
  * a streamer both on strict networks still connect). Public STUN when the relay can't say.
  */
-export async function iceServers(token: string, post: typeof fetch = fetch): Promise<RTCIceServer[]> {
+export async function iceServers(
+  token: string,
+  post: typeof fetch = fetch,
+): Promise<RTCIceServer[]> {
   try {
     // A relay that doesn't answer never holds the guest up: public STUN after 3 s.
     const res = await post('/g/v1/ice', {

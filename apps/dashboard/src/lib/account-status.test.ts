@@ -9,7 +9,10 @@ describe('account status', () => {
   })
 
   it('asks again when the window comes back, so Pro given elsewhere shows (owner, 10 Nov)', async () => {
-    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { remote: true, api: 'https://relay.example/r' }
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = {
+      remote: true,
+      api: 'https://relay.example/r',
+    }
     const asked: string[] = []
     vi.stubGlobal(
       'fetch',

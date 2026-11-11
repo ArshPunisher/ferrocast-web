@@ -47,7 +47,10 @@ describe("a guest's ICE servers", () => {
     (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
   it("takes the relay's list, TURN included", async () => {
     const turn = { urls: ['turn:turn.example:3478'], username: 'u', credential: 'c' }
-    const list = await iceServers('tok', answer(200, { iceServers: [ICE_SERVERS[0], turn, { nope: 1 }] }))
+    const list = await iceServers(
+      'tok',
+      answer(200, { iceServers: [ICE_SERVERS[0], turn, { nope: 1 }] }),
+    )
     expect(list).toEqual([ICE_SERVERS[0], turn])
   })
   it('falls back to public STUN when the relay says no or is away', async () => {

@@ -299,9 +299,9 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                     checked={!!dest.enhanced}
                     disabled={busy === 'enhanced'}
                     onChange={(on) =>
-                      void run('enhanced', () => api.setEnhanced(dest.id, on).then(() => true)).then(
-                        (x) => x && onSaved(),
-                      )
+                      void run('enhanced', () =>
+                        api.setEnhanced(dest.id, on).then(() => true),
+                      ).then((x) => x && onSaved())
                     }
                   />
                 </Row>

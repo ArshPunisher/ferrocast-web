@@ -35,18 +35,27 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
       <div class="container hero-grid">
         <div class="hero-copy">
           <Breadcrumbs page={page} />
-          <h1 class="display-2">Your whole stream. <em>One free app.</em></h1>
+          <h1 class="display-2">
+            Your whole stream. <em>One free app.</em>
+          </h1>
           <p class="lede">Go live, run alerts, chat and moderation from your own computer.</p>
           <div class="cta">
             <a class="btn primary" href={PAGES.download.path}>
-              <Icon name="download-simple" weight="bold" size={18} />Download
+              <Icon name="download-simple" weight="bold" size={18} />
+              Download
             </a>
             <a class="btn ghost" href="#index">
-              <Icon name="squares-four" weight="bold" size={18} />Browse features
+              <Icon name="squares-four" weight="bold" size={18} />
+              Browse features
             </a>
           </div>
         </div>
-        <button class="shot reveal" type="button" data-title="The Studio" aria-label="See the Studio big">
+        <button
+          class="shot reveal"
+          type="button"
+          data-title="The Studio"
+          aria-label="See the Studio big"
+        >
           <img
             src="/media/features/studio-desk.webp"
             width="1600"
@@ -77,11 +86,24 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
         <h2 id="index-h">Find a feature</h2>
         <p class="sub">Pick one to jump straight to it.</p>
         <div class="chips" role="group" aria-label="Show features about">
-          <button class="chip" type="button" aria-pressed="true" data-g="all" style="--c: var(--fx-t2)">
-            <Icon name="squares-four" weight="bold" size={16} />All
+          <button
+            class="chip"
+            type="button"
+            aria-pressed="true"
+            data-g="all"
+            style="--c: var(--fx-t2)"
+          >
+            <Icon name="squares-four" weight="bold" size={16} />
+            All
           </button>
           {GROUPS.map((g) => (
-            <button class="chip" type="button" aria-pressed="false" data-g={g.key} style={`--c: var(--fx-${g.key})`}>
+            <button
+              class="chip"
+              type="button"
+              aria-pressed="false"
+              data-g={g.key}
+              style={`--c: var(--fx-${g.key})`}
+            >
               <Icon name={g.icon} weight="bold" size={16} />
               {g.name}
             </button>
@@ -113,7 +135,8 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
           </a>
         ))}
         <a href="#more" style="--c: var(--fx-studio)">
-          <Icon name="dots-three-circle" weight="bold" size={15} />And more
+          <Icon name="dots-three-circle" weight="bold" size={15} />
+          And more
         </a>
       </nav>
 
@@ -139,8 +162,21 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
             </div>
           )
           const shot = (
-            <button class="shot crop reveal" type="button" data-title={f.name} aria-label={`See ${f.name} big`} style={`--pos: ${f.pos}`}>
-              <img loading="lazy" decoding="async" src={`/media/features/${f.shot}`} width={w} height={h} alt={`${f.name} in Ferrocast`} />
+            <button
+              class="shot crop reveal"
+              type="button"
+              data-title={f.name}
+              aria-label={`See ${f.name} big`}
+              style={`--pos: ${f.pos}`}
+            >
+              <img
+                loading="lazy"
+                decoding="async"
+                src={`/media/features/${f.shot}`}
+                width={w}
+                height={h}
+                alt={`${f.name} in Ferrocast`}
+              />
             </button>
           )
           const steps = (
@@ -159,7 +195,12 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
             </ol>
           )
           return (
-            <section class="feat" id={f.id} style={`--c: var(--fx-${f.group})`} aria-labelledby={`${f.id}-h`}>
+            <section
+              class="feat"
+              id={f.id}
+              style={`--c: var(--fx-${f.group})`}
+              aria-labelledby={`${f.id}-h`}
+            >
               {layout.startsWith('split') ? (
                 <>
                   <div class:list={['split', { rev: layout === 'split rev' }]}>
@@ -210,12 +251,17 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
         <h2>Free, open source, yours.</h2>
         <p>Mac and Windows. Nothing to sign up for to start.</p>
         <a class="btn primary" href={PAGES.download.path}>
-          <Icon name="download-simple" weight="bold" size={18} />Download
+          <Icon name="download-simple" weight="bold" size={18} />
+          Download
         </a>
       </div>
     </section>
 
-    <dialog class="zoom" id="zoom" aria-label="Screenshot, big. Click, scroll or press Escape to go back.">
+    <dialog
+      class="zoom"
+      id="zoom"
+      aria-label="Screenshot, big. Click, scroll or press Escape to go back."
+    >
       <img id="zoom-img" alt="" />
     </dialog>
   </div>
@@ -299,7 +345,10 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
             else l.removeAttribute('aria-current')
             // The phone's row of links scrolls to keep the current one in view.
             if (on && l.parentElement && l.parentElement.scrollWidth > l.parentElement.clientWidth)
-              l.parentElement.scrollTo({ left: l.offsetLeft - 16, behavior: calm ? 'auto' : 'smooth' })
+              l.parentElement.scrollTo({
+                left: l.offsetLeft - 16,
+                behavior: calm ? 'auto' : 'smooth',
+              })
           }
         }
       },
@@ -366,7 +415,9 @@ const size = (f: BigFeature) => (f.shot === 'studio-desk.webp' ? [1600, 950] : [
     shrink()
   })
   zoom?.addEventListener('keydown', (e) => {
-    if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' ', 'Enter', 'Home', 'End'].includes(e.key)) {
+    if (
+      ['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' ', 'Enter', 'Home', 'End'].includes(e.key)
+    ) {
       e.preventDefault()
       shrink()
     }

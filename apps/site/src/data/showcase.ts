@@ -210,27 +210,108 @@ export interface SmallFeature {
 }
 
 export const SMALL: SmallFeature[] = [
-  { id: 'vertical', group: 'live', icon: 'device-mobile', name: 'Vertical for Shorts', one: 'A second, upright picture for Shorts and Reels, live at the same time.' },
-  { id: 'record', group: 'live', icon: 'record', name: 'Record', one: 'Record while you stream, or on its own, in MP4.' },
-  { id: 'replay', group: 'studio', icon: 'clock-counter-clockwise', name: 'Instant replay', one: 'Save the last moments and play them in a scene, then back.' },
-  { id: 'captions', group: 'studio', icon: 'closed-captioning', name: 'Live captions', one: 'Captions on your stream, made on your computer, translated.' },
-  { id: 'background', group: 'studio', icon: 'user-focus', name: 'Background removal', one: 'No green screen. Works on any Mac or PC.' },
-  { id: 'noise', group: 'studio', icon: 'waveform', name: 'Clean sound', one: 'Strong noise removal that keeps your voice natural.' },
-  { id: 'guests', group: 'studio', icon: 'users-three', name: 'Guest cameras', one: 'Bring a friend on with a link. No app for them.' },
-  { id: 'vst', group: 'plug', icon: 'sliders', name: 'VST sound plugins', isNew: true, one: 'Your own VST3 audio plugins on a Mac, each one locked down.' },
-  { id: 'remote', group: 'chat', icon: 'device-mobile-camera', name: 'Phone remote', one: 'Switch scenes and run alerts from your phone.' },
-  { id: 'tts', group: 'chat', icon: 'speaker-high', name: 'Text to speech', one: 'Tips and messages read out, with a voice you pick.' },
-  { id: 'recap', group: 'chat', icon: 'chart-line-up', name: 'Stream recap', one: 'What happened, who showed up, and your best moments.' },
-  { id: 'your-data', group: 'chat', icon: 'house-line', name: 'Your data stays yours', one: 'Your chat, events and keys stay on your PC.' },
+  {
+    id: 'vertical',
+    group: 'live',
+    icon: 'device-mobile',
+    name: 'Vertical for Shorts',
+    one: 'A second, upright picture for Shorts and Reels, live at the same time.',
+  },
+  {
+    id: 'record',
+    group: 'live',
+    icon: 'record',
+    name: 'Record',
+    one: 'Record while you stream, or on its own, in MP4.',
+  },
+  {
+    id: 'replay',
+    group: 'studio',
+    icon: 'clock-counter-clockwise',
+    name: 'Instant replay',
+    one: 'Save the last moments and play them in a scene, then back.',
+  },
+  {
+    id: 'captions',
+    group: 'studio',
+    icon: 'closed-captioning',
+    name: 'Live captions',
+    one: 'Captions on your stream, made on your computer, translated.',
+  },
+  {
+    id: 'background',
+    group: 'studio',
+    icon: 'user-focus',
+    name: 'Background removal',
+    one: 'No green screen. Works on any Mac or PC.',
+  },
+  {
+    id: 'noise',
+    group: 'studio',
+    icon: 'waveform',
+    name: 'Clean sound',
+    one: 'Strong noise removal that keeps your voice natural.',
+  },
+  {
+    id: 'guests',
+    group: 'studio',
+    icon: 'users-three',
+    name: 'Guest cameras',
+    one: 'Bring a friend on with a link. No app for them.',
+  },
+  {
+    id: 'vst',
+    group: 'plug',
+    icon: 'sliders',
+    name: 'VST sound plugins',
+    isNew: true,
+    one: 'Your own VST3 audio plugins on a Mac, each one locked down.',
+  },
+  {
+    id: 'remote',
+    group: 'chat',
+    icon: 'device-mobile-camera',
+    name: 'Phone remote',
+    one: 'Switch scenes and run alerts from your phone.',
+  },
+  {
+    id: 'tts',
+    group: 'chat',
+    icon: 'speaker-high',
+    name: 'Text to speech',
+    one: 'Tips and messages read out, with a voice you pick.',
+  },
+  {
+    id: 'recap',
+    group: 'chat',
+    icon: 'chart-line-up',
+    name: 'Stream recap',
+    one: 'What happened, who showed up, and your best moments.',
+  },
+  {
+    id: 'your-data',
+    group: 'chat',
+    icon: 'house-line',
+    name: 'Your data stays yours',
+    one: 'Your chat, events and keys stay on your PC.',
+  },
 ]
 
 /** What makes Ferrocast different. The CPU figure was measured on an M4 Mac on 11 Nov 2026:
  * a 1440p screen, two cameras and a timer, not recording. */
 export const WHY: { icon: string; big: string; small: string }[] = [
-  { icon: 'currency-circle-dollar', big: 'Free', small: 'Open source. No ads, no cut of your tips.' },
+  {
+    icon: 'currency-circle-dollar',
+    big: 'Free',
+    small: 'Open source. No ads, no cut of your tips.',
+  },
   { icon: 'cpu', big: '7% CPU', small: 'A 1440p screen and two cameras, on an M4 Mac.' },
   { icon: 'lock-key', big: 'On your PC', small: 'Your keys and chat never leave it.' },
-  { icon: 'plugs-connected', big: 'No OBS', small: 'Its own studio built in. OBS still works too.' },
+  {
+    icon: 'plugs-connected',
+    big: 'No OBS',
+    small: 'Its own studio built in. OBS still works too.',
+  },
   { icon: 'shield-check', big: 'Safe plugins', small: 'Each locked away from your files.' },
   { icon: 'globe-hemisphere-east', big: '3 at once', small: 'Twitch, YouTube and Kick together.' },
 ]

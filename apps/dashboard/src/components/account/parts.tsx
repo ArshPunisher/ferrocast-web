@@ -413,7 +413,11 @@ export function SidebarAccount({
             type="button"
             onClick={() => {
               if (!reopenSignIn())
-                toast({ tone: 'info', message: 'Sign in again', hint: 'Cancel, then press Sign in once more.' })
+                toast({
+                  tone: 'info',
+                  message: 'Sign in again',
+                  hint: 'Cancel, then press Sign in once more.',
+                })
             }}
             title="Open the sign-in page again"
             className="min-w-0 flex-1 rounded-[6px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"

@@ -28,7 +28,8 @@ const BACK_MIN_MS = 20_000
 
 export function publishAccount(v: AccountView | null): void {
   const wasPending = current?.state === 'pending'
-  const planBefore = current?.state === 'signed_in' ? `${current.plan}:${current.pro?.active}` : null
+  const planBefore =
+    current?.state === 'signed_in' ? `${current.plan}:${current.pro?.active}` : null
   current = v
   subs.forEach((f) => f())
   if (poll) clearTimeout(poll)

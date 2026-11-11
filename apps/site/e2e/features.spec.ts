@@ -6,7 +6,10 @@ test('the chips dim the other groups and a card jumps to its feature', async ({ 
   // Clicked before the page has finished loading too: the jump still lands.
   await page.goto('/features/', { waitUntil: 'commit' })
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Plugins', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Plugins', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   const alerts = page.locator('.cards > li[data-g="alerts"]').first()
   await expect(alerts).toHaveClass(/dim/)
   // A dimmed card is out of the tab order; the group's own cards aren't.
@@ -18,7 +21,9 @@ test('the chips dim the other groups and a card jumps to its feature', async ({ 
   await expect(page.locator('.cards > li.dim')).toHaveCount(0)
 })
 
-test('a screenshot grows big with nothing else, and a click, a scroll or Esc puts it back', async ({ page }) => {
+test('a screenshot grows big with nothing else, and a click, a scroll or Esc puts it back', async ({
+  page,
+}) => {
   await page.goto('/features/')
   const zoom = page.locator('#zoom')
   const shot = page.getByRole('button', { name: 'See Alerts big' })
@@ -52,7 +57,9 @@ test('every feature screenshot loads and is a dark one', async ({ page }) => {
   const shots = page.locator('.fx .shot img')
   for (const img of await shots.all()) {
     await img.scrollIntoViewIfNeeded()
-    await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true)
+    await expect
+      .poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0))
+      .toBe(true)
     // Mean brightness of a small copy: the owner wants dark screenshots only.
     const mean = await img.evaluate((i: HTMLImageElement) => {
       const c = document.createElement('canvas')
@@ -65,6 +72,6 @@ test('every feature screenshot loads and is a dark one', async ({ page }) => {
       for (let k = 0; k < d.length; k += 4) sum += (d[k]! + d[k + 1]! + d[k + 2]!) / 3
       return sum / (d.length / 4) / 255
     })
-    expect(mean, await img.getAttribute('src') ?? '').toBeLessThan(0.25)
+    expect(mean, (await img.getAttribute('src')) ?? '').toBeLessThan(0.25)
   }
 })
