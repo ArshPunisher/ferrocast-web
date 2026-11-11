@@ -79,6 +79,7 @@
 
   /* Meaning. Used only for real state. */
   --fc-ok: #3dd193;
+  --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
   --fc-ok-soft: rgb(61 209 147 / 0.14);
   --fc-warn: #f2b84b;
   --fc-warn-soft: rgb(242 184 75 / 0.14);
@@ -167,6 +168,7 @@
   --fc-accent-soft: rgb(8 136 184 / 0.1);
   --fc-accent-line: rgb(8 136 184 / 0.38);
   --fc-ok: #0a6b46;
+  --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
   --fc-ok-soft: rgb(17 160 100 / 0.13);
   --fc-warn: #946200;
   --fc-warn-soft: rgb(255 176 32 / 0.18);
@@ -213,7 +215,7 @@
     --fc-stage: #e2e4ea;
     --fc-line: #dfe2e8;
     --fc-line-strong: #c9ced7;
-  --fc-dock-head: #e8ebef;
+    --fc-dock-head: #e8ebef;
     --fc-text: #0e1014;
     --fc-text-2: #222832;
     --fc-text-3: #3c434e;
@@ -230,6 +232,7 @@
     --fc-accent-soft: rgb(8 136 184 / 0.1);
     --fc-accent-line: rgb(8 136 184 / 0.38);
     --fc-ok: #0a6b46;
+    --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
     --fc-ok-soft: rgb(17 160 100 / 0.13);
     --fc-warn: #946200;
     --fc-warn-soft: rgb(255 176 32 / 0.18);

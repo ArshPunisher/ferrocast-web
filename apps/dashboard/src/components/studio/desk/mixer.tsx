@@ -429,10 +429,16 @@ function MuteButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
       variant="ghost"
       label={a.muted ? `Unmute ${a.name}` : `Mute ${a.name}`}
       aria-pressed={a.muted}
-      className={cx(a.muted ? 'bg-danger-soft text-danger hover:bg-danger-soft' : 'text-text')}
+      // Filled both ways (owner, 11 Nov, as the eye and lock); muted is a solid red chip.
+      className={cx(
+        // `!`: the ghost button's own hover would clear the fill (owner, 11 Nov).
+        a.muted
+          ? 'bg-danger-fill! text-white! hover:brightness-110'
+          : 'text-text-2 hover:text-text',
+      )}
       onClick={() => onAudio({ muted: !a.muted })}
     >
-      {a.muted ? <SpeakerSlash size={15} weight="bold" /> : <SpeakerHigh size={15} weight="bold" />}
+      {a.muted ? <SpeakerSlash size={15} weight="fill" /> : <SpeakerHigh size={15} weight="fill" />}
     </IconButton>
   )
 }
@@ -445,10 +451,16 @@ function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
       variant="ghost"
       label={hearing ? `Stop hearing ${a.name}` : `Hear ${a.name} in your headphones`}
       aria-pressed={hearing}
-      className={cx(hearing ? 'fc-picked hover:bg-[var(--fc-pick-hover)]' : 'text-text-3')}
+      // Filled both ways; on, a solid green chip with a white icon (owner, 11 Nov), kept on
+      // hover (`!` over the ghost button's own hover).
+      className={cx(
+        hearing
+          ? 'bg-[var(--fc-ok-fill)]! text-white! hover:brightness-110'
+          : 'text-text-3 hover:text-text',
+      )}
       onClick={() => onAudio({ monitor: hearing ? 'off' : 'me_and_stream' })}
     >
-      <Headphones size={15} weight={hearing ? 'fill' : 'bold'} />
+      <Headphones size={15} weight="fill" />
     </IconButton>
   )
 }
