@@ -137,3 +137,44 @@ test('a logic plugin says what it may do; a panel opens in a sandbox and asks fo
   await frame.getByRole('button', { name: 'Save replay' }).click()
   await expect(frame.getByText('Done.')).toBeVisible()
 })
+
+test('a panel that sends its frame to another page is closed, not heard', async ({ page }) => {
+  await open(page, 'settings/plugins', 'autoplay=0&latency=0')
+  const p = page$(page)
+  const manifest = JSON.stringify({
+    id: 'com.ana.wander',
+    name: 'Wanderer',
+    version: '1.0.0',
+    kind: 'panel',
+    panel: 'panel.html',
+    actions: ['scene'],
+  })
+  // It sends its own frame elsewhere (a sandboxed frame still may), here without a script.
+  const html = '<meta http-equiv="refresh" content="0.2;url=about:blank"><p>here</p>'
+  await addFile(
+    page,
+    'wander.zip',
+    Buffer.from(zipSync({ 'plugin.json': strToU8(manifest), 'panel.html': strToU8(html) })),
+  )
+  await expect(toasts(page).getByText('Wanderer added.')).toBeVisible()
+  await p.getByRole('button', { name: 'Open Wanderer' }).click()
+  await expect(page.getByRole('alert').getByText(/tried to open another page/)).toBeVisible()
+  await expect(page.locator('iframe[title="Wanderer"]')).toHaveCount(0)
+})
+
+test('the catalog adds a plugin and updates one in a click', async ({ page }) => {
+  await open(page, 'settings/plugins', 'autoplay=0&latency=0')
+  const p = page$(page)
+  const grain = p.getByRole('button', { name: 'Install', exact: true })
+  await expect(p.getByText('Film grain', { exact: true })).toBeVisible()
+  await expect(p.getByText(/Effect · By Ferrocast · Soft moving grain/)).toBeVisible()
+  await grain.click()
+  await expect(toasts(page).getByText('Film grain added.')).toBeVisible()
+  // Marked installed in the catalog, and listed with the others.
+  await expect(p.getByText('Installed', { exact: true }).first()).toBeVisible()
+  await expect(p.getByRole('switch', { name: /Film grain/ })).toBeVisible()
+  // Big buttons has a later version: one click updates it.
+  await p.getByRole('button', { name: 'Update', exact: true }).click()
+  await expect(toasts(page).getByText('Big buttons updated to 1.1.0.')).toBeVisible()
+  await expect(p.getByRole('button', { name: 'Update', exact: true })).toHaveCount(0)
+})

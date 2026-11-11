@@ -59,11 +59,15 @@ function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const page = useResource(() => api.panel(p.id), [client, p.id])
   const src = panelPageUrl(client.baseUrl, p.id, location.href)
+  // A panel loads once. A second load means it sent its frame to another page (a sandboxed
+  // frame may still navigate itself): that page isn't the panel, so it's closed and never heard.
+  const loads = useRef(0)
+  const [left, setLeft] = useState(false)
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow
-      // Only this panel's own frame (a sandboxed frame's origin is "null").
-      if (!win || e.source !== win) return
+      // Only this panel's own frame (a sandboxed frame's origin is "null"), while it's the panel.
+      if (!win || e.source !== win || loads.current !== 1) return
       const data = e.data as { type?: unknown; step?: unknown } | null
       if (!data || data.type !== 'act' || typeof data.step !== 'object' || data.step === null)
         return
@@ -80,6 +84,10 @@ function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
     <Dialog open onClose={onClose} title={p.name} size="lg">
       {page.error ? (
         <LoadError error={page.error} onRetry={page.reload} />
+      ) : left ? (
+        <p role="alert" className="m-0 py-6 text-center text-[13.5px] text-text-2">
+          This panel tried to open another page, so it was closed. Panels can't go online.
+        </p>
       ) : !page.data ? (
         <Skeleton className="h-64" />
       ) : (
@@ -89,12 +97,14 @@ function PanelDialog({ p, onClose }: { p: Plugin; onClose: () => void }) {
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
           {...(src ? { src } : { srcDoc: sandboxed(page.data.html) })}
-          onLoad={() =>
+          onLoad={() => {
+            loads.current += 1
+            if (loads.current > 1) return setLeft(true)
             frame.current?.contentWindow?.postMessage(
               { type: 'hello', actions: page.data?.actions ?? [] },
               '*',
             )
-          }
+          }}
           className="h-[min(60vh,480px)] w-full rounded-control border border-line bg-white"
         />
       )}
