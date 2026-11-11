@@ -204,6 +204,8 @@ function cutOut(box: DOMRect, edge: number): Hole[] | null {
  * between them in the middle. */
 export function PreviewBox({ running }: { running: boolean }) {
   const api = useEngine()
+  const apiRef = useRef(api)
+  apiRef.current = api
   const { scenes, canvas, setCanvas } = useDesk()
   const studio = !!scenes.data?.preview
   // The vertical picture beside the main one (not in Studio Mode, which is the main one's).
@@ -229,11 +231,47 @@ export function PreviewBox({ running }: { running: boolean }) {
     preview: scenes.data?.preview ?? '',
     vertical: vertical?.current ?? '',
   }
+  // One placement at a time, in the order asked, the newest waiting one winning: sent many a
+  // frame (a menu sliding, a dialog opening), they could land out of order, and an older one
+  // without the dialog's shade left the picture bright under it (owner's recording, 11 Nov).
+  // One queue for the box's whole life, so a "take it away" from the last run of the effect
+  // never lands after the next run's "put it here" (that hid the canvas after Start).
+  // It answers true once placed, false when a newer one took its place unsent (CodeRabbit).
+  const placer = useRef<(...args: Parameters<typeof api.preview>) => Promise<boolean>>(null!)
+  if (!placer.current) {
+    let sending = false
+    let waiting: {
+      run: () => Promise<void>
+      done: (placed: boolean) => void
+      failed: (e: unknown) => void
+    } | null = null
+    const pump = () => {
+      if (sending || !waiting) return
+      const { run, done, failed } = waiting
+      waiting = null
+      sending = true
+      run()
+        .then(() => done(true), failed)
+        .finally(() => {
+          sending = false
+          pump()
+        })
+    }
+    placer.current = (...args) =>
+      new Promise<boolean>((done, failed) => {
+        // A newer one replaces one not sent yet: that one counts as done.
+        waiting?.done(false)
+        waiting = { run: () => apiRef.current.preview(...args), done, failed }
+        pump()
+      })
+  }
   useEffect(() => {
     const el = ref.current
     if (!running || !desktop || !el) return
     let raf = 0
     let last = ''
+    // One placement at a time, in order, the newest waiting one winning (see `placer`).
+    const put = placer.current
     const place = (box: HTMLElement | null): PreviewRect | null => {
       if (!box) return null
       const r = box.getBoundingClientRect()
@@ -314,7 +352,7 @@ export function PreviewBox({ running }: { running: boolean }) {
         if (frozen !== token || !alive || performance.now() >= resizing) return
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
-        void api.preview(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
+        void put(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
       }
       void Promise.all(
         boxes().map(async (b, i) => {
@@ -347,7 +385,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       if (document.hidden) {
         if (last !== 'hidden') {
           last = 'hidden'
-          void api.preview(null, null, null).catch(() => undefined)
+          void put(null, null, null).catch(() => undefined)
         }
         return
       }
@@ -385,11 +423,11 @@ export function PreviewBox({ running }: { running: boolean }) {
       }
       last = key
       const thawing = frozen
-      void api
-        .preview(rect, program, tallRect)
-        .then(() => {
-          // The live picture is back in place: the still goes a moment later, under it.
-          if (thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
+      void put(rect, program, tallRect)
+        .then((placed) => {
+          // The live picture is back in place: the still goes a moment later, under it. One
+          // replaced before it was sent leaves that to the one that replaced it.
+          if (placed && thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
         })
         .catch(() => {
           // Not placed: try again shortly, and on the next change.
@@ -482,7 +520,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
       unfreeze()
-      void api.preview(null, null, null).catch(() => undefined)
+      void put(null, null, null).catch(() => undefined)
     }
   }, [api, running, desktop, studio, tall])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
