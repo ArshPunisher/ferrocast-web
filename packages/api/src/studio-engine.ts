@@ -891,6 +891,13 @@ export function studioEngineApi(c: FerroClient) {
         'GET',
         `/api/v1/studio/engine/sources/${enc(name)}/picture?w=${w}`,
       ),
+    /** A still of a screen (a display by its id), at most `w` wide, for the cards a capture is
+     * picked from; `image` null where it can't be taken (not on a Mac yet). */
+    screenStill: (id: number, w = 320) =>
+      c.request<{ image: string | null }>(
+        'GET',
+        `/api/v1/studio/engine/screens/${encodeURIComponent(String(id))}/still?w=${w}`,
+      ),
     /** How a source is doing: a Web text's last read, whether a Browser source's page loads. */
     sourceStatus: (name: string) =>
       c.request<EngineSourceStatus>('GET', `/api/v1/studio/engine/sources/${enc(name)}/status`),

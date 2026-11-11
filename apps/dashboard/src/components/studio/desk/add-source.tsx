@@ -58,6 +58,35 @@ export function cloneChoices(sources: string[], scenes: string[], into: string):
   return [...sources, ...scenes.filter((n) => n !== into)]
 }
 
+/** A screen as it looks now, over its card's icon once it comes (owner, 10 Nov: "this should
+ * show the proper screen"). One still when the card shows: a short capture in the app, nothing
+ * left running. Where it can't be taken the icon stays. */
+function ScreenStill({ id, label }: { id: unknown; label: string }) {
+  const { api } = useDesk()
+  const [src, setSrc] = useState<string | null>(null)
+  const n = typeof id === 'number' ? id : Number(id)
+  useEffect(() => {
+    if (!Number.isFinite(n)) return
+    let alive = true
+    api
+      .screenStill(n, Math.min(640, Math.round(320 * (window.devicePixelRatio || 1))))
+      .then((r) => alive && setSrc(r.image))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [api, n])
+  if (!src) return null
+  return (
+    <img
+      src={src}
+      alt={`What's on ${label} now`}
+      className="absolute inset-0 size-full object-cover"
+      draggable={false}
+    />
+  )
+}
+
 function deviceOption(opts: EngineOption[], keys: string[] | undefined): EngineOption | null {
   if (!keys) return null
   for (const k of keys) {
@@ -745,13 +774,16 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                   className="relative flex flex-col overflow-hidden rounded-[6px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
                 >
                   <span
-                    className="grid aspect-video place-items-center"
+                    className="relative grid aspect-video place-items-center overflow-hidden"
                     style={{
                       background: `color-mix(in oklab, ${c.tone} ${on ? 22 : 9}%, var(--fc-surface-inset))`,
                       color: c.tone,
                     }}
                   >
                     <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
+                    {dev.key === 'display' && (
+                      <ScreenStill key={String(dev.values[i])} id={dev.values[i]} label={label} />
+                    )}
                   </span>
                   <span className="flex items-center gap-2 px-3 py-2.5">
                     <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">
