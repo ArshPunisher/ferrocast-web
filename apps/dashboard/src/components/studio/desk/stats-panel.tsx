@@ -17,7 +17,7 @@ import {
 import { type EngineStats } from '@ferrocast/api'
 import { Dialog, InfoTip, cx } from '@ferrocast/ui'
 import { type EngineReading } from '../../../lib/engine-stats'
-import { loadHint, sourceRates, type SourceRate } from './source-load'
+import { hasSizeSetting, loadHint, sourceRates, type SourceRate } from './source-load'
 import { KindTile, useEngine } from './common'
 
 /** Kbps between two byte counts `ms` apart (0 when it went back: a new stream or file). */
@@ -230,7 +230,6 @@ export function StatsDialog({
   const { stats, history, since, at, kbps } = reading
   const rates = useRates(stats)
   const busiest = useSourceRates(stats).slice(0, 4)
-  const hint = stats ? loadHint(busiest[0], stats.canvas) : null
   const kinds = useSourceKinds(open && busiest.length > 0)
   const e = stats?.engine
   const stream = stats?.stream ?? null
@@ -243,6 +242,16 @@ export function StatsDialog({
   const lasts = recRate ? lastsFor(free, recRate) : null
   const budget = 1000 / fps
   const slowDraw = !!e && e.frame_ms > budget * 0.8
+  // Only then is a heavy source worth a word: the Studio keeping up is fine, however big.
+  const struggling =
+    !!e &&
+    (slowDraw ||
+      e.fps < fps * 0.95 ||
+      (e.frames > 0 && e.lagged / e.frames > 0.01) ||
+      ((e.encoded ?? 0) > 0 && (e.skipped ?? 0) / (e.encoded ?? 1) > 0.01) ||
+      (!!stream?.active && stream.frames > 0 && stream.dropped / stream.frames > 0.01))
+  const topKind = busiest[0] ? kinds.get(busiest[0].name) : undefined
+  const hint = stats ? loadHint(busiest[0], stats.canvas, struggling, topKind) : null
   const outputs: {
     name: string
     icon: Icon
@@ -432,20 +441,22 @@ export function StatsDialog({
                     </p>
                     <p className="m-0 text-[12.5px] text-text-2">{hint}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // The Studio opens that source's settings (Stats lives outside it).
-                      const name = busiest[0]?.name
-                      if (name)
-                        window.dispatchEvent(new CustomEvent('fc-edit-source', { detail: name }))
-                      onClose()
-                    }}
-                    className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-line-strong bg-surface-1 px-2.5 text-[13px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-                  >
-                    <SlidersHorizontal size={14} aria-hidden />
-                    Settings
-                  </button>
+                  {hasSizeSetting(topKind) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // The Studio opens that source's settings (Stats lives outside it).
+                        const name = busiest[0]?.name
+                        if (name)
+                          window.dispatchEvent(new CustomEvent('fc-edit-source', { detail: name }))
+                        onClose()
+                      }}
+                      className="fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-line-strong bg-surface-1 px-2.5 text-[13px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    >
+                      <SlidersHorizontal size={14} aria-hidden />
+                      Settings
+                    </button>
+                  )}
                 </div>
               )}
             </section>

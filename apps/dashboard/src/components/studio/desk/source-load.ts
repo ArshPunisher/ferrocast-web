@@ -33,16 +33,41 @@ export function sourceRates(prev: readonly Load[], cur: readonly Load[], ms: num
 /** About 1080p at 60 fps: above this one source alone is a real load. */
 const HEAVY_MPIX = 120
 
-/** One short line about the heaviest source when it's worth saying, else null. Stats names
- *  the source above it, so the line doesn't (owner's pick W1, 11 Nov). */
+/** Kinds with a size and frame rate of their own in their settings (cameras). */
+const SIZED_KINDS = new Set([
+  'av_capture_input',
+  'av_capture_input_v2',
+  'macos-avcapture',
+  'macos-avcapture-fast',
+  'dshow_input',
+  'v4l2_input',
+])
+
+/** True when the source's own settings can make it smaller or slower. */
+export function hasSizeSetting(kind: string | undefined): boolean {
+  return !!kind && SIZED_KINDS.has(kind)
+}
+
+/** One short line about the heaviest source, only while the Studio is actually struggling
+ *  (frames missed or skipped, or drawing near its budget): a big source on a Studio that
+ *  keeps up is fine, and a warning then only worries (owner, 12 Nov). Stats names the source
+ *  above it, so the line doesn't (owner's pick W1, 11 Nov). */
 export function loadHint(
   top: SourceRate | undefined,
   canvas: { width: number; height: number },
+  struggling: boolean,
+  kind?: string,
 ): string | null {
-  if (!top) return null
+  if (!top || !struggling) return null
+  const sized = hasSizeSetting(kind)
   const size = `${top.width}×${top.height}`
   if (top.width * top.height > canvas.width * canvas.height * 1.5)
-    return `It sends ${size}, bigger than your ${canvas.width}×${canvas.height} picture: set it to ${canvas.width}×${canvas.height}.`
-  if (top.mpix > HEAVY_MPIX) return 'Lower its size or frame rate if the stream stutters.'
+    return sized
+      ? `It sends ${size}, bigger than your ${canvas.width}×${canvas.height} picture: pick a smaller size in its settings.`
+      : `It sends ${size}, bigger than your ${canvas.width}×${canvas.height} picture: hide it while you don't need it.`
+  if (top.mpix > HEAVY_MPIX)
+    return sized
+      ? 'Pick a smaller size or frame rate in its settings.'
+      : 'Make it smaller on screen, or hide it while you don’t need it.'
   return null
 }
