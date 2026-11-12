@@ -89,6 +89,25 @@ input[type='range'] {
     animation: fc-pro-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
   }
 }
+/* A source recording on its own: a red dot that glows (still, with its glow, when motion is
+   reduced). */
+.fc-rec-dot {
+  box-shadow: 0 0 0 3px rgb(239 59 82 / 0.25);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fc-rec-dot {
+    animation: fc-rec-glow 1.4s ease-in-out infinite;
+  }
+}
+@keyframes fc-rec-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgb(239 59 82 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(239 59 82 / 0.1);
+  }
+}
 @keyframes fc-pro-ring {
   from {
     box-shadow: 0 0 0 0 var(--fc-accent-line);

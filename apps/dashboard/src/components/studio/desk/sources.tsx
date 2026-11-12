@@ -129,6 +129,8 @@ const quiet = 'fc-quiet'
 
 export function SourcesDock() {
   const desk = useDesk()
+  // Sources recording on their own get a red dot in their row (owner, 12 Nov).
+  const recordsAlone = new Set((desk.stats?.source_records ?? []).map((r) => r.name))
   const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
   const { also, pickMore } = desk
   const { busy, run } = useAction()
@@ -504,9 +506,10 @@ export function SourcesDock() {
         }),
     },
     {
-      label: 'Record on its own',
-      icon: RecordIcon,
-      checked: recordingAlone,
+      // While it records: says how to stop it, its dot red (a tick read as "done", owner 12 Nov).
+      label: recordingAlone ? 'Stop recording it' : 'Record on its own',
+      icon: recordingAlone ? Stop : RecordIcon,
+      ...(recordingAlone ? { tone: 'var(--fc-danger-fill)' } : {}),
       onSelect: () =>
         void run('iso', () => api.recordSource(item.name, !recordingAlone), {
           success: recordingAlone
@@ -791,7 +794,25 @@ export function SourcesDock() {
           }}
           className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <KindGlyph kind={item.group ? 'group' : item.kind} dim={!item.visible} />
+          {/* Recording on its own: a red dot that takes no room, so the icons stay in line
+              (owner, 12 Nov). In a group's indent for its sources; on the icon's corner for
+              the others (too little room in front of them). */}
+          <span className="relative inline-flex shrink-0">
+            <KindGlyph kind={item.group ? 'group' : item.kind} dim={!item.visible} />
+            {recordsAlone.has(item.name) && (
+              <span
+                role="img"
+                aria-label="Recording on its own"
+                title="Recording on its own"
+                className={cx(
+                  'fc-rec-dot pointer-events-none absolute size-2 rounded-full bg-danger-fill',
+                  child
+                    ? 'top-1/2 -left-[22px] -translate-y-1/2'
+                    : '-top-0.5 -right-0.5 outline-2 outline-surface-1 outline-solid',
+                )}
+              />
+            )}
+          </span>
           <span
             className={cx(
               'min-w-0 truncate font-semibold',
