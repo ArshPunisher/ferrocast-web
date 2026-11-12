@@ -188,7 +188,7 @@ export function Dialog({
               ) : (
                 <div
                   className={cx(
-                    'relative min-h-0 flex-1 overflow-y-auto overscroll-contain',
+                    'relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]',
                     compact ? 'px-4 py-3' : 'px-5 pb-5 sm:px-6',
                   )}
                 >
@@ -402,7 +402,7 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
             {tools && (
               <div className="flex-none border-b border-line px-5 py-3.5 sm:px-6">{tools}</div>
             )}
-            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] px-5 py-4 sm:px-6">
               {children}
             </div>
             {footer && (

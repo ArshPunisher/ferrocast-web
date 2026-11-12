@@ -150,7 +150,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
         </nav>
         <div
           key={page}
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [scrollbar-gutter:stable] [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
         >
           {here && (
             <h3 className="m-0 hidden font-display text-[17px] font-bold tracking-tight sm:block">
