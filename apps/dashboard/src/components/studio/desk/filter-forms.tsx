@@ -137,7 +137,7 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
     { key: 'display', label: 'Screen' },
     { key: 'window', label: 'Window' },
     { key: 'application', label: 'App' },
-    { key: 'show_cursor', label: 'Show the pointer', help: 'In your stream and recordings' },
+    { key: 'show_cursor', label: 'Show cursor', help: 'In your stream and recordings' },
   ]).concat(
     // Anything else this form gains later still shows.
     opts.filter(

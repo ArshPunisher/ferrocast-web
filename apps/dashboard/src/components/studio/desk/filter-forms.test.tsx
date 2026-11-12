@@ -160,7 +160,7 @@ describe('screen capture form', () => {
     expect(drawn(0)).not.toContain('>Window<')
     expect(drawn(2)).toContain('>Screen<')
     expect(drawn(2)).toContain('>App<')
-    for (const t of [0, 1, 2]) expect(drawn(t)).toContain('Show the pointer')
+    for (const t of [0, 1, 2]) expect(drawn(t)).toContain('Show cursor')
   })
 })
 

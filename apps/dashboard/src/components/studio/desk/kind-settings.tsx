@@ -132,9 +132,9 @@ const SCREEN: Layout = {
   words: {
     monitor: { label: 'Screen' },
     screen: { label: 'Screen' },
-    capture_cursor: { label: 'Show the pointer' },
-    cursor: { label: 'Show the pointer' },
-    show_cursor: { label: 'Show the pointer' },
+    capture_cursor: { label: 'Show cursor' },
+    cursor: { label: 'Show cursor' },
+    show_cursor: { label: 'Show cursor' },
   },
 }
 
