@@ -1111,6 +1111,26 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     busy: false,
     next: new Map(),
   })
+  // Mac: the picture is a native view over the page, and AppKit puts the arrow back over it
+  // whenever it redoes its cursor areas (the view resized, a menu's hole cut in it…), while
+  // WebKit only sets a cursor when the page's changes, so a resize cursor could stay an arrow
+  // (owner, 12 Nov). The app keeps the page's cursor on the view itself; Windows gets it from
+  // the input the app plays on the page instead.
+  // 'default' (the API takes a name, never ""): the app leaves the cursor to the page.
+  const native = useRef('default')
+  const tellNative = (css: string) => {
+    const c = css || 'default'
+    if (!on || picturesTakeMouse() || native.current === c) return
+    native.current = c
+    void api.previewCursor(c).catch(() => undefined)
+  }
+  useEffect(() => {
+    if (!on) return
+    return () => {
+      if (native.current !== 'default') void api.previewCursor('default').catch(() => undefined)
+      native.current = 'default'
+    }
+  }, [api, on])
 
   // The engine outlines whatever is picked here or in the Sources panel (and, with frames on,
   // every source in its own colour).
@@ -1215,6 +1235,7 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
     onPointerEnter: () => setOver(true),
     onPointerLeave: () => {
       if (!held.current) setOver(false)
+      tellNative('')
     },
     // Right-click: the Sources panel's menu for what's under the pointer, as in OBS (never the
     // web view's own Reload / Inspect menu).
@@ -1331,6 +1352,7 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
               ? 'pointer'
               : ''
         e.currentTarget.style.cursor = over
+        tellNative(over)
         return
       }
       const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
