@@ -25,6 +25,7 @@ import {
   Play,
   Plus,
   Power,
+  AppWindow,
   ClockCounterClockwise,
   Scissors,
   ShareNetwork,
@@ -45,6 +46,7 @@ import {
 import { Button, Dialog, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { os } from '../../../lib/os'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
 import { useWidePage } from '../../../lib/wide'
 import { go } from '../../../lib/router'
@@ -429,6 +431,11 @@ function ControlBar({
   const api = useEngine()
   const { stats, setStats, openSettings, prefs } = useDesk()
   const { busy, run } = useAction()
+  // Windows: whether its camera for every app (Windows 11) can be, and is, set up.
+  const camSetup = useResource(
+    () => (inDesktopApp() && os === 'windows' ? api.virtualCameraSetup() : Promise.resolve(null)),
+    [api],
+  )
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
   // A stream exists until stopped; while connecting it isn't active yet but is on.
@@ -603,9 +610,30 @@ function ControlBar({
         checked: camOn,
         onSelect: () =>
           void run('virtualcam', () => api.virtualCamera(!camOn), {
-            success: camOn ? 'Virtual camera off.' : 'Virtual camera on: other apps can pick it.',
+            success: camOn
+              ? 'Virtual camera off.'
+              : 'Virtual camera on: pick "Ferrocast Camera" in your call app.',
           }),
       },
+      // Windows 11: the camera in every app (Windows Camera, new Teams…), not only those that
+      // read DirectShow cameras. Windows asks for permission once.
+      ...(camSetup.data?.every_app_possible
+        ? [
+            {
+              label: 'Camera in every app',
+              icon: AppWindow,
+              checked: camSetup.data.every_app_on,
+              onSelect: () => {
+                const want = !camSetup.data?.every_app_on
+                void run('camsetup', () => api.setVirtualCameraEveryApp(want), {
+                  success: want
+                    ? 'Ferrocast Camera now shows in every app.'
+                    : 'Back to the camera for most apps.',
+                }).then(() => camSetup.reload())
+              },
+            },
+          ]
+        : []),
       {
         label: 'NDI output',
         icon: ShareNetwork,

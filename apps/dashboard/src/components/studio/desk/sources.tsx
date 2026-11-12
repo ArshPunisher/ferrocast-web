@@ -40,6 +40,7 @@ import {
   FolderSimple,
   Minus,
   Record as RecordIcon,
+  VideoCamera,
   SkipBack,
   SkipForward,
   SlidersHorizontal,
@@ -61,7 +62,7 @@ import {
 import { ConfirmDialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
-import { shortcut } from '../../../lib/os'
+import { os, shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
 import { KindGlyph, useDesk } from './common'
 import { DockHeader } from './layout'
@@ -517,6 +518,30 @@ export function SourcesDock() {
             : 'Recording it on its own, beside your recordings.',
         }),
     },
+    // This source alone in the virtual camera (OBS's "Source" output); a Mac has no camera yet.
+    ...(os === 'mac'
+      ? []
+      : [
+          {
+            label: 'Virtual camera',
+            icon: VideoCamera,
+            checked:
+              desk.stats?.virtualcam?.active === true && desk.stats.virtualcam.source === item.name,
+            onSelect: () => {
+              const cam = desk.stats?.virtualcam
+              const showing = !!cam?.active && cam.source === item.name
+              void run(
+                'virtualcam',
+                () => api.virtualCamera(!showing, showing ? undefined : item.name),
+                {
+                  success: showing
+                    ? 'Virtual camera off.'
+                    : `Virtual camera on with ${item.name} alone: pick "Ferrocast Camera" in your call app.`,
+                },
+              )
+            },
+          },
+        ]),
     ...(inDesktopApp()
       ? [
           projectorItem('Projector', desk.screens.data, (screen, onTop) =>

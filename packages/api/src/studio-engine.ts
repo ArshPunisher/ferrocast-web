@@ -544,6 +544,16 @@ export interface StudioSettings {
   keep_replay?: boolean
 }
 
+/** The virtual camera's setup on this computer. */
+export interface EngineCameraSetup {
+  /** Windows 11's camera for every app can be set up here (not the Store version). */
+  every_app_possible: boolean
+  /** It's set up. */
+  every_app_on: boolean
+  /** The Microsoft Store version (its camera can't be seen by other apps yet). */
+  store: boolean
+}
+
 export interface EngineRecordStats {
   active: boolean
   paused: boolean
@@ -645,7 +655,8 @@ export interface EngineStats {
   remux?: EngineRemux | null
   /** The replay buffer when on: the last file saved, or why it stopped. */
   replay?: { active: boolean; last: string | null; error: string | null } | null
-  virtualcam?: { active: boolean } | null
+  /** The virtual camera: on, Windows 11's for every app (not DirectShow's), what it shows (null: what's on air). */
+  virtualcam?: { active: boolean; every_app?: boolean; source?: string | null } | null
   /** NDI output, while it sends: the name it's sent under. */
   ndi?: { name: string } | null
   /** Captures on air that show nothing: macOS's Screen Recording off for Ferrocast, no picture
@@ -1275,9 +1286,21 @@ export function studioEngineApi(c: FerroClient) {
       c.request<{ file: string | null }>('POST', '/api/v1/studio/engine/replay/save', {}),
     /** The virtual camera on (what's on air, or one scene or source) or off. */
     virtualCamera: (on: boolean, source?: string) =>
-      c.request<{ active: boolean }>('POST', '/api/v1/studio/engine/virtualcam', {
-        on,
-        ...(source ? { source } : {}),
+      c.request<{ active: boolean; every_app?: boolean }>(
+        'POST',
+        '/api/v1/studio/engine/virtualcam',
+        {
+          on,
+          ...(source ? { source } : {}),
+        },
+      ),
+    /** The virtual camera's setup on this computer (Windows: the camera for every app). */
+    virtualCameraSetup: () =>
+      c.request<EngineCameraSetup>('GET', '/api/v1/studio/engine/virtualcam/setup'),
+    /** Windows 11's camera for every app set up (Windows asks for permission once) or taken away. */
+    setVirtualCameraEveryApp: (everyApp: boolean) =>
+      c.request<EngineCameraSetup>('POST', '/api/v1/studio/engine/virtualcam/setup', {
+        every_app: everyApp,
       }),
     /** What's on air sent on the local network as NDI (under `name`, default "Ferrocast"), or stopped. */
     ndiOutput: (on: boolean, name?: string) =>
