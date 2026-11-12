@@ -38,6 +38,18 @@ import type { ChatPlatform, Command, FerroEvent, Platform } from '../../types'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, isWhole, requireObj, type DemoHost, type Routed } from './host'
 
+/** The demo's Twitch and Kick categories: what its search offers and its preview finds. */
+const DEMO_CATEGORIES = [
+  'VALORANT',
+  'Valheim',
+  'Just Chatting',
+  'Hades II',
+  'Minecraft',
+  'Elden Ring',
+  'Art',
+  'Music',
+]
+
 const DEFAULT_MODULES: ModulesConfig = {
   eight_ball: { enabled: true },
   dice: { enabled: true },
@@ -1215,6 +1227,39 @@ export class DemoStudio {
         })
       return r
     }
+    if (is('GET', 'stream-info', 'categories', 'as')) {
+      const q = url.searchParams.get('q')?.trim() ?? ''
+      if (!q || [...q].length > 100)
+        throw new HttpError(400, 'invalid', 'q: type 1 to 100 characters.')
+      const words = (s: string) =>
+        s
+          .toLowerCase()
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter(Boolean)
+      const want = words(q)
+      // The same list the search offers, and Warzone (the name people type short).
+      const games = ['Call of Duty: Warzone', ...DEMO_CATEGORIES]
+      const hit =
+        games.find((g) => words(g).join(' ') === want.join(' ')) ??
+        games.find((g) => want.every((w) => words(g).includes(w)))
+      return {
+        items: (['twitch', 'youtube', 'kick'] as const).map((platform) =>
+          platform === 'youtube'
+            ? {
+                platform,
+                name: 'Gaming',
+                note: 'YouTube picks the game from your stream; change it in YouTube Studio.',
+              }
+            : hit
+              ? { platform, name: hit, note: null }
+              : {
+                  platform,
+                  name: null,
+                  note: `${platform === 'twitch' ? 'Twitch' : 'Kick'} has no category called "${q}".`,
+                },
+        ),
+      }
+    }
     if (is('GET', 'stream-info', 'categories')) {
       const q = url.searchParams.get('q')?.trim() ?? ''
       const p = url.searchParams.get('platform') as ChatPlatform
@@ -1224,16 +1269,7 @@ export class DemoStudio {
       const all =
         p === 'youtube'
           ? ['Gaming', 'People & Blogs', 'Entertainment', 'Music', 'Education']
-          : [
-              'VALORANT',
-              'Valheim',
-              'Just Chatting',
-              'Hades II',
-              'Minecraft',
-              'Elden Ring',
-              'Art',
-              'Music',
-            ]
+          : DEMO_CATEGORIES
       return {
         platform: p,
         items: all

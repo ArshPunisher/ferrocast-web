@@ -168,6 +168,8 @@ export interface PlatformResult {
   error: { code: StreamInfoErrorCode; message: string; hint: string | null } | null
   /** YouTube before the stream starts: saved, and put on its live broadcast once you're live. */
   waiting?: boolean
+  /** The category it shows now, in its own words (YouTube: Gaming). */
+  category?: string
 }
 
 export interface ApplyResult {
@@ -215,6 +217,15 @@ export interface CategoryHit {
   id: string
   name: string
   image_url: string | null
+}
+
+/** What one platform would show for a category typed in the form, before it's sent. */
+export interface CategoryAs {
+  platform: ChatPlatform
+  /** Its own name for it ("Call of Duty: Warzone"); null when it has none like it. */
+  name: string | null
+  /** Why it isn't the game's name (YouTube), or what's wrong. */
+  note: string | null
 }
 
 export const MAX_STREAM_TITLE = 140
@@ -587,6 +598,8 @@ export function studioApi(c: FerroClient) {
       get<{ platform: ChatPlatform; items: CategoryHit[] }>(
         `/stream-info/categories?platform=${platform}&q=${enc(q)}`,
       ),
+    categoriesAs: (q: string) =>
+      get<{ items: CategoryAs[] }>(`/stream-info/categories/as?q=${enc(q)}`),
     createPreset: (name: string, info: StreamInfo) =>
       post<StreamPreset>('/stream-info/presets', { name, info }),
     savePreset: (p: StreamPreset) => put<StreamPreset>(`/stream-info/presets/${enc(p.id)}`, p),

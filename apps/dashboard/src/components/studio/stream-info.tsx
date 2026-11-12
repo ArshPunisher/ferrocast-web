@@ -12,6 +12,7 @@ import {
   relativeTime,
   MAX_STREAM_DESCRIPTION,
   STREAM_INFO_PLATFORMS,
+  type CategoryAs,
   type CategoryHit,
   type CategoryIds,
   type ChatPlatform,
@@ -515,6 +516,11 @@ function Results({ results }: { results: PlatformResult[] }) {
               ))}
             </div>
           )}
+          {r.ok && r.category && (
+            <p className="m-0 text-[13.5px] text-text-2">
+              Category: <span className="font-semibold text-text">{r.category}</span>
+            </p>
+          )}
           {r.error && (
             <p className="m-0 text-[14px] leading-snug break-words text-text">
               {r.error.message}{' '}
@@ -753,6 +759,30 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
     }, 250)
     return () => clearTimeout(t)
   }, [query, searchOn, studio])
+
+  // What each platform makes of the category typed for all of them ("Warzone" is "Call of
+  // Duty: Warzone" on Twitch and Kick; YouTube only takes Gaming), shown before it's sent.
+  const everywhere = form.category.trim()
+  const [shownAs, setShownAs] = useState<{ q: string; items: CategoryAs[] } | null>(null)
+  useEffect(() => {
+    if (everywhere.length < 2) {
+      setShownAs(null)
+      return
+    }
+    let alive = true
+    const t = setTimeout(() => {
+      studio
+        .categoriesAs(everywhere)
+        .then((r) => alive && setShownAs({ q: everywhere, items: r.items }))
+        .catch(() => alive && setShownAs(null))
+    }, 400)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [everywhere, studio])
+  const categoryAs = (p: ChatPlatform, typed: string | undefined) =>
+    shownAs && typed?.trim() === shownAs.q ? shownAs.items.find((x) => x.platform === p) : undefined
 
   if (view.error) return <LoadError error={view.error} onRetry={view.reload} />
   if (!v) return <Skeleton className="h-80" />
@@ -1052,6 +1082,10 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             key={p.platform}
             access={p}
             info={streamInfoFor(toInfo(form), p.platform)}
+            categoryAs={categoryAs(
+              p.platform,
+              streamInfoFor(toInfo(form), p.platform).category?.name,
+            )}
             sending={p.connected && targets.includes(p.platform)}
             last={v.history.find((h) => h.results.some((r) => r.platform === p.platform && r.ok))}
             onSending={() =>
@@ -1140,19 +1174,27 @@ function PresetChips({
 function PlatformCard({
   access,
   info,
+  categoryAs,
   sending,
   last,
   onSending,
 }: {
   access: PlatformAccess
   info: StreamInfo
+  /** The platform's own name for the category typed, when it has been asked. */
+  categoryAs: CategoryAs | undefined
   sending: boolean
   last: StreamHistoryEntry | undefined
   onSending: () => void
 }) {
   const name = PLATFORM_LABEL[access.platform] ?? access.platform
   const title = info.title?.trim() ?? ''
-  const category = info.category?.name?.trim() ?? ''
+  const typed = info.category?.name?.trim() ?? ''
+  // Picked from this platform's list already: it's sent by its id, whatever the search says.
+  const picked = !!info.category?.ids?.[access.platform as keyof CategoryIds]
+  // Its own words for it; picked from its list, the name is already its own.
+  const category = typed && categoryAs?.name && !picked ? categoryAs.name : typed
+  const noSuch = !!typed && !picked && !!categoryAs && categoryAs.name === null
   const anything = !!title || !!category || (info.tags?.length ?? 0) > 0
   const cut = access.platform === 'youtube' && [...title].length > 100
   const lastTitle = last ? streamInfoFor(last.info, access.platform).title : undefined
@@ -1164,9 +1206,11 @@ function PlatformCard({
         ? { tone: 'neutral' as const, text: 'Not sent' }
         : !anything
           ? { tone: 'neutral' as const, text: 'Keeps its own' }
-          : cut
-            ? { tone: 'warn' as const, text: 'Title cut to 100' }
-            : { tone: 'ok' as const, text: 'Will update' }
+          : noSuch
+            ? { tone: 'warn' as const, text: 'Category not found' }
+            : cut
+              ? { tone: 'warn' as const, text: 'Title cut to 100' }
+              : { tone: 'ok' as const, text: 'Will update' }
   return (
     <section
       aria-label={name}
@@ -1200,8 +1244,15 @@ function PlatformCard({
             </p>
           )}
           <p className="m-0 text-text-3">
-            {[category, info.tags?.join(', ')].filter(Boolean).join(' · ') || 'Title only'}
+            {[noSuch ? '' : category, info.tags?.join(', ')].filter(Boolean).join(' · ') ||
+              'Title only'}
           </p>
+          {/* Picked from its own list: it has that one, whatever a lookup by name said. */}
+          {categoryAs?.note && !picked && (
+            <p className={`m-0 mt-1 text-[13px] ${noSuch ? 'text-warn' : 'text-text-3'}`}>
+              {categoryAs.note}
+            </p>
+          )}
         </div>
       ) : (
         <p className="m-0 mt-2 text-[14px] text-text-3">

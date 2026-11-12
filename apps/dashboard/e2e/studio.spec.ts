@@ -76,6 +76,21 @@ test.describe('studio', () => {
     await expect(panel(page, 'Last sent').getByText('Late night ranked')).toBeVisible()
   })
 
+  test('a typed category shows as each platform names it before it is sent', async ({ page }) => {
+    await open(page, 'studio/info')
+    const form = panel(page, 'Stream info')
+    await form.getByLabel('Title').fill('Death Has a Play Button')
+    await form.getByLabel(/^Category/).fill('Warzone')
+    const twitch = page.getByRole('region', { name: 'Twitch', exact: true })
+    await expect(twitch.getByText(/^Call of Duty: Warzone/)).toBeVisible()
+    const youtube = page.getByRole('region', { name: 'YouTube', exact: true })
+    await expect(youtube.getByText(/^Gaming/)).toBeVisible()
+    await expect(youtube.getByText(/change it in YouTube Studio/)).toBeVisible()
+    // Nothing like it: the card says so before anything is sent.
+    await form.getByLabel(/^Category/).fill('Not a real game')
+    await expect(twitch.getByText('Category not found')).toBeVisible()
+  })
+
   test('a platform can have its own title; Everywhere shows it and it can be reset', async ({
     page,
   }) => {
