@@ -141,7 +141,8 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
             scale: null,
             encoder: 'hardware',
             video_kbps: bitrateFor(size.h, fps),
-            record_quality: use === 'record' ? 'high' : 'stream',
+            // Recordings are files here, never held to a platform's bitrate: High either way.
+            record_quality: 'high',
           })
           return true
         })
