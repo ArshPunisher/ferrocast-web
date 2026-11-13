@@ -53,10 +53,18 @@ describe('the stream doctor', () => {
     ).toBeNull()
   })
 
-  it('late frames get 30 fps, but never while live (the canvas is fixed then)', () => {
+  it('late frames get 30 fps, live too (the stream on air takes it at once)', () => {
     expect(doctorFix('render', base, hd, false)?.patch).toEqual({ fps: 30 })
-    expect(doctorFix('render', base, hd, true)).toBeNull()
+    const live = doctorFix('render', base, hd, true)
+    expect(live?.patch).toEqual({ fps: 30 })
+    expect(live?.done).toBe('The stream runs at 30 fps now.')
     expect(doctorFix('render', { ...base, fps: 30 }, hd, false)).toBeNull()
+  })
+
+  it('only recording, the frame rate stays (the file is drawn at it)', () => {
+    expect(doctorFix('render', base, hd, false, true)).toBeNull()
+    // Live and recording: the stream takes it, the file keeps the canvas's rate.
+    expect(doctorFix('render', base, hd, true, true)?.patch).toEqual({ fps: 30 })
   })
 })
 

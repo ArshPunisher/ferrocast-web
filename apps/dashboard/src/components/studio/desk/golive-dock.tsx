@@ -24,6 +24,8 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const [managing, setManaging] = useState<'main' | 'vertical' | null>(null)
   const [optimizing, setOptimizing] = useState(false)
   const desk = useDesk()
+  // While live, the stream on air takes it at once (frame rate, size, encoder, bitrate).
+  const live = !!view?.live
   const applyOptimized = (patch: Partial<StudioSettings>) =>
     void run('optimize', async () => {
       const cur = await desk.api.studioSettings()
@@ -35,7 +37,12 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       toast(
         r.restart
           ? { tone: 'warn', message: 'Optimized.', hint: r.restart }
-          : { tone: 'ok', message: 'Optimized. The next stream uses these settings.' },
+          : {
+              tone: 'ok',
+              message: live
+                ? 'Optimized. Your stream uses it now.'
+                : 'Optimized. The next stream uses these settings.',
+            },
       )
     })
   const mine = view ? onCanvas(view.destinations, 'main') : []

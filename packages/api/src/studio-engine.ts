@@ -412,10 +412,13 @@ export interface EngineStreamStats {
   reconnecting: boolean
   bytes: number
   frames: number
+  /** Packets the network side couldn't send (frames drawn late are `engine.lagged`). */
   dropped: number
   error: string | null
   /** Which encoder makes the pictures ("h264_nvenc", "VideoToolbox"…), null when not known. */
   encoder?: string | null
+  /** The upload itself struggled in the last seconds (most platforms behind at once). */
+  upload_struggling?: boolean
 }
 
 /** How the Studio streams, records and runs (every field has a default). */

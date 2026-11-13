@@ -7,8 +7,8 @@ import type { EngineCaptureProblem, StudioSettings } from '@ferrocast/api'
 export type Strain = 'render' | 'encode' | 'network'
 
 export interface Fix {
-  /** The button's words. A new bitrate reaches the stream on air at once; the encoder and
-   * its size wait for the next start, and the words say so. */
+  /** The button's words. Everything reaches the stream on air at once (it changes its
+   * picture without stopping); when not live, the next stream uses it. */
   label: string
   patch: Partial<StudioSettings>
   /** Said once it's done. */
@@ -35,14 +35,16 @@ export function lighterScale(canvas: { width: number; height: number }): [number
 
 /**
  * The fix for what's straining, or null when there's nothing lighter to offer (the words in
- * the status bar then say what to do by hand). `live`: the canvas (frame rate) can't change
- * while live or recording, so render trouble has no fix then.
+ * the status bar then say what to do by hand). `live`: the stream on air takes it at once.
+ * `recording` (with no stream): the canvas's frame rate can't change under a file, so render
+ * trouble has no fix then.
  */
 export function doctorFix(
   what: Strain,
   s: StudioSettings,
   canvas: { width: number; height: number },
   live: boolean,
+  recording = false,
 ): Fix | null {
   if (what === 'network') {
     const k = lighterKbps(s.video_kbps)
@@ -55,22 +57,30 @@ export function doctorFix(
       return {
         label: 'Use the graphics card',
         patch: { encoder: 'hardware' },
-        done: 'Encoding moves to the graphics card when the stream next starts.',
+        done: live
+          ? 'Encoding moved to the graphics card.'
+          : 'Encoding moves to the graphics card when the stream next starts.',
       }
     const scale = s.scale ? null : lighterScale(canvas)
     if (scale)
       return {
         label: 'Send 720p',
         patch: { scale },
-        done: `The stream is sent at ${scale[0]}×${scale[1]} when it next starts.`,
+        done: live
+          ? `The stream is sent at ${scale[0]}×${scale[1]} now.`
+          : `The stream is sent at ${scale[0]}×${scale[1]} when it next starts.`,
       }
     const k = lighterKbps(s.video_kbps)
     return k === null
       ? null
       : { label: 'Lower bitrate', patch: { video_kbps: k }, done: `Bitrate lowered to ${k} kbps.` }
   }
-  if (live || s.fps <= 30) return null
-  return { label: 'Use 30 fps', patch: { fps: 30 }, done: 'The picture runs at 30 fps.' }
+  if (s.fps <= 30 || (recording && !live)) return null
+  return {
+    label: 'Use 30 fps',
+    patch: { fps: 30 },
+    done: live ? 'The stream runs at 30 fps now.' : 'The picture runs at 30 fps.',
+  }
 }
 
 /**

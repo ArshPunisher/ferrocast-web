@@ -75,8 +75,11 @@ function useStrain(stats: EngineStats | null): { text: string; tone: string; wha
     const fps = stats.canvas.fps || 30
     const per = Math.max(1, (now - prev.at) / 1000)
     const bad = (d: number) => d / per > fps / 30
+    // The upload: the Studio's own sender skipping, or most platforms behind at once (one
+    // platform's own trouble shows in Go live, not here).
     const what =
-      cur.dropped > prev.dropped && bad(cur.dropped - prev.dropped)
+      stats.stream?.upload_struggling ||
+      (cur.dropped > prev.dropped && bad(cur.dropped - prev.dropped))
         ? 'network'
         : cur.skipped > prev.skipped && bad(cur.skipped - prev.skipped)
           ? 'encode'
@@ -109,11 +112,14 @@ function FixButton({
   api,
   canvas,
   live,
+  recording,
 }: {
   what: Strain
   api: ReturnType<typeof studioEngineApi>
   canvas: { width: number; height: number }
+  /** Streaming now (the stream on air takes a fix at once). */
   live: boolean
+  recording: boolean
 }) {
   const [settings, setSettings] = useState<StudioSettings | null>(null)
   const [busy, setBusy] = useState(false)
@@ -134,7 +140,7 @@ function FixButton({
       alive = false
     }
   }, [api, what])
-  const fix = settings ? doctorFix(what, settings, canvas, live) : null
+  const fix = settings ? doctorFix(what, settings, canvas, live, recording) : null
   if (!fix || done) return null
   return (
     <button
@@ -256,7 +262,13 @@ export function StudioStatusBar() {
         </button>
       )}
       {strain && note === strain && (
-        <FixButton what={strain.what} api={api} canvas={stats.canvas} live={live || recording} />
+        <FixButton
+          what={strain.what}
+          api={api}
+          canvas={stats.canvas}
+          live={live}
+          recording={recording}
+        />
       )}
       <button
         type="button"
