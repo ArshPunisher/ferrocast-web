@@ -16,6 +16,7 @@ export function InfoTip({
   label = 'More info',
   id,
   className,
+  above = false,
 }: {
   children: ReactNode
   /** The button's name for screen readers ("About Upload protection"). */
@@ -23,6 +24,8 @@ export function InfoTip({
   /** Use this id for the text (a field points `aria-describedby` at it). */
   id?: string
   className?: string
+  /** Open over the button, not under it (when what's under it is what the tip is about). */
+  above?: boolean
 }) {
   const auto = useId()
   const textId = id ?? `${auto}-tip`
@@ -67,15 +70,20 @@ export function InfoTip({
     const hi = (within ? within.right : document.documentElement.clientWidth) - t.width - EDGE
     const vh = window.innerHeight
     const left = Math.max(lo, Math.min(b.left + b.width / 2 - t.width / 2, hi))
-    const below = b.bottom + GAP + t.height <= vh - EDGE
+    const roomBelow = b.bottom + GAP + t.height <= vh - EDGE
+    const roomAbove = b.top - GAP - t.height >= EDGE
+    const below = above ? !roomAbove && roomBelow : roomBelow
     const top = below ? b.bottom + GAP : Math.max(EDGE, b.top - GAP - t.height)
     setPos({ left: left - (origin?.left ?? 0), top: top - (origin?.top ?? 0) })
-  }, [open, host])
+  }, [open, host, above])
 
   useEffect(() => {
     if (!open) return
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Only the tip closes, not the drawer or dialog it's in.
+        e.preventDefault()
+        e.stopPropagation()
         setOpen(false)
         setPinned(false)
       }
