@@ -1070,12 +1070,15 @@ function Privacy() {
       setBusy(false)
     }
   }
-  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  // Some apps hide marks in their names (WhatsApp's starts with U+200E); match without them.
+  const plain = (a: string) =>
+    a.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '').trim()
+  const same = (a: string, b: string) => plain(a).toLowerCase() === plain(b).toLowerCase()
   const hidden = (n: string) => now.hide_apps.some((a) => same(a, n))
   // Chosen first, then the usual suspects, then whatever else is open.
   const names: string[] = []
   for (const n of [...now.hide_apps, ...PRIVATE_APPS, ...(running.data ?? [])])
-    if (!names.some((m) => same(m, n))) names.push(n)
+    if (plain(n) && !names.some((m) => same(m, n))) names.push(plain(n))
   const toggle = (n: string) =>
     void save({
       ...now,
@@ -1095,7 +1098,7 @@ function Privacy() {
       <div className="flex flex-col gap-2 border-t border-line py-2.5">
         <span className="flex items-center gap-1 text-[13px]">
           Hide these apps
-          <InfoTip label="About hiding apps">
+          <InfoTip label="About hiding apps" above>
             Their windows are cut out of a display capture, even when opened later. A window capture
             of one still shows it.
           </InfoTip>
