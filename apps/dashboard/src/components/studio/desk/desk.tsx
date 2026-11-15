@@ -271,7 +271,10 @@ function Running({
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
+  // Bumped by every read made here, so a poll already on its way drops its older answer.
+  const scenesRead = useRef(0)
   const refresh = useCallback(() => {
+    scenesRead.current++
     reloadScenes()
     reloadItems()
     reloadAudio()
@@ -300,14 +303,31 @@ function Running({
   useEffect(() => {
     if (onAir && shownOnAir && onAir !== shownOnAir) refresh()
   }, [onAir, shownOnAir, refresh])
-  // The vertical picture's switches don't show in the stats: while it's on, its scenes are
-  // read again every few seconds, so one switched elsewhere (a shortcut, another window) shows.
-  const hasVertical = !!vertical
+  // Scenes made, renamed or switched elsewhere (the API, an automation, a Stream Deck, the
+  // vertical picture, whose switches aren't in the stats) show within a few seconds.
+  // Only a real change is set, so the desk isn't drawn again every few seconds.
+  const setScenes = scenes.set
+  const shownScenes = useRef(scenes.data)
+  shownScenes.current = scenes.data
+  // Each poll's number: only the newest one's answer counts (a slow one that answers after a
+  // newer one would put older scenes back: review).
+  const polls = useRef(0)
   useEffect(() => {
-    if (!hasVertical) return
-    const t = setInterval(reloadScenes, 3000)
+    const t = setInterval(() => {
+      if (document.hidden) return
+      const at = scenesRead.current
+      const n = ++polls.current
+      api.scenes().then(
+        (v) => {
+          // A change made here meanwhile (a rename, a delete) is newer than this answer.
+          if (at !== scenesRead.current || n !== polls.current) return
+          if (JSON.stringify(v) !== JSON.stringify(shownScenes.current)) setScenes(v)
+        },
+        () => undefined,
+      )
+    }, 3000)
     return () => clearInterval(t)
-  }, [hasVertical, reloadScenes])
+  }, [api, setScenes])
   const size =
     canvas === 'vertical' && vertical
       ? { width: vertical.width, height: vertical.height }
