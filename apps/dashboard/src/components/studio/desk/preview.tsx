@@ -29,6 +29,7 @@ import {
   Play,
   ProjectorScreen,
   SquaresFour,
+  Stack,
   X,
 } from '@phosphor-icons/react'
 import {
@@ -1530,20 +1531,23 @@ function ViewControls() {
   return (
     <>
       {it && cover && (
-        <span className="flex min-w-0 items-center gap-2 rounded-full bg-warn-soft py-0.5 pr-1 pl-3 text-[13px] font-semibold text-warn">
-          <span className="truncate">Behind {cover.name}</span>
-          <button
-            type="button"
-            onClick={() =>
-              void run('order', () => done(api.itemOrder(scene, it.id, 0))).then(
-                (ok) => ok && refresh(),
-              )
-            }
-            className="rounded-full bg-surface-1 px-2 py-0.5 text-[12.5px] font-bold text-text hover:bg-surface-2"
-          >
-            Bring to front
-          </button>
-        </span>
+        // One small button in the bar: the words only where there's room (at 1280 the chip
+        // pushed the transition controls onto a second line). The picture is drawn over the
+        // page by the app, so this can't sit on it.
+        <button
+          type="button"
+          title={`${it.name} is behind ${cover.name}. Bring it to front.`}
+          aria-label={`${it.name} is behind ${cover.name}. Bring it to front`}
+          onClick={() =>
+            void run('order', () => done(api.itemOrder(scene, it.id, 0))).then(
+              (ok) => ok && refresh(),
+            )
+          }
+          className="flex h-6 min-w-0 shrink-0 items-center gap-1 rounded-full bg-warn-soft px-1.5 text-[12px] font-semibold text-warn outline-none hover:brightness-95 focus-visible:shadow-[var(--fc-focus)] @[1440px]:max-w-[15rem] @[1440px]:px-2.5"
+        >
+          <Stack size={14} weight="bold" aria-hidden className="shrink-0" />
+          <span className="hidden truncate @[1440px]:inline">Behind {cover.name} · To front</span>
+        </button>
       )}
       {!scenes.data?.preview && (
         <div role="group" aria-label="Zoom" className="flex items-center gap-0.5">
