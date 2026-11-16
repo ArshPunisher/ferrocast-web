@@ -390,6 +390,8 @@ export interface EngineSourceUse {
   name: string
   kind: string
   scenes: string[]
+  /** A Mac screen capture's mode: 0 a screen, 1 a window, 2 an app. */
+  capture?: number
 }
 
 export interface EngineFilter {
@@ -828,9 +830,11 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('PUT', '/api/v1/studio/engine/top-layer', { scene }),
     items: (scene: string) =>
       c.request<EngineItem[]>('GET', `/api/v1/studio/engine/scenes/${enc(scene)}/items`),
-    /** A new source on top of the scene; `fit` fits it to the screen. */
+    /** A new source on top of the scene; `fit` fits it to the screen. `reused`: a camera or
+     * capture card already used in the collection, shown here too (a device opens once; its
+     * settings are that source's, not the ones sent). */
     addSource: (scene: string, source: NewEngineSource, fit = false) =>
-      c.request<{ item: EngineItem; settings: EngineSettings }>(
+      c.request<{ item: EngineItem; settings: EngineSettings; reused?: boolean }>(
         'POST',
         `/api/v1/studio/engine/scenes/${enc(scene)}/items`,
         { ...source, fit },
@@ -907,10 +911,10 @@ export function studioEngineApi(c: FerroClient) {
       ),
     /** A still of a screen (a display by its id), at most `w` wide, for the cards a capture is
      * picked from; `image` null where it can't be taken (not on a Mac yet). */
-    screenStill: (id: number, w = 320) =>
+    screenStill: (id: number, w = 320, window = false) =>
       c.request<{ image: string | null }>(
         'GET',
-        `/api/v1/studio/engine/screens/${encodeURIComponent(String(id))}/still?w=${w}`,
+        `/api/v1/studio/engine/screens/${encodeURIComponent(String(id))}/still?w=${w}${window ? '&window=true' : ''}`,
       ),
     /** How a source is doing: a Web text's last read, whether a Browser source's page loads. */
     sourceStatus: (name: string) =>

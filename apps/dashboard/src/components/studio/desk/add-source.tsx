@@ -33,10 +33,19 @@ import {
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useAction, useResource } from '../../../lib/hooks'
-import { KIND_GROUPS, KindTile, PLAIN_TONE, pickKind, useDesk, type KindEntry } from './common'
+import {
+  KIND_GROUPS,
+  KindTile,
+  PLAIN_TONE,
+  SOUND_ONLY,
+  pickKind,
+  useDesk,
+  type KindEntry,
+} from './common'
 import { GuestInvites } from './guests'
 import { readAhead, useKindForm } from './kind-cache'
 import { OptionsForm } from './options'
+import { ScreenStill } from './screen-still'
 
 export interface Choice {
   entry: KindEntry
@@ -56,35 +65,6 @@ function freeName(base: string, taken: Set<string>): string {
  *  into (a scene can't hold a copy of itself). */
 export function cloneChoices(sources: string[], scenes: string[], into: string): string[] {
   return [...sources, ...scenes.filter((n) => n !== into)]
-}
-
-/** A screen as it looks now, over its card's icon once it comes (owner, 10 Nov: "this should
- * show the proper screen"). One still when the card shows: a short capture in the app, nothing
- * left running. Where it can't be taken the icon stays. */
-function ScreenStill({ id, label }: { id: unknown; label: string }) {
-  const { api } = useDesk()
-  const [src, setSrc] = useState<string | null>(null)
-  const n = typeof id === 'number' ? id : Number(id)
-  useEffect(() => {
-    if (!Number.isFinite(n)) return
-    let alive = true
-    api
-      .screenStill(n, Math.min(640, Math.round(320 * (window.devicePixelRatio || 1))))
-      .then((r) => alive && setSrc(r.image))
-      .catch(() => undefined)
-    return () => {
-      alive = false
-    }
-  }, [api, n])
-  if (!src) return null
-  return (
-    <img
-      src={src}
-      alt={`What's on ${label} now`}
-      className="absolute inset-0 size-full object-cover"
-      draggable={false}
-    />
-  )
 }
 
 function deviceOption(opts: EngineOption[], keys: string[] | undefined): EngineOption | null {
@@ -492,8 +472,9 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     c.entry.key === 'clone'
       ? kindOpts.map((o) => {
           if (o.key !== 'clone') return o
+          // Only what has a picture: a copy of a mic shows nothing.
           const names = cloneChoices(
-            sources.map((s) => s.name),
+            sources.filter((s) => !SOUND_ONLY.has(s.kind)).map((s) => s.name),
             allScenes.map((s) => s.name),
             scene,
           )
@@ -508,7 +489,12 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   // instead of falling back to its settings form (owner, 8 Nov: "it shows a settings bar").
   const noDevices =
     !!c.entry.device && !c.entry.overlays && (!dev || dev.choices.every((l) => !l.trim()))
-  const devName = dev && device !== null ? dev.choices[device] : null
+  // A screen is named as people know it ("BenQ EW270Q"), not with its size and place
+  // ("BenQ EW270Q: 2560x1440 @ 2560,0").
+  const devName =
+    dev && device !== null
+      ? (dev.choices[device]?.replace(/:\s*\d+x\d+(\s*@.*)?$/, '').trim() ?? null)
+      : null
   const shownName =
     name ??
     freeName(
@@ -517,6 +503,17 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     )
   const micDev = deviceOption(micForm.data?.[0] ?? [], micEntry?.device)
   const soundName = devName && micDev ? pairedSound(devName, micDev.choices) : null
+  // An image, video or slideshow with no file yet would add an empty source.
+  const now = { ...defaults, ...(c.entry.settings ?? {}), ...edits }
+  const needsFile =
+    ['image', 'video', 'slides'].includes(c.entry.key) &&
+    opts.some((o) => {
+      if (!o.visible || !(o.kind === 'path' || (o.kind === 'editable_list' && o.path === 'files')))
+        return false
+      if (o.key === 'local_file' && now.is_local_file === false) return false
+      const v = now[o.key]
+      return Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim()
+    })
   // Scenes and sources share one set of names (as in OBS): say which one has it, and offer
   // a free one, right under the field (a toast would sit behind this dialog).
   const clash = taken.has(shownName.trim())
@@ -531,6 +528,13 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         .map((s) => ({ name: s.name, where: `${s.items} sources` }))
     : (srcs.data ?? [])
         .filter((s) => c.entry.kinds.includes(s.kind) && !s.scenes.includes(scene))
+        // A screen capture's mode must match: "Window" doesn't offer a whole screen.
+        .filter(
+          (s) =>
+            s.capture === undefined ||
+            typeof c.entry.settings?.type !== 'number' ||
+            s.capture === c.entry.settings.type,
+        )
         .map((s) => ({ name: s.name, where: `In ${s.scenes.join(', ')}` }))
   // Sound devices heard everywhere go on a free global channel (desktop 1-2, mics 3-6).
   const used = new Set(audio.data?.map((a) => a.channel).filter(Boolean))
@@ -581,19 +585,31 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )
     }
     const made = await run('add', () => api.addSource(scene, source, !!c.entry.fit), {
-      success: `Added ${source.name}.`,
+      success: (m) =>
+        m.reused
+          ? `${m.item.name} already shows this device, so it's added here too, as it's set up.`
+          : `Added ${source.name}.`,
     })
     if (made && !visible) await api.editItem(scene, made.item.id, 'hide').catch(() => undefined)
     // Its own sound, in this scene, heard by you and the stream (a console through a capture
-    // card is heard like in OBS).
+    // card is heard like in OBS). A card already used elsewhere brings the sound source it has
+    // there (the same one, not the device opened again); else its sound is added new.
     if (made && withSound && soundName && micKind && micDev) {
       const at = micDev.choices.indexOf(soundName)
-      const snd = {
-        kind: micKind,
-        name: freeName(soundName, taken),
-        settings: { [micDev.key]: micDev.values[at] },
-      }
+      const device = micDev.values[at]
       await run('add-sound', async () => {
+        const mics = (srcs.data ?? []).filter((x) => x.kind === micKind)
+        for (const m of mics) {
+          const set = await api.settings(m.name).catch(() => null)
+          if (set?.[micDev.key] !== device) continue
+          if (!m.scenes.includes(scene)) await api.addExisting(scene, m.name)
+          return true
+        }
+        const snd = {
+          kind: micKind,
+          name: freeName(soundName, taken),
+          settings: { [micDev.key]: device },
+        }
         await api.addSource(scene, snd)
         await api.setAudio(snd.name, { monitor: 'me_and_stream' })
         return true
@@ -781,8 +797,14 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     }}
                   >
                     <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
-                    {dev.key === 'display' && (
-                      <ScreenStill key={String(dev.values[i])} id={dev.values[i]} label={label} />
+                    {(dev.key === 'display' ||
+                      (dev.key === 'window' && c.kind === 'screen_capture')) && (
+                      <ScreenStill
+                        key={String(dev.values[i])}
+                        id={dev.values[i]}
+                        label={label}
+                        window={dev.key === 'window'}
+                      />
                     )}
                   </span>
                   <span className="flex items-center gap-2 px-3 py-2.5">
@@ -909,11 +931,14 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             </div>
           )}
           <span className="flex-1" />
+          {needsFile && <span className="text-[12.5px] text-text-3">Pick a file first.</span>}
           <Button
             type="submit"
             variant="primary"
             busy={busy === 'add'}
-            disabled={!shownName.trim() || !!clash || noDevices || (!!dev && device === null)}
+            disabled={
+              !shownName.trim() || !!clash || noDevices || (!!dev && device === null) || needsFile
+            }
           >
             Add
           </Button>
