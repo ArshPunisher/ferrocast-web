@@ -91,6 +91,24 @@ export function OptionsForm({ opts, all, values, onChange, disabled, compact }: 
   )
 }
 
+/** Lists of what's open or connected now: always a drop-down. */
+const CHANGING_LISTS = new Set([
+  'application',
+  'window',
+  'display',
+  'monitor',
+  'device',
+  'device_id',
+  'video_device_id',
+  'audio_device_id',
+  'source',
+  'clone',
+  'ndi_source_name',
+  // A camera's sizes and rates are its own, and the rates change with the size.
+  'resolution',
+  'fps',
+])
+
 /** An option's value: a key OBS left unset reads as zero, false or "" there (obs_data_get_*),
  *  so it's shown (and decides what else shows) the same. */
 export function valueOf(o: EngineOption, values: Record<string, unknown>): unknown {
@@ -106,8 +124,8 @@ export function valueOf(o: EngineOption, values: Record<string, unknown>): unkno
  *  unit (a key's similarity of 400 of 1000 is 40%; a contrast of -4 to 4 is -100% to +100%),
  *  else the number itself. */
 export function shownNumber(o: EngineOption, v: number): number {
-  const { min, max } = o
-  if (!o.slider || o.suffix || min === null || max === null || max <= min) return v
+  if (!asPercent(o)) return v
+  const { min, max } = o as { min: number; max: number }
   if (min < 0 && max > 0) return Math.round((v >= 0 ? v / max : v / -min) * 100)
   return Math.round(((v - min) / (max - min)) * 100)
 }
@@ -116,7 +134,7 @@ export function shownNumber(o: EngineOption, v: number): number {
 export function storedNumber(o: EngineOption, shown: number): number {
   const { min, max } = o
   let v = shown
-  if (o.slider && !o.suffix && min !== null && max !== null && max > min) {
+  if (asPercent(o) && min !== null && max !== null) {
     v =
       min < 0 && max > 0
         ? shown >= 0
@@ -129,6 +147,54 @@ export function storedNumber(o: EngineOption, shown: number): number {
   const step = o.step ?? (o.kind === 'int' ? 1 : 0)
   if (o.kind === 'int') return Math.round(v)
   return step > 0 ? Math.round(v / step) * step : v
+}
+
+/** Whether a slider shows a share of its range in percent: one with no unit, and not lopsided
+ *  around zero (OBS's saturation, -1 to 5, would read +100% at 5; it shows the number). */
+function asPercent(o: EngineOption): boolean {
+  const { min, max } = o
+  if (!o.slider || o.suffix || min === null || max === null || max <= min) return false
+  return !(min < 0 && max > 0 && Math.abs(min + max) > 1e-9)
+}
+
+/** A colour's hex, typed into (#FF8800 or FF8800, sent on Enter or leaving the box); hidden on
+ *  a phone, where the row has no room for it. */
+function HexBox({
+  label,
+  hex,
+  off,
+  onSet,
+}: {
+  label: string
+  hex: string
+  off: boolean
+  onSet: (hex: string) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const m = draft.trim().match(/^#?([0-9a-f]{6})$/i)
+    if (m) onSet(`#${m[1]!.toLowerCase()}`)
+    setDraft(null)
+  }
+  return (
+    <input
+      type="text"
+      aria-label={`${label}, hex`}
+      autoComplete="off"
+      spellCheck={false}
+      maxLength={7}
+      disabled={off}
+      value={draft ?? hex.toUpperCase()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+        if (e.key === 'Escape') setDraft(null)
+      }}
+      className="ml-auto h-7 w-[4.75rem] min-w-0 shrink-0 rounded-[5px] bg-surface-3 px-1.5 text-right font-mono text-[12px] text-text-2 tabular-nums outline-none focus-visible:shadow-[var(--fc-focus)] max-[420px]:hidden"
+    />
+  )
 }
 
 /** A number in the compact panel: a thin slider (when OBS draws one) and a small box with the
@@ -148,11 +214,12 @@ function CompactNumber({
   off: boolean
   set: (v: unknown) => void
 }) {
-  const percent = o.slider && !o.suffix && o.min !== null && o.max !== null
+  const percent = asPercent(o)
   const unit = percent ? '%' : o.suffix.trim()
   const shown = value === null ? null : shownNumber(o, value)
-  const text =
-    shown === null ? '' : `${percent && shown > 0 && (o.min ?? 0) < 0 ? '+' : ''}${shown}`
+  // A -/+ range shows its sign either way ("+3 EV", "+40%").
+  const signed = (o.min ?? 0) < 0 && (o.max ?? 0) > 0
+  const text = shown === null ? '' : `${signed && shown > 0 ? '+' : ''}${shown}`
   const [draft, setDraft] = useState<string | null>(null)
   const commit = () => {
     if (draft === null) return
@@ -161,6 +228,8 @@ function CompactNumber({
     setDraft(null)
   }
   const slider = o.slider && o.min !== null && o.max !== null
+  // Its own start, else the middle of a -/+ range.
+  const reset = typeof o.default === 'number' ? o.default : signed ? 0 : null
   // Filled from zero: on a -/+ range (contrast, saturation) from where 0 sits to the thumb.
   const at = (n: number) =>
     o.max !== null && o.min !== null && o.max > o.min ? ((n - o.min) / (o.max - o.min)) * 100 : 0
@@ -183,6 +252,11 @@ function CompactNumber({
             const n = Number(e.target.value)
             set(o.kind === 'int' ? Math.round(n) : n)
           }}
+          // As in a photo app: a double-click puts it back where it started.
+          onDoubleClick={() => {
+            if (reset !== null) set(reset)
+          }}
+          title={reset !== null ? 'Double-click to reset' : undefined}
           className="fc-slim min-w-0 flex-1"
           style={{ ['--from' as string]: from, ['--fill' as string]: fill }}
         />
@@ -353,11 +427,15 @@ function OptionField({
       const at = o.values.findIndex((x) => x === v)
       // A few short choices: a segmented choice on its line, as in the design (Count: For a
       // set time / Until a time).
+      // Not for what's open or plugged in (apps, windows, devices): those come and go, and the
+      // line would turn from buttons to a list and back; nor for words that won't fit.
       if (
         compact &&
+        !CHANGING_LISTS.has(o.key) &&
         o.choices.length >= 2 &&
         o.choices.length <= 4 &&
-        o.choices.every((c) => c.length <= 16)
+        o.choices.every((c) => c.length <= 16) &&
+        o.choices.join('').length <= 30
       )
         return (
           <Row label={label} hint={hint}>
@@ -530,6 +608,7 @@ function OptionField({
                 <Input
                   {...p}
                   type="color"
+                  aria-label={label}
                   disabled={off}
                   value={toHex(v)}
                   onChange={(e) => set(fromHex(e.target.value, v))}
@@ -554,9 +633,12 @@ function OptionField({
                     />
                   ))}
                 </span>
-                <span className="ml-auto font-mono text-[12px] text-text-2 uppercase tabular-nums">
-                  {toHex(v)}
-                </span>
+                <HexBox
+                  label={label}
+                  hex={toHex(v)}
+                  off={off}
+                  onSet={(hex) => set(fromHex(hex, v))}
+                />
               </>
             )}
           </Row>
@@ -991,7 +1073,7 @@ function ListField({
           }}
         />
         <IconButton
-          label="Add"
+          label={files ? 'Add this path' : 'Add this line'}
           size={compact ? 'xs' : 'md'}
           disabled={off || !typed.trim()}
           onClick={() => {

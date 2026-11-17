@@ -31,6 +31,7 @@ import {
   MagicWand,
   Moon,
   Palette,
+  Aperture,
   SelectionBackground,
   Shapes,
   ShieldCheck,
@@ -99,6 +100,8 @@ export interface Desk {
   prefs: Resource<StudioSettings>
   /** Reads scenes, sources and sounds again after a change. */
   refresh: () => void
+  /** Counts undos and redos: what an open drawer reads again (its filters and settings). */
+  undone: number
   selected: number | null
   /** Picks one source (or none), dropping any others picked with it. */
   select: (id: number | null) => void
@@ -443,6 +446,19 @@ export function kindIcon(kind: string): Icon {
 }
 
 /** The first of these kinds this computer's OBS has. */
+/** A kind as the Add dialog names it ("Camera", "Colour"), not OBS's "Video Capture Device";
+ *  null when the dialog doesn't have it. A Mac screen capture is a screen, a window or an
+ *  app: "Screen capture" covers all three; a kind two entries share gets both names ("Camera
+ *  or capture card"). */
+export function friendlyKind(kind: string): string | null {
+  if (kind === 'screen_capture') return 'Screen capture'
+  const found = KIND_GROUPS.flatMap((g) => g.entries).filter((e) => e.kinds.includes(kind))
+  if (found.length === 1) return found[0]?.label ?? null
+  // One kind for two entries (a Mac camera or capture card): both names.
+  if (found.length === 2) return `${found[0]?.label} or ${found[1]?.label.toLowerCase()}`
+  return null
+}
+
 export function pickKind(e: KindEntry, kinds: EngineKinds | null): string | null {
   if (e.scene) return 'scene'
   const have = new Set(kinds?.inputs.map((k) => k.id))
@@ -545,6 +561,13 @@ export const FILTERS: FilterEntry[] = [
     icon: Moon,
   },
   {
+    kinds: ['upward_compressor_filter'],
+    label: 'Lift quiet sounds',
+    help: 'Brings up soft speech without raising the loud parts.',
+    audio: true,
+    icon: Moon,
+  },
+  {
     kinds: ['chroma_key_filter_v2', 'chroma_key_filter'],
     label: 'Green screen',
     help: 'Removes a green or blue background.',
@@ -588,6 +611,13 @@ export const FILTERS: FilterEntry[] = [
     icon: GridFour,
   },
   {
+    // A photo app's sliders, on the graphics card (owner, 15 Nov).
+    kinds: ['ferrocast_adjust'],
+    label: 'Adjust colour',
+    help: 'Exposure, contrast, shadows and warmth, like a photo app.',
+    icon: Aperture,
+  },
+  {
     kinds: ['ferrocast_look'],
     label: 'Colour look',
     help: 'Warm, cool, cinematic or black and white.',
@@ -595,8 +625,8 @@ export const FILTERS: FilterEntry[] = [
   },
   {
     kinds: ['color_filter_v2', 'color_filter'],
-    label: 'Colour',
-    help: 'Brightness, contrast, saturation.',
+    label: 'OBS colour correction',
+    help: 'OBS’s own sliders, as in scenes made in OBS.',
     icon: Palette,
   },
   {

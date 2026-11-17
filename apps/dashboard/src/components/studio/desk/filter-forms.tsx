@@ -15,9 +15,11 @@ import {
   Warning,
   X,
 } from '@phosphor-icons/react'
-import { type EngineOption, type EngineSettings } from '@ferrocast/api'
+import { studioEngineApi, type EngineOption, type EngineSettings } from '@ferrocast/api'
 import { Button, InfoTip, Input, cx } from '@ferrocast/ui'
 import { useDesk } from './common'
+import { ScreenStill } from './screen-still'
+import { useLive } from '../../../lib/store'
 import { meterPct, useLevels } from './mixer'
 import { OptionsForm, RowLook, fromHex, shownNumber, toHex, valueOf } from './options'
 
@@ -128,8 +130,74 @@ const METHODS = [
   },
 ] as const
 
+/** An app capture shows nothing when the app has no windows on the screen picked: says so,
+ *  with the screen it is on one click away (switching by itself would surprise). Asked when
+ *  the app or screen changes, then every few seconds (a window may open or move). */
+function AppElsewhere({
+  name,
+  app,
+  appId,
+  at,
+  screens,
+  onShow,
+}: {
+  name: string
+  app: string
+  appId: string
+  at: unknown
+  screens: { id: unknown; name: string }[]
+  onShow: (id: unknown) => void
+}) {
+  const client = useLive((st) => st.conn?.client ?? null)
+  const [on, setOn] = useState<number[] | null>(null)
+  useEffect(() => {
+    // The last app's answer isn't this one's.
+    setOn(null)
+    if (!client || !appId) return
+    const api = studioEngineApi(client)
+    let alive = true
+    const read = () => {
+      // Each read asks macOS for every window: not while the app is out of sight.
+      if (document.hidden) return
+      void api
+        .sourceStatus(name)
+        .then((r) => alive && setOn(r.app_on ?? null))
+        .catch(() => undefined)
+    }
+    // After the change has reached the source (edits go about 350 ms after they're made).
+    const first = setTimeout(read, 700)
+    const t = setInterval(read, 4000)
+    return () => {
+      alive = false
+      clearTimeout(first)
+      clearInterval(t)
+    }
+  }, [client, name, appId, at])
+  if (!on || on.includes(at as number)) return null
+  const there = screens.find((s) => on.includes(s.id as number))
+  return (
+    <div
+      role="status"
+      className="flex min-h-9 items-center gap-2 border-b border-line bg-warn-soft px-3 py-1.5 text-[12px] font-semibold text-warn"
+    >
+      <span className="min-w-0 flex-1">
+        {there ? `${app} has no windows on this screen.` : `${app} has no windows open.`}
+      </span>
+      {there && (
+        <button
+          type="button"
+          onClick={() => onShow(there.id)}
+          className="shrink-0 rounded-full bg-surface-1 px-2 py-0.5 font-bold text-text outline-none hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)]"
+        >
+          Show {there.name || 'that screen'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 /** macOS Screen Capture: what to show as three buttons, then only the picker it needs. */
-export function CaptureForm({ opts, values, onChange }: FormIn) {
+export function CaptureForm({ opts, values, onChange, name }: FormIn & { name?: string }) {
   const type = opts.find((o) => o.key === 'type')
   const now = type ? valueOf(type, values) : 0
   const method = METHODS.find((m) => m.value === now) ?? METHODS[0]
@@ -203,7 +271,9 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
                     )}
                   >
                     <Icon size={13} weight="bold" aria-hidden />
-                    <span className="truncate">{m.label.replace(/^(Whole|One) /, '')}</span>
+                    <span className="truncate">
+                      {m.label.replace(/^(Whole|One) (.)/, (_, _w, c: string) => c.toUpperCase())}
+                    </span>
                   </button>
                 )
               })}
@@ -234,13 +304,13 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
                     )}
                   >
                     <span
-                      aria-hidden
                       className={cx(
-                        'grid aspect-video place-items-center rounded-[4px]',
+                        'relative grid aspect-video place-items-center overflow-hidden rounded-[4px]',
                         on ? 'bg-accent-soft text-accent-text' : 'bg-surface-3 text-text-3',
                       )}
                     >
-                      <Monitor size={22} weight={on ? 'fill' : 'regular'} />
+                      <Monitor size={22} weight={on ? 'fill' : 'regular'} aria-hidden />
+                      <ScreenStill id={display.values[i]} label={name} />
                     </span>
                     <span className="truncate text-[11.5px] font-semibold text-text">{name}</span>
                     {px && (
@@ -255,6 +325,19 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
           </div>
         )}
         <OptionsForm compact opts={others} all={opts} values={values} onChange={onChange} />
+        {name && now === 2 && display && typeof values.application === 'string' && (
+          <AppElsewhere
+            name={name}
+            app={appName(values.application)}
+            appId={values.application}
+            at={at}
+            screens={display.values.map((v, i) => ({
+              id: v,
+              name: (display.choices[i] ?? '').split(/:\s*(?=\d+x\d+)/)[0] ?? '',
+            }))}
+            onShow={(id) => onChange('display', id)}
+          />
+        )}
         {showsLeave && (
           <div className="border-b border-line">
             {/* One 36px row: the label, how many, and + App; the apps wrap below it (a row of
@@ -262,13 +345,13 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
             <div className="grid h-9 grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-x-2.5 pr-2.5 pl-3">
               <span className="flex items-center gap-1 text-[12.5px] font-semibold text-text-2">
                 Leave out
-                <InfoTip label="About leaving apps out">
+                <InfoTip label="About leaving apps out" above>
                   These apps never show on stream, even on top. Privacy in Studio settings hides
                   apps from every capture.
                 </InfoTip>
               </span>
               <div className="flex min-w-0 items-center justify-end gap-2">
-                <span className="truncate text-[12px] text-text-3">
+                <span className="shrink-0 text-[12px] whitespace-nowrap text-text-3">
                   {left.length === 0
                     ? 'Nothing'
                     : left.length === 1
@@ -282,7 +365,7 @@ export function CaptureForm({ opts, values, onChange }: FormIn) {
                     onChange={(e) => {
                       if (e.target.value) onChange('exclude_apps', [...left, e.target.value])
                     }}
-                    className="fc-select h-7 w-auto shrink-0 cursor-pointer appearance-none rounded-[6px] border border-line bg-surface-2 pr-7 pl-2.5 text-[12px] font-semibold text-text outline-none [background-position:right_8px_center] focus-visible:shadow-[var(--fc-focus)]"
+                    className="fc-select h-7 w-[5.75rem] shrink-0 cursor-pointer truncate appearance-none rounded-[6px] border border-line bg-surface-2 pr-7 pl-2.5 text-[12px] font-semibold text-text outline-none [background-position:right_8px_center] focus-visible:shadow-[var(--fc-focus)]"
                   >
                     <option value="">+ App</option>
                     {appList.choices.map((c, i) => {
@@ -1063,6 +1146,20 @@ export function GateForm({
 /** Filters shown main-settings-first, with short words: every label fits on one line of the
  *  panel (owner, 9 Nov), the rest behind the header's More. */
 const SIMPLE: Record<string, { main: Words[]; rename?: Words[] }> = {
+  ferrocast_adjust: {
+    main: [
+      { key: 'exposure', label: 'Exposure' },
+      { key: 'contrast', label: 'Contrast' },
+      { key: 'highlights', label: 'Highlights' },
+      { key: 'shadows', label: 'Shadows' },
+      { key: 'saturation', label: 'Saturation' },
+      { key: 'temperature', label: 'Warmth' },
+    ],
+    rename: [
+      { key: 'vibrance', label: 'Vibrance', help: 'Lifts dull colours more than bright ones' },
+      { key: 'tint', label: 'Tint', help: 'Green to magenta' },
+    ],
+  },
   color_filter: {
     main: [
       { key: 'brightness', label: 'Brightness' },
@@ -1171,5 +1268,144 @@ export function FilterForm({
       more={more}
       {...(simple.rename ? { rename: simple.rename } : {})}
     />
+  )
+}
+
+/** Blur or pixelate an area: the area drawn on a still of the source, dragged to move, by its
+ *  corner to size, or drawn anew on the picture (four % sliders were hard to aim, review 18
+ *  Nov). Arrow keys move it, Shift+arrows size it. One still, taken when it opens. */
+export function AreaPicker({
+  source,
+  values,
+  onChange,
+}: {
+  source: string
+  values: EngineSettings
+  onChange: Change
+}) {
+  const { api } = useDesk()
+  const [pic, setPic] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    void api
+      .sourcePicture(source, 480)
+      .then((r) => alive && setPic(r.image))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [api, source])
+  const num = (k: string, d: number) => (typeof values[k] === 'number' ? (values[k] as number) : d)
+  const box = {
+    x: num('area_x', 25),
+    y: num('area_y', 25),
+    w: num('area_w', 50),
+    h: num('area_h', 50),
+  }
+  const stage = useRef<HTMLDivElement>(null)
+  const drag = useRef<{
+    how: 'move' | 'size' | 'draw'
+    x0: number
+    y0: number
+    b: typeof box
+  } | null>(null)
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)))
+  // A move keeps the size and stops at the edges; a resize or a new box keeps its corner and
+  // stops growing at the edge (a resize near the right edge moved the box too: review).
+  const put = (b: typeof box, resize = false) => {
+    const x = resize ? clamp(b.x, 0, 99) : clamp(b.x, 0, 100 - clamp(b.w, 1, 100))
+    const y = resize ? clamp(b.y, 0, 99) : clamp(b.y, 0, 100 - clamp(b.h, 1, 100))
+    const w = clamp(b.w, 1, 100 - x)
+    const h = clamp(b.h, 1, 100 - y)
+    if (x !== box.x) onChange('area_x', x)
+    if (y !== box.y) onChange('area_y', y)
+    if (w !== box.w) onChange('area_w', w)
+    if (h !== box.h) onChange('area_h', h)
+  }
+  const at = (e: React.PointerEvent) => {
+    const r = stage.current?.getBoundingClientRect()
+    if (!r || r.width === 0 || r.height === 0) return { x: 0, y: 0 }
+    return { x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 }
+  }
+  const start = (how: 'move' | 'size' | 'draw') => (e: React.PointerEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    stage.current?.setPointerCapture(e.pointerId)
+    const p = at(e)
+    drag.current = { how, x0: p.x, y0: p.y, b: box }
+  }
+  const move = (e: React.PointerEvent) => {
+    const d = drag.current
+    if (!d) return
+    const p = at(e)
+    const dx = p.x - d.x0
+    const dy = p.y - d.y0
+    if (d.how === 'move') put({ ...d.b, x: d.b.x + dx, y: d.b.y + dy })
+    else if (d.how === 'size') put({ ...d.b, w: d.b.w + dx, h: d.b.h + dy }, true)
+    // A new box only once it's really drawn: a stray click keeps the area set up.
+    else if (Math.abs(dx) > 3 || Math.abs(dy) > 3)
+      put(
+        {
+          x: Math.min(d.x0, p.x),
+          y: Math.min(d.y0, p.y),
+          w: Math.abs(dx),
+          h: Math.abs(dy),
+        },
+        true,
+      )
+  }
+  const end = () => {
+    drag.current = null
+  }
+  const key = (e: React.KeyboardEvent) => {
+    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
+      e.key
+    ]
+    if (!step) return
+    e.preventDefault()
+    const [sx = 0, sy = 0] = step
+    if (e.shiftKey) put({ ...box, w: box.w + sx, h: box.h + sy }, true)
+    else put({ ...box, x: box.x + sx, y: box.y + sy })
+  }
+  return (
+    <div className="border-b border-line px-3 py-2.5">
+      <div
+        ref={stage}
+        onPointerDown={start('draw')}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        className="relative aspect-video w-full cursor-crosshair touch-none overflow-hidden rounded-[6px] border border-line-strong bg-[#000] select-none"
+      >
+        {pic && (
+          <img
+            src={pic}
+            alt=""
+            draggable={false}
+            className="pointer-events-none size-full object-fill opacity-90"
+          />
+        )}
+        <div
+          role="slider"
+          tabIndex={0}
+          aria-label="Area to hide"
+          aria-valuetext={`${box.x}% from the left, ${box.y}% from the top, ${box.w}% by ${box.h}%`}
+          aria-valuenow={box.x}
+          onPointerDown={start('move')}
+          onKeyDown={key}
+          className="absolute cursor-move rounded-[3px] border-2 border-white bg-white/15 shadow-[0_0_0_1px_rgba(0,0,0,0.6)] outline-none focus-visible:shadow-[var(--fc-focus)]"
+          style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%` }}
+        >
+          <span
+            aria-hidden
+            onPointerDown={start('size')}
+            className="absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize rounded-[2px] border border-black/60 bg-white"
+          />
+        </div>
+      </div>
+      <p className="m-0 mt-1.5 text-[11.5px] text-text-3">
+        Drag the box, or draw a new one. Shift + arrows size it.
+      </p>
+    </div>
   )
 }

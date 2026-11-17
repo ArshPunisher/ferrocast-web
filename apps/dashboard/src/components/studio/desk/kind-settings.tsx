@@ -4,7 +4,7 @@
 // a file row and a player for videos, key layouts drawn as keys. Every option the engine
 // describes still shows: what a layout doesn't name goes under More.
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Camera,
   Clock,
@@ -36,8 +36,9 @@ import {
 import type { EngineMedia, EngineOption, EngineSettings, EngineSourceStatus } from '@ferrocast/api'
 import { IconButton, Switch, cx } from '@ferrocast/ui'
 import { inDesktopApp } from '../../../lib/external'
-import { done, useAction } from '../../../lib/hooks'
-import { useDesk, useEngine } from './common'
+import { done, useAction, useResource } from '../../../lib/hooks'
+import { pairedSound } from './add-source'
+import { SOUND_ONLY, useDesk, useEngine } from './common'
 import { Band, NumBox, Pad, Prop } from './drawer-kit'
 import { OptionsForm, valueOf } from './options'
 
@@ -85,7 +86,7 @@ const CAMERA: Layout = {
       title: 'Device',
       icon: Camera,
       tone: ARC,
-      keys: ['device', 'video_device_id', 'device_id', 'resolution', 'fps'],
+      keys: ['device', 'video_device_id', 'device_id', 'resolution', 'fps', '@sound'],
     },
     { title: 'Picture', icon: SlidersHorizontal, tone: VIOLET, keys: ['@mirror'] },
   ],
@@ -442,7 +443,7 @@ export function KindSettings({
     s.keys.some((k) => k.startsWith('@') || worded.some((o) => o.key === k && !hidden.has(k)))
   return (
     <>
-      {layout.preview && <SourcePreview name={name} />}
+      {layout.preview && <SourcePreview name={name} rev={JSON.stringify(values)} />}
       {layout.sections.filter(shows).map((s) => (
         <section key={s.title} aria-label={s.title} className="flex flex-col">
           <Band icon={s.icon} tone={s.tone} title={s.title} />
@@ -477,15 +478,71 @@ function Special({
     return <MediaBlock name={name} opts={opts} values={values} onChange={onChange} />
   if (what === '@layouts') return <KeyLayouts opts={opts} values={values} onChange={onChange} />
   if (what === '@mirror') return <Mirror name={name} />
+  if (what === '@sound') return <ItsSound name={name} opts={opts} values={values} />
   if (what === '@read') return <LastRead name={name} values={values} />
   if (what === '@page') return <PageCheck name={name} values={values} />
   return null
 }
 
+/** A camera or capture card has no sound of its own: the source that carries it (its device's
+ *  mic, "USB2 Digital Audio" for "USB2 Video"), one click away. Matched by the devices' names,
+ *  not the sources' (a renamed one is still found), across every scene. */
+function ItsSound({
+  name,
+  opts,
+  values,
+}: {
+  name: string
+  opts: EngineOption[]
+  values: EngineSettings
+}) {
+  const { api, edit, audio } = useDesk()
+  const dev = opts.find(
+    (o) => ['device', 'video_device_id', 'device_id'].includes(o.key) && o.kind === 'list',
+  )
+  const at = dev ? dev.values.findIndex((v) => v === values[dev.key]) : -1
+  const label = dev && at >= 0 ? (dev.choices[at] ?? '') : ''
+  const found = useResource(async () => {
+    if (!label) return null
+    const all = (await api.sources()).filter((x) => SOUND_ONLY.has(x.kind) && x.name !== name)
+    // Each sound source's device, by the name its list shows.
+    // One that can't be read now (unplugged, being renamed) is left out, not the whole row.
+    const named = (
+      await Promise.allSettled(
+        all.map(async (x) => {
+          const [o, set] = await Promise.all([api.sourceOptions(x.name), api.settings(x.name)])
+          const d = o.find((k) => ['device_id', 'device'].includes(k.key) && k.kind === 'list')
+          const i = d ? d.values.findIndex((v) => v === set[d.key]) : -1
+          return { source: x.name, device: d && i >= 0 ? (d.choices[i] ?? '') : '' }
+        }),
+      )
+    ).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+    const device = pairedSound(label, named.map((n) => n.device).filter(Boolean))
+    return named.find((n) => n.device && n.device === device)?.source ?? null
+  }, [api, name, label])
+  const match = found.data
+  if (!match) return null
+  return (
+    <div className="flex h-9 items-center gap-2 border-b border-line pr-2.5 pl-3 text-[12.5px]">
+      <span className="w-[7.75rem] shrink-0 font-semibold text-text-2">Its sound</span>
+      <span className="min-w-0 flex-1 truncate font-semibold text-text">{match}</span>
+      <button
+        type="button"
+        aria-label={`Open ${match}`}
+        // Its Sound tab is this scene's mixer: a sound in other scenes only opens on its first.
+        onClick={() => edit(match, audio.data?.some((a) => a.name === match) ? 'sound' : undefined)}
+        className="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[12px] font-semibold text-text outline-none hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)]"
+      >
+        Open
+      </button>
+    </div>
+  )
+}
+
 /** A camera seen as in a mirror: its picture flipped sideways in this scene (the Position
  *  tab's Flip across, here where people look for it). */
 function Mirror({ name }: { name: string }) {
-  const { api, scene, items } = useDesk()
+  const { api, scene, items, refresh, undone } = useDesk()
   const { run, busy } = useAction()
   const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)
   const [on, setOn] = useState<boolean | null>(null)
@@ -500,7 +557,7 @@ function Mirror({ name }: { name: string }) {
     return () => {
       alive = false
     }
-  }, [api, scene, id])
+  }, [api, scene, id, undone])
   if (!item || on === null) return null
   return (
     <Prop label="Mirror" hint="Flips it sideways, as you see yourself in a mirror.">
@@ -513,9 +570,12 @@ function Mirror({ name }: { name: string }) {
             checked={on}
             disabled={busy !== null || item.locked}
             onChange={(to) =>
-              void run('mirror', () => done(api.editItem(scene, item.id, 'flip_h'))).then(
-                (ok) => ok && setOn(to),
-              )
+              void run('mirror', () => done(api.editItem(scene, item.id, 'flip_h'))).then((ok) => {
+                if (!ok) return
+                setOn(to)
+                // The preview above reads the flip from the scene's items.
+                refresh()
+              })
             }
           />
         </span>
@@ -929,46 +989,154 @@ function KeyLayouts({
   )
 }
 
-/** The source as it looks now, read again every 1.5 s while the drawer is open. */
-function SourcePreview({ name }: { name: string }) {
+/** Whether a still is (nearly) all black: a capture card's first second or so. */
+function blank(src: string): Promise<boolean> {
+  return new Promise((done) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = 16
+        c.height = 9
+        const g = c.getContext('2d')
+        if (!g) return done(false)
+        g.drawImage(img, 0, 0, 16, 9)
+        const d = g.getImageData(0, 0, 16, 9).data
+        let sum = 0
+        for (let k = 0; k < d.length; k += 4) sum += (d[k] ?? 0) + (d[k + 1] ?? 0) + (d[k + 2] ?? 0)
+        done(sum / (d.length / 4) / 3 < 6)
+      } catch {
+        done(false)
+      }
+    }
+    img.onerror = () => done(false)
+    img.src = src
+  })
+}
+
+/** The source as it was when the drawer opened: one still, nothing kept running (owner,
+ *  17 Nov: "don't show it live, just capture what's live while opening this"). Taken again
+ *  after its settings change (`rev`), or when clicked. With nothing to show yet, all black (a
+ *  capture card's first second) or a failed read, it's asked again a few times, then left.
+ *  With `filters` (the Filters tab) it's the result, filters on, and holding "Before" shows it
+ *  without them. */
+export function SourcePreview({
+  name,
+  rev,
+  filters = false,
+}: {
+  name: string
+  rev: string
+  filters?: boolean
+}) {
   const api = useEngine()
-  const [pic, setPic] = useState<{ image: string | null; width?: number; height?: number } | null>(
-    null,
-  )
+  // The still is the source's own picture; a flip (Mirror) is the scene's, shown here too.
+  const { items } = useDesk()
+  const frame = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)?.frame
+  const flip = frame ? `scale(${frame[0] < 0 ? -1 : 1}, ${frame[3] < 0 ? -1 : 1})` : undefined
+  type Pic = { image: string | null; width?: number; height?: number }
+  const [pic, setPic] = useState<Pic | null>(null)
+  // Without its filters, read once each time "Before" is held.
+  const [plain, setPlain] = useState<Pic | null>(null)
+  const [before, setBefore] = useState(false)
+  const [again, setAgain] = useState(0)
+  const first = useRef(true)
   useEffect(() => {
     let alive = true
+    let tries = 0
+    let t: ReturnType<typeof setTimeout> | undefined
+    const retry = () => {
+      if (alive && ++tries < 4) t = setTimeout(read, 1000)
+    }
     const read = () =>
       void api
-        .sourcePicture(name, 640)
-        .then((r) => alive && setPic(r))
-        .catch(() => clearInterval(t))
-    const t = setInterval(read, 1500)
-    read()
+        .sourcePicture(name, 640, filters)
+        .then(async (r) => {
+          if (!alive) return
+          setPic(r)
+          if (!r.image || (await blank(r.image))) retry()
+        })
+        .catch(retry)
+    // At once when it opens; after a settings change, once that has reached the source (edits
+    // are sent about 350 ms after they're made).
+    t = setTimeout(read, first.current ? 0 : 700)
+    first.current = false
     return () => {
       alive = false
-      clearInterval(t)
+      clearTimeout(t)
     }
-  }, [api, name])
+  }, [api, name, rev, again, filters])
+  const hold = (on: boolean) => {
+    setBefore(on)
+    if (on)
+      void api
+        .sourcePicture(name, 640)
+        .then(setPlain)
+        .catch(() => undefined)
+  }
+  const shown = before && plain?.image ? plain : pic
   return (
     <Pad>
-      <div className="relative aspect-video overflow-hidden rounded-[6px] border border-line-strong bg-[#000]">
-        {pic?.image ? (
-          <img src={pic.image} alt={`${name} now`} className="size-full object-contain" />
-        ) : (
-          <span className="grid size-full place-items-center text-[12px] text-text-3">
-            {pic ? 'Nothing to show yet.' : ''}
-          </span>
+      <div className="relative">
+        <button
+          type="button"
+          title="Take the picture again"
+          aria-label={`${name}: take the picture again`}
+          onClick={() => setAgain((n) => n + 1)}
+          className="relative block aspect-video w-full overflow-hidden rounded-[6px] border border-line-strong bg-[#000] outline-none focus-visible:shadow-[var(--fc-focus)]"
+        >
+          {shown?.image ? (
+            <img
+              src={shown.image}
+              alt={
+                filters
+                  ? `${name} ${before ? 'without its filters' : 'with its filters'}`
+                  : `${name} now`
+              }
+              className="size-full object-contain"
+              style={flip ? { transform: flip } : undefined}
+            />
+          ) : (
+            <span className="grid size-full place-items-center text-[12px] text-text-3">
+              {pic ? 'Nothing to show yet.' : ''}
+            </span>
+          )}
+          {shown?.width && shown.height && shown.width > 8 && shown.height > 8 ? (
+            <span className="absolute top-1.5 right-1.5 rounded-[4px] bg-black/55 px-1.5 py-[3px] font-mono text-[10px] font-semibold text-white tabular-nums">
+              {shown.width}×{shown.height}
+            </span>
+          ) : null}
+        </button>
+        {filters && pic?.image && (
+          // Held, not clicked: let go and the result is back (as a photo app's compare).
+          <button
+            type="button"
+            aria-pressed={before}
+            title="Hold to see it without its filters"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId)
+              hold(true)
+            }}
+            onPointerUp={() => hold(false)}
+            onPointerCancel={() => hold(false)}
+            onKeyDown={(e) => {
+              if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                e.preventDefault()
+                hold(true)
+              }
+            }}
+            onKeyUp={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') hold(false)
+            }}
+            onBlur={() => hold(false)}
+            className={cx(
+              'absolute bottom-1.5 left-1.5 h-6 touch-none rounded-[4px] px-2 text-[11px] font-semibold outline-none select-none focus-visible:shadow-[var(--fc-focus)]',
+              before ? 'bg-white text-black' : 'bg-black/55 text-white hover:bg-black/70',
+            )}
+          >
+            {before ? 'Before' : 'Hold: before'}
+          </button>
         )}
-        {pic?.image && (
-          <span className="absolute top-1.5 left-1.5 flex items-center gap-1 rounded-[4px] bg-black/55 px-1.5 py-[3px] font-mono text-[10px] font-semibold text-white">
-            <span aria-hidden className="size-1.5 rounded-full bg-[#3ddc84]" /> LIVE
-          </span>
-        )}
-        {pic?.width && pic.height && pic.width > 8 && pic.height > 8 ? (
-          <span className="absolute top-1.5 right-1.5 rounded-[4px] bg-black/55 px-1.5 py-[3px] font-mono text-[10px] font-semibold text-white tabular-nums">
-            {pic.width}×{pic.height}
-          </span>
-        ) : null}
       </div>
     </Pad>
   )

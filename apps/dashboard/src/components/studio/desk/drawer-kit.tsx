@@ -324,13 +324,21 @@ export function MiniPad({
  */
 export function PositionTab({ scene, item }: { scene: string; item: EngineItem }) {
   // The edited picture's size (the vertical one's while it's picked): where the snap points are.
-  const { api, items, refresh, size: picture } = useDesk()
+  const { api, items, refresh, size: picture, undone } = useDesk()
   const { run, busy } = useAction()
-  const loaded = useResource(() => api.transform(scene, item.id), [api, scene, item.id])
+  // Read again after ⌘Z, which may have moved it back.
+  const loaded = useResource(() => api.transform(scene, item.id), [api, scene, item.id, undone])
   const [t, setT] = useState<EngineTransform | null>(null)
   const [keep, setKeep] = useState(true)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pending = useRef<(() => void) | null>(null)
+  // ⌘Z: a change still waiting is dropped, and nothing is edited until the restored place is
+  // read (an edit meanwhile would have written the old place back: review).
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current)
+    pending.current = null
+    setT(null)
+  }, [undone])
   useEffect(() => {
     if (loaded.data) setT(loaded.data)
   }, [loaded.data])

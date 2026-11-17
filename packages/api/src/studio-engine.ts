@@ -91,6 +91,8 @@ export interface EngineOption {
   slider: boolean
   /** The number's unit as OBS writes it ("dB", "ms", "%"), or "". */
   suffix: string
+  /** What a new one starts at (what a double-click puts a slider back to). */
+  default?: unknown
   choices: string[]
   /** The value saved for each choice, in the same order. */
   values: (string | number | boolean)[]
@@ -263,6 +265,8 @@ export interface EngineSourceStatus {
   web_text?: { at_ms: number; value: string | null; error: string | null } | null
   /** A Browser source on the web: whether its address answers now. */
   page?: { ok: boolean; error: string | null }
+  /** A Mac app capture: the displays the app has windows on now. */
+  app_on?: number[]
 }
 
 /** Where a video, playlist or slideshow is. */
@@ -901,13 +905,13 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/transition`, {
         transition,
       }),
-    /** A source's own picture now, before its filters, `w` pixels wide (64 to 640), with the
-     * source's real size: what the crop editor and the filter previews draw on. `image` is null
-     * until the source has a picture. */
-    sourcePicture: (name: string, w = 480) =>
+    /** A source's own picture now, before its filters (or with them: `filters`), `w` pixels
+     * wide (64 to 640), with the source's real size: what the crop editor and the filter
+     * previews draw on. `image` is null until the source has a picture. */
+    sourcePicture: (name: string, w = 480, filters = false) =>
       c.request<{ image: string | null; width?: number; height?: number }>(
         'GET',
-        `/api/v1/studio/engine/sources/${enc(name)}/picture?w=${w}`,
+        `/api/v1/studio/engine/sources/${enc(name)}/picture?w=${w}${filters ? '&filters=true' : ''}`,
       ),
     /** A still of a screen (a display by its id), at most `w` wide, for the cards a capture is
      * picked from; `image` null where it can't be taken (not on a Mac yet). */

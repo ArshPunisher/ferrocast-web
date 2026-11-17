@@ -54,6 +54,7 @@ import {
   KindTile,
   NO_FORM,
   SOUND_ONLY,
+  friendlyKind,
   filterTone,
   useDesk,
   type DrawerTab,
@@ -74,17 +75,20 @@ import {
 import { Meter, useLevels } from './mixer'
 import { RowLook } from './options'
 import { Band, Pad, PositionTab, Prop, SoundRows } from './drawer-kit'
-import { KindSettings } from './kind-settings'
-import { CaptureForm, FilterForm, hasMore } from './filter-forms'
+import { KindSettings, SourcePreview } from './kind-settings'
+import { AreaPicker, CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
 
-/** Sends edits once they've stopped changing for a moment. `fresh` is the settings as last
- *  read: an edit that went through is shown until they're read again, so the old value never
- *  flashes back between the two (owner, 11 Nov: Screen → Window went back, then forward). */
+/** Sends edits once they've stopped changing for a moment (`live`: at once, one request at a
+ *  time, the newest next, so a filter's picture follows the slider as a photo app's does;
+ *  owner, 15 Nov). `fresh` is the settings as last read: an edit that went through is shown
+ *  until they're read again, so the old value never flashes back between the two (owner,
+ *  11 Nov: Screen → Window went back, then forward). */
 function useApplied(
   apply: (edits: EngineSettings) => Promise<unknown>,
   after: () => void,
   fresh: unknown,
+  live = false,
 ) {
   const [edits, setEdits] = useState<EngineSettings>({})
   // Sent and taken, until the settings are read again.
@@ -94,41 +98,63 @@ function useApplied(
   applyRef.current = apply
   const afterRef = useRef(after)
   afterRef.current = after
+  // One request at a time: edits made meanwhile go when it's back.
+  const [busy, setBusy] = useState(false)
+  // Live: the settings are read again once the slider has rested, not after every step.
+  const settle = useRef<number | undefined>(undefined)
   // What's waiting to be sent: sent at once if the drawer closes first (a click outside it
   // right after a change), so a change is never lost (CodeRabbit).
   const waiting = useRef<EngineSettings>({})
   waiting.current = edits
-  useEffect(
-    () => () => {
+  // Closed: an answer coming back later doesn't read the settings again.
+  const open = useRef(true)
+  useEffect(() => {
+    // Set here too: React's StrictMode (dev builds) runs this cleanup once at mount, which
+    // left it false for the drawer's whole life (review, 17 Nov).
+    open.current = true
+    return () => {
+      open.current = false
+      window.clearTimeout(settle.current)
       const left = waiting.current
       if (Object.keys(left).length === 0) return
       void applyRef.current(left).catch((err: unknown) => {
         const d = describeError(err)
         toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
       })
-    },
-    [],
-  )
+    }
+  }, [])
   useEffect(() => {
-    if (Object.keys(edits).length === 0) return
-    const t = setTimeout(() => {
-      const sent = edits
-      void applyRef
-        .current(sent)
-        .then(() => setTaken((t) => ({ ...t, ...sent })))
-        .catch((err: unknown) => {
-          // Not applied: say why, and show the engine's own values again.
-          const d = describeError(err)
-          toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
-        })
-        .finally(() => {
-          if (waiting.current === sent) waiting.current = {}
-          setEdits((e) => (e === sent ? {} : e))
-          afterRef.current()
-        })
-    }, 350)
+    if (Object.keys(edits).length === 0 || busy) return
+    const t = setTimeout(
+      () => {
+        const sent = edits
+        setBusy(true)
+        void applyRef
+          .current(sent)
+          .then(() => setTaken((t) => ({ ...t, ...sent })))
+          .catch((err: unknown) => {
+            // Not applied: say why, and show the engine's own values again.
+            const d = describeError(err)
+            toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+          })
+          .finally(() => {
+            if (waiting.current === sent) waiting.current = {}
+            setEdits((e) => (e === sent ? {} : e))
+            setBusy(false)
+            if (!open.current) return
+            if (live) {
+              window.clearTimeout(settle.current)
+              settle.current = window.setTimeout(() => afterRef.current(), 400)
+            } else {
+              afterRef.current()
+            }
+          })
+      },
+      // Text (a name, a file) still waits for the typing to stop: each key isn't sent.
+      live && Object.values(edits).every((v) => typeof v !== 'string') ? 0 : 350,
+    )
     return () => clearTimeout(t)
-  }, [edits])
+  }, [edits, busy, live])
   return [
     { ...taken, ...edits },
     (k: string, v: unknown) => setEdits((p) => ({ ...p, [k]: v })),
@@ -160,7 +186,7 @@ function Panel({
   first: Tab | null
   onClose: () => void
 }) {
-  const { api, audio, items, scene, refresh, edit, kinds, canvas } = useDesk()
+  const { api, audio, items, scene, refresh, edit, kinds, canvas, undone } = useDesk()
   const { run, busy } = useAction()
   const [rename, setRename] = useState(name)
   // Removing asks once more: the button turns into "Sure? Remove".
@@ -170,18 +196,33 @@ function Panel({
   const kind = a?.kind ?? item?.kind ?? ''
   const levels = useLevels(api, a ? [name] : [])
   const [tab, setTab] = useState<Tab | null>(first)
-  const filters = useResource(() => api.filters(name), [api, name])
+  // Read again after ⌘Z, which may bring a filter back.
+  const filters = useResource(() => api.filters(name), [api, name, undone])
   const panel = useRef<HTMLElement>(null)
   // A click anywhere outside closes it (owner, 28 Oct): what's in it is applied as it's
   // changed, so nothing is lost. Not for what it opened over the page (a list, a menu, a
   // dialog, a toast or an info bubble), nor a pick in the Sources list, which opens another.
+  // Toasts move left of the drawer while it's open, so an "Undo" never covers Done.
+  useEffect(() => {
+    const el = panel.current
+    const root = document.documentElement
+    if (!el) return
+    const put = () => root.style.setProperty('--fc-drawer', `${el.offsetWidth}px`)
+    put()
+    const o = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(put)
+    o?.observe(el)
+    return () => {
+      o?.disconnect()
+      root.style.removeProperty('--fc-drawer')
+    }
+  }, [])
   useEffect(() => {
     const away = (e: PointerEvent) => {
       const t = e.target as HTMLElement | null
       if (!t || !t.isConnected || panel.current?.contains(t)) return
       if (
         t.closest(
-          '[data-over-preview], [data-fc-menu], [role="listbox"], [role="menu"], [role="option"], dialog',
+          '[data-over-preview], [data-fc-menu], [data-keeps-drawer], [role="listbox"], [role="menu"], [role="option"], dialog',
         )
       )
         return
@@ -231,7 +272,7 @@ function Panel({
   ]
   const wanted: Tab = tab ?? (a && !picture ? 'sound' : 'settings')
   const shown: Tab = tabs.some((t) => t.id === wanted) ? wanted : 'settings'
-  const kindName = kinds.data?.inputs.find((k) => k.id === kind)?.name
+  const kindName = friendlyKind(kind) ?? kinds.data?.inputs.find((k) => k.id === kind)?.name
   const panelId = `source-tab-${shown}`
 
   return (
@@ -246,7 +287,8 @@ function Panel({
         <div className="flex min-w-0 flex-1 flex-col">
           <Input
             aria-label="Name"
-            className="-ml-1.5 h-7! min-w-0 rounded-[5px]! border-transparent! bg-transparent! px-1.5! font-display text-[14.5px]! font-bold hover:border-line-strong!"
+            title={rename}
+            className="-ml-1.5 h-7! min-w-0 rounded-[5px]! border-transparent! bg-transparent! px-1.5! font-display text-[14.5px]! font-bold text-ellipsis hover:border-line-strong!"
             maxLength={100}
             value={rename}
             onChange={(e) => setRename(e.target.value)}
@@ -332,7 +374,9 @@ function Panel({
         id={panelId}
         role="tabpanel"
         aria-labelledby={`tab-${shown}`}
-        className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]"
+        // No room kept for a scrollbar: it was an empty strip down the right when nothing
+        // scrolled (owner, 17 Nov).
+        className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
       >
         {shown === 'sound' && a && (
           <RowLook.Provider value="lined">
@@ -683,9 +727,12 @@ function PlaysIn({ name }: { name: string }) {
           showTiles,
           'Some scenes',
           () => setChoosing(true),
-          <span className="rounded-full bg-ok-soft px-1.5 font-mono text-[10.5px] font-bold text-ok">
-            {mine.length} picked
-          </span>,
+          // Only while picking: beside "Every scene" it read as a contradiction.
+          showTiles ? (
+            <span className="shrink-0 rounded-full bg-ok-soft px-1.5 font-mono text-[10.5px] font-bold text-ok">
+              {all.filter((n) => mine.includes(n)).length} picked
+            </span>
+          ) : undefined,
         )}
       </div>
       {showTiles &&
@@ -767,7 +814,11 @@ function Filters({
   /** Opened from a "Filters" menu item: shown in view. */
   reveal: boolean
 }) {
-  const { api, kinds } = useDesk()
+  const { api, kinds, items } = useDesk()
+  // The result is taken again after any change: a filter's settings (each one reads the
+  // scene's items again once applied), its switch, order, adding or removing.
+  const [changed, setChanged] = useState(0)
+  useEffect(() => setChanged((n) => n + 1), [items.data, list.data])
   const { run, busy } = useAction()
   const [open, setOpen] = useState<string | null>(null)
   // The open filter's extra settings (its header's More), and a count that redraws its form
@@ -883,6 +934,7 @@ function Filters({
   }
   return (
     <section ref={section} aria-label="Filters" className="flex scroll-mt-4 flex-col">
+      {picture && <SourcePreview name={name} rev={String(changed)} filters />}
       <div className="flex flex-col">
         <Band
           icon={MagicWand}
@@ -1002,8 +1054,20 @@ function Filters({
                       }}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
-                      <span className="w-full truncate text-[13px] leading-tight font-semibold">
-                        {f.name}
+                      <span className="flex w-full min-w-0 items-center gap-1 text-[13px] leading-tight font-semibold">
+                        <span className="truncate">{f.name}</span>
+                        {/* Opens its settings: says so before it's clicked. */}
+                        {!NO_FORM.has(f.kind) && (
+                          <CaretDown
+                            size={11}
+                            weight="bold"
+                            aria-hidden
+                            className={cx(
+                              'shrink-0 text-text-3 transition-transform duration-150',
+                              open === f.name ? 'rotate-180' : '',
+                            )}
+                          />
+                        )}
                       </span>
                       <span className="w-full truncate text-[11px] leading-tight text-text-3">
                         {entry && entry.label !== f.name
@@ -1228,17 +1292,34 @@ function AddFilter({
               }}
             />
             {onOnly && (
-              <Segmented
-                label="Show"
-                size="sm"
-                value={only}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'picture', label: 'Picture' },
-                  { value: 'sound', label: 'Sound' },
-                ]}
-                onChange={onOnly}
-              />
+              // Picture or Sound only; the same chip again shows both (owner, 17 Nov: no "All").
+              <div role="group" aria-label="Show only" className="flex gap-1.5">
+                {(
+                  [
+                    ['picture', 'Picture'],
+                    ['sound', 'Sound'],
+                  ] as const
+                ).map(([v, label]) => {
+                  const on = only === v
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => onOnly(on ? 'all' : v)}
+                      className={cx(
+                        'fc-press inline-flex h-7 items-center rounded-full border px-3 text-[12.5px] font-semibold',
+                        'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                        on
+                          ? 'border-accent-line bg-accent-soft text-text'
+                          : 'border-line bg-surface-2 text-text-2 hover:text-text',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
           {group('Picture', pics)}
@@ -1404,13 +1485,13 @@ function CleanMic({
 
 /** A mic's voice style: one equaliser set three ways (Natural takes it off). */
 function VoiceStyleRow({ name, list }: { name: string; list: Resource<EngineFilter[]> }) {
-  const { api } = useDesk()
+  const { api, undone } = useDesk()
   const { run, busy } = useAction()
   const filter = list.data?.find((f) => f.name === VOICE_FILTER)
   const has = !!filter
   const eq = useResource(
     () => (has ? api.filterSettings(name, VOICE_FILTER) : Promise.resolve(null)),
-    [api, name, has],
+    [api, name, has, undone],
   )
   // Switched off in Filters, it's as if natural.
   const style = filter?.enabled
@@ -1519,12 +1600,14 @@ function FilterSettings({
   kind: string
   more: boolean
 }) {
-  const { api, refresh } = useDesk()
+  const { api, refresh, undone } = useDesk()
+  // Read again after ⌘Z, which may have put its values back.
   const loaded = useResource(
     () => Promise.all([api.filterOptions(source, filter), api.filterSettings(source, filter)]),
-    [api, source, filter],
+    [api, source, filter, undone],
   )
   // The scene's items too: a crop changes the source's size, so its outline on the canvas.
+  // Live: the picture follows a filter's slider while it moves.
   const [edits, set] = useApplied(
     (e) => api.updateFilter(source, filter, e),
     () => {
@@ -1532,6 +1615,7 @@ function FilterSettings({
       refresh()
     },
     loaded.data,
+    true,
   )
   if (loaded.error && !loaded.data)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
@@ -1546,23 +1630,28 @@ function FilterSettings({
       />
     )
   return (
-    <FilterForm
-      kind={kind}
-      more={more}
-      source={source}
-      opts={loaded.data[0]}
-      values={{ ...loaded.data[1], ...edits }}
-      onChange={set}
-    />
+    <>
+      {kind === 'ferrocast_blur_area' && (
+        <AreaPicker source={source} values={{ ...loaded.data[1], ...edits }} onChange={set} />
+      )}
+      <FilterForm
+        kind={kind}
+        more={more}
+        source={source}
+        opts={loaded.data[0]}
+        values={{ ...loaded.data[1], ...edits }}
+        onChange={set}
+      />
+    </>
   )
 }
 
 /** Every setting the source has, applied as it changes, laid out for its kind. */
 function Settings({ name, kind }: { name: string; kind: string }) {
-  const { api } = useDesk()
+  const { api, undone } = useDesk()
   const loaded = useResource(
     () => Promise.all([api.sourceOptions(name), api.settings(name)]),
-    [api, name],
+    [api, name, undone],
   )
   const [edits, set] = useApplied((e) => api.update(name, e), loaded.reload, loaded.data)
   if (loaded.error && !loaded.data)
@@ -1577,7 +1666,7 @@ function Settings({ name, kind }: { name: string; kind: string }) {
     return (
       <section aria-label="What to show" className="flex flex-col">
         <Band icon={Monitor} tone="var(--fc-accent-text)" title="What to show" />
-        <CaptureForm opts={loaded.data[0]} values={values} onChange={set} />
+        <CaptureForm name={name} opts={loaded.data[0]} values={values} onChange={set} />
       </section>
     )
   return (

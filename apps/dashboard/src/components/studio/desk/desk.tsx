@@ -283,6 +283,7 @@ function Running({
   useEffect(() => select(null), [scene, select])
   // ⌘Z and ⇧⌘Z (Ctrl on Windows) undo and redo changes to sources, outside text fields.
   const { run: runUndo } = useAction()
+  const [undone, setUndone] = useState(0)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return
@@ -292,7 +293,11 @@ function Running({
       const redo = e.shiftKey
       void runUndo('undo', () => (redo ? api.redo() : api.undo()), {
         success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),
-      }).then((r) => r && refresh())
+      }).then((r) => {
+        if (!r) return
+        refresh()
+        setUndone((n) => n + 1)
+      })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -352,6 +357,7 @@ function Running({
     kinds,
     prefs,
     refresh,
+    undone,
     selected,
     select,
     also: picked.also,

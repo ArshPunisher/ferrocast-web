@@ -856,6 +856,8 @@ export function SourcesDock() {
           size="xs"
           variant="ghost"
           data-no-drag
+          // Showing, hiding or locking a source leaves an open drawer open (to compare).
+          data-keeps-drawer
           label={item.visible ? `Hide ${item.name}` : `Show ${item.name}`}
           disabled={busy !== null}
           // Narrow (owner's pick N1): shown on hover or focus, or while it says something.
@@ -874,6 +876,8 @@ export function SourcesDock() {
           size="xs"
           variant="ghost"
           data-no-drag
+          // Showing, hiding or locking a source leaves an open drawer open (to compare).
+          data-keeps-drawer
           label={item.locked ? `Unlock ${item.name}` : `Lock ${item.name}`}
           aria-pressed={item.locked}
           className={cx(!item.locked && !on && quiet)}
