@@ -661,42 +661,7 @@ function AudioPage({ s, set }: PageProps) {
           )}
         </Row>
       </div>
-      <Heading info="Changes here apply after Ferrocast restarts.">Sound</Heading>
-      <div className="flex flex-col">
-        <Row label="Sample rate">
-          <Segmented
-            label="Sample rate"
-            value={String(s.sample_rate)}
-            options={[
-              { value: '44100', label: '44.1 kHz' },
-              { value: '48000', label: '48 kHz' },
-            ]}
-            onChange={(v) => set({ sample_rate: Number(v) as StudioSettings['sample_rate'] })}
-          />
-        </Row>
-        <Row
-          label="Channels"
-          info="Surround needs a surround player on the other end; most streams are stereo."
-        >
-          <Select
-            aria-label="Channels"
-            value={s.speakers ?? (s.stereo ? 'stereo' : 'mono')}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === 'mono' || v === 'stereo') set({ stereo: v === 'stereo', speakers: null })
-              else set({ stereo: true, speakers: v as NonNullable<StudioSettings['speakers']> })
-            }}
-          >
-            <option value="mono">Mono</option>
-            <option value="stereo">Stereo</option>
-            <option value="2.1">2.1</option>
-            <option value="4.0">4.0</option>
-            <option value="4.1">4.1</option>
-            <option value="5.1">5.1</option>
-            <option value="7.1">7.1</option>
-          </Select>
-        </Row>
-      </div>
+      <Heading info="Changes apply at once.">Sound</Heading>
       <div className="flex flex-col">
         <Row
           label="True peak meters"
@@ -711,7 +676,7 @@ function AudioPage({ s, set }: PageProps) {
         </Row>
         <Row
           label="Low latency sound"
-          info="Sound waits at most 20 ms for a late device instead of up to a second, so it stays in sync with you. A device that keeps running late may crackle. Applies after a restart."
+          info="Sound waits at most 60 ms for a late device (plus what a filter like Strong noise removal needs) instead of up to a second, so you hear yourself sooner. A device that keeps running late may click."
         >
           <Switch
             label="Low latency sound"
@@ -972,22 +937,6 @@ function PicturePage({ s, set }: PageProps) {
             ))}
           </Select>
         </Row>
-        {/* Only a Mac has the choice (Windows draws with Direct3D). */}
-        {isMac && (
-          <Row
-            label="Drawing"
-            info="Metal is Apple's own way of drawing and the default. If a filter or plugin looks wrong, try OpenGL, the older way. Applies after a restart."
-          >
-            <Select
-              aria-label="Drawing"
-              value={s.renderer ?? 'metal'}
-              onChange={(e) => set({ renderer: e.target.value as 'metal' | 'opengl' })}
-            >
-              <option value="metal">Metal</option>
-              <option value="opengl">OpenGL</option>
-            </Select>
-          </Row>
-        )}
       </div>
       <Heading info="A projector of every scene at once; a click puts one on air (in Studio Mode, in the preview).">
         Multiview
