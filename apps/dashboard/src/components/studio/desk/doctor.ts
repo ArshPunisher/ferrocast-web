@@ -76,10 +76,14 @@ export function doctorFix(
       : { label: 'Lower bitrate', patch: { video_kbps: k }, done: `Bitrate lowered to ${k} kbps.` }
   }
   if (s.fps <= 30 || (recording && !live)) return null
+  // While live the stream sends every other (or every nth) frame of the picture, so only a rate
+  // that divides it can go out (50 fps → 25, not 30).
+  const lighter = live ? [30, 25, 24, 20, 15].find((f) => s.fps % f === 0) : 30
+  if (lighter === undefined) return null
   return {
-    label: 'Use 30 fps',
-    patch: { fps: 30 },
-    done: live ? 'The stream runs at 30 fps now.' : 'The picture runs at 30 fps.',
+    label: `Use ${lighter} fps`,
+    patch: { fps: lighter },
+    done: live ? `The stream runs at ${lighter} fps now.` : `The picture runs at ${lighter} fps.`,
   }
 }
 

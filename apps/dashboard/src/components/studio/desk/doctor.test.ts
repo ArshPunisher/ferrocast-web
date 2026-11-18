@@ -61,6 +61,14 @@ describe('the stream doctor', () => {
     expect(doctorFix('render', { ...base, fps: 30 }, hd, false)).toBeNull()
   })
 
+  it('live, only a rate that divides the picture\'s goes out (50 fps → 25)', () => {
+    const fifty = doctorFix('render', { ...base, fps: 50 }, hd, true)
+    expect(fifty?.patch).toEqual({ fps: 25 })
+    expect(fifty?.label).toBe('Use 25 fps')
+    // Not live, the picture itself changes: 30 is fine.
+    expect(doctorFix('render', { ...base, fps: 50 }, hd, false)?.patch).toEqual({ fps: 30 })
+  })
+
   it('only recording, the frame rate stays (the file is drawn at it)', () => {
     expect(doctorFix('render', base, hd, false, true)).toBeNull()
     // Live and recording: the stream takes it, the file keeps the canvas's rate.
