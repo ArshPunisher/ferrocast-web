@@ -410,6 +410,9 @@ export type EngineFilterEdit = 'enable' | 'disable' | 'up' | 'down' | 'top' | 'b
 export interface EngineLevel {
   peak: [number, number]
   magnitude: [number, number]
+  /** The highest it came in at, before its filters and fader (a noise gate's line is set
+   *  against this). Missing from older apps. */
+  input_peak?: [number, number]
 }
 
 /** How the Studio's stream into Go live is going (null: not streaming). */

@@ -1084,7 +1084,10 @@ export function GateForm({
   const { api } = useDesk()
   const levels = useLevels(api, [source])
   const open = typeof values.open_threshold === 'number' ? values.open_threshold : -26
-  const peak = Math.max(...(levels[source]?.peak ?? [-100, -100]))
+  // What the gate hears: the sound before the filters and the fader (after them, a shut gate
+  // shows silence and a lowered fader shows less than it gets).
+  const heard = levels[source]
+  const peak = Math.max(...(heard?.input_peak ?? heard?.peak ?? [-100, -100]))
   const set = (db: number) => {
     onChange('open_threshold', db)
     // It turns off a little below where it turns on, so a voice doesn't flicker it.
