@@ -1,5 +1,18 @@
 # Status
 
+## 18 Nov 2026 (3.3.0: smoother streams and a source drawer that works, branch own-engine-only)
+
+Released as 3.3.0 with the engine (its CHANGELOG has the streamer's list).
+
+- **Stream health:** the status bar warns only when the upload struggles; the doctor's fixes and
+  the Go live dock change the stream on air.
+- **Categories:** Stream info shows what each platform makes of a typed category.
+- **Source drawer** (after a hands-on test in the dev app, 18 Nov): filters with real forms,
+  the result picture with Before, live sliders, double-click resets, screen pictures, camera
+  modes, a capture card's sound, ⌘Z keeps it current; the Add dialog adds a card once.
+- Open: the 12 Nov `menu.tsx` change (long menus scroll) is still uncommitted; the Add dialog's
+  roomy forms should become the drawer's compact ones.
+
 ## 11 Nov 2026 (VST plugins, plugin catalog, Studio compact, branch own-engine-only; uncommitted)
 
 Morning of 11 Nov (owner away, "do all"; committed):
