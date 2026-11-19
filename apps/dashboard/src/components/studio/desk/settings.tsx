@@ -1323,7 +1323,7 @@ function RecordPage({ s, set }: PageProps) {
       <div className="flex flex-col">
         <Row
           label="File type"
-          info="All three stay playable if the app or the computer stops while recording. MOV is the same file as MP4, for editors that ask for it. MKV can become an MP4 when the recording ends."
+          info="All three stay playable if the app or the computer stops while recording. MOV is the same file as MP4 with a .mov name. MKV can become an MP4 when the recording ends."
         >
           <Select
             aria-label="File type"
