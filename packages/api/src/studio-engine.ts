@@ -454,6 +454,8 @@ export interface EncodeBudget {
   record_mpx?: number
   shared?: boolean
   why_not_shared?: string | null
+  /** The replay buffer runs or starts with the stream: an encode of its own, counted. */
+  replay?: boolean
   level: 'ok' | 'limit' | 'over' | 'unknown'
 }
 
@@ -1109,8 +1111,12 @@ export function studioEngineApi(c: FerroClient) {
         filter,
       }),
     /** macOS's Screen Recording switch for Ferrocast (as it was when Ferrocast opened). */
-    /** What streaming and recording at once ask of this computer's video encoder (API.md). */
-    encodeBudget: () => c.request<EncodeBudget>('GET', '/api/v1/studio/engine/encode-budget'),
+    /** What streaming and recording at once ask of this computer's video encoder (API.md):
+     * for `settings` not saved yet when given, else the saved ones. */
+    encodeBudget: (settings?: StudioSettings) =>
+      settings
+        ? c.request<EncodeBudget>('POST', '/api/v1/studio/engine/encode-budget', { settings })
+        : c.request<EncodeBudget>('GET', '/api/v1/studio/engine/encode-budget'),
     screenAccess: () =>
       c.request<{ granted: boolean }>('GET', '/api/v1/studio/engine/screen-access'),
     /** Asks macOS again, forgetting what it said to an older Ferrocast. */

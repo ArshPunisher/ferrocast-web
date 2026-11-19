@@ -1243,11 +1243,24 @@ function RecordPage({ s, set }: PageProps) {
   useEffect(() => setFolder(s.record_folder ?? defaultFolder), [s.record_folder, defaultFolder])
   useEffect(() => setNamePattern(pattern), [pattern])
   const tracks = s.record_tracks ?? [1]
-  // What streaming and recording at once ask of this computer's video encoder, for the saved
-  // settings (asked again when they change). A Mac with one encoder does one 4K60 (19 Nov).
+  // What streaming and recording at once ask of this computer's video encoder, for the
+  // settings as they're picked (not yet saved). A Mac with one encoder does one 4K60 (19 Nov).
   const budget = useResource(
-    () => api.encodeBudget(),
-    [api, s.width, s.height, s.fps, s.record_quality, tracks.join(','), s.scale?.join('x')],
+    () => api.encodeBudget(s),
+    [
+      api,
+      s.width,
+      s.height,
+      s.fps,
+      s.record_quality,
+      tracks.join(','),
+      s.scale?.join('x'),
+      s.encoder,
+      s.video_encoder,
+      s.record_encoder,
+      s.twitch_vod_track,
+      s.replay_when_streaming,
+    ],
   )
   const over = budget.data?.level === 'over'
   const atLimit = budget.data?.level === 'limit'
@@ -1308,11 +1321,12 @@ function RecordPage({ s, set }: PageProps) {
           <span className="flex items-start gap-1.5 font-semibold text-warn">
             <Warning size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
             <span>
-              Streaming and recording this at once is more than this computer&apos;s video encoder
-              does: both drop frames.{' '}
+              When you stream and record at once, this is more than this computer&apos;s video
+              encoder does: both drop frames.{' '}
               {budget.data?.why_not_shared && s.record_quality === 'stream'
                 ? `Same as stream can't share here: ${budget.data.why_not_shared}.`
                 : 'Same as stream shares one encode.'}
+              {budget.data?.replay ? ' The replay buffer is an encode of its own.' : ''}
             </span>
           </span>
         )}
@@ -1320,7 +1334,7 @@ function RecordPage({ s, set }: PageProps) {
           <span className="text-text-2">
             {budget.data?.shared
               ? "Shares the stream's encode: one is all this computer's video encoder does at this size."
-              : "Streaming and recording this at once uses all of this computer's video encoder."}
+              : "When you stream and record at once, this uses all of this computer's video encoder."}
           </span>
         )}
         {picked.hour && (
