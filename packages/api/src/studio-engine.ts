@@ -951,10 +951,28 @@ export function studioEngineApi(c: FerroClient) {
       ),
     /** A still of a screen (a display by its id), at most `w` wide, for the cards a capture is
      * picked from; `image` null where it can't be taken (not on a Mac yet). */
-    screenStill: (id: number, w = 320, window = false) =>
+    screenStill: (id: number, w = 240, window = false, signal?: AbortSignal) =>
       c.request<{ image: string | null }>(
         'GET',
         `/api/v1/studio/engine/screens/${encodeURIComponent(String(id))}/still?w=${w}${window ? '&window=true' : ''}`,
+        undefined,
+        undefined,
+        signal ? { signal } : undefined,
+      ),
+    /** Low-res one-shot still frame for a capture device, window or display in the source picker. */
+    sourceStill: (
+      kind: string,
+      key: string,
+      value: string | number,
+      w = 240,
+      signal?: AbortSignal,
+    ) =>
+      c.request<{ image: string | null }>(
+        'GET',
+        `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
+        undefined,
+        undefined,
+        signal ? { signal } : undefined,
       ),
     /** How a source is doing: a Web text's last read, whether a Browser source's page loads. */
     sourceStatus: (name: string) =>

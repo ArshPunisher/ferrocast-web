@@ -120,6 +120,16 @@ export function offlineError(): ApiError {
   return new ApiError(0, 'offline', STATUS_COPY[0].message, STATUS_COPY[0].hint)
 }
 
+/** True when a request was cancelled via AbortController rather than failing on the network. */
+export function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'name' in err &&
+    (err as { name?: unknown }).name === 'AbortError'
+  )
+}
+
 /** Turns anything thrown into readable copy for a toast or inline message. */
 export function describeError(err: unknown): { message: string; hint: string | null } {
   if (err instanceof ApiError) return { message: err.message, hint: err.hint }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FerroClient } from '../src/client'
-import { ApiError, STATUS_COPY, describeError, parseRetryAfter } from '../src/errors'
+import { ApiError, STATUS_COPY, describeError, isAbortError, parseRetryAfter } from '../src/errors'
 
 type Call = { url: string; init: RequestInit | undefined }
 
@@ -166,6 +166,41 @@ describe('FerroClient', () => {
     await c.upload(new Blob(['abc'], { type: 'audio/mpeg' }), 'a.mp3')
     expect(calls[0]?.init?.body).toBeInstanceOf(FormData)
     expect((calls[0]?.init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  it('forwards AbortSignal and rethrows AbortError instead of offlineError', async () => {
+    const ac = new AbortController()
+    const abortErr = new DOMException('Aborted', 'AbortError')
+    const { fn, calls } = mockFetch([abortErr])
+    const c = new FerroClient({ base: 'http://x', token: 't', fetch: fn })
+    const err = await c
+      .request('GET', '/api/v1/studio/engine/screens/1/still', undefined, undefined, {
+        signal: ac.signal,
+      })
+      .catch((e: unknown) => e)
+    expect(calls[0]?.init?.signal).toBe(ac.signal)
+    expect(isAbortError(err)).toBe(true)
+    expect(err).not.toBeInstanceOf(ApiError)
+  })
+
+  it('stops a 503 retry wait when aborted', async () => {
+    const ac = new AbortController()
+    const { fn } = mockFetch([json(503, undefined), json(200, {})])
+    const sleep = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 1000)
+          ac.abort()
+        }),
+    )
+    const c = new FerroClient({ base: 'http://x', token: 't', fetch: fn, sleep })
+    const err = await c
+      .request('GET', '/api/v1/studio/engine/still?kind=x&key=k&value=v', undefined, undefined, {
+        signal: ac.signal,
+      })
+      .catch((e: unknown) => e)
+    expect(isAbortError(err)).toBe(true)
+    expect(fn).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -1,4 +1,4 @@
-import { ApiError, errorFromResponse, offlineError } from './errors'
+import { ApiError, errorFromResponse, isAbortError, offlineError } from './errors'
 import type {
   Account,
   AlertRule,
@@ -101,6 +101,47 @@ function notAllowedHere(): ApiError {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+function makeAbortError(reason?: unknown): Error {
+  if (reason instanceof Error && reason.name === 'AbortError') return reason
+  const err = new Error('The operation was aborted.')
+  err.name = 'AbortError'
+  return err
+}
+
+function waitWithSignal(
+  sleep: (ms: number) => Promise<void>,
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!signal) return sleep(ms)
+  if (signal.aborted) return Promise.reject(makeAbortError(signal.reason))
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    const onAbort = () => {
+      if (settled) return
+      settled = true
+      reject(makeAbortError(signal.reason))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    sleep(ms).then(
+      () => {
+        signal.removeEventListener('abort', onAbort)
+        if (!settled) {
+          settled = true
+          resolve()
+        }
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort)
+        if (!settled) {
+          settled = true
+          reject(err)
+        }
+      },
+    )
+  })
+}
+
 /**
  * Typed client for every route in API.md §4. Each method resolves with the parsed body or
  * rejects with an ApiError carrying readable copy. 503 (engine starting) is retried a few
@@ -198,8 +239,15 @@ export class FerroClient {
     return `${this.base}/api/v1/media/${encodeURIComponent(id)}${query ? `?${query}` : ''}`
   }
 
-  async request<T>(method: string, path: string, body?: unknown, raw?: BodyInit): Promise<T> {
+  async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    raw?: BodyInit,
+    opts?: { signal?: AbortSignal },
+  ): Promise<T> {
     this.check(method, path)
+    if (opts?.signal?.aborted) throw makeAbortError(opts.signal.reason)
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let payload: BodyInit | undefined = raw
@@ -212,8 +260,11 @@ export class FerroClient {
       try {
         const init: RequestInit = { method, headers }
         if (payload !== undefined) init.body = payload
+        if (opts?.signal) init.signal = opts.signal
         res = await this.doFetch(`${this.base}${path}`, init)
-      } catch {
+      } catch (e) {
+        if (opts?.signal?.aborted) throw makeAbortError(opts.signal.reason)
+        if (isAbortError(e)) throw e
         throw offlineError()
       }
       if (res.ok) {
@@ -238,7 +289,7 @@ export class FerroClient {
       const starting = err.code === 'starting' || err.code === 'http_503'
       const read = method === 'GET' || method === 'HEAD'
       if (err.status === 503 && read && starting && attempt < this.startupRetries) {
-        await this.sleep(Math.max(err.retryAfter ?? 1, 1) * 1000)
+        await waitWithSignal(this.sleep, Math.max(err.retryAfter ?? 1, 1) * 1000, opts?.signal)
         continue
       }
       throw err
