@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import {
   ArrowSquareOut,
   Bell,
@@ -21,7 +21,6 @@ import {
   SquaresFour,
   Sun,
   UsersThree,
-  X,
 } from '@phosphor-icons/react'
 import { Dialog, LogoMark, Wordmark, cx, toast } from '@ferrocast/ui'
 import {
@@ -40,6 +39,7 @@ import { useClient, useMediaQuery } from '../lib/hooks'
 import { PRO_UNLOCKED_EVENT, accountInitials, proPlanLine, useProStatus } from '../lib/pro-status'
 import { ProUnlock } from './pro/ProUnlock'
 import { StatusStrip } from './StatusStrip'
+import { NoticeBanners } from './NoticeBanners'
 import { PanicButton } from './PanicButton'
 import { RemoteStrip } from './remote'
 import { UpdateDialogHost, UpdateNavItem } from './update'
@@ -642,44 +642,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           </div>
         </header>
 
-        <AnimatePresence initial={false}>
-          {notices.map((n) => (
-            <motion.div
-              key={n.id}
-              initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              role={n.level === 'error' ? 'alert' : 'status'}
-              className={cx(
-                'overflow-hidden border-b',
-                n.level === 'warn' && 'border-warn/30 bg-warn-soft',
-                n.level === 'error' && 'border-danger/30 bg-danger-soft',
-                n.level === 'info' && 'border-line bg-surface-1',
-              )}
-            >
-              <div className="flex items-center gap-3 px-4 py-2.5 text-sm sm:px-6">
-                <p className="min-w-0 flex-1 text-text">{n.message}</p>
-                {n.action && (
-                  <a
-                    href={n.action.href}
-                    className="shrink-0 font-semibold text-accent-text hover:underline"
-                  >
-                    {n.action.label}
-                  </a>
-                )}
-                <button
-                  type="button"
-                  aria-label="Dismiss"
-                  onClick={() => dismiss(n.id)}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-text-3 hover:bg-surface-3 hover:text-text"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        <NoticeBanners notices={notices} dismiss={dismiss} />
 
         <main
           id="main"
