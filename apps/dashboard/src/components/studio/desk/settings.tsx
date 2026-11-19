@@ -19,10 +19,11 @@ import {
   X,
 } from '@phosphor-icons/react'
 import {
-  ENGINE_RECORD_FORMATS,
+  WRITTEN_RECORD_FORMATS,
   describeError,
+  writtenFormat,
   type AudioCare,
-  type EngineRecordFormat,
+  type WrittenRecordFormat,
   type PrivacyGuard,
   type StudioSettings,
 } from '@ferrocast/api'
@@ -1089,15 +1090,10 @@ function Privacy() {
   )
 }
 
-const FORMAT_LABEL: Record<EngineRecordFormat, string> = {
-  mp4: 'MP4 (safe if the computer stops)',
-  mov: 'MOV (safe if the computer stops)',
-  fmp4: 'Fragmented MP4',
-  fmov: 'Fragmented MOV',
+const FORMAT_LABEL: Record<WrittenRecordFormat, string> = {
+  mp4: 'MP4',
+  mov: 'MOV',
   mkv: 'MKV',
-  flv: 'FLV',
-  ts: 'MPEG-TS',
-  hls: 'HLS (playlist and segments)',
 }
 
 /** OBS's name pattern with today's date, for a preview (the common specifiers). */
@@ -1213,8 +1209,9 @@ function RecordPage({ s, set }: PageProps) {
     },
   }
   const picked = QUALITY[s.record_quality]
-  const ext =
-    s.record_format === 'fmp4' ? 'mp4' : s.record_format === 'fmov' ? 'mov' : s.record_format
+  // What the engine writes: an older profile's FLV, TS or HLS records as MKV, and so on.
+  const format = writtenFormat(s.record_format)
+  const ext = format
   const pattern = s.record_name ?? '%CCYY-%MM-%DD %hh-%mm-%ss'
   const spaces = s.record_spaces ?? true
   const name = useMemo(() => {
@@ -1245,10 +1242,7 @@ function RecordPage({ s, set }: PageProps) {
   // Follows the draft (Undo changes, or a value the engine saved).
   useEffect(() => setFolder(s.record_folder ?? defaultFolder), [s.record_folder, defaultFolder])
   useEffect(() => setNamePattern(pattern), [pattern])
-  const [muxer, setMuxer] = useState(s.record_muxer ?? '')
-  useEffect(() => setMuxer(s.record_muxer ?? ''), [s.record_muxer])
   const tracks = s.record_tracks ?? [1]
-  const needsHelper = ['mkv', 'flv', 'ts', 'fmp4', 'fmov', 'hls'].includes(s.record_format)
   return (
     <>
       <Heading>Quality</Heading>
@@ -1329,21 +1323,21 @@ function RecordPage({ s, set }: PageProps) {
       <div className="flex flex-col">
         <Row
           label="File type"
-          info="MP4 and MOV stay playable if the app or the computer stops while recording. MKV, FLV and TS use OBS's own helper and can become MP4 when the recording ends."
+          info="All three stay playable if the app or the computer stops while recording. MOV is the same file as MP4, for editors that ask for it. MKV can become an MP4 when the recording ends."
         >
           <Select
             aria-label="File type"
-            value={s.record_format}
-            onChange={(e) => set({ record_format: e.target.value as EngineRecordFormat })}
+            value={format}
+            onChange={(e) => set({ record_format: e.target.value as WrittenRecordFormat })}
           >
-            {ENGINE_RECORD_FORMATS.map((f) => (
+            {WRITTEN_RECORD_FORMATS.map((f) => (
               <option key={f} value={f}>
                 {FORMAT_LABEL[f]}
               </option>
             ))}
           </Select>
         </Row>
-        {['mkv', 'flv', 'ts'].includes(s.record_format) && (
+        {format === 'mkv' && (
           <Row label="Make an MP4 when it ends" sub="The original is kept">
             <Switch
               label="Make an MP4 when it ends"
@@ -1353,25 +1347,6 @@ function RecordPage({ s, set }: PageProps) {
             />
           </Row>
         )}
-        <Row
-          label="Muxer settings"
-          info="ffmpeg's own key=value settings for the file, space apart (OBS's Custom Muxer Settings). Leave empty unless you know you need them."
-        >
-          <Input
-            aria-label="Muxer settings"
-            name="record_muxer"
-            autoComplete="off"
-            spellCheck={false}
-            className="font-mono text-[13.5px]"
-            placeholder="movflags=+faststart"
-            value={muxer}
-            onChange={(e) => setMuxer(e.target.value)}
-            onBlur={() => {
-              const v = muxer.trim()
-              if (v !== (s.record_muxer ?? '')) set({ record_muxer: v })
-            }}
-          />
-        </Row>
         {/* A path is long: the box takes the row's full width under its label. */}
         <div className="flex flex-col gap-2 border-t border-line py-2.5">
           <span className="text-[13px]">
@@ -1519,7 +1494,7 @@ function RecordPage({ s, set }: PageProps) {
         <Row label="Replays as">
           <Select
             aria-label="Replays as"
-            value={s.replay_format ?? 'mp4'}
+            value={writtenFormat(s.replay_format)}
             onChange={(e) =>
               set({ replay_format: e.target.value as NonNullable<StudioSettings['replay_format']> })
             }
@@ -1527,19 +1502,11 @@ function RecordPage({ s, set }: PageProps) {
             <option value="mp4">MP4</option>
             <option value="mkv">MKV</option>
             <option value="mov">MOV</option>
-            <option value="flv">FLV</option>
-            <option value="ts">MPEG-TS</option>
           </Select>
         </Row>
         <Row label="Remux a recording" sub="An MKV, FLV or TS into MP4, without encoding again">
           <RemuxButton />
         </Row>
-        {needsHelper && (
-          <p className="m-0 pt-1 text-[13.5px] text-text-3">
-            {FORMAT_LABEL[s.record_format]} uses OBS&apos;s own recording helper, so OBS needs to
-            stay installed.
-          </p>
-        )}
       </div>
     </>
   )

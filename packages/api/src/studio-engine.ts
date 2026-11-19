@@ -431,7 +431,8 @@ export interface EngineStreamStats {
 }
 
 /** How the Studio streams, records and runs (every field has a default). */
-/** Recording formats: crash-safe MP4 and MOV, fragmented ones, and MKV, FLV and TS. */
+/** Recording formats a profile may hold (OBS's list). Ferrocore writes three of them, see
+ * `writtenFormat`; the rest are only read from profiles saved before. */
 export const ENGINE_RECORD_FORMATS = [
   'mp4',
   'mov',
@@ -443,6 +444,18 @@ export const ENGINE_RECORD_FORMATS = [
   'hls',
 ] as const
 export type EngineRecordFormat = (typeof ENGINE_RECORD_FORMATS)[number]
+
+/** The formats Ferrocore writes: crash-safe MP4, the same as MOV, and MKV. */
+export const WRITTEN_RECORD_FORMATS = ['mp4', 'mov', 'mkv'] as const
+export type WrittenRecordFormat = (typeof WRITTEN_RECORD_FORMATS)[number]
+
+/** The file Ferrocore writes for a saved format (the engine's `RecordPlan::extension`):
+ * fragmented MP4 and MOV need no fragments, FLV, MPEG-TS and HLS become MKV. */
+export function writtenFormat(f: string | null | undefined): WrittenRecordFormat {
+  if (f === 'mov' || f === 'fmov') return 'mov'
+  if (f === 'mkv' || f === 'flv' || f === 'ts' || f === 'hls') return 'mkv'
+  return 'mp4'
+}
 
 /** How the last remux went. */
 /** A file a source, filter or transition uses that isn't on this computer. */
