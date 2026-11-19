@@ -1,7 +1,16 @@
 // What every part of the Studio shares: the engine's API, the scene being shown and its
 // sources and sounds, and the friendly names and icons for OBS's kinds of source and filter.
 
-import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import {
   AppWindow,
   ArrowsInLineVertical,
@@ -147,7 +156,33 @@ export interface Desk {
   openSettings: (page?: string) => void
 }
 
+export interface DeskStatsStore {
+  get: () => EngineStats | null
+  set: (next: EngineStats | null) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+export function createDeskStatsStore(): DeskStatsStore {
+  let current: EngineStats | null = null
+  const listeners = new Set<() => void>()
+  return {
+    get: () => current,
+    set: (next) => {
+      if (current === next) return
+      current = next
+      for (const l of listeners) l()
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+  }
+}
+
 const Ctx = createContext<Desk | null>(null)
+const StatsCtx = createContext<DeskStatsStore | null>(null)
 
 /**
  * Where the Studio's bar (Record, Go live, the tools) is drawn: the page header's own row
@@ -156,14 +191,67 @@ const Ctx = createContext<Desk | null>(null)
  */
 export const BarSlot = createContext<HTMLElement | null>(null)
 
-export function DeskProvider({ value, children }: { value: Desk; children: ReactNode }) {
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+export function DeskProvider({
+  value,
+  statsStore,
+  children,
+}: {
+  value: Desk
+  statsStore?: DeskStatsStore
+  children: ReactNode
+}) {
+  const inner = <Ctx.Provider value={value}>{children}</Ctx.Provider>
+  return statsStore ? <StatsCtx.Provider value={statsStore}>{inner}</StatsCtx.Provider> : inner
 }
 
 export function useDesk(): Desk {
   const d = useContext(Ctx)
   if (!d) throw new Error('useDesk outside the Studio')
   return d
+}
+
+const noopSubscribe = () => () => {}
+
+export function useDeskStats(): EngineStats | null
+export function useDeskStats<T>(
+  select: (s: EngineStats | null) => T,
+  isEqual?: (a: T, b: T) => boolean,
+): T
+export function useDeskStats<T = EngineStats | null>(
+  select?: (s: EngineStats | null) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+): T | EngineStats | null {
+  const store = useContext(StatsCtx)
+  const desk = useContext(Ctx)
+  const cache = useRef<{ has: boolean; raw: EngineStats | null; val: T } | null>(null)
+
+  const getSnap = useCallback((): T | EngineStats | null => {
+    const raw = store ? store.get() : (desk?.stats ?? null)
+    if (!select) return raw
+    const prev = cache.current
+    if (prev && prev.has && prev.raw === raw) return prev.val
+    const next = select(raw)
+    if (prev && prev.has && isEqual(prev.val, next)) {
+      prev.raw = raw
+      return prev.val
+    }
+    cache.current = { has: true, raw, val: next }
+    return next
+  }, [store, desk?.stats, select, isEqual])
+
+  return useSyncExternalStore(store ? store.subscribe : noopSubscribe, getSnap, getSnap)
+}
+
+export function useSetDeskStats(): (next: EngineStats) => void {
+  const store = useContext(StatsCtx)
+  const desk = useContext(Ctx)
+  return useCallback(
+    (next: EngineStats) => {
+      if (store) store.set(next)
+      else desk?.setStats(next)
+    },
+    [store, desk],
+  )
 }
 
 /** One entry in "Add a source": a friendly name for an OBS kind (macOS or Windows id). */

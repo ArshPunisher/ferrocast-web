@@ -75,7 +75,9 @@ export function VstForm({
       }
     }
     void look()
-    const t = setInterval(() => void look(), 2000)
+    const t = setInterval(() => {
+      if (!document.hidden) void look()
+    }, 2000)
     return () => {
       gone = true
       clearInterval(t)

@@ -3,7 +3,7 @@
 // fit it, open its settings or remove it; right-click for everything else OBS's menu has
 // (transform, order, blending, copy, filters, rename).
 
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -64,7 +64,7 @@ import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os, shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
-import { KindGlyph, useDesk } from './common'
+import { KindGlyph, useDesk, useDeskStats } from './common'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 import { addsToPick } from './stage-edit'
@@ -130,8 +130,21 @@ const quiet = 'fc-quiet'
 
 export function SourcesDock() {
   const desk = useDesk()
+  const { recordsKey, virtualcam } = useDeskStats(
+    (s) => ({
+      recordsKey: (s?.source_records ?? []).map((r) => r.name).join('\n'),
+      virtualcam: s?.virtualcam ?? null,
+    }),
+    (a, b) =>
+      a.recordsKey === b.recordsKey &&
+      a.virtualcam?.active === b.virtualcam?.active &&
+      a.virtualcam?.source === b.virtualcam?.source,
+  )
   // Sources recording on their own get a red dot in their row (owner, 12 Nov).
-  const recordsAlone = new Set((desk.stats?.source_records ?? []).map((r) => r.name))
+  const recordsAlone = useMemo(
+    () => new Set(recordsKey ? recordsKey.split('\n') : []),
+    [recordsKey],
+  )
   const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
   const { also, pickMore } = desk
   const { busy, run } = useAction()
@@ -305,7 +318,7 @@ export function SourcesDock() {
       { success: (r) => r?.restart ?? 'The canvas now matches this source.' },
     ).then((r) => r && refresh())
   const itemMenu = (item: EngineItem): MenuItem[] => {
-    const recordingAlone = !!desk.stats?.source_records?.some((r) => r.name === item.name)
+    const recordingAlone = recordsAlone.has(item.name)
     return itemMenuWith(item, recordingAlone)
   }
   const itemMenuWith = (item: EngineItem, recordingAlone: boolean): MenuItem[] => [
@@ -525,11 +538,9 @@ export function SourcesDock() {
           {
             label: 'Virtual camera',
             icon: VideoCamera,
-            checked:
-              desk.stats?.virtualcam?.active === true && desk.stats.virtualcam.source === item.name,
+            checked: virtualcam?.active === true && virtualcam.source === item.name,
             onSelect: () => {
-              const cam = desk.stats?.virtualcam
-              const showing = !!cam?.active && cam.source === item.name
+              const showing = !!virtualcam?.active && virtualcam.source === item.name
               void run(
                 'virtualcam',
                 () => api.virtualCamera(!showing, showing ? undefined : item.name),
@@ -662,10 +673,10 @@ export function SourcesDock() {
       },
     ]
   }
-  // The preview's right-click opens these same menus (registered on every render, so it
-  // always sees the current list and pick).
+  // The preview's right-click opens these same menus via a stable indirection ref.
+  const menuTargetRef = useRef<(e: React.MouseEvent, id: number | null) => void>(() => {})
   useEffect(() => {
-    desk.itemMenu.current = (e, id) => {
+    menuTargetRef.current = (e, id) => {
       const item = id === null ? null : flat.find((i) => i.id === id)
       if (!item) return open(e, `Sources in ${scene}`, emptyMenu)
       const many = [selected, ...also].filter((x): x is number => x !== null)
@@ -678,7 +689,12 @@ export function SourcesDock() {
       open(e, item.name, itemMenu(item))
     }
   })
-  useEffect(() => () => void (desk.itemMenu.current = null), [desk.itemMenu])
+  useEffect(() => {
+    desk.itemMenu.current = (e, id) => menuTargetRef.current(e, id)
+    return () => {
+      desk.itemMenu.current = null
+    }
+  }, [desk.itemMenu])
   const emptyMenu: MenuItem[] = [
     { label: 'Add a source', icon: Plus, onSelect: () => setAdding('') },
     {

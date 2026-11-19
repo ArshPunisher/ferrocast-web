@@ -26,7 +26,9 @@ export function GuestInvites() {
   const list = useResource(() => api.guests(), [api])
   const { reload } = list
   useEffect(() => {
-    const t = setInterval(reload, POLL_MS)
+    const t = setInterval(() => {
+      if (!document.hidden) reload()
+    }, POLL_MS)
     return () => clearInterval(t)
   }, [reload])
 

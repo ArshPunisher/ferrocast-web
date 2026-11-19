@@ -36,6 +36,8 @@ import {
   describeError,
   goingTo,
   onCanvas,
+  type EngineItem,
+  type EngineScenes,
   type EngineStats,
   type GoLiveView,
   type StreamInfo,
@@ -55,7 +57,19 @@ import { useShow } from '../show'
 import { styleOf } from '../show-style'
 import { AddSourceDialog } from './add-source'
 import { FileDrop } from './file-drop'
-import { BarSlot, DeskProvider, useDesk, useEngine, type Desk, type DrawerTab } from './common'
+import {
+  BarSlot,
+  DeskProvider,
+  createDeskStatsStore,
+  useDesk,
+  useDeskStats,
+  useEngine,
+  useSetDeskStats,
+  type Desk,
+  type DeskStatsStore,
+  type DrawerTab,
+  type EngineApi,
+} from './common'
 import { GoLiveDock } from './golive-dock'
 import {
   BUILT_INS,
@@ -118,7 +132,9 @@ export function StudioDesk({
   const reloadStatus = status.reload
   useEffect(() => {
     if (!off) return
-    const t = setInterval(reloadStatus, 3000)
+    const t = setInterval(() => {
+      if (!document.hidden) reloadStatus()
+    }, 3000)
     return () => clearInterval(t)
   }, [off, reloadStatus])
   if (status.error && !s) return <LoadError error={status.error} onRetry={status.reload} />
@@ -138,6 +154,96 @@ export function StudioDesk({
       {ready && <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} />}
     </>
   )
+}
+
+function itemsSame(a: EngineItem[] | null | undefined, b: EngineItem[]): boolean {
+  if (!a || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!
+    const y = b[i]!
+    if (
+      x.id !== y.id ||
+      x.name !== y.name ||
+      x.visible !== y.visible ||
+      x.locked !== y.locked ||
+      x.blend !== y.blend ||
+      x.scale_filter !== y.scale_filter ||
+      x.srgb_off !== y.srgb_off ||
+      x.frame?.[0] !== y.frame?.[0] ||
+      x.frame?.[1] !== y.frame?.[1] ||
+      x.frame?.[2] !== y.frame?.[2] ||
+      x.frame?.[3] !== y.frame?.[3] ||
+      x.frame?.[4] !== y.frame?.[4] ||
+      x.frame?.[5] !== y.frame?.[5] ||
+      !itemsSame(x.children, y.children)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function scenesSame(a: EngineScenes | null | undefined, b: EngineScenes): boolean {
+  if (!a) return false
+  if (
+    a.current !== b.current ||
+    a.preview !== b.preview ||
+    a.scenes.length !== b.scenes.length ||
+    a.vertical?.current !== b.vertical?.current ||
+    (a.vertical?.scenes.length ?? 0) !== (b.vertical?.scenes.length ?? 0)
+  ) {
+    return false
+  }
+  for (let i = 0; i < a.scenes.length; i++) {
+    const x = a.scenes[i]!
+    const y = b.scenes[i]!
+    if (
+      x.name !== y.name ||
+      x.items !== y.items ||
+      x.current !== y.current ||
+      x.preview !== y.preview ||
+      x.transition?.kind !== y.transition?.kind ||
+      x.transition?.ms !== y.transition?.ms
+    ) {
+      return false
+    }
+  }
+  const va = a.vertical?.scenes ?? []
+  const vb = b.vertical?.scenes ?? []
+  for (let i = 0; i < va.length; i++) {
+    const x = va[i]!
+    const y = vb[i]!
+    if (x.name !== y.name || x.items !== y.items || x.current !== y.current) return false
+  }
+  return true
+}
+
+/**
+ * Isolated 1s stats reader: pushes live telemetry into `statsStore` so the Desk workspace and
+ * dock panels don't re-render on CPU/FPS/byte counters every second.
+ */
+function DeskStatsSync({
+  api,
+  shownOnAir,
+  statsStore,
+  onSceneMismatch,
+  onCanvasSize,
+}: {
+  api: EngineApi
+  shownOnAir: string | undefined
+  statsStore: DeskStatsStore
+  onSceneMismatch: () => void
+  onCanvasSize: (w: number, h: number) => void
+}) {
+  const reading = useEngineReading(api.stats)
+  const s = reading.stats
+  useEffect(() => {
+    if (!s) return
+    statsStore.set(s)
+    onCanvasSize(s.canvas.width, s.canvas.height)
+    if (s.scene && shownOnAir && s.scene !== shownOnAir) onSceneMismatch()
+  }, [s, statsStore, onCanvasSize, shownOnAir, onSceneMismatch])
+  return null
 }
 
 function Running({
@@ -215,13 +321,13 @@ function Running({
   }, [edit])
   const itemMenu = useRef<((e: React.MouseEvent, id: number | null) => void) | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
-  const [stats, setStats] = useState<EngineStats | null>(null)
-  // The engine's stats, read once a second for the whole window (the status bar along the
-  // bottom reads the same); actions here update them at once, the next read takes over.
-  const reading = useEngineReading(api.stats)
-  useEffect(() => {
-    if (reading.stats) setStats(reading.stats)
-  }, [reading.stats])
+  const [statsStore] = useState(createDeskStatsStore)
+  const [mainCanvas, setMainCanvas] = useState<{ width: number; height: number } | null>(null)
+  const handleCanvasSize = useCallback((width: number, height: number) => {
+    setMainCanvas((prev) =>
+      prev && prev.width === width && prev.height === height ? prev : { width, height },
+    )
+  }, [])
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
@@ -236,31 +342,33 @@ function Running({
   )
   const [library, setLibrary] = useState(0)
   const [transformClip, setTransformClip] = useState<Desk['transformClip']>(null)
-  // A source can change size by itself (a captured window resized): its frame is read again
-  // every second, so the handles the page grabs are where the picture draws them (owner's
-  // recording, 29 Oct: a handle under the cursor that wouldn't drag). Only a change re-renders.
+  // A source can change size by itself (a captured window resized): its frame is read again while
+  // visible so handles match what is drawn; single-flight & cheap equality skip idle churn.
   const setItems = items.set
   const itemsNow = useRef(items.data)
   itemsNow.current = items.data
   useEffect(() => {
     if (!scene) return
-    // Not while a button is held: a read sent before a drag's last move would land after it
-    // and put the frame back for a moment.
     let held = false
+    let busy = false
     const down = () => (held = true)
     const up = () => (held = false)
     window.addEventListener('pointerdown', down, true)
     window.addEventListener('pointerup', up, true)
     window.addEventListener('pointercancel', up, true)
     const t = setInterval(() => {
-      if (document.hidden || held) return
+      if (document.hidden || held || busy) return
+      busy = true
       void api
         .items(scene)
         .then((v) => {
-          if (!held && JSON.stringify(v) !== JSON.stringify(itemsNow.current)) setItems(v)
+          if (!held && !itemsSame(itemsNow.current, v)) setItems(v)
         })
-        .then(undefined, () => undefined)
-    }, 1000)
+        .catch(() => undefined)
+        .finally(() => {
+          busy = false
+        })
+    }, 2500)
     return () => {
       clearInterval(t)
       window.removeEventListener('pointerdown', down, true)
@@ -303,14 +411,6 @@ function Running({
     return () => window.removeEventListener('keydown', onKey)
   }, [api, refresh, runUndo])
   // A switch made elsewhere (a shortcut, a click in a multiview) shows up in the stats first.
-  const onAir = stats?.scene
-  const shownOnAir = scenes.data?.current
-  useEffect(() => {
-    if (onAir && shownOnAir && onAir !== shownOnAir) refresh()
-  }, [onAir, shownOnAir, refresh])
-  // Scenes made, renamed or switched elsewhere (the API, an automation, a Stream Deck, the
-  // vertical picture, whose switches aren't in the stats) show within a few seconds.
-  // Only a real change is set, so the desk isn't drawn again every few seconds.
   const setScenes = scenes.set
   const shownScenes = useRef(scenes.data)
   shownScenes.current = scenes.data
@@ -318,71 +418,125 @@ function Running({
   // newer one would put older scenes back: review).
   const polls = useRef(0)
   useEffect(() => {
+    let busy = false
     const t = setInterval(() => {
-      if (document.hidden) return
+      if (document.hidden || busy) return
+      busy = true
       const at = scenesRead.current
       const n = ++polls.current
-      api.scenes().then(
-        (v) => {
-          // A change made here meanwhile (a rename, a delete) is newer than this answer.
-          if (at !== scenesRead.current || n !== polls.current) return
-          if (JSON.stringify(v) !== JSON.stringify(shownScenes.current)) setScenes(v)
-        },
-        () => undefined,
-      )
+      api
+        .scenes()
+        .then(
+          (v) => {
+            // A change made here meanwhile (a rename, a delete) is newer than this answer.
+            if (at !== scenesRead.current || n !== polls.current) return
+            if (!scenesSame(shownScenes.current, v)) setScenes(v)
+          },
+          () => undefined,
+        )
+        .finally(() => {
+          busy = false
+        })
     }, 3000)
     return () => clearInterval(t)
   }, [api, setScenes])
-  const size =
-    canvas === 'vertical' && vertical
-      ? { width: vertical.width, height: vertical.height }
-      : (stats?.canvas ?? null)
+  const size = useMemo(
+    () =>
+      canvas === 'vertical' && vertical
+        ? { width: vertical.width, height: vertical.height }
+        : mainCanvas,
+    [canvas, vertical, mainCanvas],
+  )
   // Made once per scenes answer, so panels that compute from them don't redo it every render.
   const wide = useMemo(() => scenes.data?.scenes ?? [], [scenes.data])
   const tallScenes = useMemo(() => scenes.data?.vertical?.scenes ?? [], [scenes.data])
   const allScenes = useMemo(() => [...wide, ...tallScenes], [wide, tallScenes])
-  const desk: Desk = {
-    api,
-    scenes,
-    scene,
-    canvas,
-    setCanvas,
-    size,
-    pictureScenes: canvas === 'vertical' ? tallScenes : wide,
-    pictureCurrent:
-      (canvas === 'vertical' ? scenes.data?.vertical?.current : scenes.data?.current) ?? '',
-    allScenes,
-    items,
-    audio,
-    kinds,
-    prefs,
-    refresh,
-    undone,
-    selected,
-    select,
-    also: picked.also,
-    pickMore,
-    itemMenu,
-    editing,
-    edit,
-    editTab,
-    adding,
-    setAdding,
-    stats,
-    setStats,
-    clip,
-    setClip,
-    filterClip,
-    setFilterClip,
-    screens,
-    transforming,
-    setTransforming,
-    library,
-    bumpLibrary: () => setLibrary((n) => n + 1),
-    transformClip,
-    setTransformClip,
-    openSettings: (page) => setSettingsAt((page as Page | undefined) ?? 'stream'),
-  }
+  const pictureScenes = canvas === 'vertical' ? tallScenes : wide
+  const pictureCurrent =
+    (canvas === 'vertical' ? scenes.data?.vertical?.current : scenes.data?.current) ?? ''
+  const bumpLibrary = useCallback(() => setLibrary((n) => n + 1), [])
+  const openSettings = useCallback(
+    (page?: string) => setSettingsAt((page as Page | undefined) ?? 'stream'),
+    [],
+  )
+  const desk: Desk = useMemo(
+    () => ({
+      api,
+      scenes,
+      scene,
+      canvas,
+      setCanvas,
+      size,
+      pictureScenes,
+      pictureCurrent,
+      allScenes,
+      items,
+      audio,
+      kinds,
+      prefs,
+      refresh,
+      undone,
+      selected,
+      select,
+      also: picked.also,
+      pickMore,
+      itemMenu,
+      editing,
+      edit,
+      editTab,
+      adding,
+      setAdding,
+      stats: null,
+      setStats: statsStore.set,
+      clip,
+      setClip,
+      filterClip,
+      setFilterClip,
+      screens,
+      transforming,
+      setTransforming,
+      library,
+      bumpLibrary,
+      transformClip,
+      setTransformClip,
+      openSettings,
+    }),
+    [
+      api,
+      scenes,
+      scene,
+      canvas,
+      setCanvas,
+      size,
+      pictureScenes,
+      pictureCurrent,
+      allScenes,
+      items,
+      audio,
+      kinds,
+      prefs,
+      refresh,
+      undone,
+      selected,
+      select,
+      picked.also,
+      pickMore,
+      editing,
+      edit,
+      editTab,
+      adding,
+      statsStore.set,
+      clip,
+      filterClip,
+      screens,
+      transforming,
+      setTransforming,
+      library,
+      bumpLibrary,
+      transformClip,
+      openSettings,
+    ],
+  )
   const docks = (id: DockId): React.ReactNode => {
     if (isWeb(id)) return <WebDockSlot id={id} />
     return {
@@ -395,7 +549,14 @@ function Running({
     }[id]
   }
   return (
-    <DeskProvider value={desk}>
+    <DeskProvider value={desk} statsStore={statsStore}>
+      <DeskStatsSync
+        api={api}
+        shownOnAir={scenes.data?.current}
+        statsStore={statsStore}
+        onSceneMismatch={refresh}
+        onCanvasSize={handleCanvasSize}
+      />
       <DockWorkspace
         top={
           <>
@@ -487,7 +648,9 @@ function ControlBar({
   onStatus: (s: StudioEngineStatus) => void
 }) {
   const api = useEngine()
-  const { stats, setStats, openSettings, prefs } = useDesk()
+  const { openSettings, prefs } = useDesk()
+  const stats = useDeskStats()
+  const setStats = useSetDeskStats()
   const { busy, run } = useAction()
   // Windows: whether its camera for every app (Windows 11) can be, and is, set up.
   const camSetup = useResource(
@@ -928,13 +1091,15 @@ const TOOL =
 export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void }) {
   const api = useEngine()
   const { layout, setLayout } = useLayout()
-  const { stats } = useDesk()
+  const asked = useDeskStats(
+    (s) => turnOffAsk(s),
+    (a, b) => a?.title === b?.title && a?.text === b?.text && a?.keep === b?.keep,
+  )
   const [open, setOpen] = useState(false)
   // Turning the Studio off while live or recording asks first (it ends both for good).
   const [asking, setAsking] = useState(false)
   const [stopping, setStopping] = useState(false)
   const turningOff = useRef(false)
-  const asked = turnOffAsk(stats)
   const [addingWeb, setAddingWeb] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)

@@ -45,7 +45,7 @@ import { inDesktopApp } from '../../../lib/external'
 import { shortcut } from '../../../lib/os'
 import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-input'
 import { done, useAction, useResource } from '../../../lib/hooks'
-import { useDesk, useEngine } from './common'
+import { useDesk, useDeskStats, useEngine } from './common'
 import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OptionsForm } from './options'
 import {
@@ -412,9 +412,13 @@ export function PreviewBox({ running }: { running: boolean }) {
         program = program && { ...program, shade: 0.62 }
         tallRect = tallRect && { ...tallRect, shade: 0.62 }
       }
-      // While a menu or panel is open, follow it every frame: one sliding in or away changes
-      // no attribute the observers below see.
-      if (document.querySelector(OVER)) schedule()
+      // While an overlay menu or floating panel is animating, follow it smoothly; stop at rest
+      // instead of spinning at 60 fps while idle.
+      if (
+        document.querySelector(OVER) &&
+        document.getAnimations().some((a) => a.playState === 'running')
+      )
+        schedule()
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, tallRect, window.innerHeight])
       still = [rect, program, tallRect]
@@ -473,7 +477,7 @@ export function PreviewBox({ running }: { running: boolean }) {
     // A moved stage that changed no size and fired nothing above (a panel landing elsewhere,
     // a bar above it growing) would leave the picture where it was, over the panels (owner,
     // 29 Oct): looked at again now and then. Unchanged, nothing is sent.
-    const watch = window.setInterval(schedule, 400)
+    const watch = window.setInterval(() => !document.hidden && schedule(), 500)
     // While a panel is dragged the live picture can't stay (the drop zones are drawn over the
     // stage): a still of it shows in its place, as for a window resize, rather than a grey box
     // (owner's recording, 29 Oct). The live one comes back where the stage ends up.
@@ -1597,11 +1601,18 @@ function ViewControls() {
 }
 
 export function StageBar() {
-  const { api, scenes, scene, kinds, stats, openSettings, screens, refresh, size } = useDesk()
-  const c = stats?.canvas
+  const { api, scenes, scene, kinds, openSettings, screens, refresh, size } = useDesk()
+  const { c, history } = useDeskStats(
+    (s) => ({ c: s?.canvas ?? null, history: s?.history ?? null }),
+    (a, b) =>
+      a.c?.width === b.c?.width &&
+      a.c?.height === b.c?.height &&
+      a.c?.fps === b.c?.fps &&
+      a.history?.undo === b.history?.undo &&
+      a.history?.redo === b.history?.redo,
+  )
   const { run } = useAction()
   const { open, menu } = useContextMenu()
-  const history = stats?.history
   const step = (redo: boolean) =>
     void run('undo', () => (redo ? api.redo() : api.undo()), {
       success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),

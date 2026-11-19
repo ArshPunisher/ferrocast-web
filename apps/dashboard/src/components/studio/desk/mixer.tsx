@@ -43,28 +43,73 @@ const SCALE = [-60, -50, -40, -30, -20, -10, 0]
 const ZONES =
   'linear-gradient(var(--dir),var(--fc-ok) 0 66.6%,var(--fc-warn) 66.6% 85%,var(--fc-danger) 85% 100%)'
 
-/** Live levels for these sounds, read about ten times a second while shown. */
+function qDb(v: number | undefined): number {
+  if (v === undefined || v <= -60) return -100
+  return Math.round(v * 2) / 2
+}
+
+function levelsSame(a: Record<string, EngineLevel>, b: Record<string, EngineLevel>): boolean {
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+  if (keysA.length !== keysB.length) return false
+  for (const k of keysA) {
+    const la = a[k]
+    const lb = b[k]
+    if (!la || !lb) return false
+    if (
+      qDb(la.peak[0]) !== qDb(lb.peak[0]) ||
+      qDb(la.peak[1]) !== qDb(lb.peak[1]) ||
+      qDb(la.magnitude[0]) !== qDb(lb.magnitude[0]) ||
+      qDb(la.magnitude[1]) !== qDb(lb.magnitude[1]) ||
+      qDb(la.input_peak?.[0]) !== qDb(lb.input_peak?.[0]) ||
+      qDb(la.input_peak?.[1]) !== qDb(lb.input_peak?.[1])
+    )
+      return false
+  }
+  return true
+}
+
+/** Live levels for these sounds while shown; pauses off-tab and ignores sub-0.5 dB noise ticks. */
 export function useLevels(api: EngineApi, names: string[]): Record<string, EngineLevel> {
   const [levels, setLevels] = useState<Record<string, EngineLevel>>({})
   const key = names.join('\n')
+  const prevRef = useRef<Record<string, EngineLevel>>({})
   useEffect(() => {
     if (!key) return
     let alive = true
     let timer = 0
+    let busy = false
     const list = key.split('\n')
+    const scheduleNext = () => {
+      if (!alive || document.hidden) return
+      timer = window.setTimeout(() => void tick(), 150)
+    }
     const tick = async () => {
+      if (!alive || document.hidden || busy) return
+      busy = true
       try {
         const v = await api.levels(list)
-        if (alive) setLevels(v)
+        if (alive && !levelsSame(prevRef.current, v)) {
+          prevRef.current = v
+          setLevels(v)
+        }
       } catch {
         // Stopped or busy: the next tick tries again.
+      } finally {
+        busy = false
+        scheduleNext()
       }
-      if (alive) timer = window.setTimeout(() => void tick(), 100)
     }
-    void tick()
+    const onVisible = () => {
+      clearTimeout(timer)
+      if (!document.hidden && alive) void tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    if (!document.hidden) void tick()
     return () => {
       alive = false
       clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [api, key])
   return levels
@@ -266,29 +311,41 @@ export function Meter({
       <div
         key={i}
         className={cx(
-          'relative overflow-hidden rounded-full',
+          'relative overflow-hidden rounded-full bg-inset',
           vertical ? 'h-full w-[7px]' : tall ? 'h-[8px]' : 'h-[6px]',
         )}
         style={{ ['--dir' as string]: vertical ? '0deg' : '90deg' }}
       >
-        <div aria-hidden className="absolute inset-0 opacity-20" style={{ background: ZONES }} />
+        {/* GPU-composited meter: gradient sits static, cover mask translates on compositor (0 layouts). */}
         <div
           aria-hidden
-          className={cx(
-            'absolute inset-0 transition-[clip-path] duration-75 motion-reduce:transition-none',
-            muted && 'opacity-40 grayscale',
-          )}
+          className={cx('absolute inset-0', muted && 'opacity-40 grayscale')}
+          style={{ background: ZONES }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-inset/80 will-change-transform transition-transform duration-75 motion-reduce:transition-none"
           style={{
-            background: ZONES,
-            clipPath: vertical ? `inset(${100 - pct}% 0 0 0)` : `inset(0 ${100 - pct}% 0 0)`,
+            transform: vertical ? `translate3d(0, ${-pct}%, 0)` : `translate3d(${pct}%, 0, 0)`,
           }}
         />
         {held > 0 && (
           <div
             aria-hidden
-            className={cx('absolute bg-text', vertical ? 'inset-x-0 h-[2px]' : 'inset-y-0 w-[2px]')}
-            style={vertical ? { bottom: `${held}%` } : { left: `calc(${held}% - 2px)` }}
-          />
+            className="pointer-events-none absolute inset-0 will-change-transform"
+            style={{
+              transform: vertical
+                ? `translate3d(0, ${100 - held}%, 0)`
+                : `translate3d(${held - 100}%, 0, 0)`,
+            }}
+          >
+            <span
+              className={cx(
+                'absolute bg-text',
+                vertical ? 'inset-x-0 top-0 h-[2px]' : 'inset-y-0 right-0 w-[2px]',
+              )}
+            />
+          </div>
         )}
       </div>
     )

@@ -141,7 +141,9 @@ export function GoLiveTab() {
   // While live, OBS's side (Aitum Multistream's outputs) is read again every 15 s.
   useEffect(() => {
     if (!live) return
-    const t = setInterval(reload, 15_000)
+    const t = setInterval(() => {
+      if (!document.hidden) reload()
+    }, 15_000)
     return () => clearInterval(t)
   }, [live, reload])
   if (res.error && !view) return <LoadError error={res.error} onRetry={res.reload} />
