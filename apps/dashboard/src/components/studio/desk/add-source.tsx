@@ -827,10 +827,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       {dev && !noDevices && (
         <div role="group" aria-labelledby="add-pick-one" className="flex flex-col gap-2.5">
           <div className="mb-1 flex items-center gap-2">
-            <h4
-              id="add-pick-one"
-              className="m-0 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase"
-            >
+            <h4 id="add-pick-one" className="m-0 text-[13px] font-bold text-text-2">
               Pick one
             </h4>
             <span className="flex-1" />
@@ -968,7 +965,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void addExisting(r.name)}
-                  className="flex items-center gap-3 rounded-[6px] border border-line bg-surface-2 px-2.5 py-2 text-left hover:border-line-strong active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-control border border-line bg-surface-2 px-2.5 py-2 text-left hover:border-line-strong active:scale-[0.98]"
                 >
                   {isScene ? (
                     <KindTile kind="scene" size={34} />
@@ -1004,7 +1001,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         </>
       )}
       {!isScene && !c.entry.overlays && (
-        <div className="sticky bottom-0 z-10 -mx-1 mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-1 px-1 pt-3 pb-1">
+        <div className="sticky bottom-0 z-10 -mx-1 mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-1 px-1 pt-3 pb-2">
           {sound ? (
             <div>
               <Switch

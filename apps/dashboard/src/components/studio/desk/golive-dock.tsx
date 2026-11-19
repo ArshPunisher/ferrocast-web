@@ -166,18 +166,18 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             )}
             {/* Shown whatever the wide list holds: the Vertical tab sends people here. */}
             <section aria-label="Vertical platforms">
-              <h3 className="m-0 flex items-center gap-1.5 border-b border-line px-3 pt-2 pb-1.5 text-[11px] font-extrabold tracking-[0.06em] text-text-3 uppercase">
+              <h3 className="m-0 flex items-center gap-1.5 border-b border-line px-3 pt-2 pb-1.5 text-[12px] font-bold text-text-2">
                 <DeviceMobile size={14} weight="bold" aria-hidden />
                 Vertical
-                <span className="ml-auto font-semibold tracking-normal normal-case">
-                  {hasPicture ? 'the vertical picture' : 'add it: Vertical, under the picture'}
+                <span className="ml-auto font-semibold text-text-2">
+                  {hasPicture ? 'On vertical picture' : 'Under picture'}
                 </span>
               </h3>
               {tall.length > 0 && <ul className="flex flex-col">{tall.map(row)}</ul>}
               <button
                 type="button"
                 onClick={() => setManaging('vertical')}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-semibold text-text-3 hover:text-text"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-semibold text-text-2 hover:text-text"
               >
                 <Plus size={14} weight="bold" aria-hidden />
                 Add a vertical destination

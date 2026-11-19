@@ -621,7 +621,7 @@ export function DockWorkspace({
           {shown.length > 1 && (
             <Segmented
               label="Panel"
-              className="mx-3 my-3 max-w-full overflow-x-auto"
+              className="mx-3 my-2.5 max-w-[calc(100%-24px)] flex-wrap"
               value={cur}
               options={shown.map((d) => ({ value: d, label: dockName(layout, d) }))}
               onChange={(d) => setLayout((l) => ({ ...l, mob: d }))}

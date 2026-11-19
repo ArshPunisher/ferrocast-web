@@ -904,7 +904,7 @@ function ControlBar({
         <div
           role="group"
           aria-label="Studio tools"
-          className="flex h-8 items-stretch divide-x divide-line rounded-[6px] border border-line bg-surface-1"
+          className="flex h-8 items-stretch divide-x divide-line rounded-control border border-line bg-surface-1"
         >
           <button
             type="button"
@@ -958,7 +958,7 @@ function ControlBar({
         {recording && (
           <IconButton
             label="Chapter or a new file"
-            className="h-8! w-8! rounded-[6px]!"
+            className="h-8! w-8! rounded-control!"
             variant="ghost"
             onClick={recordMenu}
           >

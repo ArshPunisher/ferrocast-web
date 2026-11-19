@@ -261,7 +261,7 @@ export function LiveCard({
           </span>
         </div>
         <ul
-          className="overflow-hidden rounded-[12px] border border-line"
+          className="overflow-hidden rounded-panel border border-line"
           aria-label="Health per platform"
         >
           {shown.map((d) => {
@@ -504,7 +504,7 @@ export function Platforms({
     >
       <div className="flex flex-col gap-3">
         <ul
-          className="overflow-hidden rounded-[12px] border border-line"
+          className="overflow-hidden rounded-panel border border-line"
           aria-label="Platforms, top first"
         >
           {merged.map((d, i) => (
@@ -518,13 +518,13 @@ export function Platforms({
                 dragged.current = null
               }}
               className={cx(
-                'grid grid-cols-[22px_30px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-3 py-3 last:border-b-0',
+                'grid grid-cols-[18px_28px_minmax(0,1fr)_auto] items-center gap-2 border-b border-line px-2.5 py-3 last:border-b-0 sm:grid-cols-[22px_30px_minmax(0,1fr)_auto] sm:gap-3 sm:px-3',
                 d.enabled ? 'bg-surface-1' : 'bg-surface-2',
               )}
             >
               <button
                 type="button"
-                className="grid cursor-grab place-items-center rounded-[6px] text-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="grid cursor-grab place-items-center rounded-[calc(var(--fc-radius-control)-2px)] text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                 aria-label={`Move ${d.name}: arrow up or down`}
                 onKeyDown={onGripKey(i)}
               >
@@ -532,7 +532,7 @@ export function Platforms({
               </button>
               <Logo kind={d.kind} />
               <RowText d={d} />
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-3">
                 <span className="hidden text-right font-mono text-[13px] leading-tight text-text-2 sm:block">
                   {!d.enabled
                     ? ''
@@ -673,24 +673,33 @@ export function RowText({
       >
         {d.name}
       </b>
-      <span className={cx('block truncate text-text-3', compact ? 'text-[12px]' : 'text-[13.5px]')}>
+      <span
+        className={cx(
+          'flex min-w-0 items-center gap-1 text-text-2',
+          compact ? 'text-[12.5px]' : 'text-[13.5px]',
+        )}
+      >
         {d.kind === 'custom' ? (
-          d.direct ? (
-            <>
-              {d.account ?? 'Your own server'} · {DIRECT_NAMES[d.direct]} from the Studio
-            </>
-          ) : (
-            <>{d.account ?? 'Your own server'} · video only</>
-          )
-        ) : d.connected ? (
-          <span className="inline-flex items-center gap-1">
-            {d.account ?? platform} ·{' '}
-            {d.canvas === 'vertical' ? 'Ferrocast makes its stream' : `key from ${platform}`}
-            <LockSimple size={12} aria-label="kept safe" />
+          <span className="min-w-0 truncate">
+            {d.direct ? (
+              <>
+                {d.account ?? 'Your own server'} · {DIRECT_NAMES[d.direct]} from the Studio
+              </>
+            ) : (
+              <>{d.account ?? 'Your own server'} · video only</>
+            )}
           </span>
+        ) : d.connected ? (
+          <>
+            <span className="min-w-0 truncate">
+              {d.account ?? platform} ·{' '}
+              {d.canvas === 'vertical' ? 'Ferrocast makes its stream' : `key from ${platform}`}
+            </span>
+            <LockSimple size={12} className="shrink-0" aria-label="kept safe" />
+          </>
         ) : (
           // A plain link, not a pill: the tag looked heavy in the panel (owner, 28 Oct).
-          <span>
+          <span className="min-w-0 truncate">
             Not connected ·{' '}
             <a
               className="font-semibold text-accent-text underline-offset-2 hover:underline"
@@ -724,7 +733,16 @@ export function RowText({
           Sending for {d.backup_for}
         </span>
       )}
-      {d.blocked && <span className="block text-[13.5px] text-danger">{d.blocked}</span>}
+      {d.blocked && (
+        <span
+          className={cx(
+            'block text-[13.5px]',
+            d.enabled ? 'font-semibold text-danger' : 'font-medium text-warn',
+          )}
+        >
+          {d.blocked}
+        </span>
+      )}
       {d.rules.map((r) => {
         const kbps = fixBitrate ? askedKbps(r) : null
         return (
@@ -796,7 +814,7 @@ function Note({ children, warn }: { children: React.ReactNode; warn?: boolean })
   return (
     <p
       className={cx(
-        'm-0 flex items-start gap-2.5 rounded-[10px] border px-3 py-2.5 text-[14px] text-text-2',
+        'm-0 flex items-start gap-2.5 rounded-control border px-3 py-2.5 text-[14px] text-text-2',
         warn ? 'border-transparent bg-warn-soft' : 'border-line bg-surface-2',
       )}
     >
@@ -1085,7 +1103,7 @@ function AitumNote({ names, onOk }: { names: string[]; onOk: () => void }) {
   return (
     <section
       aria-label="Aitum Multistream"
-      className="flex flex-col gap-3 rounded-[14px] border border-warn/30 bg-warn-soft p-4 text-[14.5px] text-text-2"
+      className="flex flex-col gap-3 rounded-panel border border-warn/30 bg-warn-soft p-4 text-[14.5px] text-text-2"
     >
       <p className="m-0 flex gap-2.5">
         <Warning size={18} weight="fill" className="mt-0.5 shrink-0 text-warn" aria-hidden />
@@ -1327,8 +1345,8 @@ export function ByHand({ vertical = false }: { vertical?: boolean }) {
 
 function CopyRow({ label, value, onCopy }: { label: string; value: string; onCopy: () => void }) {
   return (
-    <div className="flex items-center gap-2 rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5">
-      <span className="w-20 shrink-0 text-[13px] text-text-3">{label}</span>
+    <div className="flex items-center gap-2 rounded-control border border-line bg-surface-2 px-2.5 py-1.5">
+      <span className="w-20 shrink-0 text-[13px] font-medium text-text-2">{label}</span>
       <code className="min-w-0 flex-1 truncate font-mono text-[13.5px] text-text">{value}</code>
       <IconButton label={`Copy ${label.toLowerCase()}`} size="sm" onClick={onCopy}>
         <Copy size={15} />
@@ -1372,7 +1390,7 @@ function Upload({ view, onUpload }: { view: GoLiveView; onUpload: (u: UploadChec
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[14.5px]">
               <thead>
-                <tr className="text-left font-mono text-[12px] text-text-3 [&>th]:border-b [&>th]:border-line [&>th]:px-2.5 [&>th]:py-2 [&>th]:font-semibold">
+                <tr className="text-left font-mono text-[12.5px] text-text-2 [&>th]:border-b [&>th]:border-line [&>th]:px-2.5 [&>th]:py-2 [&>th]:font-bold">
                   <th scope="col">Platform</th>
                   <th scope="col">Delay</th>
                   <th scope="col">Needs</th>

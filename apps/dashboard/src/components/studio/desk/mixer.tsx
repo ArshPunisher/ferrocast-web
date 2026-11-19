@@ -898,7 +898,7 @@ export function AudioDock() {
             ))}
           </div>
         ) : (
-          <div className="@container flex flex-col">
+          <div className="@container flex flex-col pb-2">
             {shown.map((a) => (
               <Row key={a.name} {...props(a)} />
             ))}

@@ -165,7 +165,7 @@ export function ScreenStill({
         <span
           title={errorMsg ?? 'Preview unavailable'}
           className={cx(
-            'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 bg-surface-inset/90 text-danger',
+            'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 bg-inset/90 text-danger',
             compact ? 'p-0.5' : 'px-2 text-center',
           )}
         >

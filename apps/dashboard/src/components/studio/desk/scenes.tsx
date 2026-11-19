@@ -411,7 +411,7 @@ export function ScenesDock() {
                     className={cx(
                       'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
                       grid
-                        ? 'grid gap-1 rounded-[10px] border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
+                        ? 'grid gap-1 rounded-control border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
                         : 'flex min-h-8 items-center gap-2.5 border-b border-line pr-2 pl-3 text-[13.5px] hover:bg-surface-2',
                       // What's picked: on air, or Studio Mode's preview being edited.
                       (studio ? s.preview : s.current) && 'fc-picked border-transparent',
@@ -428,7 +428,7 @@ export function ScenesDock() {
                             Arc and PREVIEW for Studio Mode's preview. */}
                         <span
                           className={cx(
-                            'relative block overflow-hidden rounded-[7px] bg-[#0a0b0d]',
+                            'relative block overflow-hidden rounded-[calc(var(--fc-radius-control)-3px)] bg-inset',
                             tall ? 'mx-auto aspect-[9/16] h-24' : 'aspect-video',
                             s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
                             s.preview &&
@@ -451,8 +451,8 @@ export function ScenesDock() {
                           {(s.current || s.preview) && (
                             <span
                               className={cx(
-                                'absolute top-1.5 left-1.5 rounded-[4px] px-1.5 py-[3px] font-mono text-[10px] leading-none font-extrabold tracking-[0.06em] text-white',
-                                s.current ? 'bg-[#d61f35]' : 'bg-[#0a6f8f]',
+                                'absolute top-1.5 left-1.5 rounded-[4px] px-1.5 py-[3px] font-mono text-[10px] leading-none font-extrabold tracking-[0.06em]',
+                                s.current ? 'bg-danger-fill text-white' : 'bg-pick text-on-pick',
                               )}
                             >
                               {s.current ? 'LIVE' : 'PREVIEW'}

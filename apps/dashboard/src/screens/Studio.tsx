@@ -92,7 +92,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         beside={
           <Segmented
             label="Studio section"
-            className="max-w-full overflow-x-auto"
+            className="max-w-full flex-wrap"
             value={
               section === 'engine' || (section === 'vertical' && !usesObs) ? 'golive' : section
             }

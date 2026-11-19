@@ -213,14 +213,14 @@ export function LibraryBar() {
               })
             }
             className={cx(
-              'fc-press inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-[6px] bg-surface-1 pr-2 pl-1.5 text-[13px] font-semibold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
+              'fc-press inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-control bg-surface-1 pr-2.5 pl-1.5 text-[13.5px] font-semibold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
               busy === `switch:${kind}` && 'opacity-60',
             )}
           >
             <span
               aria-hidden
               className={cx(
-                'grid size-5 shrink-0 place-items-center rounded-[5px]',
+                'grid size-5 shrink-0 place-items-center rounded-[calc(var(--fc-radius-control)-4px)]',
                 kind === 'collections'
                   ? 'bg-accent-soft text-accent-text'
                   : 'bg-teal-soft text-teal',
