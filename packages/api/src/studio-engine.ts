@@ -445,6 +445,18 @@ export const ENGINE_RECORD_FORMATS = [
 ] as const
 export type EngineRecordFormat = (typeof ENGINE_RECORD_FORMATS)[number]
 
+/** `GET /studio/engine/encode-budget`: Mpx a second the encoder does (a Mac's engines × one
+ * 4K60 each; null where unknown), what the stream and the recording would ask (0 when the
+ * recording shares the stream's encode), and the verdict. */
+export interface EncodeBudget {
+  budget_mpx: number | null
+  stream_mpx?: number
+  record_mpx?: number
+  shared?: boolean
+  why_not_shared?: string | null
+  level: 'ok' | 'limit' | 'over' | 'unknown'
+}
+
 /** The formats Ferrocore writes: crash-safe MP4, the same as MOV, and MKV. */
 export const WRITTEN_RECORD_FORMATS = ['mp4', 'mov', 'mkv'] as const
 export type WrittenRecordFormat = (typeof WRITTEN_RECORD_FORMATS)[number]
@@ -1097,6 +1109,8 @@ export function studioEngineApi(c: FerroClient) {
         filter,
       }),
     /** macOS's Screen Recording switch for Ferrocast (as it was when Ferrocast opened). */
+    /** What streaming and recording at once ask of this computer's video encoder (API.md). */
+    encodeBudget: () => c.request<EncodeBudget>('GET', '/api/v1/studio/engine/encode-budget'),
     screenAccess: () =>
       c.request<{ granted: boolean }>('GET', '/api/v1/studio/engine/screen-access'),
     /** Asks macOS again, forgetting what it said to an older Ferrocast. */
