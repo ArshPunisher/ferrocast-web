@@ -60,7 +60,9 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
   return (
     <ul
       aria-label="Connections"
-      className={cx('flex min-w-0 items-center', compact ? 'gap-1.5' : 'gap-1.5 overflow-x-auto')}
+      // Scrolls inside its own box at any size: on a phone the "Reconnecting" chip came out
+      // over the Panic button beside it (S19).
+      className="flex min-w-0 items-center gap-1.5 overflow-x-auto"
     >
       {ORDER.filter((name) => connectors[name] !== undefined && (name !== 'obs' || usesObs)).map(
         (name) => {
@@ -155,7 +157,11 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
         <li className="shrink-0" role="status">
           <span className="flex h-8 items-center gap-2 rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[14px] font-medium text-warn">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-warn" />
-            {socket === 'retrying' ? 'Reconnecting to Ferrocast…' : 'Connecting…'}
+            {socket === 'retrying'
+              ? compact
+                ? 'Reconnecting…'
+                : 'Reconnecting to Ferrocast…'
+              : 'Connecting…'}
           </span>
         </li>
       )}
