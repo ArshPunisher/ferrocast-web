@@ -158,7 +158,7 @@ function FixButton({
             }
             toast(
               r.restart
-                ? { tone: 'warn', message: fix.done, hint: r.restart }
+                ? { tone: 'warn', message: fix.done, hint: r.restart, detail: r.restart_detail }
                 : { tone: 'ok', message: fix.done },
             )
           })
@@ -210,6 +210,8 @@ export function StudioStatusBar() {
       ? {
           text: `${health.score < 50 ? 'Stream health is poor' : 'Stream health is shaky'}: ${health.reason}.`,
           tone: health.score < 50 ? 'text-danger' : 'text-warn',
+          // What to do about it, on hover: the bar keeps to one short line.
+          ...(health.detail ? { detail: health.detail } : {}),
         }
       : null
   const note = stream?.reconnecting
@@ -232,7 +234,7 @@ export function StudioStatusBar() {
     >
       <span
         aria-live="polite"
-        title={note?.text}
+        title={note && 'detail' in note && note.detail ? `${note.text} ${note.detail}` : note?.text}
         className={cx('flex min-w-0 flex-1 items-center truncate px-3 font-semibold', note?.tone)}
       >
         {note?.text}

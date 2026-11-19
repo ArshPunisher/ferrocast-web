@@ -547,6 +547,7 @@ function ControlBar({
           ? 'Ended, but not everything stopped.'
           : 'Live, but not everything started.',
         hint: v.also,
+        detail: v.also_detail,
       })
     if (v !== undefined) {
       resetUploadRate()

@@ -36,7 +36,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       if (!r) return
       toast(
         r.restart
-          ? { tone: 'warn', message: 'Optimized.', hint: r.restart }
+          ? { tone: 'warn', message: 'Optimized.', hint: r.restart, detail: r.restart_detail }
           : {
               tone: 'ok',
               message: live
@@ -74,6 +74,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               tone: 'warn',
               message: `Video bitrate set to ${kbps.toLocaleString()} kbps.`,
               hint: r.restart,
+              detail: r.restart_detail,
             }
           : { tone: 'ok', message: `Video bitrate set to ${kbps.toLocaleString()} kbps.` },
       )

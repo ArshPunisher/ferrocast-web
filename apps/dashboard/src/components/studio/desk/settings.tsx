@@ -108,7 +108,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
       setDraft(r.settings)
       toast(
         r.restart
-          ? { tone: 'warn', message: 'Saved.', hint: r.restart }
+          ? { tone: 'warn', message: 'Saved.', hint: r.restart, detail: r.restart_detail }
           : { tone: 'ok', message: 'Saved.' },
       )
       // Saved: done here (owner, 29 Oct). A failure keeps it open to fix.

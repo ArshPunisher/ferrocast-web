@@ -2352,12 +2352,14 @@ export class DemoEngine {
         ? {
             key: 'panic',
             level: 'warn',
-            message: 'Panic mode is on. Chat is locked down and alerts are paused.',
+            message: 'Panic mode is on',
+            detail: 'Chat is locked down and alerts are paused.',
           }
         : {
             key: 'panic',
             level: 'info',
-            message: 'Panic mode is off. Chat and alerts are back to normal.',
+            message: 'Panic mode is off',
+            detail: 'Chat and alerts are back to normal.',
           },
     })
     return { on, applied }
