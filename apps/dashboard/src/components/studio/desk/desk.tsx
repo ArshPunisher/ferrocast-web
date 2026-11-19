@@ -43,7 +43,7 @@ import {
   type StudioEngineStatus,
   type StudioSettings,
 } from '@ferrocast/api'
-import { Button, Dialog, IconButton, Skeleton, cx, toast } from '@ferrocast/ui'
+import { Button, Dialog, IconButton, InfoTip, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os } from '../../../lib/os'
@@ -437,6 +437,38 @@ export function asksFirst(
   return p?.confirm_go_live ? 'live' : null
 }
 
+/**
+ * What turning the Studio off would end, for the question asked first: the live stream, a
+ * recording, or both (one short line). Null when nothing is on air: it just turns off.
+ */
+export function turnOffAsk(
+  stats: Pick<EngineStats, 'stream' | 'record'> | null,
+): { title: string; text: string; keep: string } | null {
+  const s = stats?.stream
+  // As the bar reads it: a stream exists until stopped; while connecting it isn't active yet.
+  const live = !!s && (s.active || s.reconnecting || !s.error)
+  const recording = !!stats?.record?.active
+  if (live && recording)
+    return {
+      title: 'Turn the Studio off?',
+      text: 'The stream ends for everyone watching, and the recording is saved.',
+      keep: 'Keep going',
+    }
+  if (live)
+    return {
+      title: 'Turn the Studio off?',
+      text: 'The stream ends for everyone watching.',
+      keep: 'Keep streaming',
+    }
+  if (recording)
+    return {
+      title: 'Turn the Studio off?',
+      text: 'The recording is saved and closed.',
+      keep: 'Keep recording',
+    }
+  return null
+}
+
 /** Whether stream info has anything set: a title or category, everywhere or for one platform. */
 export function hasStreamInfo(i: StreamInfo | null | undefined): boolean {
   if (!i) return false
@@ -779,6 +811,7 @@ function ControlBar({
           // Time recorded (frames over the frame rate): pauses don't count.
           time={clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
           title={recording ? rec?.file : undefined}
+          working={busy === 'record'}
           onClick={pressRecord}
         />
         <OnAirButton
@@ -797,6 +830,7 @@ function ControlBar({
           time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
           disabled={!on && ticked.length === 0}
           title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
+          working={busy === 'stream'}
           onClick={() => void pressStream()}
         />
         <Dialog
@@ -811,7 +845,6 @@ function ControlBar({
                 <Button
                   variant={ask === 'noinfo' ? 'secondary' : 'ghost'}
                   onClick={() => {
-          working={busy === 'record'}
                     if (ask === 'noinfo') go({ name: 'studio', section: 'info' })
                     setAsk(null)
                   }}
@@ -830,7 +863,6 @@ function ControlBar({
           }
         />
       </div>
-          working={busy === 'stream'}
     </InBar>
   )
 }
@@ -892,10 +924,16 @@ function Mini({ p }: { p: Preset }) {
 const TOOL =
   'grid h-full w-8 place-items-center text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:relative focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none'
 
-function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void }) {
+export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void }) {
   const api = useEngine()
   const { layout, setLayout } = useLayout()
+  const { stats } = useDesk()
   const [open, setOpen] = useState(false)
+  // Turning the Studio off while live or recording asks first (it ends both for good).
+  const [asking, setAsking] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const turningOff = useRef(false)
+  const asked = turnOffAsk(stats)
   const [addingWeb, setAddingWeb] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
@@ -919,13 +957,27 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
       document.removeEventListener('keydown', key)
     }
   }, [open])
+  // Not turning it off after all: back to the button that asked (the menu item is gone).
+  const keep = () => {
+    if (turningOff.current) return
+    setAsking(false)
+    btn.current?.focus()
+  }
   const stop = async () => {
     setOpen(false)
+    // A second press while it turns off does nothing (a ref: state is stale inside one tick).
+    if (turningOff.current) return
+    turningOff.current = true
+    setStopping(true)
     try {
       onStatus(await api.stop())
     } catch (e) {
       const d = describeError(e)
       toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    } finally {
+      turningOff.current = false
+      setStopping(false)
+      setAsking(false)
     }
   }
   const item =
@@ -1044,13 +1096,44 @@ function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => void })
             type="button"
             role="menuitem"
             className={cx(item, 'text-danger')}
-            onClick={() => void stop()}
+            aria-haspopup={asked ? 'dialog' : undefined}
+            onClick={() => {
+              if (asked) {
+                setOpen(false)
+                setAsking(true)
+              } else void stop()
+            }}
           >
             <Power size={17} aria-hidden /> Turn the Studio off
           </button>
         </div>
       )}
       <WebDockDialog open={addingWeb} onClose={() => setAddingWeb(false)} />
+      <Dialog
+        compact
+        open={asking && !!asked}
+        onClose={keep}
+        title="Turn the Studio off?"
+        description={asked?.text}
+        footer={
+          <>
+            <Button variant="ghost" disabled={stopping} onClick={keep}>
+              {asked?.keep ?? 'Keep going'}
+            </Button>
+            <Button variant="danger" busy={stopping} onClick={() => void stop()}>
+              Turn off
+            </Button>
+          </>
+        }
+      >
+        <p className="flex items-center gap-1.5 text-[13px] text-text-3">
+          Everything else stops too
+          <InfoTip label="What else turning the Studio off stops">
+            The replay buffer, the virtual camera and NDI stop as well. Your scenes and settings are
+            saved.
+          </InfoTip>
+        </p>
+      </Dialog>
     </div>
   )
 }

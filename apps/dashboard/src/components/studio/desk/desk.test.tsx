@@ -13,7 +13,7 @@ import { balanceLabel } from './advanced-audio'
 import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
 import { fileName as baseName, ownerText } from './missing-files'
-import { asksFirst, hasStreamInfo } from './desk'
+import { asksFirst, hasStreamInfo, turnOffAsk } from './desk'
 import { sourceFor } from './file-drop'
 import { levelOf, visibleLines } from './log-viewer'
 import { recommend } from './auto-config'
@@ -337,6 +337,31 @@ describe('asking first', () => {
     expect(asksFirst('record', true, p)).toBe('record')
     // Starting a recording never asks.
     expect(asksFirst('record', false, p)).toBeNull()
+  })
+})
+
+describe('turning the Studio off', () => {
+  type Stats = NonNullable<Parameters<typeof turnOffAsk>[0]>
+  const stream = (o: object) =>
+    ({ active: true, reconnecting: false, error: null, ...o }) as Stats['stream']
+  const record = { active: true } as Stats['record']
+
+  it('asks only when it would end a stream or a recording, and says which', () => {
+    expect(turnOffAsk(null)).toBeNull()
+    expect(turnOffAsk({ stream: null, record: null })).toBeNull()
+    expect(turnOffAsk({ stream: null, record: { active: false } as Stats['record'] })).toBeNull()
+    expect(turnOffAsk({ stream: stream({}), record: null })?.text).toBe(
+      'The stream ends for everyone watching.',
+    )
+    expect(turnOffAsk({ stream: null, record })?.text).toBe('The recording is saved and closed.')
+    expect(turnOffAsk({ stream: stream({}), record })?.text).toMatch(/stream.*recording/)
+  })
+
+  it('counts a stream that is still connecting, not one that failed', () => {
+    const connecting = stream({ active: false, reconnecting: true, error: 'Kick refused' })
+    expect(turnOffAsk({ stream: connecting, record: null })).not.toBeNull()
+    const failed = stream({ active: false, reconnecting: false, error: 'the encoder stopped' })
+    expect(turnOffAsk({ stream: failed, record: null })).toBeNull()
   })
 })
 
