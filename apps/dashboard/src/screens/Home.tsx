@@ -152,7 +152,8 @@ export function Home() {
             {stats.data?.live ? 'You’re live' : 'Ready when you are'}
           </h1>
         </div>
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+        {/* Wraps (a phone gets two short rows): a row that scrolled sideways cut "Pause alerts" at the edge (S18 B7). */}
+        <div className="flex flex-wrap gap-2">
           <StartShowButton />
           <TestAlertMenu variant="primary" />
           <Button
