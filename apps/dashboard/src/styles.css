@@ -370,11 +370,15 @@ body[data-dock-drag] iframe {
   outline: 2px solid var(--fc-accent-text);
   outline-offset: 2px;
 }
-.fc-air:active:not(:disabled) {
+.fc-air:active:not(:disabled):not([aria-disabled='true']) {
   transform: scale(0.97);
 }
 .fc-air:disabled {
   cursor: not-allowed;
+}
+/* A press being answered: still focusable, answers no second press. */
+.fc-air[aria-disabled='true'] {
+  cursor: progress;
 }
 .fc-air[data-kind='rec'][data-state='idle'],
 .fc-air[data-kind='rec'][data-state='starting'] {

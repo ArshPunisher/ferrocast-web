@@ -18,6 +18,7 @@ export function OnAirButton({
   title,
   onContextMenu,
   paused,
+  working,
 }: {
   kind: 'rec' | 'live'
   state: AirState
@@ -29,6 +30,12 @@ export function OnAirButton({
   onContextMenu?: (e: React.MouseEvent) => void
   /** A recording on pause: still, with a pause mark instead of the moving bars. */
   paused?: boolean
+  /**
+   * A press is being answered (the stream or recording is starting or stopping): another press
+   * does nothing. Marked `aria-disabled`, not `disabled`, so the button keeps keyboard focus
+   * while it works and a double click never starts twice.
+   */
+  working?: boolean
 }) {
   const tag = kind === 'rec' ? 'REC' : 'LIVE'
   const idle = kind === 'rec' ? 'Record' : 'Go live'
@@ -75,9 +82,10 @@ export function OnAirButton({
       data-paused={paused || undefined}
       aria-label={label}
       aria-busy={state === 'starting' || state === 'stopping' || undefined}
+      aria-disabled={working || undefined}
       disabled={disabled || state === 'stopping'}
       title={title ?? label}
-      onClick={onClick}
+      onClick={working ? undefined : onClick}
       onContextMenu={onContextMenu}
       className={cx('fc-air', 'h-8 px-3 text-[13.5px]')}
     >

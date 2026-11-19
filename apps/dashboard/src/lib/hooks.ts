@@ -60,15 +60,22 @@ export function useResource<T>(
 /**
  * Runs an action, tracks busy state, and turns any failure into a toast with the engine's
  * own copy and hint. Resolves with the result, or undefined if it failed.
+ *
+ * `once`: a second call with the same key while the first is still running does nothing
+ * (resolves undefined at once). For buttons that start or stop something: a double click
+ * started it twice. Off by default: a slider saving on every step needs every call.
  */
 export function useAction() {
   const [busy, setBusy] = useState<string | null>(null)
+  const running = useRef(new Set<string>())
   const run = useCallback(
     async <T>(
       key: string,
       fn: () => Promise<T>,
-      opts: { success?: string | ((v: T) => string | null); quiet?: boolean } = {},
+      opts: { success?: string | ((v: T) => string | null); quiet?: boolean; once?: boolean } = {},
     ): Promise<T | undefined> => {
+      if (opts.once && running.current.has(key)) return undefined
+      running.current.add(key)
       setBusy(key)
       try {
         const v = await fn()
@@ -82,6 +89,7 @@ export function useAction() {
         }
         return undefined
       } finally {
+        running.current.delete(key)
         setBusy(null)
       }
     },

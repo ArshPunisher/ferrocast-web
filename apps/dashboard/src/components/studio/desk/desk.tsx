@@ -470,7 +470,20 @@ function ControlBar({
   const studio = useStudio()
   const [show, setShow] = useShow()
   const ticked = view ? onCanvas(view.destinations, 'main').filter((d) => d.enabled) : []
-  const toggle = async () => {
+  // A press that's still being answered takes no second one: a double click on Go live started
+  // the show or the stream twice (the button now says so, this is what holds it).
+  const pressed = useRef(new Set<'stream' | 'record'>())
+  const once = async (key: 'stream' | 'record', f: () => Promise<void>) => {
+    if (pressed.current.has(key)) return
+    pressed.current.add(key)
+    try {
+      await f()
+    } finally {
+      pressed.current.delete(key)
+    }
+  }
+  const toggle = () => once('stream', toggleNow)
+  const toggleNow = async () => {
     // A show style (anything but "just go live"): Go live runs the show, which starts the
     // stream itself, and ending runs its ending, which stops it (owner's pick D1, 30 Oct).
     // Settings that can't be read stop here with their error (never a plain stream that skips
@@ -509,7 +522,8 @@ function ControlBar({
       if (stats) setStats({ ...stats, stream: ending ? null : v })
     }
   }
-  const record = async () => {
+  const record = () => once('record', recordNow)
+  const recordNow = async () => {
     const v = await run('record', () => api.record(!recording), {
       success: () => (recording ? 'Recording saved.' : null),
     })
@@ -797,6 +811,7 @@ function ControlBar({
                 <Button
                   variant={ask === 'noinfo' ? 'secondary' : 'ghost'}
                   onClick={() => {
+          working={busy === 'record'}
                     if (ask === 'noinfo') go({ name: 'studio', section: 'info' })
                     setAsk(null)
                   }}
@@ -815,6 +830,7 @@ function ControlBar({
           }
         />
       </div>
+          working={busy === 'stream'}
     </InBar>
   )
 }
