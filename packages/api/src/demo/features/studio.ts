@@ -1408,6 +1408,25 @@ export class DemoStudio {
     }
     if (is('POST', 'show', 'live-scene')) return { show: this.goLive() }
     if (is('POST', 'show', 'end')) {
+      const now = Boolean((body as { now?: boolean } | null)?.now)
+      // Stop now on a show already ending: only its waiting stop comes forward.
+      const cur = this.run
+      if (
+        now &&
+        cur?.phase === 'ended' &&
+        cur.steps.some((x) => x.id === 'stop_stream' && x.status === 'waiting')
+      ) {
+        this.obs.streaming = false
+        this.setRun({
+          ...cur,
+          steps: cur.steps.map((x) =>
+            x.id === 'stop_stream'
+              ? { ...x, status: 'done' as const, detail: 'OBS stopped streaming.' }
+              : x,
+          ),
+        })
+        return { show: clone(this.run) }
+      }
       const steps: ShowStep[] = []
       if (this.showCfg.ending_scene) {
         this.switchTo(this.showCfg.ending_scene)
@@ -1429,8 +1448,8 @@ export class DemoStudio {
       }
       this.addMarker('manual', 'Show ended', null)
       const showId = this.run?.id
-      if (this.showCfg.stop_stream) {
-        const delay = this.showCfg.stop_delay_s
+      if (this.showCfg.stop_stream || now) {
+        const delay = now ? 0 : this.showCfg.stop_delay_s
         if (delay === 0) {
           this.obs.streaming = false
           steps.push({
