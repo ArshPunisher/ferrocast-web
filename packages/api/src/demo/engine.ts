@@ -1572,7 +1572,17 @@ export class DemoEngine {
     // settings and data
     if (is('GET', 'settings')) return clone(this.settings)
     if (is('PUT', 'settings')) {
-      this.settings = { ...this.settings, ...(requireObj(body) as Settings) }
+      const patch = requireObj(body) as Settings
+      if (
+        patch.youtube_privacy !== undefined &&
+        !['public', 'unlisted', 'private'].includes(patch.youtube_privacy)
+      )
+        throw new HttpError(
+          400,
+          'invalid',
+          'The settings aren’t valid: youtube_privacy: use one of public, unlisted, private.',
+        )
+      this.settings = { ...this.settings, ...patch }
       return clone(this.settings)
     }
     if (is('POST', 'export')) {

@@ -450,4 +450,5 @@ export const SETTINGS: Settings = {
   close_to_tray: true,
   language: 'en',
   currency: 'INR',
+  youtube_privacy: 'public',
 }
