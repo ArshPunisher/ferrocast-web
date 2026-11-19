@@ -415,7 +415,7 @@ export function NoDevices({
 
 /** The right side: devices or settings for the kind, a name, and Add. */
 function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => void }) {
-  const { api, allScenes, pictureScenes, audio, refresh, kinds } = useDesk()
+  const { api, allScenes, pictureScenes, audio, refresh, kinds, select } = useDesk()
   const { run, busy } = useAction()
   const isScene = !!c.entry.scene
   // The form shows at once from what was read before; the devices are read again meanwhile.
@@ -549,27 +549,29 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       name: freeName(o.name, taken),
       settings: { url: o.url, width: o.width, height: o.height },
     }
-    finish(
-      await run(
-        'overlay',
-        async () => {
-          const made = await api.addSource(scene, source, true)
-          // Alert sounds: heard by you as well as the stream (OBS's browser source plays them
-          // on the computer too). Without this they only reached viewers.
-          await api.setAudio(source.name, { monitor: 'me_and_stream' }).catch(() => undefined)
-          return made
-        },
-        { success: `Added ${source.name}.` },
-      ),
+    const overlay = await run(
+      'overlay',
+      async () => {
+        const made = await api.addSource(scene, source, true)
+        // Alert sounds: heard by you as well as the stream (OBS's browser source plays them
+        // on the computer too). Without this they only reached viewers.
+        await api.setAudio(source.name, { monitor: 'me_and_stream' }).catch(() => undefined)
+        return made
+      },
+      { success: `Added ${source.name}.` },
     )
+    finish(overlay, overlay?.item.id)
   }
-  const finish = (ok: unknown) => {
+  const finish = (ok: unknown, picked?: number) => {
     if (!ok) return
+    if (picked !== undefined) select(picked)
     refresh()
     onDone()
   }
-  const addExisting = async (n: string) =>
-    finish(await run('reuse', () => api.addExisting(scene, n), { success: `Added ${n}.` }))
+  const addExisting = async (n: string) => {
+    const r = await run('reuse', () => api.addExisting(scene, n), { success: `Added ${n}.` })
+    finish(r, r?.item.id)
+  }
   const add = async () => {
     const settings: EngineSettings = {
       ...(c.entry.settings ?? {}),
@@ -591,6 +593,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
           : `Added ${source.name}.`,
     })
     if (made && !visible) await api.editItem(scene, made.item.id, 'hide').catch(() => undefined)
+    // The new source is the one selected: its properties are what is edited next (S18 B3).
     // Its own sound, in this scene, heard by you and the stream (a console through a capture
     // card is heard like in OBS). A card already used elsewhere brings the sound source it has
     // there (the same one, not the device opened again); else its sound is added new.
@@ -615,7 +618,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
         return true
       })
     }
-    finish(made)
+    finish(made, made?.item.id)
   }
 
   const Icon = c.entry.icon
