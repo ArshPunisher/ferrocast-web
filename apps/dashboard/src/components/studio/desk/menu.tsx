@@ -167,15 +167,20 @@ function MenuList({
       if (!t.closest('[data-fc-menu]')) onClose()
     }
     const gone = () => onClose()
+    // Scrolling the page closes it; scrolling a menu itself (a long one in a short window) doesn't.
+    const scrolled = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest('[data-fc-menu]')) return
+      onClose()
+    }
     document.addEventListener('pointerdown', away, true)
     window.addEventListener('resize', gone)
     window.addEventListener('blur', gone)
-    document.addEventListener('scroll', gone, true)
+    document.addEventListener('scroll', scrolled, true)
     return () => {
       document.removeEventListener('pointerdown', away, true)
       window.removeEventListener('resize', gone)
       window.removeEventListener('blur', gone)
-      document.removeEventListener('scroll', gone, true)
+      document.removeEventListener('scroll', scrolled, true)
     }
   }, [root, onClose])
 
@@ -228,13 +233,20 @@ function MenuList({
       tabIndex={-1}
       onKeyDown={onKey}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed z-[80] flex min-w-[210px] flex-col rounded-control border border-line-strong bg-surface-1 p-1 shadow-pop"
+      // Taller than the window: it scrolls (an open sub-menu closes, its row moved).
+      onScroll={(e) => {
+        if (e.target !== e.currentTarget) return
+        // A sub-menu about to open on hover would open for the row that moved away.
+        clearTimeout(timer.current)
+        setSub(null)
+      }}
+      className="fixed z-[80] flex max-h-[calc(100vh-12px)] min-w-[210px] flex-col overflow-y-auto overscroll-contain rounded-control border border-line-strong bg-surface-1 p-1 shadow-pop [&>*]:shrink-0"
       style={pos}
     >
       {head && (
         <div
           role="presentation"
-          className="-mx-1 -mt-1 mb-1 flex h-[34px] items-center gap-2 rounded-t-[inherit] border-b border-line bg-surface-3 px-3.5 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase"
+          className="sticky -top-1 z-10 -mx-1 -mt-1 mb-1 flex h-[34px] items-center gap-2 rounded-t-[inherit] border-b border-line bg-surface-3 px-3.5 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase"
         >
           {head.icon && <head.icon size={14} weight="bold" aria-hidden />}
           {head.title}
