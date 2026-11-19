@@ -98,7 +98,7 @@ export function PageHeader({
       className={cx(
         'flex flex-col',
         compact
-          ? 'mb-2 gap-2 lg:flex-row lg:flex-wrap lg:items-center'
+          ? 'mb-2 gap-2 xl:flex-row xl:flex-wrap xl:items-center'
           : 'mb-5 gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between',
       )}
     >

@@ -4,10 +4,11 @@
 // with a moving texture, small sound bars and the time. Motion stops with Reduce motion.
 
 import type { ReactNode } from 'react'
-import { Broadcast, Pause, Record as RecordIcon } from '@phosphor-icons/react'
+import { Broadcast, HourglassMedium, Pause, Record as RecordIcon } from '@phosphor-icons/react'
 import { cx } from '@ferrocast/ui'
 
-export type AirState = 'idle' | 'starting' | 'on' | 'stopping'
+/** `ending`: the show's ending is playing and the engine stops the stream in `left` seconds. */
+export type AirState = 'idle' | 'starting' | 'on' | 'stopping' | 'ending'
 
 export function OnAirButton({
   kind,
@@ -19,6 +20,7 @@ export function OnAirButton({
   onContextMenu,
   paused,
   working,
+  left,
 }: {
   kind: 'rec' | 'live'
   state: AirState
@@ -36,6 +38,8 @@ export function OnAirButton({
    * while it works and a double click never starts twice.
    */
   working?: boolean
+  /** While `ending`: whole seconds before the stream stops (null: not known). */
+  left?: number | null
 }) {
   const tag = kind === 'rec' ? 'REC' : 'LIVE'
   const idle = kind === 'rec' ? 'Record' : 'Go live'
@@ -53,6 +57,13 @@ export function OnAirButton({
           </span>
         )}
         {tag} <span className="font-mono text-[12.5px] tabular-nums">{time}</span>
+      </>
+    )
+  else if (state === 'ending')
+    face = (
+      <>
+        <HourglassMedium size={14} weight="fill" aria-hidden />
+        {left == null ? 'Ending…' : `Ending in ${left} s`}
       </>
     )
   else if (state === 'starting') face = 'Starting…'
@@ -73,7 +84,9 @@ export function OnAirButton({
       ? kind === 'rec'
         ? `Stop recording (${paused ? 'paused at' : 'recording'} ${time})`
         : `End stream (live ${time})`
-      : undefined
+      : state === 'ending'
+        ? `The stream is ending${left == null ? '' : `, it stops in ${left} seconds`} (live ${time})`
+        : undefined
   return (
     <button
       type="button"
@@ -82,12 +95,12 @@ export function OnAirButton({
       data-paused={paused || undefined}
       aria-label={label}
       aria-busy={state === 'starting' || state === 'stopping' || undefined}
-      aria-disabled={working || undefined}
+      aria-disabled={working || state === 'ending' || undefined}
       disabled={disabled || state === 'stopping'}
       title={title ?? label}
-      onClick={working ? undefined : onClick}
+      onClick={working || state === 'ending' ? undefined : onClick}
       onContextMenu={onContextMenu}
-      className={cx('fc-air', 'h-8 px-3 text-[13.5px]')}
+      className={cx('fc-air', 'h-8 px-3 text-[13.5px] max-sm:w-full max-sm:justify-center')}
     >
       {face}
       {state === 'starting' && (

@@ -437,6 +437,7 @@ body[data-dock-drag] iframe {
 }
 /* On air: deep red, a slow texture, sound bars. */
 .fc-air[data-state='on'],
+.fc-air[data-state='ending'],
 .fc-air[data-state='stopping'] {
   background: linear-gradient(
     180deg,
@@ -470,6 +471,11 @@ body[data-dock-drag] iframe {
 }
 .fc-air[data-state='stopping'] {
   filter: saturate(0.4);
+}
+/* Ending: still on air, but standing still (no texture), the stop is on its way. */
+.fc-air[data-state='ending'] {
+  filter: saturate(0.75);
+  cursor: default;
 }
 /* A paused recording stands still (owner, 29 Oct). */
 .fc-air[data-paused]::after {

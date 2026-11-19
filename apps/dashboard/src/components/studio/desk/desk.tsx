@@ -23,6 +23,7 @@ import {
   LockSimpleOpen,
   Pause,
   Play,
+  Stop,
   Plus,
   Power,
   AppWindow,
@@ -76,6 +77,7 @@ import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
+import { useEndingLeft } from './ending'
 import { OnAirButton } from './onair'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
@@ -477,7 +479,7 @@ export function hasStreamInfo(i: StreamInfo | null | undefined): boolean {
 }
 
 /** The stream's health, the Layout menu, and Go live. */
-function ControlBar({
+export function ControlBar({
   view,
   lead,
   onStatus,
@@ -501,6 +503,11 @@ function ControlBar({
   const recording = !!rec?.active
   const studio = useStudio()
   const [show, setShow] = useShow()
+  // A show with an ending keeps streaming for its stop delay after End stream: this says so,
+  // counts it down, and offers Stop now. Read again when the show ends, so the delay is current.
+  const stopCfg = useResource(() => studio.showConfig(), [studio, show?.phase === 'ended'])
+  const stopDelay = stopCfg.data?.stop_delay_s ?? null
+  const { ending, left } = useEndingLeft(show, on, stopDelay)
   const ticked = view ? onCanvas(view.destinations, 'main').filter((d) => d.enabled) : []
   // A press that's still being answered takes no second one: a double click on Go live started
   // the show or the stream twice (the button now says so, this is what holds it).
@@ -531,7 +538,14 @@ function ControlBar({
             await studio.saveShowConfig({ ...cfg, start_stream: true, stop_stream: true })
           return on ? studio.endShow() : studio.startShow(true)
         },
-        { success: () => (on ? 'Ending the show.' : null) },
+        {
+          success: () =>
+            on
+              ? cfg.stop_delay_s > 0
+                ? `Ending the show. The stream stops in ${cfg.stop_delay_s} s.`
+                : 'Ending the show.'
+              : null,
+        },
       )
       if (r) setShow(r.show)
       return
@@ -555,11 +569,38 @@ function ControlBar({
       if (stats) setStats({ ...stats, stream: ending ? null : v })
     }
   }
+  // Stop now: the ending's wait is skipped and the stream stops at once.
+  const stopNow = () =>
+    once('stream', async () => {
+      const r = await run('stop-now', () => studio.endShow(true), { success: 'Stream ended.' })
+      if (r) {
+        setShow(r.show)
+        resetUploadRate()
+      }
+    })
+  // Said with the file's name, its whole path behind an (i), and a way to copy it: the streamer
+  // can find a 2560x1440 file without opening Settings (S18 B4). Revealing it in the file
+  // manager is the app's to do, not the page's.
+  const saved = (file: string | null | undefined) =>
+    toast({
+      tone: 'ok',
+      message: 'Recording saved.',
+      ...(file
+        ? {
+            hint: file.split(/[\\/]/).pop() ?? file,
+            detail: file,
+            action: {
+              label: 'Copy path',
+              run: () => void navigator.clipboard?.writeText(file).catch(() => {}),
+            },
+          }
+        : {}),
+    })
   const record = () => once('record', recordNow)
   const recordNow = async () => {
-    const v = await run('record', () => api.record(!recording), {
-      success: () => (recording ? 'Recording saved.' : null),
-    })
+    const file = rec?.file
+    const v = await run('record', () => api.record(!recording))
+    if (v !== undefined && recording) saved(file)
     if (v !== undefined && stats) setStats({ ...stats, record: v })
   }
   // OBS's General › "Show confirmation dialog when…": ending is asked by default.
@@ -570,7 +611,8 @@ function ControlBar({
     // Going live with no title or category anywhere: asked once whether to set them first
     // (owner, 29 Oct). Only then is it read afresh (it may have been set since), and stream
     // info that can't be read doesn't hold the stream up.
-    if (!on && !hasStreamInfo(info.data?.last?.info)) {
+    // (Only for platforms: a server of their own has no title or category to set.)
+    if (!on && ticked.some((d) => d.kind !== 'custom') && !hasStreamInfo(info.data?.last?.info)) {
       const fresh = await studio.streamInfo().catch(() => null)
       if (fresh && !hasStreamInfo(fresh.last?.info)) return setAsk('noinfo')
     }
@@ -596,6 +638,7 @@ function ControlBar({
     const go = ask === 'record' ? record() : toggle()
     void go.finally(() => setAsk(null))
   }
+  const showRunning = !!show && show.phase !== 'ended'
   const ASK = {
     noinfo: {
       title: 'No stream info yet',
@@ -613,7 +656,10 @@ function ControlBar({
     },
     end: {
       title: 'End the stream?',
-      text: 'It ends for everyone watching.',
+      text:
+        showRunning && stopDelay
+          ? `Your ending plays for ${stopDelay} s, then it ends for everyone watching. You can stop it sooner.`
+          : 'It ends for everyone watching.',
       keep: 'Keep streaming',
       yes: 'End stream',
       key: 'stream',
@@ -725,115 +771,146 @@ function ControlBar({
     })
   return (
     <InBar className="mb-2 flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Where the bar is one row (wide screens) these step aside while on air (the engine can't
+          be switched, nor a collection, in the middle of a stream; OBS greys them too), so
+          Pause, Stop now, Record and Go live never wrap onto a second row and nothing moves
+          when they are pressed (S18 B2). Narrower, the bar is stacked rows that are the same
+          height idle and on air, so they stay. */}
+      <div className={cx('flex flex-wrap items-center gap-2', (on || recording) && 'xl:hidden')}>
         {lead}
         <LibraryBar />
       </div>
-      {/* Health and the actions stay together: short of room they move down as one, so Go
-          live never ends up on a line of its own. */}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+      {/* Health and the actions stay together. Narrow: two fixed rows (the tools and what
+          belongs to a recording or the ending, then Record and Go live side by side), so the
+          bar is the same height idle and on air; wider: one row. */}
+      <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         {stream?.error && !stream.active && (
           <span className="text-[14px] font-semibold text-danger" aria-live="polite">
             {stream.error}
           </span>
         )}
-        {/* Settings, the layout and the extra outputs: one quiet group of icons. */}
-        <div
-          role="group"
-          aria-label="Studio tools"
-          className="flex h-8 items-stretch divide-x divide-line rounded-[6px] border border-line bg-surface-1"
-        >
-          <button
-            type="button"
-            aria-label="Studio settings"
-            title="Studio settings"
-            className={cx(TOOL, 'rounded-l-[inherit]')}
-            onClick={() => openSettings()}
+        <div className="flex items-center justify-between gap-2 sm:contents">
+          {/* Settings, the layout and the extra outputs: one quiet group of icons. */}
+          <div
+            role="group"
+            aria-label="Studio tools"
+            className="flex h-8 items-stretch divide-x divide-line rounded-[6px] border border-line bg-surface-1"
           >
-            <GearSix size={16} />
-          </button>
-          <LayoutMenu onStatus={onStatus} />
-          <button
-            type="button"
-            aria-label="Replay buffer, virtual camera and NDI"
-            title="Replay buffer, virtual camera and NDI"
-            aria-pressed={replayOn || camOn || ndiOn}
-            className={cx(
-              TOOL,
-              'rounded-r-[inherit]',
-              (replayOn || camOn || ndiOn) && 'text-accent-text',
+            <button
+              type="button"
+              aria-label="Studio settings"
+              title="Studio settings"
+              className={cx(TOOL, 'rounded-l-[inherit]')}
+              onClick={() => openSettings()}
+            >
+              <GearSix size={16} />
+            </button>
+            <LayoutMenu onStatus={onStatus} />
+            <button
+              type="button"
+              aria-label="Replay buffer, virtual camera and NDI"
+              title="Replay buffer, virtual camera and NDI"
+              aria-pressed={replayOn || camOn || ndiOn}
+              className={cx(
+                TOOL,
+                'rounded-r-[inherit]',
+                (replayOn || camOn || ndiOn) && 'text-accent-text',
+              )}
+              onClick={outputsMenu}
+            >
+              <VideoCamera size={16} weight={replayOn || camOn || ndiOn ? 'fill' : 'regular'} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 sm:contents">
+            {recording && (
+              <Button
+                variant="secondary"
+                size="xs"
+                className={cx('h-8', paused && 'bg-warn-soft! text-warn!')}
+                onClick={pause}
+                aria-pressed={paused}
+                aria-label={paused ? 'Resume recording' : 'Pause recording'}
+                title={paused ? 'Resume recording' : 'Pause recording'}
+              >
+                {paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
+                <span className="hidden 2xl:inline">{paused ? 'Resume' : 'Pause'}</span>
+              </Button>
             )}
-            onClick={outputsMenu}
-          >
-            <VideoCamera size={16} weight={replayOn || camOn || ndiOn ? 'fill' : 'regular'} />
-          </button>
+            {replayOn && (
+              <Button
+                variant="secondary"
+                size="xs"
+                className="h-8"
+                busy={busy === 'save-replay'}
+                onClick={saveReplay}
+              >
+                <ClockCounterClockwise size={15} weight="bold" />
+                <span className="hidden sm:inline">Save replay</span>
+              </Button>
+            )}
+            {recording && (
+              <IconButton
+                label="Chapter or a new file"
+                className="h-8! w-8! rounded-[6px]!"
+                variant="ghost"
+                onClick={recordMenu}
+              >
+                <DotsThree size={18} weight="bold" />
+              </IconButton>
+            )}
+            {ending && (
+              <Button
+                variant="danger"
+                size="xs"
+                className="h-8"
+                busy={busy === 'stop-now'}
+                onClick={() => void stopNow()}
+              >
+                <Stop size={14} weight="fill" aria-hidden />
+                Stop now
+              </Button>
+            )}
+          </div>
         </div>
-        {recording && (
-          <Button
-            variant="secondary"
-            size="xs"
-            className={cx('h-8', paused && 'bg-warn-soft! text-warn!')}
-            onClick={pause}
-            aria-pressed={paused}
-          >
-            {paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
-            <span className="hidden sm:inline">{paused ? 'Resume' : 'Pause'}</span>
-          </Button>
-        )}
-        {replayOn && (
-          <Button
-            variant="secondary"
-            size="xs"
-            className="h-8"
-            busy={busy === 'save-replay'}
-            onClick={saveReplay}
-          >
-            <ClockCounterClockwise size={15} weight="bold" />
-            <span className="hidden sm:inline">Save replay</span>
-          </Button>
-        )}
-        {recording && (
-          <IconButton
-            label="Chapter or a new file"
-            className="h-8! w-8! rounded-[6px]!"
-            variant="ghost"
-            onClick={recordMenu}
-          >
-            <DotsThree size={18} weight="bold" />
-          </IconButton>
-        )}
         {menu}
-        <OnAirButton
-          kind="rec"
-          paused={recording && paused}
-          state={
-            busy === 'record' ? (recording ? 'stopping' : 'starting') : recording ? 'on' : 'idle'
-          }
-          // Time recorded (frames over the frame rate): pauses don't count.
-          time={clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
-          title={recording ? rec?.file : undefined}
-          working={busy === 'record'}
-          onClick={pressRecord}
-        />
-        <OnAirButton
-          kind="live"
-          state={
-            busy === 'stream'
-              ? on
-                ? 'stopping'
-                : 'starting'
-              : on
-                ? stream?.active
-                  ? 'on'
+        <div className="grid grid-cols-2 gap-2 sm:contents">
+          <OnAirButton
+            kind="rec"
+            paused={recording && paused}
+            state={
+              busy === 'record' ? (recording ? 'stopping' : 'starting') : recording ? 'on' : 'idle'
+            }
+            // Time recorded (frames over the frame rate): pauses don't count.
+            time={clock(((rec?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
+            title={recording ? rec?.file : undefined}
+            working={busy === 'record'}
+            onClick={pressRecord}
+          />
+          <OnAirButton
+            kind="live"
+            state={
+              busy === 'stream' || busy === 'stop-now'
+                ? on
+                  ? 'stopping'
                   : 'starting'
-                : 'idle'
-          }
-          time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
-          disabled={!on && ticked.length === 0}
-          title={!on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined}
-          working={busy === 'stream'}
-          onClick={() => void pressStream()}
-        />
+                : ending
+                  ? 'ending'
+                  : on
+                    ? stream?.active
+                      ? 'on'
+                      : 'starting'
+                    : 'idle'
+            }
+            left={left}
+            time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
+            disabled={!on && ticked.length === 0}
+            title={
+              !on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined
+            }
+            working={busy === 'stream' || busy === 'stop-now'}
+            onClick={() => void pressStream()}
+          />
+        </div>
         <Dialog
           compact
           open={!!asked}
