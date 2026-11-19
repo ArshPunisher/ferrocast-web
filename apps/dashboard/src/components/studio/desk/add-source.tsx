@@ -2,7 +2,7 @@
 // cameras, screens and mics to pick in one click; any kind can reuse a source from another
 // scene; sound devices can play in every scene. Every other kind OBS has is under "More".
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowClockwise,
   CheckCircle,
@@ -45,7 +45,8 @@ import {
 import { GuestInvites } from './guests'
 import { readAhead, useKindForm } from './kind-cache'
 import { OptionsForm } from './options'
-import { ScreenStill } from './screen-still'
+import { ScreenStill, type StillState } from './screen-still'
+import { invalidateKindStills, isStillCapable } from './thumb-cache'
 
 export interface Choice {
   entry: KindEntry
@@ -395,7 +396,7 @@ export function NoDevices({
   return (
     <div
       role="status"
-      className="flex flex-col items-center gap-4 rounded-[6px] border border-dashed border-line-strong bg-inset px-6 py-9 text-center"
+      className="flex flex-col items-center gap-4 rounded-control border border-dashed border-line-strong bg-inset px-6 py-9 text-center"
     >
       <KindTile icon={c.entry.icon} tone={c.tone} size={56} />
       <div className="flex flex-col gap-1.5">
@@ -409,6 +410,149 @@ export function NoDevices({
       <Button type="button" variant="secondary" busy={checking} onClick={onLook}>
         <ArrowClockwise size={16} weight="bold" /> Look again
       </Button>
+    </div>
+  )
+}
+
+/** One selectable device tile or row with lazy cached still frame and non-nested retry action. */
+function DeviceTile({
+  label,
+  on,
+  view,
+  tone,
+  icon: Icon,
+  capable,
+  kind,
+  optionKey,
+  value,
+  refreshKey,
+  onSelect,
+}: {
+  label: string
+  on: boolean
+  view: PickView
+  tone: string
+  icon: KindEntry['icon']
+  capable: boolean
+  kind: string
+  optionKey: string
+  value: unknown
+  refreshKey: number
+  onSelect: () => void
+}) {
+  const [stillStatus, setStillStatus] = useState<StillState>('idle')
+  const retryRef = useRef<(() => void) | null>(null)
+  const handleStatus = useCallback((status: StillState, retry: () => void) => {
+    setStillStatus(status)
+    retryRef.current = retry
+  }, [])
+  const ring = on ? { borderColor: tone, boxShadow: `0 0 0 1px ${tone}` } : undefined
+  const check = on && (
+    <CheckCircle size={18} weight="fill" aria-hidden className="shrink-0" style={{ color: tone }} />
+  )
+
+  if (view === 'list') {
+    return (
+      <div
+        style={ring}
+        className="relative flex min-h-11 items-center gap-2 rounded-control border border-line bg-surface-2 pr-2 transition-[border-color,box-shadow] duration-150 hover:border-line-strong"
+      >
+        <button
+          type="button"
+          aria-pressed={on}
+          onClick={onSelect}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left active:scale-[0.99] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        >
+          {capable ? (
+            <span
+              className="relative grid h-7 w-12 shrink-0 place-items-center overflow-hidden rounded-[4px]"
+              style={{
+                background: `color-mix(in oklab, ${tone} ${on ? 22 : 10}%, var(--fc-surface-inset))`,
+                color: tone,
+              }}
+            >
+              <Icon size={16} weight={on ? 'fill' : 'bold'} aria-hidden />
+              <ScreenStill
+                id={value}
+                label={label}
+                kind={kind}
+                optionKey={optionKey}
+                window={optionKey === 'window'}
+                refreshKey={refreshKey}
+                onStatusChange={handleStatus}
+                compact
+              />
+            </span>
+          ) : (
+            <KindTile icon={Icon} tone={tone} size={30} />
+          )}
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">{label}</span>
+          {check}
+        </button>
+        {capable && stillStatus === 'error' && (
+          <button
+            type="button"
+            aria-label={`Retry preview for ${label}`}
+            title="Retry preview"
+            onClick={() => retryRef.current?.()}
+            className="fc-press inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-surface-1 px-2 text-[12px] font-semibold text-text hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          >
+            <ArrowClockwise size={13} weight="bold" aria-hidden />
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={ring}
+      className="relative flex flex-col overflow-hidden rounded-control border border-line bg-surface-2 transition-[border-color,box-shadow] duration-150 hover:border-line-strong"
+    >
+      <button
+        type="button"
+        aria-pressed={on}
+        onClick={onSelect}
+        className="flex flex-1 flex-col text-left active:scale-[0.98] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      >
+        <span
+          className="relative grid aspect-video w-full place-items-center overflow-hidden"
+          style={{
+            background: `color-mix(in oklab, ${tone} ${on ? 22 : 9}%, var(--fc-surface-inset))`,
+            color: tone,
+          }}
+        >
+          <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
+          {capable && (
+            <ScreenStill
+              id={value}
+              label={label}
+              kind={kind}
+              optionKey={optionKey}
+              window={optionKey === 'window'}
+              refreshKey={refreshKey}
+              onStatusChange={handleStatus}
+            />
+          )}
+        </span>
+        <span className="flex w-full items-center gap-2 px-3 py-2.5">
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">{label}</span>
+          {check}
+        </span>
+      </button>
+      {capable && stillStatus === 'error' && (
+        <button
+          type="button"
+          aria-label={`Retry preview for ${label}`}
+          title="Retry preview"
+          onClick={() => retryRef.current?.()}
+          className="fc-press absolute top-2 right-2 z-10 inline-flex h-7 items-center gap-1 rounded-full border border-line-strong bg-surface-1/95 px-2.5 text-[12px] font-bold text-text shadow-sm hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        >
+          <ArrowClockwise size={13} weight="bold" aria-hidden />
+          Retry
+        </button>
+      )}
     </div>
   )
 }
@@ -429,6 +573,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     [api],
   )
   const [view, setView] = usePickView()
+  const [stillRefresh, setStillRefresh] = useState(0)
   // Back to the app after plugging a camera in or opening a window: look again by itself.
   const reloadForm = form.reload
   useEffect(() => {
@@ -707,7 +852,11 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
               size="sm"
               label="Look again"
               disabled={form.checking}
-              onClick={() => form.reload()}
+              onClick={() => {
+                invalidateKindStills(c.kind)
+                setStillRefresh((n) => n + 1)
+                form.reload()
+              }}
             >
               <ArrowClockwise size={16} weight="bold" />
             </IconButton>
@@ -751,69 +900,22 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             {dev.choices.map((label, i) => {
               if (!label.trim()) return null
               const on = device === i
-              const ring = on
-                ? { borderColor: c.tone, boxShadow: `0 0 0 1px ${c.tone}` }
-                : undefined
-              const check = on && (
-                <CheckCircle
-                  size={18}
-                  weight="fill"
-                  aria-hidden
-                  className="shrink-0"
-                  style={{ color: c.tone }}
-                />
-              )
-              if (view === 'list')
-                return (
-                  <button
-                    key={`${i}-${label}`}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setDevice(i)}
-                    style={ring}
-                    className="flex min-h-10 items-center gap-3 rounded-[6px] border border-line bg-surface-2 px-3 py-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.99]"
-                  >
-                    <KindTile icon={Icon} tone={c.tone} size={30} />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">
-                      {label}
-                    </span>
-                    {check}
-                  </button>
-                )
+              const capable = isStillCapable(c.kind, dev.key)
               return (
-                <button
-                  key={`${i}-${label}`}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setDevice(i)}
-                  style={ring}
-                  className="relative flex flex-col overflow-hidden rounded-[6px] border border-line bg-surface-2 text-left transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong active:scale-[0.98]"
-                >
-                  <span
-                    className="relative grid aspect-video place-items-center overflow-hidden"
-                    style={{
-                      background: `color-mix(in oklab, ${c.tone} ${on ? 22 : 9}%, var(--fc-surface-inset))`,
-                      color: c.tone,
-                    }}
-                  >
-                    <Icon size={34} weight={on ? 'fill' : 'bold'} aria-hidden />
-                    {(dev.key === 'display' ||
-                      (dev.key === 'window' && c.kind === 'screen_capture')) && (
-                      <ScreenStill
-                        key={String(dev.values[i])}
-                        id={dev.values[i]}
-                        label={label}
-                        window={dev.key === 'window'}
-                      />
-                    )}
-                  </span>
-                  <span className="flex items-center gap-2 px-3 py-2.5">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">
-                      {label}
-                    </span>
-                    {check}
-                  </span>
-                </button>
+                <DeviceTile
+                  key={`${i}-${String(dev.values[i])}-${label}`}
+                  label={label}
+                  on={on}
+                  view={view}
+                  tone={c.tone}
+                  icon={Icon}
+                  capable={capable}
+                  kind={c.kind}
+                  optionKey={dev.key}
+                  value={dev.values[i]}
+                  refreshKey={stillRefresh}
+                  onSelect={() => setDevice(i)}
+                />
               )
             })}
           </div>

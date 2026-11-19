@@ -77,6 +77,15 @@ describe('the Add dialog’s kind forms', () => {
     expect(cachedForm('wasapi_input_capture')).toBeDefined()
   })
 
+  it('skips duplicate readAhead calls for a kind just read within the freshness window', async () => {
+    const e = slowEngine(['Cam'])
+    await readForm(e.api, 'dshow_input')
+    expect(e.calls()).toBe(1)
+    readAhead(e.api, ['dshow_input'])
+    await new Promise((r) => setTimeout(r, 30))
+    expect(e.calls()).toBe(1)
+  })
+
   it('a failed read leaves the last good list and can be read again', async () => {
     const ok = slowEngine(['Cam'])
     await readForm(ok.api, 'dshow_input')

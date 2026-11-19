@@ -10,10 +10,18 @@ import { type EngineApi } from './common'
 type Engine = Pick<EngineApi, 'options' | 'defaults'>
 
 const forms = new Map<string, EngineOption[]>()
+const formsAt = new Map<string, number>()
 const defaults = new Map<string, EngineSettings>()
 const reading = new Map<string, Promise<EngineOption[]>>()
 const readingDefaults = new Map<string, Promise<EngineSettings>>()
 const subs = new Set<() => void>()
+
+const FRESH_MS = 1500
+
+function isFresh(kind: string, maxAgeMs = FRESH_MS): boolean {
+  const at = formsAt.get(kind)
+  return at !== undefined && Date.now() - at < maxAgeMs
+}
 
 function changed() {
   for (const cb of subs) cb()
@@ -32,6 +40,7 @@ export function readForm(api: Engine, kind: string): Promise<EngineOption[]> {
     .options(kind)
     .then((o) => {
       forms.set(kind, o)
+      formsAt.set(kind, Date.now())
       changed()
       return o
     })
@@ -60,7 +69,7 @@ export function readDefaults(api: Engine, kind: string): Promise<EngineSettings>
 /** Reads these kinds ahead (the dialog opening, or the Studio settling), quietly. */
 export function readAhead(api: Engine, kinds: Iterable<string>) {
   for (const k of new Set(kinds)) {
-    if (!reading.has(k)) void readForm(api, k).catch(() => undefined)
+    if (!reading.has(k) && !isFresh(k)) void readForm(api, k).catch(() => undefined)
     if (!defaults.has(k)) void readDefaults(api, k).catch(() => undefined)
   }
 }
@@ -98,7 +107,6 @@ export function useKindForm(api: Engine, kind: string | null): KindForm {
     if (!kind) return
     let alive = true
     setError(null)
-    setChecking(true)
     // Defaults first when they're missing (rare: read ahead when the dialog opened).
     const d = defaults.get(kind)
     if (d) setDefs(d)
@@ -106,6 +114,13 @@ export function useKindForm(api: Engine, kind: string | null): KindForm {
       void readDefaults(api, kind)
         .then((v) => alive && setDefs(v))
         .catch((e: unknown) => alive && setError(e))
+    if (nonce === 0 && forms.has(kind) && isFresh(kind)) {
+      setChecking(false)
+      return () => {
+        alive = false
+      }
+    }
+    setChecking(true)
     readForm(api, kind)
       .catch((e: unknown) => {
         if (alive) setError(e)
@@ -132,6 +147,7 @@ export function useKindForm(api: Engine, kind: string | null): KindForm {
 /** Forgets everything read (tests). */
 export function forgetForms() {
   forms.clear()
+  formsAt.clear()
   defaults.clear()
   reading.clear()
   readingDefaults.clear()
