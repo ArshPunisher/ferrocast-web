@@ -60,7 +60,7 @@ summary {
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
     animation: fc-shimmer 1.4s ease-in-out infinite;
   }
 }

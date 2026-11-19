@@ -148,7 +148,7 @@ export function ScreenStill({
       {status === 'loading' && !src && (
         <span
           aria-hidden
-          className="fc-skeleton pointer-events-none absolute inset-0 opacity-75 motion-reduce:animate-none"
+          className="fc-skeleton pointer-events-none absolute inset-0 bg-surface-3/65 motion-reduce:animate-none"
         />
       )}
       {src && (

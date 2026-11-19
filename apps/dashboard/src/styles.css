@@ -167,9 +167,11 @@ input[type='range'] {
 /* The sound picker's little level meter while a preview plays. */
 .fc-eq i {
   width: 3px;
-  height: 4px;
+  height: 14px;
   border-radius: 2px;
   background: var(--fc-accent);
+  transform-origin: bottom;
+  transform: scaleY(0.28);
 }
 @media (prefers-reduced-motion: no-preference) {
   .fc-eq i {
@@ -184,12 +186,12 @@ input[type='range'] {
 }
 @media (prefers-reduced-motion: reduce) {
   .fc-eq i {
-    height: 10px;
+    transform: scaleY(0.71);
   }
 }
 @keyframes fc-eq {
   to {
-    height: 14px;
+    transform: scaleY(1);
   }
 }
 
@@ -486,6 +488,7 @@ body[data-dock-drag] iframe {
   height: 12px;
   border-radius: 1px;
   background: currentColor;
+  transform-origin: bottom;
   animation: fc-air-eq 0.9s ease-in-out infinite;
 }
 .fc-air-eq b:nth-child(2) {
@@ -497,10 +500,10 @@ body[data-dock-drag] iframe {
 @keyframes fc-air-eq {
   0%,
   100% {
-    height: 4px;
+    transform: scaleY(0.33);
   }
   50% {
-    height: 12px;
+    transform: scaleY(1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
