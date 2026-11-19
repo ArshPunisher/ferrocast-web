@@ -683,7 +683,13 @@ export interface EngineStats {
   sources?: { name: string; sent: number; width: number; height: number }[]
   canvas: { width: number; height: number; fps: number }
   /** While the stream is live: its health out of 100 over the last ten seconds, and what costs most. */
-  health?: { score: number; verdict: 'great' | 'good' | 'shaky' | 'poor'; reason?: string }
+  health?: {
+    score: number
+    verdict: 'great' | 'good' | 'shaky' | 'poor'
+    reason?: string
+    /** What to do about it, behind an (i). Older engines send none. */
+    detail?: string
+  }
   stream: EngineStreamStats | null
   record: EngineRecordStats | null
   /** The scene on air (switches made elsewhere show up here first). */
@@ -1180,11 +1186,12 @@ export function studioEngineApi(c: FerroClient) {
     studioSettings: () => c.request<StudioSettings>('GET', '/api/v1/studio/engine/settings'),
     /** Saves and applies them → what needs a restart or didn't apply, in words (or null). */
     setStudioSettings: (s: StudioSettings) =>
-      c.request<{ settings: StudioSettings; restart: string | null }>(
-        'PUT',
-        '/api/v1/studio/engine/settings',
-        s,
-      ),
+      c.request<{
+        settings: StudioSettings
+        restart: string | null
+        /** The full words when `restart` is a short line (behind an (i)). */
+        restart_detail?: string
+      }>('PUT', '/api/v1/studio/engine/settings', s),
     stats: () => c.request<EngineStats>('GET', '/api/v1/studio/engine/stats'),
     /** Starts or stops recording → its stats (null when stopped). */
     record: (on: boolean) =>
@@ -1229,7 +1236,7 @@ export function studioEngineApi(c: FerroClient) {
     stream: (on: boolean) =>
       // `also`: what was set to start or stop with the stream but didn't, in words. Ending
       // answers null, or only `{ also }`.
-      c.request<(EngineStreamStats & { also?: string }) | null>(
+      c.request<(EngineStreamStats & { also?: string; also_detail?: string }) | null>(
         'POST',
         '/api/v1/studio/engine/stream',
         { on },

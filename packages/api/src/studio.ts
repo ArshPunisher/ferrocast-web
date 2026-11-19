@@ -553,7 +553,10 @@ export interface LiveAlert {
   /** `mic:<name>`, `camera:<name>:black`, `camera:<name>:frozen`, `destination:<name>`. */
   id: string
   level: 'warn' | 'error'
+  /** One short line (about 60 characters). */
   message: string
+  /** What the line leaves out (what to check), behind an (i). Older engines send none. */
+  detail?: string
   cleared: boolean
 }
 

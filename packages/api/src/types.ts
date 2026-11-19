@@ -1458,7 +1458,10 @@ export interface Notice {
   /** Notices with the same key replace each other (`panic`, `account:twitch`, …). */
   key?: string
   level: 'info' | 'warn' | 'error'
+  /** One short line (about 60 characters). */
   message: string
+  /** The rest (a cause, the engine's own words), shown behind an (i). Older engines send none. */
+  detail?: string
   action?: { label: string; href: string }
 }
 

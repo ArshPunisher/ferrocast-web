@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { X, CheckCircle, WarningCircle, Info } from '@phosphor-icons/react'
 import { cx } from '../cx'
+import { InfoLine } from './infotip'
 
 export interface DialogProps {
   open: boolean
@@ -425,6 +426,10 @@ export interface Toast {
   tone: ToastTone
   message: string
   hint?: string | null
+  /** The rest, behind an (i) beside the line (a cause, the engine's own words). */
+  detail?: string | undefined
+  /** Other things like this one waiting behind it ("+2 more"). */
+  more?: number | undefined
   action?: { label: string; run: () => void }
   /**
    * Toasts about the same thing share a key (`panic`, `obs`, `account:twitch`): a new one
@@ -542,7 +547,14 @@ export function Toaster() {
           >
             <span className="mt-px">{icons[t.tone]}</span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium break-words text-text">{t.message}</p>
+              <InfoLine detail={t.detail} label="More about this message">
+                <p className="text-sm font-medium break-words text-text">
+                  {t.message}
+                  {!!t.more && (
+                    <span className="ml-1.5 font-normal text-text-3">+{t.more} more</span>
+                  )}
+                </p>
+              </InfoLine>
               {t.hint && (
                 <p className="mt-0.5 text-[14px] leading-snug break-words text-text-3">{t.hint}</p>
               )}

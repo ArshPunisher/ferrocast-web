@@ -175,3 +175,52 @@ export function InfoTip({
     </>
   )
 }
+
+/**
+ * One short line with its (i): the rest opens in place, under the line, and closes again (no
+ * bubble). For banners and toasts, where a floating bubble could sit under the layer that holds
+ * them or be cut off at a phone's edge. Without `detail` it is just the line.
+ */
+export function InfoLine({
+  children,
+  detail,
+  label = 'More about this',
+  className,
+}: {
+  children: ReactNode
+  detail?: string | undefined
+  /** The button's name for screen readers ("More about this warning"). */
+  label?: string
+  className?: string
+}) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  if (!detail) return <div className={className}>{children}</div>
+  return (
+    <div className={className}>
+      <div className="flex items-start justify-start gap-1">
+        <div className="min-w-0">{children}</div>
+        <button
+          type="button"
+          aria-label={label}
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((o) => !o)}
+          className={cx(
+            'relative -my-0.5 inline-grid size-6 shrink-0 place-items-center rounded-full text-text-3 transition-colors',
+            'hover:text-text-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+            'after:absolute after:-inset-1.5 after:content-[""]',
+            open && 'text-text-2',
+          )}
+        >
+          <Info size={16} weight={open ? 'fill' : 'bold'} aria-hidden />
+        </button>
+      </div>
+      {open && (
+        <p id={id} className="mt-1 text-[14px] leading-snug break-words text-text-2">
+          {detail}
+        </p>
+      )}
+    </div>
+  )
+}
