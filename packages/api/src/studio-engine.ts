@@ -500,6 +500,22 @@ export function writtenFormat(f: string | null | undefined): WrittenRecordFormat
   return 'mp4'
 }
 
+/** The obs-websocket v5 server (Stream Deck, Touch Portal and the like): off until switched on. */
+export interface RemoteControl {
+  enabled: boolean
+  port: number
+  /** Other devices on the network may connect (else only this computer). */
+  lan: boolean
+  has_password: boolean
+  /** Apps connected and signed in now. */
+  clients: number
+  listening: boolean
+  /** Why it isn't listening (a port in use), in words. */
+  error: string | null
+  /** Only in the answer that made it: shown once, never readable again. */
+  password?: string
+}
+
 /** How the last remux went. */
 /** A file a source, filter or transition uses that isn't on this computer. */
 export interface EngineMissingFile {
@@ -1445,6 +1461,14 @@ export function studioEngineApi(c: FerroClient) {
     /** Makes an MP4 beside a recording, in the background (progress in stats). */
     remux: (file: string) =>
       c.request<{ to: string }>('POST', '/api/v1/studio/engine/remux', { file }),
+    /** The obs-websocket server's settings and state. */
+    remoteControl: () => c.request<RemoteControl>('GET', '/api/v1/studio/remote-control'),
+    /** Changes them; switching on the first time returns the password, once. */
+    setRemoteControl: (patch: { enabled?: boolean; port?: number; lan?: boolean }) =>
+      c.request<RemoteControl>('POST', '/api/v1/studio/remote-control', patch),
+    /** A new password (the old one stops working, apps connected are let go). */
+    newRemoteControlPassword: () =>
+      c.request<{ password: string }>('POST', '/api/v1/studio/remote-control/password', {}),
     /** An encoder's own options for these settings, and its values with defaults. */
     encoderOptions: (id: string, settings: Record<string, unknown>) =>
       c.request<{ options: EngineOption[]; values: EngineSettings }>(
