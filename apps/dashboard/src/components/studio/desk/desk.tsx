@@ -115,12 +115,18 @@ export function StudioDesk({
 }) {
   const api = useEngine()
   useWidePage()
-  const status = useResource(() => api.status(), [api])
+  // When the status now shown was asked for (the last ask is the one whose answer is kept).
+  const askedAt = useRef(0)
+  const status = useResource(() => {
+    askedAt.current = Date.now()
+    return api.status()
+  }, [api])
   const s = status.data
-  // Keep Shell's SafeModeBanner in sync if the engine starts or exits Safe Mode elsewhere.
+  // Keep Shell's SafeModeBanner in sync if the engine starts or exits Safe Mode elsewhere (a
+  // reading asked for before the streamer's own choice is dropped: it would undo it).
   useEffect(() => {
     if (!s) return
-    useLive.getState().setSafeMode(s.safe_mode ?? null)
+    useLive.getState().setSafeMode(s.safe_mode ?? null, askedAt.current)
   }, [s])
   // After pressing Start (never on its own): the ready check, with what came back after a crash.
   const [ready, setReady] = useState<{ recovered: EngineRecovered | null } | null>(null)

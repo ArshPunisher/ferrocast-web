@@ -72,6 +72,8 @@ interface LiveStore {
   /** A phone's live socket said it can't go on (removed, Pro paused, open elsewhere). */
   remoteGone: RemoteProblem | null
   status: Status | null
+  /** When the engine last answered a Safe Mode choice (0: never), to drop older readings. */
+  safeModeChosenAt: number
   bootError: ApiError | null
   socket: ConnectionState
   connectors: Connectors | null
@@ -110,7 +112,10 @@ interface LiveStore {
   studio: StudioLive
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
-  setSafeMode: (sm: SafeModeStatus | null) => void
+  /** `askedAt`: when the engine status it came from was asked for; an older one than the last choice is dropped. */
+  setSafeMode: (sm: SafeModeStatus | null, askedAt?: number) => void
+  /** The streamer just chose in Safe Mode (the engine has answered): readings asked before are stale. */
+  markSafeModeChosen: () => void
   setBootError: (e: ApiError | null) => void
   setQueue: (q: Queue) => void
   setPanic: (on: boolean) => void
@@ -213,11 +218,16 @@ export const useLive = create<LiveStore>((set, get) => ({
   setUpdateLoadError: (updateLoadError) => set({ updateLoadError }),
   chatters: new Map(),
   studio: EMPTY_STUDIO,
+  safeModeChosenAt: 0,
   setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
-  setSafeMode: (safeMode) =>
+  markSafeModeChosen: () => set({ safeModeChosenAt: Date.now() }),
+  setSafeMode: (safeMode, askedAt) =>
     set((s) => {
       if (!s.status) return s
+      // A slow engine status asked for before the choice would put "saved scenes held back" (and
+      // its Load button) back after they were loaded.
+      if (askedAt !== undefined && askedAt < s.safeModeChosenAt) return s
       if (!safeMode && s.status.safe_mode === undefined) return s
       const next: Status = { ...s.status }
       if (safeMode) next.safe_mode = safeMode

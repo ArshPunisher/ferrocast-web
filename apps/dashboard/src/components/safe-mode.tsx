@@ -101,6 +101,8 @@ export async function resolveSafeMode(
   opts: StudioStartOptions,
 ): Promise<{ engine: StudioEngineStatus; next: SafeModeStatus | null }> {
   const engine = await studioEngineApi(client).start(opts)
+  // Any Studio status asked for before this answer is older than the choice.
+  useLive.getState().markSafeModeChosen()
   let next: SafeModeStatus | null = engine.safe_mode ?? null
   try {
     const fresh = await client.status()

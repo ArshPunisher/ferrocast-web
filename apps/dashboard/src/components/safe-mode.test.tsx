@@ -9,6 +9,7 @@ import {
   SafeModeScreen,
   heldBackItems,
   isSafeModeLocked,
+  resolveSafeMode,
   safeModeSummary,
 } from './safe-mode'
 
@@ -79,6 +80,41 @@ describe('Safe Mode helpers', () => {
     expect(safeModeSummary({ ...crashSafeMode, collection_pending: false }).line).toBe(
       'Safe Mode: plugins, VSTs and auto-start held back.',
     )
+  })
+})
+
+describe('a slow Studio status asked for before the streamer chose', () => {
+  it('does not bring "saved scenes held back" and its Load button back', async () => {
+    vi.useFakeTimers()
+    try {
+      const afterConfirm: SafeModeStatus = {
+        ...crashSafeMode,
+        offer: false,
+        collection_pending: false,
+      }
+      const client = {
+        request: vi.fn(async () => ({ available: true, running: true, safe_mode: afterConfirm })),
+        status: vi.fn(async () => seedStatus(afterConfirm)),
+      }
+      useLive.setState({ conn: { client } as never, status: seedStatus(crashSafeMode) })
+
+      // The desk asks the engine for its status at t=1000; the answer is slow.
+      vi.setSystemTime(1000)
+      const askedAt = Date.now()
+      // At t=2000 the streamer loads their scenes (the engine answers).
+      vi.setSystemTime(2000)
+      await resolveSafeMode(client as never, { safe_mode: true, confirm_collection: true })
+      expect(useLive.getState().status?.safe_mode?.collection_pending).toBe(false)
+      // At t=8000 the old status arrives, still saying "pending".
+      vi.setSystemTime(8000)
+      useLive.getState().setSafeMode(crashSafeMode, askedAt)
+      expect(useLive.getState().status?.safe_mode?.collection_pending).toBe(false)
+      // A status asked for after the choice is believed (the engine can change by itself).
+      useLive.getState().setSafeMode(crashSafeMode, 8000)
+      expect(useLive.getState().status?.safe_mode?.collection_pending).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
