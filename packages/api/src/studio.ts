@@ -550,7 +550,8 @@ export const STUDIO_FRAME_TYPES = [
  * destination not sending), or that it's fixed (`cleared`).
  */
 export interface LiveAlert {
-  /** `mic:<name>`, `camera:<name>:black`, `camera:<name>:frozen`, `destination:<name>`. */
+  /** `mic:<name>`, `mic:muted|quiet|silent:<name>`, `scene:empty`, `camera:<name>:black`,
+   * `camera:<name>:frozen`, `destination:<name>`. */
   id: string
   level: 'warn' | 'error'
   /** One short line (about 60 characters). */
@@ -558,6 +559,10 @@ export interface LiveAlert {
   /** What the line leaves out (what to check), behind an (i). Older engines send none. */
   detail?: string
   cleared: boolean
+  /** The source (or scene) it is about, for the one-tap fix. Older engines send none. */
+  source?: string
+  /** The fix the page may offer: `unmute`, `gain_up` (+6 dB) or `pick_scene`. */
+  action?: 'unmute' | 'gain_up' | 'pick_scene'
 }
 
 /** "01:02:03" from milliseconds into the stream. */
