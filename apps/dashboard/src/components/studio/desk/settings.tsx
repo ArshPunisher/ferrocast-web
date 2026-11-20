@@ -519,10 +519,7 @@ export function StreamPage({ s, set }: PageProps) {
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>
-      <ChoiceGrid
-        label="Stream quality"
-        className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4"
-      >
+      <ChoiceGrid label="Stream quality" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {PRESETS.map((p) => {
           const size = p.scale ?? [s.width, s.height]
           return (
