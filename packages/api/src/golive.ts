@@ -179,6 +179,11 @@ export interface DestinationView {
   backup_for?: string
   /** A backup on standby: it sends only while this one (its name) can't. */
   standby_for?: string
+  /**
+   * Which stream key a platform destination sent to when it last started, in words
+   * ("Ferrocast · variable"). Never the key itself; absent until it has started.
+   */
+  key_note?: string
 }
 
 /** Servers the Ferrocast Studio sends to itself (not through the RTMP forwarders). */

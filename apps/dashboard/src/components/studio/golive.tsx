@@ -381,35 +381,41 @@ export function LiveCard({
                     </InfoLine>
                   ) : (
                     <>
-                      <span
-                        className={cx(
-                          'flex items-start gap-1.5 text-[14.5px] font-bold',
-                          h.tone === 'ok' && 'text-ok',
-                          h.tone === 'warn' && 'text-warn',
-                          h.tone === 'bad' && 'text-danger',
-                          (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
-                        )}
+                      {/* Which stream key it sent to ("Key: Ferrocast · variable"), behind (i). */}
+                      <InfoLine
+                        detail={d.key_note ? `Key: ${d.key_note}` : undefined}
+                        label={`Which stream key ${d.name} uses`}
                       >
-                        {/* On the first line when a long label wraps (a phone). */}
-                        {h.tone === 'warn' ? (
-                          <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
-                        ) : h.tone === 'paused' ? (
-                          <Pause
-                            size={14}
-                            weight="fill"
-                            className="mt-[3px] shrink-0"
-                            aria-hidden
-                          />
-                        ) : (
-                          <span
-                            className="mt-[7px] size-[7px] shrink-0 rounded-full bg-current"
-                            aria-hidden
-                          />
-                        )}
-                        <span>
-                          {d.name}: {h.label}
+                        <span
+                          className={cx(
+                            'flex items-start gap-1.5 text-[14.5px] font-bold',
+                            h.tone === 'ok' && 'text-ok',
+                            h.tone === 'warn' && 'text-warn',
+                            h.tone === 'bad' && 'text-danger',
+                            (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
+                          )}
+                        >
+                          {/* On the first line when a long label wraps (a phone). */}
+                          {h.tone === 'warn' ? (
+                            <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
+                          ) : h.tone === 'paused' ? (
+                            <Pause
+                              size={14}
+                              weight="fill"
+                              className="mt-[3px] shrink-0"
+                              aria-hidden
+                            />
+                          ) : (
+                            <span
+                              className="mt-[7px] size-[7px] shrink-0 rounded-full bg-current"
+                              aria-hidden
+                            />
+                          )}
+                          <span>
+                            {d.name}: {h.label}
+                          </span>
                         </span>
-                      </span>
+                      </InfoLine>
                       {h.detail && (
                         <p className="m-0 text-[13.5px] text-text-3 tabular-nums">{h.detail}</p>
                       )}

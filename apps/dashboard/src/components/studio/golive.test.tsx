@@ -214,6 +214,32 @@ describe('Contract C-1: PushState failed UI', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
+  it('LiveCard names the stream key a platform destination sent to, behind (i) and never inline', async () => {
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const view = baseView({
+      live: true,
+      destinations: [
+        baseDest({
+          id: 'youtube',
+          kind: 'youtube',
+          name: 'YouTube',
+          key_note: 'Ferrocast · variable',
+        }),
+        baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch' }),
+      ],
+    })
+    const el = await renderNode(<LiveCard view={view} onSaved={vi.fn()} />)
+    expect(el.textContent).not.toContain('Ferrocast · variable')
+    // Only the destination that has a key note has the button.
+    expect(el.querySelector('button[aria-label="Which stream key Twitch uses"]')).toBeNull()
+    const info = el.querySelector(
+      'button[aria-label="Which stream key YouTube uses"]',
+    ) as HTMLButtonElement
+    expect(info).not.toBeNull()
+    await act(async () => info.click())
+    expect(el.textContent).toContain('Key: Ferrocast · variable')
+  })
+
   it('LiveCard renders failed destination with (i) disclosure and Retry wired to /golive/resume/{id}', async () => {
     const request = vi.fn(async () => undefined)
     useLive.setState({ conn: { client: { request } } as never })
