@@ -651,7 +651,7 @@ export class DemoStudio {
     return { checks, ready: !checks.some((x) => x.status === 'fail') }
   }
 
-  private startShow(force: boolean): ShowRun {
+  private startShow(force: boolean, stream?: boolean): ShowRun {
     if (this.run && this.run.phase !== 'ended')
       throw new HttpError(
         409,
@@ -670,6 +670,10 @@ export class DemoStudio {
         'Fix what the checklist shows, or press Start anyway.',
       )
     const c = this.showCfg
+    const liveScene =
+      c.live_scene ??
+      (c.starting_scene && this.obs.current !== c.starting_scene ? this.obs.current : null)
+    const shouldStream = stream ?? c.start_stream
     const steps: ShowStep[] = []
     const preset = this.presets.find((p) => p.id === c.preset_id)
     if (c.preset_id) {
@@ -714,7 +718,7 @@ export class DemoStudio {
         detail: `OBS is on "${c.starting_scene}".`,
       })
     }
-    if (c.start_stream) {
+    if (shouldStream) {
       this.obs.streaming = true
       steps.push({
         id: 'stream',
@@ -735,7 +739,7 @@ export class DemoStudio {
     let phase: ShowRun['phase'] = 'starting'
     let ends: number | null = null
     const sw = c.at_zero?.switch !== false
-    if (c.countdown_s > 0 && (c.live_scene || !sw)) {
+    if (c.countdown_s > 0 && (liveScene || !sw)) {
       phase = 'countdown'
       ends = Date.now() + c.countdown_s * 1000
       steps.push({
@@ -753,19 +757,19 @@ export class DemoStudio {
         phase,
         started_at: Date.now(),
         countdown_ends_at: ends,
-        live_scene: c.live_scene,
+        live_scene: liveScene,
         ended_at: null,
         steps,
       }
       this.setRun(run)
       return clone(run)
-    } else if (c.live_scene) {
-      this.switchTo(c.live_scene)
+    } else if (liveScene) {
+      this.switchTo(liveScene)
       steps.push({
         id: 'live_scene',
         label: 'Live scene',
         status: 'done',
-        detail: `OBS is on "${c.live_scene}".`,
+        detail: `OBS is on "${liveScene}".`,
       })
       phase = 'live'
     }
@@ -774,7 +778,7 @@ export class DemoStudio {
       phase,
       started_at: Date.now(),
       countdown_ends_at: ends,
-      live_scene: c.live_scene,
+      live_scene: liveScene,
       ended_at: null,
       steps,
     }
@@ -1349,12 +1353,6 @@ export class DemoStudio {
           'invalid',
           'at_zero.chat: 1 to 400 characters on one line, or turn it off.',
         )
-      if (next.countdown_s > 0 && next.at_zero?.switch !== false && !next.live_scene)
-        throw new HttpError(
-          400,
-          'invalid',
-          'live_scene: pick the scene to switch to when the countdown ends.',
-        )
       if (!Number.isInteger(next.stop_delay_s) || next.stop_delay_s < 0 || next.stop_delay_s > 600)
         throw new HttpError(400, 'invalid', 'stop_delay_s: 0 to 600 seconds.')
       if (next.preset_id && !this.presets.some((p) => p.id === next.preset_id))
@@ -1380,8 +1378,15 @@ export class DemoStudio {
         )
       return this.preflight()
     }
-    if (is('POST', 'show', 'start'))
-      return { show: this.startShow(Boolean((body as { force?: boolean } | null)?.force)) }
+    if (is('POST', 'show', 'start')) {
+      const b = body as { force?: boolean; stream?: boolean } | null
+      return {
+        show: this.startShow(
+          Boolean(b?.force),
+          typeof b?.stream === 'boolean' ? b.stream : undefined,
+        ),
+      }
+    }
     if (is('POST', 'show', 'countdown', 'skip')) {
       if (this.run?.phase !== 'countdown')
         throw new HttpError(

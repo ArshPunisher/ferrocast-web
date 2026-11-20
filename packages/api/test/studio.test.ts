@@ -190,6 +190,26 @@ describe('demo studio (same contract as API.md §4 Studio)', () => {
     expect(now.show.steps.find((x) => x.id === 'stop_stream')?.status).toBe('done')
   })
 
+  it('show: startShow(true, true) streams per-run without mutating ShowConfig and captures on-air scene when live_scene is null', async () => {
+    await studio.switchScene('Gameplay')
+    await studio.saveShowConfig({
+      starting_scene: 'Starting Soon',
+      countdown_s: 60,
+      live_scene: null,
+      start_stream: false,
+      stop_stream: false,
+    })
+    const run = await studio.startShow(true, true)
+    expect(run.show.phase).toBe('countdown')
+    expect(run.show.live_scene).toBe('Gameplay')
+    expect(run.show.steps.find((x) => x.id === 'stream')?.status).toBe('done')
+    // Saved ShowConfig must NOT have been mutated to start_stream: true.
+    const saved = await studio.showConfig()
+    expect(saved.start_stream).toBe(false)
+    expect(saved.live_scene).toBeNull()
+    await studio.endShow(true)
+  })
+
   it('obs: replay not running, then a clip with a marker; BRB needs a scene', async () => {
     expect((await fail(studio.clip()))?.status).toBe(422)
     await studio.preflightFix('action:start_replay_buffer')

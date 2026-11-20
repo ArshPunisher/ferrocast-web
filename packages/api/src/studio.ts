@@ -613,7 +613,9 @@ export function studioApi(c: FerroClient) {
     saveShowConfig: (patch: Partial<ShowConfig>) => put<ShowConfig>('/show/config', patch),
     preflight: () => get<Preflight>('/show/preflight'),
     preflightFix: (action: string) => post<Preflight>('/show/preflight/fix', { action }),
-    startShow: (force = false) => post<{ show: ShowRun }>('/show/start', { force }),
+    /** `stream`: per-run streaming override without mutating saved `ShowConfig` (M9-02). */
+    startShow: (force = false, stream?: boolean) =>
+      post<{ show: ShowRun }>('/show/start', stream === undefined ? { force } : { force, stream }),
     skipCountdown: () => post<{ show: ShowRun }>('/show/countdown/skip'),
     cancelCountdown: () => post<{ show: ShowRun }>('/show/countdown/cancel'),
     liveScene: () => post<{ show: ShowRun }>('/show/live-scene'),

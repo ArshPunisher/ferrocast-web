@@ -2,6 +2,7 @@
 // by the desktop app. Every kind of source and filter OBS has, with every option, read live.
 
 import type { FerroClient } from './client'
+import type { SafeModeStatus } from './types'
 
 /**
  * Sound that looks after itself: music quieter while you talk (ducking), and every track at
@@ -30,10 +31,19 @@ export interface StudioEngineStatus {
   version: string | null
   renderer: string | null
   /** Why it isn't available, with what to do. */
-  detail:
-    | string
-    | null /** Only from the Start after Ferrocast didn't close normally: what was on, what came back. */
+  detail: string | null
+  /** Only from the Start after Ferrocast didn't close normally: what was on, what came back. */
   recovered?: EngineRecovered
+  /** Present while Safe Mode is active or waiting for confirmation (M11-03). */
+  safe_mode?: SafeModeStatus | null
+}
+
+/** Options for `POST /api/v1/studio/engine/start` (M11-03 Safe Mode). */
+export interface StudioStartOptions {
+  /** `true` keeps/enters Safe Mode; `false` exits a crash-triggered Safe Mode offer into Normal Mode. */
+  safe_mode?: boolean
+  /** When `true` in Safe Mode, confirms loading the saved scene collection. */
+  confirm_collection?: boolean
 }
 
 export interface EngineRecovered {
@@ -428,6 +438,12 @@ export interface EngineStreamStats {
   encoder?: string | null
   /** The upload itself struggled in the last seconds (most platforms behind at once). */
   upload_struggling?: boolean
+  /** Terminal failure fields from M9-04 (`PushState::Failed`). */
+  failed?: boolean
+  attempts?: number
+  reason?: string | null
+  detail?: string | null
+  refused?: boolean
 }
 
 /** How the Studio streams, records and runs (every field has a default). */
@@ -832,7 +848,8 @@ export function studioEngineApi(c: FerroClient) {
   const enc = encodeURIComponent
   return {
     status: () => c.request<StudioEngineStatus>('GET', '/api/v1/studio/engine'),
-    start: () => c.request<StudioEngineStatus>('POST', '/api/v1/studio/engine/start', {}),
+    start: (opts: StudioStartOptions = {}) =>
+      c.request<StudioEngineStatus>('POST', '/api/v1/studio/engine/start', opts),
     stop: () => c.request<StudioEngineStatus>('POST', '/api/v1/studio/engine/stop', {}),
     kinds: () => c.request<EngineKinds>('GET', '/api/v1/studio/engine/kinds'),
     options: (kind: string) =>

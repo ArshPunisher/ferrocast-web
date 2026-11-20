@@ -43,6 +43,11 @@ export interface DemoGoLiveSetup {
   vertical?: { installed?: boolean; points_here?: boolean; streaming?: boolean }
   /** Pretend ffmpeg isn't on this computer yet (cutting fetches it). */
   ffmpeg_missing?: boolean
+  /** Destinations in terminal `PushState::Failed` (Contract C-1 tests & demo). */
+  failed?: Record<
+    string,
+    { attempts: number; reason: string; detail?: string; refused?: boolean } | null
+  >
 }
 
 const INGEST = 'rtmp://127.0.0.1:1935/live'
@@ -118,6 +123,11 @@ export class DemoGoLive {
   private autoQuality = true
   /** Paused by upload protection: until when, and since when. */
   private paused = new Map<string, { until: number; since: number; reason: string }>()
+  /** Permanently failed for this stream (Contract C-1). */
+  private failed = new Map<
+    string,
+    { attempts: number; reason: string; detail?: string; refused?: boolean; since: number }
+  >()
   private struggle = 0
   private calm = 0
   private nextPause = FIRST_PAUSE_MS
@@ -150,6 +160,13 @@ export class DemoGoLive {
       this.verticalBefore = s.vertical.points_here ? 'a.rtmps.youtube.com' : null
     }
     if (s.vertical?.streaming !== undefined) this.verticalStreaming = s.vertical.streaming
+    if (s.failed) {
+      const now = Date.now()
+      for (const [id, info] of Object.entries(s.failed)) {
+        if (info === null) this.failed.delete(id)
+        else this.failed.set(id, { ...info, since: now })
+      }
+    }
     this.tick()
   }
 
@@ -239,6 +256,18 @@ export class DemoGoLive {
   }
 
   private health(d: DestinationConfig, now: number): PushHealth | null {
+    const f = this.failed.get(d.id)
+    if (f && d.enabled)
+      return {
+        state: 'failed',
+        attempts: f.attempts,
+        reason: f.reason,
+        ...(f.detail ? { detail: f.detail } : {}),
+        ...(f.refused ? { refused: true } : {}),
+        kbps: 0,
+        dropped: 0,
+        since_ms: f.since,
+      }
     if (!this.liveFor(d.canvas) || !d.enabled || this.blocked(d)) return null
     const p = this.paused.get(d.id)
     if (p)
@@ -657,6 +686,7 @@ export class DemoGoLive {
       if (!d.enabled) {
         this.started.delete(d.id)
         this.paused.delete(d.id)
+        this.failed.delete(d.id)
       }
     this.tick()
     return { destinations: clone(this.cfg) }
@@ -765,7 +795,9 @@ export class DemoGoLive {
   }
 
   private resume(id: string): undefined {
-    if (!this.paused.has(id))
+    const isPaused = this.paused.has(id)
+    const isFailed = this.failed.has(id)
+    if (!isPaused && !isFailed)
       throw new HttpError(
         422,
         'golive_not_paused',
@@ -773,6 +805,7 @@ export class DemoGoLive {
         'Nothing to resume.',
       )
     this.paused.delete(id)
+    this.failed.delete(id)
     this.tick()
     return undefined
   }

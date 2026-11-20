@@ -29,6 +29,17 @@ export interface DestinationConfig {
 export type PushState =
   | { state: 'waiting' | 'connecting' | 'live' | 'stopped' }
   | { state: 'reconnecting'; attempt: number; retry_in_ms: number; reason: string }
+  /** Gave up for this stream after repeated failures or a platform refusal (Contract C-1). */
+  | {
+      state: 'failed'
+      attempts: number
+      /** One short line saying what happened. */
+      reason: string
+      /** Cause and what to do, shown behind an (i). */
+      detail?: string
+      /** True when the platform refused the stream (bad key, Kick multistreaming). */
+      refused?: boolean
+    }
   /** Upload protection paused it; it comes back by itself, no earlier than `until_ms`. */
   | { state: 'paused'; until_ms: number; reason: string }
 
@@ -579,10 +590,15 @@ export function goingTo(destinations: Pick<DestinationView, 'enabled'>[]): strin
   return n === 1 ? 'Going to 1 place' : `Going to ${n} places`
 }
 
+/** Guidance shown behind `(i)` when Kick refuses a multistream (Contract C-1). */
+export const KICK_MULTISTREAM_DETAIL =
+  'Allow multistreaming in Kick’s settings (Kick Partners), or turn Kick off.'
+
 /** The health line's words for one destination. */
 export function healthText(
   h: PushHealth | null,
   blocked: string | null,
+  kind?: Service,
 ): {
   tone: 'ok' | 'warn' | 'off' | 'bad' | 'paused'
   label: string
@@ -610,6 +626,23 @@ export function healthText(
             detail: `${h.reason} Trying again in ${Math.max(1, Math.round(h.retry_in_ms / 1000))} s.`,
           }
         : { tone: 'warn', label: 'Reconnecting', detail: h.reason }
+    case 'failed': {
+      const label =
+        h.reason.trim() ||
+        (kind === 'kick'
+          ? 'Kick refused the stream.'
+          : h.refused
+            ? 'Platform refused the stream.'
+            : 'Stopped trying.')
+      let detail = h.detail?.trim() || null
+      if (kind === 'kick') {
+        if (!detail) detail = KICK_MULTISTREAM_DETAIL
+        else if (!/multistream/i.test(detail)) detail = `${detail} ${KICK_MULTISTREAM_DETAIL}`
+      } else if (!detail && h.attempts > 0) {
+        detail = `Stopped after ${h.attempts} ${h.attempts === 1 ? 'try' : 'tries'}.`
+      }
+      return { tone: 'bad', label, detail }
+    }
     case 'waiting':
       return { tone: 'off', label: 'Waiting for OBS', detail: null }
     case 'stopped':
@@ -617,6 +650,39 @@ export function healthText(
     case 'paused':
       return { tone: 'paused', label: 'Paused', detail: h.reason }
   }
+}
+
+/**
+ * When every enabled non-standby destination on `canvas` has permanently failed (or is blocked)
+ * and at least one reached `state: 'failed'`, returns the calm summary line and `(i)` detail.
+ */
+export function allDestinationsFailed(
+  destinations: DestinationView[],
+  canvas: Canvas = 'main',
+): { failed: DestinationView[]; allRefused: boolean; summary: string; detail: string } | null {
+  const active = onCanvas(destinations, canvas).filter((d) => d.enabled && !d.standby_for)
+  if (active.length === 0) return null
+  const failed: DestinationView[] = []
+  for (const d of active) {
+    if (d.health?.state === 'failed') failed.push(d)
+    else if (d.blocked) continue
+    else return null
+  }
+  if (failed.length === 0) return null
+  const allRefused = failed.every(
+    (d) =>
+      d.health?.state === 'failed' && (d.health.refused === true || /refus/i.test(d.health.reason)),
+  )
+  const summary = allRefused
+    ? 'Stream stopped: every platform refused'
+    : 'Stream stopped: every platform failed'
+  const lines = failed.map((d) => {
+    const t = healthText(d.health, d.blocked, d.kind)
+    return t.detail && t.detail !== t.label
+      ? `${d.name}: ${t.label} ${t.detail}`
+      : `${d.name}: ${t.label}`
+  })
+  return { failed, allRefused, summary, detail: lines.join(' ') }
 }
 
 /**

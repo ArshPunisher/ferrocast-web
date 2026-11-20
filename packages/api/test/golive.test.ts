@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  KICK_MULTISTREAM_DETAIL,
+  allDestinationsFailed,
   directKind,
   aitumClashes,
   andList,
@@ -12,6 +14,7 @@ import {
   mbps,
   viaOf,
   withVia,
+  type DestinationView,
 } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
@@ -539,5 +542,143 @@ describe('which servers the Studio sends to itself', () => {
     expect(directKind('https://a/whip')).toBe('whip')
     expect(directKind('http://example.com/whip')).toBeNull()
     expect(directKind('rtmp://a/app')).toBeNull()
+  })
+})
+
+describe('Contract C-1: PushState failed and all-failed detection', () => {
+  const dest = (over: Partial<DestinationView>): DestinationView => ({
+    id: 'kick',
+    kind: 'kick',
+    canvas: 'main',
+    name: 'Kick',
+    account: 'arsh',
+    enabled: true,
+    connected: true,
+    health: null,
+    blocked: null,
+    rules: [],
+    ...over,
+  })
+
+  it('formats failed PushState into one calm line with Kick multistream guidance behind (i)', () => {
+    const kick = healthText(
+      {
+        state: 'failed',
+        attempts: 3,
+        reason: 'Kick refused the stream.',
+        refused: true,
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+      null,
+      'kick',
+    )
+    expect(kick).toEqual({
+      tone: 'bad',
+      label: 'Kick refused the stream.',
+      detail: KICK_MULTISTREAM_DETAIL,
+    })
+
+    const custom = healthText(
+      {
+        state: 'failed',
+        attempts: 6,
+        reason: 'Stream key was refused.',
+        detail: 'Twitch refused the stream key. Check the key for this destination.',
+        refused: true,
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+      null,
+      'twitch',
+    )
+    expect(custom).toEqual({
+      tone: 'bad',
+      label: 'Stream key was refused.',
+      detail: 'Twitch refused the stream key. Check the key for this destination.',
+    })
+  })
+
+  it('detects when every enabled destination refused or failed', () => {
+    const kickFailed = dest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      health: {
+        state: 'failed',
+        attempts: 3,
+        reason: 'Kick refused the stream.',
+        refused: true,
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+    })
+    const ytLive = dest({
+      id: 'youtube',
+      kind: 'youtube',
+      name: 'YouTube',
+      health: { state: 'live', kbps: 6000, dropped: 0, since_ms: 0 },
+    })
+    // One live + one failed -> stream is still alive.
+    expect(allDestinationsFailed([ytLive, kickFailed])).toBeNull()
+
+    // Every enabled platform refused -> "Stream stopped: every platform refused".
+    const ytRefused = dest({
+      id: 'youtube',
+      kind: 'youtube',
+      name: 'YouTube',
+      health: {
+        state: 'failed',
+        attempts: 3,
+        reason: 'Stream key was refused.',
+        refused: true,
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+    })
+    const refused = allDestinationsFailed([ytRefused, kickFailed])
+    expect(refused?.allRefused).toBe(true)
+    expect(refused?.summary).toBe('Stream stopped: every platform refused')
+    expect(refused?.detail).toContain('Kick')
+    expect(refused?.detail).toContain('multistreaming')
+
+    // Network failure without refusal.
+    const ytNet = dest({
+      id: 'youtube',
+      kind: 'youtube',
+      name: 'YouTube',
+      health: {
+        state: 'failed',
+        attempts: 6,
+        reason: 'a.rtmps.youtube.com stopped taking the stream.',
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+    })
+    const netFailed = allDestinationsFailed([ytNet])
+    expect(netFailed?.allRefused).toBe(false)
+    expect(netFailed?.summary).toBe('Stream stopped: every platform failed')
+  })
+
+  it('demo engine supports failed destinations and clears them via resume', async () => {
+    const { engine, api } = demo()
+    engine.setGoLive({
+      points_here: true,
+      failed: {
+        twitch: { attempts: 3, reason: 'Stream key was refused.', refused: true },
+      },
+    })
+    const v1 = await api.view()
+    const tw1 = v1.destinations.find((d) => d.id === 'twitch')
+    expect(tw1?.health?.state).toBe('failed')
+    await api.resume('twitch')
+    const v2 = await api.view()
+    const tw2 = v2.destinations.find((d) => d.id === 'twitch')
+    expect(tw2?.health?.state).not.toBe('failed')
   })
 })

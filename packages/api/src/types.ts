@@ -259,6 +259,25 @@ export interface ConnectorState {
 export type ConnectorName = 'twitch' | 'youtube' | 'kick' | 'obs' | 'relay'
 export type Connectors = Record<ConnectorName, ConnectorState>
 
+/** Safe Mode state reported by `GET /api/v1/status` and `GET /api/v1/studio/engine` (M11-03). */
+export interface SafeModeStatus {
+  /** Previous run ended uncleanly (running marker or studio session remained on disk). */
+  unclean_exit: boolean
+  /** Safe Mode protections are currently active. */
+  active: boolean
+  /** True after an unclean exit until the user decides Safe Mode vs Normal Mode. */
+  offer: boolean
+  /** True while Safe Mode is waiting for confirmation before loading the saved scene collection. */
+  collection_pending: boolean
+  /** Third-party effect, logic, and panel plugins are suppressed. */
+  plugins_disabled: boolean
+  /** Third-party VST3 plugins are suppressed. */
+  vsts_disabled: boolean
+  /** Automatic start of recovery recording/replay is suppressed. */
+  auto_start_disabled: boolean
+  reason?: string
+}
+
 export interface Status {
   version: string
   port: number
@@ -267,6 +286,8 @@ export interface Status {
   setup_done: boolean
   /** Cloud mode (ferrocast docs/CLOUD.md): Ferrocast's servers answer, not a PC. */
   cloud?: boolean
+  /** Safe Mode state after an unclean exit or `--safe-mode` launch (M11-03). */
+  safe_mode?: SafeModeStatus
 }
 
 export interface Account {
