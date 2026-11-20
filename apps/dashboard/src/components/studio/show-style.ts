@@ -33,8 +33,8 @@ export function styleOf(c: ShowConfig): ShowStyle {
 
 const find = (names: string[], re: RegExp) => names.find((n) => re.test(n)) ?? null
 
-/** The settings for `style`, keeping the scenes and countdown already picked, else guessing them
- * from the scenes' names. Going live always streams; ending always stops it. */
+/** The settings for `style`, keeping the scenes and countdown already picked; `live_scene` is
+ * never guessed by name so the engine captures whatever scene is on air when it stays `null`. */
 export function applyStyle(c: ShowConfig, style: ShowStyle, names: string[]): ShowConfig {
   const base: ShowConfig = { ...c, start_stream: true, stop_stream: true }
   if (style === 'just') {
@@ -48,13 +48,11 @@ export function applyStyle(c: ShowConfig, style: ShowStyle, names: string[]): Sh
     }
   }
   const starting = c.starting_scene ?? find(names, /start|soon|wait|intro/i)
-  const live =
-    c.live_scene ?? find(names, /main|game|live|play/i) ?? names.find((n) => n !== starting) ?? null
   const shared = {
     ...base,
     starting_scene: starting,
     countdown_s: c.countdown_s || 300,
-    live_scene: live,
+    live_scene: c.live_scene ?? null,
     alerts_on: true,
     bot_on: true,
   }
@@ -77,6 +75,8 @@ export function routeOf(c: ShowConfig): string[] {
   const out = [c.starting_scene ?? 'Your scene']
   if (c.countdown_s > 0) out.push(`${m}:${s}`)
   if (c.live_scene) out.push(c.live_scene)
+  else if (c.starting_scene && c.countdown_s > 0 && c.at_zero?.switch !== false)
+    out.push('Your scene')
   if (style === 'full' && c.ending_scene) out.push(c.ending_scene)
   return out
 }

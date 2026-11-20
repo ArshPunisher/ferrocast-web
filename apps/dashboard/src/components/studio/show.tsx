@@ -549,7 +549,12 @@ function PlannedRun({ cfg, presets }: { cfg: ShowConfig; presets: StreamPreset[]
     [
       'Live',
       join([
-        z.switch && (cfg.live_scene ? `Scene “${cfg.live_scene}”` : 'No scene switch'),
+        z.switch &&
+          (cfg.live_scene
+            ? `Scene “${cfg.live_scene}”`
+            : cfg.starting_scene
+              ? 'Current scene on air'
+              : 'No scene switch'),
         z.unmute && 'mic unmuted',
         z.start_stream && 'streaming',
         z.record && 'recording',
@@ -759,7 +764,7 @@ export function ShowSettings({
           value={c[key] ?? ''}
           onChange={(e) => set({ [key]: e.target.value || null })}
         >
-          <option value="">Don’t switch</option>
+          <option value="">{key === 'live_scene' ? 'Current scene on air' : 'Don’t switch'}</option>
           {withCurrent(c[key]).map((n) => (
             <option key={n} value={n}>
               {n}

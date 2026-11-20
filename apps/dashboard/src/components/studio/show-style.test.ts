@@ -35,9 +35,9 @@ describe('show styles', () => {
     expect(styleOf({ ...base, discord: true })).toBe('full')
   })
 
-  it('picks scenes by name and always streams', () => {
+  it('picks starting and ending scenes by name, never guesses live_scene, and always streams', () => {
     const c = applyStyle(base, 'countdown', scenes)
-    expect([c.starting_scene, c.countdown_s, c.live_scene]).toEqual(['Starting', 300, 'Main'])
+    expect([c.starting_scene, c.countdown_s, c.live_scene]).toEqual(['Starting', 300, null])
     expect([c.start_stream, c.stop_stream, c.discord, c.ending_scene]).toEqual([
       true,
       true,
@@ -46,11 +46,12 @@ describe('show styles', () => {
     ])
     expect(styleOf(c)).toBe('countdown')
     const f = applyStyle(base, 'full', scenes)
-    expect([f.ending_scene, f.discord, f.replay_buffer, f.recap_message]).toEqual([
+    expect([f.ending_scene, f.discord, f.replay_buffer, f.recap_message, f.live_scene]).toEqual([
       'Ending',
       true,
       true,
       DEFAULT_THANKS,
+      null,
     ])
     expect(styleOf(f)).toBe('full')
     const j = applyStyle(f, 'just', scenes)
@@ -58,11 +59,18 @@ describe('show styles', () => {
     expect(j.start_stream).toBe(true)
   })
 
-  it('keeps what was picked by hand, and copes with no scenes', () => {
-    const own = { ...base, starting_scene: 'Just Chatting', countdown_s: 120, recap_message: 'bye' }
+  it('keeps what was picked by hand (including an explicit live_scene), and copes with no scenes', () => {
+    const own = {
+      ...base,
+      starting_scene: 'Just Chatting',
+      live_scene: 'Main',
+      countdown_s: 120,
+      recap_message: 'bye',
+    }
     const f = applyStyle(own, 'full', scenes)
-    expect([f.starting_scene, f.countdown_s, f.recap_message]).toEqual([
+    expect([f.starting_scene, f.live_scene, f.countdown_s, f.recap_message]).toEqual([
       'Just Chatting',
+      'Main',
       120,
       'bye',
     ])
@@ -74,16 +82,24 @@ describe('show styles', () => {
 
   it('draws the route', () => {
     expect(routeOf(base)).toEqual(['Your scene'])
-    expect(routeOf(applyStyle(base, 'countdown', scenes))).toEqual(['Starting', '5:00', 'Main'])
+    expect(routeOf(applyStyle(base, 'countdown', scenes))).toEqual([
+      'Starting',
+      '5:00',
+      'Your scene',
+    ])
     expect(routeOf(applyStyle(base, 'full', scenes))).toEqual([
       'Starting',
       '5:00',
-      'Main',
+      'Your scene',
       'Ending',
     ])
+    expect(
+      routeOf({ ...base, starting_scene: 'Starting', countdown_s: 90, live_scene: 'Game' }),
+    ).toEqual(['Starting', '1:30', 'Game'])
     expect(routeOf({ ...base, starting_scene: 'Starting', countdown_s: 90 })).toEqual([
       'Starting',
       '1:30',
+      'Your scene',
     ])
   })
 })

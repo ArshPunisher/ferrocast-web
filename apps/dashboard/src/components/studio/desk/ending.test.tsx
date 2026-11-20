@@ -271,4 +271,68 @@ describe('the desk bar while the show ends', () => {
     })
     expect(document.body.textContent).not.toContain('No stream info yet')
   })
+
+  it('Go live with a Show style sends { force: true, stream: true } without mutating ShowConfig', async () => {
+    const view = {
+      live: false,
+      destinations: [
+        { id: 'a', kind: 'custom', canvas: 'main', name: 'Local test', enabled: true },
+      ],
+    } as never
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const idle = { stream: null, record: null, canvas: { fps: 30 } } as unknown as EngineStats
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      calls.push([method, path, body])
+      if (path.endsWith('/show/config'))
+        return {
+          starting_scene: 'Starting',
+          countdown_s: 300,
+          live_scene: null,
+          start_stream: false,
+          stop_stream: false,
+          stop_delay_s: 30,
+          discord: false,
+          ending_scene: null,
+        }
+      if (path.endsWith('/show/start')) return { show: run({ phase: 'countdown', steps: [] }) }
+      if (path.endsWith('/show')) return { show: null }
+      if (path.includes('/stream-info')) return { last: null, history: [], presets: [] }
+      return []
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const desk = {
+      stats: idle,
+      setStats: vi.fn(),
+      openSettings: vi.fn(),
+      prefs: { data: {}, reload: vi.fn() },
+      api: { shelf: async () => ({ list: [], current: null }) },
+      library: 0,
+      refresh: vi.fn(),
+    } as unknown as Desk
+    const el = document.body.appendChild(document.createElement('div'))
+    root = createRoot(el)
+    await act(async () =>
+      root!.render(
+        <DeskProvider value={desk}>
+          <DockWorkspace
+            top={<ControlBar view={view} onStatus={vi.fn()} />}
+            stage={<div />}
+            docks={() => null}
+          />
+        </DeskProvider>,
+      ),
+    )
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    await act(async () => button('Go live')!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    // Must NEVER PUT /show/config when pressing Go live!
+    expect(calls.filter((c) => c[0] === 'PUT' && c[1].endsWith('/show/config'))).toHaveLength(0)
+    const starts = calls.filter((c) => c[0] === 'POST' && c[1].endsWith('/show/start'))
+    expect(starts).toHaveLength(1)
+    expect(starts[0]?.[2]).toEqual({ force: true, stream: true })
+  })
 })

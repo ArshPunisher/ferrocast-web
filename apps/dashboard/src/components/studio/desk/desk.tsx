@@ -45,12 +45,14 @@ import {
   type EngineRecovered,
   type StudioEngineStatus,
   type StudioSettings,
+  type StudioStartOptions,
 } from '@ferrocast/api'
-import { Button, Dialog, IconButton, InfoTip, Skeleton, cx, toast } from '@ferrocast/ui'
+import { Button, Dialog, IconButton, InfoLine, InfoTip, Skeleton, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os } from '../../../lib/os'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
+import { useLive } from '../../../lib/store'
 import { useWidePage } from '../../../lib/wide'
 import { go } from '../../../lib/router'
 import { useStudio } from '../common'
@@ -115,19 +117,28 @@ export function StudioDesk({
   useWidePage()
   const status = useResource(() => api.status(), [api])
   const s = status.data
+  // Keep Shell's SafeModeBanner in sync if the engine starts or exits Safe Mode elsewhere.
+  useEffect(() => {
+    if (!s) return
+    useLive.getState().setSafeMode(s.safe_mode ?? null)
+  }, [s])
   // After pressing Start (never on its own): the ready check, with what came back after a crash.
   const [ready, setReady] = useState<{ recovered: EngineRecovered | null } | null>(null)
-  const start = useCallback(async () => {
-    try {
-      const st = await api.start()
-      status.set(st)
-      setReady({ recovered: st.recovered ?? null })
-    } catch (e) {
-      const d = describeError(e)
-      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
-      status.reload()
-    }
-  }, [api, status])
+  const start = useCallback(
+    async (opts?: StudioStartOptions) => {
+      try {
+        const st = await api.start(opts)
+        status.set(st)
+        useLive.getState().setSafeMode(st.safe_mode ?? null)
+        setReady({ recovered: st.recovered ?? null })
+      } catch (e) {
+        const d = describeError(e)
+        toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+        status.reload()
+      }
+    },
+    [api, status],
+  )
   // Off: checked again every 3 s, so a start from elsewhere (a shortcut, another screen)
   // shows here too.
   const off = !!s && !s.running
@@ -146,7 +157,12 @@ export function StudioDesk({
       <>
         {lead && <InBar className="mb-3 flex">{lead}</InBar>}
         <div className="flex min-h-[420px] flex-col overflow-hidden rounded-panel border border-line">
-          <StageOff available={s.available} detail={s.detail} onStart={start} />
+          <StageOff
+            available={s.available}
+            detail={s.detail}
+            safeMode={s.safe_mode ?? null}
+            onStart={start}
+          />
         </div>
       </>
     )
@@ -457,6 +473,16 @@ function Running({
   const pictureCurrent =
     (canvas === 'vertical' ? scenes.data?.vertical?.current : scenes.data?.current) ?? ''
   const bumpLibrary = useCallback(() => setLibrary((n) => n + 1), [])
+  // Loading saved scenes from the Safe Mode banner replaces the blank canvas immediately.
+  const collectionPending = useLive((s) => s.status?.safe_mode?.collection_pending ?? false)
+  const wasCollectionPending = useRef(collectionPending)
+  useEffect(() => {
+    if (wasCollectionPending.current && !collectionPending) {
+      refresh()
+      bumpLibrary()
+    }
+    wasCollectionPending.current = collectionPending
+  }, [collectionPending, refresh, bumpLibrary])
   const openSettings = useCallback(
     (page?: string) => setSettingsAt((page as Page | undefined) ?? 'stream'),
     [],
@@ -609,7 +635,7 @@ export function turnOffAsk(
 ): { title: string; text: string; keep: string } | null {
   const s = stats?.stream
   // As the bar reads it: a stream exists until stopped; while connecting it isn't active yet.
-  const live = !!s && (s.active || s.reconnecting || !s.error)
+  const live = !!s && !s.failed && (s.active || s.reconnecting || !s.error)
   const recording = !!stats?.record?.active
   if (live && recording)
     return {
@@ -662,7 +688,7 @@ export function ControlBar({
   const stream = stats?.stream ?? null
   const rec = stats?.record ?? null
   // A stream exists until stopped; while connecting it isn't active yet but is on.
-  const on = !!stream && (stream.active || stream.reconnecting || !stream.error)
+  const on = !!stream && !stream.failed && (stream.active || stream.reconnecting || !stream.error)
   const recording = !!rec?.active
   const studio = useStudio()
   const [show, setShow] = useShow()
@@ -696,15 +722,12 @@ export function ControlBar({
     if ((!on && styleOf(cfg) !== 'just') || (on && showing)) {
       const r = await run(
         'stream',
-        async () => {
-          if (!cfg.start_stream || !cfg.stop_stream)
-            await studio.saveShowConfig({ ...cfg, start_stream: true, stop_stream: true })
-          return on ? studio.endShow() : studio.startShow(true)
-        },
+        // Per-run stream override: never mutate saved ShowConfig (M9-02).
+        () => (on ? studio.endShow(!cfg.stop_stream) : studio.startShow(true, true)),
         {
           success: () =>
             on
-              ? cfg.stop_delay_s > 0
+              ? cfg.stop_stream && cfg.stop_delay_s > 0
                 ? `Ending the show. The stream stops in ${cfg.stop_delay_s} s.`
                 : 'Ending the show.'
               : null,
@@ -947,10 +970,14 @@ export function ControlBar({
           belongs to a recording or the ending, then Record and Go live side by side), so the
           bar is the same height idle and on air; wider: one row. */}
       <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-        {stream?.error && !stream.active && (
-          <span className="text-[14px] font-semibold text-danger" aria-live="polite">
-            {stream.error}
-          </span>
+        {(stream?.error || stream?.failed) && !stream.active && (
+          <InfoLine
+            detail={stream.detail ?? undefined}
+            label="More about stream error"
+            className="text-[14px] font-semibold text-danger"
+          >
+            <span aria-live="polite">{stream.reason ?? stream.error ?? 'Stream stopped.'}</span>
+          </InfoLine>
         )}
         <div className="flex items-center justify-between gap-2 sm:contents">
           {/* Settings, the layout and the extra outputs: one quiet group of icons. */}
