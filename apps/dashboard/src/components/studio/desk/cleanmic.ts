@@ -7,8 +7,12 @@ import type { NewEngineSource } from '@ferrocast/api'
 /** Where a voice's loudest moments should sit after the mic level step (dB below full scale). */
 export const VOICE_TARGET_DB = -12
 
-/** The most the mic level step ever adds (OBS's Gain filter goes to +30 dB). */
-export const MAX_MIC_GAIN_DB = 30
+/**
+ * The most the mic level step ever adds. OBS's Gain goes to +30 dB, but a step that big on a
+ * mic in a noisy room (a fan counted as talking) left the fan 11 dB under the voice (S32: +20 dB
+ * gave pauses at -25.8 dBFS, +10 dB at -43.3), so it stops at +15.
+ */
+export const MAX_MIC_GAIN_DB = 15
 
 export const MIC_LEVEL_FILTER = 'Raise a quiet mic'
 
@@ -55,21 +59,26 @@ export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
   },
 ]
 
-/** The median of a voice's peaks while it talked (dB), or null until there's been enough talking. */
-export function voiceMedianPeak(peaks: readonly number[]): number | null {
+/**
+ * Where a voice's peaks usually sit while it talked (dB): the 60th percentile of the readings
+ * above silence, or null until there's been enough talking. Not the middle: in a noisy room the
+ * fan's low peaks count as talking and drag a median down (a captured voice read -31.7 dB against
+ * the voice's own -27), so the step asked for too much.
+ */
+export function voiceUsualPeak(peaks: readonly number[]): number | null {
   const talk = peaks.filter((p) => Number.isFinite(p) && p > TALKING_DB).sort((a, b) => a - b)
   if (talk.length < 10) return null
-  return talk[Math.floor(talk.length / 2)] ?? null
+  return talk[Math.min(talk.length - 1, Math.floor(talk.length * 0.6))] ?? null
 }
 
 /**
  * How many dB the mic level step adds so the voice's usual peak sits at -12 dB: nothing when it
- * already does or is louder, at most +30. Null until there's been enough talking to tell.
+ * already does or is louder, at most +15. Null until there's been enough talking to tell.
  */
 export function micGainDb(peaks: readonly number[]): number | null {
-  const median = voiceMedianPeak(peaks)
-  if (median === null) return null
-  return Math.round(Math.min(MAX_MIC_GAIN_DB, Math.max(0, VOICE_TARGET_DB - median)))
+  const usual = voiceUsualPeak(peaks)
+  if (usual === null) return null
+  return Math.round(Math.min(MAX_MIC_GAIN_DB, Math.max(0, VOICE_TARGET_DB - usual)))
 }
 
 /** The filters still to add, in order (the ones it has already stay as they are). */

@@ -67,7 +67,7 @@ import {
   MIC_LEVEL_FILTER,
   cleanMicPlan,
   micGainDb,
-  voiceMedianPeak,
+  voiceUsualPeak,
   duckFilter,
   duckMic,
   freeName,
@@ -1465,7 +1465,7 @@ function CleanMic({
     if (peaks.current.length > 100) peaks.current.shift()
   }, [level])
   const verdict = voiceVerdict(peaks.current)
-  const median = voiceMedianPeak(peaks.current)
+  const usual = voiceUsualPeak(peaks.current)
   const gainDb = micGainDb(peaks.current)
   const have = list.data ?? null
   const plan = have
@@ -1502,14 +1502,14 @@ function CleanMic({
         aria-live="polite"
       >
         {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
-        {gainStep && median !== null && (
+        {gainStep && usual !== null && (
           <>
             {' '}
             <span className="font-normal text-text-2">
               Cleaning up will also raise it by {gainDb} dB.
             </span>
             <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
-              Your voice peaks around {Math.round(median)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
+              Your voice peaks around {Math.round(usual)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
               step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
               something to work on. Change it in Filters.
             </InfoTip>

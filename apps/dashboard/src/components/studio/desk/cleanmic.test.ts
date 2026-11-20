@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   DUCK_FILTER,
   VOICE_STYLES,
+  MAX_MIC_GAIN_DB,
   MIC_LEVEL_FILTER,
+  VOICE_TARGET_DB,
   cleanMicPlan,
   duckFilter,
   duckMic,
   freeName,
   micGainDb,
-  voiceMedianPeak,
+  voiceUsualPeak,
   voiceStyleOf,
   voiceVerdict,
 } from './cleanmic'
@@ -80,14 +82,27 @@ describe('clean mic', () => {
 describe('the voice level', () => {
   const many = (v: number, n = 20) => Array.from({ length: n }, () => v)
 
-  it('raises a quiet voice so its usual peak sits near -12 dB, at most +30', () => {
+  it('raises a quiet voice so its usual peak sits near -12 dB, at most +15', () => {
     expect(micGainDb(many(-22))).toBe(10)
     expect(micGainDb(many(-12))).toBe(0)
     expect(micGainDb(many(-6))).toBe(0)
-    expect(micGainDb(many(-45))).toBe(30)
-    // The middle reading, not the loudest: one shout doesn't hide a quiet voice.
-    expect(micGainDb([...many(-30, 20), -1])).toBe(18)
-    expect(voiceMedianPeak(many(-30))).toBe(-30)
+    expect(micGainDb(many(-45))).toBe(15)
+    expect(voiceUsualPeak(many(-30))).toBe(-30)
+  })
+
+  it('does not take a fan for a quiet voice: the captured noisy room asks for at most +15', () => {
+    // The S32 capture: most 21 ms blocks were above silence (the fan's peaks near -34 dB), the
+    // voice's own near -27 dB on average and up to -14: the middle reading (-31.7) asked for +20
+    // and left the fan 11 dB under the voice; the 60th percentile and the cap give +15 or less.
+    const fan = many(-35, 60)
+    const voice = [...many(-27, 30), ...many(-20, 15), ...many(-14, 10)]
+    const noisy = [...fan, ...voice]
+    const middle = [...noisy].sort((a, b) => a - b)[Math.floor(noisy.length / 2)] ?? 0
+    expect(VOICE_TARGET_DB - middle).toBeGreaterThan(MAX_MIC_GAIN_DB)
+    expect(micGainDb(noisy)).toBeLessThanOrEqual(15)
+    expect(micGainDb(noisy)).toBe(15)
+    // A quiet room (only the voice) is not held back below what it needs.
+    expect(micGainDb(voice)).toBe(Math.round(Math.max(0, -12 - (voiceUsualPeak(voice) ?? 0))))
   })
 
   it('has no number until there has been enough talking', () => {
