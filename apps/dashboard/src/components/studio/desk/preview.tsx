@@ -1887,8 +1887,9 @@ export function StageBar() {
       key: 'tip',
       wrap: 'hidden @[960px]:flex',
       rank: 0,
-      render: () =>
-        t && (
+      render: (panel) =>
+        t &&
+        !panel && (
           <InfoTip label="About switching scenes">
             How the picture changes when you click another scene.
           </InfoTip>
