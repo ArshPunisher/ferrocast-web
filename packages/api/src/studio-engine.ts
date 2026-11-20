@@ -519,10 +519,14 @@ export interface StudioSettings {
   bframes: boolean
   /** Send at this size instead of the canvas's. */
   scale: [number, number] | null
+  /** How a stream sent at another size is scaled (bicubic when absent). */
+  scale_filter?: 'bilinear' | 'bicubic' | 'lanczos' | 'area'
   audio_kbps: number
   width: number
   height: number
   fps: number
+  /** Broadcast timing: 24 → 23.976, 30 → 29.97, 60 → 59.94 (only for those; from the next start). */
+  fps_ntsc?: boolean
   /** null: Movies/Ferrocast. */
   record_folder: string | null
   /** Where recordings go when `record_folder` is null (this computer's Movies or Videos
@@ -538,7 +542,10 @@ export interface StudioSettings {
   delay_max_mb?: number
   /** Twitch's VOD track: this audio track (2 to 6) goes to Twitch for the VOD; 0 off. */
   twitch_vod_track?: number
+  /** The rate the engine mixes at and the files and streams carry (from the next start). */
   sample_rate: 44100 | 48000
+  /** Names for the recording's audio tracks, by track number (MP4 and MKV); up to 6 of 40 characters. */
+  audio_track_names?: string[]
   stereo: boolean
   /** [name, id]; null: the system's. */
   monitoring: [string, string] | null

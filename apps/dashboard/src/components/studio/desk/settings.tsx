@@ -653,8 +653,58 @@ export function StreamPage({ s, set }: PageProps) {
                     {w}×{h}
                   </option>
                 ))}
+              {/* A size typed below stays in the list. */}
+              {s.scale &&
+                !['1920x1080', '1600x900', '1280x720', '960x540', '852x480'].includes(
+                  s.scale.join('x'),
+                ) && (
+                  <option value={s.scale.join('x')}>
+                    {s.scale[0]}×{s.scale[1]} (custom)
+                  </option>
+                )}
             </Select>
           </Row>
+          {s.scale && (
+            <>
+              <Row label="Custom size" sub="Even numbers; the picture is scaled to fit">
+                <span className="flex items-center gap-2">
+                  <NumberBox
+                    label="Width"
+                    value={s.scale[0]}
+                    min={128}
+                    max={7680}
+                    unit=""
+                    onChange={(w) => set({ scale: [w & ~1, s.scale?.[1] ?? 720] })}
+                  />
+                  ×
+                  <NumberBox
+                    label="Height"
+                    value={s.scale[1]}
+                    min={72}
+                    max={4320}
+                    unit="px"
+                    onChange={(h) => set({ scale: [s.scale?.[0] ?? 1280, h & ~1] })}
+                  />
+                </span>
+              </Row>
+              <Row label="Scaling" sub="How the picture is made smaller. Bicubic suits most">
+                <Select
+                  aria-label="Scaling"
+                  value={s.scale_filter ?? 'bicubic'}
+                  onChange={(e) =>
+                    set({
+                      scale_filter: e.target.value as NonNullable<StudioSettings['scale_filter']>,
+                    })
+                  }
+                >
+                  <option value="bilinear">Bilinear (fastest)</option>
+                  <option value="bicubic">Bicubic</option>
+                  <option value="lanczos">Lanczos (sharpest)</option>
+                  <option value="area">Area</option>
+                </Select>
+              </Row>
+            </>
+          )}
           <Row label="Encoder" info="One you pick here wins over the choice above (HEVC, AV1…).">
             <EncoderSelect
               label="Encoder"
@@ -727,6 +777,19 @@ function AudioPage({ s, set }: PageProps) {
       </div>
       <Heading info="Changes apply at once.">Sound</Heading>
       <div className="flex flex-col">
+        <Row
+          label="Sample rate"
+          info="The rate sound is mixed and recorded at. 48 kHz suits video; 44.1 kHz for music-first files. Applies from the next start. The strong noise removal needs 48 kHz."
+        >
+          <Select
+            aria-label="Sample rate"
+            value={String(s.sample_rate ?? 48000)}
+            onChange={(e) => set({ sample_rate: Number(e.target.value) as 44100 | 48000 })}
+          >
+            <option value="48000">48 kHz</option>
+            <option value="44100">44.1 kHz</option>
+          </Select>
+        </Row>
         <Row
           label="True peak meters"
           info="Catches peaks between samples (OBS's True Peak), a little more work for the computer."
@@ -1006,7 +1069,11 @@ export function PicturePage({ s, set }: PageProps) {
           <Select
             aria-label="Frame rate"
             value={String(s.fps)}
-            onChange={(e) => set({ fps: Number(e.target.value) })}
+            onChange={(e) => {
+              const fps = Number(e.target.value)
+              // Broadcast timing only exists for 24, 30 and 60.
+              set(s.fps_ntsc && ![24, 30, 60].includes(fps) ? { fps, fps_ntsc: false } : { fps })
+            }}
           >
             {[24, 25, 30, 48, 50, 60, 120].map((f) => (
               <option key={f} value={f}>
@@ -1015,6 +1082,19 @@ export function PicturePage({ s, set }: PageProps) {
             ))}
           </Select>
         </Row>
+        {[24, 30, 60].includes(s.fps) && (
+          <Row
+            label={`Broadcast timing (${{ 24: '23.976', 30: '29.97', 60: '59.94' }[s.fps as 24 | 30 | 60]} fps)`}
+            info="A thousandth slower, as TV and most capture cards run. Use it when your sources are 29.97 or 59.94 and the picture stutters now and then. Applies from the next start."
+          >
+            <Switch
+              label="Broadcast timing"
+              hideLabel
+              checked={!!s.fps_ntsc}
+              onChange={(fps_ntsc) => set({ fps_ntsc })}
+            />
+          </Row>
+        )}
       </div>
       <Heading info="A projector of every scene at once; a click puts one on air (in Studio Mode, in the preview).">
         Multiview
@@ -1620,6 +1700,31 @@ export function RecordPage({ s, set }: PageProps) {
                 </button>
               )
             })}
+          </span>
+        </Row>
+        <Row
+          label="Track names"
+          info="Shown by editors and players for each audio track in MP4 and MKV recordings (Mic, Game…). Leave empty for none."
+        >
+          <span className="flex flex-col gap-1.5">
+            {tracks.map((t) => (
+              <Input
+                key={t}
+                aria-label={`Name of track ${t}`}
+                placeholder={`Track ${t}`}
+                maxLength={40}
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 w-44"
+                value={s.audio_track_names?.[t - 1] ?? ''}
+                onChange={(e) => {
+                  const names = [...(s.audio_track_names ?? [])]
+                  while (names.length < 6) names.push('')
+                  names[t - 1] = e.target.value
+                  set({ audio_track_names: names })
+                }}
+              />
+            ))}
           </span>
         </Row>
         <Row label="Replay buffer keeps" sub="The last seconds, saved on request">
