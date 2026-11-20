@@ -44,6 +44,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
 import { Group, Row, SettingsHead, SwitchRow } from '../components/settings-kit'
+import { AppearanceGroups } from '../components/appearance-settings'
 import { AccountRow, useConnect } from '../components/accounts'
 import { YoutubePrivacyGroup } from '../components/youtube-privacy'
 import { stateCopy } from '../components/StatusStrip'
@@ -564,6 +565,7 @@ function Appearance({
           }
         />
       </Group>
+      <AppearanceGroups />
       <Group title="On stream">
         <SwitchRow
           checked={settings.low_motion_overlays}
