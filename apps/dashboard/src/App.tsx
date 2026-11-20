@@ -36,6 +36,14 @@ import {
   type RemoteProblem,
 } from './lib/boot'
 import { isLimited, loadFull, startLive, stopLive, useLive } from './lib/store'
+import { isMenuMessage, runMenu } from './lib/menu'
+import { refreshUpdate } from './lib/update'
+import {
+  ZOOM_STEP,
+  fitPreview,
+  togglePreviewLock,
+  zoomView,
+} from './components/studio/desk/preview'
 import { parseRoute, useRoute } from './lib/router'
 import { Shell } from './components/Shell'
 import { Home } from './screens/Home'
@@ -222,6 +230,30 @@ export function App() {
     void boot()
     return () => stopLive()
   }, [boot])
+
+  // The Mac menu bar (the desktop app) hands the page what an item means.
+  const menuClient = conn?.client
+  useEffect(() => {
+    const onMenu = (e: Event) => {
+      const msg = (e as CustomEvent).detail as unknown
+      if (!isMenuMessage(msg)) return
+      runMenu(msg, {
+        navigate: (hash) => {
+          window.location.hash = hash
+        },
+        checkUpdates: async () => {
+          if (!menuClient) return
+          await menuClient.checkUpdates()
+          await refreshUpdate(menuClient)
+        },
+        toggleLock: togglePreviewLock,
+        zoom: (how) =>
+          how === 'fit' ? fitPreview() : zoomView(how === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP),
+      })
+    }
+    window.addEventListener('ferrocast:menu', onMenu)
+    return () => window.removeEventListener('ferrocast:menu', onMenu)
+  }, [menuClient])
 
   // The app restarted (or forgot this browser): the live socket only retries, so ask once
   // whether this tab is still signed in, and if not, show "Link this browser" instead of

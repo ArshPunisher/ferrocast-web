@@ -204,6 +204,16 @@ function pointerFromCentre(el: Element, x: number, y: number): [number, number] 
   return [x - (r.left + r.width / 2), y - (r.top + r.height / 2)]
 }
 
+/** Lock preview on or off (the menu bar's Edit › Lock Preview). */
+export function togglePreviewLock(): void {
+  viewSet({ locked: !getPreviewView().locked })
+}
+
+/** Fit and centre the preview's canvas. */
+export function fitPreview(): void {
+  viewSet({ zoom: 1, pan: [0, 0] })
+}
+
 /** Zooms the preview by `k` round `at` (from the stage's centre). */
 export function zoomView(k: number, at: [number, number] = [0, 0]): void {
   const v = getPreviewView()
