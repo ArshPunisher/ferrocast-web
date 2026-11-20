@@ -1,7 +1,7 @@
 // The "Go live to" panel: the platforms the Studio's picture goes to, each switched on or off
 // here; adding, ordering and the rest open Go live's full list.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   healthText,
   onCanvas,
@@ -10,10 +10,10 @@ import {
   type StudioSettings,
 } from '@ferrocast/api'
 import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
-import { IconButton, Button, Dialog, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
+import { IconButton, Button, Dialog, InfoLine, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
-import { Logo, Platforms, RowText, useGoLive } from '../golive'
+import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
@@ -29,10 +29,16 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const live = !!view?.live
   // On air, each destination's own line ("Live · 6.5 Mbps") comes from this reading, which no
   // frame brings for the Studio's own stream: read again now and then (S18 B5).
-  const onAir = useDeskStats((s) => !!s?.stream)
+  const onAir = useDeskStats((s) => !!s?.stream && !s.stream.failed)
+  const wasOnAir = useRef(onAir)
   const { reload } = res
   useEffect(() => {
-    if (!onAir) return
+    if (!onAir) {
+      if (wasOnAir.current) reload()
+      wasOnAir.current = false
+      return
+    }
+    wasOnAir.current = true
     reload()
     const poll = () => {
       if (!document.hidden) reload()
@@ -112,12 +118,26 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       if (!r) res.reload()
     })
   }
+  const retry = (d: DestinationView) =>
+    void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
+      success: `Retrying ${d.name}.`,
+    }).then((r) => {
+      if (r) res.reload()
+    })
+  const canRetry = onAir || live
   const row = (d: DestinationView) => (
-    <li key={d.id} className="flex items-center gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
-      <Logo kind={d.kind} size={20} />
+    <li key={d.id} className="flex items-start gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
+      <div className="mt-0.5 shrink-0">
+        <Logo kind={d.kind} size={20} />
+      </div>
       <div className="min-w-0 flex-1">
         <RowText d={d} fixBitrate={fixBitrate} compact />
-        <LiveLine d={d} />
+        <LiveLine
+          d={d}
+          canRetry={canRetry}
+          retrying={busy === `retry:${d.id}`}
+          onRetry={() => retry(d)}
+        />
       </div>
       {/* At the top, lined up with the name, however long the notes below. */}
       <Switch
@@ -171,6 +191,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           <Skeleton className="m-3 h-28" />
         ) : (
           <>
+            {!onAir && <AllFailedBanner view={view} compact />}
             {mine.length === 0 ? (
               <div className="flex flex-col items-start gap-3 p-3">
                 <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
@@ -219,13 +240,45 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
 }
 
 /**
- * While a destination is on air (or trying to be): how it is doing, on its own row ("Live ·
- * 13.5 Mbit/s", "Reconnecting"), so which one is in trouble shows without the status bar (S18 B5).
+ * While a destination is on air (or failed for this stream): how it is doing, on its own row
+ * ("Live · 13.5 Mbps", "Reconnecting", or one calm failed line with the reason behind (i) and Retry).
  */
-function LiveLine({ d }: { d: DestinationView }) {
+export function LiveLine({
+  d,
+  canRetry = false,
+  retrying = false,
+  onRetry,
+}: {
+  d: DestinationView
+  canRetry?: boolean
+  retrying?: boolean
+  onRetry?: () => void
+}) {
   const h = d.health
   if (!d.enabled || !h || h.state === 'waiting' || h.state === 'stopped') return null
-  const t = healthText(h, d.blocked)
+  const t = healthText(h, d.blocked, d.kind)
+  if (h.state === 'failed') {
+    return (
+      <div className="mt-0.5 flex flex-col items-start gap-1.5">
+        <InfoLine detail={t.detail ?? undefined} label={`More about ${d.name}`} className="w-full">
+          <span className="block text-[12px] font-semibold text-danger" aria-live="polite">
+            {t.label}
+          </span>
+        </InfoLine>
+        {canRetry && onRetry && (
+          <Button
+            size="xs"
+            variant="outline"
+            busy={retrying}
+            onClick={onRetry}
+            aria-label={`Retry ${d.name}`}
+          >
+            Retry
+          </Button>
+        )}
+      </div>
+    )
+  }
   return (
     <span
       className={cx(

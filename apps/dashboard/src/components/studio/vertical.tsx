@@ -17,7 +17,7 @@ import { useAction, useClient, useResource } from '../../lib/hooks'
 import { href } from '../../lib/router'
 import { CutEditor, CutPreview, type CutShown } from './cut-editor'
 import { useUsesObs } from '../../lib/picture'
-import { ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
+import { AllFailedBanner, ByHand, LiveCard, Platforms, useGoLive, useMerged } from './golive'
 
 export function VerticalTab() {
   const api = useGoLive()
@@ -52,7 +52,11 @@ export function VerticalTab() {
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[auto_minmax(0,1fr)]">
         <Phone view={view} cut={view.cut.source === 'cut' ? shown : null} />
         <div className="flex min-w-0 flex-col gap-5">
-          {view.vertical_live && <LiveCard view={view} onSaved={res.reload} canvas="vertical" />}
+          {view.vertical_live ? (
+            <LiveCard view={view} onSaved={res.reload} canvas="vertical" />
+          ) : (
+            <AllFailedBanner view={view} canvas="vertical" />
+          )}
           <Source view={view} onVertical={setVertical} onSource={res.reload} />
           {view.cut.source === 'cut' && (
             <CutEditor cut={view.cut} onSaved={res.reload} onShown={setShown} />

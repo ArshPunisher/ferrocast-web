@@ -82,11 +82,13 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
             : undefined
           const streamIssue = dest?.blocked
             ? 'stream can’t start'
-            : dest?.health?.state === 'reconnecting'
-              ? 'stream reconnecting'
-              : dest?.health?.state === 'paused'
-                ? 'stream paused to save upload'
-                : null
+            : dest?.health?.state === 'failed'
+              ? 'stream failed'
+              : dest?.health?.state === 'reconnecting'
+                ? 'stream reconnecting'
+                : dest?.health?.state === 'paused'
+                  ? 'stream paused to save upload'
+                  : null
           const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
           const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
           const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
@@ -136,8 +138,21 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
                   </span>
                 )}
                 {streamIssue && (
-                  <span className="flex items-center gap-1.5 text-warn" aria-hidden="true">
-                    <span className="size-1.5 rounded-full bg-warn" />
+                  <span
+                    className={cx(
+                      'flex items-center gap-1.5',
+                      dest?.blocked || dest?.health?.state === 'failed'
+                        ? 'text-danger'
+                        : 'text-warn',
+                    )}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={cx(
+                        'size-1.5 rounded-full',
+                        dest?.blocked || dest?.health?.state === 'failed' ? 'bg-danger' : 'bg-warn',
+                      )}
+                    />
                     {!compact && streamIssue}
                   </span>
                 )}

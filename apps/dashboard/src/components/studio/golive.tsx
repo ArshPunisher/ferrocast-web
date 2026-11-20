@@ -26,6 +26,7 @@ import {
 } from '@phosphor-icons/react'
 import {
   aitumClashes,
+  allDestinationsFailed,
   andList,
   describeError,
   directKind,
@@ -176,7 +177,11 @@ export function GoLiveTab() {
       <InBar className="mb-4 flex">{pick}</InBar>
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
-          {view.live && <LiveCard view={view} onSaved={res.reload} />}
+          {view.live ? (
+            <LiveCard view={view} onSaved={res.reload} />
+          ) : (
+            <AllFailedBanner view={view} />
+          )}
           <Platforms view={view} onSaved={res.reload} onProtect={(protect) => set({ protect })} />
           {/* The extras (each platform's server and retries, the protection rule, the vertical
               numbers) fold away; open, they stay open on this computer. */}
@@ -210,6 +215,50 @@ export function GoLiveTab() {
 
 // ---------------------------------------------------------------- 5A: while live
 
+/**
+ * Calm one-line banner shown when every enabled destination on `canvas` reached terminal
+ * `PushState::Failed` and the Studio stopped streaming (Contract C-1).
+ */
+export function AllFailedBanner({
+  view,
+  canvas = 'main',
+  compact = false,
+}: {
+  view: GoLiveView
+  canvas?: Canvas
+  compact?: boolean
+}) {
+  const isLive = canvas === 'vertical' ? view.vertical_live : view.live
+  if (isLive) return null
+  const all = allDestinationsFailed(view.destinations, canvas)
+  if (!all) return null
+  return (
+    <div
+      role="alert"
+      className={cx(
+        'flex items-start gap-2 bg-danger-soft text-danger',
+        compact
+          ? 'border-b border-danger/25 px-3 py-2 text-[12.5px]'
+          : 'rounded-panel border border-danger/30 px-4 py-3 text-[14px]',
+      )}
+    >
+      <WarningCircle
+        size={compact ? 15 : 18}
+        weight="fill"
+        className="mt-0.5 shrink-0"
+        aria-hidden
+      />
+      <InfoLine
+        detail={all.detail}
+        label="More about why the stream stopped"
+        className="min-w-0 flex-1"
+      >
+        <span className="font-semibold text-danger">{all.summary}</span>
+      </InfoLine>
+    </div>
+  )
+}
+
 export function LiveCard({
   view,
   onSaved,
@@ -230,6 +279,7 @@ export function LiveCard({
   const on = shown.filter((d) => !d.standby_for)
   const live = on.filter((d) => d.health?.state === 'live')
   const paused = on.filter((d) => d.health?.state === 'paused').length
+  const failed = on.filter((d) => d.health?.state === 'failed').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
   const since = Math.min(...on.map((d) => d.health?.since_ms ?? Infinity))
   const stopTrying = (id: string) =>
@@ -240,7 +290,7 @@ export function LiveCard({
     ).then((r) => r && onSaved())
   const resume = (d: DestinationView) =>
     void run(`resume:${d.id}`, () => api.resume(d.id).then(() => true), {
-      success: `${d.name} is coming back.`,
+      success: d.health?.state === 'failed' ? `Retrying ${d.name}.` : `${d.name} is coming back.`,
     }).then((r) => r && onSaved())
   return (
     <Panel id={canvas === 'main' ? 'golive-live' : 'vertical-live'}>
@@ -257,8 +307,9 @@ export function LiveCard({
             <b className="font-display text-[18px] tabular-nums">{elapsed(now - since)}</b>
           )}
           <span className="text-[14px] text-text-3">
-            {live.length} of {on.length} live{paused > 0 ? ` · ${paused} paused` : ''} · {mbps(out)}{' '}
-            going out
+            {live.length} of {on.length} live
+            {paused > 0 ? ` · ${paused} paused` : ''}
+            {failed > 0 ? ` · ${failed} failed` : ''} · {mbps(out)} going out
           </span>
         </div>
         <ul
@@ -266,6 +317,7 @@ export function LiveCard({
           aria-label="Health per platform"
         >
           {shown.map((d) => {
+            const isFailed = d.health?.state === 'failed'
             const h = d.standby_for
               ? {
                   tone: 'off' as const,
@@ -273,54 +325,88 @@ export function LiveCard({
                   detail: `Sends only if ${d.standby_for} can’t.`,
                 }
               : d.backup_for
-                ? withBackup(healthText(d.health, d.blocked), d.backup_for)
+                ? withBackup(healthText(d.health, d.blocked, d.kind), d.backup_for)
                 : d.lighter_for_route
-                  ? lighterForNow(healthText(d.health, d.blocked))
-                  : healthText(d.health, d.blocked)
+                  ? lighterForNow(healthText(d.health, d.blocked, d.kind))
+                  : healthText(d.health, d.blocked, d.kind)
             return (
               <li
                 key={d.id}
                 className={cx(
                   'grid grid-cols-[30px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b border-line px-3.5 py-3 last:border-b-0 sm:grid-cols-[30px_minmax(0,1fr)_auto]',
-                  h.tone === 'warn' ? 'bg-warn-soft' : 'bg-surface-1',
+                  h.tone === 'warn' ? 'bg-warn-soft' : isFailed ? 'bg-danger-soft' : 'bg-surface-1',
                 )}
               >
                 <Logo kind={d.kind} />
                 <div className="min-w-0">
-                  <span
-                    className={cx(
-                      'flex items-start gap-1.5 text-[14.5px] font-bold',
-                      h.tone === 'ok' && 'text-ok',
-                      h.tone === 'warn' && 'text-warn',
-                      h.tone === 'bad' && 'text-danger',
-                      (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
-                    )}
-                  >
-                    {/* On the first line when a long label wraps (a phone). */}
-                    {h.tone === 'warn' ? (
-                      <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
-                    ) : h.tone === 'paused' ? (
-                      <Pause size={14} weight="fill" className="mt-[3px] shrink-0" aria-hidden />
-                    ) : (
+                  {isFailed ? (
+                    <InfoLine detail={h.detail ?? undefined} label={`More about ${d.name}`}>
+                      <span className="flex items-start gap-1.5 text-[14.5px] font-bold text-danger">
+                        <WarningCircle
+                          size={15}
+                          weight="fill"
+                          className="mt-[3px] shrink-0"
+                          aria-hidden
+                        />
+                        <span>
+                          {d.name}: {h.label}
+                        </span>
+                      </span>
+                    </InfoLine>
+                  ) : (
+                    <>
                       <span
-                        className="mt-[7px] size-[7px] shrink-0 rounded-full bg-current"
-                        aria-hidden
-                      />
-                    )}
-                    <span>
-                      {d.name}: {h.label}
-                    </span>
-                  </span>
-                  {h.detail && (
-                    <p className="m-0 text-[13.5px] text-text-3 tabular-nums">{h.detail}</p>
-                  )}
-                  {d.health?.state === 'paused' && d.health.until_ms > now && (
-                    <p className="m-0 text-[13.5px] text-text-3 tabular-nums">
-                      Back in {waitText(d.health.until_ms - now)} at the earliest.
-                    </p>
+                        className={cx(
+                          'flex items-start gap-1.5 text-[14.5px] font-bold',
+                          h.tone === 'ok' && 'text-ok',
+                          h.tone === 'warn' && 'text-warn',
+                          h.tone === 'bad' && 'text-danger',
+                          (h.tone === 'off' || h.tone === 'paused') && 'text-text-3',
+                        )}
+                      >
+                        {/* On the first line when a long label wraps (a phone). */}
+                        {h.tone === 'warn' ? (
+                          <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
+                        ) : h.tone === 'paused' ? (
+                          <Pause
+                            size={14}
+                            weight="fill"
+                            className="mt-[3px] shrink-0"
+                            aria-hidden
+                          />
+                        ) : (
+                          <span
+                            className="mt-[7px] size-[7px] shrink-0 rounded-full bg-current"
+                            aria-hidden
+                          />
+                        )}
+                        <span>
+                          {d.name}: {h.label}
+                        </span>
+                      </span>
+                      {h.detail && (
+                        <p className="m-0 text-[13.5px] text-text-3 tabular-nums">{h.detail}</p>
+                      )}
+                      {d.health?.state === 'paused' && d.health.until_ms > now && (
+                        <p className="m-0 text-[13.5px] text-text-3 tabular-nums">
+                          Back in {waitText(d.health.until_ms - now)} at the earliest.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
-                {h.tone === 'paused' ? (
+                {isFailed ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="col-start-2 justify-self-start sm:col-start-auto"
+                    busy={busy === `resume:${d.id}`}
+                    aria-label={`Retry ${d.name}`}
+                    onClick={() => resume(d)}
+                  >
+                    Retry
+                  </Button>
+                ) : h.tone === 'paused' ? (
                   <Button
                     size="sm"
                     className="col-start-2 justify-self-start sm:col-start-auto"
@@ -532,14 +618,40 @@ export function Platforms({
                 <DotsSixVertical size={16} aria-hidden />
               </button>
               <Logo kind={d.kind} />
-              <RowText d={d} />
+              <div className="min-w-0">
+                <RowText d={d} />
+                {!(vertical ? view.vertical_live : view.live) &&
+                  d.enabled &&
+                  d.health?.state === 'failed' &&
+                  (() => {
+                    const t = healthText(d.health, d.blocked, d.kind)
+                    return (
+                      <InfoLine
+                        detail={t.detail ?? undefined}
+                        label={`More about ${d.name}`}
+                        className="mt-1"
+                      >
+                        <span className="text-[13px] font-semibold text-danger">{t.label}</span>
+                      </InfoLine>
+                    )
+                  })()}
+              </div>
               <div className="flex items-center gap-1.5 sm:gap-3">
-                <span className="hidden text-right font-mono text-[13px] leading-tight text-text-2 sm:block">
+                <span
+                  className={cx(
+                    'hidden text-right font-mono text-[13px] leading-tight sm:block',
+                    d.enabled && d.health?.state === 'failed'
+                      ? 'font-semibold text-danger'
+                      : 'text-text-2',
+                  )}
+                >
                   {!d.enabled
                     ? ''
-                    : d.health?.state === 'paused'
-                      ? 'Paused'
-                      : mbps(d.health?.kbps || plan)}
+                    : d.health?.state === 'failed'
+                      ? 'Failed'
+                      : d.health?.state === 'paused'
+                        ? 'Paused'
+                        : mbps(d.health?.kbps || plan)}
                 </span>
                 {(d.kind === 'custom' || d.connected) && (
                   <IconButton
@@ -707,7 +819,7 @@ export function RowText({
           </span>
         )}
       </span>
-      {d.enabled && d.kind === 'kick' && (
+      {d.enabled && d.kind === 'kick' && d.health?.state !== 'failed' && (
         <a
           // Kick's Creator Dashboard: Partner Income › Multistreaming (or /multi on in chat).
           // Through the app's opener: a plain new-window link does nothing in the desktop app.

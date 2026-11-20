@@ -9,6 +9,7 @@ import { Button, Dialog, InfoTip, Segmented, Skeleton, cx, toast } from '@ferroc
 import { LoadError } from '../../Panel'
 import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
+import { showShelfError } from './library'
 
 type From = 'obs' | 'streamlabs'
 
@@ -31,10 +32,23 @@ function Picker({ onDone }: { onDone: () => void }) {
   const [pick, setPick] = useState<EngineObsCollection | null>(null)
   const go = async () => {
     if (!pick) return
-    const r = await run('import', () =>
-      from === 'obs' ? api.importObs(pick.id) : api.importStreamlabs(pick.id),
+    let caught: unknown = null
+    const r = await run(
+      'import',
+      async () => {
+        try {
+          return await (from === 'obs' ? api.importObs(pick.id) : api.importStreamlabs(pick.id))
+        } catch (e) {
+          caught = e
+          throw e
+        }
+      },
+      { quiet: true },
     )
-    if (!r) return
+    if (!r) {
+      if (caught !== null) showShelfError(caught)
+      return
+    }
     refresh()
     bumpLibrary()
     onDone()

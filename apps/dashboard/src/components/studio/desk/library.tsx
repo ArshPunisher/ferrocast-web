@@ -16,7 +16,7 @@ import {
   UploadSimple,
   UserGear,
 } from '@phosphor-icons/react'
-import { type EngineShelf, type EngineShelfKind } from '@ferrocast/api'
+import { ApiError, describeError, type EngineShelf, type EngineShelfKind } from '@ferrocast/api'
 import { Field, Button, Dialog, Input, cx, toast } from '@ferrocast/ui'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { saveBlob } from '../common'
@@ -40,6 +40,22 @@ export function fileName(name: string): string {
   return `${safe || 'Studio'}.json`
 }
 
+/** Calm one-line toast when switching collections or profiles while live (M9-01). */
+export function showShelfError(err: unknown): void {
+  if (err instanceof ApiError && err.status === 409 && err.code === 'studio_busy') {
+    const detail = [err.message, err.hint].filter(Boolean).join(' ')
+    toast({
+      key: 'studio:busy-switch',
+      tone: 'warn',
+      message: 'Stop the stream to switch',
+      ...(detail ? { detail } : {}),
+    })
+    return
+  }
+  const d = describeError(err)
+  toast({ tone: 'error', message: d.message, hint: d.hint })
+}
+
 type Naming = { kind: EngineShelfKind; mode: 'new' | 'copy' | 'rename'; id?: string; value: string }
 
 export function LibraryBar() {
@@ -50,6 +66,28 @@ export function LibraryBar() {
   const { open, menu } = useContextMenu()
   const [naming, setNaming] = useState<Naming | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  const runShelf = async <T,>(
+    key: string,
+    fn: () => Promise<T>,
+    success?: string,
+  ): Promise<T | undefined> => {
+    let caught: unknown = null
+    const res = await run(
+      key,
+      async () => {
+        try {
+          return await fn()
+        } catch (e) {
+          caught = e
+          throw e
+        }
+      },
+      { quiet: true, ...(success ? { success } : {}) },
+    )
+    if (res === undefined && caught !== null) showShelfError(caught)
+    return res
+  }
 
   const reload = (kind: EngineShelfKind) => {
     if (kind === 'collections') {
@@ -72,9 +110,11 @@ export function LibraryBar() {
         checked: e.id === shelf.current,
         onSelect: () =>
           e.id !== shelf.current &&
-          void run(`switch:${kind}`, () => done(api.switchShelf(kind, e.id)), {
-            success: `Now using ${e.name}.`,
-          }).then((ok) => ok && reload(kind)),
+          void runShelf(
+            `switch:${kind}`,
+            () => done(api.switchShelf(kind, e.id)),
+            `Now using ${e.name}.`,
+          ).then((ok) => ok && reload(kind)),
       })),
       { sep: true },
       {
@@ -160,7 +200,7 @@ export function LibraryBar() {
         ? (doc as { name: string }).name
         : ''
     const name = fromDoc.trim() || f.name.replace(/\.json$/i, '') || 'Imported'
-    const r = await run('import', () => api.importCollection(name, doc))
+    const r = await runShelf('import', () => api.importCollection(name, doc))
     if (!r) return
     reload('collections')
     toast({
@@ -177,7 +217,7 @@ export function LibraryBar() {
     const value = naming.value.trim()
     if (!value) return
     const { kind, mode } = naming
-    const ok = await run('name', async () => {
+    const ok = await runShelf('name', async () => {
       if (mode === 'rename' && naming.id) await api.renameShelf(kind, naming.id, value)
       else await api.newShelf(kind, value, mode === 'copy')
       return true
