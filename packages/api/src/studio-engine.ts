@@ -643,6 +643,8 @@ export interface StudioSettings {
   projector_on_top?: boolean
   projector_one_per_screen?: boolean
   projector_restore?: boolean
+  /** The pointer is hidden while it is over a projector window (OBS's setting); off by default. */
+  projector_hide_cursor?: boolean
   /** Recording and the replay buffer start with the stream; they stop with it unless kept. */
   record_when_streaming?: boolean
   keep_recording?: boolean

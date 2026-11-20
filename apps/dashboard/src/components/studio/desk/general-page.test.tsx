@@ -76,6 +76,7 @@ describe('Settings › General', () => {
       ['Keep new projector windows on top', 'projector_on_top'],
       ['One full-screen projector per display', 'projector_one_per_screen'],
       ['Open them again next time', 'projector_restore'],
+      ['Hide the mouse pointer over projectors', 'projector_hide_cursor'],
     ] as const) {
       const el = sw(label)
       expect(el, label).toBeTruthy()

@@ -2319,6 +2319,9 @@ export function GeneralPage({ s, set }: PageProps) {
             {toggle('Open them again next time', !!s.projector_restore, (v) =>
               set({ projector_restore: v }),
             )}
+            {toggle('Hide the mouse pointer over projectors', !!s.projector_hide_cursor, (v) =>
+              set({ projector_hide_cursor: v }),
+            )}
           </div>
         </>
       )}
