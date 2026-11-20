@@ -16,6 +16,9 @@ import {
   ArrowUUpRight,
   ArrowsLeftRight,
   BoundingBox,
+  FrameCorners,
+  Lock,
+  LockOpen,
   LockSimple,
   LockSimpleOpen,
   ClockCounterClockwise,
@@ -24,6 +27,8 @@ import {
   DotsThree,
   MoonStars,
   GearSix,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
   Plus,
   Trash,
   Play,
@@ -62,6 +67,7 @@ import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useDeskStats, useEngine } from './common'
 import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OverflowRow, type OverflowItem } from './overflow-row'
+import { GuideOverlay, OverflowMask } from './preview-guides'
 import { OptionsForm } from './options'
 import {
   MOVE,
@@ -86,13 +92,43 @@ import {
  * outline and handles of a source at the canvas's edge, as OBS's preview has. */
 const EDGE = 10
 
-/** How far the preview can zoom out: all of the canvas, then smaller to see what's off it. */
+/** The zoom shortcuts: all of the canvas, then smaller to see what's off it. */
 export const ZOOMS = [1, 0.75, 0.5] as const
+/** How far the preview zooms: out to a quarter, in to four times the fit. */
+export const ZOOM_MIN = 0.25
+export const ZOOM_MAX = 4
+/** One step of the zoom in and out buttons and keys. */
+export const ZOOM_STEP = 1.25
+export const clampZoom = (z: number): number => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+
+/**
+ * Zooms by `k` keeping the picture point under `at` (the pointer, from the stage's centre) where
+ * it is: the box sits centred in its stage and `pan` moves it, so the new pan follows from the
+ * old one. Returns the clamped zoom and the pan that goes with it.
+ */
+export function zoomAt(
+  zoom: number,
+  pan: readonly [number, number],
+  k: number,
+  at: readonly [number, number],
+): { zoom: number; pan: [number, number] } {
+  const next = clampZoom(zoom * k)
+  const r = next / zoom
+  return { zoom: next, pan: [at[0] - (at[0] - pan[0]) * r, at[1] - (at[1] - pan[1]) * r] }
+}
 
 /** The preview's zoom, whether every source shows its outline, and whether frames keep their
  * shape from every handle (locked) or stretch from the side ones, kept for this viewer. */
 interface PreviewView {
   zoom: number
+  /** Where the zoomed canvas sits against the stage's centre (px); not kept between runs. */
+  pan: [number, number]
+  /** Lock preview: sources can be picked but not moved, resized or nudged. */
+  locked: boolean
+  /** Guides over the canvas (EBU R95 action and title safe areas, a centre cross). */
+  safe: { action: boolean; title: boolean; cross: boolean }
+  /** What shows of a source that runs past the canvas: as it is, or hidden. */
+  overflow: 'show' | 'hide'
   frames: boolean
   keep: boolean
   /** With the vertical picture on: both side by side, or one of them on its own. */
@@ -107,9 +143,17 @@ let view: PreviewView = readView()
 function readView(): PreviewView {
   try {
     const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as Partial<PreviewView> | null
-    if (v && ZOOMS.some((z) => z === v.zoom) && typeof v.frames === 'boolean')
+    if (v && typeof v.zoom === 'number' && Number.isFinite(v.zoom) && typeof v.frames === 'boolean')
       return {
-        zoom: v.zoom as number,
+        zoom: clampZoom(v.zoom),
+        pan: [0, 0],
+        locked: v.locked === true,
+        safe: {
+          action: v.safe?.action === true,
+          title: v.safe?.title === true,
+          cross: v.safe?.cross === true,
+        },
+        overflow: v.overflow === 'hide' ? 'hide' : 'show',
         frames: v.frames,
         keep: typeof v.keep === 'boolean' ? v.keep : true,
         view: VIEWS.find((x) => x === v.view) ?? 'both',
@@ -117,8 +161,31 @@ function readView(): PreviewView {
   } catch {
     // Storage off (a private window): the defaults.
   }
-  return { zoom: 1, frames: true, keep: true, view: 'both' }
+  return {
+    zoom: 1,
+    pan: [0, 0],
+    locked: false,
+    safe: { action: false, title: false, cross: false },
+    overflow: 'show',
+    frames: true,
+    keep: true,
+    view: 'both',
+  }
 }
+
+function viewSet(next: Partial<PreviewView>): void {
+  view = { ...view, ...next }
+  try {
+    const { pan: _pan, ...kept } = view
+    localStorage.setItem(VIEW_KEY, JSON.stringify(kept))
+  } catch {
+    // Not kept; still applies now.
+  }
+  for (const cb of viewSubs) cb()
+}
+
+/** The view as it is now (for handlers that must not wait for a render). */
+export const getPreviewView = (): PreviewView => view
 
 export function usePreviewView(): [PreviewView, (next: Partial<PreviewView>) => void] {
   const v = useSyncExternalStore(
@@ -128,16 +195,20 @@ export function usePreviewView(): [PreviewView, (next: Partial<PreviewView>) => 
     },
     () => view,
   )
-  const set = (next: Partial<PreviewView>) => {
-    view = { ...view, ...next }
-    try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify(view))
-    } catch {
-      // Not kept; still applies now.
-    }
-    for (const cb of viewSubs) cb()
-  }
-  return [v, set]
+  return [v, viewSet]
+}
+
+/** A point from the middle of `el`, in px (where `zoomAt` takes it from). */
+function pointerFromCentre(el: Element, x: number, y: number): [number, number] {
+  const r = el.getBoundingClientRect()
+  return [x - (r.left + r.width / 2), y - (r.top + r.height / 2)]
+}
+
+/** Zooms the preview by `k` round `at` (from the stage's centre). */
+export function zoomView(k: number, at: [number, number] = [0, 0]): void {
+  const v = getPreviewView()
+  const next = zoomAt(v.zoom, v.pan, k, at)
+  viewSet({ zoom: next.zoom, pan: next.pan })
 }
 
 /** An element's background as 0xRRGGBB (what the app paints round the canvas). */
@@ -156,6 +227,10 @@ const OVER = '[role="menu"], [role="listbox"], [data-over-preview]'
 
 /** The most holes the app takes; more than that and the picture hides instead. */
 const MAX_HOLES = 16
+
+/** The guides' lines and the overflow mask are holes too, but not the kind of crowd that hides
+ * the picture: they aren't counted against the limit. */
+const freeHoles = (): number => document.querySelectorAll('[data-guide-hole]').length
 
 /**
  * What lies over the box: the app's view can't be drawn under the page, so it leaves its
@@ -177,7 +252,7 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
       holes.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad })
     }
   }
-  return holes.length > MAX_HOLES ? null : holes
+  return holes.length - Math.min(freeHoles(), holes.length) > MAX_HOLES ? null : holes
 }
 
 /** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
@@ -212,7 +287,7 @@ function cutOut(box: DOMRect, edge: number): Hole[] | null {
   const over = clip && overPreview(box, edge)
   if (!clip || !over) return null
   const holes = [...clip, ...over]
-  return holes.length > MAX_HOLES ? null : holes
+  return holes.length - Math.min(freeHoles(), holes.length) > MAX_HOLES ? null : holes
 }
 
 /** Where the live picture goes: the app draws it exactly on this box (its view reaches EDGE past it for handles). In Studio
@@ -239,6 +314,21 @@ export function PreviewBox({ running }: { running: boolean }) {
     return installPreviewInput((css) => void api.previewCursor(css).catch(() => undefined))
   }, [api, desktop, running])
   const [pv] = usePreviewView()
+  // ⌘/Ctrl + scroll (and a trackpad pinch, which arrives the same way) zooms round the pointer.
+  // A listener of its own: React's wheel handler can't stop the page from zooming itself.
+  useEffect(() => {
+    const els = [stageRef.current, vStageRef.current].filter((e): e is HTMLDivElement => !!e)
+    const off = els.map((el) => {
+      const onWheel = (e: WheelEvent) => {
+        if (!(e.ctrlKey || e.metaKey)) return
+        e.preventDefault()
+        zoomView(Math.exp(-e.deltaY * 0.0025), pointerFromCentre(el, e.clientX, e.clientY))
+      }
+      el.addEventListener('wheel', onWheel, { passive: false })
+      return () => el.removeEventListener('wheel', onWheel)
+    })
+    return () => off.forEach((f) => f())
+  }, [studio, tall])
   // The scenes shown, for the still during a window resize (read there, not a reason to
   // place the picture again).
   const shown = useRef({ current: '', preview: '', vertical: '' })
@@ -545,11 +635,16 @@ export function PreviewBox({ running }: { running: boolean }) {
   }, [api, running, desktop, studio, tall])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
+  // The zoom, and where the zoomed canvas sits against the stage's centre.
+  const boxStyle = {
+    '--fc-zoom': pv.zoom,
+    ...(pv.pan[0] || pv.pan[1] ? { transform: `translate(${pv.pan[0]}px, ${pv.pan[1]}px)` } : {}),
+  } as CSSProperties
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
     // left clear: if the page lags the window for a moment, the stage shows, never a black box.
-    'grid aspect-video touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
+    'relative grid aspect-video touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
     desktop && running ? 'bg-transparent' : 'bg-[#0a0b0d]',
   )
   if (tall) {
@@ -570,7 +665,7 @@ export function PreviewBox({ running }: { running: boolean }) {
           : 'Click to edit it.'
       }`
     const stage =
-      'grid min-h-0 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+      'grid min-h-0 touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
     // One picture on its own (owner's pick X1): the other stage is hidden, so the app is told
     // to draw nothing for it, and the one shown fills the stage.
     const only = pv.view === 'both' ? null : pv.view
@@ -587,10 +682,13 @@ export function PreviewBox({ running }: { running: boolean }) {
         >
           <div
             ref={ref}
-            style={{ '--fc-zoom': pv.zoom } as CSSProperties}
+            data-canvas-box
+            style={boxStyle}
             className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
           >
             {!desktop && 'The live picture shows in the Ferrocast app.'}
+            <GuideOverlay safe={pv.safe} />
+            <OverflowMask on={pv.overflow === 'hide'} />
           </div>
         </div>
         <div
@@ -612,6 +710,7 @@ export function PreviewBox({ running }: { running: boolean }) {
         >
           <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0!')}>
             {!desktop && 'Vertical'}
+            <GuideOverlay safe={pv.safe} />
           </div>
         </div>
       </div>
@@ -626,15 +725,18 @@ export function PreviewBox({ running }: { running: boolean }) {
         ref={stageRef}
         aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
         data-stage-bg
-        className="grid min-h-16 flex-1 touch-none place-items-center bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+        className="grid min-h-16 flex-1 touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         {...editing}
       >
         <div
           ref={ref}
-          style={{ '--fc-zoom': pv.zoom } as CSSProperties}
+          data-canvas-box
+          style={boxStyle}
           className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
         >
           {!desktop && 'The live picture shows in the Ferrocast app.'}
+          <GuideOverlay safe={pv.safe} />
+          <OverflowMask on={pv.overflow === 'hide'} />
         </div>
       </div>
     )
@@ -1104,7 +1206,7 @@ type Job = { box: Box; save: boolean } | { crop: Crop; save: boolean }
  * moves on its own once picked (in Sources, or by pressing inside it when picked); a click
  * on it picks its group, as in OBS.
  */
-function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
+export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) {
   const {
     api,
     scene,
@@ -1124,6 +1226,16 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
   const canvas = size
   const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
+  // Panning (space + drag, or the middle button) and pinching (two touches) the zoomed canvas.
+  const panning = useRef<{ x: number; y: number; pan: [number, number] } | null>(null)
+  const space = useRef(false)
+  const touches = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{
+    dist: number
+    zoom: number
+    pan: [number, number]
+    mid: [number, number]
+  } | null>(null)
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
   // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
   const [over, setOver] = useState(false)
@@ -1271,6 +1383,32 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       itemMenu.current?.(e, target?.id ?? null)
     },
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        if (touches.current.size === 2) {
+          // A second finger: zoom and pan, not a drag of a source.
+          held.current = null
+          const [a, b] = [...touches.current.values()] as [
+            { x: number; y: number },
+            { x: number; y: number },
+          ]
+          const v = getPreviewView()
+          pinch.current = {
+            dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+            zoom: v.zoom,
+            pan: v.pan,
+            mid: pointerFromCentre(e.currentTarget, (a.x + b.x) / 2, (a.y + b.y) / 2),
+          }
+          return
+        }
+      }
+      if (e.button === 1 || (e.button === 0 && space.current)) {
+        e.preventDefault()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        panning.current = { x: e.clientX, y: e.clientY, pan: getPreviewView().pan }
+        e.currentTarget.style.cursor = 'grabbing'
+        return
+      }
       if (e.button !== 0) return
       const w = where(e)
       if (!w) return
@@ -1311,7 +1449,8 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       }
       const picked = pickedIds.includes(target.id)
       if (!picked) select(target.id)
-      if (target.locked) return
+      // A locked source, or a locked preview: picked, never dragged.
+      if (target.locked || pv.locked) return
       e.currentTarget.setPointerCapture(e.pointerId)
       const cropping = e.altKey && grip.u >= 0
       const h: Held = {
@@ -1355,6 +1494,28 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       }
     },
     onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      if (pinch.current && touches.current.has(e.pointerId)) {
+        touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        const [a, b] = [...touches.current.values()] as [
+          { x: number; y: number },
+          { x: number; y: number },
+        ]
+        const from = pinch.current
+        const k = (Math.hypot(a.x - b.x, a.y - b.y) || 1) / from.dist
+        const mid = pointerFromCentre(e.currentTarget, (a.x + b.x) / 2, (a.y + b.y) / 2)
+        const z = zoomAt(from.zoom, from.pan, k, from.mid)
+        // The fingers' middle moving is a pan as well.
+        viewSet({
+          zoom: z.zoom,
+          pan: [z.pan[0] + mid[0] - from.mid[0], z.pan[1] + mid[1] - from.mid[1]],
+        })
+        return
+      }
+      if (panning.current) {
+        const from = panning.current
+        viewSet({ pan: [from.pan[0] + e.clientX - from.x, from.pan[1] + e.clientY - from.y] })
+        return
+      }
       const w = where(e)
       if (!w) return
       const h = held.current
@@ -1362,15 +1523,19 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         // The cursor says what a press would do.
         const f = frameOf(selected)
         const g = f ? gripAt(f, w.p, w.reach) : null
-        const over = g
-          ? e.altKey
-            ? 'crosshair'
-            : cursorFor(f as Frame, g)
-          : f && inside(f, w.p)
-            ? 'move'
-            : pick(list, w.p)
-              ? 'pointer'
-              : ''
+        const over = pv.locked
+          ? pick(list, w.p)
+            ? 'pointer'
+            : ''
+          : g
+            ? e.altKey
+              ? 'crosshair'
+              : cursorFor(f as Frame, g)
+            : f && inside(f, w.p)
+              ? 'move'
+              : pick(list, w.p)
+                ? 'pointer'
+                : ''
         e.currentTarget.style.cursor = over
         tellNative(over)
         return
@@ -1408,18 +1573,54 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
       moveAll(h, b, false)
     },
     onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+      touches.current.delete(e.pointerId)
+      if (touches.current.size < 2) pinch.current = null
+      if (panning.current) {
+        panning.current = null
+        e.currentTarget.style.cursor = space.current ? 'grab' : ''
+        if (e.currentTarget.hasPointerCapture(e.pointerId))
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        return
+      }
       const h = held.current
       held.current = null
       if (e.currentTarget.hasPointerCapture(e.pointerId))
         e.currentTarget.releasePointerCapture(e.pointerId)
       finish(h)
     },
-    onPointerCancel: () => {
+    onPointerCancel: (e: PointerEvent<HTMLDivElement>) => {
+      touches.current.delete(e.pointerId)
+      pinch.current = null
+      panning.current = null
       const h = held.current
       held.current = null
       finish(h)
     },
+    onKeyUp: (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === ' ') {
+        space.current = false
+        if (!panning.current) e.currentTarget.style.cursor = ''
+      }
+    },
+    onBlur: (e: React.FocusEvent<HTMLDivElement>) => {
+      space.current = false
+      if (!panning.current) e.currentTarget.style.cursor = ''
+    },
     onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+      // Space held: a drag pans the zoomed canvas.
+      if (e.key === ' ') {
+        e.preventDefault()
+        space.current = true
+        if (!panning.current) e.currentTarget.style.cursor = 'grab'
+        return
+      }
+      // ⌘/Ctrl with + − 0: zoom in, out, back to fit.
+      if ((e.metaKey || e.ctrlKey) && ['=', '+', '-', '0'].includes(e.key)) {
+        e.preventDefault()
+        if (e.key === '0') viewSet({ zoom: 1, pan: [0, 0] })
+        else zoomView(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP)
+        return
+      }
       if (e.key === 'Escape') {
         select(null)
         return
@@ -1440,7 +1641,9 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
         ArrowUp: { x: 0, y: -step },
         ArrowDown: { x: 0, y: step },
       }[e.key]
-      const moving = flat.filter((i) => pickedIds.includes(i.id) && i.frame && !i.locked)
+      const moving = pv.locked
+        ? []
+        : flat.filter((i) => pickedIds.includes(i.id) && i.frame && !i.locked)
       if (!d || moving.length === 0) return
       e.preventDefault()
       for (const it of moving) {
@@ -1591,11 +1794,24 @@ export function covers(a: Frame, b: Frame, w: number, h: number): boolean {
 
 /** The preview's zoom and frames switch, and a note when the picked source is hidden behind
  * another (it still moves; its outline shows where it is). */
+const zoomButton = (on: boolean) =>
+  cx(
+    'h-[26px] rounded-[5px] px-2 text-[12.5px] font-semibold outline-none focus-visible:shadow-[var(--fc-focus)] disabled:opacity-40',
+    on
+      ? 'rounded-b-[3px] bg-surface-3 text-text shadow-[inset_0_-2px_0_var(--fc-accent-text)]'
+      : 'text-text-2 hover:bg-surface-3 hover:text-text',
+  )
+
 function ViewControls() {
   const { api, scene, scenes, items, selected, refresh, size } = useDesk()
   const { run } = useAction()
   const [pv, setPv] = usePreviewView()
   const c = size
+  // One canvas pixel per screen pixel: the zoom (against the fit) that makes the box as wide as
+  // the canvas. Known once the box is on the page.
+  const box = typeof document === 'undefined' ? null : document.querySelector('[data-canvas-box]')
+  const fitWidth = box ? box.getBoundingClientRect().width / pv.zoom : 0
+  const pixelZoom = c && fitWidth > 0 ? c.width / fitWidth : null
   const list = items.data ?? []
   const idx = list.findIndex((i) => i.id === selected)
   const it = idx >= 0 ? list[idx] : undefined
@@ -1634,18 +1850,42 @@ function ViewControls() {
             <button
               key={z}
               type="button"
-              aria-pressed={pv.zoom === z}
-              onClick={() => setPv({ zoom: z })}
-              className={cx(
-                'h-[26px] rounded-[5px] px-2 text-[12.5px] font-semibold outline-none focus-visible:shadow-[var(--fc-focus)]',
-                pv.zoom === z
-                  ? 'rounded-b-[3px] bg-surface-3 text-text shadow-[inset_0_-2px_0_var(--fc-accent-text)]'
-                  : 'text-text-2 hover:bg-surface-3 hover:text-text',
-              )}
+              aria-pressed={pv.zoom === z && !pv.pan[0] && !pv.pan[1]}
+              aria-label={z === 1 ? 'Fit the canvas and centre it' : `Zoom ${z * 100}%`}
+              title={z === 1 ? 'Fit the canvas and centre it (⌘0)' : undefined}
+              onClick={() => setPv({ zoom: z, pan: [0, 0] })}
+              className={zoomButton(pv.zoom === z && !pv.pan[0] && !pv.pan[1])}
             >
               {z === 1 ? 'Fit' : `${z * 100}%`}
             </button>
           ))}
+          <button
+            type="button"
+            aria-label="Zoom to canvas pixels (100%)"
+            title="One canvas pixel per screen pixel"
+            aria-pressed={pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005}
+            disabled={pixelZoom === null}
+            onClick={() => pixelZoom !== null && setPv({ zoom: clampZoom(pixelZoom), pan: [0, 0] })}
+            className={zoomButton(pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005)}
+          >
+            100%
+          </button>
+          <IconButton
+            size="sm"
+            label="Zoom out (⌘−)"
+            disabled={pv.zoom <= ZOOM_MIN}
+            onClick={() => zoomView(1 / ZOOM_STEP)}
+          >
+            <MagnifyingGlassMinus size={16} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label="Zoom in (⌘+)"
+            disabled={pv.zoom >= ZOOM_MAX}
+            onClick={() => zoomView(ZOOM_STEP)}
+          >
+            <MagnifyingGlassPlus size={16} weight="bold" />
+          </IconButton>
         </div>
       )}
       <span aria-hidden className="h-5 w-px bg-line" />
@@ -1688,6 +1928,39 @@ export function StageBar() {
   )
   const { run } = useAction()
   const { open, menu } = useContextMenu()
+  const [pv, setPv] = usePreviewView()
+  const guideItems: MenuItem[] = [
+    { heading: 'Guides' },
+    {
+      label: 'Action safe area',
+      hint: '93%',
+      checked: pv.safe.action,
+      onSelect: () => setPv({ safe: { ...pv.safe, action: !pv.safe.action } }),
+    },
+    {
+      label: 'Title safe area',
+      hint: '90%',
+      checked: pv.safe.title,
+      onSelect: () => setPv({ safe: { ...pv.safe, title: !pv.safe.title } }),
+    },
+    {
+      label: 'Centre cross',
+      checked: pv.safe.cross,
+      onSelect: () => setPv({ safe: { ...pv.safe, cross: !pv.safe.cross } }),
+    },
+    { sep: true },
+    { heading: 'Past the canvas' },
+    {
+      label: 'Show what runs past the canvas',
+      checked: pv.overflow === 'show',
+      onSelect: () => setPv({ overflow: 'show' }),
+    },
+    {
+      label: 'Hide what runs past the canvas',
+      checked: pv.overflow === 'hide',
+      onSelect: () => setPv({ overflow: 'hide' }),
+    },
+  ]
   const step = (redo: boolean) =>
     void run('undo', () => (redo ? api.redo() : api.undo()), {
       success: (r) => (r.done ? `${redo ? 'Redone' : 'Undone'}: ${r.done}` : null),
@@ -1820,6 +2093,54 @@ export function StageBar() {
       render: () => <span aria-hidden className="h-5 w-px bg-line" />,
     },
     { key: 'view', rank: 6, render: () => <ViewControls /> },
+    {
+      key: 'lock',
+      rank: 8,
+      render: () => (
+        <IconButton
+          size="sm"
+          label={
+            pv.locked
+              ? 'Unlock the preview: sources can be moved again'
+              : 'Lock the preview: sources can be picked but not moved or resized'
+          }
+          aria-pressed={pv.locked}
+          className={cx(pv.locked ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+          onClick={() => setPv({ locked: !pv.locked })}
+        >
+          {pv.locked ? <Lock size={17} weight="fill" /> : <LockOpen size={17} />}
+        </IconButton>
+      ),
+    },
+    {
+      key: 'guides',
+      rank: 7,
+      render: () =>
+        scenes.data?.preview ? null : (
+          <span className="flex items-center gap-1">
+            <IconButton
+              size="sm"
+              label="Guides: safe areas, centre cross, what runs past the canvas"
+              aria-haspopup="menu"
+              aria-pressed={
+                pv.safe.action || pv.safe.title || pv.safe.cross || pv.overflow === 'hide'
+              }
+              className={cx(
+                pv.safe.action || pv.safe.title || pv.safe.cross || pv.overflow === 'hide'
+                  ? 'bg-accent-soft! text-accent-text!'
+                  : 'text-text-2',
+              )}
+              onClick={(e) => open(e, 'Guides', guideItems)}
+            >
+              <FrameCorners size={17} weight="bold" />
+            </IconButton>
+            <InfoTip label="About the guides">
+              Safe areas mark where a TV or phone may crop the picture (EBU R95: action 93%, titles
+              90%). Hide what runs past the canvas to see only the picture that goes out.
+            </InfoTip>
+          </span>
+        ),
+    },
     { key: 'sep2', render: () => <span aria-hidden className="h-5 w-px bg-line" /> },
     {
       key: 'vertical',
