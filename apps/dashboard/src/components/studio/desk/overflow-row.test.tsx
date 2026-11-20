@@ -10,7 +10,7 @@ import { OverflowRow, type OverflowItem } from './overflow-row'
 let rowWidth = 1000
 const widthOf = (el: HTMLElement) => (el.dataset.ov ? 60 : el.hasAttribute('data-more') ? 26 : 0)
 const used = (row: HTMLElement) => {
-  const parts = [...row.querySelectorAll<HTMLElement>(':scope > [data-ov]')].map(widthOf)
+  const parts: number[] = [...row.querySelectorAll<HTMLElement>(':scope > [data-ov]')].map(widthOf)
   const more = row.querySelector<HTMLElement>(':scope > [data-more]')
   if (more && !more.classList.contains('hidden')) parts.push(26)
   return parts.reduce((a, b) => a + b, 0) + Math.max(0, parts.length - 1) * 10
