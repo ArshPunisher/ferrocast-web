@@ -1290,6 +1290,10 @@ export function studioEngineApi(c: FerroClient) {
     projector: (p: EngineProjector) =>
       c.request<{ id: number }>('POST', '/api/v1/studio/engine/projectors', p),
     closeProjectors: () => c.request<void>('DELETE', '/api/v1/studio/engine/projectors'),
+    /** A shortcut field waits for a key (`true`; ask again every ~10 s) or stopped: the app lets
+     * its global shortcuts go meanwhile, so every key reaches the page and none runs an action. */
+    captureKeys: (on: boolean) =>
+      c.request<void>('POST', '/api/v1/studio/engine/keys/capture', { on }),
     /** The displays a full-screen projector can go on. */
     screens: () => c.request<EngineScreen[]>('GET', '/api/v1/studio/engine/screens'),
     /** Quits and opens Ferrocast again (refused while streaming or recording). */

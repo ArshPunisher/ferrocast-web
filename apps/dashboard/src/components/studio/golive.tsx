@@ -815,7 +815,10 @@ const KICK_MULTI =
 /** The row's notices, shortest label first-class: the sentence is only in `text`. */
 function rowNotices(d: DestinationView): RowNotice[] {
   const out: RowNotice[] = []
-  if (d.blocked)
+  // Live, the live line under the row already says it (Can't start, with its (i)): not twice.
+  const liveLineSays =
+    d.enabled && !!d.health && d.health.state !== 'waiting' && d.health.state !== 'stopped'
+  if (d.blocked && !liveLineSays)
     out.push({
       key: 'blocked',
       tone: d.enabled ? 'danger' : 'warn',
