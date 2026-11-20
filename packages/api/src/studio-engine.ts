@@ -540,7 +540,10 @@ export interface StudioSettings {
   delay_max_mb?: number
   /** Twitch's VOD track: this audio track (2 to 6) goes to Twitch for the VOD; 0 off. */
   twitch_vod_track?: number
+  /** The rate the engine mixes at and the files and streams carry (from the next start). */
   sample_rate: 44100 | 48000
+  /** Names for the recording's audio tracks, by track number (MP4 and MKV); up to 6 of 40 characters. */
+  audio_track_names?: string[]
   stereo: boolean
   /** [name, id]; null: the system's. */
   monitoring: [string, string] | null

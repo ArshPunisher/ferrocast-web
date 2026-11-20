@@ -786,6 +786,19 @@ function AudioPage({ s, set }: PageProps) {
       <Heading info="Changes apply at once.">Sound</Heading>
       <div className="flex flex-col">
         <Row
+          label="Sample rate"
+          info="The rate sound is mixed and recorded at. 48 kHz suits video; 44.1 kHz for music-first files. Applies from the next start. The strong noise removal needs 48 kHz."
+        >
+          <Select
+            aria-label="Sample rate"
+            value={String(s.sample_rate ?? 48000)}
+            onChange={(e) => set({ sample_rate: Number(e.target.value) as 44100 | 48000 })}
+          >
+            <option value="48000">48 kHz</option>
+            <option value="44100">44.1 kHz</option>
+          </Select>
+        </Row>
+        <Row
           label="True peak meters"
           info="Catches peaks between samples (OBS's True Peak), a little more work for the computer."
         >
@@ -1656,6 +1669,31 @@ function RecordPage({ s, set }: PageProps) {
                 </button>
               )
             })}
+          </span>
+        </Row>
+        <Row
+          label="Track names"
+          info="Shown by editors and players for each audio track in MP4 and MKV recordings (Mic, Game…). Leave empty for none."
+        >
+          <span className="flex flex-col gap-1.5">
+            {tracks.map((t) => (
+              <Input
+                key={t}
+                aria-label={`Name of track ${t}`}
+                placeholder={`Track ${t}`}
+                maxLength={40}
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 w-44"
+                value={s.audio_track_names?.[t - 1] ?? ''}
+                onChange={(e) => {
+                  const names = [...(s.audio_track_names ?? [])]
+                  while (names.length < 6) names.push('')
+                  names[t - 1] = e.target.value
+                  set({ audio_track_names: names })
+                }}
+              />
+            ))}
           </span>
         </Row>
         <Row label="Replay buffer keeps" sub="The last seconds, saved on request">
