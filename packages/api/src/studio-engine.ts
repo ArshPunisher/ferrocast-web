@@ -614,6 +614,11 @@ export interface StudioSettings {
   confirm_go_live?: boolean
   confirm_end_stream?: boolean
   confirm_stop_record?: boolean
+  /** Projectors: new windows stay above other apps', a full-screen one replaces the one on its
+   * display, and the open ones come back at the next Start. All off by default. */
+  projector_on_top?: boolean
+  projector_one_per_screen?: boolean
+  projector_restore?: boolean
   /** Recording and the replay buffer start with the stream; they stop with it unless kept. */
   record_when_streaming?: boolean
   keep_recording?: boolean

@@ -2190,7 +2190,7 @@ const kbdClass =
   'inline-flex h-7 items-center rounded-[8px] border border-line-strong bg-inset px-2 font-mono text-[13.5px] font-semibold shadow-[0_1px_0_var(--fc-line-strong)]'
 
 /** OBS's General settings that apply here: snapping in the preview, and asking first. */
-function GeneralPage({ s, set }: PageProps) {
+export function GeneralPage({ s, set }: PageProps) {
   const snapping = s.snapping ?? true
   const toggle = (label: string, checked: boolean, on: (v: boolean) => void, off = false) => (
     <Row label={label}>
@@ -2264,6 +2264,24 @@ function GeneralPage({ s, set }: PageProps) {
           set({ confirm_stop_record: v }),
         )}
       </div>
+      {inDesktopApp() && (
+        <>
+          <Heading info="Projectors are the full-screen or windowed copies of your picture (the projector button in the bar under the preview). A full-screen one is already above everything; “on top” is for windowed ones.">
+            Projectors
+          </Heading>
+          <div className="flex flex-col">
+            {toggle('Keep new projector windows on top', !!s.projector_on_top, (v) =>
+              set({ projector_on_top: v }),
+            )}
+            {toggle('One full-screen projector per display', !!s.projector_one_per_screen, (v) =>
+              set({ projector_one_per_screen: v }),
+            )}
+            {toggle('Open them again next time', !!s.projector_restore, (v) =>
+              set({ projector_restore: v }),
+            )}
+          </div>
+        </>
+      )}
     </>
   )
 }
