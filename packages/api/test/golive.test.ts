@@ -235,6 +235,11 @@ describe('advanced settings', () => {
       /first_to_pause/,
     )
     expect(checkAdvanced({ ...a, port: 80 }, ids)).toMatch(/^port:/)
+    // The IP version and the pinned connection (the engine's rules).
+    expect(checkAdvanced({ ...a, ip_family: 'v4', bind: 'en7' }, ids)).toBeNull()
+    expect(checkAdvanced({ ...a, ip_family: 'v6', bind: null }, ids)).toBeNull()
+    expect(checkAdvanced({ ...a, ip_family: 'v5' as never }, ids)).toMatch(/^ip_family:/)
+    expect(checkAdvanced({ ...a, bind: '  ' }, ids)).toMatch(/^bind:/)
     const per = (d: Partial<(typeof a.per)[string]>) => ({
       ...a,
       per: { twitch: { server: null, first_retry_s: 1, max_retry_s: 30, ...d } },
