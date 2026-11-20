@@ -753,6 +753,14 @@ export const FILTERS: FilterEntry[] = [
     help: 'Holds the picture still. Switch it off to move again.',
     icon: Snowflake,
   },
+  {
+    // OBS's Render Delay (pictures only) and Video Delay Async (pictures and sound).
+    kinds: ['ferrocast_video_delay', 'gpu_delay', 'async_delay_filter'],
+    label: 'Video delay',
+    help: 'Shows its picture a little late, to line a fast camera up with a slow capture card.',
+    icon: Timer,
+    settings: { delay_ms: 200, audio: false },
+  },
 ]
 
 /** Filters with nothing to set: their row is the whole of them (no body, no Reset). */

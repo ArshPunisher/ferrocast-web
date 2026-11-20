@@ -21,6 +21,23 @@ export function isMenuMessage(x: unknown): x is MenuMessage {
   )
 }
 
+/** The Studio settings page the menu asked for, kept for a Studio that isn't on screen yet. */
+let pendingSettings: string | null = null
+
+/** What the menu asked the Studio to open (once), for the Studio to take when it appears. */
+export function takePendingSettings(): string | null {
+  const page = pendingSettings
+  pendingSettings = null
+  return page
+}
+
+/** Opens a page of the Studio's settings: now if the Studio is there, else when it appears. */
+function openStudioSettings(page: string, deps: MenuDeps): void {
+  pendingSettings = page
+  deps.navigate('#/studio')
+  window.dispatchEvent(new CustomEvent('ferrocast:open-settings', { detail: { page } }))
+}
+
 /** A text field has focus: Undo and Redo there mean its own edit history. */
 function typingInAField(): boolean {
   const t = document.activeElement as HTMLElement | null
@@ -56,6 +73,9 @@ export function runMenu(msg: MenuMessage, deps: MenuDeps): void {
       deps.navigate('#/settings/updates')
       void deps.checkUpdates().catch(() => undefined)
       return
+    case 'remux':
+      // OBS's Remux lives on the Recording page of the Studio's settings.
+      return openStudioSettings('record', deps)
     case 'undo':
       return undoRedo(false)
     case 'redo':
