@@ -134,8 +134,17 @@ export function useMerged(view: GoLiveView | null): GoLiveView | null {
 
 export function GoLiveTab() {
   const api = useGoLive()
-  const res = useResource(() => api.view(), [api])
+  const askedAt = useRef(0)
+  const res = useResource(() => {
+    askedAt.current = Date.now()
+    return api.view()
+  }, [api])
   const view = useMerged(res.data)
+  // Share the latest HTTP Go live reading with StudioStatusBar so Health and Upload reflect
+  // destination failures even when the live WebSocket isn't delivering golive frames (U5).
+  useEffect(() => {
+    if (res.data) useLive.getState().setGoLiveView(res.data, askedAt.current)
+  }, [res.data])
   const [mode, setMode] = useMode('studio')
   const picture = usePictureSource()
   const live = !!view?.live

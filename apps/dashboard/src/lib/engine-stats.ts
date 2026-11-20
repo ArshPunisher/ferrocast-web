@@ -53,11 +53,15 @@ async function tick() {
   if (read !== r) return
   const t = Date.now()
   const st = v?.stream ?? null
+  const sending = !!st && st.active && !st.failed && !st.reconnecting
   let kbps = reading.kbps
-  if (st && last && t > last.at) kbps = Math.round(((st.bytes - last.bytes) * 8) / (t - last.at))
-  else if (!st) kbps = null
-  last = st ? { bytes: st.bytes, at: t } : null
-  const since = st?.active ? (reading.since ?? t) : null
+  if (sending && last && t > last.at) {
+    kbps = Math.max(0, Math.round(((st.bytes - last.bytes) * 8) / (t - last.at)))
+  } else if (!sending) {
+    kbps = st ? 0 : null
+  }
+  last = sending ? { bytes: st.bytes, at: t } : null
+  const since = st?.active && !st.failed ? (reading.since ?? t) : null
   const keep = (a: number[], x: number | undefined) =>
     x === undefined ? a : [...a.slice(-(HISTORY - 1)), x]
   const history = v

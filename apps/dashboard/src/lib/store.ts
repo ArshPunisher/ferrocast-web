@@ -12,6 +12,7 @@ import {
   type FerroEvent,
   type LiveFrame,
   type Goal,
+  type GoLiveView,
   type Notice,
   type PanicConfig,
   type PollView,
@@ -110,6 +111,12 @@ interface LiveStore {
   setUpdateLoadError: (e: unknown) => void
   /** Studio: the "Don't miss" lane, OBS health, the show, counters (studio-live.ts). */
   studio: StudioLive
+  /** Latest HTTP `GET /golive` snapshot for components outside GoLiveTab (e.g. StudioStatusBar). */
+  goliveView: GoLiveView | null
+  goliveViewAt: number
+  /** When the last live WebSocket `golive` frame arrived (to drop older HTTP snapshots). */
+  goliveFrameAt: number
+  setGoLiveView: (v: GoLiveView, askedAt?: number) => void
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
   /** `askedAt`: when the engine status it came from was asked for; an older one than the last choice is dropped. */
@@ -218,7 +225,15 @@ export const useLive = create<LiveStore>((set, get) => ({
   setUpdateLoadError: (updateLoadError) => set({ updateLoadError }),
   chatters: new Map(),
   studio: EMPTY_STUDIO,
+  goliveView: null,
+  goliveViewAt: 0,
+  goliveFrameAt: 0,
   safeModeChosenAt: 0,
+  setGoLiveView: (view, askedAt) =>
+    set((s) => {
+      if (askedAt !== undefined && askedAt < s.goliveFrameAt) return s
+      return { goliveView: view, goliveViewAt: Date.now() }
+    }),
   setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
   markSafeModeChosen: () => set({ safeModeChosenAt: Date.now() }),
@@ -278,12 +293,14 @@ export const useLive = create<LiveStore>((set, get) => ({
     let updateFrames = s.updateFrames
     let chatters = s.chatters
     let studio = s.studio
+    let goliveFrameAt = s.goliveFrameAt
     let remote = s.remote
     let chatChanged = false
     let eventsChanged = false
     for (const f of frames) {
       if (isStudioFrame(f)) {
         studio = reduceStudio(studio, f)
+        if (f.type === 'golive') goliveFrameAt = Date.now()
         continue
       }
       switch (f.type) {
@@ -433,6 +450,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       updateFrames,
       chatters,
       studio,
+      goliveFrameAt,
       remote,
     })
   },

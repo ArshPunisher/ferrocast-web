@@ -222,10 +222,16 @@ export function StatsDialog({
   open,
   onClose,
   reading,
+  effectiveUploadKbps,
+  streamStateLabel,
 }: {
   open: boolean
   onClose: () => void
   reading: EngineReading
+  /** Destination-aware upload rate (kb/s), overriding encoder rate when destinations are down (U5). */
+  effectiveUploadKbps?: number | null | undefined
+  /** Destination-aware status label for the Stream row ("Reconnecting", "Failed", etc.). */
+  streamStateLabel?: string | null | undefined
 }) {
   const { stats, history, since, at, kbps } = reading
   const rates = useRates(stats)
@@ -264,15 +270,25 @@ export function StatsDialog({
     {
       name: 'Stream',
       icon: Broadcast,
-      on: !!stream?.active || !!stream?.reconnecting,
-      status: stream?.reconnecting
-        ? 'Reconnecting'
-        : stream?.active
-          ? clock(since ? at - since : 0)
-          : 'Off',
-      rate: stream?.active ? `${((kbps ?? rates.stream) / 1000).toFixed(1)} Mb/s` : '–',
-      dropped: stream?.active ? droppedText(stream.dropped, stream.frames) : '–',
-      bad: !!stream && stream.frames > 0 && stream.dropped / stream.frames > 0.01,
+      on: !!stream?.active && !stream.failed,
+      status:
+        streamStateLabel ??
+        (stream?.failed
+          ? 'Failed'
+          : stream?.reconnecting
+            ? 'Reconnecting'
+            : stream?.active
+              ? clock(since ? at - since : 0)
+              : 'Off'),
+      rate:
+        stream?.active && !stream.failed
+          ? `${((effectiveUploadKbps ?? kbps ?? rates.stream) / 1000).toFixed(1)} Mb/s`
+          : '–',
+      dropped: stream?.active && !stream.failed ? droppedText(stream.dropped, stream.frames) : '–',
+      bad:
+        !!stream?.failed ||
+        streamStateLabel === 'Failed' ||
+        (!!stream && stream.frames > 0 && stream.dropped / stream.frames > 0.01),
     },
     {
       name: 'Recording',
