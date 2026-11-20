@@ -1077,7 +1077,11 @@ export function PicturePage({ s, set }: PageProps) {
           <Select
             aria-label="Frame rate"
             value={String(s.fps)}
-            onChange={(e) => set({ fps: Number(e.target.value) })}
+            onChange={(e) => {
+              const fps = Number(e.target.value)
+              // Broadcast timing only exists for 24, 30 and 60.
+              set(s.fps_ntsc && ![24, 30, 60].includes(fps) ? { fps, fps_ntsc: false } : { fps })
+            }}
           >
             {[24, 25, 30, 48, 50, 60, 120].map((f) => (
               <option key={f} value={f}>
@@ -1086,6 +1090,19 @@ export function PicturePage({ s, set }: PageProps) {
             ))}
           </Select>
         </Row>
+        {[24, 30, 60].includes(s.fps) && (
+          <Row
+            label={`Broadcast timing (${{ 24: '23.976', 30: '29.97', 60: '59.94' }[s.fps as 24 | 30 | 60]} fps)`}
+            info="A thousandth slower, as TV and most capture cards run. Use it when your sources are 29.97 or 59.94 and the picture stutters now and then. Applies from the next start."
+          >
+            <Switch
+              label="Broadcast timing"
+              hideLabel
+              checked={!!s.fps_ntsc}
+              onChange={(fps_ntsc) => set({ fps_ntsc })}
+            />
+          </Row>
+        )}
       </div>
       <Heading info="A projector of every scene at once; a click puts one on air (in Studio Mode, in the preview).">
         Multiview

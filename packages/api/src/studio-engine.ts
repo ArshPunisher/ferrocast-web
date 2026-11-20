@@ -525,6 +525,8 @@ export interface StudioSettings {
   width: number
   height: number
   fps: number
+  /** Broadcast timing: 24 → 23.976, 30 → 29.97, 60 → 59.94 (only for those; from the next start). */
+  fps_ntsc?: boolean
   /** null: Movies/Ferrocast. */
   record_folder: string | null
   /** Where recordings go when `record_folder` is null (this computer's Movies or Videos
