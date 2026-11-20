@@ -3,18 +3,19 @@
 
 import { useEffect, useState } from 'react'
 import {
+  healthText,
   onCanvas,
   type DestinationView,
   type GoLiveView,
   type StudioSettings,
 } from '@ferrocast/api'
 import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
-import { IconButton, Button, Dialog, Skeleton, Switch, toast } from '@ferrocast/ui'
+import { IconButton, Button, Dialog, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
 import { Logo, Platforms, RowText, useGoLive } from '../golive'
 import { DockHeader } from './layout'
-import { useDesk } from './common'
+import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
 
 export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoLiveView | null }) {
@@ -26,6 +27,23 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const desk = useDesk()
   // While live, the stream on air takes it at once (frame rate, size, encoder, bitrate).
   const live = !!view?.live
+  // On air, each destination's own line ("Live · 6.5 Mbps") comes from this reading, which no
+  // frame brings for the Studio's own stream: read again now and then (S18 B5).
+  const onAir = useDeskStats((s) => !!s?.stream)
+  const { reload } = res
+  useEffect(() => {
+    if (!onAir) return
+    reload()
+    const poll = () => {
+      if (!document.hidden) reload()
+    }
+    const t = setInterval(poll, 5000)
+    document.addEventListener('visibilitychange', poll)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', poll)
+    }
+  }, [onAir, reload])
   const applyOptimized = (patch: Partial<StudioSettings>) =>
     void run('optimize', async () => {
       const cur = await desk.api.studioSettings()
@@ -99,6 +117,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       <Logo kind={d.kind} size={20} />
       <div className="min-w-0 flex-1">
         <RowText d={d} fixBitrate={fixBitrate} compact />
+        <LiveLine d={d} />
       </div>
       {/* At the top, lined up with the name, however long the notes below. */}
       <Switch
@@ -196,5 +215,30 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
       </Dialog>
     </section>
+  )
+}
+
+/**
+ * While a destination is on air (or trying to be): how it is doing, on its own row ("Live ·
+ * 13.5 Mbit/s", "Reconnecting"), so which one is in trouble shows without the status bar (S18 B5).
+ */
+function LiveLine({ d }: { d: DestinationView }) {
+  const h = d.health
+  if (!d.enabled || !h || h.state === 'waiting' || h.state === 'stopped') return null
+  const t = healthText(h, d.blocked)
+  return (
+    <span
+      className={cx(
+        'block truncate text-[12px] font-semibold',
+        t.tone === 'ok' && 'text-ok',
+        t.tone === 'warn' && 'text-warn',
+        t.tone === 'bad' && 'text-danger',
+        (t.tone === 'off' || t.tone === 'paused') && 'text-text-3',
+      )}
+      aria-live="polite"
+    >
+      {t.label}
+      {t.detail ? ` · ${t.detail}` : ''}
+    </span>
   )
 }

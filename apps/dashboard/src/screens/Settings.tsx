@@ -45,6 +45,7 @@ import {
 import { LoadError, PageHeader } from '../components/Panel'
 import { Group, Row, SettingsHead, SwitchRow } from '../components/settings-kit'
 import { AccountRow, useConnect } from '../components/accounts'
+import { YoutubePrivacyGroup } from '../components/youtube-privacy'
 import { stateCopy } from '../components/StatusStrip'
 import { THEME_EVENT } from '../components/Shell'
 import { done, useAction, useClient, useNow, useResource } from '../lib/hooks'
@@ -186,6 +187,7 @@ function Accounts() {
           ))}
         </ul>
       </Group>
+      <YoutubePrivacyGroup />
       {dialog}
       <Dialog
         open={leaving !== null}

@@ -617,7 +617,8 @@ export function studioApi(c: FerroClient) {
     skipCountdown: () => post<{ show: ShowRun }>('/show/countdown/skip'),
     cancelCountdown: () => post<{ show: ShowRun }>('/show/countdown/cancel'),
     liveScene: () => post<{ show: ShowRun }>('/show/live-scene'),
-    endShow: () => post<{ show: ShowRun }>('/show/end'),
+    /** `now`: the stream stops at once, not after the show's `stop_delay_s` (engine 20 Nov). */
+    endShow: (now = false) => post<{ show: ShowRun }>('/show/end', now ? { now: true } : undefined),
 
     obsScenes: () => get<ObsScenes>('/obs/scenes'),
     obsInputs: () => get<{ name: string; kind: string }[]>('/obs/inputs'),

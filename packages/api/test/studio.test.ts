@@ -176,6 +176,20 @@ describe('demo studio (same contract as API.md §4 Studio)', () => {
     expect((await studio.endShow()).show.phase).toBe('ended')
   })
 
+  it('show: ending with a stop delay waits, and endShow(true) stops at once', async () => {
+    await studio.saveShowConfig({ stop_stream: true, stop_delay_s: 30 })
+    await studio.startShow(true)
+    const ending = await studio.endShow()
+    expect(ending.show.steps.find((x) => x.id === 'stop_stream')?.status).toBe('waiting')
+    const stopped = await studio.endShow(true)
+    expect(stopped.show.id).toBe(ending.show.id)
+    expect(stopped.show.steps.find((x) => x.id === 'stop_stream')?.status).toBe('done')
+    // On a show still running: the ending and the stop in one go.
+    await studio.startShow(true)
+    const now = await studio.endShow(true)
+    expect(now.show.steps.find((x) => x.id === 'stop_stream')?.status).toBe('done')
+  })
+
   it('obs: replay not running, then a clip with a marker; BRB needs a scene', async () => {
     expect((await fail(studio.clip()))?.status).toBe(422)
     await studio.preflightFix('action:start_replay_buffer')

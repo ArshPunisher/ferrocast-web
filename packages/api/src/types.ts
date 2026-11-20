@@ -1196,7 +1196,14 @@ export interface Settings {
   language: string
   /** The main currency (ISO 4217); the TTS minimum is in it. From the computer's region by default. */
   currency: string
+  /**
+   * Who can watch a YouTube broadcast Ferrocast makes (the vertical one too). `public` unless
+   * chosen. Missing from an older engine, which makes them all public.
+   */
+  youtube_privacy?: YoutubePrivacy
 }
+
+export type YoutubePrivacy = 'public' | 'unlisted' | 'private'
 
 /** Why a backup was taken (API.md §4 Settings and data). `restore`: the data a restore replaced. */
 export type BackupReason =
