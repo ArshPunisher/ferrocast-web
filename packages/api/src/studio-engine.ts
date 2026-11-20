@@ -386,6 +386,12 @@ export interface EngineAudio {
   tracks?: number[]
   /** Making sound now (a playing file, an open device). */
   active?: boolean
+  /** Push to talk: muted unless its key is held, and `push_to_talk_ms` after it is let go. */
+  push_to_talk?: boolean
+  push_to_talk_ms?: number
+  /** Push to mute: muted while its key is held, and `push_to_mute_ms` after it is let go. */
+  push_to_mute?: boolean
+  push_to_mute_ms?: number
 }
 
 /** What to change in a sound's mixer settings (anything left out stays). */
@@ -397,6 +403,11 @@ export interface EngineAudioChange {
   sync_ms?: number
   mono?: boolean
   tracks?: number[]
+  push_to_talk?: boolean
+  /** 0 to 5000. */
+  push_to_talk_ms?: number
+  push_to_mute?: boolean
+  push_to_mute_ms?: number
 }
 
 /** A source and the scenes it's in. */
@@ -423,6 +434,8 @@ export interface EngineLevel {
   /** The highest it came in at, before its filters and fader (a noise gate's line is set
    *  against this). Missing from older apps. */
   input_peak?: [number, number]
+  /** Muted by a push-to-talk or push-to-mute key right now (a meter shows it dim). */
+  gated?: boolean
 }
 
 /** How the Studio's stream into Go live is going (null: not streaming). */

@@ -256,6 +256,8 @@ export function Meter({
   const covers = useRef<(HTMLDivElement | null)[]>([])
   const holds = useRef<(HTMLDivElement | null)[]>([])
   const light = useRef<HTMLSpanElement | null>(null)
+  // The bars' colour, dimmed while a push-to-talk / push-to-mute key holds the sound muted.
+  const zones = useRef<(HTMLDivElement | null)[]>([])
   const input = useLatest({ level, feed, feedName, decay, vertical: !!vertical })
   useEffect(() => {
     const st = [initialMeter(), initialMeter()]
@@ -263,9 +265,20 @@ export function Meter({
     let last = performance.now()
     let clipAt = -1e9
     let clipOn = false
+    let gatedOn = false
     return onFrame((now) => {
       const t = input.current
       const lv = t.feed && t.feedName !== undefined ? t.feed.get(t.feedName) : t.level
+      const gated = !!lv?.gated
+      if (gated !== gatedOn) {
+        gatedOn = gated
+        for (const z of zones.current) {
+          if (z) {
+            z.style.opacity = gated ? '0.35' : ''
+            z.style.filter = gated ? 'grayscale(1)' : ''
+          }
+        }
+      }
       const dt = now - last
       last = now
       for (let i = 0; i < 2; i++) {
@@ -322,6 +335,9 @@ export function Meter({
           every animation frame by direct style writes (no React render, no layout). */}
       <div
         aria-hidden
+        ref={(el) => {
+          zones.current[i] = el
+        }}
         className={cx('absolute inset-0', muted && 'opacity-40 grayscale')}
         style={{ background: ZONES }}
       />
@@ -541,6 +557,18 @@ function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
         >
           {a.name}
         </span>
+        {(a.push_to_talk || a.push_to_mute) && (
+          <span
+            title={
+              a.push_to_talk
+                ? 'Push to talk: muted unless its key is held.'
+                : 'Push to mute: muted while its key is held.'
+            }
+            className="shrink-0 rounded-full border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-bold text-text-2"
+          >
+            {a.push_to_talk ? 'PTT' : 'PTM'}
+          </span>
+        )}
         {a.channel !== null && (
           <>
             <span className="hidden shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-bold text-accent-text @[300px]:inline">
