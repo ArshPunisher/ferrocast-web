@@ -61,7 +61,7 @@ describe('the stream doctor', () => {
     expect(doctorFix('render', { ...base, fps: 30 }, hd, false)).toBeNull()
   })
 
-  it('live, only a rate that divides the picture\'s goes out (50 fps → 25)', () => {
+  it("live, only a rate that divides the picture's goes out (50 fps → 25)", () => {
     const fifty = doctorFix('render', { ...base, fps: 50 }, hd, true)
     expect(fifty?.patch).toEqual({ fps: 25 })
     expect(fifty?.label).toBe('Use 25 fps')

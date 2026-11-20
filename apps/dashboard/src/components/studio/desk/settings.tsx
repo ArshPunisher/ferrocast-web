@@ -2,8 +2,9 @@
 // recording, shortcuts and reconnecting, as plain choices first and the details under "More
 // options". Saved together; what can't change now (live, or until a restart) says so.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+  ArrowCounterClockwise,
   CheckCircle,
   Broadcast,
   EyeSlash,
@@ -11,13 +12,25 @@ import {
   GearSix,
   Keyboard,
   Monitor,
+  Plus,
   Record,
   SlidersHorizontal,
   Sparkle,
   SpeakerHigh,
+  Trash,
   Warning,
   X,
 } from '@phosphor-icons/react'
+import {
+  MAX_KEYS,
+  addKey,
+  keysOf,
+  removeKey,
+  sharedWith,
+  usersOf,
+  usesKey,
+  withKeys,
+} from './shortcut-keys'
 import {
   WRITTEN_RECORD_FORMATS,
   describeError,
@@ -1871,12 +1884,19 @@ export function shortcutGroups(
       title: 'Recording',
       actions: [
         { id: 'record', label: 'Start or stop recording' },
+        { id: 'start_record', label: 'Start recording' },
+        { id: 'stop_record', label: 'Stop recording' },
         { id: 'pause_record', label: 'Pause or resume recording' },
+        { id: 'unpause_record', label: 'Resume recording' },
         { id: 'split_record', label: 'Start a new file' },
         { id: 'chapter', label: 'Add a chapter' },
         { id: 'replay', label: 'Replay buffer on or off' },
+        { id: 'start_replay', label: 'Start the replay buffer' },
+        { id: 'stop_replay', label: 'Stop the replay buffer' },
         { id: 'save_replay', label: 'Save replay' },
         { id: 'virtualcam', label: 'Virtual camera on or off' },
+        { id: 'start_virtualcam', label: 'Start the virtual camera' },
+        { id: 'stop_virtualcam', label: 'Stop the virtual camera' },
         { id: 'screenshot', label: 'Screenshot of what’s on air' },
       ],
     },
@@ -1936,10 +1956,15 @@ export function shortcutGroups(
   ]
 }
 
-function KeysPage({ s, set }: PageProps) {
+export function KeysPage({ s, set }: PageProps) {
   const { api, allScenes, scenes, audio } = useDesk()
+  // The action taking a key now, and the key being looked for ("find by key").
   const [listening, setListening] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [finding, setFinding] = useState(false)
+  const [keyFilter, setKeyFilter] = useState<string | null>(null)
+  // What the shortcuts were when this page opened: Reset on a row goes back to it.
+  const opened = useRef(s.hotkeys)
   // Every scene's sources, filters and media: what OBS lists on its Hotkeys page.
   const names = allScenes.map((x) => x.name).join('\n')
   const extra = useResource(async () => {
@@ -1979,48 +2004,73 @@ function KeysPage({ s, set }: PageProps) {
   const q = query.trim().toLowerCase()
   const labelOf = (id: string) =>
     groups.flatMap((g) => g.actions).find((a) => a.id === id)?.label ?? id
-  const setKey = (id: string, keys: string | null) => {
-    const next = { ...s.hotkeys }
-    if (keys) {
-      // One action per keys: a key taken from another action says so.
-      for (const [k, v] of Object.entries(next))
-        if (v === keys && k !== id) {
-          delete next[k]
-          toast({ tone: 'warn', message: `${pretty(keys)} moved from “${labelOf(k)}”.` })
-        }
-      next[id] = keys
-    } else delete next[id]
-    set({ hotkeys: next })
+  const change = (next: Record<string, string>) => set({ hotkeys: next })
+  const add = (id: string, key: string) => {
+    // A key another action has is not taken from it: both run, and both rows say so.
+    const others = usersOf(s.hotkeys, key).filter((x) => x !== id)
+    if (others.length)
+      toast({
+        tone: 'warn',
+        message: `${pretty(key)} is also used by ${others.map(labelOf).join(', ')}. Both will run.`,
+      })
+    change(addKey(s.hotkeys, id, key))
     setListening(null)
   }
   return (
     <>
       <Heading
-        info={`They work while a game has the keyboard. Push to talk mutes the sound until held; push to mute is the other way round.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
+        info={`They work while a game has the keyboard. An action can have up to ${MAX_KEYS} keys, and one key can run several actions. Push to talk mutes the sound until held; push to mute is the other way round.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
       >
         How they work
       </Heading>
-      <Input
-        type="search"
-        aria-label="Search shortcuts"
-        name="shortcut-search"
-        autoComplete="off"
-        data-keep-placeholder
-        placeholder="Search shortcuts…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          aria-label="Search shortcuts"
+          name="shortcut-search"
+          autoComplete="off"
+          data-keep-placeholder
+          placeholder="Search shortcuts…"
+          className="min-w-0 flex-1"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {finding ? (
+          <KeyCapture
+            onKeys={(k) => {
+              setKeyFilter(k)
+              setFinding(false)
+            }}
+            onCancel={() => setFinding(false)}
+          />
+        ) : keyFilter ? (
+          <span className="inline-flex items-center gap-1">
+            <kbd className={kbdClass}>{pretty(keyFilter)}</kbd>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label="Stop looking for that key"
+              onClick={() => setKeyFilter(null)}
+            >
+              <X size={14} />
+            </IconButton>
+          </span>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setFinding(true)}>
+            Find by key
+          </Button>
+        )}
+      </div>
       {groups
         .map((g) => ({
           ...g,
           actions: g.actions.filter(
             (a) =>
-              !q ||
-              a.label.toLowerCase().includes(q) ||
-              g.title.toLowerCase().includes(q) ||
-              pretty(s.hotkeys[a.id] ?? '')
-                .toLowerCase()
-                .includes(q),
+              (!keyFilter || usesKey(s.hotkeys, a.id, keyFilter)) &&
+              (!q ||
+                a.label.toLowerCase().includes(q) ||
+                g.title.toLowerCase().includes(q) ||
+                keysOf(s.hotkeys[a.id]).some((k) => pretty(k).toLowerCase().includes(q))),
           ),
         }))
         .filter((g) => g.actions.length > 0)
@@ -2028,51 +2078,116 @@ function KeysPage({ s, set }: PageProps) {
           <section key={g.title} aria-label={g.title} className="flex flex-col">
             <h4 className="m-0 mb-1 text-[13.5px] font-bold text-text-3">{g.title}</h4>
             {g.actions.map((a) => {
-              const keys = s.hotkeys[a.id]
+              const keys = keysOf(s.hotkeys[a.id])
+              const shared = sharedWith(s.hotkeys, a.id)
+              const changed = (s.hotkeys[a.id] ?? '') !== (opened.current[a.id] ?? '')
               return (
                 <div
                   key={a.id}
-                  className="flex min-h-9 items-center gap-2 border-t border-line text-[13px]"
+                  className="flex flex-col gap-0.5 border-t border-line py-1 text-[13px]"
                 >
-                  <span className="min-w-0 flex-1 truncate" title={a.label}>
-                    {a.label}
-                  </span>
-                  {listening === a.id ? (
-                    <KeyCapture
-                      onKeys={(k) => setKey(a.id, k)}
-                      onCancel={() => setListening(null)}
-                    />
-                  ) : keys ? (
-                    <kbd className="inline-flex h-7 items-center rounded-[8px] border border-line-strong bg-inset px-2 font-mono text-[13.5px] font-semibold shadow-[0_1px_0_var(--fc-line-strong)]">
-                      {pretty(keys)}
-                    </kbd>
-                  ) : (
-                    <span className="text-[14px] text-text-3">None</span>
-                  )}
-                  <Button size="sm" variant="ghost" onClick={() => setListening(a.id)}>
-                    {keys ? 'Change' : 'Set'}
-                  </Button>
-                  {keys && (
-                    <IconButton
-                      size="sm"
-                      variant="ghost"
-                      label={`Clear the shortcut for ${a.label}`}
-                      onClick={() => setKey(a.id, null)}
-                    >
-                      <X size={14} />
-                    </IconButton>
+                  <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-0 flex-1 basis-40 truncate" title={a.label}>
+                      {a.label}
+                    </span>
+                    {keys.length === 0 && listening !== a.id && (
+                      <span className="text-[14px] text-text-3">None</span>
+                    )}
+                    {keys.map((k) => (
+                      <span key={k} className="inline-flex items-center gap-0.5">
+                        <kbd
+                          className={cx(kbdClass, shared[k] && 'border-warn text-warn')}
+                          title={
+                            shared[k]
+                              ? `Also used by ${shared[k].map(labelOf).join(', ')}`
+                              : undefined
+                          }
+                        >
+                          {pretty(k)}
+                        </kbd>
+                        <IconButton
+                          size="sm"
+                          variant="ghost"
+                          label={`Remove ${pretty(k)} from ${a.label}`}
+                          onClick={() => change(removeKey(s.hotkeys, a.id, k))}
+                        >
+                          <X size={12} />
+                        </IconButton>
+                      </span>
+                    ))}
+                    {listening === a.id ? (
+                      <KeyCapture
+                        onKeys={(k) => add(a.id, k)}
+                        onCancel={() => setListening(null)}
+                      />
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={keys.length >= MAX_KEYS}
+                        aria-label={`${keys.length ? 'Add another key to' : 'Set a key for'} ${a.label}`}
+                        onClick={() => setListening(a.id)}
+                      >
+                        {keys.length ? <Plus size={14} /> : 'Set'}
+                      </Button>
+                    )}
+                    {keys.length > 1 && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={`Clear every shortcut for ${a.label}`}
+                        onClick={() => change(withKeys(s.hotkeys, a.id, null))}
+                      >
+                        <Trash size={14} />
+                      </IconButton>
+                    )}
+                    {changed && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={`Reset ${a.label} to what it was when this page opened`}
+                        onClick={() => change(withKeys(s.hotkeys, a.id, opened.current[a.id]))}
+                      >
+                        <ArrowCounterClockwise size={14} />
+                      </IconButton>
+                    )}
+                  </div>
+                  {Object.keys(shared).length > 0 && (
+                    <p className="m-0 text-[12.5px] text-warn">
+                      Shared with{' '}
+                      {[...new Set(Object.values(shared).flat())].map(labelOf).join(', ')}: both
+                      run.
+                    </p>
                   )}
                 </div>
               )
             })}
           </section>
         ))}
-      {q && groups.every((g) => g.actions.every((a) => !a.label.toLowerCase().includes(q))) && (
-        <p className="m-0 text-[14px] text-text-3">No shortcut matches “{query}”.</p>
-      )}
+      {(q || keyFilter) &&
+        groups.every((g) =>
+          g.actions.every(
+            (a) =>
+              !(
+                (!keyFilter || usesKey(s.hotkeys, a.id, keyFilter)) &&
+                (!q ||
+                  a.label.toLowerCase().includes(q) ||
+                  g.title.toLowerCase().includes(q) ||
+                  keysOf(s.hotkeys[a.id]).some((k) => pretty(k).toLowerCase().includes(q)))
+              ),
+          ),
+        ) && (
+          <p className="m-0 text-[14px] text-text-3">
+            No shortcut matches{q ? ` “${query}”` : ''}
+            {keyFilter ? ` with ${pretty(keyFilter)}` : ''}.
+          </p>
+        )}
     </>
   )
 }
+
+const kbdClass =
+  'inline-flex h-7 items-center rounded-[8px] border border-line-strong bg-inset px-2 font-mono text-[13.5px] font-semibold shadow-[0_1px_0_var(--fc-line-strong)]'
 
 /** OBS's General settings that apply here: snapping in the preview, and asking first. */
 function GeneralPage({ s, set }: PageProps) {
