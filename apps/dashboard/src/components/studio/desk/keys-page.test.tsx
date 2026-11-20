@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StudioSettings } from '@ferrocast/api'
 import { DeskProvider } from './common'
 import { KeysPage } from './settings'
@@ -14,9 +14,11 @@ const nop: unknown = new Proxy(function () {}, {
   apply: () => nop,
 })
 
+const captureKeys = vi.fn(async (_on: boolean) => undefined)
+
 function desk() {
   const t = {
-    api: { items: async () => [], filters: async () => [] },
+    api: { items: async () => [], filters: async () => [], captureKeys },
     allScenes: [{ name: 'Main' }, { name: 'BRB' }],
     scenes: { data: { quick: [] } },
     audio: { data: [{ name: 'Mic' }] },
@@ -29,6 +31,7 @@ describe('the Shortcuts page', () => {
   let host: HTMLDivElement
   let saved: Record<string, string>
   beforeEach(() => {
+    captureKeys.mockClear()
     useLive.setState({ conn: { client: {} } as never })
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -162,5 +165,66 @@ describe('the Shortcuts page', () => {
     await act(async () => byLabel(row('Undo'), /^Reset Undo/)!.click())
     expect(saved).toEqual({ record: 'F9' })
     expect(row('Start or stop recording').textContent).not.toContain('Shared with')
+  })
+
+  const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))))
+  const calls = () => captureKeys.mock.calls.map((c) => c[0])
+
+  it('lets the global shortcuts go while it waits for a key and takes them back after it', async () => {
+    await mount({ record: 'F9' })
+    await act(async () => byLabel(row('Start or stop recording'), /^Add another key to/)!.click())
+    await settle()
+    expect(calls()).toEqual([true])
+    // A key already used by another action is captured (and shows as shared), not run.
+    await press('F9')
+    await settle()
+    expect(saved.record).toBe('F9')
+    expect(calls()).toEqual([true, false])
+  })
+
+  it('puts them back on Escape, and when the window loses focus', async () => {
+    await mount({})
+    const find = () =>
+      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Find by key')!
+    await act(async () => find().click())
+    await settle()
+    expect(host.textContent).toContain('Press keys')
+    await act(
+      async () =>
+        void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    )
+    await settle()
+    expect(host.textContent).not.toContain('Press keys')
+    expect(calls()).toEqual([true, false])
+    // Waiting again, then the window goes to another app.
+    await act(async () => find().click())
+    await settle()
+    await act(async () => void window.dispatchEvent(new Event('blur')))
+    await settle()
+    expect(host.textContent).not.toContain('Press keys')
+    expect(calls()).toEqual([true, false, true, false])
+  })
+
+  it('asks again every 10 s while it waits, and puts them back when the page goes away', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      await mount({})
+      const find = [...host.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Find by key',
+      )!
+      await act(async () => find.click())
+      await settle()
+      expect(calls()).toEqual([true])
+      await act(async () => void vi.advanceTimersByTime(10_000))
+      await settle()
+      expect(calls().filter((c) => c).length).toBeGreaterThanOrEqual(2)
+      await act(async () => root.unmount())
+      await settle()
+      expect(calls().at(-1)).toBe(false)
+      // Mounted again for afterEach's unmount.
+      root = createRoot(host)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

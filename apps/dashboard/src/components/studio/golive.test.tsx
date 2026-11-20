@@ -140,6 +140,7 @@ describe('RowText (Contract C-2 capped chip and structured issues)', () => {
       <RowText
         d={baseDest({
           blocked: 'Connect your Twitch account first.',
+          health: null,
           issues: [
             bitrateIssue,
             { code: 'keyint', summary: 'Keyframes every 4 s', detail: 'Set it to 2 s.' },
@@ -446,5 +447,25 @@ describe('Contract C-1: PushState failed UI', () => {
     await act(async () => infoBtn.click())
     expect(el.textContent).toContain('allow multistreaming')
     expect(el.textContent).toContain('Trying again in 5 s.')
+  })
+})
+
+describe('RowText: a blocked row says it once', () => {
+  const blocked = 'Connect your Twitch account first.'
+  it('has a Can’t start chip before it goes live (nothing else says it)', async () => {
+    const el = await renderNode(<RowText d={baseDest({ blocked, health: null })} />)
+    expect(el.textContent).toContain('Can’t start')
+  })
+
+  it('leaves it to the live line once the row has a health (shown twice before)', async () => {
+    const el = await renderNode(
+      <RowText
+        d={baseDest({
+          blocked,
+          health: { state: 'failed', attempts: 1, reason: 'x', since_ms: 0 } as never,
+        })}
+      />,
+    )
+    expect(el.textContent).not.toContain('Can’t start')
   })
 })

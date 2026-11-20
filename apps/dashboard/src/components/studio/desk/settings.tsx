@@ -55,7 +55,7 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
-import { useDesk } from './common'
+import { useDesk, type EngineApi } from './common'
 import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
 import { RemoteControlSection } from './remote-control'
@@ -1844,8 +1844,36 @@ export function pretty(keys: string, mac = isMac): string {
     .join(' ')
 }
 
-/** Listens for the next key press with at least one modifier (or an F key) → its keys. */
+/** One call at a time, in order: a stop and the next wait come close together. */
+let captureChain: Promise<unknown> = Promise.resolve()
+function captureKeys(api: EngineApi, on: boolean) {
+  captureChain = captureChain.then(() => api.captureKeys(on)).catch(() => undefined)
+}
+
+/** How often a wait is renewed: the app puts its shortcuts back by itself 30 s after the last. */
+const CAPTURE_RENEW_MS = 10_000
+
+/**
+ * Listens for the next key press with at least one modifier (or an F key) → its keys. While it
+ * waits the app lets its global shortcuts go, so every key reaches the page (those already
+ * assigned too: the pressed key is then shown as shared) and none runs its action; they come
+ * back when the wait ends: a key, Escape, a click away, the window losing focus, the page closing.
+ */
 function KeyCapture({ onKeys, onCancel }: { onKeys: (k: string) => void; onCancel: () => void }) {
+  const { api } = useDesk()
+  const cancel = useRef(onCancel)
+  cancel.current = onCancel
+  useEffect(() => {
+    captureKeys(api, true)
+    const renew = window.setInterval(() => captureKeys(api, true), CAPTURE_RENEW_MS)
+    const away = () => cancel.current()
+    window.addEventListener('blur', away)
+    return () => {
+      window.clearInterval(renew)
+      window.removeEventListener('blur', away)
+      captureKeys(api, false)
+    }
+  }, [api])
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       e.preventDefault()

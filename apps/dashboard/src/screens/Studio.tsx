@@ -1,7 +1,7 @@
 // Studio: Go live everywhere, the show, stream info, OBS and moments, one tab each (API.md §4
 // "Studio" and "Go live everywhere").
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Segmented } from '@ferrocast/ui'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
@@ -33,7 +33,7 @@ import { LiveCaptions } from '../components/studio/captions'
 import { ShowStylePicker } from '../components/studio/show-style-picker'
 import { TranscriptPanel } from '../components/studio/transcript'
 
-const TABS: { value: StudioSection; label: string }[] = [
+const TABS: { value: StudioSection; label: ReactNode }[] = [
   { value: 'golive', label: 'Go live' },
   // Second: what viewers see is set right after picking where to go (owner, 29 Oct).
   { value: 'info', label: 'Stream info' },
@@ -43,12 +43,42 @@ const TABS: { value: StudioSection; label: string }[] = [
   { value: 'moments', label: 'Moments' },
 ]
 
+/** The Show tab, marked with a small dot (and said so to a screen reader) while a show runs. */
+export function markRunningShow<T extends { value: string; label: ReactNode; title?: string }>(
+  tabs: T[],
+  running: boolean,
+): T[] {
+  if (!running) return tabs
+  return tabs.map((t) =>
+    t.value === 'show'
+      ? {
+          ...t,
+          title: 'A show is running',
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              Show
+              <span aria-hidden data-show-running className="size-1.5 rounded-full bg-ok" />
+              <span className="sr-only">(running)</span>
+            </span>
+          ),
+        }
+      : t,
+  )
+}
+
 export function Studio({ section = 'golive' }: { section?: StudioSection | undefined }) {
   const studio = useStudio()
   // The OBS and Vertical tabs only for those who stream from OBS: with Ferrocast's Studio the
   // vertical picture and its platforms are all in Go live (owner, 28 Oct).
   const usesObs = useUsesObs()
-  const tabs = usesObs ? TABS : TABS.filter((t) => t.value !== 'obs' && t.value !== 'vertical')
+  // A show that is running (counting down, starting, live) is marked on its tab: it was not
+  // seen from the other tabs, and its 409 came with no hint it was still there (19 Nov).
+  const [run] = useShow()
+  const showOn = !!run && run.phase !== 'ended'
+  const tabs = markRunningShow(
+    usesObs ? TABS : TABS.filter((t) => t.value !== 'obs' && t.value !== 'vertical'),
+    showOn,
+  )
   const info = useResource(() => studio.streamInfo(), [studio])
   // OBS's scenes only for its own tab: asked on every Studio page they failed without OBS (a
   // 422 on each load); elsewhere the request just waits, never sent.
