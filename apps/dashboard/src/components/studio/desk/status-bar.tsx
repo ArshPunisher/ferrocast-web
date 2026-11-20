@@ -443,18 +443,25 @@ export function StudioStatusBar() {
           ...(health.detail ? { detail: health.detail } : {}),
         }
       : null)
-  const note = stream?.reconnecting
-    ? { text: 'Reconnecting…', tone: 'text-warn' }
-    : (stream?.error || stream?.failed) && (!stream.active || stream.failed)
-      ? { text: stream.reason ?? stream.error ?? 'Stream stopped.', tone: 'text-danger' }
-      : remux?.error
-        ? { text: `The MP4 couldn't be made: ${remux.error}`, tone: 'text-danger' }
-        : remux && !remux.done
-          ? { text: `Making an MP4… ${Math.round(remux.percent)}%`, tone: 'text-text-2' }
-          : rec?.paused
-            ? { text: 'Recording paused', tone: 'text-warn' }
-            : (strain ??
-              (capture ? { text: captureWords(capture), tone: 'text-warn' } : healthNote))
+  // After Stop with a stream delay: the last seconds are still going out.
+  const tail = stats.delay?.draining ? Math.max(1, Math.ceil(stats.delay.remaining_s)) : null
+  const note = tail
+    ? {
+        text: `Sending the last ${tail} s of your delayed stream…`,
+        tone: 'text-text-2 tabular-nums',
+      }
+    : stream?.reconnecting
+      ? { text: 'Reconnecting…', tone: 'text-warn' }
+      : (stream?.error || stream?.failed) && (!stream.active || stream.failed)
+        ? { text: stream.reason ?? stream.error ?? 'Stream stopped.', tone: 'text-danger' }
+        : remux?.error
+          ? { text: `The MP4 couldn't be made: ${remux.error}`, tone: 'text-danger' }
+          : remux && !remux.done
+            ? { text: `Making an MP4… ${Math.round(remux.percent)}%`, tone: 'text-text-2' }
+            : rec?.paused
+              ? { text: 'Recording paused', tone: 'text-warn' }
+              : (strain ??
+                (capture ? { text: captureWords(capture), tone: 'text-warn' } : healthNote))
   const shownUpload = effective.uploadKbps ?? 0
   const uploadTone =
     live && shownUpload === 0 && health && health.score === 0 && health.tone !== 'ok'
@@ -495,6 +502,21 @@ export function StudioStatusBar() {
           className="my-1 shrink-0 rounded-[6px] bg-btn-soft px-2 text-[12px] font-bold text-molten-text hover:bg-btn-soft-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
         >
           Allow
+        </button>
+      )}
+      {tail && (
+        <button
+          type="button"
+          aria-label="Stop now: don't send the rest of the delay"
+          onClick={() =>
+            void api.stream(false, { discard_delay: true }).catch((err: unknown) => {
+              const d = describeError(err)
+              toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+            })
+          }
+          className="my-1 shrink-0 rounded-[6px] bg-btn-soft px-2 text-[12px] font-bold text-molten-text hover:bg-btn-soft-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        >
+          Stop now
         </button>
       )}
       {strain && note === strain && (

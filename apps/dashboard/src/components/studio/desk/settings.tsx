@@ -2075,6 +2075,18 @@ function AdvancedPage({ s, set }: PageProps) {
             />
           </Row>
         )}
+        {s.delay_s > 0 && (
+          <Row label="Memory limit">
+            <NumberBox
+              label="Delay memory limit"
+              value={s.delay_max_mb ?? 256}
+              min={16}
+              max={4096}
+              unit="MB"
+              onChange={(delay_max_mb) => set({ delay_max_mb })}
+            />
+          </Row>
+        )}
       </div>
       <Heading info="Twitch keeps a second sound for your VOD. Play music only on track 1 and it stays out of the VOD (no muted parts), while viewers hear it live.">
         Twitch VOD
