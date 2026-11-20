@@ -168,10 +168,9 @@ describe('the engine-backed settings', () => {
     await act(async () => root?.render(<RecordPage s={initial} set={() => {}} />))
   }
 
-  it('has no B-frames switch (they do nothing yet) but keeps the profile and an Auto keyframe', async () => {
+  it('keeps the profile, the B-frames switch and an Auto keyframe', async () => {
     await show(mk({}))
-    expect(host?.textContent).not.toContain('B-frames')
-    expect(host?.querySelector('[aria-label="B-frames"]')).toBeNull()
+    expect(host?.querySelector('[aria-label="B-frames"]')).not.toBeNull()
     expect(host?.querySelector('[aria-label="Profile"]')).not.toBeNull()
     const keyframe = host?.querySelector('[aria-label="Keyframe every"]') as HTMLSelectElement
     expect(Array.from(keyframe.options).map((o) => o.value)).toContain('0')
@@ -195,5 +194,24 @@ describe('the engine-backed settings', () => {
     const box = host?.querySelector('[aria-label="Replay buffer memory"]') as HTMLInputElement
     expect(box).not.toBeNull()
     expect(box.value).toBe('512')
+  })
+})
+
+describe('the B-frames switch', () => {
+  it('is in More options, off until switched on, with its words behind an (i)', async () => {
+    await show(mk({ b_frames: false }))
+    const sw = host?.querySelector<HTMLElement>('[aria-label="B-frames"]')
+    expect(sw).not.toBeNull()
+    expect(sw?.closest('details')).not.toBeNull()
+    expect((sw as HTMLInputElement).checked || sw?.getAttribute('aria-checked') === 'true').toBe(
+      false,
+    )
+    // The explanation sits behind the (i), not on the row's own line.
+    expect(host?.querySelector('[aria-label="About b-frames"]')).not.toBeNull()
+    await act(async () => sw?.click())
+    const again = host?.querySelector<HTMLElement>('[aria-label="B-frames"]')
+    expect(
+      (again as HTMLInputElement).checked || again?.getAttribute('aria-checked') === 'true',
+    ).toBe(true)
   })
 })

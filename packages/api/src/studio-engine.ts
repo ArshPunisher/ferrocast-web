@@ -545,7 +545,8 @@ export interface StudioSettings {
   /** 0 lets the encoder pick. */
   keyframe_s: number
   profile: 'high' | 'main' | 'baseline'
-  bframes: boolean
+  /** B-frames in the Mac's encoder (off unless switched on). */
+  b_frames: boolean
   /** Send at this size instead of the canvas's. */
   scale: [number, number] | null
   /** How a stream sent at another size is scaled (bicubic when absent). */
