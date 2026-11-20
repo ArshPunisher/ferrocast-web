@@ -63,7 +63,7 @@ describe('Appearance and Accessibility settings', () => {
 
   it('the colour-blind preset changes the meters; its sample shows them', async () => {
     const host = await mount()
-    await act(async () => radio(host, 'Meter colours', 'Colour-blind friendly')?.click())
+    await act(async () => radio(host, 'Meter colours', 'Colour-blind')?.click())
     expect(document.documentElement.style.getPropertyValue('--fc-meter-ok')).toBe('#0072b2')
     expect(
       host.querySelector<HTMLElement>('[data-testid="meter-sample"]')?.style.background,

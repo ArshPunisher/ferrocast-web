@@ -119,7 +119,7 @@ export function AppearanceGroups() {
         />
         <Row
           label="Meter colours"
-          description="The mixer’s normal, loud and clipping zones."
+          description="The mixer’s normal, loud and clipping zones. Colour-blind keeps them apart."
           control={
             <Segmented
               label="Meter colours"
@@ -127,7 +127,7 @@ export function AppearanceGroups() {
               onChange={(meters: MeterPreset) => put({ meters })}
               options={[
                 { value: 'default', label: 'Normal' },
-                { value: 'colorblind', label: 'Colour-blind friendly' },
+                { value: 'colorblind', label: 'Colour-blind' },
                 { value: 'custom', label: 'Your own' },
               ]}
             />
