@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { NoticeItem } from '../lib/store'
+import { useLive } from '../lib/store'
 import { NoticeBanners } from './NoticeBanners'
 
 // jsdom doesn't run exit animations, so the old banners would stay in the page: plain elements.
@@ -119,5 +120,50 @@ describe('NoticeBanners', () => {
     await act(async () => root!.render(<NoticeBanners notices={[n(2, 'b')]} dismiss={vi.fn()} />))
     expect(lines()).toEqual(['b'])
     expect(byName('Show one')).toBeUndefined()
+  })
+
+  it('an action with a request is a button: Reload POSTs it, then the banner goes', async () => {
+    const request = vi.fn().mockResolvedValue(undefined)
+    useLive.setState({ conn: { client: { request } } as never })
+    const dismiss = vi.fn()
+    await mount(
+      [
+        n(7, 'Alerts stopped drawing', {
+          action: {
+            label: 'Reload',
+            href: '/api/v1/studio/engine/sources/Alerts/web',
+            post: { do: 'reload' },
+          },
+        }),
+      ],
+      dismiss,
+    )
+    expect(document.querySelector('a[href*="/sources/"]')).toBeNull()
+    const reload = byName('Reload')
+    expect(reload).toBeDefined()
+    await act(async () => reload!.click())
+    expect(request).toHaveBeenCalledWith('POST', '/api/v1/studio/engine/sources/Alerts/web', {
+      do: 'reload',
+    })
+    expect(dismiss).toHaveBeenCalledWith(7)
+    useLive.setState({ conn: null })
+  })
+
+  it('a failed Reload keeps the banner (it can be tried again)', async () => {
+    const request = vi.fn().mockRejectedValue(new Error('nope'))
+    useLive.setState({ conn: { client: { request } } as never })
+    const dismiss = vi.fn()
+    await mount(
+      [
+        n(8, 'Chat stopped drawing', {
+          action: { label: 'Reload', href: '/x', post: { do: 'reload' } },
+        }),
+      ],
+      dismiss,
+    )
+    await act(async () => byName('Reload')!.click())
+    expect(request).toHaveBeenCalled()
+    expect(dismiss).not.toHaveBeenCalled()
+    useLive.setState({ conn: null })
   })
 })

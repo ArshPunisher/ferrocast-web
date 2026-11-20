@@ -5,8 +5,47 @@
 import { useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { X } from '@phosphor-icons/react'
-import { InfoLine, cx } from '@ferrocast/ui'
-import type { NoticeItem } from '../lib/store'
+import { InfoLine, cx, toast } from '@ferrocast/ui'
+import { describeError } from '@ferrocast/api'
+import { useLive, type NoticeItem } from '../lib/store'
+
+/** An action that is a request the dashboard makes (Reload a stalled browser source). */
+function PostAction({
+  label,
+  href,
+  body,
+  done,
+}: {
+  label: string
+  href: string
+  body: Record<string, unknown>
+  done: () => void
+}) {
+  const conn = useLive((s) => s.conn)
+  const [busy, setBusy] = useState(false)
+  return (
+    <button
+      type="button"
+      disabled={busy || !conn}
+      onClick={async () => {
+        if (!conn) return
+        setBusy(true)
+        try {
+          await conn.client.request('POST', href, body)
+          done()
+        } catch (e) {
+          const d = describeError(e)
+          toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+        } finally {
+          setBusy(false)
+        }
+      }}
+      className="shrink-0 pt-0.5 font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none disabled:opacity-60"
+    >
+      {label}
+    </button>
+  )
+}
 
 export function NoticeBanners({
   notices,
@@ -57,13 +96,22 @@ export function NoticeBanners({
                 {open ? 'Show one' : `+${waiting} more`}
               </button>
             )}
-            {n.action && (
-              <a
+            {n.action?.post ? (
+              <PostAction
+                label={n.action.label}
                 href={n.action.href}
-                className="shrink-0 pt-0.5 font-semibold text-accent-text hover:underline"
-              >
-                {n.action.label}
-              </a>
+                body={n.action.post}
+                done={() => dismiss(n.id)}
+              />
+            ) : (
+              n.action && (
+                <a
+                  href={n.action.href}
+                  className="shrink-0 pt-0.5 font-semibold text-accent-text hover:underline"
+                >
+                  {n.action.label}
+                </a>
+              )
             )}
             <button
               type="button"

@@ -1490,7 +1490,11 @@ export interface Notice {
   message: string
   /** The rest (a cause, the engine's own words), shown behind an (i). Older engines send none. */
   detail?: string
-  action?: { label: string; href: string }
+  /**
+   * A link to open, or (with `post`) a request the dashboard makes: a POST of `post` to `href`
+   * (Reload a browser source that stopped drawing).
+   */
+  action?: { label: string; href: string; post?: Record<string, unknown> }
 }
 
 /** Frames on the dashboard live socket (API.md §5). */
