@@ -328,6 +328,22 @@ function PushRows({ a, onChange }: { a: EngineAudio; onChange: (p: EngineAudioCh
     <>
       {row(true)}
       {row(false)}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 lg:col-span-full lg:pl-1">
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-text">
+          <Switch
+            hideLabel
+            label={`This is a mic: ${a.name}`}
+            checked={!!a.mic}
+            onChange={(v) => onChange({ mic: v })}
+          />
+          This is a mic
+        </span>
+        <InfoTip label="About This is a mic">
+          While you stream, Ferrocast warns you about a mic that is muted while you talk, very
+          quiet, or sends nothing. Only sounds marked as a mic are watched: a capture card’s sound,
+          an app or the desktop is not one unless you say so.
+        </InfoTip>
+      </div>
     </>
   )
 }

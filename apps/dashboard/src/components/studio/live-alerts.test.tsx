@@ -5,7 +5,7 @@ import type { LiveAlert } from '@ferrocast/api'
 import { Toaster, dismissToast } from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
 import type { FerroClient } from '@ferrocast/api'
-import { LiveAlertToasts, alertFix, foldAlerts } from './live-alerts'
+import { LiveAlertToasts, alertDismiss, alertFix, foldAlerts } from './live-alerts'
 
 // Live alerts are one toast: the newest wrong thing, the count behind it, the detail behind an (i).
 
@@ -221,5 +221,72 @@ describe('LiveAlertToasts one-tap fix', () => {
     expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Unmute')).toBe(
       false,
     )
+  })
+})
+
+describe('alertDismiss: "Muted on purpose"', () => {
+  const muted: LiveAlert = {
+    id: 'mic:muted:KREO',
+    level: 'warn',
+    message: "You're talking but KREO is muted.",
+    cleared: false,
+    source: 'KREO',
+    action: 'unmute',
+    dismiss: 'muted_on_purpose',
+  }
+
+  it('is offered only when the engine says so, and silences that alert for the stream', async () => {
+    const { client, calls } = fakeClient()
+    expect(alertDismiss(fixable('unmute'), client)).toBeUndefined()
+    const d = alertDismiss(muted, client)!
+    expect(d.label).toBe('Muted on purpose')
+    await d.run()
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/api/v1/studio/engine/live-alerts/silence',
+        body: { id: 'mic:muted:KREO' },
+      },
+    ])
+  })
+
+  it('shows beside Unmute on the toast, and pressing it calls the engine', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.matchMedia = ((q: string) => ({
+      matches: false,
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia
+    const { client, calls } = fakeClient()
+    useLive.setState({ conn: { client } as never })
+    const el = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(el)
+    await act(async () =>
+      root.render(
+        <>
+          <LiveAlertToasts />
+          <Toaster />
+        </>,
+      ),
+    )
+    await act(async () => useLive.setState((s) => ({ studio: { ...s.studio, alert: muted } })))
+    const buttons = [
+      ...document.querySelectorAll<HTMLButtonElement>('section[aria-label="Notifications"] button'),
+    ].map((b) => b.textContent)
+    expect(buttons).toContain('Unmute')
+    expect(buttons).toContain('Muted on purpose')
+    const b = [...document.querySelectorAll('button')].find(
+      (x) => x.textContent === 'Muted on purpose',
+    )!
+    await act(async () => b.click())
+    expect(calls.map((c) => c.path)).toContain('/api/v1/studio/engine/live-alerts/silence')
+    await act(async () => root.unmount())
+    useLive.setState((st) => ({ conn: null, studio: { ...st.studio, alert: null } }))
+    for (let i = 1; i < 50; i++) dismissToast(i)
   })
 })

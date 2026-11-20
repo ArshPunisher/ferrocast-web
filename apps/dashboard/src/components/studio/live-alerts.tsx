@@ -51,6 +51,22 @@ export function alertFix(
   return undefined
 }
 
+/** The "this is on purpose" button an alert offers (a muted mic), or none: it silences the alert for the stream. */
+export function alertDismiss(
+  alert: LiveAlert,
+  client: FerroClient,
+): { label: string; run: () => Promise<string> } | undefined {
+  if (alert.dismiss !== 'muted_on_purpose') return undefined
+  const api = studioEngineApi(client)
+  return {
+    label: 'Muted on purpose',
+    run: async () => {
+      await api.silenceLiveAlert(alert.id)
+      return 'Not said again for this stream.'
+    },
+  }
+}
+
 /**
  * Folds one alert frame into the ones still wrong (oldest first; one raised again moves to
  * the end), and says what the toast shows: the newest wrong one with the count behind it, or,
@@ -100,25 +116,18 @@ export function LiveAlertToasts() {
     const r = foldAlerts(active.current, alert)
     active.current = r.active
     const fix = r.shown.alert && client ? alertFix(r.shown.alert, client) : undefined
+    const dismiss = r.shown.alert && client ? alertDismiss(r.shown.alert, client) : undefined
+    const said = (run: () => Promise<string>) => () => {
+      run().then(
+        (m) => toast({ tone: 'ok', message: m }),
+        (e: unknown) =>
+          toast({ tone: 'error', message: e instanceof Error ? e.message : 'That didn’t work.' }),
+      )
+    }
     toast({
       key: KEY,
-      ...(fix
-        ? {
-            action: {
-              label: fix.label,
-              run: () => {
-                fix.run().then(
-                  (said) => toast({ tone: 'ok', message: said }),
-                  (e: unknown) =>
-                    toast({
-                      tone: 'error',
-                      message: e instanceof Error ? e.message : 'That didn’t work.',
-                    }),
-                )
-              },
-            },
-          }
-        : {}),
+      ...(fix ? { action: { label: fix.label, run: said(fix.run) } } : {}),
+      ...(dismiss ? { action2: { label: dismiss.label, run: said(dismiss.run) } } : {}),
       tone: r.shown.tone,
       message: r.shown.message,
       detail: r.shown.detail,
