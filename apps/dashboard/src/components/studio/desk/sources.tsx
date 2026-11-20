@@ -278,10 +278,18 @@ export function SourcesDock() {
     void run('group', () => done(fn()), ok ? { success: ok } : undefined).then(
       (r) => r && refresh(),
     )
-  const pasteFilters = (to: string) => (from: string) =>
-    void run('filters', () => done(api.pasteFilters(to, from)), {
-      success: `Filters pasted onto ${to}.`,
-    })
+  // Onto a picture with its own filters, they go onto that picture alone.
+  const pasteFilters = (to: EngineItem) => (from: string) =>
+    void run(
+      'filters',
+      () =>
+        done(
+          to.own_filters
+            ? api.pasteItemFilters(scene, to.id, from)
+            : api.pasteFilters(to.name, from),
+        ),
+      { success: `Filters pasted onto ${to.name}.` },
+    )
 
   const web = (item: EngineItem, what: 'interact' | 'reload') =>
     void run(`web:${item.id}`, () => done(api.web(item.name, what)))
@@ -610,7 +618,7 @@ export function SourcesDock() {
         },
     { label: 'Copy', icon: CopySimple, onSelect: () => setClip(item.name) },
     { label: 'Duplicate', icon: Copy, onSelect: () => void act(item, 'duplicate') },
-    ...filterItems(item.name, { ...desk, paste: pasteFilters(item.name) }),
+    ...filterItems(item.name, { ...desk, paste: pasteFilters(item) }),
     { sep: true },
     { label: 'Remove', icon: Trash, danger: true, onSelect: () => setRemoving(item) },
   ]
