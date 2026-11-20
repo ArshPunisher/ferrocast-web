@@ -28,6 +28,7 @@ import {
   Trash,
   Play,
   ProjectorScreen,
+  ShieldWarning,
   SquaresFour,
   Stack,
   X,
@@ -38,8 +39,21 @@ import {
   type EngineStudioOptions,
   type EngineTransition,
   type PreviewRect,
+  type SafeModeStatus,
+  type StudioStartOptions,
 } from '@ferrocast/api'
-import { Button, Dialog, IconButton, InfoTip, Input, Select, Skeleton, cx } from '@ferrocast/ui'
+import {
+  Badge,
+  Button,
+  Dialog,
+  IconButton,
+  InfoTip,
+  Input,
+  Select,
+  Skeleton,
+  cx,
+} from '@ferrocast/ui'
+import { isSafeModeLocked } from '../../safe-mode'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { shortcut } from '../../../lib/os'
@@ -1443,32 +1457,92 @@ function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: boolean) 
 export function StageOff({
   available,
   detail,
+  safeMode = null,
   onStart,
 }: {
   available: boolean
   detail: string | null
-  onStart: () => Promise<void>
+  safeMode?: SafeModeStatus | null
+  onStart: (opts?: StudioStartOptions) => Promise<void>
 }) {
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'default' | 'scenes' | 'normal' | 'blank' | null>(null)
+  const startWith = (key: 'default' | 'scenes' | 'normal' | 'blank', opts?: StudioStartOptions) => {
+    if (busy !== null) return
+    setBusy(key)
+    void onStart(opts).finally(() => setBusy(null))
+  }
+  const locked = safeMode ? isSafeModeLocked(safeMode) : false
   return (
     <div className="grid min-h-0 flex-1 place-items-center bg-[#0a0b0d] p-6 text-center">
       {available ? (
-        <div className="flex flex-col items-center gap-3">
-          <p className="m-0 max-w-[36ch] text-[15px] text-[#c3c8d1]">
-            Your scenes come back where you left them.
-          </p>
-          <Button
-            variant="primary"
-            busy={busy}
-            onClick={() => {
-              setBusy(true)
-              // Spins until it started or failed (then it can be pressed again).
-              void onStart().finally(() => setBusy(false))
-            }}
-          >
-            <Play size={15} weight="fill" /> Start the Studio
-          </Button>
-        </div>
+        safeMode?.active ? (
+          <div className="flex max-w-[44ch] flex-col items-center gap-3">
+            <Badge tone="warn" className="border-[#f5b43c]/35! bg-[#f5b43c]/15! text-[#ffd27a]!">
+              <ShieldWarning size={14} weight="fill" aria-hidden />
+              Safe Mode
+            </Badge>
+            <p className="m-0 text-[15px] text-[#c3c8d1]">
+              {safeMode.collection_pending
+                ? 'Plugins, VSTs, auto-start and saved scenes are held back.'
+                : 'Plugins, VSTs and auto-start are off.'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                variant="primary"
+                busy={busy === 'scenes'}
+                disabled={busy !== null}
+                onClick={() =>
+                  startWith(
+                    'scenes',
+                    safeMode.collection_pending
+                      ? { safe_mode: true, confirm_collection: true }
+                      : { safe_mode: true },
+                  )
+                }
+              >
+                <Play size={15} weight="fill" aria-hidden />
+                {safeMode.collection_pending ? 'Load my scenes' : 'Start in Safe Mode'}
+              </Button>
+              {!locked && (
+                <Button
+                  variant="outline"
+                  busy={busy === 'normal'}
+                  disabled={busy !== null}
+                  className="border-white/25! bg-white/8! text-white! hover:bg-white/15!"
+                  onClick={() =>
+                    startWith('normal', { safe_mode: false, confirm_collection: true })
+                  }
+                >
+                  Start normally
+                </Button>
+              )}
+              {safeMode.collection_pending && (
+                <Button
+                  variant="ghost"
+                  busy={busy === 'blank'}
+                  disabled={busy !== null}
+                  className="text-[#c3c8d1]! hover:bg-white/10! hover:text-white!"
+                  onClick={() => startWith('blank', { safe_mode: true, confirm_collection: false })}
+                >
+                  Blank canvas
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <p className="m-0 max-w-[36ch] text-[15px] text-[#c3c8d1]">
+              Your scenes come back where you left them.
+            </p>
+            <Button
+              variant="primary"
+              busy={busy === 'default'}
+              onClick={() => startWith('default')}
+            >
+              <Play size={15} weight="fill" /> Start the Studio
+            </Button>
+          </div>
+        )
       ) : (
         <p className="m-0 max-w-[48ch] text-[15px] text-[#c3c8d1]">{detail}</p>
       )}

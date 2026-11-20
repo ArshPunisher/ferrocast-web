@@ -40,6 +40,7 @@ import { PRO_UNLOCKED_EVENT, accountInitials, proPlanLine, useProStatus } from '
 import { ProUnlock } from './pro/ProUnlock'
 import { StatusStrip } from './StatusStrip'
 import { NoticeBanners } from './NoticeBanners'
+import { SafeModeBanner } from './safe-mode'
 import { PanicButton } from './PanicButton'
 import { RemoteStrip } from './remote'
 import { UpdateDialogHost, UpdateNavItem } from './update'
@@ -389,6 +390,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const [folded, flipNav] = useNavFold()
   const studio = route.name === 'studio'
   const notices = useLive((s) => s.notices)
+  const safeMode = useLive((s) => s.status?.safe_mode ?? null)
   const remote = useLive((s) => s.remote)
   const conn = useLive((s) => s.conn)
   const dismiss = useLive((s) => s.dismissNotice)
@@ -642,6 +644,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           </div>
         </header>
 
+        {!remote && !cloud && safeMode?.active && <SafeModeBanner safeMode={safeMode} />}
         <NoticeBanners notices={notices} dismiss={dismiss} />
 
         <main

@@ -20,6 +20,7 @@ import {
   type ChatterMark,
   type Platform,
   type Queue,
+  type SafeModeStatus,
   type Status,
   type TtsPending,
 } from '@ferrocast/api'
@@ -109,6 +110,7 @@ interface LiveStore {
   studio: StudioLive
   setConn: (c: Connection) => void
   setStatus: (s: Status) => void
+  setSafeMode: (sm: SafeModeStatus | null) => void
   setBootError: (e: ApiError | null) => void
   setQueue: (q: Queue) => void
   setPanic: (on: boolean) => void
@@ -213,6 +215,15 @@ export const useLive = create<LiveStore>((set, get) => ({
   studio: EMPTY_STUDIO,
   setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
   setStatus: (status) => set({ status, connectors: status.connectors }),
+  setSafeMode: (safeMode) =>
+    set((s) => {
+      if (!s.status) return s
+      if (!safeMode && s.status.safe_mode === undefined) return s
+      const next: Status = { ...s.status }
+      if (safeMode) next.safe_mode = safeMode
+      else delete next.safe_mode
+      return { status: next }
+    }),
   setBootError: (bootError) => set({ bootError }),
   setQueue: (queue) => set({ queue }),
   setPanic: (panic) => set({ panic }),

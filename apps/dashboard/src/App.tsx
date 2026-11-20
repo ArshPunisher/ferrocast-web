@@ -42,6 +42,7 @@ import { Home } from './screens/Home'
 import { StudioGlobal } from './components/studio/moments'
 import { LiveAlertToasts } from './components/studio/live-alerts'
 import { RemoteGate } from './components/remote'
+import { SafeModeScreen } from './components/safe-mode'
 
 // Home is in the first bundle; other screens load when first opened.
 const Chat = lazy(() => import('./screens/Chat').then((m) => ({ default: m.Chat })))
@@ -100,8 +101,10 @@ async function hydrate(conn: Connection): Promise<boolean> {
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: 'booting' })
   const [setupDone, setSetupDone] = useState(true)
+  const [safeModeDismissed, setSafeModeDismissed] = useState(false)
   const conn = useLive((s) => s.conn)
   const remoteNow = useLive((s) => s.remote)
+  const safeMode = useLive((s) => s.status?.safe_mode ?? null)
   const route = useRoute()
 
   // StrictMode (and "Try again") can start a boot while another is still running; only
@@ -115,6 +118,7 @@ export function App() {
       // A phone never runs first-time setup: that's on the PC (accounts, OBS).
       // Cloud mode is set up on its Cloud page, never the PC's first run.
       setSetupDone(done || c.mode === 'remote' || c.remote !== undefined || isCloud(c))
+      setSafeModeDismissed(false)
       setPhase({ kind: 'ready' })
     } catch (e) {
       if (id !== bootId.current) return
@@ -319,6 +323,23 @@ export function App() {
         <Toaster />
       </>
     )
+
+  // After a crash or `--safe-mode` launch on this PC: show the calm Safe Mode screen before
+  // entering the dashboard until the streamer loads scenes, starts normally, or opens blank.
+  if (
+    !remoteNow &&
+    !isCloud(conn) &&
+    !safeModeDismissed &&
+    safeMode?.active &&
+    (safeMode.offer || safeMode.collection_pending)
+  ) {
+    return (
+      <>
+        <SafeModeScreen safeMode={safeMode} onResolved={() => setSafeModeDismissed(true)} />
+        <Toaster />
+      </>
+    )
+  }
 
   // A phone sees only its role's screens: others open its home instead (hidden, not greyed).
   // While its PC is off and the cloud bot stands in, only chat, bans and history (M10).
