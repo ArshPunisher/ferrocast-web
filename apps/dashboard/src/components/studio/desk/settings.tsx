@@ -979,7 +979,12 @@ const CANVASES = [
   { w: 1080, h: 1920, title: '1080×1920', note: 'Vertical, for Shorts' },
 ]
 
-function PicturePage({ s, set }: PageProps) {
+/** Whether a canvas size is one of the cards; if not, "Your own" is the one picked. */
+export function isPresetCanvas(w: number, h: number): boolean {
+  return CANVASES.some((c) => c.w === w && c.h === h)
+}
+
+export function PicturePage({ s, set }: PageProps) {
   return (
     <>
       <Heading info="What scenes are built on. It can't change while you're live or recording.">
@@ -997,6 +1002,15 @@ function PicturePage({ s, set }: PageProps) {
             }
           />
         ))}
+        {!isPresetCanvas(s.width, s.height) && (
+          <Choice
+            on
+            title="Your own"
+            sub={`${s.width}×${s.height}`}
+            note="The size this setup has"
+            onPick={() => {}}
+          />
+        )}
       </ChoiceGrid>
       <div className="flex flex-col">
         <Row label="Frame rate">

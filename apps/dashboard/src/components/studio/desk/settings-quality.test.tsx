@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { StudioSettings } from '@ferrocast/api'
-import { StreamPage, encoderChoice, recordChoice, streamQuality } from './settings'
+import { PicturePage, StreamPage, encoderChoice, recordChoice, streamQuality } from './settings'
 
 vi.mock('./common', async (orig) => ({
   ...(await orig<typeof import('./common')>()),
@@ -108,6 +108,27 @@ describe('the stream quality cards', () => {
     expect(encoderChoice('hardware')).toBe('hardware')
     expect(encoderChoice('something else')).toBe('hardware')
     expect(encoderChoice(undefined)).toBe('hardware')
+  })
+})
+
+describe('the canvas cards', () => {
+  async function showPicture(initial: StudioSettings) {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root?.render(<PicturePage s={initial} set={() => {}} />))
+  }
+
+  it('a preset size picks its card, and only it', async () => {
+    await showPicture(mk({ width: 2560, height: 1440 }))
+    expect(picked('Canvas size')).toEqual(['2560×1440'])
+  })
+
+  it('a size that is no card picks "Your own", with its size', async () => {
+    await showPicture(mk({ width: 2000, height: 1000 }))
+    expect(picked('Canvas size')).toEqual(['Your own'])
+    expect(cards('Canvas size')).toHaveLength(5)
+    expect(host?.textContent).toContain('2000×1000')
   })
 })
 
