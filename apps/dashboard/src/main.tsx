@@ -1,9 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MotionConfig } from 'motion/react'
 import './styles.css'
 import { registerDesignFonts } from '@ferrocast/overlays'
 import { App } from './App'
+import { applyAppearance, loadAppearance } from './lib/appearance'
+import { Motion } from './lib/use-appearance'
+
+// The saved size, density, motion and colours, before the first paint.
+applyAppearance(loadAppearance())
 
 // Design fonts for the gallery and designer previews (downloaded only when a design uses one).
 registerDesignFonts()
@@ -12,8 +16,8 @@ const root = document.getElementById('root')
 if (root)
   createRoot(root).render(
     <StrictMode>
-      <MotionConfig reducedMotion="user">
+      <Motion>
         <App />
-      </MotionConfig>
+      </Motion>
     </StrictMode>,
   )

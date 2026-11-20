@@ -50,7 +50,7 @@ export const meterPct = (db: number): number => Math.max(0, Math.min(100, ((db +
 const SCALE = [-60, -50, -40, -30, -20, -10, 0]
 /** OBS's zones: green to -20 dB, yellow to -9, red above. */
 const ZONES =
-  'linear-gradient(var(--dir),var(--fc-ok) 0 66.6%,var(--fc-warn) 66.6% 85%,var(--fc-danger) 85% 100%)'
+  'linear-gradient(var(--dir),var(--fc-meter-ok,var(--fc-ok)) 0 66.6%,var(--fc-meter-warn,var(--fc-warn)) 66.6% 85%,var(--fc-meter-clip,var(--fc-danger)) 85% 100%)'
 
 function qDb(v: number | undefined): number {
   if (v === undefined || v <= -60) return -100
@@ -396,7 +396,7 @@ export function Meter({
       aria-hidden
       ref={light}
       data-clip="false"
-      className="size-2 shrink-0 rounded-full bg-surface-3 transition-colors data-[clip=true]:bg-danger-fill data-[clip=true]:shadow-[0_0_6px_var(--fc-danger)]"
+      className="size-2 shrink-0 rounded-full bg-surface-3 transition-colors data-[clip=true]:bg-[var(--fc-meter-clip,var(--fc-danger-fill))] data-[clip=true]:shadow-[0_0_6px_var(--fc-meter-clip,var(--fc-danger))]"
     />
   )
   if (vertical)
