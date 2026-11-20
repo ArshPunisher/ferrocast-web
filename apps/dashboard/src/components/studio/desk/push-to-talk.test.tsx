@@ -145,4 +145,13 @@ describe('the meter while a push key holds the sound muted', () => {
     })
     expect(zone().style.opacity).toBe('')
   })
+
+  it('has a "This is a mic" switch per sound that sends the owner\'s word', async () => {
+    audioNow = mic({ mic: false })
+    await mountAdvanced()
+    const sw = document.querySelector('[aria-label="This is a mic: Mic"]') as HTMLElement | null
+    expect(sw).not.toBeNull()
+    await act(async () => sw!.click())
+    expect(setAudio).toHaveBeenCalledWith('Mic', { mic: true })
+  })
 })

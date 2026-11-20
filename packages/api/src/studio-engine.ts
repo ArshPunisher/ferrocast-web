@@ -397,6 +397,11 @@ export interface EngineAudio {
   /** Push to mute: muted while its key is held, and `push_to_mute_ms` after it is let go. */
   push_to_mute?: boolean
   push_to_mute_ms?: number
+  /** The live watch judges it as a microphone ("This is a mic"): the owner's switch, else by its
+   * kind (a capture card's, an app's or the desktop's sound is not one). */
+  mic?: boolean
+  /** On air in this scene: its item and every scene above it shown. */
+  shown?: boolean
 }
 
 /** What to change in a sound's mixer settings (anything left out stays). */
@@ -413,6 +418,7 @@ export interface EngineAudioChange {
   push_to_talk_ms?: number
   push_to_mute?: boolean
   push_to_mute_ms?: number
+  mic?: boolean
 }
 
 /** A source and the scenes it's in. */
@@ -1296,6 +1302,10 @@ export function studioEngineApi(c: FerroClient) {
      * its global shortcuts go meanwhile, so every key reaches the page and none runs an action. */
     captureKeys: (on: boolean) =>
       c.request<void>('POST', '/api/v1/studio/engine/keys/capture', { on }),
+    /** A live alert about a mic is on purpose ("Muted on purpose"): cleared now, not raised
+     * again for this stream. */
+    silenceLiveAlert: (id: string) =>
+      c.request<void>('POST', '/api/v1/studio/engine/live-alerts/silence', { id }),
     /** The displays a full-screen projector can go on. */
     screens: () => c.request<EngineScreen[]>('GET', '/api/v1/studio/engine/screens'),
     /** Quits and opens Ferrocast again (refused while streaming or recording). */

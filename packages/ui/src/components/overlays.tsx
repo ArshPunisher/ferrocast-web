@@ -431,6 +431,8 @@ export interface Toast {
   /** Other things like this one waiting behind it ("+2 more"). */
   more?: number | undefined
   action?: { label: string; run: () => void }
+  /** A second button beside it ("Muted on purpose" next to "Unmute"). */
+  action2?: { label: string; run: () => void }
   /**
    * Toasts about the same thing share a key (`panic`, `obs`, `account:twitch`): a new one
    * replaces the old one instead of stacking, so switching panic on then off shows only
@@ -560,17 +562,25 @@ export function Toaster() {
               {t.hint && (
                 <p className="mt-0.5 text-[14px] leading-snug break-words text-text-3">{t.hint}</p>
               )}
-              {t.action && (
-                <button
-                  type="button"
-                  className="mt-1.5 text-[14px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
-                  onClick={() => {
-                    t.action?.run()
-                    dismissToast(t.id)
-                  }}
-                >
-                  {t.action.label}
-                </button>
+              {(t.action || t.action2) && (
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                  {[t.action, t.action2].map(
+                    (a) =>
+                      a && (
+                        <button
+                          key={a.label}
+                          type="button"
+                          className="text-[14px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
+                          onClick={() => {
+                            a.run()
+                            dismissToast(t.id)
+                          }}
+                        >
+                          {a.label}
+                        </button>
+                      ),
+                  )}
+                </div>
               )}
             </div>
             <button
