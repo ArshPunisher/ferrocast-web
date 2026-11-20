@@ -126,7 +126,11 @@ export function RemoteControlSection() {
               </Line>
               <Line
                 label="Other devices on my network"
-                sub={view.lan ? 'Anyone on your network with the password' : 'Only this computer'}
+                sub={
+                  view.lan
+                    ? "Anyone on your network with the password. Use it only on a network you trust: the link isn't encrypted."
+                    : 'Only this computer'
+                }
               >
                 <Switch
                   label="Other devices on my network"
