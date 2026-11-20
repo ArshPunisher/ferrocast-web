@@ -103,6 +103,8 @@ describe('live meters', () => {
     })
     const calls = (api.levels as ReturnType<typeof vi.fn>).mock.calls.length - start
     expect(calls).toBeGreaterThanOrEqual(30)
+    // The meters ask for the short window.
+    expect((api.levels as ReturnType<typeof vi.fn>).mock.calls[0]).toEqual([['Mic'], 'fast'])
     expect(POLL_MS).toBeLessThanOrEqual(33)
     // The bar moved (-10 dB is 83% along) by style writes alone.
     expect(cover().style.transform).toMatch(/translate3d\(8\d(\.\d+)?%/)

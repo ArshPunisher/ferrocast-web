@@ -1281,8 +1281,13 @@ export function studioEngineApi(c: FerroClient) {
     setPrivacy: (p: PrivacyGuard) =>
       c.request<PrivacyGuard>('PUT', '/api/v1/studio/engine/privacy', p),
     /** Levels now, for these sounds (a meter starts on the first ask). */
-    levels: (names: string[]) =>
-      c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),
+    /** `window: 'fast'` reads the last ~43 ms (for meters that draw their own release); the
+     * default is the 300 ms window. */
+    levels: (names: string[], window?: 'fast' | 'slow') =>
+      c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', {
+        names,
+        ...(window ? { window } : {}),
+      }),
     /** Starts or stops streaming the Studio into this PC's Go live. */
     stream: (on: boolean, opts: { discard_delay?: boolean } = {}) =>
       // `also`: what was set to start or stop with the stream but didn't, in words. Ending

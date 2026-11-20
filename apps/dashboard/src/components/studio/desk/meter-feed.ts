@@ -44,7 +44,7 @@ function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () 
     if (!alive || document.hidden || busy) return
     busy = true
     try {
-      const v = await api.levels(list)
+      const v = await api.levels(list, 'fast')
       if (alive) {
         latest = v
         at = performance.now()

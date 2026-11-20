@@ -189,3 +189,5 @@ The overlay ignores any value it doesn't know, and never passes one to CSS.
 ## Level meters: raw peaks, pushed (requested 21 Nov by Sonnet 2)
 
 `POST /studio/engine/levels` answers with the highest peak over the last ~300 ms, so even at 30 requests a second the dashboard's bars move in 300 ms steps. Ask: a short window (about 33 ms) for `peak`, or a push of levels over the live WebSocket at 30 Hz, so the dashboard can draw attack and release itself. The dashboard already polls at ~30 Hz and animates between samples.
+
+Status 21 Nov: the engine now takes an optional `window: "fast"` (about 43 ms) on `POST /studio/engine/levels`, answered off the Studio queue; the dashboard sends it. A push over the WebSocket is still open.

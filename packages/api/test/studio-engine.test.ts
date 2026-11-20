@@ -4,6 +4,22 @@ import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { ApiError } from '../src/errors'
 import { studioEngineApi } from '../src/studio-engine'
 
+describe('levels request', () => {
+  it("sends window only when asked (default stays the engine's 300 ms window)", async () => {
+    const bodies: unknown[] = []
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    const api = studioEngineApi(
+      new FerroClient({ base: 'http://x', token: 't', fetch: fetchFn as unknown as typeof fetch }),
+    )
+    await api.levels(['Mic'])
+    await api.levels(['Mic'], 'fast')
+    expect(bodies).toEqual([{ names: ['Mic'] }, { names: ['Mic'], window: 'fast' }])
+  })
+})
+
 describe('the Studio engine in the demo (no desktop app)', () => {
   let engine: DemoEngine
   let api: ReturnType<typeof studioEngineApi>
