@@ -68,46 +68,106 @@ describe('RowText (Contract C-2 capped chip and structured issues)', () => {
     expect(el.textContent).toContain(detail)
   })
 
-  it('renders structured issues with expandable detail and Use N kbps quick-fix button', async () => {
+  const longSummary =
+    'Twitch takes up to 6,000 kbps of video; you’re sending 7,011 kbps. Lower the video bitrate to 5,500 kbps or less, or viewers may see it stutter.'
+  const bitrateIssue = {
+    code: 'bitrate' as const,
+    summary: longSummary,
+    detail: longSummary,
+    fix_kbps: 5500,
+  }
+
+  it('a bitrate warning is a short chip on the name line; the sentence and the fix are behind it', async () => {
     const fixBitrate = vi.fn()
-    const detail =
-      'Over Twitch’s 6,000 kbps limit, viewers may buffer. Lower the bitrate to 5,500 kbps or less.'
     const el = await renderNode(
       <RowText
         fixBitrate={fixBitrate}
-        d={baseDest({
-          rules: [detail],
-          issues: [
-            {
-              code: 'bitrate',
-              summary: 'Over Twitch’s 6,000 kbps limit',
-              detail,
-              fix_kbps: 5500,
-            },
-          ],
-        })}
+        d={baseDest({ rules: [longSummary], issues: [bitrateIssue] })}
       />,
     )
-    expect(el.textContent).toContain('Over Twitch’s 6,000 kbps limit')
-    expect(el.textContent).not.toContain('viewers may buffer')
-    const infoBtn = el.querySelector(
-      'button[aria-label="More about Over Twitch’s 6,000 kbps limit"]',
-    ) as HTMLButtonElement
-    await act(async () => infoBtn.click())
-    expect(el.textContent).toContain('viewers may buffer')
-
+    // The row keeps its two lines: nothing long is in it until the chip is pressed.
+    expect(el.textContent).toContain('Bitrate too high')
+    expect(el.textContent).not.toContain('7,011')
+    expect(el.textContent).not.toContain('stutter')
+    // The chip sits on the name's line, and it is a button named by the whole sentence.
+    const chip = el.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(chip.getAttribute('aria-label')).toContain('you’re sending 7,011 kbps')
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(chip.parentElement?.querySelector('b')?.textContent).toBe('Twitch')
+    await act(async () => chip.click())
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    expect(el.textContent).toContain('viewers may see it stutter')
     const fixBtn = Array.from(el.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Use 5,500 kbps'),
     ) as HTMLButtonElement
-    expect(fixBtn).not.toBeUndefined()
     await act(async () => fixBtn.click())
+    expect(fixBitrate).toHaveBeenCalledWith(5500)
+    // Escape closes it again.
+    const panel = el.querySelector(`#${chip.getAttribute('aria-controls')}`) as HTMLElement
+    await act(async () => {
+      panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('with room the fix is one press next to the chip (hidden by a container query when narrow)', async () => {
+    const fixBitrate = vi.fn()
+    const el = await renderNode(
+      <RowText fixBitrate={fixBitrate} d={baseDest({ issues: [bitrateIssue] })} />,
+    )
+    const inline = Array.from(el.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Use 5,500',
+    ) as HTMLButtonElement
+    expect(inline).not.toBeUndefined()
+    expect(inline.className).toContain('@[19rem]:inline-flex')
+    await act(async () => inline.click())
     expect(fixBitrate).toHaveBeenCalledWith(5500)
   })
 
   it('keeps the legacy rules string fallback working when an older engine omits issues', async () => {
     const legacy = 'Twitch needs a keyframe at least every 2 s.'
     const el = await renderNode(<RowText d={baseDest({ rules: [legacy] })} />)
+    expect(el.textContent).toContain('Stream rule')
+    expect(el.textContent).not.toContain(legacy)
+    const chip = el.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(chip.getAttribute('aria-label')).toContain(legacy)
+    await act(async () => chip.click())
     expect(el.textContent).toContain(legacy)
+  })
+
+  it('several notices share one chip ("+2"); the panel lists them all', async () => {
+    const el = await renderNode(
+      <RowText
+        d={baseDest({
+          blocked: 'Connect your Twitch account first.',
+          issues: [
+            bitrateIssue,
+            { code: 'keyint', summary: 'Keyframes every 4 s', detail: 'Set it to 2 s.' },
+          ],
+        })}
+      />,
+    )
+    expect(el.querySelectorAll('button[aria-expanded]').length).toBe(1)
+    expect(el.textContent).toContain('Can’t start')
+    expect(el.textContent).toContain('+2')
+    const chip = el.querySelector('button[aria-expanded]') as HTMLButtonElement
+    await act(async () => chip.click())
+    expect(el.textContent).toContain('Connect your Twitch account first.')
+    expect(el.textContent).toContain('Set it to 2 s.')
+  })
+
+  it('the Kick multistreaming note is a chip too, with the link in the panel', async () => {
+    const el = await renderNode(
+      <RowText d={baseDest({ kind: 'kick', name: 'Kick', enabled: true, health: null })} />,
+    )
+    expect(el.textContent).toContain('Kick Partner?')
+    expect(el.textContent).not.toContain('Creator Dashboard')
+    const chip = el.querySelector('button[aria-expanded]') as HTMLButtonElement
+    await act(async () => chip.click())
+    expect(el.textContent).toContain('Creator Dashboard')
+    expect(
+      Array.from(el.querySelectorAll('a')).some((a) => a.textContent?.includes('dashboard')),
+    ).toBe(true)
   })
 })
 
