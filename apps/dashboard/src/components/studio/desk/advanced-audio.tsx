@@ -232,7 +232,8 @@ function SoundRow({
       </label>
       <div className={cell} role="group" aria-label={`Audio tracks for ${a.name}`}>
         <span className={small}>Tracks</span>
-        <span className="flex gap-1">
+        {/* Three by two on a phone (six touch-size buttons and the label don't fit 375 px in one row). */}
+        <span className="grid w-fit min-w-0 grid-cols-3 gap-1 sm:flex">
           {TRACKS.map((t) => {
             const on = tracks.includes(t)
             return (

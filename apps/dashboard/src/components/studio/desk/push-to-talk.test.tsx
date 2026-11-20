@@ -154,4 +154,15 @@ describe('the meter while a push key holds the sound muted', () => {
     await act(async () => sw!.click())
     expect(setAudio).toHaveBeenCalledWith('Mic', { mic: true })
   })
+
+  it('lays the six track buttons three by two on a phone and in one row from "sm" up', async () => {
+    audioNow = mic({ tracks: [1, 2] })
+    await mountAdvanced()
+    const group = document.querySelector('[aria-label="Audio tracks for Mic"]') as HTMLElement
+    const buttons = group.querySelector('span:not(.sr-only):last-child') as HTMLElement
+    expect(buttons.querySelectorAll('button')).toHaveLength(6)
+    expect(buttons.className).toContain('grid-cols-3')
+    expect(buttons.className).toContain('sm:flex')
+    expect(buttons.className).toContain('min-w-0')
+  })
 })
