@@ -108,7 +108,30 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
       setDraft(r.settings)
       toast(
         r.restart
-          ? { tone: 'warn', message: 'Saved.', hint: r.restart, detail: r.restart_detail }
+          ? {
+              tone: 'warn',
+              message: 'Saved.',
+              hint: r.restart,
+              detail: r.restart_detail,
+              // Only a restart of Ferrocast applies some settings (the sound rate, broadcast
+              // timing): offered right here. It refuses while streaming or recording, and says so.
+              ...(/restart/i.test(r.restart)
+                ? {
+                    action: {
+                      label: 'Restart',
+                      run: () =>
+                        void api.restart().catch((err: unknown) => {
+                          const d = describeError(err)
+                          toast({
+                            tone: 'error',
+                            message: d.message,
+                            ...(d.hint ? { hint: d.hint } : {}),
+                          })
+                        }),
+                    },
+                  }
+                : {}),
+            }
           : { tone: 'ok', message: 'Saved.' },
       )
       // Saved: done here (owner, 29 Oct). A failure keeps it open to fix.
