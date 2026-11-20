@@ -203,6 +203,43 @@ function Heading({ children, info }: { children: ReactNode; info?: string }) {
 }
 
 /** A choice drawn as a card; the picked one is outlined. */
+/** A group of `Choice` cards: one radio group, the arrow keys move between its cards. */
+function ChoiceGrid({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={className}
+      onKeyDown={(e) => {
+        const step =
+          e.key === 'ArrowRight' || e.key === 'ArrowDown'
+            ? 1
+            : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+              ? -1
+              : 0
+        if (!step) return
+        const cards = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]'))
+        const at = cards.indexOf(document.activeElement as HTMLElement)
+        if (at < 0) return
+        e.preventDefault()
+        const next = cards[(at + step + cards.length) % cards.length]
+        next?.focus()
+        next?.click()
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
 function Choice({
   on,
   title,
@@ -219,7 +256,8 @@ function Choice({
   return (
     <button
       type="button"
-      aria-pressed={on}
+      role="radio"
+      aria-checked={on}
       onClick={onPick}
       className={cx(
         'relative flex min-w-0 flex-col items-start gap-0.5 rounded-control border px-3.5 py-3 text-left transition-colors',
@@ -319,6 +357,38 @@ const PRESETS = [
   { id: 'sharp', title: 'Sharp', kbps: 6000, scale: null, note: 'What Twitch takes' },
   { id: 'max', title: 'Max', kbps: 12000, scale: null, note: 'YouTube only' },
 ] as const
+
+/** The recording card picked: an unknown value from the engine is "Your own", never nothing. */
+export function recordChoice(q: string | null | undefined): StudioSettings['record_quality'] {
+  return q === 'stream' || q === 'high' || q === 'lossless' ? q : 'custom'
+}
+
+/** The encoder card picked: anything but software is the hardware one. */
+export function encoderChoice(e: string | null | undefined): StudioSettings['encoder'] {
+  return e === 'software' ? 'software' : 'hardware'
+}
+
+type Preset = (typeof PRESETS)[number]
+
+/** The picture size a preset sends on a canvas this tall: its own scale only when that is smaller. */
+function presetScale(p: Preset, height: number): [number, number] | null {
+  return p.scale && p.scale[1] < height ? [p.scale[0], p.scale[1]] : null
+}
+
+/**
+ * The quality card the settings match: a preset when both the bitrate and the sent size are
+ * the preset's, else `custom` (Your own), so exactly one card is always picked.
+ */
+export function streamQuality(
+  s: Pick<StudioSettings, 'video_kbps' | 'height' | 'scale'>,
+): Preset['id'] | 'custom' {
+  const sent = s.scale ? `${s.scale[0]}x${s.scale[1]}` : ''
+  const hit = PRESETS.find((p) => {
+    const want = presetScale(p, s.height)
+    return p.kbps === s.video_kbps && (want ? `${want[0]}x${want[1]}` : '') === sent
+  })
+  return hit?.id ?? 'custom'
+}
 
 const HARDWARE_H264 = 'com.apple.videotoolbox.videoencoder.ave.avc'
 
@@ -427,14 +497,11 @@ export function EncoderOptions({
   )
 }
 
-function StreamPage({ s, set }: PageProps) {
+export function StreamPage({ s, set }: PageProps) {
   const [wizard, setWizard] = useState(false)
+  const [more, setMore] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
-  const preset = PRESETS.find(
-    (p) =>
-      p.kbps === s.video_kbps &&
-      JSON.stringify(p.scale) === JSON.stringify(p.scale ? s.scale : null),
-  )
+  const quality = streamQuality(s)
   return (
     <>
       <button
@@ -452,31 +519,34 @@ function StreamPage({ s, set }: PageProps) {
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <ChoiceGrid
+        label="Stream quality"
+        className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4"
+      >
         {PRESETS.map((p) => {
           const size = p.scale ?? [s.width, s.height]
           return (
             <Choice
               key={p.id}
-              on={preset?.id === p.id}
+              on={quality === p.id}
               title={p.title}
               sub={`${size[1]}p · ${s.fps} fps · ${(p.kbps / 1000).toFixed(1)} Mbps`}
               note={p.note}
-              onPick={() =>
-                set({
-                  video_kbps: p.kbps,
-                  scale: p.scale && p.scale[1] < s.height ? p.scale : null,
-                })
-              }
+              onPick={() => {
+                const scale = presetScale(p, s.height)
+                set({ video_kbps: p.kbps, scale })
+              }}
             />
           )
         })}
-      </div>
-      {!preset && (
-        <p className="m-0 text-[14px] text-text-3">
-          Your own: {sent[1]}p at {(s.video_kbps / 1000).toFixed(1)} Mbps.
-        </p>
-      )}
+        <Choice
+          on={quality === 'custom'}
+          title="Your own"
+          sub={`${sent[1]}p · ${s.fps} fps · ${(s.video_kbps / 1000).toFixed(1)} Mbps`}
+          note="Set in More options"
+          onPick={() => setMore(true)}
+        />
+      </ChoiceGrid>
       <Heading
         info={
           isMac
@@ -486,9 +556,9 @@ function StreamPage({ s, set }: PageProps) {
       >
         Encoder
       </Heading>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <ChoiceGrid label="Encoder" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         <Choice
-          on={s.encoder === 'hardware'}
+          on={encoderChoice(s.encoder) === 'hardware'}
           title={hardwareEncoderName()}
           note={
             isMac
@@ -498,13 +568,17 @@ function StreamPage({ s, set }: PageProps) {
           onPick={() => set({ encoder: 'hardware' })}
         />
         <Choice
-          on={s.encoder === 'software'}
+          on={encoderChoice(s.encoder) === 'software'}
           title="Software (x264)"
           note="Sharper at low bitrates, uses more CPU."
           onPick={() => set({ encoder: 'software' })}
         />
-      </div>
-      <details className="rounded-control border border-line">
+      </ChoiceGrid>
+      <details
+        className="rounded-control border border-line"
+        open={more}
+        onToggle={(e) => setMore(e.currentTarget.open)}
+      >
         <summary className="cursor-pointer px-3.5 py-2.5 text-[13px] font-semibold text-accent-text">
           More options
         </summary>
@@ -911,7 +985,7 @@ function PicturePage({ s, set }: PageProps) {
       <Heading info="What scenes are built on. It can't change while you're live or recording.">
         Canvas
       </Heading>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <ChoiceGrid label="Canvas size" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {CANVASES.map((c) => (
           <Choice
             key={c.title}
@@ -923,7 +997,7 @@ function PicturePage({ s, set }: PageProps) {
             }
           />
         ))}
-      </div>
+      </ChoiceGrid>
       <div className="flex flex-col">
         <Row label="Frame rate">
           <Select
@@ -1208,7 +1282,8 @@ function RecordPage({ s, set }: PageProps) {
       facts: ['Pick the encoder and its settings yourself, as in OBS.'],
     },
   }
-  const picked = QUALITY[s.record_quality]
+  const choice = recordChoice(s.record_quality)
+  const picked = QUALITY[choice]
   // What the engine writes: an older profile's FLV, TS or HLS records as MKV, and so on.
   const format = writtenFormat(s.record_format)
   const ext = format
@@ -1267,35 +1342,35 @@ function RecordPage({ s, set }: PageProps) {
   return (
     <>
       <Heading>Quality</Heading>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <ChoiceGrid label="Recording quality" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <Choice
-          on={s.record_quality === 'stream'}
+          on={choice === 'stream'}
           title="Same as stream"
           sub={`${QUALITY.stream.minute} a minute`}
           note="Smallest files"
           onPick={() => set({ record_quality: 'stream' })}
         />
         <Choice
-          on={s.record_quality === 'high'}
+          on={choice === 'high'}
           title="High"
           sub={`${QUALITY.high.minute} a minute`}
           note="For editing"
           onPick={() => set({ record_quality: 'high' })}
         />
         <Choice
-          on={s.record_quality === 'lossless'}
+          on={choice === 'lossless'}
           title="Lossless"
           sub={`${sizeText(sizes.lossless[0])}+ a minute`}
           note="Huge files"
           onPick={() => set({ record_quality: 'lossless' })}
         />
         <Choice
-          on={s.record_quality === 'custom'}
+          on={choice === 'custom'}
           title="Your own"
           note="Any encoder"
           onPick={() => set({ record_quality: 'custom' })}
         />
-      </div>
+      </ChoiceGrid>
       {/* What the picked quality means: size, what it costs the computer, when to use it. */}
       <div
         aria-live="polite"
