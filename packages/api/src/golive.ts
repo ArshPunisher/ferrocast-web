@@ -310,7 +310,16 @@ export interface Advanced {
   per: Record<string, DestAdvanced>
   /** Disable automatic Twitch/Kick Studio encoding caps (Contract C-6). */
   ignore_service_limits?: boolean
+  /** The IP version the RTMP destinations connect over (auto when absent). */
+  ip_family?: IpFamily
+  /**
+   * Send over this connection only (its name or address from `networks()`); it never moves to
+   * another when it fails. Null: the system's way, with failover.
+   */
+  bind?: string | null
 }
+
+export type IpFamily = 'auto' | 'v4' | 'v6'
 
 export const DEST_ADVANCED_DEFAULT: DestAdvanced = {
   server: null,
@@ -331,6 +340,14 @@ export function checkAdvanced(
     return 'per: send the per-destination settings as an object.'
   if (a.ignore_service_limits !== undefined && typeof a.ignore_service_limits !== 'boolean')
     return 'ignore_service_limits: true or false.'
+  if (a.ip_family !== undefined && !['auto', 'v4', 'v6'].includes(a.ip_family))
+    return 'ip_family: auto, v4 or v6.'
+  if (
+    a.bind !== undefined &&
+    a.bind !== null &&
+    (typeof a.bind !== 'string' || a.bind.trim() === '' || a.bind.length > 64)
+  )
+    return 'bind: a connection’s name or address, or none.'
   const r = a.rules
   const int = (v: unknown, lo: number, hi: number) =>
     typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi

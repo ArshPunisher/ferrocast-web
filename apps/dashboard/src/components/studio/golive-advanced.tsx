@@ -2,7 +2,7 @@
 // settings" card with a tab per platform and one for the local server, and upload protection's
 // rule as a sentence with its numbers. API.md §4 "Go live everywhere", PUT /golive/advanced.
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowsClockwise } from '@phosphor-icons/react'
 import {
   DEST_ADVANCED_DEFAULT,
@@ -11,6 +11,8 @@ import {
   type Advanced,
   type DestAdvanced,
   type GoLiveView,
+  type IpFamily,
+  type Network,
 } from '@ferrocast/api'
 import { Button, Dialog, Field, Input, Select, Switch, cx } from '@ferrocast/ui'
 import { Panel } from '../Panel'
@@ -177,6 +179,19 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
   const tab =
     picked === LOCAL || main.some((d) => d.id === picked) ? picked : (main[0]?.id ?? LOCAL)
   const [asking, setAsking] = useState(false)
+  // This computer's connections, asked for when the local tab is shown.
+  const [networks, setNetworks] = useState<Network[]>([])
+  useEffect(() => {
+    if (tab !== LOCAL) return
+    let live = true
+    api
+      .networks()
+      .then((n) => live && setNetworks(n))
+      .catch(() => live && setNetworks([]))
+    return () => {
+      live = false
+    }
+  }, [tab, api])
   const problem = checkAdvanced(
     draft,
     view.destinations.map((d) => d.id),
@@ -266,6 +281,47 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   value={draft.keep_free_pct}
                   onChange={(n) => setDraft({ ...draft, keep_free_pct: n })}
                 />
+              </Row>
+              <Row
+                label="IP version"
+                hint="Automatic works for almost everyone. Pick IPv4 if a server can’t be reached over IPv6."
+              >
+                <span className="inline-block w-44">
+                  <Select
+                    aria-label="IP version"
+                    className="h-8"
+                    value={draft.ip_family ?? 'auto'}
+                    onChange={(e) => setDraft({ ...draft, ip_family: e.target.value as IpFamily })}
+                  >
+                    <option value="auto">Automatic</option>
+                    <option value="v4">IPv4 only</option>
+                    <option value="v6">IPv6 only</option>
+                  </Select>
+                </span>
+              </Row>
+              <Row
+                label="Network connection"
+                hint="Automatic moves to another connection if the one in use fails. A connection you pick is the only one used, so a metered hotspot is never taken instead."
+              >
+                <span className="inline-block w-56">
+                  <Select
+                    aria-label="Network connection"
+                    className="h-8"
+                    value={draft.bind ?? ''}
+                    onChange={(e) => setDraft({ ...draft, bind: e.target.value || null })}
+                  >
+                    <option value="">Automatic, with a backup</option>
+                    {/* A pinned one that isn't plugged in now stays listed, so it can be seen and changed. */}
+                    {draft.bind && !networks.some((n) => n.name === draft.bind) && (
+                      <option value={draft.bind}>{draft.bind} (not connected)</option>
+                    )}
+                    {networks.map((n) => (
+                      <option key={n.name} value={n.name}>
+                        {n.name} · {n.ip}
+                      </option>
+                    ))}
+                  </Select>
+                </span>
               </Row>
               <Row
                 label="Stream above platform bitrate limits"

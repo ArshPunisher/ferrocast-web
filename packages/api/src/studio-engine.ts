@@ -534,6 +534,8 @@ export interface StudioSettings {
   reconnect_every_s: number
   reconnect_tries: number
   delay_s: number
+  /** The most memory the delay holds, in megabytes (16 to 4096; 256). */
+  delay_max_mb?: number
   /** Twitch's VOD track: this audio track (2 to 6) goes to Twitch for the VOD; 0 off. */
   twitch_vod_track?: number
   sample_rate: 44100 | 48000
@@ -708,6 +710,11 @@ export interface EngineStats {
   }
   stream: EngineStreamStats | null
   record: EngineRecordStats | null
+  /**
+   * The stream delay: what it holds while live, and after Stop how long its tail still has to go
+   * (`draining`, `remaining_s`). Left out without a delay.
+   */
+  delay?: { draining: boolean; remaining_s: number; mb: number }
   /** The scene on air (switches made elsewhere show up here first). */
   scene?: string | null
   /** What Undo and Redo would do now (labels), or null. */
@@ -1270,13 +1277,14 @@ export function studioEngineApi(c: FerroClient) {
     levels: (names: string[]) =>
       c.request<Record<string, EngineLevel>>('POST', '/api/v1/studio/engine/levels', { names }),
     /** Starts or stops streaming the Studio into this PC's Go live. */
-    stream: (on: boolean) =>
+    stream: (on: boolean, opts: { discard_delay?: boolean } = {}) =>
       // `also`: what was set to start or stop with the stream but didn't, in words. Ending
-      // answers null, or only `{ also }`.
+      // answers null, or only `{ also }`. `discard_delay` with `on: false`: Stop now, the delay's
+      // tail isn't sent.
       c.request<(EngineStreamStats & { also?: string; also_detail?: string }) | null>(
         'POST',
         '/api/v1/studio/engine/stream',
-        { on },
+        on || !opts.discard_delay ? { on } : { on, discard_delay: true },
       ),
     streamStats: () => c.request<EngineStreamStats | null>('GET', '/api/v1/studio/engine/stream'),
     /** Puts the live preview over the box, or takes it away (null). */

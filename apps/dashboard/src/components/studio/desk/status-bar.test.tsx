@@ -215,4 +215,31 @@ describe('U5: StudioStatusBar DOM', () => {
     expect(footer!.textContent).toContain('Upload0 kb/s')
     expect(footer!.textContent).toContain('Reconnecting to S25 Dead…')
   })
+  it('says the last seconds of a delayed stream are still going out, with Stop now', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const stats = baseStats({
+      stream: null,
+      delay: { draining: true, remaining_s: 11.6, mb: 1.5 },
+    })
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path.endsWith('/studio/engine/stats')) return stats
+      return null
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => root!.render(<StudioStatusBar />))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const footer = host.querySelector('footer[aria-label="Studio status"]')
+    expect(footer!.textContent).toContain('Sending the last 12 s of your delayed stream…')
+    const stop = host.querySelector('button[aria-label^="Stop now"]') as HTMLButtonElement | null
+    expect(stop).not.toBeNull()
+    await act(async () => stop!.click())
+    expect(request).toHaveBeenCalledWith('POST', '/api/v1/studio/engine/stream', {
+      on: false,
+      discard_delay: true,
+    })
+  })
 })
