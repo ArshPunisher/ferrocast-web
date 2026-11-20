@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isMenuMessage, runMenu, type MenuDeps } from './menu'
+import { isMenuMessage, runMenu, takePendingSettings, type MenuDeps } from './menu'
 
 const deps = (): MenuDeps => ({
   navigate: vi.fn(),
@@ -81,5 +81,21 @@ describe('the menu bar messages', () => {
     expect((d.zoom as ReturnType<typeof vi.fn>).mock.calls).toEqual([['fit'], ['in'], ['out']])
     runMenu({ kind: 'action', name: 'something-new' }, d)
     expect(d.toggleLock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Remux Recordings…', () => {
+  it('opens the Recording settings of the Studio, now or when it appears', () => {
+    const d = deps()
+    const seen: unknown[] = []
+    const on = (e: Event) => seen.push((e as CustomEvent).detail)
+    window.addEventListener('ferrocast:open-settings', on)
+    runMenu({ kind: 'action', name: 'remux' }, d)
+    window.removeEventListener('ferrocast:open-settings', on)
+    expect(d.navigate).toHaveBeenCalledWith('#/studio')
+    expect(seen).toEqual([{ page: 'record' }])
+    // A Studio that wasn't there to hear it takes it when it mounts, once.
+    expect(takePendingSettings()).toBe('record')
+    expect(takePendingSettings()).toBeNull()
   })
 })

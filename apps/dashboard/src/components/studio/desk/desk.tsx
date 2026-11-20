@@ -92,6 +92,7 @@ import { AudioDock } from './mixer'
 import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
+import { takePendingSettings } from '../../../lib/menu'
 import { SourcePanel } from './source-panel'
 import { useCountdownLeft, useEndingLeft } from './ending'
 import { OnAirButton } from './onair'
@@ -493,6 +494,19 @@ function Running({
     (page?: string) => setSettingsAt((page as Page | undefined) ?? 'stream'),
     [],
   )
+  // File > Remux Recordings… (the Mac menu): the Recording page of these settings, whether the
+  // Studio was already open or only just opened by the menu.
+  useEffect(() => {
+    const pending = takePendingSettings()
+    if (pending) openSettings(pending)
+    const onAsk = (e: Event) => {
+      takePendingSettings()
+      const page = (e as CustomEvent<{ page?: string }>).detail?.page
+      if (page) openSettings(page)
+    }
+    window.addEventListener('ferrocast:open-settings', onAsk)
+    return () => window.removeEventListener('ferrocast:open-settings', onAsk)
+  }, [openSettings])
   const desk: Desk = useMemo(
     () => ({
       api,
