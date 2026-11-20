@@ -35,6 +35,7 @@ import {
   healthText,
   mbps,
   onCanvas,
+  reconnectingText,
   viaOf,
   withVia,
   type Canvas,
@@ -327,6 +328,10 @@ export function LiveCard({
         >
           {shown.map((d) => {
             const isFailed = d.health?.state === 'failed'
+            const rec =
+              !d.standby_for && !d.backup_for && !d.blocked && d.health?.state === 'reconnecting'
+                ? reconnectingText(d.health)
+                : null
             const h = d.standby_for
               ? {
                   tone: 'off' as const,
@@ -361,6 +366,18 @@ export function LiveCard({
                           {d.name}: {h.label}
                         </span>
                       </span>
+                    </InfoLine>
+                  ) : rec ? (
+                    <InfoLine detail={rec.detail ?? undefined} label={`More about ${d.name}`}>
+                      <span className="flex items-start gap-1.5 text-[14.5px] font-bold text-warn">
+                        <ArrowsClockwise size={14} className="mt-[3px] shrink-0" aria-hidden />
+                        <span>
+                          {d.name}: {rec.heading}
+                        </span>
+                      </span>
+                      {rec.reason && (
+                        <p className="m-0 text-[13.5px] break-words text-text-2">{rec.reason}</p>
+                      )}
                     </InfoLine>
                   ) : (
                     <>

@@ -594,6 +594,43 @@ export function goingTo(destinations: Pick<DestinationView, 'enabled'>[]): strin
 export const KICK_MULTISTREAM_DETAIL =
   'Allow multistreaming in Kick’s settings (Kick Partners), or turn Kick off.'
 
+/**
+ * Splits a reconnecting destination's status into a short heading, a full short reason (never
+ * cut with an ellipsis), and extra context (longer explanation + retry countdown) for `(i)` (U6).
+ */
+export function reconnectingText(h: Extract<PushHealth, { state: 'reconnecting' }>): {
+  heading: string
+  reason: string | null
+  detail: string | null
+} {
+  const heading = h.attempt > 0 ? `Reconnecting, try ${h.attempt}` : 'Reconnecting'
+  const retryNote =
+    h.attempt > 0 ? `Trying again in ${Math.max(1, Math.round(h.retry_in_ms / 1000))} s.` : null
+  const raw = h.reason.trim()
+  let reason: string | null = null
+  let extra: string | null = null
+  if (raw) {
+    const m = /^(.+?[.!?])\s+([\s\S]+)$/.exec(raw)
+    if (m && m[1]!.length <= 72) {
+      reason = m[1]!
+      extra = m[2]!.trim() || null
+    } else if (raw.length <= 72) {
+      reason = raw
+    } else {
+      const colon = raw.indexOf(': ')
+      if (colon > 0 && colon <= 72) {
+        reason = `${raw.slice(0, colon)}.`
+        extra = raw.slice(colon + 2).trim() || null
+      } else {
+        reason = 'Connection interrupted.'
+        extra = raw
+      }
+    }
+  }
+  const detail = [extra, retryNote].filter(Boolean).join(' ') || null
+  return { heading, reason, detail }
+}
+
 /** The health line's words for one destination. */
 export function healthText(
   h: PushHealth | null,

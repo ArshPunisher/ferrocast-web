@@ -304,4 +304,61 @@ describe('Contract C-1: PushState failed UI', () => {
     expect(el.textContent).toContain('Allow multistreaming')
     expect(el.textContent).toContain('YouTube refused the stream key.')
   })
+
+  it('U6: LiveLine shows full short reconnect reason without truncate and puts retry details behind (i)', async () => {
+    const dead = baseDest({
+      id: 'c_dead',
+      kind: 'custom',
+      name: 'S25 Dead',
+      health: {
+        state: 'reconnecting',
+        attempt: 3,
+        retry_in_ms: 4000,
+        reason: 'Couldn’t reach 127.0.0.1.',
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+    })
+    const el = await renderNode(<LiveLine d={dead} />)
+    expect(el.textContent).toContain('Reconnecting, try 3')
+    expect(el.textContent).toContain('Couldn’t reach 127.0.0.1.')
+    expect(el.textContent).not.toContain('Trying again in 4 s.')
+    expect(el.querySelector('.truncate')).toBeNull()
+
+    const infoBtn = el.querySelector(
+      'button[aria-label="More about S25 Dead"]',
+    ) as HTMLButtonElement
+    expect(infoBtn).not.toBeNull()
+    expect(infoBtn.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => infoBtn.click())
+    expect(infoBtn.getAttribute('aria-expanded')).toBe('true')
+    expect(el.textContent).toContain('Trying again in 4 s.')
+  })
+
+  it('U6: LiveLine splits long Kick reconnect advice so short reason shows in full and advice stays behind (i)', async () => {
+    const kick = baseDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      health: {
+        state: 'reconnecting',
+        attempt: 2,
+        retry_in_ms: 5000,
+        reason:
+          'Kick closed the stream. Kick took the stream and closed it at once: allow multistreaming in Kick’s settings.',
+        kbps: 0,
+        dropped: 0,
+        since_ms: 0,
+      },
+    })
+    const el = await renderNode(<LiveLine d={kick} />)
+    expect(el.textContent).toContain('Reconnecting, try 2')
+    expect(el.textContent).toContain('Kick closed the stream.')
+    expect(el.textContent).not.toContain('allow multistreaming')
+    const infoBtn = el.querySelector('button[aria-label="More about Kick"]') as HTMLButtonElement
+    await act(async () => infoBtn.click())
+    expect(el.textContent).toContain('allow multistreaming')
+    expect(el.textContent).toContain('Trying again in 5 s.')
+  })
 })

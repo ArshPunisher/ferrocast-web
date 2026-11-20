@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   healthText,
   onCanvas,
+  reconnectingText,
   type DestinationView,
   type GoLiveView,
   type StudioSettings,
@@ -277,6 +278,40 @@ export function LiveLine({
           </Button>
         )}
       </div>
+    )
+  }
+  if (!d.blocked && h.state === 'reconnecting') {
+    const rec = reconnectingText(h)
+    return (
+      <InfoLine
+        detail={rec.detail ?? undefined}
+        label={`More about ${d.name}`}
+        className="mt-0.5 w-full"
+      >
+        <div className="flex flex-col text-[12px] leading-snug text-warn" aria-live="polite">
+          <span className="font-semibold">{rec.heading}</span>
+          {rec.reason && <span className="break-words">{rec.reason}</span>}
+        </div>
+      </InfoLine>
+    )
+  }
+  if (d.blocked || h.state === 'paused') {
+    return (
+      <InfoLine
+        detail={t.detail ?? undefined}
+        label={`More about ${d.name}`}
+        className="mt-0.5 w-full"
+      >
+        <span
+          className={cx(
+            'block text-[12px] leading-snug font-semibold',
+            t.tone === 'bad' ? 'text-danger' : 'text-text-3',
+          )}
+          aria-live="polite"
+        >
+          {t.label}
+        </span>
+      </InfoLine>
     )
   }
   return (

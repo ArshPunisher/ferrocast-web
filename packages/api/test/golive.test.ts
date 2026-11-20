@@ -12,6 +12,7 @@ import {
   healthText,
   linkText,
   mbps,
+  reconnectingText,
   viaOf,
   withVia,
   type DestinationView,
@@ -680,5 +681,62 @@ describe('Contract C-1: PushState failed and all-failed detection', () => {
     const v2 = await api.view()
     const tw2 = v2.destinations.find((d) => d.id === 'twitch')
     expect(tw2?.health?.state).not.toBe('failed')
+  })
+})
+
+describe('U6: reconnectingText keeps short reason in full and puts extras behind (i)', () => {
+  const rec = (over: Partial<Extract<DestinationView['health'], { state: 'reconnecting' }>>) => ({
+    state: 'reconnecting' as const,
+    attempt: 3,
+    retry_in_ms: 4000,
+    reason: 'Couldn’t reach 127.0.0.1.',
+    kbps: 0,
+    dropped: 0,
+    since_ms: 0,
+    ...over,
+  })
+
+  it('keeps a short single-sentence reason in full and moves retry timing into detail', () => {
+    expect(reconnectingText(rec({}))).toEqual({
+      heading: 'Reconnecting, try 3',
+      reason: 'Couldn’t reach 127.0.0.1.',
+      detail: 'Trying again in 4 s.',
+    })
+  })
+
+  it('splits multi-sentence Kick multistream advice into short reason + (i) detail', () => {
+    const out = reconnectingText(
+      rec({
+        attempt: 2,
+        retry_in_ms: 5000,
+        reason:
+          'Kick closed the stream. Kick took the stream and closed it at once: allow multistreaming in Kick’s settings.',
+      }),
+    )
+    expect(out.heading).toBe('Reconnecting, try 2')
+    expect(out.reason).toBe('Kick closed the stream.')
+    expect(out.detail).toContain('allow multistreaming')
+    expect(out.detail).toContain('Trying again in 5 s.')
+  })
+
+  it('splits a long single-sentence reason at colon or falls back without mid-word ellipsis', () => {
+    const withColon = reconnectingText(
+      rec({
+        reason:
+          'a.rtmps.youtube.com closed the connection: TLS handshake timed out after 10 seconds on en0',
+      }),
+    )
+    expect(withColon.reason).toBe('a.rtmps.youtube.com closed the connection.')
+    expect(withColon.detail).toContain('TLS handshake timed out')
+    expect(withColon.reason).not.toContain('…')
+
+    const direct = reconnectingText(
+      rec({ attempt: 0, retry_in_ms: 0, reason: 'The server refused it.' }),
+    )
+    expect(direct).toEqual({
+      heading: 'Reconnecting',
+      reason: 'The server refused it.',
+      detail: null,
+    })
   })
 })
