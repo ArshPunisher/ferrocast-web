@@ -61,6 +61,7 @@ import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-inp
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { useDesk, useDeskStats, useEngine } from './common'
 import { projectorItem, useContextMenu, type MenuItem } from './menu'
+import { OverflowRow, type OverflowItem } from './overflow-row'
 import { OptionsForm } from './options'
 import {
   MOVE,
@@ -1755,39 +1756,86 @@ export function StageBar() {
     })
     if (ok) scenes.reload()
   }
-  return (
-    // Parts show by the bar's own width (not the window's), so it stays on one line: the
-    // name and the picture size only where there's room for them.
-    <div className="@container flex-none border-t border-line bg-surface-1">
-      <div className="fc-dock-bar flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-[13px] text-text-3 @[900px]:gap-x-2.5 @[900px]:px-2.5">
-        {/* The Scenes panel shows what's on air; here the name fits on wide screens. A set
-            width, so the buttons after it stay put when the scene or picture changes. */}
+  const lengthInput = (panel: boolean) =>
+    // A stinger lasts as long as its video.
+    t && t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' ? (
+      <span className="flex items-center gap-1.5">
+        {panel && <span>Length</span>}
+        <Input
+          aria-label="Transition length in milliseconds"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={20000}
+          step={50}
+          className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
+          value={ms ?? t.ms}
+          onChange={(e) =>
+            setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
+          }
+          onBlur={() => {
+            if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
+              void set(t.kind, Math.round(ms))
+            setMs(null)
+          }}
+        />
+        <span aria-hidden>ms</span>
+      </span>
+    ) : null
+  const items: OverflowItem[] = [
+    {
+      // The Scenes panel shows what's on air; here the name fits on wide screens. A set
+      // width, so the buttons after it stay put when the scene or picture changes.
+      key: 'name',
+      wrap: 'hidden @[1440px]:flex',
+      render: () => (
         <span
           title={scene}
-          className="hidden w-32 truncate font-display text-[16px] font-bold text-text @[1440px]:inline-block"
+          className="inline-block w-32 truncate font-display text-[16px] font-bold text-text"
         >
           {scene}
         </span>
-        {c && (
+      ),
+    },
+    {
+      key: 'size',
+      wrap: 'hidden @[1040px]:flex',
+      render: () =>
+        c && (
           <button
             type="button"
             title="Change the picture size"
             onClick={() => openSettings('picture')}
-            className="hidden rounded-[6px] px-1.5 py-0.5 font-mono text-[12.5px] font-semibold text-text-3 tabular-nums hover:bg-surface-3 hover:text-text @[1040px]:inline-block"
+            className="rounded-[6px] px-1.5 py-0.5 font-mono text-[12.5px] font-semibold text-text-3 tabular-nums hover:bg-surface-3 hover:text-text"
           >
             {/* The edited picture's size: the vertical one's while it's picked. */}
             {size?.width ?? c.width}×{size?.height ?? c.height} · {c.fps}&nbsp;fps
           </button>
-        )}
-        {/* One quiet strip (owner's pick S1): plain tools, blue when on, thin lines between
-            the groups. */}
-        <span aria-hidden className="hidden h-5 w-px bg-line @[1040px]:block" />
-        <ViewControls />
-        <span aria-hidden className="h-5 w-px bg-line" />
-        <VerticalToggle />
-        <PictureViewPick />
-        <span className="flex-1" />
-        {t && (
+        ),
+    },
+    // One quiet strip (owner's pick S1): plain tools, blue when on, thin lines between the groups.
+    {
+      key: 'sep1',
+      wrap: 'hidden @[1040px]:flex',
+      render: () => <span aria-hidden className="h-5 w-px bg-line" />,
+    },
+    { key: 'view', rank: 6, render: () => <ViewControls /> },
+    { key: 'sep2', render: () => <span aria-hidden className="h-5 w-px bg-line" /> },
+    {
+      key: 'vertical',
+      rank: 5,
+      render: () => (
+        <span className="flex items-center gap-2">
+          <VerticalToggle />
+          <PictureViewPick />
+        </span>
+      ),
+    },
+    { key: 'spacer', spacer: true, render: () => null },
+    {
+      key: 'switch',
+      render: () =>
+        t && (
           <div className="flex items-center gap-1.5">
             <label
               htmlFor="studio-transition"
@@ -1808,46 +1856,47 @@ export function StageBar() {
                 </option>
               ))}
             </Select>
-            {HAS_SETTINGS.has(t.kind) && (
-              <IconButton
-                size="xs"
-                label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
-                onClick={() => setTuning(t.kind)}
-              >
-                <GearSix size={16} weight="bold" />
-              </IconButton>
-            )}
-            {/* A stinger lasts as long as its video. */}
-            {t.kind !== 'cut_transition' && t.kind !== 'obs_stinger_transition' && (
-              <span className="flex items-center gap-1.5">
-                <Input
-                  aria-label="Transition length in milliseconds"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={20000}
-                  step={50}
-                  className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
-                  value={ms ?? t.ms}
-                  onChange={(e) =>
-                    setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
-                  }
-                  onBlur={() => {
-                    if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
-                      void set(t.kind, Math.round(ms))
-                    setMs(null)
-                  }}
-                />
-                <span aria-hidden>ms</span>
-              </span>
-            )}
-            <span className="hidden @[960px]:contents">
-              <InfoTip label="About switching scenes">
-                How the picture changes when you click another scene.
-              </InfoTip>
-            </span>
           </div>
-        )}
+        ),
+    },
+    {
+      key: 'gear',
+      rank: 2,
+      render: (panel) =>
+        t &&
+        HAS_SETTINGS.has(t.kind) && (
+          <span className="ml-1.5 flex items-center gap-1.5">
+            <IconButton
+              size="xs"
+              label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
+              onClick={() => setTuning(t.kind)}
+            >
+              <GearSix size={16} weight="bold" />
+            </IconButton>
+            {panel && <span>{TRANSITIONS[t.kind] ?? 'Transition'} settings</span>}
+          </span>
+        ),
+    },
+    {
+      key: 'length',
+      rank: 1,
+      render: (panel) =>
+        t && lengthInput(panel) ? <span className="ml-1.5 flex">{lengthInput(panel)}</span> : null,
+    },
+    {
+      key: 'tip',
+      wrap: 'hidden @[960px]:flex',
+      rank: 0,
+      render: () =>
+        t && (
+          <InfoTip label="About switching scenes">
+            How the picture changes when you click another scene.
+          </InfoTip>
+        ),
+    },
+    {
+      key: 'studio',
+      render: () => (
         <IconButton
           size="sm"
           label={
@@ -1865,6 +1914,12 @@ export function StageBar() {
         >
           <Columns size={17} weight="bold" />
         </IconButton>
+      ),
+    },
+    {
+      key: 'history',
+      rank: 4,
+      render: () => (
         <span className="flex items-center">
           <IconButton
             size="sm"
@@ -1888,11 +1943,29 @@ export function StageBar() {
             <ClockCounterClockwise size={16} weight="bold" />
           </IconButton>
         </span>
-        {inDesktopApp() && (
+      ),
+    },
+    {
+      key: 'projectors',
+      rank: 3,
+      render: () =>
+        inDesktopApp() && (
           <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
             <ProjectorScreen size={17} weight="bold" />
           </IconButton>
-        )}
+        ),
+    },
+  ]
+  return (
+    // Parts show by the bar's own width (not the window's), so it stays on one line: the
+    // name and the picture size only where there's room for them, and what doesn't fit moves
+    // into the More panel (OverflowRow).
+    <div className="@container flex-none border-t border-line bg-surface-1">
+      <OverflowRow
+        items={items}
+        className="fc-dock-bar gap-x-2 px-2 py-1 text-[13px] text-text-3 @[900px]:gap-x-2.5 @[900px]:px-2.5"
+      />
+      <div className="contents">
         {menu}
         <TransitionSettingsDialog kind={tuning} onClose={() => setTuning(null)} />
       </div>
