@@ -17,7 +17,7 @@ import {
 } from '@phosphor-icons/react'
 import { studioEngineApi, type EngineOption, type EngineSettings } from '@ferrocast/api'
 import { Button, InfoTip, Input, cx } from '@ferrocast/ui'
-import { useDesk } from './common'
+import { useDesk, useDeskOptional } from './common'
 import { ScreenStill } from './screen-still'
 import { useLive } from '../../../lib/store'
 import { meterPct, useLevels } from './mixer'
@@ -1209,22 +1209,102 @@ const SIMPLE: Record<string, { main: Words[]; rename?: Words[] }> = {
     ],
   },
   sharpness_filter: { main: [{ key: 'sharpness', label: 'Amount' }] },
-  compressor_filter: {
-    main: [
-      { key: 'threshold', label: 'Starts at', help: 'Sounds louder than this get quieter' },
-      { key: 'ratio', label: 'Amount' },
-    ],
-    rename: [
-      { key: 'attack_time', label: 'Attack' },
-      { key: 'release_time', label: 'Release' },
-      { key: 'output_gain', label: 'Boost after' },
-    ],
-  },
 }
 // OBS's newer versions of the same filters read the same keys.
 for (const k of ['color_filter', 'chroma_key_filter', 'color_key_filter', 'sharpness_filter']) {
   const s = SIMPLE[k]
   if (s) SIMPLE[`${k}_v2`] = s
+}
+
+/** Compressor: threshold, amount and sidechain ("Duck under") first; timings and boost under More. */
+function CompressorForm({
+  source,
+  opts,
+  values,
+  onChange,
+  more,
+}: FormIn & { source: string; more: boolean }) {
+  const desk = useDeskOptional()
+  const rawSc = values.sidechain_source
+  const sc =
+    typeof rawSc === 'string' && rawSc.trim() !== '' && rawSc.trim().toLowerCase() !== 'none'
+      ? rawSc.trim()
+      : 'none'
+  const filled: EngineSettings = {
+    threshold: -18,
+    ratio: 10,
+    attack_time: 6,
+    release_time: 60,
+    output_gain: 0,
+    ...values,
+    sidechain_source: sc,
+  }
+  const deskAudio = desk?.audio.data ?? []
+  const existingSc = opts.find((o) => o.key === 'sidechain_source')
+  const scChoices = existingSc ? [...existingSc.choices] : ['None']
+  const scValues: (string | number | boolean)[] = existingSc ? [...existingSc.values] : ['none']
+  if (!scValues.includes('none')) {
+    scChoices.unshift('None')
+    scValues.unshift('none')
+  }
+  for (const a of deskAudio) {
+    if (a.name === source) continue
+    if (!scChoices.includes(a.name) && !scValues.includes(a.name)) {
+      scChoices.push(a.name)
+      scValues.push(a.name)
+    }
+  }
+  if (
+    sc !== 'none' &&
+    !scValues.some((v) => typeof v === 'string' && v.toLowerCase() === sc.toLowerCase())
+  ) {
+    scChoices.push(`${sc} (missing)`)
+    scValues.push(sc)
+  }
+  const scOpt: EngineOption = existingSc
+    ? { ...existingSc, choices: scChoices, values: scValues }
+    : {
+        key: 'sidechain_source',
+        label: 'Duck under',
+        kind: 'list',
+        help: 'Lower this sound while another source plays, like your mic.',
+        visible: true,
+        enabled: true,
+        min: null,
+        max: null,
+        step: null,
+        slider: false,
+        suffix: '',
+        default: 'none',
+        choices: scChoices,
+        values: scValues,
+        group: [],
+      }
+  const mergedOpts = existingSc
+    ? opts.map((o) => (o.key === 'sidechain_source' ? scOpt : o))
+    : [...opts, scOpt]
+  return (
+    <MainAndMore
+      opts={mergedOpts}
+      values={filled}
+      onChange={onChange}
+      more={more}
+      main={[
+        { key: 'threshold', label: 'Starts at', help: 'Sounds louder than this get quieter' },
+        { key: 'ratio', label: 'Amount' },
+        {
+          key: 'sidechain_source',
+          label: 'Duck under',
+          help: 'Lower this sound while another source plays, like your mic.',
+        },
+      ]}
+      rename={[
+        { key: 'attack_time', label: 'Attack' },
+        { key: 'release_time', label: 'Release' },
+        { key: 'output_gain', label: 'Boost after' },
+      ]}
+    />
+  )
 }
 
 /** OBS expander-filter.c preset curves: switching presets applies its ratio and release time. */
@@ -1329,6 +1409,7 @@ function UpwardCompressorForm({ opts, values, onChange, more }: FormIn & { more:
 export function hasMore(kind: string): boolean {
   return (
     kind === 'noise_gate_filter' ||
+    kind === 'compressor_filter' ||
     kind === 'expander_filter' ||
     kind === 'upward_compressor_filter' ||
     (Object.hasOwn(SIMPLE, kind) && kind !== 'sharpness_filter' && kind !== 'sharpness_filter_v2')
@@ -1349,6 +1430,10 @@ export function FilterForm({
     return <CropForm source={source} opts={opts} values={values} onChange={onChange} />
   if (kind === 'noise_gate_filter')
     return <GateForm source={source} opts={opts} values={values} onChange={onChange} more={more} />
+  if (kind === 'compressor_filter')
+    return (
+      <CompressorForm source={source} opts={opts} values={values} onChange={onChange} more={more} />
+    )
   if (kind === 'expander_filter')
     return <ExpanderForm opts={opts} values={values} onChange={onChange} more={more} />
   if (kind === 'upward_compressor_filter')

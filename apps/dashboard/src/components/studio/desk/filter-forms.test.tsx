@@ -15,6 +15,7 @@ import {
   startingSimilarity,
 } from './filter-forms'
 import { RowLook, shownNumber, storedNumber } from './options'
+import { DeskProvider, type Desk } from './common'
 import { bytes } from './kind-settings'
 import { recordSizes, sizeText } from './settings'
 
@@ -489,5 +490,189 @@ describe('expander presets/detector and upward compressor knee controls', () => 
     expect(host.textContent).toContain('Attack')
     expect(host.textContent).toContain('Release')
     expect(host.textContent).toContain('Boost after')
+  })
+
+  it('shows compressor Duck under select with (i) tip, lists other audio sources, and writes sidechain_source', async () => {
+    expect(hasMore('compressor_filter')).toBe(true)
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const changes: [string, unknown][] = []
+    const compOpts: EngineOption[] = [
+      opt({
+        key: 'ratio',
+        label: 'Ratio',
+        kind: 'float',
+        min: 1,
+        max: 32,
+        step: 0.5,
+        slider: true,
+        suffix: ':1',
+      }),
+      opt({
+        key: 'threshold',
+        label: 'Threshold',
+        kind: 'float',
+        min: -60,
+        max: 0,
+        step: 0.1,
+        slider: true,
+        suffix: ' dB',
+      }),
+      opt({
+        key: 'attack_time',
+        label: 'Attack',
+        kind: 'int',
+        min: 1,
+        max: 500,
+        step: 1,
+        suffix: ' ms',
+      }),
+      opt({
+        key: 'release_time',
+        label: 'Release',
+        kind: 'int',
+        min: 1,
+        max: 1000,
+        step: 1,
+        suffix: ' ms',
+      }),
+      opt({
+        key: 'output_gain',
+        label: 'Volume after',
+        kind: 'float',
+        min: -32,
+        max: 32,
+        step: 0.1,
+        slider: true,
+        suffix: ' dB',
+      }),
+      opt({
+        key: 'sidechain_source',
+        label: 'Duck under',
+        kind: 'list',
+        choices: ['None', 'Mic/Aux'],
+        values: ['none', 'Mic/Aux'],
+        help: 'Lower this sound while another source plays, like your mic.',
+      }),
+    ]
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <RowLook.Provider value="inset">
+          <FilterForm
+            kind="compressor_filter"
+            source="Music"
+            opts={compOpts}
+            values={{}}
+            onChange={(k, v) => changes.push([k, v])}
+          />
+        </RowLook.Provider>,
+      ),
+    )
+
+    // Always a <select> (never flips to segmented radio buttons even with only 1 other audio source).
+    const select = host.querySelector('select') as HTMLSelectElement
+    expect(select).not.toBeNull()
+    expect(Array.from(select.options).map((o) => o.text)).toEqual(['None', 'Mic/Aux'])
+    expect(select.value).toBe('0')
+    expect(host.querySelector('button[aria-label="About duck under"]')).not.toBeNull()
+    // Timings stay hidden behind More.
+    expect(host.textContent).not.toContain('Attack')
+
+    // Choosing Mic/Aux writes sidechain_source='Mic/Aux'; switching back writes 'none'.
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
+    await act(async () => {
+      setValue.call(select, '1')
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(changes).toEqual([['sidechain_source', 'Mic/Aux']])
+
+    changes.length = 0
+    await act(async () => {
+      setValue.call(select, '0')
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(changes).toEqual([['sidechain_source', 'none']])
+
+    // With more=true, Attack/Release/Boost after appear.
+    await act(async () =>
+      root!.render(
+        <RowLook.Provider value="inset">
+          <FilterForm
+            kind="compressor_filter"
+            source="Music"
+            opts={compOpts}
+            values={{ sidechain_source: 'Mic/Aux' }}
+            more
+            onChange={(k, v) => changes.push([k, v])}
+          />
+        </RowLook.Provider>,
+      ),
+    )
+    expect(host.textContent).toContain('Attack')
+    expect(host.textContent).toContain('Release')
+    expect(host.textContent).toContain('Boost after')
+    expect((host.querySelector('select') as HTMLSelectElement).value).toBe('1')
+  })
+
+  it('merges live desk audio sources (excluding self) and labels a missing saved sidechain source', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const desk = {
+      audio: {
+        data: [
+          { name: 'Music', kind: 'ffmpeg_source' },
+          { name: 'Mic/Aux', kind: 'coreaudio_input_capture' },
+          { name: 'Discord', kind: 'sck_audio_capture' },
+        ],
+      },
+    } as unknown as Desk
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <DeskProvider value={desk}>
+          <RowLook.Provider value="inset">
+            <FilterForm
+              kind="compressor_filter"
+              source="Music"
+              opts={[
+                opt({
+                  key: 'threshold',
+                  label: 'Threshold',
+                  kind: 'float',
+                  min: -60,
+                  max: 0,
+                  step: 0.1,
+                  slider: true,
+                  suffix: ' dB',
+                }),
+                opt({
+                  key: 'ratio',
+                  label: 'Ratio',
+                  kind: 'float',
+                  min: 1,
+                  max: 32,
+                  step: 0.5,
+                  slider: true,
+                  suffix: ':1',
+                }),
+              ]}
+              values={{ sidechain_source: 'OldMic' }}
+              onChange={vi.fn()}
+            />
+          </RowLook.Provider>
+        </DeskProvider>,
+      ),
+    )
+
+    const select = host.querySelector('select') as HTMLSelectElement
+    expect(select).not.toBeNull()
+    expect(Array.from(select.options).map((o) => o.text)).toEqual([
+      'None',
+      'Mic/Aux',
+      'Discord',
+      'OldMic (missing)',
+    ])
+    expect(select.value).toBe('3')
   })
 })

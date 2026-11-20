@@ -103,6 +103,7 @@ const CHANGING_LISTS = new Set([
   'audio_device_id',
   'source',
   'clone',
+  'sidechain_source',
   'ndi_source_name',
   // A camera's sizes and rates are its own, and the rates change with the size.
   'resolution',

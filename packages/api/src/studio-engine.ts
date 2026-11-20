@@ -727,6 +727,8 @@ export interface EngineStats {
   disk_free_mb?: number
   /** Sources being recorded on their own (Source Record). */
   source_records?: { name: string; file: string }[]
+  /** Broken sidechain compressor loops currently silenced to avoid feedback cycles. */
+  sidechain_cycles?: { source: string; key: string }[]
 }
 
 /** Kinds of bounding box, as OBS orders them (fit = scale inner, fill = scale outer). */

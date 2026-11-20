@@ -210,6 +210,10 @@ export function useDesk(): Desk {
   return d
 }
 
+export function useDeskOptional(): Desk | null {
+  return useContext(Ctx)
+}
+
 const noopSubscribe = () => () => {}
 
 export function useDeskStats(): EngineStats | null
