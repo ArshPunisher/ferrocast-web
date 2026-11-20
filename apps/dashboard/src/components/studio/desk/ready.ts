@@ -5,7 +5,8 @@ import type { EngineCaptureProblem, EngineRecovered, PreflightCheck } from '@fer
 import { captureWords } from './doctor'
 
 /** Pre-flight checks that are about the Studio itself (not platforms, Discord or stream info). */
-const STUDIO_IDS = /^(obs|scenes|starting_scene|live_scene|ending_scene|disk|replay|mic:.+|cam:.+)$/
+const STUDIO_IDS =
+  /^(obs|scenes|starting_scene|live_scene|ending_scene|disk|replay|mic:.+|cam:.+|picture:.+)$/
 
 /** Below this peak the whole time, a mic is silent (dBFS). */
 export const SILENT_DB = -60

@@ -24,6 +24,13 @@ describe('ready check', () => {
     expect(got).toEqual(['mic:Mic', 'cam:Cam', 'disk'])
   })
 
+  it('warns before Go live about a scene with no picture', () => {
+    const got = studioProblems([check('picture:Main', 'warn'), check('picture:Live', 'ok')]).map(
+      (c) => c.id,
+    )
+    expect(got).toEqual(['picture:Main'])
+  })
+
   it('calls a mic silent only when every sample was quiet', () => {
     const got = silentMics({ Quiet: [-90, -75, -61], Talking: [-90, -20], Unsampled: [] })
     expect(got.map((c) => c.label)).toEqual(['Quiet'])
