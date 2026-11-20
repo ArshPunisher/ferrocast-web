@@ -2,7 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { StudioSettings } from '@ferrocast/api'
-import { PicturePage, StreamPage, encoderChoice, recordChoice, streamQuality } from './settings'
+import {
+  PicturePage,
+  RecordPage,
+  StreamPage,
+  encoderChoice,
+  recordChoice,
+  recordSizes,
+  replayCapMb,
+  streamQuality,
+} from './settings'
 
 vi.mock('./common', async (orig) => ({
   ...(await orig<typeof import('./common')>()),
@@ -148,5 +157,43 @@ describe('the picks', () => {
     expect(recordChoice('custom')).toBe('custom')
     expect(recordChoice('mystery')).toBe('custom')
     expect(recordChoice(null)).toBe('custom')
+  })
+})
+
+describe('the engine-backed settings', () => {
+  async function showRecord(initial: StudioSettings) {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root?.render(<RecordPage s={initial} set={() => {}} />))
+  }
+
+  it('has no B-frames switch (they do nothing yet) but keeps the profile and an Auto keyframe', async () => {
+    await show(mk({}))
+    expect(host?.textContent).not.toContain('B-frames')
+    expect(host?.querySelector('[aria-label="B-frames"]')).toBeNull()
+    expect(host?.querySelector('[aria-label="Profile"]')).not.toBeNull()
+    const keyframe = host?.querySelector('[aria-label="Keyframe every"]') as HTMLSelectElement
+    expect(Array.from(keyframe.options).map((o) => o.value)).toContain('0')
+    expect(Array.from(keyframe.options).find((o) => o.value === '0')?.text).toMatch(/Auto/)
+  })
+
+  it('shows the Balanced recording tier, picked when it is the quality', async () => {
+    await showRecord(mk({ record_quality: 'balanced' }))
+    expect(cards('Recording quality')).toHaveLength(5)
+    expect(picked('Recording quality')).toEqual(['Balanced'])
+    expect(recordChoice('balanced')).toBe('balanced')
+    const s = recordSizes({ video_kbps: 6000, audio_kbps: 160, width: 2560, height: 1440, fps: 60 })
+    expect(s.balanced).toBeCloseTo(s.high / 2, 6)
+  })
+
+  it('shows the replay buffer memory cap: 512 MB unless one is set', async () => {
+    expect(replayCapMb(mk({}))).toBe(512)
+    expect(replayCapMb(mk({ replay_mb: 0 }))).toBe(512)
+    expect(replayCapMb(mk({ replay_mb: 2048 }))).toBe(2048)
+    await showRecord(mk({ replay_mb: 0 }))
+    const box = host?.querySelector('[aria-label="Replay buffer memory"]') as HTMLInputElement
+    expect(box).not.toBeNull()
+    expect(box.value).toBe('512')
   })
 })
