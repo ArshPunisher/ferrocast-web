@@ -511,6 +511,15 @@ describe('Freeze (built in)', () => {
   })
 })
 
+describe('Video delay (built in)', () => {
+  it("is among the filters, under OBS's two names as well", () => {
+    for (const k of ['ferrocast_video_delay', 'gpu_delay', 'async_delay_filter']) {
+      expect(FILTER_OF[k]?.label).toBe('Video delay')
+    }
+    expect(NO_FORM.has('ferrocast_video_delay')).toBe(false)
+  })
+})
+
 describe('Source Clone (built in)', () => {
   it('is among the sources, picked from a list like a camera', () => {
     const copy = KIND_GROUPS.flatMap((g) => g.entries).find((e) => e.key === 'clone')
