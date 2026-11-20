@@ -963,14 +963,12 @@ export function ControlBar({
     })
   return (
     <InBar className="mb-2 flex flex-wrap items-center gap-2">
-      {/* Where the bar is one row (wide screens) these step aside while on air (the engine can't
-          be switched, nor a collection, in the middle of a stream; OBS greys them too), so
-          Pause, Stop now, Record and Go live never wrap onto a second row and nothing moves
-          when they are pressed (S18 B2). Narrower, the bar is stacked rows that are the same
-          height idle and on air, so they stay. */}
-      <div className={cx('flex flex-wrap items-center gap-2', (on || recording) && 'xl:hidden')}>
-        {lead}
-        <LibraryBar />
+      {/* On wide screens the engine switch steps aside while on air (it can't switch mid-stream),
+          while the scene-collection and profile selectors stay visible in compact form so 1280 px
+          stays one row and the streamer still sees them (and gets the 409 notice if switching, U3). */}
+      <div className="flex flex-wrap items-center gap-2">
+        {lead && <div className={cx((on || recording) && 'xl:hidden')}>{lead}</div>}
+        <LibraryBar compact={on || recording} />
       </div>
       {/* Health and the actions stay together. Narrow: two fixed rows (the tools and what
           belongs to a recording or the ending, then Record and Go live side by side), so the

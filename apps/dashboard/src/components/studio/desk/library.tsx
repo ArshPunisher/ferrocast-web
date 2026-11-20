@@ -58,7 +58,7 @@ export function showShelfError(err: unknown): void {
 
 type Naming = { kind: EngineShelfKind; mode: 'new' | 'copy' | 'rename'; id?: string; value: string }
 
-export function LibraryBar() {
+export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
   const { api, refresh, library } = useDesk()
   const collections = useResource(() => api.shelf('collections'), [api, library])
   const profiles = useResource(() => api.shelf('profiles'), [api, library])
@@ -268,8 +268,11 @@ export function LibraryBar() {
             >
               <Icon size={13} weight="bold" />
             </span>
-            {/* The name shows on wide screens; smaller ones keep the bar on one line. */}
-            <span className="hidden min-w-0 truncate xl:inline">{name}</span>
+            {/* The name shows on wide screens; compact (while live/recording) waits for 2xl so
+                1280 px stays on one row without hiding the selectors (U3). */}
+            <span className={cx('hidden min-w-0 truncate', compact ? '2xl:inline' : 'xl:inline')}>
+              {name}
+            </span>
             <CaretDown size={13} weight="bold" className="shrink-0 text-text-3" aria-hidden />
           </button>
         )
