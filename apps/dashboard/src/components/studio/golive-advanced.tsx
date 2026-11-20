@@ -267,6 +267,19 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
                   onChange={(n) => setDraft({ ...draft, keep_free_pct: n })}
                 />
               </Row>
+              <Row
+                label="Stream above platform bitrate limits"
+                hint="Turns off automatic 6,000 kbps Twitch and 8,000 kbps Kick studio caps (like OBS’s Ignore streaming service setting recommendations)."
+              >
+                <Switch
+                  label="Stream above platform bitrate limits"
+                  hideLabel
+                  checked={draft.ignore_service_limits ?? false}
+                  onChange={(ignore_service_limits) =>
+                    setDraft({ ...draft, ignore_service_limits })
+                  }
+                />
+              </Row>
             </>
           ) : (
             <>

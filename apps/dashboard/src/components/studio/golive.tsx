@@ -51,6 +51,7 @@ import {
   Dialog,
   Field,
   IconButton,
+  InfoLine,
   InfoTip,
   Input,
   PlatformMark,
@@ -644,12 +645,6 @@ export function Platforms({
   )
 }
 
-/** The bitrate a platform's warning asks for ("… to 5,500 kbps or less"), in kbps. */
-export function askedKbps(rule: string): number | null {
-  const m = rule.match(/to ([\d,]+) kbps or less/)
-  return m ? Number(m[1]?.replace(/,/g, '')) : null
-}
-
 export function RowText({
   d,
   fixBitrate,
@@ -662,6 +657,7 @@ export function RowText({
   compact?: boolean
 }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
+  const issues = d.issues ?? null
   return (
     <div className="min-w-0">
       <b
@@ -743,23 +739,45 @@ export function RowText({
           {d.blocked}
         </span>
       )}
-      {d.rules.map((r) => {
-        const kbps = fixBitrate ? askedKbps(r) : null
-        return (
-          <span key={r} className="mt-1 block text-[13px] leading-snug text-warn">
-            {r}
-            {kbps !== null && (
-              <button
-                type="button"
-                onClick={() => fixBitrate?.(kbps)}
-                className="ml-1.5 inline-flex h-6 items-center rounded-full bg-warn-soft px-2 align-middle text-[12.5px] font-bold text-text ring-1 ring-warn/40 hover:bg-warn/20"
-              >
-                Use {kbps.toLocaleString()} kbps
-              </button>
+      {d.capped && (
+        <InfoLine detail={d.capped.detail} label={`About ${d.name} limits`} className="mt-1">
+          <span
+            className={cx(
+              'inline-flex max-w-full items-center rounded-full bg-surface-2 px-2 py-0.5 font-medium text-text-2 ring-1 ring-line',
+              compact ? 'text-[11.5px]' : 'text-[12px]',
             )}
+          >
+            {d.capped.summary}
           </span>
-        )
-      })}
+        </InfoLine>
+      )}
+      {issues
+        ? issues.map((issue) => (
+            <InfoLine
+              key={`${issue.code}:${issue.summary}`}
+              detail={issue.detail}
+              label={`More about ${issue.summary}`}
+              className="mt-1"
+            >
+              <span className="text-[13px] leading-snug text-warn">
+                {issue.summary}
+                {fixBitrate && issue.fix_kbps !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => fixBitrate(issue.fix_kbps!)}
+                    className="ml-1.5 inline-flex h-6 items-center rounded-full bg-warn-soft px-2 align-middle text-[12.5px] font-bold text-text ring-1 ring-warn/40 hover:bg-warn/20"
+                  >
+                    Use {issue.fix_kbps.toLocaleString()} kbps
+                  </button>
+                )}
+              </span>
+            </InfoLine>
+          ))
+        : d.rules.map((r) => (
+            <span key={r} className="mt-1 block text-[13px] leading-snug text-warn">
+              {r}
+            </span>
+          ))}
     </div>
   )
 }
