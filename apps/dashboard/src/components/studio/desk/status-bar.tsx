@@ -20,7 +20,7 @@ import { captureWords, doctorFix, lastingProblem, type Strain } from './doctor'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
 import { useLive } from '../../../lib/store'
-import { StatsDialog, clock, droppedText } from './stats-panel'
+import { StatsDialog, clock, droppedText, streamTime } from './stats-panel'
 
 /** Its height (px): the sidebar, the page and the Studio's layout leave room for it. */
 export const STATUS_BAR_PX = 28
@@ -373,7 +373,7 @@ export function StudioStatusBar() {
   const api = useMemo(() => studioEngineApi(client), [client])
   const golive = useMemo(() => goliveApi(client), [client])
   const reading = useEngineReading(api.stats)
-  const { stats, kbps, since, at } = reading
+  const { stats, kbps } = reading
   const goliveFrame = useLive((s) => s.studio.golive)
   const goliveFrameAt = useLive((s) => s.goliveFrameAt)
   const goliveView = useLive((s) => s.goliveView)
@@ -514,7 +514,7 @@ export function StudioStatusBar() {
         className="flex h-full items-stretch transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none focus-visible:ring-inset"
       >
         <Cell label={live ? 'LIVE' : 'Live'} tone={live ? 'live' : undefined}>
-          {clock(since ? at - since : 0)}
+          {streamTime(stream, target)}
         </Cell>
         {health && (
           <Cell label="Health" tone={health.tone === 'ok' ? undefined : health.tone}>

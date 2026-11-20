@@ -97,7 +97,7 @@ import { useCountdownLeft, useEndingLeft } from './ending'
 import { OnAirButton } from './onair'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
-import { clock } from './stats-panel'
+import { clock, streamTime } from './stats-panel'
 import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
@@ -1104,7 +1104,7 @@ export function ControlBar({
             }
             left={left}
             countdown={on && !ending ? countdown : null}
-            time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
+            time={streamTime(stream, stats?.canvas.fps ?? 30)}
             disabled={!on && ticked.length === 0}
             title={
               !on && ticked.length === 0 ? 'Switch on a platform under Go live to.' : undefined

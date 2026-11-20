@@ -92,6 +92,16 @@ export function clock(ms: number): string {
     .join(':')
 }
 
+/**
+ * How long the stream has been going, as the engine counts it: its frames over the frame rate.
+ * The same everywhere (the header's LIVE pill, the status bar, Stats) and right after the page is
+ * opened or reloaded mid-stream. The status bar used to count from when this page first saw the
+ * stream (a reload at 28 s read 00:00:02 beside the pill's 00:00:28).
+ */
+export function streamTime(stream: { frames?: number } | null | undefined, fps: number): string {
+  return clock(((stream?.frames ?? 0) / (fps || 30)) * 1000)
+}
+
 /** The encoder as people know it: the graphics card's maker, or software. Unknown ones as
  *  FFmpeg names them. */
 export function encoderName(id: string): string {
@@ -233,7 +243,7 @@ export function StatsDialog({
   /** Destination-aware status label for the Stream row ("Reconnecting", "Failed", etc.). */
   streamStateLabel?: string | null | undefined
 }) {
-  const { stats, history, since, at, kbps } = reading
+  const { stats, history, kbps } = reading
   const rates = useRates(stats)
   const busiest = useSourceRates(stats).slice(0, 4)
   const kinds = useSourceKinds(open && busiest.length > 0)
@@ -278,7 +288,7 @@ export function StatsDialog({
           : stream?.reconnecting
             ? 'Reconnecting'
             : stream?.active
-              ? clock(since ? at - since : 0)
+              ? streamTime(stream, fps)
               : 'Off'),
       rate:
         stream?.active && !stream.failed
