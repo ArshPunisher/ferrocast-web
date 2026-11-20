@@ -3,7 +3,7 @@
 // the upload check as a table (4B), a health line per platform while live (5A), and a dialog
 // for a server of your own (7). API.md §4 "Go live everywhere".
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
@@ -44,6 +44,7 @@ import {
   type GoLiveView,
   type Network,
   type Reach,
+  type RuleCode,
   type Service,
   type UploadCheck,
 } from '@ferrocast/api'
@@ -789,6 +790,190 @@ export function Platforms({
   )
 }
 
+/** One thing a destination's row has to say about itself that isn't "all good". */
+interface RowNotice {
+  key: string
+  tone: 'warn' | 'danger'
+  /** A word or two: what the chip says. */
+  label: string
+  /** All of it: what the screen reader hears and the panel under the row shows. */
+  text: string
+  /** The bitrate (kbps) that clears it, when lowering it does. */
+  fixKbps?: number
+  link?: { href: string; label: string }
+}
+
+const ISSUE_LABEL: Record<RuleCode, string> = {
+  bitrate: 'Bitrate too high',
+  codec: 'Wrong codec',
+  keyint: 'Keyframes too far apart',
+}
+
+const KICK_MULTI =
+  'Kick Partners must allow multistreaming: Creator Dashboard › Partner Income › Multistreaming, or type /multi on in your chat.'
+
+/** The row's notices, shortest label first-class: the sentence is only in `text`. */
+function rowNotices(d: DestinationView): RowNotice[] {
+  const out: RowNotice[] = []
+  if (d.blocked)
+    out.push({
+      key: 'blocked',
+      tone: d.enabled ? 'danger' : 'warn',
+      label: 'Can’t start',
+      text: d.blocked,
+    })
+  if (d.enabled && d.kind === 'kick' && d.health?.state !== 'failed')
+    out.push({
+      key: 'kick',
+      tone: 'warn',
+      label: 'Kick Partner?',
+      text: KICK_MULTI,
+      link: { href: 'https://dashboard.kick.com/', label: 'Open Kick’s dashboard' },
+    })
+  if (d.backup_for)
+    out.push({
+      key: 'backup',
+      tone: 'warn',
+      label: 'Backup on',
+      text: `Sending for ${d.backup_for}.`,
+    })
+  if (d.issues)
+    for (const i of d.issues) {
+      const text = i.detail
+        ? i.detail.includes(i.summary)
+          ? i.detail
+          : `${i.summary}. ${i.detail}`
+        : i.summary
+      out.push({
+        key: `${i.code}:${i.summary}`,
+        tone: 'warn',
+        label: ISSUE_LABEL[i.code] ?? 'Check this',
+        text,
+        ...(i.fix_kbps !== undefined ? { fixKbps: i.fix_kbps } : {}),
+      })
+    }
+  else for (const r of d.rules) out.push({ key: r, tone: 'warn', label: 'Stream rule', text: r })
+  return out
+}
+
+/**
+ * A small status chip on the name line: the row keeps its height, whatever is wrong. The chip is
+ * a button named by the whole text; pressed, the text (and the fix) opens under the row. With
+ * room, the one-press fix sits next to the chip.
+ */
+function RowAlerts({
+  d,
+  notices,
+  fixBitrate,
+  compact,
+}: {
+  d: DestinationView
+  notices: RowNotice[]
+  fixBitrate?: ((kbps: number) => void) | undefined
+  compact: boolean
+}) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  if (notices.length === 0) return null
+  const first = notices[0]!
+  const danger = notices.some((n) => n.tone === 'danger')
+  const fix = fixBitrate ? notices.find((n) => n.fixKbps !== undefined) : undefined
+  const name = `${d.name}: ${notices.map((n) => n.text).join(' ')}`
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={name}
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        onClick={() => setOpen((o) => !o)}
+        className={cx(
+          'relative inline-flex h-5 min-w-0 shrink items-center gap-1 rounded-full px-1.5 font-bold ring-1 transition-colors',
+          'text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+          // A bigger touch target than the chip.
+          'after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[""]',
+          compact ? 'text-[11px]' : 'text-[11.5px]',
+          danger
+            ? 'bg-danger-soft ring-danger/40 hover:bg-danger/20'
+            : 'bg-warn-soft ring-warn/40 hover:bg-warn/20',
+        )}
+      >
+        <Warning
+          size={12}
+          weight="fill"
+          className={cx('shrink-0', danger ? 'text-danger' : 'text-warn')}
+          aria-hidden
+        />
+        <span className="min-w-0 truncate">{first.label}</span>
+        {notices.length > 1 && <span className="shrink-0 text-text-2">+{notices.length - 1}</span>}
+        <Info
+          size={12}
+          weight={open ? 'fill' : 'bold'}
+          className="shrink-0 text-text-3"
+          aria-hidden
+        />
+      </button>
+      {fix && (
+        <button
+          type="button"
+          onClick={() => fixBitrate?.(fix.fixKbps!)}
+          className={cx(
+            'hidden h-5 shrink-0 items-center rounded-full bg-surface-3 px-2 font-bold text-text ring-1 ring-line-strong @[19rem]:inline-flex',
+            'hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+            compact ? 'text-[11px]' : 'text-[11.5px]',
+          )}
+        >
+          Use {fix.fixKbps!.toLocaleString()}
+        </button>
+      )}
+      {open && (
+        <div
+          id={id}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setOpen(false)
+            }
+          }}
+          className={cx(
+            'basis-full rounded-control px-2 py-1.5 leading-snug text-text-2',
+            compact ? 'text-[12.5px]' : 'text-[13.5px]',
+            danger ? 'bg-danger-soft' : 'bg-warn-soft',
+          )}
+        >
+          {notices.map((n) => (
+            <p key={n.key} className="m-0 not-first:mt-1.5">
+              <span className="break-words">{n.text}</span>
+              {(n.link || (fixBitrate && n.fixKbps !== undefined)) && (
+                <span className="mt-1 flex flex-wrap items-center gap-2">
+                  {fixBitrate && n.fixKbps !== undefined && (
+                    <button
+                      type="button"
+                      onClick={() => fixBitrate(n.fixKbps!)}
+                      className="inline-flex h-6 items-center rounded-full bg-warn-soft px-2 text-[12.5px] font-bold text-text ring-1 ring-warn/40 hover:bg-warn/20 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    >
+                      Use {n.fixKbps.toLocaleString()} kbps
+                    </button>
+                  )}
+                  {n.link && (
+                    <a
+                      {...externalLink(n.link.href)}
+                      className="inline-flex items-center gap-1 font-semibold text-accent-text underline-offset-2 hover:underline"
+                    >
+                      {n.link.label}
+                      <ArrowSquareOut size={12} aria-hidden />
+                    </a>
+                  )}
+                </span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 export function RowText({
   d,
   fixBitrate,
@@ -801,18 +986,21 @@ export function RowText({
   compact?: boolean
 }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
-  const issues = d.issues ?? null
+  const notices = rowNotices(d)
   return (
-    <div className="min-w-0">
-      <b
-        className={cx(
-          'block truncate',
-          compact ? 'text-[13.5px] leading-tight font-semibold' : 'text-[15px]',
-          !d.enabled && 'text-text-2',
-        )}
-      >
-        {d.name}
-      </b>
+    <div className="@container min-w-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+        <b
+          className={cx(
+            'min-w-0 truncate',
+            compact ? 'text-[13.5px] leading-tight font-semibold' : 'text-[15px]',
+            !d.enabled && 'text-text-2',
+          )}
+        >
+          {d.name}
+        </b>
+        <RowAlerts d={d} notices={notices} fixBitrate={fixBitrate} compact={compact} />
+      </div>
       <span
         className={cx(
           'flex min-w-0 items-center gap-1 text-text-2',
@@ -851,36 +1039,9 @@ export function RowText({
           </span>
         )}
       </span>
-      {d.enabled && d.kind === 'kick' && d.health?.state !== 'failed' && (
-        <a
-          // Kick's Creator Dashboard: Partner Income › Multistreaming (or /multi on in chat).
-          // Through the app's opener: a plain new-window link does nothing in the desktop app.
-          {...externalLink('https://dashboard.kick.com/')}
-          title="Kick Partners must allow multistreaming: Creator Dashboard › Partner Income › Multistreaming, or type /multi on in your chat."
-          className="mt-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-warn underline-offset-2 hover:underline"
-        >
-          Kick Partner? Allow multistreaming
-          <ArrowSquareOut size={12} aria-hidden />
-        </a>
-      )}
       {d.standby_for && (
         <span className="block text-[13.5px] text-text-3">
           Backup for {d.standby_for}: sends only if it can’t
-        </span>
-      )}
-      {d.backup_for && (
-        <span className="block text-[13.5px] font-semibold text-warn">
-          Sending for {d.backup_for}
-        </span>
-      )}
-      {d.blocked && (
-        <span
-          className={cx(
-            'block text-[13.5px]',
-            d.enabled ? 'font-semibold text-danger' : 'font-medium text-warn',
-          )}
-        >
-          {d.blocked}
         </span>
       )}
       {d.capped && (
@@ -895,33 +1056,6 @@ export function RowText({
           </span>
         </InfoLine>
       )}
-      {issues
-        ? issues.map((issue) => (
-            <InfoLine
-              key={`${issue.code}:${issue.summary}`}
-              detail={issue.detail}
-              label={`More about ${issue.summary}`}
-              className="mt-1"
-            >
-              <span className="text-[13px] leading-snug text-warn">
-                {issue.summary}
-                {fixBitrate && issue.fix_kbps !== undefined && (
-                  <button
-                    type="button"
-                    onClick={() => fixBitrate(issue.fix_kbps!)}
-                    className="ml-1.5 inline-flex h-6 items-center rounded-full bg-warn-soft px-2 align-middle text-[12.5px] font-bold text-text ring-1 ring-warn/40 hover:bg-warn/20"
-                  >
-                    Use {issue.fix_kbps.toLocaleString()} kbps
-                  </button>
-                )}
-              </span>
-            </InfoLine>
-          ))
-        : d.rules.map((r) => (
-            <span key={r} className="mt-1 block text-[13px] leading-snug text-warn">
-              {r}
-            </span>
-          ))}
     </div>
   )
 }
