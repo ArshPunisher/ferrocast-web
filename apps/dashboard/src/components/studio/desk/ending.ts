@@ -31,6 +31,64 @@ export function secondsLeft(
   return Math.max(0, Math.ceil((deadline - now) / 1000))
 }
 
+/** Whether the show is currently running its pre-live countdown. */
+export function isCountingDown(show: ShowRun | null | undefined): boolean {
+  return !!show && show.phase === 'countdown' && show.countdown_ends_at !== null
+}
+
+/** Whole seconds left until `endsAt` (0 once reached); null when no deadline is set. */
+export function countdownSecondsLeft(endsAt: number | null, now: number): number | null {
+  if (endsAt === null) return null
+  return Math.max(0, Math.ceil((endsAt - now) / 1000))
+}
+
+/**
+ * Fixed-width mono countdown ("04:59", "00:10", or "1:05:09" past an hour) so ticking down
+ * never shifts the width of the desk's on-air pill (U4).
+ */
+export function formatCountdown(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const rem = s % 60
+  return h > 0 ? `${h}:${pad(m)}:${pad(rem)}` : `${pad(m)}:${pad(rem)}`
+}
+
+/**
+ * Ticking Show countdown for the desk's on-air pill. Runs a 500 ms timer only while the Show is
+ * in its `countdown` phase, and invokes `onElapsed` once past the deadline so the desk refreshes
+ * even if the live socket is offline.
+ */
+export function useCountdownLeft(
+  show: ShowRun | null | undefined,
+  onElapsed?: () => void,
+): { counting: boolean; left: number | null; text: string | null } {
+  const counting = isCountingDown(show)
+  const endsAt = show?.countdown_ends_at ?? null
+  const showId = show?.id ?? null
+  const [now, setNow] = useState(() => Date.now())
+  const onElapsedRef = useRef(onElapsed)
+  onElapsedRef.current = onElapsed
+  const refreshedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!counting) return
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [counting, showId])
+  useEffect(() => {
+    if (!counting || endsAt === null || !showId) return
+    if (now >= endsAt + 600 && refreshedFor.current !== showId) {
+      refreshedFor.current = showId
+      onElapsedRef.current?.()
+    }
+  }, [counting, endsAt, showId, now])
+  if (!counting || endsAt === null) return { counting: false, left: null, text: null }
+  const left = countdownSecondsLeft(endsAt, now)
+  return { counting: true, left, text: left === null ? null : formatCountdown(left) }
+}
+
 /** The seconds left, ticking, while the show is ending; null when it isn't (or the delay is unknown). */
 export function useEndingLeft(
   show: ShowRun | null | undefined,

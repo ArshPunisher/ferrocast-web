@@ -7,7 +7,13 @@ import { DeskProvider, type Desk } from './common'
 import { ControlBar } from './desk'
 import { DockWorkspace } from './layout'
 import { currentToasts, dismissToast } from '@ferrocast/ui'
-import { isEnding, secondsLeft } from './ending'
+import {
+  countdownSecondsLeft,
+  formatCountdown,
+  isCountingDown,
+  isEnding,
+  secondsLeft,
+} from './ending'
 import { OnAirButton } from './onair'
 
 // End stream with a show that has an ending (S18 B1): the stream stays on air for the stop delay
@@ -53,6 +59,24 @@ describe('the ending of a show', () => {
     expect(secondsLeft(t - 10_000, 30, t, t)).toBe(20)
     expect(secondsLeft(t, null, t, t)).toBeNull()
     expect(secondsLeft(null, 30, t, t)).toBe(30)
+  })
+})
+
+describe('U4: Show countdown on the desk on-air pill', () => {
+  it('detects active countdowns and formats fixed-width mono digits', () => {
+    const t = 1_000_000
+    expect(isCountingDown(run({ phase: 'countdown', countdown_ends_at: t + 10_000 }))).toBe(true)
+    expect(isCountingDown(run({ phase: 'countdown', countdown_ends_at: null }))).toBe(false)
+    expect(isCountingDown(run({ phase: 'live', countdown_ends_at: t + 10_000 }))).toBe(false)
+    expect(countdownSecondsLeft(t + 9_200, t)).toBe(10)
+    expect(countdownSecondsLeft(t + 100, t)).toBe(1)
+    expect(countdownSecondsLeft(t - 500, t)).toBe(0)
+    expect(countdownSecondsLeft(null, t)).toBeNull()
+    expect(formatCountdown(10)).toBe('00:10')
+    expect(formatCountdown(9)).toBe('00:09')
+    expect(formatCountdown(299)).toBe('04:59')
+    expect(formatCountdown(0)).toBe('00:00')
+    expect(formatCountdown(3909)).toBe('1:05:09')
   })
 })
 
@@ -190,6 +214,23 @@ describe('the desk bar while the show ends', () => {
     expect(button('Stop now')).toBeUndefined()
     expect(button(/Ending in/)).toBeUndefined()
     expect(button(/^LIVE/)?.getAttribute('aria-label')).toContain('End stream')
+    expect(button(/^LIVE/)?.querySelector('[data-countdown]')).toBeNull()
+  })
+
+  it('shows the Show countdown on the on-air pill while counting down (U4)', async () => {
+    await mount(
+      run({
+        phase: 'countdown',
+        countdown_ends_at: Date.now() + 10_000,
+        ended_at: null,
+        steps: [],
+      }),
+    )
+    const liveBtn = button(/^LIVE/)
+    expect(liveBtn).toBeTruthy()
+    const cd = liveBtn?.querySelector('[data-countdown]')
+    expect(cd?.textContent).toMatch(/^00:(09|10)$/)
+    expect(liveBtn?.getAttribute('aria-label')).toMatch(/show starts in 00:(09|10)/)
   })
 
   it('a double press of Stop now asks once', async () => {

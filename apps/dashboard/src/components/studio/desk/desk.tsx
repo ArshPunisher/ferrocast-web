@@ -93,7 +93,7 @@ import { PreviewBox, StageBar, StageOff } from './preview'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { SourcePanel } from './source-panel'
-import { useEndingLeft } from './ending'
+import { useCountdownLeft, useEndingLeft } from './ending'
 import { OnAirButton } from './onair'
 import { LibraryBar } from './library'
 import { useContextMenu } from './menu'
@@ -703,6 +703,13 @@ export function ControlBar({
   const stopCfg = useResource(() => studio.showConfig(), [studio, show?.phase === 'ended'])
   const stopDelay = stopCfg.data?.stop_delay_s ?? null
   const { ending, left } = useEndingLeft(show, on, stopDelay)
+  const refreshShow = useCallback(() => {
+    void studio
+      .show()
+      .then((r) => setShow(r.show))
+      .catch(() => undefined)
+  }, [studio, setShow])
+  const { text: countdown } = useCountdownLeft(show, refreshShow)
   const ticked = view ? onCanvas(view.destinations, 'main').filter((d) => d.enabled) : []
   // A press that's still being answered takes no second one: a double click on Go live started
   // the show or the stream twice (the button now says so, this is what holds it).
@@ -1096,6 +1103,7 @@ export function ControlBar({
                     : 'idle'
             }
             left={left}
+            countdown={on && !ending ? countdown : null}
             time={clock(((stream?.frames ?? 0) / (stats?.canvas.fps || 30)) * 1000)}
             disabled={!on && ticked.length === 0}
             title={

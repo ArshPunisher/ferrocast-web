@@ -1,7 +1,7 @@
 // Start show / End show: the run with its steps, the pre-flight with one-click fixes, the
 // Start dialog Home opens (two clicks to go live), and the checklist settings.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowsClockwise, Broadcast, Play, Stop } from '@phosphor-icons/react'
 import {
   AT_ZERO_DEFAULT,
@@ -201,7 +201,13 @@ export function useShow(): [ShowRun | null | undefined, (r: ShowRun | null) => v
       alive = false
     }
   }, [studio])
-  return [live !== undefined ? live : loaded, setLoaded]
+  const setShow = useCallback((r: ShowRun | null) => {
+    setLoaded(r)
+    useLive.setState((s) =>
+      s.studio.show === undefined ? s : { studio: { ...s.studio, show: r } },
+    )
+  }, [])
+  return [live !== undefined ? live : loaded, setShow]
 }
 
 export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Preflight) => void }) {

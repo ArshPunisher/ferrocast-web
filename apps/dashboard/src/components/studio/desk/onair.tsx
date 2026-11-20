@@ -21,6 +21,7 @@ export function OnAirButton({
   paused,
   working,
   left,
+  countdown,
 }: {
   kind: 'rec' | 'live'
   state: AirState
@@ -40,9 +41,12 @@ export function OnAirButton({
   working?: boolean
   /** While `ending`: whole seconds before the stream stops (null: not known). */
   left?: number | null
+  /** While `on` during a Show countdown: fixed-width mono time left ("04:59", "00:10"). */
+  countdown?: string | null
 }) {
   const tag = kind === 'rec' ? 'REC' : 'LIVE'
   const idle = kind === 'rec' ? 'Record' : 'Go live'
+  const showCountdown = state === 'on' && kind === 'live' && !!countdown
   let face: ReactNode
   if (state === 'on')
     face = (
@@ -56,14 +60,47 @@ export function OnAirButton({
             <b />
           </span>
         )}
-        {tag} <span className="font-mono text-[12.5px] tabular-nums">{time}</span>
+        {tag}{' '}
+        <span
+          className={cx(
+            'font-mono text-[12.5px] tabular-nums',
+            showCountdown && 'hidden sm:inline',
+          )}
+        >
+          {time}
+        </span>
+        {showCountdown && (
+          <>
+            <span aria-hidden className="h-3.5 w-px bg-white/30" />
+            <span className="inline-flex items-center gap-1">
+              <HourglassMedium size={13} weight="fill" aria-hidden />
+              <span className="hidden text-[12px] font-semibold opacity-90 sm:inline">Starts</span>
+              <span
+                data-countdown
+                className="inline-block min-w-[5ch] text-right font-mono text-[12.5px] tabular-nums"
+              >
+                {countdown}
+              </span>
+            </span>
+          </>
+        )}
       </>
     )
   else if (state === 'ending')
     face = (
       <>
         <HourglassMedium size={14} weight="fill" aria-hidden />
-        {left == null ? 'Ending…' : `Ending in ${left} s`}
+        {left == null ? (
+          'Ending…'
+        ) : (
+          <>
+            Ending in{' '}
+            <span className="inline-block min-w-[2ch] text-right font-mono text-[12.5px] tabular-nums">
+              {left}
+            </span>{' '}
+            s
+          </>
+        )}
       </>
     )
   else if (state === 'starting') face = 'Starting…'
@@ -83,7 +120,9 @@ export function OnAirButton({
     state === 'on'
       ? kind === 'rec'
         ? `Stop recording (${paused ? 'paused at' : 'recording'} ${time})`
-        : `End stream (live ${time})`
+        : showCountdown
+          ? `End stream (live ${time}, show starts in ${countdown})`
+          : `End stream (live ${time})`
       : state === 'ending'
         ? `The stream is ending${left == null ? '' : `, it stops in ${left} seconds`} (live ${time})`
         : undefined
