@@ -529,7 +529,7 @@ export interface StudioSettings {
    *  folder's Ferrocast folder); shown, never saved. */
   record_folder_default?: string
   record_format: EngineRecordFormat
-  record_quality: 'stream' | 'high' | 'lossless' | 'custom'
+  record_quality: 'stream' | 'high' | 'balanced' | 'lossless' | 'custom'
   reconnect: boolean
   reconnect_every_s: number
   reconnect_tries: number

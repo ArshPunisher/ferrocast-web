@@ -360,7 +360,7 @@ const PRESETS = [
 
 /** The recording card picked: an unknown value from the engine is "Your own", never nothing. */
 export function recordChoice(q: string | null | undefined): StudioSettings['record_quality'] {
-  return q === 'stream' || q === 'high' || q === 'lossless' ? q : 'custom'
+  return q === 'stream' || q === 'high' || q === 'balanced' || q === 'lossless' ? q : 'custom'
 }
 
 /** The encoder card picked: anything but software is the hardware one. */
@@ -610,7 +610,7 @@ export function StreamPage({ s, set }: PageProps) {
               <option value="2">2 s (recommended)</option>
               <option value="1">1 s</option>
               <option value="4">4 s</option>
-              <option value="0">Let the encoder pick</option>
+              <option value="0">Auto (2 s for streams, 10 s for recordings)</option>
             </Select>
           </Row>
           <Row label="Profile">
@@ -623,14 +623,6 @@ export function StreamPage({ s, set }: PageProps) {
               <option value="main">Main</option>
               <option value="baseline">Baseline</option>
             </Select>
-          </Row>
-          <Row label="B-frames" sub="Better quality at the same bitrate">
-            <Switch
-              label="B-frames"
-              hideLabel
-              checked={s.bframes}
-              onChange={(bframes) => set({ bframes })}
-            />
           </Row>
           <Row label="Send at" sub="Smaller than the picture saves upload">
             <Select
@@ -1241,6 +1233,11 @@ export function sizeText(mb: number): string {
  *  own bitrate; High (constant quality 16) and Lossless (x264 at 0) depend on what's on
  *  screen, so they're estimates from the picture's size and frame rate: about 0.18 bits a
  *  pixel for High, 0.6 to 1.8 for Lossless (a still screen to a busy game). */
+/** The replay buffer's memory cap as the engine applies it: 0 (an older profile) is 512 MB. */
+export function replayCapMb(s: Pick<StudioSettings, 'replay_mb'>): number {
+  return s.replay_mb ? s.replay_mb : 512
+}
+
 export function recordSizes(
   s: Pick<StudioSettings, 'video_kbps' | 'audio_kbps' | 'width' | 'height' | 'fps'>,
 ) {
@@ -1249,15 +1246,16 @@ export function recordSizes(
   return {
     stream: perMin((s.video_kbps + s.audio_kbps) * 1000),
     high: perMin(pixels * 0.18),
+    balanced: perMin(pixels * 0.09),
     lossless: [perMin(pixels * 0.6), perMin(pixels * 1.8)] as const,
   }
 }
 
-function RecordPage({ s, set }: PageProps) {
+export function RecordPage({ s, set }: PageProps) {
   const sizes = recordSizes(s)
   const chip = s.encoder === 'hardware' ? 'your graphics chip' : 'your processor (x264)'
   const QUALITY: Record<
-    'stream' | 'high' | 'lossless' | 'custom',
+    'stream' | 'high' | 'balanced' | 'lossless' | 'custom',
     { minute: string; hour: string; facts: string[]; warn?: string }
   > = {
     stream: {
@@ -1276,6 +1274,15 @@ function RecordPage({ s, set }: PageProps) {
         'Sharper than the stream. Text and fast motion stay clean when you pause.',
         `Uses ${chip}, a little more than streaming.`,
         'Best for editing videos and clips.',
+      ],
+    },
+    balanced: {
+      minute: sizeText(sizes.balanced),
+      hour: sizeText(sizes.balanced * 60),
+      facts: [
+        'Looks very close to High at about half the size.',
+        `Uses ${chip}, about as much as High.`,
+        'Good for long sessions and everyday recordings.',
       ],
     },
     lossless: {
@@ -1353,7 +1360,7 @@ function RecordPage({ s, set }: PageProps) {
   return (
     <>
       <Heading>Quality</Heading>
-      <ChoiceGrid label="Recording quality" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <ChoiceGrid label="Recording quality" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <Choice
           on={choice === 'stream'}
           title="Same as stream"
@@ -1367,6 +1374,13 @@ function RecordPage({ s, set }: PageProps) {
           sub={`${QUALITY.high.minute} a minute`}
           note="For editing"
           onPick={() => set({ record_quality: 'high' })}
+        />
+        <Choice
+          on={choice === 'balanced'}
+          title="Balanced"
+          sub={`${QUALITY.balanced.minute} a minute`}
+          note="Half of High's size"
+          onPick={() => set({ record_quality: 'balanced' })}
         />
         <Choice
           on={choice === 'lossless'}
@@ -1616,6 +1630,16 @@ function RecordPage({ s, set }: PageProps) {
             max={21600}
             unit="s"
             onChange={(replay_seconds) => set({ replay_seconds })}
+          />
+        </Row>
+        <Row label="Replay buffer memory" sub="Most it may use; older seconds go first">
+          <NumberBox
+            label="Replay buffer memory"
+            value={replayCapMb(s)}
+            min={64}
+            max={1_000_000}
+            unit="MB"
+            onChange={(replay_mb) => set({ replay_mb })}
           />
         </Row>
         <Row label="Replays as">
