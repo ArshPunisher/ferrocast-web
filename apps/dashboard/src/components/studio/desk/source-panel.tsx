@@ -80,6 +80,7 @@ import { useLevelFeed } from './meter-feed'
 import { RowLook } from './options'
 import { Band, Pad, PositionTab, Prop, SoundRows } from './drawer-kit'
 import { KindSettings, SourcePreview } from './kind-settings'
+import { useFilterApi, useItemOf } from './item-filters'
 import { AreaPicker, CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
 
@@ -202,7 +203,8 @@ function Panel({
   const feed = useLevelFeed(api, a ? [name] : [])
   const [tab, setTab] = useState<Tab | null>(first)
   // Read again after ⌘Z, which may bring a filter back.
-  const filters = useResource(() => api.filters(name), [api, name, undone])
+  const fapi = useFilterApi(name)
+  const filters = useResource(() => fapi.filters(name), [fapi, name, undone])
   const panel = useRef<HTMLElement>(null)
   // A click anywhere outside closes it (owner, 28 Oct): what's in it is applied as it's
   // changed, so nothing is lost. Not for what it opened over the page (a list, a menu, a
@@ -820,7 +822,9 @@ function Filters({
   /** Opened from a "Filters" menu item: shown in view. */
   reveal: boolean
 }) {
-  const { api, kinds, items } = useDesk()
+  const { api: engine, kinds, items, refresh, scene } = useDesk()
+  const api = useFilterApi(name)
+  const item = useItemOf(name)
   // The result is taken again after any change: a filter's settings (each one reads the
   // scene's items again once applied), its switch, order, adding or removing.
   const [changed, setChanged] = useState(0)
@@ -854,6 +858,14 @@ function Filters({
     const ok = await run(key, () => done(f()))
     if (ok) list.reload()
     return ok
+  }
+  // Picture filters of this item alone ("This picture only") or the source's, in every scene.
+  const own = !!item?.own_filters
+  const setScope = (to: boolean) => {
+    if (!item) return
+    void act('scope', () => engine.setItemFilterScope(scene, item.id, to)).then(
+      (ok) => ok && refresh(),
+    )
   }
   // Instant optimistic enable/disable for a filter (no full filter-list reload); a per-(source,
   // filter) counter prevents a stale failure from reverting a newer click or another source's list.
@@ -987,6 +999,28 @@ function Filters({
             <Plus size={13} weight="bold" /> Add a filter
           </Button>
         </Band>
+        {picture && item && !item.group && (
+          <div
+            data-testid="filter-scope"
+            className="flex items-center gap-1.5 border-b border-line px-3 py-2"
+          >
+            <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text">
+              {own ? 'This picture only' : 'Everywhere this source is used'}
+            </span>
+            <InfoTip label="About these filters">
+              A picture can keep its own copy of the picture filters, so it looks different in
+              Vertical or another scene. Shared filters change every scene that shows this source.
+              Sound filters are always shared. Switching back drops the copy (Undo brings it back).
+            </InfoTip>
+            <Switch
+              label="This picture only"
+              hideLabel
+              checked={own}
+              disabled={busy !== null}
+              onChange={setScope}
+            />
+          </div>
+        )}
         {list.error && !list.data ? (
           <div className="p-3">
             <LoadError error={list.error} onRetry={list.reload} />
@@ -1117,7 +1151,7 @@ function Filters({
                         disabled={busy !== null}
                         onClick={() =>
                           void act('reset', async () => {
-                            const d = await readDefaults(api, f.kind)
+                            const d = await readDefaults(engine, f.kind)
                             await api.updateFilter(name, f.name, d)
                             setFresh((n) => n + 1)
                           })
@@ -1649,7 +1683,8 @@ function FilterSettings({
   kind: string
   more: boolean
 }) {
-  const { api, refresh, undone } = useDesk()
+  const { refresh, undone } = useDesk()
+  const api = useFilterApi(source)
   // Read again after ⌘Z, which may have put its values back.
   const loaded = useResource(
     () => Promise.all([api.filterOptions(source, filter), api.filterSettings(source, filter)]),

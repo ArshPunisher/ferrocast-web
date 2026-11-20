@@ -217,6 +217,11 @@ export interface EngineItem {
   /** It makes sound (shows in the mixer). */
   audio: boolean
   group: boolean
+  /**
+   * It has its own picture filters ("This picture only"), not the source's ("Everywhere this
+   * source is used"). Older engines send none: shared.
+   */
+  own_filters?: boolean
   /** How it mixes with what's under it. */
   blend: EngineBlend
   /** How it's scaled. */
@@ -423,6 +428,8 @@ export interface EngineFilter {
   name: string
   kind: string
   enabled: boolean
+  /** On an item's list: `item` for this picture's own, `source` for the source's (sound ones). */
+  scope?: 'item' | 'source'
 }
 
 export type EngineFilterEdit = 'enable' | 'disable' | 'up' | 'down' | 'top' | 'bottom'
@@ -895,6 +902,9 @@ export interface StudioGuests {
   guests: StudioGuest[]
 }
 
+const itemRoute = (scene: string, id: number) =>
+  `/api/v1/studio/engine/scenes/${encodeURIComponent(scene)}/items/${id}`
+
 export function studioEngineApi(c: FerroClient) {
   const enc = encodeURIComponent
   return {
@@ -1003,6 +1013,41 @@ export function studioEngineApi(c: FerroClient) {
         `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/settings`,
         { settings },
       ),
+    /**
+     * One scene item's filters, as `filters` lists a source's. With the item's own filters
+     * (`own_filters`) its picture filters are its own; sound filters stay on the source.
+     */
+    itemFilters: (scene: string, id: number) =>
+      c.request<EngineFilter[]>('GET', `${itemRoute(scene, id)}/filters`),
+    addItemFilter: (scene: string, id: number, filter: NewEngineSource) =>
+      c.request<void>('POST', `${itemRoute(scene, id)}/filters`, filter),
+    removeItemFilter: (scene: string, id: number, filter: string) =>
+      c.request<void>('DELETE', `${itemRoute(scene, id)}/filters/${enc(filter)}`),
+    editItemFilter: (scene: string, id: number, filter: string, what: EngineFilterEdit) =>
+      c.request<void>('POST', `${itemRoute(scene, id)}/filters/${enc(filter)}/edit`, { do: what }),
+    itemFilterSettings: (scene: string, id: number, filter: string) =>
+      c.request<EngineSettings>('GET', `${itemRoute(scene, id)}/filters/${enc(filter)}/settings`),
+    itemFilterOptions: (scene: string, id: number, filter: string) =>
+      c.request<EngineOption[]>('GET', `${itemRoute(scene, id)}/filters/${enc(filter)}/options`),
+    updateItemFilter: (scene: string, id: number, filter: string, settings: EngineSettings) =>
+      c.request<void>('PUT', `${itemRoute(scene, id)}/filters/${enc(filter)}/settings`, {
+        settings,
+      }),
+    /**
+     * Gives the item its own copy of the source's picture filters (`own`: "This picture only"),
+     * or takes it back to the source's ("Everywhere this source is used"). One undo step.
+     */
+    setItemFilterScope: (scene: string, id: number, own: boolean) =>
+      c.request<EngineItem>('PUT', `${itemRoute(scene, id)}/filters/scope`, { own }),
+    /** A picture with the item's own filters (as `sourcePicture` with `filters`). */
+    itemPicture: (scene: string, id: number, w = 480, filters = true) =>
+      c.request<{ image: string | null; width?: number; height?: number }>(
+        'GET',
+        `${itemRoute(scene, id)}/picture?w=${w}&filters=${filters}`,
+      ),
+    /** Copies every filter of `from` onto this item's own (or shared) filters. */
+    pasteItemFilters: (scene: string, id: number, from: string) =>
+      c.request<void>('POST', `${itemRoute(scene, id)}/paste-filters`, { from }),
     /** A global sound device heard in every scene: 1, 2 desktop sound; 3 to 6 mics. */
     /** A scene's own transition, or null to use the Studio's. */
     setSceneTransition: (scene: string, transition: EngineTransition | null) =>

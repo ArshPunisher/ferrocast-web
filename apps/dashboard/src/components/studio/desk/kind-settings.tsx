@@ -4,6 +4,7 @@
 // a file row and a player for videos, key layouts drawn as keys. Every option the engine
 // describes still shows: what a layout doesn't name goes under More.
 
+import { useFilterApi } from './item-filters'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Camera,
@@ -1030,6 +1031,7 @@ export function SourcePreview({
   filters?: boolean
 }) {
   const api = useEngine()
+  const fapi = useFilterApi(name)
   // The still is the source's own picture; a flip (Mirror) is the scene's, shown here too.
   const { items } = useDesk()
   const frame = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)?.frame
@@ -1049,8 +1051,8 @@ export function SourcePreview({
       if (alive && ++tries < 4) t = setTimeout(read, 1000)
     }
     const read = () =>
-      void api
-        .sourcePicture(name, 640, filters)
+      void fapi
+        .picture(name, 640, filters)
         .then(async (r) => {
           if (!alive) return
           setPic(r)
@@ -1065,7 +1067,7 @@ export function SourcePreview({
       alive = false
       clearTimeout(t)
     }
-  }, [api, name, rev, again, filters])
+  }, [fapi, name, rev, again, filters])
   const hold = (on: boolean) => {
     setBefore(on)
     if (on)
