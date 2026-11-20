@@ -1227,10 +1227,110 @@ for (const k of ['color_filter', 'chroma_key_filter', 'color_key_filter', 'sharp
   if (s) SIMPLE[`${k}_v2`] = s
 }
 
+/** OBS expander-filter.c preset curves: switching presets applies its ratio and release time. */
+export const EXPANDER_PRESETS = {
+  expander: { ratio: 2, release_time: 50 },
+  gate: { ratio: 10, release_time: 125 },
+} as const
+
+/** Expander: Preset (Expander/Gate), threshold, ratio and RMS/Peak detector first; timings under More. */
+function ExpanderForm({ opts, values, onChange, more }: FormIn & { more: boolean }) {
+  const filled: EngineSettings = {
+    presets: 'expander',
+    threshold: -40,
+    ratio: 2,
+    attack_time: 10,
+    release_time: 50,
+    output_gain: 0,
+    detector: 'RMS',
+    ...values,
+  }
+  const handleChange: Change = (key, value) => {
+    onChange(key, value)
+    if (key === 'presets' && (value === 'expander' || value === 'gate')) {
+      const curve = EXPANDER_PRESETS[value]
+      onChange('ratio', curve.ratio)
+      onChange('release_time', curve.release_time)
+    }
+  }
+  return (
+    <MainAndMore
+      opts={opts}
+      values={filled}
+      onChange={handleChange}
+      more={more}
+      main={[
+        {
+          key: 'presets',
+          label: 'Preset',
+          help: 'Expander lowers quiet sound gently (2:1). Gate cuts it harder (10:1).',
+        },
+        {
+          key: 'threshold',
+          label: 'Starts below',
+          help: 'Sounds quieter than this get lowered.',
+        },
+        { key: 'ratio', label: 'Amount' },
+        {
+          key: 'detector',
+          label: 'Detection',
+          help: 'RMS follows average loudness (smoother). Peak catches fast clicks and hits.',
+        },
+      ]}
+      rename={[
+        { key: 'attack_time', label: 'Attack' },
+        { key: 'release_time', label: 'Release' },
+        { key: 'output_gain', label: 'Boost after' },
+      ]}
+    />
+  )
+}
+
+/** Upward compressor: threshold, amount and soft knee first; timings and boost under More. */
+function UpwardCompressorForm({ opts, values, onChange, more }: FormIn & { more: boolean }) {
+  const filled: EngineSettings = {
+    threshold: -20,
+    ratio: 0.5,
+    attack_time: 10,
+    release_time: 50,
+    output_gain: 0,
+    knee_width: 10,
+    ...values,
+  }
+  return (
+    <MainAndMore
+      opts={opts}
+      values={filled}
+      onChange={onChange}
+      more={more}
+      main={[
+        {
+          key: 'threshold',
+          label: 'Below',
+          help: 'Sounds quieter than this get lifted.',
+        },
+        { key: 'ratio', label: 'Amount' },
+        {
+          key: 'knee_width',
+          label: 'Soft knee',
+          help: 'How smoothly the lift fades in near the threshold (0 dB is sharp).',
+        },
+      ]}
+      rename={[
+        { key: 'attack_time', label: 'Attack' },
+        { key: 'release_time', label: 'Release' },
+        { key: 'output_gain', label: 'Boost after' },
+      ]}
+    />
+  )
+}
+
 /** Whether `kind`'s form keeps settings behind its header's More button. */
 export function hasMore(kind: string): boolean {
   return (
     kind === 'noise_gate_filter' ||
+    kind === 'expander_filter' ||
+    kind === 'upward_compressor_filter' ||
     (Object.hasOwn(SIMPLE, kind) && kind !== 'sharpness_filter' && kind !== 'sharpness_filter_v2')
   )
 }
@@ -1249,6 +1349,10 @@ export function FilterForm({
     return <CropForm source={source} opts={opts} values={values} onChange={onChange} />
   if (kind === 'noise_gate_filter')
     return <GateForm source={source} opts={opts} values={values} onChange={onChange} more={more} />
+  if (kind === 'expander_filter')
+    return <ExpanderForm opts={opts} values={values} onChange={onChange} more={more} />
+  if (kind === 'upward_compressor_filter')
+    return <UpwardCompressorForm opts={opts} values={values} onChange={onChange} more={more} />
   if (/^(chroma|color)_key_filter(_v2)?$/.test(kind))
     return (
       <KeyForm

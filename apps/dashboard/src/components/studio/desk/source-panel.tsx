@@ -832,7 +832,7 @@ function Filters({
   const [more, setMore] = useState(false)
   const section = useRef<HTMLElement>(null)
   useEffect(() => {
-    if (reveal) section.current?.scrollIntoView({ block: 'start' })
+    if (reveal) section.current?.scrollIntoView?.({ block: 'start' })
   }, [reveal])
   const have = new Set(kinds.data?.filters.map((k) => k.id))
   const curated = FILTERS.filter((f) => (f.audio ? sound : picture))
@@ -848,6 +848,30 @@ function Filters({
     const ok = await run(key, () => done(f()))
     if (ok) list.reload()
     return ok
+  }
+  // Instant optimistic enable/disable for a filter (no full filter-list reload); a per-(source,
+  // filter) counter prevents a stale failure from reverting a newer click or another source's list.
+  const sourceRef = useRef(name)
+  sourceRef.current = name
+  const toggleSeq = useRef(new Map<string, number>())
+  const toggleFilter = (filterName: string, on: boolean) => {
+    const targetSource = name
+    const key = `${targetSource}\0${filterName}`
+    const seq = (toggleSeq.current.get(key) ?? 0) + 1
+    toggleSeq.current.set(key, seq)
+    list.set((prev) => (prev ?? []).map((x) => (x.name === filterName ? { ...x, enabled: on } : x)))
+    void api
+      .editFilter(targetSource, filterName, on ? 'enable' : 'disable')
+      .catch((err: unknown) => {
+        if (toggleSeq.current.get(key) !== seq) return
+        if (sourceRef.current === targetSource) {
+          list.set((prev) =>
+            (prev ?? []).map((x) => (x.name === filterName ? { ...x, enabled: !on } : x)),
+          )
+        }
+        const d = describeError(err)
+        toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+      })
   }
   const add = async (kind: string, label: string) => {
     let n = label
@@ -1126,11 +1150,7 @@ function Filters({
                       label={`${f.name} on`}
                       hideLabel
                       checked={f.enabled}
-                      onChange={(on) =>
-                        void act('on', () =>
-                          api.editFilter(name, f.name, on ? 'enable' : 'disable'),
-                        )
-                      }
+                      onChange={(on) => toggleFilter(f.name, on)}
                     />
                   </div>
                   {open === f.name && !NO_FORM.has(f.kind) && (

@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest'
-import { createElement } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { type EngineOption } from '@ferrocast/api'
 import {
   CaptureForm,
+  FilterForm,
   chromaFromGrey,
   clampEdges,
   colourAt,
   edgesOf,
+  hasMore,
   safeSimilarity,
   startingSimilarity,
 } from './filter-forms'
@@ -286,5 +289,205 @@ describe('a file size as people read it', () => {
     expect(bytes(512)).toBe('512 B')
     expect(bytes(48_200_000)).toBe('48 MB')
     expect(bytes(1_234_000_000)).toBe('1.2 GB')
+  })
+})
+
+describe('expander presets/detector and upward compressor knee controls', () => {
+  let root: Root | null = null
+  afterEach(async () => {
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+  })
+
+  const expanderOpts: EngineOption[] = [
+    opt({
+      key: 'presets',
+      label: 'Preset',
+      kind: 'list',
+      choices: ['Expander', 'Gate'],
+      values: ['expander', 'gate'],
+    }),
+    opt({
+      key: 'ratio',
+      label: 'Ratio',
+      kind: 'float',
+      min: 1,
+      max: 20,
+      step: 0.1,
+      slider: true,
+      suffix: ':1',
+    }),
+    opt({
+      key: 'threshold',
+      label: 'Threshold',
+      kind: 'float',
+      min: -60,
+      max: 0,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+    }),
+    opt({ key: 'attack_time', label: 'Attack', kind: 'int', min: 1, max: 100, suffix: ' ms' }),
+    opt({ key: 'release_time', label: 'Release', kind: 'int', min: 1, max: 1000, suffix: ' ms' }),
+    opt({
+      key: 'output_gain',
+      label: 'Volume after',
+      kind: 'float',
+      min: -32,
+      max: 32,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+    }),
+    opt({
+      key: 'detector',
+      label: 'Detection',
+      kind: 'list',
+      choices: ['RMS', 'Peak'],
+      values: ['RMS', 'peak'],
+    }),
+  ]
+
+  const upwardOpts: EngineOption[] = [
+    opt({
+      key: 'ratio',
+      label: 'Ratio',
+      kind: 'float',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      slider: true,
+      suffix: ':1',
+    }),
+    opt({
+      key: 'threshold',
+      label: 'Threshold',
+      kind: 'float',
+      min: -60,
+      max: 0,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+    }),
+    opt({ key: 'attack_time', label: 'Attack', kind: 'int', min: 1, max: 100, suffix: ' ms' }),
+    opt({ key: 'release_time', label: 'Release', kind: 'int', min: 1, max: 1000, suffix: ' ms' }),
+    opt({
+      key: 'output_gain',
+      label: 'Volume after',
+      kind: 'float',
+      min: -32,
+      max: 32,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+    }),
+    opt({
+      key: 'knee_width',
+      label: 'Knee width',
+      kind: 'float',
+      min: 0,
+      max: 20,
+      step: 0.5,
+      slider: true,
+      suffix: ' dB',
+    }),
+  ]
+
+  it('shows expander Preset and Detection immediately, applies OBS Gate curve, and matches detector case-insensitively', async () => {
+    expect(hasMore('expander_filter')).toBe(true)
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const changes: [string, unknown][] = []
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <RowLook.Provider value="inset">
+          <FilterForm
+            kind="expander_filter"
+            source="Mic"
+            opts={expanderOpts}
+            values={{ detector: 'rms' }}
+            onChange={(k, v) => changes.push([k, v])}
+          />
+        </RowLook.Provider>,
+      ),
+    )
+
+    // Preset and Detection render as segmented radiogroups with defaults/case-insensitive match.
+    const expRadio = host.querySelector(
+      '[role="radiogroup"][aria-label="Preset"] button[role="radio"][title="Expander"]',
+    ) as HTMLButtonElement
+    const gateRadio = host.querySelector(
+      '[role="radiogroup"][aria-label="Preset"] button[role="radio"][title="Gate"]',
+    ) as HTMLButtonElement
+    const rmsRadio = host.querySelector(
+      '[role="radiogroup"][aria-label="Detection"] button[role="radio"][title="RMS"]',
+    ) as HTMLButtonElement
+    const peakRadio = host.querySelector(
+      '[role="radiogroup"][aria-label="Detection"] button[role="radio"][title="Peak"]',
+    ) as HTMLButtonElement
+    expect(expRadio.getAttribute('aria-checked')).toBe('true')
+    expect(rmsRadio.getAttribute('aria-checked')).toBe('true')
+    // Timings stay hidden until More is opened.
+    expect(host.textContent).not.toContain('Attack')
+
+    await act(async () => gateRadio.click())
+    expect(changes).toEqual([
+      ['presets', 'gate'],
+      ['ratio', 10],
+      ['release_time', 125],
+    ])
+
+    changes.length = 0
+    await act(async () => peakRadio.click())
+    expect(changes).toEqual([['detector', 'peak']])
+  })
+
+  it('shows upward compressor Soft knee immediately with 10 dB default and timings under More', async () => {
+    expect(hasMore('upward_compressor_filter')).toBe(true)
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const onChange = vi.fn()
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <RowLook.Provider value="inset">
+          <FilterForm
+            kind="upward_compressor_filter"
+            source="Mic"
+            opts={upwardOpts}
+            values={{}}
+            onChange={onChange}
+          />
+        </RowLook.Provider>,
+      ),
+    )
+
+    const kneeSlider = host.querySelector(
+      'input[type="range"][aria-label="Soft knee"]',
+    ) as HTMLInputElement
+    expect(kneeSlider).not.toBeNull()
+    expect(kneeSlider.value).toBe('10')
+    expect(host.textContent).not.toContain('Attack')
+
+    // With more=true, Attack/Release/Boost after appear.
+    await act(async () =>
+      root!.render(
+        <RowLook.Provider value="inset">
+          <FilterForm
+            kind="upward_compressor_filter"
+            source="Mic"
+            opts={upwardOpts}
+            values={{ knee_width: 6 }}
+            more
+            onChange={onChange}
+          />
+        </RowLook.Provider>,
+      ),
+    )
+    expect(host.textContent).toContain('Attack')
+    expect(host.textContent).toContain('Release')
+    expect(host.textContent).toContain('Boost after')
   })
 })

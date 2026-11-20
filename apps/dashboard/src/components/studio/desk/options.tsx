@@ -114,6 +114,7 @@ const CHANGING_LISTS = new Set([
 export function valueOf(o: EngineOption, values: Record<string, unknown>): unknown {
   const raw = values[o.key]
   if (raw !== undefined) return raw
+  if (o.default !== undefined) return o.default
   if (o.kind === 'int' || o.kind === 'float') return 0
   if (o.kind === 'bool') return false
   if (o.kind === 'list') return o.values.find((x) => x === 0 || x === '' || x === false)
@@ -424,7 +425,11 @@ function OptionField({
         />
       )
     case 'list': {
-      const at = o.values.findIndex((x) => x === v)
+      let at = o.values.findIndex((x) => x === v)
+      if (at < 0 && typeof v === 'string') {
+        const low = v.toLowerCase()
+        at = o.values.findIndex((x) => typeof x === 'string' && x.toLowerCase() === low)
+      }
       // A few short choices: a segmented choice on its line, as in the design (Count: For a
       // set time / Until a time).
       // Not for what's open or plugged in (apps, windows, devices): those come and go, and the
