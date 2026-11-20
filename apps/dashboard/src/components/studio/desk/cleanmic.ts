@@ -4,10 +4,30 @@
 
 import type { NewEngineSource } from '@ferrocast/api'
 
-/** The chain, each with the kinds that already count as it (OBS's older noise filter too). */
+/** Where a voice's loudest moments should sit after the mic level step (dB below full scale). */
+export const VOICE_TARGET_DB = -12
+
+/** The most the mic level step ever adds (OBS's Gain filter goes to +30 dB). */
+export const MAX_MIC_GAIN_DB = 30
+
+export const MIC_LEVEL_FILTER = 'Raise a quiet mic'
+
+/**
+ * The chain, each with the kinds that already count as it (OBS's older noise filter too).
+ * The numbers are measured (S31/S32, 20 Nov, a voice captured from a mic through each chain): at a
+ * normal level the old 4:1 from -20 dB with +2 dB never touched speech (-19.7 LUFS); 3:1 from -26
+ * dB with +9 dB gives -16.3 LUFS and -2.4 dBFS in the file. The noise step stays as it was: at
+ * strength 40 (what it means) it took 14 dB off a fan, 25 only 10 dB, and neither cost normal
+ * speech more than the other; a noise gate after it cut soft words completely.
+ */
 export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
   {
-    as: ['noise_suppress_filter_v2', 'noise_suppress_filter', 'noise_gate_filter'],
+    as: [
+      'noise_suppress_filter_v2',
+      'noise_suppress_filter',
+      'noise_gate_filter',
+      'ferrocast_deepfilter',
+    ],
     add: {
       kind: 'noise_suppress_filter_v2',
       name: 'Remove background noise',
@@ -19,8 +39,9 @@ export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
     add: {
       kind: 'compressor_filter',
       name: 'Even out loud moments',
-      // A voice's usual: 4:1 from -20 dB, quick to catch a shout, back up for the next word.
-      settings: { ratio: 4, threshold: -20, attack_time: 6, release_time: 60, output_gain: 2 },
+      // 3:1 from -26 dB (it acts on speech at a normal level), quick to catch a shout, 150 ms
+      // back up for the next word, and +9 dB to bring the evened voice to about -16 LUFS.
+      settings: { ratio: 3, threshold: -26, attack_time: 8, release_time: 150, output_gain: 9 },
     },
   },
   {
@@ -28,14 +49,41 @@ export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
     add: {
       kind: 'limiter_filter',
       name: 'Stop clipping',
+      // -3 dB, not higher: the recording's AAC overshot a -1.5 dB ceiling by 2.9 dB.
       settings: { threshold: -3, release_time: 60 },
     },
   },
 ]
 
+/** The median of a voice's peaks while it talked (dB), or null until there's been enough talking. */
+export function voiceMedianPeak(peaks: readonly number[]): number | null {
+  const talk = peaks.filter((p) => Number.isFinite(p) && p > TALKING_DB).sort((a, b) => a - b)
+  if (talk.length < 10) return null
+  return talk[Math.floor(talk.length / 2)] ?? null
+}
+
+/**
+ * How many dB the mic level step adds so the voice's usual peak sits at -12 dB: nothing when it
+ * already does or is louder, at most +30. Null until there's been enough talking to tell.
+ */
+export function micGainDb(peaks: readonly number[]): number | null {
+  const median = voiceMedianPeak(peaks)
+  if (median === null) return null
+  return Math.round(Math.min(MAX_MIC_GAIN_DB, Math.max(0, VOICE_TARGET_DB - median)))
+}
+
 /** The filters still to add, in order (the ones it has already stay as they are). */
-export function cleanMicPlan(has: readonly string[]): NewEngineSource[] {
-  return CLEAN_MIC.filter((c) => !c.as.some((k) => has.includes(k))).map((c) => c.add)
+export function cleanMicPlan(
+  has: readonly string[],
+  opts: { gainDb?: number | null } = {},
+): NewEngineSource[] {
+  const plan = CLEAN_MIC.filter((c) => !c.as.some((k) => has.includes(k))).map((c) => c.add)
+  const gain = opts.gainDb ?? 0
+  if (gain >= 1 && !has.includes('gain_filter')) {
+    // First in the chain (the caller moves it to the top): the level the rest works on.
+    plan.unshift({ kind: 'gain_filter', name: MIC_LEVEL_FILTER, settings: { db: gain } })
+  }
+  return plan
 }
 
 /** A name that isn't taken yet ("Stop clipping 2"). */

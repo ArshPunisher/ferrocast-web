@@ -64,7 +64,10 @@ import {
   VERDICT_WORDS,
   VOICE_FILTER,
   VOICE_STYLES,
+  MIC_LEVEL_FILTER,
   cleanMicPlan,
+  micGainDb,
+  voiceMedianPeak,
   duckFilter,
   duckMic,
   freeName,
@@ -1462,8 +1465,16 @@ function CleanMic({
     if (peaks.current.length > 100) peaks.current.shift()
   }, [level])
   const verdict = voiceVerdict(peaks.current)
+  const median = voiceMedianPeak(peaks.current)
+  const gainDb = micGainDb(peaks.current)
   const have = list.data ?? null
-  const plan = have ? cleanMicPlan(have.map((f) => f.kind)) : []
+  const plan = have
+    ? cleanMicPlan(
+        have.map((f) => f.kind),
+        { gainDb },
+      )
+    : []
+  const gainStep = plan.find((f) => f.kind === 'gain_filter')
   const clean = async () => {
     const taken = (have ?? []).map((f) => f.name)
     const ok = await run('clean', async () => {
@@ -1472,6 +1483,8 @@ function CleanMic({
         const n = freeName(f.name, taken)
         taken.push(n)
         await api.addFilter(name, { ...f, name: n })
+        // The level goes first: every other step works on the raised voice.
+        if (f.kind === 'gain_filter') await api.editFilter(name, n, 'top')
       }
       return true
     })
@@ -1489,6 +1502,19 @@ function CleanMic({
         aria-live="polite"
       >
         {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
+        {gainStep && median !== null && (
+          <>
+            {' '}
+            <span className="font-normal text-text-2">
+              Cleaning up will also raise it by {gainDb} dB.
+            </span>
+            <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
+              Your voice peaks around {Math.round(median)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
+              step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
+              something to work on. Change it in Filters.
+            </InfoTip>
+          </>
+        )}
       </span>
       {!have ? null : plan.length > 0 ? (
         <Button size="sm" variant="secondary" busy={busy === 'clean'} onClick={() => void clean()}>
