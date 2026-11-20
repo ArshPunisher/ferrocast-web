@@ -76,6 +76,7 @@ import {
   type VoiceStyle,
 } from './cleanmic'
 import { Meter, useLevels } from './mixer'
+import { useLevelFeed } from './meter-feed'
 import { RowLook } from './options'
 import { Band, Pad, PositionTab, Prop, SoundRows } from './drawer-kit'
 import { KindSettings, SourcePreview } from './kind-settings'
@@ -198,6 +199,7 @@ function Panel({
   const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
   const kind = a?.kind ?? item?.kind ?? ''
   const levels = useLevels(api, a ? [name] : [])
+  const feed = useLevelFeed(api, a ? [name] : [])
   const [tab, setTab] = useState<Tab | null>(first)
   // Read again after ⌘Z, which may bring a filter back.
   const filters = useResource(() => api.filters(name), [api, name, undone])
@@ -389,7 +391,8 @@ function Panel({
                 <Meter
                   tall
                   scale
-                  level={levels[name]}
+                  feed={feed}
+                  feedName={name}
                   muted={a.muted}
                   volumeDb={a.volume_db}
                   label={`${name} volume`}

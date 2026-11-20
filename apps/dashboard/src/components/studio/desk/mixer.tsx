@@ -31,6 +31,15 @@ import { KindTile, useDesk, type EngineApi } from './common'
 import { DockHeader } from './layout'
 import { filterItems, useContextMenu, type MenuItem } from './menu'
 import { AdvancedAudio } from './advanced-audio'
+import {
+  FLOOR,
+  initialMeter,
+  onFrame,
+  stepMeter,
+  useLatest,
+  useLevelFeed,
+  type LevelFeed,
+} from './meter-feed'
 
 /** The fader is cubic like OBS's: halfway is about -18 dB, the top is 0 dB. */
 export const toDb = (pos: number): number =>
@@ -69,49 +78,32 @@ function levelsSame(a: Record<string, EngineLevel>, b: Record<string, EngineLeve
   return true
 }
 
-/** Live levels for these sounds while shown; pauses off-tab and ignores sub-0.5 dB noise ticks. */
+/** Live levels as React state, for panels that read numbers (a gate's line, the ready check):
+ * only a change of 0.5 dB or more re-renders, and no faster than 150 ms apart. The meters
+ * themselves use `useLevelFeed` and never re-render. */
 export function useLevels(api: EngineApi, names: string[]): Record<string, EngineLevel> {
   const [levels, setLevels] = useState<Record<string, EngineLevel>>({})
+  const feed = useLevelFeed(api, names)
   const key = names.join('\n')
-  const prevRef = useRef<Record<string, EngineLevel>>({})
   useEffect(() => {
     if (!key) return
-    let alive = true
-    let timer = 0
-    let busy = false
     const list = key.split('\n')
-    const scheduleNext = () => {
-      if (!alive || document.hidden) return
-      timer = window.setTimeout(() => void tick(), 150)
-    }
-    const tick = async () => {
-      if (!alive || document.hidden || busy) return
-      busy = true
-      try {
-        const v = await api.levels(list)
-        if (alive && !levelsSame(prevRef.current, v)) {
-          prevRef.current = v
-          setLevels(v)
-        }
-      } catch {
-        // Stopped or busy: the next tick tries again.
-      } finally {
-        busy = false
-        scheduleNext()
+    let prev: Record<string, EngineLevel> = {}
+    let lastAt = 0
+    return feed.subscribe(() => {
+      const now = performance.now()
+      if (now - lastAt < 150) return
+      const v: Record<string, EngineLevel> = {}
+      for (const n of list) {
+        const l = feed.get(n)
+        if (l) v[n] = l
       }
-    }
-    const onVisible = () => {
-      clearTimeout(timer)
-      if (!document.hidden && alive) void tick()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    if (!document.hidden) void tick()
-    return () => {
-      alive = false
-      clearTimeout(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [api, key])
+      if (levelsSame(prev, v)) return
+      lastAt = now
+      prev = v
+      setLevels(v)
+    })
+  }, [feed, key])
   return levels
 }
 
@@ -123,39 +115,6 @@ export type Decay = keyof typeof DECAY
 export function decayed(prev: number, next: number, rate: number, dtMs: number): number {
   if (next >= prev) return next
   return Math.max(next, prev - (rate * dtMs) / 1000)
-}
-
-/** The peaks shown, falling at `rate` (OBS's decay; fast is close to raw). */
-function useDecayed(peaks: number[], rate: number): number[] {
-  const s = useRef<{ v: number[]; at: number }>({ v: [-100, -100], at: Date.now() })
-  const now = Date.now()
-  const dt = now - s.current.at
-  s.current = { v: peaks.map((p, i) => decayed(s.current.v[i] ?? -100, p, rate, dt)), at: now }
-  return s.current.v
-}
-
-/** The highest recent peak per side (held 1.5 s, then falling), and a clip light that stays
- * on 2 s after a peak at 0 dB. */
-function useHold(level: EngineLevel | undefined): { hold: number[]; clip: boolean } {
-  const h = useRef<{ v: number[]; at: number[]; clip: number }>({
-    v: [-100, -100],
-    at: [0, 0],
-    clip: 0,
-  })
-  const now = Date.now()
-  const peaks = level?.peak ?? [-100, -100]
-  peaks.forEach((p, i) => {
-    const s = h.current
-    const held = s.v[i] ?? -100
-    if (p >= held) {
-      s.v[i] = p
-      s.at[i] = now
-    } else if (now - (s.at[i] ?? 0) > 1500) {
-      s.v[i] = Math.max(p, held - 2)
-    }
-    if (p >= -0.5) s.clip = now
-  })
-  return { hold: [...h.current.v], clip: now - h.current.clip < 2000 }
 }
 
 /** The fader's handle across (or up), pixels: w-3 / h-3. */
@@ -263,6 +222,8 @@ function Fader({
  * marks. Used by the mixer and a source's own panel. */
 export function Meter({
   level,
+  feed,
+  feedName,
   muted,
   volumeDb,
   label,
@@ -273,7 +234,11 @@ export function Meter({
   scale,
   decay = DECAY.fast,
 }: {
-  level: EngineLevel | undefined
+  /** A level to show as it is (the live way is `feed` + `feedName`). */
+  level?: EngineLevel | undefined
+  /** Live levels drawn every animation frame, with no React render per tick. */
+  feed?: LevelFeed
+  feedName?: string
   muted: boolean
   volumeDb: number
   label: string
@@ -288,8 +253,48 @@ export function Meter({
   const [pos, setPos] = useState<number | null>(null)
   const shown = pos ?? toPos(volumeDb)
   const last = useRef(0)
-  const peaks = useDecayed(level?.peak ?? [-100, -100], decay)
-  const { hold, clip } = useHold(level)
+  const covers = useRef<(HTMLDivElement | null)[]>([])
+  const holds = useRef<(HTMLDivElement | null)[]>([])
+  const light = useRef<HTMLSpanElement | null>(null)
+  const input = useLatest({ level, feed, feedName, decay, vertical: !!vertical })
+  useEffect(() => {
+    const st = [initialMeter(), initialMeter()]
+    const shown: string[] = ['', '', '', '']
+    let last = performance.now()
+    let clipAt = -1e9
+    let clipOn = false
+    return onFrame((now) => {
+      const t = input.current
+      const lv = t.feed && t.feedName !== undefined ? t.feed.get(t.feedName) : t.level
+      const dt = now - last
+      last = now
+      for (let i = 0; i < 2; i++) {
+        const peak = lv?.peak[i] ?? FLOOR
+        const s = (st[i] = stepMeter(st[i]!, peak, dt, now, t.decay, DECAY.fast))
+        if (peak >= -0.5) clipAt = now
+        const pct = meterPct(s.level)
+        const held = meterPct(s.hold)
+        const cover = t.vertical ? `translate3d(0, ${-pct}%, 0)` : `translate3d(${pct}%, 0, 0)`
+        const tick = t.vertical
+          ? `translate3d(0, ${100 - held}%, 0)`
+          : `translate3d(${held - 100}%, 0, 0)`
+        const c = covers.current[i]
+        if (c && shown[i * 2] !== cover) c.style.transform = shown[i * 2] = cover
+        const h = holds.current[i]
+        if (h && shown[i * 2 + 1] !== tick) {
+          shown[i * 2 + 1] = tick
+          h.style.transform = tick
+          h.style.display = held > 0 ? '' : 'none'
+        }
+      }
+      const clip = now - clipAt < 2000
+      if (clip !== clipOn && light.current) {
+        clipOn = clip
+        light.current.dataset.clip = String(clip)
+        light.current.title = clip ? 'Too loud: it clipped' : ''
+      }
+    })
+  }, [input])
   const move = (p: number, end: boolean) => {
     // Sent as it moves, at most every 80 ms; the last value always goes.
     const now = Date.now()
@@ -304,52 +309,46 @@ export function Meter({
       }
     }
   }
-  const bars = peaks.map((p, i) => {
-    const pct = meterPct(p)
-    const held = meterPct(hold[i] ?? -100)
-    return (
+  const bars = [0, 1].map((i) => (
+    <div
+      key={i}
+      className={cx(
+        'relative overflow-hidden rounded-full bg-inset',
+        vertical ? 'h-full w-[7px]' : tall ? 'h-[8px]' : 'h-[6px]',
+      )}
+      style={{ ['--dir' as string]: vertical ? '0deg' : '90deg' }}
+    >
+      {/* GPU-composited meter: the gradient sits static; the cover and the peak tick are moved
+          every animation frame by direct style writes (no React render, no layout). */}
       <div
-        key={i}
-        className={cx(
-          'relative overflow-hidden rounded-full bg-inset',
-          vertical ? 'h-full w-[7px]' : tall ? 'h-[8px]' : 'h-[6px]',
-        )}
-        style={{ ['--dir' as string]: vertical ? '0deg' : '90deg' }}
+        aria-hidden
+        className={cx('absolute inset-0', muted && 'opacity-40 grayscale')}
+        style={{ background: ZONES }}
+      />
+      <div
+        aria-hidden
+        ref={(el) => {
+          covers.current[i] = el
+        }}
+        className="pointer-events-none absolute inset-0 bg-inset/80 will-change-transform"
+      />
+      <div
+        aria-hidden
+        ref={(el) => {
+          holds.current[i] = el
+        }}
+        className="pointer-events-none absolute inset-0 will-change-transform"
+        style={{ display: 'none' }}
       >
-        {/* GPU-composited meter: gradient sits static, cover mask translates on compositor (0 layouts). */}
-        <div
-          aria-hidden
-          className={cx('absolute inset-0', muted && 'opacity-40 grayscale')}
-          style={{ background: ZONES }}
+        <span
+          className={cx(
+            'absolute bg-text',
+            vertical ? 'inset-x-0 top-0 h-[2px]' : 'inset-y-0 right-0 w-[2px]',
+          )}
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-inset/80 will-change-transform transition-transform duration-75 motion-reduce:transition-none"
-          style={{
-            transform: vertical ? `translate3d(0, ${-pct}%, 0)` : `translate3d(${pct}%, 0, 0)`,
-          }}
-        />
-        {held > 0 && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 will-change-transform"
-            style={{
-              transform: vertical
-                ? `translate3d(0, ${100 - held}%, 0)`
-                : `translate3d(${held - 100}%, 0, 0)`,
-            }}
-          >
-            <span
-              className={cx(
-                'absolute bg-text',
-                vertical ? 'inset-x-0 top-0 h-[2px]' : 'inset-y-0 right-0 w-[2px]',
-              )}
-            />
-          </div>
-        )}
       </div>
-    )
-  })
+    </div>
+  ))
   const marks = scale && (
     <div
       aria-hidden
@@ -376,20 +375,18 @@ export function Meter({
       ))}
     </div>
   )
-  const light = (
+  const clipLight = (
     <span
       aria-hidden
-      title={clip ? 'Too loud: it clipped' : undefined}
-      className={cx(
-        'size-2 shrink-0 rounded-full transition-colors',
-        clip ? 'bg-danger-fill shadow-[0_0_6px_var(--fc-danger)]' : 'bg-surface-3',
-      )}
+      ref={light}
+      data-clip="false"
+      className="size-2 shrink-0 rounded-full bg-surface-3 transition-colors data-[clip=true]:bg-danger-fill data-[clip=true]:shadow-[0_0_6px_var(--fc-danger)]"
     />
   )
   if (vertical)
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center gap-1.5">
-        {light}
+        {clipLight}
         <div className="flex min-h-0 flex-1 gap-1">
           {marks}
           <div className="relative flex h-full gap-[3px] px-1">
@@ -413,7 +410,7 @@ export function Meter({
           </div>
           <Fader pos={shown} onMove={move} label={label} disabled={locked} />
         </div>
-        {light}
+        {clipLight}
       </div>
       {marks && <div className="pr-3.5">{marks}</div>}
     </div>
@@ -472,7 +469,7 @@ const HEAR: { value: EngineMonitor; label: string }[] = [
 
 interface ChannelProps {
   a: EngineAudio
-  level: EngineLevel | undefined
+  feed: LevelFeed
   locked: boolean
   onAudio: (patch: AudioPatch) => void
   onMenu: (e: React.MouseEvent) => void
@@ -525,7 +522,7 @@ function HearButton({ a, onAudio }: Pick<ChannelProps, 'a' | 'onAudio'>) {
 const dbText = (a: EngineAudio) =>
   a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : `${a.volume_db.toFixed(1)} dB`
 
-function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
+function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
   return (
     <div
       onContextMenu={onMenu}
@@ -583,7 +580,8 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
         <MuteButton a={a} onAudio={onAudio} />
         <div className="min-w-0 flex-1 pt-0.5">
           <Meter
-            level={level}
+            feed={feed}
+            feedName={a.name}
             muted={a.muted}
             volumeDb={a.volume_db}
             label={`${a.name} volume`}
@@ -614,7 +612,7 @@ function Row({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
  * meter with its fader, mute and hear, and the name at the bottom (it opens the sound's menu).
  * The dB scale is printed once beside the strips (DeskScale), not on each.
  */
-function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
+function Strip({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
   return (
     <div
       onContextMenu={onMenu}
@@ -633,7 +631,8 @@ function Strip({ a, level, locked, onAudio, onMenu, decay }: ChannelProps) {
       </span>
       <Meter
         vertical
-        level={level}
+        feed={feed}
+        feedName={a.name}
         muted={a.muted}
         volumeDb={a.volume_db}
         label={`${a.name} volume`}
@@ -713,7 +712,7 @@ export function AudioDock() {
     (a) => !prefs.hidden.includes(a.name) && (!prefs.activeOnly || a.active !== false),
   )
   const hiddenHere = (list?.length ?? 0) - (shown?.length ?? 0)
-  const levels = useLevels(api, shown?.map((a) => a.name) ?? [])
+  const feed = useLevelFeed(api, shown?.map((a) => a.name) ?? [])
 
   const setAudio = (name: string, patch: AudioPatch) => {
     // Shown at once; the engine follows.
@@ -797,7 +796,7 @@ export function AudioDock() {
   }
   const props = (a: EngineAudio): ChannelProps => ({
     a,
-    level: levels[a.name],
+    feed,
     locked: prefs.locked.includes(a.name),
     onAudio: (p) => setAudio(a.name, p),
     onMenu: (e) => open(e, a.name, channelMenu(a)),
