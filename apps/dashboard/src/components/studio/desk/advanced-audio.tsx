@@ -8,6 +8,7 @@ import { Dialog, InfoTip, Input, Segmented, Select, Skeleton, Switch, cx } from 
 import { LoadError } from '../../Panel'
 import { useAction, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
+import { pretty } from './settings'
 
 const HEAR: { value: EngineMonitor; label: string }[] = [
   { value: 'off', label: 'Stream only' },
@@ -260,6 +261,73 @@ function SoundRow({
           })}
         </span>
       </div>
+      <PushRows a={a} onChange={onChange} />
     </div>
+  )
+}
+
+/** Push to talk and push to mute for a sound (OBS's per-source ones): on or off, the release delay,
+ *  and the key (set in Settings, Shortcuts). The details are behind (i). */
+function PushRows({ a, onChange }: { a: EngineAudio; onChange: (p: EngineAudioChange) => void }) {
+  const { prefs } = useDesk()
+  const keys = prefs.data?.hotkeys ?? {}
+  const row = (talk: boolean) => {
+    const on = !!(talk ? a.push_to_talk : a.push_to_mute)
+    const ms = (talk ? a.push_to_talk_ms : a.push_to_mute_ms) ?? 0
+    const label = talk ? 'Push to talk' : 'Push to mute'
+    const key = keys[`${talk ? 'push_to_talk' : 'push_to_mute'}:${a.name}`]
+    return (
+      <div
+        key={label}
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 lg:col-span-full lg:pl-1"
+      >
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-text">
+          <Switch
+            hideLabel
+            label={`${label} for ${a.name}`}
+            checked={on}
+            onChange={(v) => onChange(talk ? { push_to_talk: v } : { push_to_mute: v })}
+          />
+          {label}
+        </span>
+        <InfoTip label={`About ${label.toLowerCase()}`}>
+          {talk
+            ? 'The sound is muted unless its key is held, and stays heard for the delay after you let go (so the end of a word isn’t cut). Pick the key in Settings, Shortcuts.'
+            : 'The sound is muted while its key is held, and stays muted for the delay after you let go. Pick the key in Settings, Shortcuts.'}
+        </InfoTip>
+        {on && (
+          <>
+            <label className="flex items-center gap-1.5 text-[12.5px] text-text-3">
+              Delay
+              <Input
+                aria-label={`${label} delay for ${a.name}, ms`}
+                inputMode="numeric"
+                name={talk ? 'push_to_talk_ms' : 'push_to_mute_ms'}
+                autoComplete="off"
+                className="h-7! w-20 rounded-[5px]! px-2! text-right font-mono text-[12px]! tabular-nums"
+                defaultValue={String(ms)}
+                key={ms}
+                onBlur={(e) => {
+                  const v = Math.min(5000, Math.max(0, Math.round(Number(e.target.value))))
+                  if (Number.isFinite(v) && v !== ms)
+                    onChange(talk ? { push_to_talk_ms: v } : { push_to_mute_ms: v })
+                  else e.target.value = String(ms)
+                }}
+              />
+              ms
+            </label>
+            <span className="text-[12.5px] text-text-3">
+              {key ? `Key: ${pretty(key)}` : 'No key yet: set it in Settings, Shortcuts'}
+            </span>
+          </>
+        )}
+      </div>
+    )
+  }
+  return (
+    <>
+      {row(true)}
+      {row(false)}
+    </>
   )
 }
