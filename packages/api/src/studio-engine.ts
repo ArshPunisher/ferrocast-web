@@ -519,6 +519,8 @@ export interface StudioSettings {
   bframes: boolean
   /** Send at this size instead of the canvas's. */
   scale: [number, number] | null
+  /** How a stream sent at another size is scaled (bicubic when absent). */
+  scale_filter?: 'bilinear' | 'bicubic' | 'lanczos' | 'area'
   audio_kbps: number
   width: number
   height: number

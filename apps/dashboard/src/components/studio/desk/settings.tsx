@@ -661,8 +661,58 @@ export function StreamPage({ s, set }: PageProps) {
                     {w}×{h}
                   </option>
                 ))}
+              {/* A size typed below stays in the list. */}
+              {s.scale &&
+                !['1920x1080', '1600x900', '1280x720', '960x540', '852x480'].includes(
+                  s.scale.join('x'),
+                ) && (
+                  <option value={s.scale.join('x')}>
+                    {s.scale[0]}×{s.scale[1]} (custom)
+                  </option>
+                )}
             </Select>
           </Row>
+          {s.scale && (
+            <>
+              <Row label="Custom size" sub="Even numbers; the picture is scaled to fit">
+                <span className="flex items-center gap-2">
+                  <NumberBox
+                    label="Width"
+                    value={s.scale[0]}
+                    min={128}
+                    max={7680}
+                    unit=""
+                    onChange={(w) => set({ scale: [w & ~1, s.scale?.[1] ?? 720] })}
+                  />
+                  ×
+                  <NumberBox
+                    label="Height"
+                    value={s.scale[1]}
+                    min={72}
+                    max={4320}
+                    unit="px"
+                    onChange={(h) => set({ scale: [s.scale?.[0] ?? 1280, h & ~1] })}
+                  />
+                </span>
+              </Row>
+              <Row label="Scaling" sub="How the picture is made smaller. Bicubic suits most">
+                <Select
+                  aria-label="Scaling"
+                  value={s.scale_filter ?? 'bicubic'}
+                  onChange={(e) =>
+                    set({
+                      scale_filter: e.target.value as NonNullable<StudioSettings['scale_filter']>,
+                    })
+                  }
+                >
+                  <option value="bilinear">Bilinear (fastest)</option>
+                  <option value="bicubic">Bicubic</option>
+                  <option value="lanczos">Lanczos (sharpest)</option>
+                  <option value="area">Area</option>
+                </Select>
+              </Row>
+            </>
+          )}
           <Row label="Encoder" info="One you pick here wins over the choice above (HEVC, AV1…).">
             <EncoderSelect
               label="Encoder"
