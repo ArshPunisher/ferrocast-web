@@ -58,6 +58,7 @@ import { useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
+import { RemoteControlSection } from './remote-control'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
 import { inDesktopApp } from '../../../lib/external'
@@ -2301,6 +2302,7 @@ function AdvancedPage({ s, set }: PageProps) {
         </Row>
       </div>
       <LogDialog open={logOpen} onClose={() => setLogOpen(false)} />
+      <RemoteControlSection />
       <Heading>If the connection drops</Heading>
       <div className="flex flex-col">
         <Row label="Reconnect by itself">
