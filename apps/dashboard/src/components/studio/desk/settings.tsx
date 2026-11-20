@@ -441,7 +441,7 @@ function baseOptions(s: StudioSettings): Record<string, unknown> {
     rate_control: s.vbr ? 'VBR' : 'CBR',
     keyint_sec: s.keyframe_s,
     profile: s.profile,
-    bframes: s.bframes,
+    bframes: s.b_frames,
   }
 }
 
@@ -660,6 +660,17 @@ export function StreamPage({ s, set }: PageProps) {
               <option value="main">Main</option>
               <option value="baseline">Baseline</option>
             </Select>
+          </Row>
+          <Row
+            label="B-frames"
+            info="A cleaner picture for the same bitrate, as OBS has by default. Only the Mac's own encoder uses it (x264 and Windows encoders send none). Takes effect the next time you go live or record. Baseline profile has none. If a destination looks wrong, turn it off."
+          >
+            <Switch
+              label="B-frames"
+              hideLabel
+              checked={s.b_frames}
+              onChange={(b_frames) => set({ b_frames })}
+            />
           </Row>
           <Row label="Send at" sub="Smaller than the picture saves upload">
             <Select

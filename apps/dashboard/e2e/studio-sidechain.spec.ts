@@ -398,7 +398,7 @@ async function mountMockStudio(page: Page) {
           vbr: false,
           keyframe_s: 2,
           profile: 'high',
-          bframes: true,
+          b_frames: false,
           scale: null,
           audio_kbps: 160,
           width: 1920,
