@@ -19,6 +19,7 @@ import type {
   ObsSetup,
   PushHealth,
   Reach,
+  RuleNotice,
   Service,
   StreamStats,
   UploadCheck,
@@ -32,6 +33,7 @@ import { NOT_MINE, clone, requireObj, type DemoHost, type Routed } from './host'
 /** Steers the demo for tests: upload speed, OBS already set up, what the stream breaks. */
 export interface DemoGoLiveSetup {
   upload_kbps?: number
+  kbps?: number
   points_here?: boolean
   codec?: VideoCodec
   keyframe_interval_ms?: number
@@ -74,6 +76,7 @@ export class DemoGoLive {
   private before: string | null = null
   private upload: UploadCheck | null = null
   private uploadKbps = 24_000
+  private kbps = 6100
   private codec: VideoCodec = 'h264'
   private keyint = 2000
   /** When each destination started sending this stream. */
@@ -109,6 +112,7 @@ export class DemoGoLive {
     keep_free_pct: 20,
     port: 1935,
     per: {},
+    ignore_service_limits: false,
   }
   private aitumOk = false
   private autoQuality = true
@@ -130,6 +134,7 @@ export class DemoGoLive {
 
   setup(s: DemoGoLiveSetup): void {
     if (s.upload_kbps !== undefined) this.uploadKbps = s.upload_kbps
+    if (s.kbps !== undefined) this.kbps = s.kbps
     if (s.points_here !== undefined) {
       this.pointsHere = s.points_here
       this.before = s.points_here ? 'Twitch' : null
@@ -220,7 +225,7 @@ export class DemoGoLive {
         fps: null,
       }
     return {
-      kbps: 6100,
+      kbps: this.kbps,
       keyframe_interval_ms: this.keyint,
       video_codec: this.codec,
       width: 1920,
@@ -284,20 +289,49 @@ export class DemoGoLive {
     return this.account(d.kind) ? null : `Connect ${LABELS[d.kind]} in Settings, Accounts first.`
   }
 
-  private rules(kind: Service, s: StreamStats, vertical = false): string[] {
+  private rulesStructured(
+    kind: Service,
+    s: StreamStats,
+    vertical = false,
+    enhanced = false,
+  ): RuleNotice[] {
     if (kind === 'custom' || !(vertical ? this.verticalLive() : this.live())) return []
+    if (enhanced && kind === 'twitch') return []
     const name = LABELS[kind]
-    const out: string[] = []
+    const out: RuleNotice[] = []
     const codecs: VideoCodec[] = kind === 'youtube' ? ['h264', 'hevc', 'av1'] : ['h264']
-    if (s.video_codec && !codecs.includes(s.video_codec))
-      out.push(
-        `${name} doesn’t take ${s.video_codec === 'hevc' ? 'HEVC (H.265)' : s.video_codec.toUpperCase()} video. Pick H.264 in OBS (Settings, Output, Video Encoder), or turn ${name} off.`,
-      )
-    const max = kind === 'youtube' ? 4000 : 2000
-    if (s.keyframe_interval_ms !== null && s.keyframe_interval_ms > max + 250)
-      out.push(
-        `${name} needs a keyframe at least every ${max / 1000} s; yours come every ${(s.keyframe_interval_ms / 1000).toFixed(1)} s. Set the keyframe interval to 2 s.`,
-      )
+    if (s.video_codec && !codecs.includes(s.video_codec)) {
+      const what = s.video_codec === 'hevc' ? 'HEVC (H.265)' : s.video_codec.toUpperCase()
+      out.push({
+        code: 'codec',
+        summary: `${name} requires H.264`,
+        detail: `${name} doesn’t take ${what} video. Pick H.264 in OBS (Settings, Output, Video Encoder), or turn ${name} off.`,
+      })
+    }
+    const maxKey = kind === 'youtube' ? 4000 : 2000
+    if (s.keyframe_interval_ms !== null && s.keyframe_interval_ms > maxKey + 250) {
+      out.push({
+        code: 'keyint',
+        summary: `Keyframes every ${(s.keyframe_interval_ms / 1000).toFixed(1)} s (need ${maxKey / 1000} s)`,
+        detail: `${name} needs a keyframe at least every ${maxKey / 1000} s; yours come every ${(s.keyframe_interval_ms / 1000).toFixed(1)} s. Set the keyframe interval to 2 s.`,
+      })
+    }
+    const maxKbps = kind === 'twitch' ? 6000 : kind === 'kick' ? 8000 : 51000
+    if (s.kbps > maxKbps + 400) {
+      const fix = maxKbps - 500
+      const then =
+        kind === 'twitch'
+          ? 'viewers may buffer'
+          : kind === 'kick'
+            ? 'the stream may drop'
+            : 'it may reject the stream'
+      out.push({
+        code: 'bitrate',
+        summary: `Over ${name}’s ${maxKbps.toLocaleString()} kbps limit`,
+        detail: `Over ${name}’s ${maxKbps.toLocaleString()} kbps limit, ${then}. Lower the bitrate to ${fix.toLocaleString()} kbps or less.`,
+        fix_kbps: fix,
+      })
+    }
     return out
   }
 
@@ -318,6 +352,9 @@ export class DemoGoLive {
       // A backup waits while the one it backs up is ticked (the demo's never fails).
       const primary = Object.entries(this.advanced.per).find(([, a]) => a.backup === d.id)?.[0]
       const backs = this.cfg.find((x) => x.id === primary && x.enabled)
+      const issues = d.enabled
+        ? this.rulesStructured(d.kind, vertical ? vs : s, vertical, !!d.enhanced)
+        : []
       return {
         id: d.id,
         kind: d.kind,
@@ -328,7 +365,8 @@ export class DemoGoLive {
         connected: custom || !!acct,
         health: backs ? null : this.health(d, now),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
-        rules: d.enabled ? this.rules(d.kind, vertical ? vs : s, vertical) : [],
+        rules: issues.map((i) => i.detail),
+        issues,
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),
         ...(d.light ? { light: true } : {}),
         ...(d.enhanced ? { enhanced: true } : {}),
@@ -478,7 +516,9 @@ export class DemoGoLive {
         Object.fromEntries(this.cfg.map((d) => [d.id, d.url])),
       )
       if (err) throw new HttpError(400, 'invalid', err)
-      this.advanced = clone(body as Advanced)
+      const next = clone(body as Advanced)
+      next.ignore_service_limits = Boolean(next.ignore_service_limits)
+      this.advanced = next
       return { destinations: clone(this.cfg), advanced: clone(this.advanced) }
     }
     if (method === 'POST' && path === 'new-key') {

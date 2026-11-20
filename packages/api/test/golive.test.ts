@@ -245,7 +245,43 @@ describe('advanced settings', () => {
     expect(
       (await refusal(client.request('PUT', '/api/v1/golive/advanced', { rules: 1 }))).status,
     ).toBe(400)
+    expect(checkAdvanced({ ...a, ignore_service_limits: 'yes' as never }, ids)).toMatch(
+      /ignore_service_limits/,
+    )
+    expect(checkAdvanced({ ...a, ignore_service_limits: true }, ids)).toBeNull()
+    expect(checkAdvanced({ ...a, ignore_service_limits: false }, ids)).toBeNull()
+    const withIgnore = await api.setAdvanced({ ...a, ignore_service_limits: true })
+    expect(withIgnore.advanced.ignore_service_limits).toBe(true)
+    expect((await api.view()).advanced.ignore_service_limits).toBe(true)
     await api.newKey()
+  })
+
+  it('demo emits structured rule issues for codec, keyint and bitrate, exempting Twitch Enhanced', async () => {
+    const { engine, api } = demo()
+    engine.setGoLive({
+      points_here: true,
+      kbps: 9000,
+      codec: 'hevc',
+      keyframe_interval_ms: 4000,
+    })
+    const live = await api.view()
+    const twitch = live.destinations.find((d) => d.id === 'twitch')
+    expect(twitch?.issues).toEqual([
+      expect.objectContaining({ code: 'codec', summary: 'Twitch requires H.264' }),
+      expect.objectContaining({
+        code: 'keyint',
+        summary: 'Keyframes every 4.0 s (need 2 s)',
+      }),
+      expect.objectContaining({
+        code: 'bitrate',
+        summary: 'Over Twitch’s 6,000 kbps limit',
+        fix_kbps: 5500,
+      }),
+    ])
+    expect(twitch?.issues?.find((i) => i.code === 'codec')?.fix_kbps).toBeUndefined()
+    await api.setEnhanced('twitch', true)
+    const enhanced = await api.view()
+    expect(enhanced.destinations.find((d) => d.id === 'twitch')?.issues).toEqual([])
   })
 })
 

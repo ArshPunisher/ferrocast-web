@@ -115,6 +115,26 @@ export interface StreamStats {
   fps: number | null
 }
 
+export type RuleCode = 'bitrate' | 'codec' | 'keyint'
+
+/** Structured rule broken by the active stream (Contract C-2). */
+export interface RuleNotice {
+  code: RuleCode
+  summary: string
+  detail: string
+  /** Target video bitrate in kbps when lowering bitrate satisfies the platform limit. */
+  fix_kbps?: number
+}
+
+/** Calm chip shown when Ferrocast Studio auto-caps its shared encode for Twitch/Kick (Contract C-2). */
+export interface CappedInfo {
+  kbps: number
+  resolution?: [number, number]
+  separate_encode: boolean
+  summary: string
+  detail: string
+}
+
 export interface DestinationView {
   id: string
   kind: Service
@@ -129,6 +149,10 @@ export interface DestinationView {
   blocked: string | null
   /** The platform's rules this stream breaks, in words. */
   rules: string[]
+  /** Structured rules broken by the active stream (Contract C-2). */
+  issues?: RuleNotice[]
+  /** Calm cap badge shown when Studio fits its shared encode to Twitch/Kick limits (Contract C-2). */
+  capped?: CappedInfo
   /** Sent straight from the Ferrocast Studio by this protocol; absent for RTMP. */
   direct?: DirectKind
   /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
@@ -268,6 +292,8 @@ export interface Advanced {
   /** The local server's port (from the next start). */
   port: number
   per: Record<string, DestAdvanced>
+  /** Disable automatic Twitch/Kick Studio encoding caps (Contract C-6). */
+  ignore_service_limits?: boolean
 }
 
 export const DEST_ADVANCED_DEFAULT: DestAdvanced = {
@@ -287,6 +313,8 @@ export function checkAdvanced(
     return 'rules: send the protection rule as an object.'
   if (typeof a.per !== 'object' || a.per === null)
     return 'per: send the per-destination settings as an object.'
+  if (a.ignore_service_limits !== undefined && typeof a.ignore_service_limits !== 'boolean')
+    return 'ignore_service_limits: true or false.'
   const r = a.rules
   const int = (v: unknown, lo: number, hi: number) =>
     typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi
