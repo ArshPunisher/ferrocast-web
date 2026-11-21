@@ -1951,6 +1951,15 @@ export function shortcutGroups(
       ],
     },
     {
+      title: 'Vertical',
+      actions: [
+        { id: 'vertical:toggle_preview', label: 'Vertical picture on or off' },
+        { id: 'vertical:show_preview', label: 'Show the vertical picture' },
+        { id: 'vertical:hide_preview', label: 'Hide the vertical picture' },
+        { id: 'vertical:screenshot', label: 'Screenshot of the vertical picture' },
+      ],
+    },
+    {
       title: 'Scenes',
       actions: scenes.map((x) => ({ id: `scene:${x.name}`, label: x.name })),
     },
