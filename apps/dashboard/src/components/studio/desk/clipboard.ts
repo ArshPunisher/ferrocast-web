@@ -20,11 +20,19 @@ let copies = 0
  * to a text field (or an editable area), `selection` while text is selected: those keep their
  * own copy and paste, so the page never takes them. */
 export function clipboardKey(
-  e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+  e: {
+    key: string
+    metaKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    repeat?: boolean
+  },
   mac: boolean,
   state: { editing: boolean; selection: boolean },
 ): 'copy' | 'paste' | null {
-  if (state.editing || e.altKey || e.shiftKey) return null
+  // A held key repeats: one press is one copy or paste.
+  if (state.editing || e.altKey || e.shiftKey || e.repeat) return null
   if (!(mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey)) return null
   const k = e.key.toLowerCase()
   if (k === 'c') return state.selection ? null : 'copy'
@@ -36,7 +44,12 @@ export function clipboardKey(
 export function isEditing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el || typeof el.closest !== 'function') return false
-  return !!el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
+  return (
+    el.isContentEditable === true ||
+    !!el.closest(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
+    )
+  )
 }
 
 /** What the paste said happened beyond the paste itself, each as a warning. */

@@ -30,6 +30,12 @@ describe('the clipboard keys', () => {
     expect(clipboardKey(key('x', { metaKey: true }), true, free)).toBeNull()
     expect(clipboardKey(key('c'), true, free)).toBeNull()
   })
+  it('one press is one copy or paste: a held key repeating does nothing', () => {
+    expect(clipboardKey({ ...key('v', { metaKey: true }), repeat: true }, true, free)).toBeNull()
+    expect(clipboardKey({ ...key('c', { ctrlKey: true }), repeat: false }, false, free)).toBe(
+      'copy',
+    )
+  })
   it('never takes a key that goes to a text field, and leaves selected text to copy', () => {
     expect(
       clipboardKey(key('c', { metaKey: true }), true, { editing: true, selection: false }),
@@ -47,9 +53,9 @@ describe('the clipboard keys', () => {
   it('knows text fields from buttons', () => {
     const doc = document.createElement('div')
     doc.innerHTML =
-      '<input id="i"><textarea id="t"></textarea><select id="s"></select><div id="e" contenteditable="true"><b id="in"></b></div><button id="b"></button>'
+      '<input id="i"><textarea id="t"></textarea><select id="s"></select><div id="e" contenteditable="true"><b id="in"></b></div><div id="p" contenteditable="plaintext-only"></div><button id="b"></button>'
     const get = (id: string) => doc.querySelector(`#${id}`)
-    for (const id of ['i', 't', 's', 'e', 'in']) expect(isEditing(get(id)), id).toBe(true)
+    for (const id of ['i', 't', 's', 'e', 'in', 'p']) expect(isEditing(get(id)), id).toBe(true)
     expect(isEditing(get('b'))).toBe(false)
     expect(isEditing(null)).toBe(false)
   })

@@ -283,11 +283,14 @@ export function SourcesDock() {
     ctrlKey: boolean
     altKey: boolean
     shiftKey: boolean
+    repeat?: boolean
     target: EventTarget | null
     preventDefault: () => void
   }) => {
     const what = clipboardKey(e, os === 'mac', {
-      editing: isEditing(e.target),
+      // A dialog or drawer open over the desk has the keys, not the list behind it.
+      editing:
+        isEditing(e.target) || document.querySelector('dialog[open], [role="dialog"]') !== null,
       selection: (window.getSelection()?.toString() ?? '') !== '',
     })
     if (!what) return

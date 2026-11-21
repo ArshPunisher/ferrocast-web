@@ -430,6 +430,19 @@ function suite() {
     expect(calls).toHaveLength(2)
   })
 
+  test('the keys leave an open dialog alone', async ({ page, isMobile }) => {
+    test.skip(!!isMobile, 'A phone has no keyboard.')
+    const { calls } = await mount(page, { withClip: true })
+    await row(page).locator('button').first().click()
+    await dock(page)
+      .getByRole('button', { name: /^Remove Music/ })
+      .click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Control+v')
+    await page.keyboard.press('Control+c')
+    expect(calls.filter((c) => c.p.includes('/clipboard/'))).toEqual([])
+  })
+
   test('no accessibility violations and no sideways scroll', async ({ page }) => {
     await mount(page, { withClip: true })
     const r = await new AxeBuilder({ page }).include('section[aria-label^="Sources in"]').analyze()
