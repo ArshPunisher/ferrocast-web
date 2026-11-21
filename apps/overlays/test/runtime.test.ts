@@ -841,4 +841,76 @@ describe('review fixes', () => {
     rt.apply(frame('event', { ...first, seq: 99_999 }))
     expect(root.querySelector('.fc-ev .fc-ev-name')?.textContent).toBe('first-follower')
   })
+
+  it('hype train label counts down strictly via textContent, extends on events, and hides on expiry', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = {
+        source: 'hype_train',
+        template: 'Hype Lv.{level} ({count}) {timer}',
+        theme: 'molten',
+      }
+      const s = snapshot(
+        {
+          labels: { wl: 'Hype Lv.1 (3) 01:00' },
+          label_trains: {
+            wl: {
+              active: true,
+              level: 1,
+              events: 3,
+              contributors: 2,
+              latest_actor: 'NeelaMoth',
+              remaining_ms: 60_000,
+              ends_at: Date.now() + 60_000,
+              warmup_count: 3,
+              threshold: 3,
+            },
+          },
+        },
+        overlay(ws),
+      )
+      rt.apply(s)
+
+      const labelEl = root.querySelector('.fc-w-label') as HTMLElement
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      expect(textEl.children.length).toBe(0)
+      expect(textEl.textContent).toBe('Hype Lv.1 (3) 01:00')
+      expect(labelEl.hidden).toBe(false)
+
+      // Advance 10s -> timer ticks down
+      vi.advanceTimersByTime(10_000)
+      expect(textEl.textContent).toBe('Hype Lv.1 (3) 00:50')
+
+      // New event extends countdown window (+15s) and bumps level/count
+      rt.apply(
+        frame('state', {
+          labels: { wl: 'Hype Lv.2 (4) 01:05' },
+          label_trains: {
+            wl: {
+              active: true,
+              level: 2,
+              events: 4,
+              contributors: 3,
+              latest_actor: '<img onerror=alert(1)>Ravi',
+              remaining_ms: 65_000,
+              ends_at: Date.now() + 65_000,
+              warmup_count: 4,
+              threshold: 3,
+            },
+          },
+        }),
+      )
+      expect(textEl.textContent).toBe('Hype Lv.2 (4) 01:05')
+      expect(textEl.children.length).toBe(0)
+
+      // Countdown hits 0 -> hides cleanly
+      vi.advanceTimersByTime(65_500)
+      expect(textEl.textContent).toBe('')
+      expect(labelEl.hidden).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
