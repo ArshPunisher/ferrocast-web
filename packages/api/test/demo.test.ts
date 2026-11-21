@@ -631,3 +631,23 @@ describe('the demo saves rules like the engine', () => {
     e.dispose()
   })
 })
+
+describe('the demo with storage that throws', () => {
+  it('still works when localStorage refuses reads and writes', async () => {
+    const boom = () => {
+      throw new DOMException('blocked', 'SecurityError')
+    }
+    vi.stubGlobal('localStorage', { getItem: boom, setItem: boom })
+    const e = new DemoEngine({ autoplay: false, latencyMs: 0, persistQueue: true })
+    const c = new FerroClient({
+      base: e.base,
+      token: DEMO_TOKEN,
+      fetch: e.fetch,
+      sleep: async () => {},
+    })
+    expect((await c.queuePause()).paused).toBe(true)
+    expect((await c.queueMute()).muted).toBe(true)
+    e.dispose()
+    vi.unstubAllGlobals()
+  })
+})
