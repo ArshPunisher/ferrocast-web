@@ -83,6 +83,7 @@ import { KindSettings, SourcePreview } from './kind-settings'
 import { useFilterApi, useItemOf } from './item-filters'
 import { AreaPicker, CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
+import { ShownIn, editForShow } from './shown-in'
 
 /** Sends edits once they've stopped changing for a moment (`live`: at once, one request at a
  *  time, the newest next, so a filter's picture follows the slider as a photo app's does;
@@ -435,6 +436,20 @@ function Panel({
             {canvas === 'vertical' && picture && item && (
               <Pad>
                 <FollowFace scene={scene} item={item.id} />
+              </Pad>
+            )}
+            {/* Where it is shown: the stream, the recording or both (a source in this scene). */}
+            {item && (
+              <Pad>
+                <ShownIn
+                  item={item}
+                  busy={busy === 'shown'}
+                  onChoose={(to) =>
+                    void run('shown', () =>
+                      done(api.editItem(scene, item.id, editForShow(to))),
+                    ).then((ok) => ok && refresh())
+                  }
+                />
               </Pad>
             )}
             <Settings name={name} kind={kind} />
