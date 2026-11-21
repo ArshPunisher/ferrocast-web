@@ -40,16 +40,19 @@ interface DeviceChoice {
   kind: string
 }
 
-function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined }) {
+export function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined }) {
   const [state, setState] = useState<'idle' | 'active' | 'denied' | 'unsupported'>('idle')
   const [peakDb, setPeakDb] = useState(-100)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
 
   const stop = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     rafRef.current = null
+    void ctxRef.current?.close().catch(() => undefined)
+    ctxRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     setState('idle')
@@ -57,6 +60,12 @@ function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined })
   }, [onClose])
 
   useEffect(() => () => stop(), [stop])
+  // The picture goes to the video once it is on the page (it only exists while the test runs).
+  const [hasVideo, setHasVideo] = useState(false)
+  useEffect(() => {
+    if (state === 'active' && videoRef.current && streamRef.current && hasVideo)
+      videoRef.current.srcObject = streamRef.current
+  }, [state, hasVideo])
 
   const startBrowserTest = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -64,12 +73,21 @@ function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined })
       return
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      // Camera and mic together; with no camera (or it refused) the mic alone still tests.
+      let stream: MediaStream
+      let video = true
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      } catch {
+        video = false
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      }
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      setHasVideo(video)
       const AudioCtx = window.AudioContext
       if (AudioCtx) {
         const ctx = new AudioCtx()
+        ctxRef.current = ctx
         const src = ctx.createMediaStreamSource(stream)
         const analyser = ctx.createAnalyser()
         analyser.fftSize = 256
@@ -109,13 +127,16 @@ function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined })
 
       {state === 'active' && (
         <div className="flex flex-col gap-3">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="aspect-video w-full max-w-[360px] rounded-[12px] bg-surface-2 object-cover"
-          />
+          {hasVideo && (
+            <video
+              ref={videoRef}
+              aria-label="Browser camera preview"
+              autoPlay
+              playsInline
+              muted
+              className="aspect-video w-full max-w-[360px] rounded-[12px] bg-surface-2 object-cover"
+            />
+          )}
           <div className="flex items-center gap-3">
             <span className="text-[13px] font-medium text-text-2">Browser mic input</span>
             <span className="font-mono text-[13px] font-semibold tabular-nums text-text">
@@ -130,7 +151,8 @@ function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undefined })
 
       {state === 'denied' && (
         <p className="text-[13px] text-warn">
-          Camera or microphone permission was denied in this browser.
+          This browser did not allow the camera or microphone. Allow them in the site settings (the
+          icon at the left of the address bar), then press Test again, or Continue without.
         </p>
       )}
       {state === 'unsupported' && (
