@@ -207,6 +207,14 @@ export const ENGINE_DEINTERLACE = [
 ] as const
 export type EngineDeinterlace = (typeof ENGINE_DEINTERLACE)[number]
 
+/**
+ * Where an item is shown: on the stream and in the recording (the default), on the stream only
+ * (chat or alerts a clean recording leaves out) or in the recording only (a camera the stream
+ * doesn't carry). The preview and thumbnails always show every item.
+ */
+export const ENGINE_SHOWS = ['both', 'stream', 'recording'] as const
+export type EngineShow = (typeof ENGINE_SHOWS)[number]
+
 /** A source in a scene, top first. A group lists its own items. */
 export interface EngineItem {
   id: number
@@ -222,6 +230,11 @@ export interface EngineItem {
    * source is used"). Older engines send none: shared.
    */
   own_filters?: boolean
+  /**
+   * Where it is shown. Older engines send none: both. On a group it covers the group's items as
+   * a whole; one of a group's own keeps its own.
+   */
+  show?: EngineShow
   /** How it mixes with what's under it. */
   blend: EngineBlend
   /** How it's scaled. */
@@ -342,6 +355,12 @@ export type EngineItemEdit =
   | 'blend_method_default'
   | 'blend_method_srgb_off'
   | `scale_${EngineScaleFilter}`
+  /** Shown on the stream and in the recording (the default). */
+  | 'stream_and_recording'
+  /** Shown on the stream only. */
+  | 'stream_only'
+  /** Shown in the recording only. */
+  | 'recording_only'
 
 export interface NewEngineSource {
   kind: string

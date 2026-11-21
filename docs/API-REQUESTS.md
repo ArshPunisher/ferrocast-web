@@ -221,7 +221,7 @@ past the canvas; without it the surround stays plain. The dashboard sends the th
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
 
-## R14. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
+## R21. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
 
 The Studio's events dock now has pause, skip, mute, filters, read marks and a test alert. Pause, skip and test already exist; the rest needs the engine (done on branch `feat/p1-minifeed-alerts`, see the engine's `docs/API.md` Alerts):
 
@@ -231,3 +231,26 @@ The Studio's events dock now has pause, skip, mute, filters, read marks and a te
 - `Variation.weight: number` (0 to 1000, default 1): among matching looks with the same top priority, picked by weight; 400 over 1000.
 
 Read marks and the type filter are per browser (localStorage `fc-feed-read-v2` (by the engine's event number), `fc-feed-filter`), not engine state. The demo engine implements all of it (`persistQueue` keeps pause and mute over a reload in the dashboard's demo). A phone's owner role can call mute (the relay's audit log names it); the cloud `queue_op` has no mute and its queue frame always says `muted: false`.
+
+## R22. Selective recording: `show` on an item, and three edit words (22 Nov)
+
+Each source can be shown on the stream only (chat and alerts a clean recording leaves out), in the
+recording only (a face camera the stream doesn't carry), or both. Roadmap Phase 2 #9.
+
+Ask (done on the engine side, branch `feat/p2-selective-recording`):
+- `GET /api/v1/studio/engine/scenes/{scene}/items` lists `show` on every item and every child of a
+  group: `"both"` (the default, and what a collection from before had), `"stream"` or `"recording"`.
+  The dashboard reads a missing `show` as both.
+- `POST /api/v1/studio/engine/scenes/{scene}/items/{id}/edit` takes `{ do: "stream_only" }`,
+  `{ do: "recording_only" }` and `{ do: "stream_and_recording" }`. An unknown word is a 400 as before.
+  The choice is an undo step.
+- A flag on a group covers its children as a whole; a child of a shown group keeps its own. It
+  applies to the stream, the recording and the replay buffer's clips; the preview, Studio Mode,
+  thumbnails and the virtual camera show every item. While no visible item differs the two are one
+  picture, drawn once; once one does, a recording can't share the stream's encode (the encoder
+  budget's `why_not_shared` says why), so it runs its own.
+
+The demo engine has no Studio desk (the Studio engine needs the desktop app), so there is nothing
+to simulate there; the page's behaviour is covered by `e2e/studio-selective-recording.spec.ts`
+against mocked Studio endpoints.
+
