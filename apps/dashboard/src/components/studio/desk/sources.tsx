@@ -67,6 +67,7 @@ import { done, useAction } from '../../../lib/hooks'
 import { KindGlyph, useDesk, useDeskStats } from './common'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
+import { clipLabel, clipboardKey, isEditing, useStudioClipboard } from './clipboard'
 import { addsToPick } from './stage-edit'
 import { TRANSITIONS } from './preview'
 
@@ -148,6 +149,7 @@ export function SourcesDock() {
   const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
   const { also, pickMore } = desk
   const { busy, run } = useAction()
+  const studioClip = useStudioClipboard(api)
   const [closed, setClosed] = useState<Set<number>>(new Set())
   const [removing, setRemoving] = useState<EngineItem | null>(null)
   const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
@@ -264,6 +266,52 @@ export function SourcesDock() {
     })
     if (ok) refresh()
   }
+  // Copy keeps the name for "Paste" in this collection, and hands the source (a group with its
+  // children) to the engine, which keeps it for any collection.
+  const copyItem = (item: EngineItem) => {
+    setClip(item.name)
+    studioClip.copySource(scene, item.id, item.name)
+  }
+  const pasteFromClipboard = () => {
+    if (studioClip.clip?.kind !== 'source') return
+    studioClip.pasteSource(scene, refresh)
+  }
+  // ⌘/Ctrl+C and V while a row (not a text field or selected text) has the keys.
+  const onClipboardKey = (e: {
+    key: string
+    metaKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    target: EventTarget | null
+    preventDefault: () => void
+  }) => {
+    const what = clipboardKey(e, os === 'mac', {
+      editing: isEditing(e.target),
+      selection: (window.getSelection()?.toString() ?? '') !== '',
+    })
+    if (!what) return
+    if (what === 'copy') {
+      if (!picked) return
+      e.preventDefault()
+      copyItem(picked)
+    } else if (studioClip.clip?.kind === 'source') {
+      e.preventDefault()
+      pasteFromClipboard()
+    }
+  }
+  // A row picked by a click can leave the focus on the page itself: the keys count then too, but
+  // never when the focus is in another panel or a field.
+  const clipKeyRef = useRef(onClipboardKey)
+  clipKeyRef.current = onClipboardKey
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (document.activeElement && document.activeElement !== document.body) return
+      clipKeyRef.current(e)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   // Groups in this scene, and which group (if any) an item is in.
   const groups = (list ?? []).filter((i) => i.group)
   const parentOf = (id: number) => groups.find((g) => g.children.some((c) => c.id === id)) ?? null
@@ -616,9 +664,48 @@ export function SourcesDock() {
               : []),
           ],
         },
-    { label: 'Copy', icon: CopySimple, onSelect: () => setClip(item.name) },
+    {
+      label: 'Copy',
+      icon: CopySimple,
+      hint: shortcut('C'),
+      onSelect: () => copyItem(item),
+    },
+    ...(studioClip.clip?.kind === 'source'
+      ? [
+          {
+            label: `Paste ${clipLabel(studioClip.clip)} from the clipboard`,
+            icon: ClipboardText,
+            hint: shortcut('V'),
+            disabled: studioClip.busy !== null,
+            onSelect: () => pasteFromClipboard(),
+          },
+        ]
+      : []),
     { label: 'Duplicate', icon: Copy, onSelect: () => void act(item, 'duplicate') },
-    ...filterItems(item.name, { ...desk, paste: pasteFilters(item) }),
+    ...filterItems(item.name, {
+      ...desk,
+      setFilterClip: (n) => {
+        desk.setFilterClip(n)
+        if (n)
+          studioClip.copyFilters(item.name, item.own_filters ? { scene, id: item.id } : undefined)
+      },
+      paste: pasteFilters(item),
+    }),
+    ...(studioClip.clip?.kind === 'filters'
+      ? [
+          {
+            label: `Paste ${clipLabel(studioClip.clip)} from the clipboard`,
+            icon: ClipboardText,
+            disabled: studioClip.busy !== null,
+            onSelect: () =>
+              studioClip.pasteFilters(
+                item.name,
+                item.own_filters ? { scene, id: item.id } : undefined,
+                item.name,
+              ),
+          },
+        ]
+      : []),
     { sep: true },
     { label: 'Remove', icon: Trash, danger: true, onSelect: () => setRemoving(item) },
   ]
@@ -722,6 +809,16 @@ export function SourcesDock() {
       icon: Copy,
       disabled: !clip,
       onSelect: () => void pasteCopy(),
+    },
+    {
+      label:
+        studioClip.clip?.kind === 'source'
+          ? `Paste ${clipLabel(studioClip.clip)} from the clipboard`
+          : 'Paste from the clipboard',
+      icon: ClipboardText,
+      hint: shortcut('V'),
+      disabled: studioClip.clip?.kind !== 'source' || studioClip.busy !== null,
+      onSelect: () => pasteFromClipboard(),
     },
   ]
 
@@ -919,7 +1016,11 @@ export function SourcesDock() {
   }
 
   return (
-    <section aria-label={`Sources in ${scene}`} className="flex min-h-0 flex-1 flex-col">
+    <section
+      aria-label={`Sources in ${scene}`}
+      className="flex min-h-0 flex-1 flex-col"
+      onKeyDown={onClipboardKey}
+    >
       {ghost && dragging !== null && (
         <div
           aria-hidden
@@ -1018,6 +1119,26 @@ export function SourcesDock() {
           onClick={() => picked && void act(picked, 'fit')}
         >
           <FrameCorners size={15} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="sm"
+          label={picked ? `Copy ${picked.name}` : 'Copy'}
+          disabled={!picked || studioClip.busy !== null}
+          onClick={() => picked && copyItem(picked)}
+        >
+          <CopySimple size={15} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="sm"
+          label={
+            studioClip.clip?.kind === 'source'
+              ? `Paste ${clipLabel(studioClip.clip)} into ${scene}`
+              : 'Paste a copied source'
+          }
+          disabled={studioClip.clip?.kind !== 'source' || studioClip.busy !== null}
+          onClick={() => pasteFromClipboard()}
+        >
+          <ClipboardText size={15} weight="bold" />
         </IconButton>
         <span className="flex-1" />
         <IconButton
