@@ -220,3 +220,24 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+## R14. Support report & likely-cause analyzer (`#7`, 22 Nov)
+
+One-click redacted support archive (`.zip`) in Settings (`#/settings/advanced#support`), Studio Log dialog,
+and Desktop Help menu:
+- `GET /api/v1/diagnostics/preview` → redacted `SupportReport` (`likely_causes` ranked first, app/OS
+  versions, GPU & encoders, audio devices & sample rates, up to 5 recent streams' health, crash dumps,
+  safe mode / disk status).
+- `POST /api/v1/diagnostics/report` `{ folder? }` → picks folder on Desktop (`{ cancelled: true }` if
+  dismissed) or writes into explicit `folder` (`400` if missing/not a directory), saving a redacted `.zip`.
+- `POST /api/v1/diagnostics/report.zip` → streams the redacted `.zip` download for browsers.
+All three stay PC-only (`remoteAllowed` denies paired phones).
+
+## R15. Local stream labels+ & hype/combo train (`#8`, 22 Nov)
+
+`LabelConfig.source` covers Latest-X (`latest_follower`, `latest_sub`, `latest_gifter`, `latest_tip`,
+`latest_bits`, `latest_raid`), Session (`session_follows`, `session_subs`, `session_bits`, `session_tips`,
+`session_raids`, `top_tip_session`, `top_supporter_session`), Monthly (`monthly_*`, `top_tip_monthly`,
+`top_supporter_monthly` with optional `timezone_offset_min` `-720..840`), All-time (`alltime_*`,
+`top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
+`train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
+

@@ -253,6 +253,8 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/golive/ingest'],
   ['POST', '/golive/destinations'],
   ['*', '/golive/destinations/*'],
+  ['*', '/diagnostics'],
+  ['*', '/diagnostics/**'],
 ]
 
 const SEGMENT_CHARS = /^[A-Za-z0-9\-_.~:@!$&'()*+,;=%]+$/

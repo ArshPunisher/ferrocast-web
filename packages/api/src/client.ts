@@ -47,6 +47,7 @@ import type {
   StarterResult,
   Settings,
   Status,
+  SupportReport,
   Theme,
   Timer,
   TipSettings,
@@ -58,6 +59,7 @@ import type {
   WelcomeConfig,
   ViewerCard,
   WhyResult,
+  WrittenSupportReport,
 } from './types'
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
@@ -557,6 +559,25 @@ export class FerroClient {
     let res: Response
     try {
       res = await this.doFetch(`${this.base}/api/v1/export`, { method: 'POST', headers })
+    } catch {
+      throw offlineError()
+    }
+    if (!res.ok) throw await errorFromResponse(res)
+    return res.blob()
+  }
+  diagnosticsPreview = () => this.get<SupportReport>('/api/v1/diagnostics/preview')
+  createSupportReport = (folder?: string | null) =>
+    this.post<WrittenSupportReport>('/api/v1/diagnostics/report', { folder: folder ?? null })
+  downloadSupportReportZip = async (): Promise<Blob> => {
+    this.check('POST', '/api/v1/diagnostics/report.zip')
+    const headers: Record<string, string> = {}
+    if (this.token) headers.Authorization = `Bearer ${this.token}`
+    let res: Response
+    try {
+      res = await this.doFetch(`${this.base}/api/v1/diagnostics/report.zip`, {
+        method: 'POST',
+        headers,
+      })
     } catch {
       throw offlineError()
     }
