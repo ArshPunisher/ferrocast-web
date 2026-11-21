@@ -38,6 +38,7 @@ export {
   render as renderAlert,
   select as selectAlert,
   validateRule,
+  MAX_WEIGHT,
   MIN_DURATION_MS,
   MAX_DURATION_MS,
 } from './alert'

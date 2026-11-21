@@ -220,6 +220,8 @@ export interface Variation {
   name: string
   condition: Condition | null
   priority: number
+  /** Chance share among matching looks of the same top priority (0 to 1000, default 1). */
+  weight: number
   title: string
   body: string
   image: string | null
@@ -238,10 +240,14 @@ export interface AlertRule {
   kinds: string[]
   platforms: Platform[]
   variations: Variation[]
+  /** A new alert from this rule ends the one playing instead of queueing. */
+  interrupt: boolean
 }
 
 export interface Queue {
   paused: boolean
+  /** Alerts play without sound or speech. */
+  muted: boolean
   playing: { alert: RenderedAlert; started_at: Millis } | null
   waiting: { alert: RenderedAlert; priority: number; enqueued_at: Millis }[]
 }

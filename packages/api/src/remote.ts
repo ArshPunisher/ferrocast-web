@@ -339,6 +339,8 @@ const ACTIONS: Record<string, string> = {
   'POST /queue/pause': 'Paused alerts',
   'POST /queue/resume': 'Resumed alerts',
   'POST /queue/skip': 'Skipped an alert',
+  'POST /queue/mute': 'Muted alert sounds',
+  'POST /queue/unmute': 'Unmuted alert sounds',
   'POST /obs/scene': 'Switched the OBS scene',
   'POST /designs/{id}/obs': 'Put a theme into OBS',
   'DELETE /obs/theme': 'Took the theme out of OBS',

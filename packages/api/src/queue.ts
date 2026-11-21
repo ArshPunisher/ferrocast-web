@@ -39,12 +39,21 @@ export class AlertQueue {
   private waiting: Waiting[] = []
   private playing: Playing | null = null
   private paused = false
+  private muted = false
   private nextAt = 0
 
   constructor(readonly tuning: QueueTuning = DEFAULT_QUEUE_TUNING) {}
 
-  enqueue(alert: RenderedAlert, priority: number, now: number): QueueAction[] {
+  enqueue(alert: RenderedAlert, priority: number, now: number, interrupt = false): QueueAction[] {
     if (this.contains(alert.alert_id)) return []
+    if (interrupt && !this.paused && this.playing) {
+      // The new alert ends the one playing, with no gap, and goes to the front.
+      const actions: QueueAction[] = [{ type: 'hide', alert_id: this.playing.alert.alert_id }]
+      this.finish(now)
+      this.nextAt = now
+      this.waiting.unshift({ alert, priority, enqueued_at: now })
+      return [...actions, ...this.enforceCap(), ...this.tick(now)]
+    }
     let pos = this.waiting.findIndex((w) => w.priority < priority)
     if (pos < 0) pos = this.waiting.length
     this.waiting.splice(pos, 0, { alert, priority, enqueued_at: now })
@@ -68,9 +77,13 @@ export class AlertQueue {
     }
     const next = this.waiting.shift()
     if (next) {
-      actions.push({ type: 'show', alert: next.alert })
+      // Muted: the alert still shows, without its sound or speech.
+      const alert = this.muted
+        ? { ...next.alert, sound: null, tts_text: null, tts_audio: null }
+        : next.alert
+      actions.push({ type: 'show', alert })
       this.playing = {
-        alert: next.alert,
+        alert,
         started_at: now,
         deadline: now + next.alert.duration_ms + this.tuning.ack_grace_ms,
         acknowledged: false,
@@ -102,6 +115,14 @@ export class AlertQueue {
 
   pause(): void {
     this.paused = true
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted
+  }
+
+  get isMuted(): boolean {
+    return this.muted
   }
 
   resume(now: number): QueueAction[] {
@@ -144,6 +165,7 @@ export class AlertQueue {
   snapshot(): Queue {
     return {
       paused: this.paused,
+      muted: this.muted,
       playing: this.playing
         ? { alert: this.playing.alert, started_at: this.playing.started_at }
         : null,

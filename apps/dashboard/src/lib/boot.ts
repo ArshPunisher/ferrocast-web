@@ -455,6 +455,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
   window.__ferrocastDemo?.dispose()
   const engine = new DemoEngine({
     setupDone,
+    persistQueue: true,
     autoplay: params.get('autoplay') !== '0',
     ...(params.has('latency') ? { latencyMs: Number(params.get('latency')) } : {}),
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
