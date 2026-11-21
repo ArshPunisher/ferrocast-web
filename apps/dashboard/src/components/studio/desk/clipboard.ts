@@ -13,6 +13,9 @@ const useClipStore = create<{
   set: (c: EngineClipboard | null) => void
 }>((set) => ({ clip: null, set: (clip) => set({ clip }) }))
 
+/** Counts copies that succeeded: a read that began before one must not overwrite it. */
+let copies = 0
+
 /** What a key press means for the clipboard, if anything. `editing` is true while the key goes
  * to a text field (or an editable area), `selection` while text is selected: those keep their
  * own copy and paste, so the page never takes them. */
@@ -62,11 +65,12 @@ export function useStudioClipboard(api: EngineApi, running = true): StudioClipbo
   useEffect(() => {
     if (!running) return
     let alive = true
+    const before = copies
     api
       .clipboard()
-      .then((c) => alive && set(c))
+      .then((c) => alive && copies === before && set(c))
       // Nothing copied (a 404) or no app to ask: nothing to paste.
-      .catch(() => alive && set(null))
+      .catch(() => alive && copies === before && set(null))
     return () => {
       alive = false
     }
@@ -76,7 +80,11 @@ export function useStudioClipboard(api: EngineApi, running = true): StudioClipbo
       void run('copy', () => api.copySource(scene, id), {
         once: true,
         success: `Copied ${name}. Paste it here or in another collection.`,
-      }).then((c) => c && set(c)),
+      }).then((c) => {
+        if (!c) return
+        copies++
+        set(c)
+      }),
     [api, run, set],
   )
   const copyFilters = useCallback(
@@ -84,7 +92,11 @@ export function useStudioClipboard(api: EngineApi, running = true): StudioClipbo
       void run('copy', () => api.copyFilters(name, item), {
         once: true,
         success: (c) => `Copied ${c.count} filter${c.count === 1 ? '' : 's'} of ${c.name}.`,
-      }).then((c) => c && set(c)),
+      }).then((c) => {
+        if (!c) return
+        copies++
+        set(c)
+      }),
     [api, run, set],
   )
   const pasteSource = useCallback(

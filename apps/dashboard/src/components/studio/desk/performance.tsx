@@ -20,6 +20,9 @@ const usePausedStore = create<PausedState>((set) => ({
   set: (paused) => set({ paused }),
 }))
 
+/** Counts the answers to a toggle: a poll that began before one must not overwrite it. */
+let toggled = 0
+
 /** Whether performance mode has the pictures paused now. */
 export function usePreviewPaused(): boolean {
   return usePausedStore((s) => s.paused)
@@ -39,12 +42,14 @@ export function PreviewPausedSync({ running }: { running: boolean }) {
       return
     }
     let alive = true
-    const read = () =>
+    const read = () => {
+      const before = toggled
       void api
         .previewPaused()
-        .then((r) => alive && set(r.paused))
+        .then((r) => alive && toggled === before && set(r.paused))
         // The app not answering is not "paused": keep what the page shows.
         .catch(() => undefined)
+    }
     read()
     const timer = window.setInterval(read, PAUSE_POLL_MS)
     const onVisible = () => document.visibilityState === 'visible' && read()
@@ -73,7 +78,11 @@ export function usePausePreview(): {
     void run('pause-preview', () => api.setPreviewPaused(next), {
       once: true,
       success: (r) => (r.paused ? 'Preview paused. Your stream and recording carry on.' : null),
-    }).then((r) => r && set(r.paused))
+    }).then((r) => {
+      if (!r) return
+      toggled++
+      set(r.paused)
+    })
   }
   return { paused, busy: busy === 'pause-preview', toggle }
 }
@@ -104,6 +113,9 @@ export function PausedCard({ compact }: { compact?: boolean }) {
     <div
       role="status"
       data-over-preview
+      // The card is not the stage: a press on it never picks or moves the source under it.
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
       className="absolute inset-0 z-[1] grid place-items-center bg-[#0a0b0d] p-3 text-center"
     >
       <div className="flex max-w-[34ch] flex-col items-center gap-2">
