@@ -42,6 +42,7 @@ export function ImportStep({
   onChoiceChange,
   imported,
   onImportedChange,
+  editedAfterImport = false,
   onContinue,
 }: {
   engine: EngineApi
@@ -51,6 +52,8 @@ export function ImportStep({
   onChoiceChange: (next: ImportChoice) => void
   imported: ImportedCollectionState | null
   onImportedChange: (next: ImportedCollectionState | null) => void
+  /** The mic setup was changed in the imported collection after it came in. */
+  editedAfterImport?: boolean
   onContinue: () => void
 }) {
   const [collections, setCollections] = useState<EngineObsCollection[] | null>(null)
@@ -68,6 +71,7 @@ export function ImportStep({
 
   const [undoing, setUndoing] = useState(false)
   const [undoError, setUndoError] = useState<unknown>(null)
+  const [confirmingUndo, setConfirmingUndo] = useState(false)
   const [undoneMessage, setUndoneMessage] = useState<string | null>(null)
   const listReqRef = useRef(0)
   const previewReqRef = useRef(0)
@@ -177,22 +181,35 @@ export function ImportStep({
     if (!imported) return
     setUndoing(true)
     setUndoError(null)
+    const backTo = imported.previousId ?? 'untitled'
     try {
-      const backTo = imported.previousId ?? 'untitled'
       await engine.switchShelf('collections', backTo)
+    } catch (e) {
+      setUndoError(e)
+      setUndoing(false)
+      return
+    }
+    try {
       if (imported.report.id && imported.report.id !== backTo) {
         await engine.removeShelf('collections', imported.report.id)
       }
-      onImportedChange(null)
-      onChoiceChange('fresh')
-      setPreview(null)
-      setSelectedId(null)
       setUndoneMessage('Import undone. Restored your previous clean setup.')
-    } catch (e) {
-      setUndoError(e)
-    } finally {
-      setUndoing(false)
+    } catch {
+      // Studio is back on the previous setup: the card must not still claim the import.
+      setUndoneMessage(
+        'Back on your previous setup, but the imported copy couldn’t be removed. You can remove it later in the Studio’s collections.',
+      )
     }
+    setConfirmingUndo(false)
+    onImportedChange(null)
+    onChoiceChange('fresh')
+    setPreview(null)
+    setSelectedId(null)
+    setUndoing(false)
+    // The card with the focused button is gone: focus goes to the step's heading.
+    window.setTimeout(() => {
+      document.getElementById(headingId)?.focus()
+    }, 80)
   }
 
   const describedListError = listError ? describeError(listError) : null
@@ -308,6 +325,35 @@ export function ImportStep({
             </div>
           )}
 
+          {confirmingUndo && (
+            <div
+              role="alert"
+              className="flex flex-col gap-2 rounded-[12px] border border-warn/40 bg-warn-soft px-3.5 py-3 text-[13px] text-text"
+            >
+              <p className="font-semibold">
+                You changed your mic setup after importing. Undoing removes those changes too.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  busy={undoing}
+                  onClick={() => void undoImport()}
+                >
+                  Undo and lose my changes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={undoing}
+                  onClick={() => setConfirmingUndo(false)}
+                >
+                  Keep the import
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button
               size="lg"
@@ -323,7 +369,7 @@ export function ImportStep({
               size="lg"
               variant="secondary"
               busy={undoing}
-              onClick={() => void undoImport()}
+              onClick={() => (editedAfterImport ? setConfirmingUndo(true) : void undoImport())}
               icon={<ArrowCounterClockwise size={17} />}
             >
               Undo and start over

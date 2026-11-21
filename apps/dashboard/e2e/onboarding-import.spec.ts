@@ -112,6 +112,34 @@ test.describe('first-run import and camera/mic check', () => {
     await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
+  test('undo asks first when the mic was changed after the import, and keeps focus', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: /Import “Main Streaming Setup”/ }).click()
+    await expect(
+      page.getByRole('heading', { name: /Imported “Main Streaming Setup”/ }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Continue to camera and mic check' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+    await page.getByRole('button', { name: /Clean up my mic/ }).click()
+    await expect(page.getByText(/Mic cleaned up/)).toBeVisible()
+    await page.getByRole('button', { name: 'Back' }).click()
+    await page.getByRole('button', { name: 'Undo and start over' }).click()
+    await expect(page.getByText(/You changed your mic setup after importing/)).toBeVisible()
+    // Keep the import: nothing was removed.
+    await page.getByRole('button', { name: 'Keep the import' }).click()
+    await expect(
+      page.getByRole('heading', { name: /Imported “Main Streaming Setup”/ }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Undo and start over' }).click()
+    await page.getByRole('button', { name: 'Undo and lose my changes' }).click()
+    await expect(page.getByText(/Import undone/)).toBeVisible()
+    // The undone import no longer counts as done, and focus is on the step's heading.
+    await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
+  })
+
   test('fits 375px mobile viewport with zero horizontal overflow across Import and Camera/Mic check', async ({
     page,
   }) => {

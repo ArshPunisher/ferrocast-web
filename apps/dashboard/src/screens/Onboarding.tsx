@@ -89,6 +89,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   const [imported, setImported] = useState<ImportedCollectionState | null>(null)
   const [importDone, setImportDone] = useState(false)
   const [mediaChecked, setMediaChecked] = useState(false)
+  const [editedAfterImport, setEditedAfterImport] = useState(false)
 
   const anyConnected = (['twitch', 'youtube', 'kick'] as const).some(
     (p) => connectors?.[p].state === 'connected',
@@ -256,9 +257,14 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   choice={importChoice}
                   onChoiceChange={setImportChoice}
                   imported={imported}
+                  editedAfterImport={editedAfterImport}
                   onImportedChange={(next) => {
                     setImported(next)
-                    if (!next) setImportDone(false)
+                    if (!next) {
+                      setImportDone(false)
+                      setMediaChecked(false)
+                      setEditedAfterImport(false)
+                    }
                   }}
                   onContinue={() => {
                     setImportDone(true)
@@ -273,6 +279,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   headingId="step-1"
                   headingRef={headingRef}
                   onBack={() => goTo(0)}
+                  onEdited={() => imported && setEditedAfterImport(true)}
                   onContinue={() => {
                     setMediaChecked(true)
                     goTo(2)

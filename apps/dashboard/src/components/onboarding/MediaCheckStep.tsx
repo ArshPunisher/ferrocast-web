@@ -177,12 +177,15 @@ export function MediaCheckStep({
   headingId,
   headingRef,
   onBack,
+  onEdited,
   onContinue,
 }: {
   engine: EngineApi
   headingId: string
   headingRef: Ref<HTMLHeadingElement>
   onBack: () => void
+  /** The mic was changed here (device, level, mute, clean-up). */
+  onEdited?: () => void
   onContinue: () => void
 }) {
   const [initLoading, setInitLoading] = useState(true)
@@ -362,6 +365,7 @@ export function MediaCheckStep({
       // In place: only the device changes, so the mic keeps its filters, volume and mute (and
       // a mic that lives in a scene, as in an imported collection, can be switched too).
       await engine.update(micAudio.name, { device_id: value })
+      onEdited?.()
     } catch (e) {
       setMicError(e)
     }
@@ -373,6 +377,7 @@ export function MediaCheckStep({
     setMicAudio({ ...micAudio, muted: nextMuted })
     try {
       await engine.setAudio(micAudio.name, { muted: nextMuted })
+      onEdited?.()
     } catch (e) {
       setMicAudio({ ...micAudio, muted: !nextMuted })
       setMicError(e)
@@ -385,8 +390,10 @@ export function MediaCheckStep({
     setMicAudio({ ...micAudio, volume_db: rounded })
     try {
       await engine.setAudio(micAudio.name, { volume_db: rounded })
-    } catch {
-      // Ignore intermediate slider failures during rapid drag
+      onEdited?.()
+    } catch (e) {
+      // The mic went away: the slider says what it is, and the mic error says what to do.
+      setMicError(e)
     }
   }
 
@@ -657,6 +664,7 @@ export function MediaCheckStep({
                   level={currentLevel}
                   filters={micFilters}
                   onReload={() => void reloadMicFilters()}
+                  onCleaned={() => onEdited?.()}
                   className="border-t border-line pt-3"
                 />
               </div>
