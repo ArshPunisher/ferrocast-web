@@ -186,12 +186,12 @@ nothing breaks today; please add the same checks the web side makes
 The overlay ignores any value it doesn't know, and never passes one to CSS.
 
 
-## Level meters: raw peaks, pushed (requested 21 Nov by Sonnet 2)
+## Level meters: raw peaks, pushed (requested 21 Nov)
 
 `POST /studio/engine/levels` answers with the highest peak over the last ~300 ms, so even at 30 requests a second the dashboard's bars move in 300 ms steps. Ask: a short window (about 33 ms) for `peak`, or a push of levels over the live WebSocket at 30 Hz, so the dashboard can draw attack and release itself. The dashboard already polls at ~30 Hz and animates between samples.
 
 Status 21 Nov: the engine now takes an optional `window: "fast"` (about 43 ms) on `POST /studio/engine/levels`, answered off the Studio queue; the dashboard sends it. A push over the WebSocket is still open.
 
-## Preview guides in the native picture (21 Nov, Sonnet 2)
+## Preview guides in the native picture (21 Nov)
 
 The dashboard draws the safe areas (EBU R95 93% and 90%), the centre cross and the "hide what runs past the canvas" mask as page elements marked `data-over-preview`, so the app's existing holes leave its picture out under them and the page shows through. That keeps this dashboard-only, but it is unverified in the real app. If it does not look right there, the cleaner route is an optional `guides` field on the preview rect (`{ action, title, cross, hide_overflow }`) that the app draws itself; "show overflow even when the source is hidden" (OBS's third mode) needs the app in any case. Not requested yet.
