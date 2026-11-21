@@ -143,6 +143,8 @@ export interface Fault {
 
 export interface DemoOptions {
   base?: string
+  /** Keep the alert queue's pause and mute in localStorage, so a reload keeps them (the dashboard's demo). */
+  persistQueue?: boolean
   /** Generate chat and alerts on timers (default true). */
   autoplay?: boolean
   seed?: number
@@ -335,6 +337,7 @@ export class DemoEngine {
   private overlayTokens = new Map<string, string>()
   private rules: AlertRule[]
   private queue = new AlertQueue()
+  private persistQueue = false
   private queueTimer: ReturnType<typeof setTimeout> | null = null
   private events: FerroEvent[] = []
   private why = new Map<string, string[]>()
@@ -492,6 +495,8 @@ export class DemoEngine {
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
+    this.persistQueue = opts.persistQueue === true
+    this.loadQueueFlags()
     this.rand = mulberry32(opts.seed ?? 20261017)
     this.latency = opts.latencyMs ?? null
     this.setupDone = opts.setupDone ?? true
@@ -2022,6 +2027,10 @@ export class DemoEngine {
 
   private saveRule(id: string | null, body: unknown) {
     const r = requireObj(body) as AlertRule
+    if (r.interrupt !== undefined && typeof r.interrupt !== 'boolean')
+      throw new HttpError(400, 'invalid', 'interrupt: true or false.')
+    r.interrupt = r.interrupt === true
+    for (const v of r.variations ?? []) if (v && v.weight === undefined) v.weight = 1
     if (!Array.isArray(r.kinds) || r.kinds.length === 0)
       throw new HttpError(400, 'invalid', 'kinds: the rule needs at least one event type.')
     if (!Array.isArray(r.variations) || !r.variations.some((v) => v.condition === null))
@@ -2035,6 +2044,11 @@ export class DemoEngine {
         throw new HttpError(400, 'invalid', `variations: “${v.name}” must last 1 to 60 seconds.`)
       if (v.volume < 0 || v.volume > 100)
         throw new HttpError(400, 'invalid', `variations: “${v.name}” volume must be 0 to 100.`)
+      if (
+        v.weight !== undefined &&
+        (!Number.isInteger(v.weight) || v.weight < 0 || v.weight > 1000)
+      )
+        throw new HttpError(400, 'invalid', `variations: “${v.name}” weight must be 0 to 1000.`)
       if ((v.title.match(/{/g) ?? []).length !== (v.title.match(/}/g) ?? []).length)
         throw new HttpError(400, 'invalid', `variations: “${v.name}” has a { that is never closed.`)
     }
@@ -2119,11 +2133,44 @@ export class DemoEngine {
       case 'clear':
         this.queue.clearWaiting()
         break
+      case 'mute':
+        this.queue.setMuted(true)
+        break
+      case 'unmute':
+        this.queue.setMuted(false)
+        break
       default:
         throw new HttpError(404, 'not_found', 'That queue action doesn’t exist.')
     }
+    this.saveQueueFlags()
     this.applyQueue(actions)
     return this.queue.snapshot()
+  }
+
+  private loadQueueFlags(): void {
+    if (!this.persistQueue) return
+    try {
+      const v = JSON.parse(localStorage.getItem('fc-demo-queue') ?? '{}') as {
+        paused?: unknown
+        muted?: unknown
+      }
+      if (v.paused === true) this.queue.pause()
+      if (v.muted === true) this.queue.setMuted(true)
+    } catch {
+      // Storage can be blocked or hold junk: start with the defaults.
+    }
+  }
+
+  private saveQueueFlags(): void {
+    if (!this.persistQueue) return
+    try {
+      localStorage.setItem(
+        'fc-demo-queue',
+        JSON.stringify({ paused: this.queue.isPaused, muted: this.queue.isMuted }),
+      )
+    } catch {
+      // Not saved; the flags still work for this page.
+    }
   }
 
   private replayEvent(id: string) {
@@ -2355,6 +2402,7 @@ export class DemoEngine {
       }))
     if (on && this.panicCfg.pause_alerts) this.queue.pause()
     if (!on && this.panicCfg.pause_alerts) this.applyQueue(this.queue.resume(Date.now()))
+    this.saveQueueFlags()
     this.broadcastQueue()
     for (const a of applied) {
       if (a.modes.includes('followers_only'))
@@ -2607,7 +2655,7 @@ export class DemoEngine {
       for (const s of this.overlaySubs) if (this.overlayWants(s, e)) this.sendOverlay(s, 'event', e)
 
     if (isAlertable(e) && (origin === 'live' || origin === 'replay' || origin === 'test')) {
-      const sel = select(this.rules, e)
+      const sel = select(this.rules, e, this.rand)
       if (sel) {
         const alert = this.designs.dress(
           render(`al-${++this.alertSeq}`, sel.rule, sel.variation, e),
@@ -2630,7 +2678,7 @@ export class DemoEngine {
           })
           this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
         }
-        this.applyQueue(this.queue.enqueue(alert, priority, now))
+        this.applyQueue(this.queue.enqueue(alert, priority, now, sel.rule.interrupt === true))
       } else if (origin === 'live') {
         this.why.set(e.id, this.whyFor(e).reasons)
       }

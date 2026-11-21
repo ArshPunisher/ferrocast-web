@@ -136,6 +136,7 @@ describe('alert rules', () => {
       enabled: true,
       kinds: ['subscription'],
       platforms: [],
+      interrupt: false,
       variations: [newVariation('default', '{name} subscribed'), silver, gold],
     }
   }
@@ -215,6 +216,7 @@ describe('alert rules', () => {
       enabled: true,
       kinds: ['tip'],
       platforms: [],
+      interrupt: false,
       variations: [v],
     }
     const a = render('a', rule, v, e)

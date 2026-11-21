@@ -220,3 +220,14 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+
+## R14. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
+
+The Studio's events dock now has pause, skip, mute, filters, read marks and a test alert. Pause, skip and test already exist; the rest needs the engine (done on branch `feat/p1-minifeed-alerts`, see the engine's `docs/API.md` Alerts):
+
+- `GET /api/v1/queue` gains `muted: boolean` (saved with the queue, survives a restart).
+- `POST /api/v1/queue/mute` and `/unmute` -> queue. A muted queue shows alerts without `sound`, `tts_text` and `tts_audio`.
+- `AlertRule.interrupt: boolean` (default false): a new alert from the rule ends the playing one and shows at once; paused queues just queue it.
+- `Variation.weight: number` (0 to 1000, default 1): among matching looks with the same top priority, picked by weight; 400 over 1000.
+
+Read marks and the type filter are per browser (localStorage `fc-feed-read-v2` (by the engine's event number), `fc-feed-filter`), not engine state. The demo engine implements all of it (`persistQueue` keeps pause and mute over a reload in the dashboard's demo). A phone's owner role can call mute (the relay's audit log names it); the cloud `queue_op` has no mute and its queue frame always says `muted: false`.
