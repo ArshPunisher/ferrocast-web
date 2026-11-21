@@ -220,3 +220,13 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+## R14. `.overlay` theme-pack import, Google Fonts & Undo (Phase 2 #13, 22 Nov)
+
+Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat/p2-overlay-import`):
+- `POST /api/v1/studio/engine/library/collections/overlay/preview` (multipart `file` upload)
+- `POST /api/v1/studio/engine/library/collections/overlay/import` (`{ preview_id, name?, create_overlays?, fetch_fonts? }`)
+- `POST /api/v1/studio/engine/library/collections/overlay/undo` (`{ undo_token }`)
+
+Also adds file-backed `GET/POST/PUT/DELETE` `/api/v1/studio/engine/library/*` fallback in `ferrocast-headless` when no desktop `StudioHost` is registered, and auto-loads `<FERROCAST_HOME>/fonts/` in `ferrocore::TextRenderer`.
+
+

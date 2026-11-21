@@ -622,7 +622,38 @@ export class DemoEngine {
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.welcome = new DemoWelcome(this.host)
-    this.studio = new DemoStudio(this.host, () => this.commands)
+    this.studio = new DemoStudio(this.host, () => this.commands, true, {
+      baseUrl: () => this.base,
+      isLive: () => this.studio.library.busy,
+      isOffline: () => this.offline,
+      createOverlay: (input) => {
+        const id = `ov-${randomToken().slice(0, 10)}`
+        let unique = input.name.trim() || 'Overlay'
+        for (
+          let n = 2;
+          this.overlays.some((x) => x.name.toLowerCase() === unique.toLowerCase());
+          n++
+        ) {
+          unique = `${input.name.slice(0, 56)} ${n}`
+        }
+        const ov: Overlay = {
+          id,
+          name: unique,
+          url: `${this.base}/o/${this.tokenFor(id)}/`,
+          width: input.width,
+          height: input.height,
+          widgets: clone(input.widgets),
+          updated_at: Date.now(),
+          design: null,
+        }
+        this.overlays.push(ov)
+        return clone(ov)
+      },
+      deleteOverlay: (id) => {
+        this.overlays = this.overlays.filter((o) => o.id !== id)
+      },
+      now: () => Date.now(),
+    })
     this.golive = new DemoGoLive(
       this.host,
       () => this.accounts,
