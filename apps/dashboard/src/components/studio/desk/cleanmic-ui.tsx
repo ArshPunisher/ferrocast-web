@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Sparkle } from '@phosphor-icons/react'
 import type { EngineFilter, EngineLevel, studioEngineApi } from '@ferrocast/api'
 import { Button, InfoTip, cx, toast } from '@ferrocast/ui'
@@ -35,6 +35,7 @@ export function CleanMicControl({
 }) {
   const { run, busy } = useAction()
   const peaks = useRef<number[]>([])
+  const [failed, setFailed] = useState<string | null>(null)
 
   useEffect(() => {
     peaks.current = []
@@ -60,18 +61,36 @@ export function CleanMicControl({
 
   const clean = async () => {
     const taken = (have ?? []).map((f) => f.name)
-    const ok = await run('clean', async () => {
-      // Apply one at a time in chain order; gain moves to top so later stages hear the boosted voice.
-      for (const f of plan) {
-        const n = freeName(f.name, taken)
-        taken.push(n)
-        await api.addFilter(name, { ...f, name: n })
-        if (f.kind === 'gain_filter') await api.editFilter(name, n, 'top')
-      }
-      return true
-    })
+    const added: string[] = []
+    setFailed(null)
+    const ok = await run(
+      'clean',
+      async () => {
+        try {
+          // Apply one at a time in chain order; gain moves to top so later stages hear the boosted voice.
+          for (const f of plan) {
+            const n = freeName(f.name, taken)
+            taken.push(n)
+            await api.addFilter(name, { ...f, name: n })
+            added.push(n)
+            if (f.kind === 'gain_filter') await api.editFilter(name, n, 'top')
+          }
+          return true
+        } catch (e) {
+          // Half a chain (or a boost left after the limiter) is worse than none: take it back.
+          for (const n of added.reverse()) await api.removeFilter(name, n).catch(() => undefined)
+          setFailed(
+            'Cleaning up didn’t finish, so nothing was changed. Check the mic is connected and try again.',
+          )
+          throw e
+        }
+      },
+      { once: true },
+    )
     onReload()
     if (ok) {
+      // What was measured before the clean-up says nothing about the cleaned voice.
+      peaks.current = []
       toast({ tone: 'ok', message: 'Your mic is cleaned up: noise out, level even, no clipping.' })
       onCleaned?.()
     }
@@ -101,7 +120,16 @@ export function CleanMicControl({
           </>
         )}
       </span>
-      {!have ? null : plan.length > 0 ? (
+      {failed && (
+        <p role="alert" className="w-full text-[13px] font-medium text-danger">
+          {failed}
+        </p>
+      )}
+      {!have ? (
+        <Button size="sm" variant="secondary" onClick={onReload}>
+          Couldn’t read your mic’s filters. Try again
+        </Button>
+      ) : plan.length > 0 ? (
         <Button size="sm" variant="secondary" busy={busy === 'clean'} onClick={() => void clean()}>
           <Sparkle size={15} weight="bold" /> Clean up my mic
         </Button>
