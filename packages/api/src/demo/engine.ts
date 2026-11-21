@@ -9,6 +9,7 @@ import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
 import { DemoMusic } from './features/music'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
+import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
 import type { FetchLike } from '../client'
@@ -1581,6 +1582,15 @@ export class DemoEngine {
           400,
           'invalid',
           'The settings aren’t valid: youtube_privacy: use one of public, unlisted, private.',
+        )
+      if (
+        patch.theme !== undefined &&
+        !['system', 'dark', 'light', ...THEME_IDS].includes(patch.theme)
+      )
+        throw new HttpError(
+          400,
+          'invalid',
+          'The settings aren’t valid: theme: use system, dark, light or one of the ten themes.',
         )
       this.settings = { ...this.settings, ...patch }
       return clone(this.settings)

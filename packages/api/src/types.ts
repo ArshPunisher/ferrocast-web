@@ -1205,9 +1205,29 @@ export interface ObsState {
   detail?: string | null
 }
 
+/** The dashboard's ten looks (Settings, Appearance). Six dark, four light. */
+export const THEME_IDS = [
+  'graphite',
+  'slate',
+  'moonlight',
+  'forest',
+  'ember',
+  'obsidian',
+  'daylight',
+  'mist',
+  'linen',
+  'contrast',
+] as const
+export type ThemeId = (typeof THEME_IDS)[number]
+/**
+ * What `Settings.theme` can be: follow the computer, one of the ten, or the old `dark` and
+ * `light`, which stay as aliases of Slate and Daylight so a saved choice keeps working.
+ */
+export type ThemePref = 'system' | 'dark' | 'light' | ThemeId
+
 /** App settings. Shape proposed in docs/API-REQUESTS.md (R5). */
 export interface Settings {
-  theme: 'system' | 'dark' | 'light'
+  theme: ThemePref
   reduced_motion: 'system' | 'on' | 'off'
   low_motion_overlays: boolean
   lan_access: boolean

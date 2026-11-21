@@ -195,3 +195,16 @@ Status 21 Nov: the engine now takes an optional `window: "fast"` (about 43 ms) o
 ## Preview guides in the native picture (21 Nov)
 
 The dashboard draws the safe areas (EBU R95 93% and 90%), the centre cross and the "hide what runs past the canvas" mask as page elements marked `data-over-preview`, so the app's existing holes leave its picture out under them and the page shows through. That keeps this dashboard-only, but it is unverified in the real app. If it does not look right there, the cleaner route is an optional `guides` field on the preview rect (`{ action, title, cross, hide_overflow }`) that the app draws itself; "show overflow even when the source is hidden" (OBS's third mode) needs the app in any case. Not requested yet.
+
+## R12. Dashboard themes: `Settings.theme` takes ten ids (21 Nov)
+
+The dashboard has ten looks (Settings, Appearance): `graphite`, `slate`, `moonlight`, `forest`,
+`ember`, `obsidian` (dark) and `daylight`, `mist`, `linen`, `contrast` (light). `PUT /api/v1/settings`
+today accepts only `system`, `dark` and `light` for `theme` (`crates/engine/src/state.rs`, `one_of`),
+so choosing one of the ten is refused with 400.
+
+Ask: accept `system`, `dark`, `light` and the ten ids. `dark` and `light` stay valid and mean
+`slate` and `daylight`, so a saved setting keeps working; anything else is still a 400 naming
+`theme`. Nothing else changes (the phone's remote page reads the same setting). The demo engine
+(`packages/api/src/demo/engine.ts`) already takes and checks the same list.
+
