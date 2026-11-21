@@ -40,7 +40,7 @@
      main one so nothing reads faint (owner, 26 Oct). */
   --fc-text: #e9eff5;
   --fc-text-2: #bccad8;
-  --fc-text-3: #90a1b2;
+  --fc-text-3: #96a6b6;
 
   /* The Spark mark's own colours (logo, brand art). */
   --fc-brand-molten: #ffa424;
@@ -52,7 +52,7 @@
   --fc-accent: #ffa424;
   --fc-accent-strong: #ffb547;
   --fc-on-accent: #120a00;
-  --fc-molten-text: #ffa424;
+  --fc-molten-text: #ffba59;
 
   /* Primary buttons: white text on a deeper Molten fill. The bright --fc-accent stays for
      graphics; as a button fill it can't carry white text. The same values in every theme:
@@ -89,7 +89,7 @@
   --fc-ok-soft: rgb(61 209 147 / 0.14);
   --fc-warn: #f2b84b;
   --fc-warn-soft: rgb(242 184 75 / 0.14);
-  --fc-danger: #ff5d6c;
+  --fc-danger: #ff7985;
   --fc-danger-fill: #d9324a;
   --fc-danger-soft: rgb(255 93 108 / 0.14);
 
@@ -157,17 +157,18 @@
   --fc-dock-head: #2e333c;
   --fc-text: #eceef2;
   --fc-text-2: #c3c8d1;
-  --fc-text-3: #99a0ac;
+  --fc-text-3: #9ba2ae;
   --fc-accent: #ffa424;
   --fc-accent-text: #5fdcff;
   --fc-arc: #5fdcff;
   --fc-accent-soft: rgb(95 220 255 / 0.12);
   --fc-accent-line: rgb(95 220 255 / 0.4);
   --fc-btn-primary: #c04d00;
-  --fc-btn-primary-hover: #a54200;
+  --fc-btn-primary-hover: #a54100;
   --fc-on-btn-primary: #ffffff;
   --fc-live: #e5484d;
   --fc-meter: #3ecf8e;
+  --fc-molten-text: #ffb956;
 }
 
 :root[data-theme='slate'],
@@ -187,17 +188,20 @@
   --fc-dock-head: #283643;
   --fc-text: #e9eff5;
   --fc-text-2: #bccad8;
-  --fc-text-3: #90a1b2;
+  --fc-text-3: #96a6b6;
   --fc-accent: #ffa424;
   --fc-accent-text: #5fdcff;
   --fc-arc: #5fdcff;
   --fc-accent-soft: rgb(95 220 255 / 0.12);
   --fc-accent-line: rgb(95 220 255 / 0.4);
   --fc-btn-primary: #c04d00;
-  --fc-btn-primary-hover: #a54200;
+  --fc-btn-primary-hover: #a54100;
   --fc-on-btn-primary: #ffffff;
   --fc-live: #e5484d;
   --fc-meter: #3ecf8e;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-danger: #ff7985;
+  --fc-molten-text: #ffba59;
 }
 
 :root[data-theme='moonlight'],
@@ -216,17 +220,20 @@
   --fc-dock-head: #303248;
   --fc-text: #eeedf7;
   --fc-text-2: #c6c5da;
-  --fc-text-3: #9c9bb6;
+  --fc-text-3: #a1a0ba;
   --fc-accent: #ffb04a;
   --fc-accent-text: #8fd8ff;
   --fc-arc: #8fd8ff;
   --fc-accent-soft: rgb(143 216 255 / 0.12);
   --fc-accent-line: rgb(143 216 255 / 0.4);
   --fc-btn-primary: #c04d00;
-  --fc-btn-primary-hover: #a54200;
+  --fc-btn-primary-hover: #a54100;
   --fc-on-btn-primary: #ffffff;
   --fc-live: #ef5b62;
   --fc-meter: #4fd6a0;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-danger: #ff7784;
+  --fc-molten-text: #ffb95e;
 }
 
 :root[data-theme='forest'],
@@ -245,17 +252,20 @@
   --fc-dock-head: #2a362f;
   --fc-text: #e9f0ec;
   --fc-text-2: #bfcdc5;
-  --fc-text-3: #93a39a;
+  --fc-text-3: #96a69d;
   --fc-accent: #ffa424;
   --fc-accent-text: #7fe0b8;
   --fc-arc: #7fe0b8;
   --fc-accent-soft: rgb(127 224 184 / 0.12);
   --fc-accent-line: rgb(127 224 184 / 0.4);
   --fc-btn-primary: #c04d00;
-  --fc-btn-primary-hover: #a54200;
+  --fc-btn-primary-hover: #a54100;
   --fc-on-btn-primary: #ffffff;
   --fc-live: #e5484d;
   --fc-meter: #3ecf8e;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-danger: #ff7481;
+  --fc-molten-text: #ffb956;
 }
 
 :root[data-theme='ember'],
@@ -281,10 +291,13 @@
   --fc-accent-soft: rgb(125 211 252 / 0.12);
   --fc-accent-line: rgb(125 211 252 / 0.4);
   --fc-btn-primary: #c04d00;
-  --fc-btn-primary-hover: #a54200;
+  --fc-btn-primary-hover: #a54100;
   --fc-on-btn-primary: #ffffff;
   --fc-live: #ef5350;
   --fc-meter: #4ccf8f;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-danger: #ff6c79;
+  --fc-molten-text: #ffb554;
 }
 
 :root[data-theme='obsidian'],
@@ -453,7 +466,7 @@
   --fc-dock-head: #d2dae5;
   --fc-text: #121a24;
   --fc-text-2: #2b3746;
-  --fc-text-3: #4a5869;
+  --fc-text-3: #495667;
   --fc-accent: #c46b00;
   --fc-accent-text: #0a5a78;
   --fc-arc: #0888b8;
@@ -464,6 +477,13 @@
   --fc-on-btn-primary: #ffffff;
   --fc-live: #c62f35;
   --fc-meter: #14915f;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-ok: #0a6844;
+  --fc-warn: #7c5200;
+  --fc-danger: #ae1f33;
+  --fc-tips: #7c5200;
+  --fc-teal: #0d655f;
+  --fc-molten-text: #703c00;
 }
 
 :root[data-theme='linen'],
@@ -493,6 +513,12 @@
   --fc-on-btn-primary: #ffffff;
   --fc-live: #c62f35;
   --fc-meter: #2f8f5b;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-warn: #8a5b00;
+  --fc-danger: #c22338;
+  --fc-tips: #8a5b00;
+  --fc-teal: #0e716a;
+  --fc-molten-text: #804500;
 }
 
 :root[data-theme='contrast'],
@@ -522,6 +548,11 @@
   --fc-on-btn-primary: #ffffff;
   --fc-live: #b00010;
   --fc-meter: #00703c;
+  /* A step deeper (or lighter) so this colour as text clears 4.5:1 on every surface of this theme. */
+  --fc-warn: #8b5c00;
+  --fc-tips: #8b5c00;
+  --fc-teal: #0f726b;
+  --fc-molten-text: #864800;
 }
 
 /* No theme chosen on a light computer: Daylight. */

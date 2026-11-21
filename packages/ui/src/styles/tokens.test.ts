@@ -211,6 +211,27 @@ describe('the ten themes', () => {
     },
   )
 
+  it.each(THEME_IDS)(
+    '%s: all three text colours clear 4.5:1 on every surface, the inset included',
+    (id) => {
+      // text-3 labels sit on panels, hover rows and the inset; the picked values were a hair under on
+      // the third surface in five themes, so those text-3 values are a step stronger than the mock-up's.
+      const t = resolved(id)
+      for (const fg of ['--fc-text', '--fc-text-2', '--fc-text-3'])
+        for (const bg of [
+          '--fc-bg',
+          '--fc-surface-1',
+          '--fc-surface-2',
+          '--fc-surface-3',
+          '--fc-surface-inset',
+        ])
+          expect(
+            contrast(hexOf(t, fg), hexOf(t, bg)),
+            `${id}: ${fg} on ${bg}`,
+          ).toBeGreaterThanOrEqual(4.5)
+    },
+  )
+
   it.each(THEME_IDS)('%s: button text clears 4.5:1 on the button, and on hover', (id) => {
     const t = resolved(id)
     expect(
@@ -227,6 +248,50 @@ describe('the ten themes', () => {
       const t = resolved(id)
       for (const bg of ['--fc-bg', '--fc-surface-1'])
         expect(contrast(hexOf(t, '--fc-molten-text'), hexOf(t, bg))).toBeGreaterThanOrEqual(4.5)
+    },
+  )
+
+  it.each(THEME_IDS)(
+    '%s: ok, warn, danger, tips and teal text clear 4.5:1 on every surface',
+    (id) => {
+      const t = resolved(id)
+      for (const fg of ['--fc-ok', '--fc-warn', '--fc-danger', '--fc-tips', '--fc-teal'])
+        for (const bg of ['--fc-bg', '--fc-surface-1', '--fc-surface-2', '--fc-surface-3'])
+          expect(
+            contrast(hexOf(t, fg), hexOf(t, bg)),
+            `${id}: ${fg} on ${bg}`,
+          ).toBeGreaterThanOrEqual(4.5)
+    },
+  )
+
+  it.each(THEME_IDS)(
+    '%s: Molten text clears 4.5:1 on the soft button, at rest and on hover',
+    (id) => {
+      const t = resolved(id)
+      const tint = (name: string): [number, number, number, number] => {
+        const m = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(t.get(name) ?? '')
+        if (!m) throw new Error(`${name} is not an rgb() with alpha: ${t.get(name)}`)
+        return [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]
+      }
+      const over = (bg: string, [r, g, b, a]: [number, number, number, number]) => {
+        const c = [1, 3, 5].map((i, k) => {
+          const base = parseInt(bg.slice(i, i + 2), 16)
+          return Math.round(base + ([r, g, b][k]! - base) * a)
+        })
+        return `#${c.map((x) => x.toString(16).padStart(2, '0')).join('')}`
+      }
+      for (const name of ['--fc-btn-soft', '--fc-btn-soft-hover'])
+        for (const bg of [
+          '--fc-bg',
+          '--fc-surface-1',
+          '--fc-surface-2',
+          '--fc-surface-3',
+          '--fc-surface-inset',
+        ])
+          expect(
+            contrast(hexOf(t, '--fc-molten-text'), over(hexOf(t, bg), tint(name))),
+            `${id}: ${name} over ${bg}`,
+          ).toBeGreaterThanOrEqual(4.5)
     },
   )
 
@@ -251,7 +316,7 @@ describe('the ten themes', () => {
     // :root is the dark default: its own surfaces are slate's.
     const base = rules(outsideMedia).find((r) => r.selectors.includes(':root'))!
     const slate = resolved('slate')
-    for (const name of ['--fc-bg', '--fc-surface-1', '--fc-text', '--fc-stage'])
+    for (const name of OWN.concat(['--fc-molten-text', '--fc-danger']))
       expect(base.decls.get(name), name).toBe(slate.get(name))
     // The light system block carries daylight's values.
     const sys = rules(`${systemLightCss}`).flatMap((r) => [...r.decls])
