@@ -43,22 +43,79 @@ export function OverlayEditor({ id }: { id: string }) {
   }, [ov.data])
   const leaving = useLeaveGuard(draft !== null && JSON.stringify(draft) !== JSON.stringify(ov.data))
 
-  // Labels depend only on label widgets' text, not on where widgets sit, so dragging
+  // Labels depend only on label widgets' source/template, not on where widgets sit, so dragging
   // doesn't rebuild the preview state.
   const labelKey = JSON.stringify(
-    (draft?.widgets ?? []).flatMap((w) => (w.kind === 'label' ? [[w.id, w.config.template]] : [])),
+    (draft?.widgets ?? []).flatMap((w) =>
+      w.kind === 'label' ? [[w.id, w.config.source, w.config.template]] : [],
+    ),
+  )
+  const hasTrain = (draft?.widgets ?? []).some(
+    (w) => w.kind === 'label' && w.config.source === 'hype_train',
   )
   const lastChat = chat.at(-1)?.id
   const lastEvent = events.at(-1)?.id
+  const sampleLabels: Record<string, string> = {
+    latest_follower: 'LunaLagoon',
+    latest_sub: 'rohanbuilds',
+    latest_gifter: 'Devika (5)',
+    latest_tip: 'Asha ₹500',
+    latest_bits: 'Ananya 1,200 bits',
+    latest_raid: 'VikramGG (48)',
+    top_tip_session: 'MeeraDraws ₹2,500',
+    top_supporter_session: 'MeeraDraws (₹2,500, 2 subs)',
+    session_follows: '41',
+    session_subs: '7',
+    session_bits: '4,850',
+    session_tips: '₹3,250',
+    session_raids: '2',
+    monthly_follows: '312',
+    monthly_subs: '58',
+    monthly_bits: '24,500',
+    monthly_tips: '₹18,400',
+    monthly_raids: '9',
+    top_tip_monthly: 'MeeraDraws ₹5,000',
+    top_supporter_monthly: 'Devika (15 subs, ₹3,500)',
+    alltime_follows: '2,840',
+    alltime_subs: '419',
+    alltime_bits: '148,200',
+    alltime_tips: '₹92,150',
+    alltime_raids: '64',
+    top_tip_alltime: 'AriaLive ₹12,000',
+    top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
+    hype_train: 'Lv.2 · 8 events · 01:45',
+  }
   const state: OverlayState = useMemo(
     () => ({
       goals: goals.data ?? [],
       labels: Object.fromEntries(
-        (JSON.parse(labelKey) as [string, string][]).map(([id, t]) => [
+        (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, t]) => [
           id,
-          t.replace('{name}', 'LunaLagoon'),
+          t.replace(/\{(value|name)\}/g, sampleLabels[source] ?? 'LunaLagoon'),
         ]),
       ),
+      ...(hasTrain
+        ? {
+            label_trains: Object.fromEntries(
+              (JSON.parse(labelKey) as [string, string, string][])
+                .filter(([, source]) => source === 'hype_train')
+                .map(([id]) => [
+                  id,
+                  {
+                    active: true,
+                    level: 2,
+                    events: 8,
+                    contributors: 5,
+                    latest_actor: 'NeelaMoth',
+                    remaining_ms: 105_000,
+                    ends_at: Date.now() + 105_000,
+                    warmup_count: 8,
+                    threshold: 3,
+                  },
+                ]),
+            ),
+          }
+        : {}),
       viewers,
       events: events.slice(-25),
       chat: chat.slice(-30),
@@ -68,7 +125,7 @@ export function OverlayEditor({ id }: { id: string }) {
     }),
     // Keyed on the newest item: both lists are capped, so their lengths stop changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goals.data, labelKey, lastChat, lastEvent, livePoll, liveGiveaway],
+    [goals.data, labelKey, hasTrain, lastChat, lastEvent, livePoll, liveGiveaway],
   )
 
   if (ov.error) return <LoadError error={ov.error} onRetry={ov.reload} />

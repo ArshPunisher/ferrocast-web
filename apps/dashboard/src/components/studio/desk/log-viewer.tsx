@@ -3,12 +3,18 @@
 // stream keys and tokens already taken out by the engine. Nothing is uploaded anywhere.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowClockwise, CopySimple, FolderOpen, MagnifyingGlass } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  CopySimple,
+  FileArchive,
+  FolderOpen,
+  MagnifyingGlass,
+} from '@phosphor-icons/react'
 import { describeError } from '@ferrocast/api'
 import { Button, Dialog, Input, Segmented, Skeleton, copyText, cx, toast } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
-import { useResource } from '../../../lib/hooks'
+import { useClient, useResource } from '../../../lib/hooks'
 import { useDesk } from './common'
 
 export type LogLevel = 'error' | 'warn' | 'info'
@@ -45,9 +51,11 @@ export function LogDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
 function LogBody() {
   const { api } = useDesk()
+  const client = useClient()
   const log = useResource(() => api.log(1500), [api])
   const [only, setOnly] = useState<'all' | 'problems'>('all')
   const [q, setQ] = useState('')
+  const [reporting, setReporting] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const lines = useMemo(() => visibleLines(log.data?.lines ?? [], only, q), [log.data, only, q])
   const problems = useMemo(
@@ -73,6 +81,37 @@ function LogBody() {
     } catch (e) {
       const d = describeError(e)
       toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    }
+  }
+  const supportReport = async () => {
+    setReporting(true)
+    try {
+      if (inDesktopApp()) {
+        const res = await client.createSupportReport(null)
+        if (!res.cancelled) {
+          toast({
+            tone: 'ok',
+            message: 'Support report saved.',
+            ...(res.path ? { hint: res.path } : {}),
+          })
+        }
+        return
+      }
+      const blob = await client.downloadSupportReportZip()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ferrocast-support-${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      toast({ tone: 'ok', message: 'Support report downloaded.' })
+    } catch (e) {
+      const d = describeError(e)
+      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+    } finally {
+      setReporting(false)
     }
   }
   if (log.error && !log.data) return <LoadError error={log.error} onRetry={log.reload} />
@@ -130,6 +169,14 @@ function LogBody() {
             Show file
           </Button>
         )}
+        <Button
+          size="sm"
+          icon={<FileArchive size={15} />}
+          busy={reporting}
+          onClick={() => void supportReport()}
+        >
+          Support report
+        </Button>
       </div>
       {!log.data ? (
         <Skeleton className="h-[52vh]" />
