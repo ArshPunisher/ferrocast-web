@@ -87,3 +87,27 @@ describe('the browser camera and mic test', () => {
     expect(host.textContent).toMatch(/site settings|address bar|Retry|Continue/i)
   })
 })
+
+describe('the browser test when the page goes away or setup fails', () => {
+  it('lets the camera go when the step is left while the browser is still asking', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const stop = vi.fn()
+    let grant: (s: MediaStream) => void = () => undefined
+    const pending = new Promise<MediaStream>((res) => (grant = res))
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn(() => pending) },
+      configurable: true,
+    })
+    await act(async () => root.render(<BrowserMicFallback />))
+    const start = [...host.querySelectorAll('button')].find((b) =>
+      /Test camera/.test(b.textContent ?? ''),
+    )
+    await act(async () => start?.click())
+    await act(async () => root.unmount())
+    await act(async () => grant({ getTracks: () => [{ stop }] } as unknown as MediaStream))
+    expect(stop).toHaveBeenCalled()
+    host.remove()
+  })
+})

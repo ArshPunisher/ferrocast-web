@@ -47,6 +47,7 @@ export function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undef
   const rafRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
+  const aliveRef = useRef(true)
 
   const stop = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -59,7 +60,13 @@ export function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undef
     onClose?.()
   }, [onClose])
 
-  useEffect(() => () => stop(), [stop])
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+      stop()
+    }
+  }, [stop])
   // The picture goes to the video once it is on the page (it only exists while the test runs).
   const [hasVideo, setHasVideo] = useState(false)
   useEffect(() => {
@@ -81,6 +88,11 @@ export function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undef
       } catch {
         video = false
         stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      }
+      // Left the step while the browser was asking: let the camera and mic go at once.
+      if (!aliveRef.current) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
       }
       streamRef.current = stream
       setHasVideo(video)
@@ -108,6 +120,9 @@ export function BrowserMicFallback({ onClose }: { onClose?: (() => void) | undef
       }
       setState('active')
     } catch {
+      // Whatever was opened is let go (a failed audio setup must not leave the camera on).
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
       setState('denied')
     }
   }
@@ -264,6 +279,7 @@ export function MediaCheckStep({
       } else if (micChoices.length > 0) {
         // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
         const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
+        if (probeReqRef.current !== req) return
         let micNew = 'Mic'
         for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
         await engine.setChannel(3, {
