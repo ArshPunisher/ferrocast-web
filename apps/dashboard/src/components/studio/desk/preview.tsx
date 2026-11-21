@@ -69,6 +69,22 @@ import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OverflowRow, type OverflowItem } from './overflow-row'
 import { GuideOverlay, OverflowMask } from './preview-guides'
 import { OptionsForm } from './options'
+import { ArrangeButton } from './arrange'
+import { GroupBox, SnapOverlay, clearHints, setHints } from './snap-overlay'
+import {
+  frameOfBox,
+  gapsFor,
+  guidesFor,
+  marqueeHits,
+  pickWith,
+  rectOf,
+  scaleGroup,
+  snapReach,
+  snapTargets,
+  union,
+  type BoxFor,
+  type Rect,
+} from './snap'
 import {
   MOVE,
   at,
@@ -714,6 +730,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             {!desktop && 'The live picture shows in the Ferrocast app.'}
             <GuideOverlay safe={pv.safe} />
             <OverflowMask on={pv.overflow === 'hide'} />
+            <EditHints boxRef={ref} active={!onTall} />
           </div>
         </div>
         <div
@@ -736,6 +753,7 @@ export function PreviewBox({ running }: { running: boolean }) {
           <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0!')}>
             {!desktop && 'Vertical'}
             <GuideOverlay safe={pv.safe} />
+            <EditHints boxRef={vRef} active={onTall} />
           </div>
         </div>
       </div>
@@ -762,6 +780,7 @@ export function PreviewBox({ running }: { running: boolean }) {
           {!desktop && 'The live picture shows in the Ferrocast app.'}
           <GuideOverlay safe={pv.safe} />
           <OverflowMask on={pv.overflow === 'hide'} />
+          <EditHints boxRef={ref} active />
         </div>
       </div>
     )
@@ -790,6 +809,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             {...editing}
           >
             {!desktop && 'The live picture shows in the Ferrocast app.'}
+            <EditHints boxRef={ref} active />
           </div>
         </figure>
         <figure className="m-0 flex flex-col gap-3">
@@ -1217,10 +1237,19 @@ interface Held {
   /** Alt held on a handle: cropping, from this crop and source size once they're read. */
   crop: { from: Crop; size: { width: number; height: number } } | null | 'reading'
   lastCrop: Crop | null
+  /** A handle of the box round several picked sources: they are sized together, from these. */
+  group?: { items: { id: number; frame: Frame; locked: boolean }[]; rect: Rect }
+  /** The boxes of the last step of a group drag, for the step that saves. */
+  lastBoxes?: BoxFor[]
 }
 
-/** What the next request for a source does (the newest replaces an older one). */
-type Job = { box: Box; save: boolean } | { crop: Crop; save: boolean }
+/** What the next request for a source does (the newest replaces an older one). Several at once
+ * (`boxes`) are one request, one undo step. */
+type Job =
+  { box: Box; save: boolean } | { crop: Crop; save: boolean } | { boxes: BoxFor[]; save: boolean }
+
+/** Key of the one request for several sources (a source's own id is never negative). */
+const MANY = -1
 
 /**
  * Pick, move and resize sources in the preview, as in OBS: click picks (the engine outlines
@@ -1240,6 +1269,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     select,
     also,
     pickMore,
+    pickSet,
     setTransforming,
     prefs,
     itemMenu,
@@ -1251,6 +1281,13 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   const canvas = size
   const [pv] = usePreviewView()
   const held = useRef<Held | null>(null)
+  // A box dragged on empty canvas to pick every source it touches.
+  const marquee = useRef<{
+    start: Pt
+    mode: 'replace' | 'add' | 'toggle'
+    base: number[]
+    moved: boolean
+  } | null>(null)
   // Panning (space + drag, or the middle button) and pinching (two touches) the zoomed canvas.
   const panning = useRef<{ x: number; y: number; pan: [number, number] } | null>(null)
   const space = useRef(false)
@@ -1322,7 +1359,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       // Three screen pixels before a press becomes a drag.
       still: 3 / f.scale,
       // OBS's Snapping: how near (screen pixels), off when switched off.
-      snap: p?.snapping === false ? 0 : (p?.snap_px ?? 10) / f.scale,
+      snap: p?.snapping === false ? 0 : snapReach(p?.snap_px ?? 10, f.scale),
     }
   }
 
@@ -1344,14 +1381,16 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     const [id, job] = first.value
     q.next.delete(id)
     q.busy = true
-    const go =
-      'box' in job
-        ? api.setItemBox(scene, id, { ...job.box, save: job.save })
-        : api.setItemCrop(scene, id, { ...job.crop, save: job.save })
+    const go: Promise<EngineItem | EngineItem[]> =
+      'boxes' in job
+        ? api.setItemBoxes(scene, { items: job.boxes, save: job.save })
+        : 'box' in job
+          ? api.setItemBox(scene, id, { ...job.box, save: job.save })
+          : api.setItemCrop(scene, id, { ...job.crop, save: job.save })
     const done = job.save ? run('move', () => go) : go.catch(() => undefined)
     void done
-      .then((item) => {
-        if (item) put(item)
+      .then((res) => {
+        for (const item of Array.isArray(res) ? res : res ? [res] : []) put(item)
       })
       .finally(() => {
         q.busy = false
@@ -1370,20 +1409,56 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   const frameOf = (id: number | null) => flat.find((i) => i.id === id)?.frame ?? null
   const pickedIds = [selected, ...also].filter((id): id is number => id !== null)
 
-  // Where every source of the drag goes: the held one by the drag, the others by as much.
+  // Where every source of the drag goes: the held one by the drag, the others by as much. Several
+  // go in one request, so the whole drag is one undo step.
   const moveAll = (h: Held, b: Box, save: boolean) => {
-    send(h.id, b, save)
+    if (h.others.length === 0) return send(h.id, b, save)
     const dx = b.x - h.from[4]
     const dy = b.y - h.from[5]
+    const boxes: BoxFor[] = [{ id: h.id, ...b }]
     for (const o of h.others) {
       const ob = boxOf(o.from)
-      send(o.id, { ...ob, x: ob.x + dx, y: ob.y + dy }, save)
+      boxes.push({ id: o.id, ...ob, x: ob.x + dx, y: ob.y + dy })
     }
+    queue(MANY, { boxes, save })
   }
   const finish = (h: Held | null) => {
+    clearHints()
     if (!h?.moved) return
     if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true })
+    else if (h.group && h.lastBoxes) queue(MANY, { boxes: h.lastBoxes, save: true })
     else if (h.last) moveAll(h, h.last, true)
+  }
+
+  // The picked sources that can be moved together, and the one box round them: where the
+  // handles are, what the group moves and is sized by.
+  const together = flat.flatMap((i) =>
+    pickedIds.includes(i.id) && i.visible && i.frame
+      ? [{ id: i.id, frame: i.frame, locked: i.locked }]
+      : [],
+  )
+  const groupRect =
+    !pv.locked && together.filter((i) => !i.locked).length >= 2
+      ? union(together.filter((i) => !i.locked).map((i) => rectOf(i.frame)))
+      : null
+  const groupFrame = (r: Rect): Frame => [r.right - r.left, 0, 0, r.bottom - r.top, r.left, r.top]
+  // What snapping reaches for while these are dragged, from the settings: the canvas's edges and
+  // middle and other sources' edges and middles.
+  const snapOpts = {
+    screen: p?.snap_screen ?? true,
+    centre: p?.snap_center ?? true,
+    others: p?.snap_sources ?? true,
+  }
+  // The guide lines and the distances to the nearest neighbours for a box now at `r`.
+  const showHints = (r: Rect, moving: number[], enabled: boolean) => {
+    if (!enabled || !canvas) return clearHints()
+    const targets = snapTargets(list, moving)
+    setHints({
+      owner: ref.current,
+      guides: guidesFor(r, targets, canvas, snapOpts),
+      gaps: gapsFor(r, targets),
+      marquee: null,
+    })
   }
 
   if (!on || !canvas) return {}
@@ -1439,10 +1514,37 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (!w) return
       ref.current?.focus({ preventScroll: true })
       // ⌘-click (Ctrl on Windows) picks or unpicks one more, as in OBS.
+      // On empty canvas it starts a box to pick several (⌘/Ctrl toggles, Shift adds).
+      const startMarquee = (mode: 'replace' | 'add' | 'toggle') => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        marquee.current = { start: w.p, mode, base: pickedIds, moved: false }
+      }
       if (addsToPick(e)) {
         const t = pick(list, w.p)
         if (t) pickMore(t.id, 'toggle')
+        else startMarquee('toggle')
         return
+      }
+      // The box round several picked sources: its handles size them together.
+      if (groupRect && !e.altKey) {
+        const g = gripAt(groupFrame(groupRect), w.p, w.reach)
+        if (g && g.u >= 0) {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          const items = together.filter((i) => !i.locked)
+          held.current = {
+            id: items[0]?.id ?? 0,
+            from: groupFrame(groupRect),
+            start: w.p,
+            grip: g,
+            moved: false,
+            last: null,
+            others: [],
+            crop: null,
+            lastCrop: null,
+            group: { items, rect: groupRect },
+          }
+          return
+        }
       }
       const current = flat.find((i) => i.id === selected)
       let target: EngineItem | null = null
@@ -1467,9 +1569,15 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (!target) {
         target = pick(list, w.p)
         grip = MOVE
+        // Inside the box round several picked sources, over nothing: it moves them all.
+        if (!target && groupRect && inside(groupFrame(groupRect), w.p)) {
+          const first = together.find((i) => !i.locked)
+          target = flat.find((i) => i.id === first?.id) ?? null
+        }
       }
       if (!target || !grip || !target.frame) {
-        select(null)
+        // Empty canvas: a click drops the picks, a drag picks what the box touches.
+        startMarquee(e.shiftKey ? 'add' : 'replace')
         return
       }
       const picked = pickedIds.includes(target.id)
@@ -1543,6 +1651,18 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       const w = where(e)
       if (!w) return
+      const m = marquee.current
+      if (m) {
+        if (!m.moved && Math.hypot(w.p.x - m.start.x, w.p.y - m.start.y) < w.still) return
+        m.moved = true
+        setHints({
+          owner: ref.current,
+          guides: [],
+          gaps: [],
+          marquee: { left: m.start.x, top: m.start.y, right: w.p.x, bottom: w.p.y },
+        })
+        return
+      }
       const h = held.current
       if (!h) {
         // The cursor says what a press would do.
@@ -1575,31 +1695,74 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         queue(h.id, { crop: c, save: false })
         return
       }
-      const b = drag(h.from, h.grip, d, {
-        free: e.shiftKey,
-        keep: pv.keep,
-        canvas,
-        // Alt (Option) held: no snapping this once, as in OBS.
-        snap: e.altKey ? 0 : w.snap,
-        to: {
-          screen: p?.snap_screen ?? true,
-          center: p?.snap_center ?? false,
-          others:
-            (p?.snap_sources ?? false)
-              ? flat.flatMap((i) =>
-                  i.id !== h.id && !h.others.some((o) => o.id === i.id) && i.visible && i.frame
-                    ? [i.frame]
-                    : [],
-                )
-              : [],
-        },
-      })
+      // Alt (Option) held: no snapping this once, as in OBS.
+      const snap = e.altKey ? 0 : w.snap
+      const movingIds = h.group
+        ? h.group.items.map((i) => i.id)
+        : [h.id, ...h.others.map((o) => o.id)]
+      const to = {
+        screen: snapOpts.screen,
+        center: snapOpts.centre,
+        others: snapOpts.others ? snapTargets(list, movingIds) : [],
+      }
+      if (h.group) {
+        // A handle of the box round several: it sizes every one of them with it.
+        const b = drag(h.from, h.grip, d, { free: e.shiftKey, keep: pv.keep, canvas, snap, to })
+        const next: Rect = { left: b.x, top: b.y, right: b.x + b.w, bottom: b.y + b.h }
+        const boxes = scaleGroup(h.group.items, h.group.rect, next)
+        h.last = b
+        h.lastBoxes = boxes
+        queue(MANY, { boxes, save: false })
+        showHints(next, movingIds, snap > 0)
+        return
+      }
+      let b: Box
+      let shown: Rect
+      if (h.others.length > 0 && h.grip.u < 0) {
+        // Several picked sources move as one box: its bounds snap, and all go by the same.
+        const frames = [h.from, ...h.others.map((o) => o.from)]
+        const at = union(frames.map((f) => rectOf(f))) as Rect
+        const moved = drag(groupFrame(at), h.grip, d, { canvas, snap, to })
+        const dx = moved.x - at.left
+        const dy = moved.y - at.top
+        const hb = boxOf(h.from)
+        b = { ...hb, x: hb.x + dx, y: hb.y + dy }
+        shown = {
+          left: at.left + dx,
+          top: at.top + dy,
+          right: at.right + dx,
+          bottom: at.bottom + dy,
+        }
+      } else {
+        b = drag(h.from, h.grip, d, { free: e.shiftKey, keep: pv.keep, canvas, snap, to })
+        shown = rectOf(frameOfBox(h.from, b))
+      }
       h.last = b
+      showHints(shown, movingIds, snap > 0)
       moveAll(h, b, false)
     },
     onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
       touches.current.delete(e.pointerId)
       if (touches.current.size < 2) pinch.current = null
+      const m = marquee.current
+      if (m) {
+        marquee.current = null
+        if (e.currentTarget.hasPointerCapture(e.pointerId))
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        clearHints()
+        const w = where(e)
+        if (m.moved && w) {
+          // Every source the box touches, joined to the picks as the modifier says.
+          const hits = marqueeHits(list, {
+            left: m.start.x,
+            top: m.start.y,
+            right: w.p.x,
+            bottom: w.p.y,
+          })
+          pickSet(pickWith(m.mode === 'replace' ? [] : m.base, hits, m.mode))
+        } else if (m.mode === 'replace') select(null)
+        return
+      }
       if (panning.current) {
         panning.current = null
         e.currentTarget.style.cursor = space.current ? 'grab' : ''
@@ -1617,6 +1780,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       touches.current.delete(e.pointerId)
       pinch.current = null
       panning.current = null
+      marquee.current = null
+      clearHints()
       const h = held.current
       held.current = null
       finish(h)
@@ -1671,15 +1836,49 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         : flat.filter((i) => pickedIds.includes(i.id) && i.frame && !i.locked)
       if (!d || moving.length === 0) return
       e.preventDefault()
+      const boxes: BoxFor[] = []
       for (const it of moving) {
         const f = it.frame as Frame
         const b = boxOf(f)
         // Moved here at once, so a held key builds on each step before the engine answers.
         put({ ...it, frame: [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y] })
-        send(it.id, { ...b, x: b.x + d.x, y: b.y + d.y }, true)
+        boxes.push({ id: it.id, ...b, x: b.x + d.x, y: b.y + d.y })
       }
+      // One request for all of them, so a nudge of several is one undo step.
+      if (boxes.length > 1) queue(MANY, { boxes, save: true })
+      else if (boxes[0]) send(boxes[0].id, boxes[0], true)
     },
   }
+}
+
+/**
+ * What the editor draws over a canvas box: the guides and distances while a source is dragged,
+ * the box dragged to pick several, and the one box round the sources picked together.
+ */
+function EditHints({
+  boxRef,
+  active,
+}: {
+  boxRef: React.RefObject<HTMLDivElement | null>
+  active: boolean
+}) {
+  const { items, selected, also, size } = useDesk()
+  const [pv] = usePreviewView()
+  if (!size) return null
+  const ids = [selected, ...also].filter((id): id is number => id !== null)
+  const movable = (items.data ?? [])
+    .flatMap((i) => [i, ...i.children])
+    .filter((i) => ids.includes(i.id) && i.visible && i.frame && !i.locked)
+  const rect =
+    active && !pv.locked && movable.length >= 2
+      ? union(movable.map((i) => rectOf(i.frame as Frame)))
+      : null
+  return (
+    <>
+      <SnapOverlay boxRef={boxRef} canvas={size} />
+      <GroupBox rect={rect} canvas={size} />
+    </>
+  )
 }
 
 /** The stage when the Studio isn't running: start it, or say why it can't. */
@@ -2136,6 +2335,11 @@ export function StageBar() {
           {pv.locked ? <Lock size={17} weight="fill" /> : <LockOpen size={17} />}
         </IconButton>
       ),
+    },
+    {
+      key: 'arrange',
+      rank: 7,
+      render: () => <ArrangeButton />,
     },
     {
       key: 'guides',

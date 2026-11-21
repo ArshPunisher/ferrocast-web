@@ -65,6 +65,7 @@ import { inDesktopApp } from '../../../lib/external'
 import { os, shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
 import { KindGlyph, useDesk, useDeskStats } from './common'
+import { useArrange } from './arrange'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 import { addsToPick } from './stage-edit'
@@ -130,6 +131,8 @@ const quiet = 'fc-quiet'
 
 export function SourcesDock() {
   const desk = useDesk()
+  // Align and Space out, for the sources picked together.
+  const arrange = useArrange()
   const { recordsKey, virtualcam } = useDeskStats(
     (s) => ({
       recordsKey: (s?.source_records ?? []).map((r) => r.name).join('\n'),
@@ -341,6 +344,8 @@ export function SourcesDock() {
           { sep: true },
         ] satisfies MenuItem[])
       : []),
+    // With several picked: align them, or space them out (the same as the preview bar's).
+    ...(arrange.count >= 2 ? [...arrange.menu(), { sep: true as const }] : []),
     { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(item.name) },
     { label: 'Filters', icon: Funnel, onSelect: () => edit(item.name, 'filters') },
     {
