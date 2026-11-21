@@ -93,3 +93,18 @@ describe('mute in the demo queue', () => {
     expect(s?.type === 'show' && s.alert.sound).toBe('builtin:chime')
   })
 })
+
+describe('demo details that match the engine', () => {
+  it('fractional weights count as whole numbers, like the engine', async () => {
+    const { pickWeighted, newVariation, seededRandom } = await import('../src/alert')
+    const v = (id: string, weight: number) => ({ ...newVariation(id, 't'), weight })
+    const rand = seededRandom(3)
+    const seen = new Set<string>()
+    for (let i = 0; i < 200; i++) seen.add(pickWeighted([v('a', 1.5), v('b', 1.5)], rand)?.id ?? '')
+    expect(seen).toEqual(new Set(['a', 'b']))
+    // 0.5 truncates to 0: both are zero, so equal chances rather than always the first.
+    const zero = new Set<string>()
+    for (let i = 0; i < 200; i++) zero.add(pickWeighted([v('a', 0.5), v('b', 0.5)], rand)?.id ?? '')
+    expect(zero).toEqual(new Set(['a', 'b']))
+  })
+})

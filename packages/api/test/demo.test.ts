@@ -608,3 +608,26 @@ describe('demo engine: frames added in API.md §5–6', () => {
     expect(client.mediaUrl('m 1')).toBe(`${engine.base}/api/v1/media/m%201?session=${DEMO_TOKEN}`)
   })
 })
+
+describe('the demo saves rules like the engine', () => {
+  it('fills in weight and interrupt and refuses a non-boolean interrupt', async () => {
+    const e = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const c = new FerroClient({
+      base: e.base,
+      token: DEMO_TOKEN,
+      fetch: e.fetch,
+      sleep: async () => {},
+    })
+    const rule = (await c.alertRules())[0]!
+    const bare = JSON.parse(JSON.stringify(rule)) as Record<string, unknown>
+    delete bare.interrupt
+    for (const v of bare.variations as Record<string, unknown>[]) delete v.weight
+    const saved = await c.saveAlertRule(bare as never)
+    expect(saved.interrupt).toBe(false)
+    expect(saved.variations.every((v) => v.weight === 1)).toBe(true)
+    await expect(c.saveAlertRule({ ...rule, interrupt: 'yes' } as never)).rejects.toMatchObject({
+      status: 400,
+    })
+    e.dispose()
+  })
+})

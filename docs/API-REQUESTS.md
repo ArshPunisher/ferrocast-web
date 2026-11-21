@@ -230,4 +230,4 @@ The Studio's events dock now has pause, skip, mute, filters, read marks and a te
 - `AlertRule.interrupt: boolean` (default false): a new alert from the rule ends the playing one and shows at once; paused queues just queue it.
 - `Variation.weight: number` (0 to 1000, default 1): among matching looks with the same top priority, picked by weight; 400 over 1000.
 
-Read marks and the type filter are per browser (localStorage `fc-feed-read`, `fc-feed-filter`), not engine state. The demo engine implements all of it (`persistQueue` keeps pause and mute over a reload in the dashboard's demo). Not done: a phone (remote) role can't call mute yet (`/queue/mute` isn't in the relay's remote allow-list), and the cloud `queue_op` has no mute.
+Read marks and the type filter are per browser (localStorage `fc-feed-read-v2` (by the engine's event number), `fc-feed-filter`), not engine state. The demo engine implements all of it (`persistQueue` keeps pause and mute over a reload in the dashboard's demo). A phone's owner role can call mute (the relay's audit log names it); the cloud `queue_op` has no mute and its queue frame always says `muted: false`.

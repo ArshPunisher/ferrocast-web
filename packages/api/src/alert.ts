@@ -137,11 +137,11 @@ export const MAX_WEIGHT = 1000
 export function pickWeighted(tied: Variation[], rand: () => number): Variation | null {
   if (tied.length === 0) return null
   if (tied.length === 1) return tied[0] ?? null
-  const total = tied.reduce((n, v) => n + Math.max(0, v.weight ?? 1), 0)
+  const total = tied.reduce((n, v) => n + Math.max(0, Math.trunc(v.weight ?? 1)), 0)
   if (total === 0) return tied[Math.min(tied.length - 1, Math.floor(rand() * tied.length))] ?? null
   let roll = Math.floor(rand() * total)
   for (const v of tied) {
-    const w = Math.max(0, v.weight ?? 1)
+    const w = Math.max(0, Math.trunc(v.weight ?? 1))
     if (roll < w) return v
     roll -= w
   }

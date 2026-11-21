@@ -2027,6 +2027,10 @@ export class DemoEngine {
 
   private saveRule(id: string | null, body: unknown) {
     const r = requireObj(body) as AlertRule
+    if (r.interrupt !== undefined && typeof r.interrupt !== 'boolean')
+      throw new HttpError(400, 'invalid', 'interrupt: true or false.')
+    r.interrupt = r.interrupt === true
+    for (const v of r.variations ?? []) if (v && v.weight === undefined) v.weight = 1
     if (!Array.isArray(r.kinds) || r.kinds.length === 0)
       throw new HttpError(400, 'invalid', 'kinds: the rule needs at least one event type.')
     if (!Array.isArray(r.variations) || !r.variations.some((v) => v.condition === null))
@@ -2398,6 +2402,7 @@ export class DemoEngine {
       }))
     if (on && this.panicCfg.pause_alerts) this.queue.pause()
     if (!on && this.panicCfg.pause_alerts) this.applyQueue(this.queue.resume(Date.now()))
+    this.saveQueueFlags()
     this.broadcastQueue()
     for (const a of applied) {
       if (a.modes.includes('followers_only'))
