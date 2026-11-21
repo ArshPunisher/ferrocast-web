@@ -18,23 +18,29 @@
   color-scheme: dark;
 
   /* Surfaces, darkest to lightest. */
-  --fc-bg: #0a0b0d;
-  --fc-surface-1: #101216;
-  --fc-surface-2: #16191e;
-  --fc-surface-3: #1d2127;
-  --fc-surface-inset: #07080a;
-  /* Round the Studio's canvas: a black canvas always stands out from it. */
-  --fc-stage: #23272e;
-  --fc-line: #252a31;
-  --fc-line-strong: #343a44;
+  --fc-bg: #17212b;
+  --fc-surface-1: #1d2833;
+  --fc-surface-2: #24313d;
+  --fc-surface-3: #2d3b49;
+  --fc-surface-inset: #121a22;
+  /* The area round the Studio's canvas (outside it): the first of its two stripe colours. */
+  --fc-stage: #152029;
+  /* The second stripe colour of the area outside the canvas (the picture's overflow). */
+  --fc-stage-b: #1c2833;
+  /* The Studio canvas, the red of live and recording, and the mixer's normal level. */
+  --fc-canvas: #0c1218;
+  --fc-live: #e5484d;
+  --fc-meter: #3ecf8e;
+  --fc-line: #2f3e4d;
+  --fc-line-strong: #3d4e60;
   /* A Studio panel's heading band and the line under it (owner's pick "A joined", 10 Nov). */
-  --fc-dock-head: #191c22;
+  --fc-dock-head: #283643;
 
   /* Text. All pass WCAG AA on --fc-bg and --fc-surface-2; the quieter two stay close to the
      main one so nothing reads faint (owner, 26 Oct). */
-  --fc-text: #eef0f4;
-  --fc-text-2: #e0e4ec;
-  --fc-text-3: #bac1cc;
+  --fc-text: #e9eff5;
+  --fc-text-2: #bccad8;
+  --fc-text-3: #90a1b2;
 
   /* The Spark mark's own colours (logo, brand art). */
   --fc-brand-molten: #ffa424;
@@ -72,10 +78,10 @@
   /* Arc: links, icons, focus rings, selection and info highlights. --fc-arc is the bright
      fill/graphic value, --fc-accent-text the text value (7.2:1+ on every surface, also
      over --fc-accent-soft). */
-  --fc-arc: #33d4ff;
-  --fc-accent-text: #33d4ff;
-  --fc-accent-soft: rgb(51 212 255 / 0.12);
-  --fc-accent-line: rgb(51 212 255 / 0.4);
+  --fc-arc: #5fdcff;
+  --fc-accent-text: #5fdcff;
+  --fc-accent-soft: rgb(95 220 255 / 0.12);
+  --fc-accent-line: rgb(95 220 255 / 0.4);
 
   /* Meaning. Used only for real state. */
   --fc-ok: #3dd193;
@@ -133,29 +139,235 @@
   --fc-dur-3: 320ms;
 }
 
-:root[data-theme='light'] {
+/* ---- Dark themes. :root above is Slate, the default dark; `dark` is its alias. ---- */
+
+:root[data-theme='graphite'],
+[data-theme-preview='graphite'] {
+  color-scheme: dark;
+  --fc-bg: #1c1e23;
+  --fc-surface-1: #23262c;
+  --fc-surface-2: #2a2e35;
+  --fc-surface-3: #333842;
+  --fc-surface-inset: #16181c;
+  --fc-stage: #1a1c20;
+  --fc-stage-b: #212429;
+  --fc-canvas: #0f1012;
+  --fc-line: #363b45;
+  --fc-line-strong: #454b57;
+  --fc-dock-head: #2e333c;
+  --fc-text: #eceef2;
+  --fc-text-2: #c3c8d1;
+  --fc-text-3: #99a0ac;
+  --fc-accent: #ffa424;
+  --fc-accent-text: #5fdcff;
+  --fc-arc: #5fdcff;
+  --fc-accent-soft: rgb(95 220 255 / 0.12);
+  --fc-accent-line: rgb(95 220 255 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54200;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #e5484d;
+  --fc-meter: #3ecf8e;
+}
+
+:root[data-theme='slate'],
+:root[data-theme='dark'],
+[data-theme-preview='slate'] {
+  color-scheme: dark;
+  --fc-bg: #17212b;
+  --fc-surface-1: #1d2833;
+  --fc-surface-2: #24313d;
+  --fc-surface-3: #2d3b49;
+  --fc-surface-inset: #121a22;
+  --fc-stage: #152029;
+  --fc-stage-b: #1c2833;
+  --fc-canvas: #0c1218;
+  --fc-line: #2f3e4d;
+  --fc-line-strong: #3d4e60;
+  --fc-dock-head: #283643;
+  --fc-text: #e9eff5;
+  --fc-text-2: #bccad8;
+  --fc-text-3: #90a1b2;
+  --fc-accent: #ffa424;
+  --fc-accent-text: #5fdcff;
+  --fc-arc: #5fdcff;
+  --fc-accent-soft: rgb(95 220 255 / 0.12);
+  --fc-accent-line: rgb(95 220 255 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54200;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #e5484d;
+  --fc-meter: #3ecf8e;
+}
+
+:root[data-theme='moonlight'],
+[data-theme-preview='moonlight'] {
+  color-scheme: dark;
+  --fc-bg: #1d1e2a;
+  --fc-surface-1: #242536;
+  --fc-surface-2: #2b2d41;
+  --fc-surface-3: #35374e;
+  --fc-surface-inset: #171821;
+  --fc-stage: #1b1c27;
+  --fc-stage-b: #232435;
+  --fc-canvas: #101018;
+  --fc-line: #3a3c55;
+  --fc-line-strong: #4a4c69;
+  --fc-dock-head: #303248;
+  --fc-text: #eeedf7;
+  --fc-text-2: #c6c5da;
+  --fc-text-3: #9c9bb6;
+  --fc-accent: #ffb04a;
+  --fc-accent-text: #8fd8ff;
+  --fc-arc: #8fd8ff;
+  --fc-accent-soft: rgb(143 216 255 / 0.12);
+  --fc-accent-line: rgb(143 216 255 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54200;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #ef5b62;
+  --fc-meter: #4fd6a0;
+}
+
+:root[data-theme='forest'],
+[data-theme-preview='forest'] {
+  color-scheme: dark;
+  --fc-bg: #18201c;
+  --fc-surface-1: #1e2823;
+  --fc-surface-2: #25302a;
+  --fc-surface-3: #2e3b34;
+  --fc-surface-inset: #131a16;
+  --fc-stage: #161d19;
+  --fc-stage-b: #1d2621;
+  --fc-canvas: #0d120f;
+  --fc-line: #2f3d35;
+  --fc-line-strong: #3e4f45;
+  --fc-dock-head: #2a362f;
+  --fc-text: #e9f0ec;
+  --fc-text-2: #bfcdc5;
+  --fc-text-3: #93a39a;
+  --fc-accent: #ffa424;
+  --fc-accent-text: #7fe0b8;
+  --fc-arc: #7fe0b8;
+  --fc-accent-soft: rgb(127 224 184 / 0.12);
+  --fc-accent-line: rgb(127 224 184 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54200;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #e5484d;
+  --fc-meter: #3ecf8e;
+}
+
+:root[data-theme='ember'],
+[data-theme-preview='ember'] {
+  color-scheme: dark;
+  --fc-bg: #211c1a;
+  --fc-surface-1: #29231f;
+  --fc-surface-2: #312a25;
+  --fc-surface-3: #3b332d;
+  --fc-surface-inset: #1a1614;
+  --fc-stage: #1e1917;
+  --fc-stage-b: #26201c;
+  --fc-canvas: #120f0d;
+  --fc-line: #3d342e;
+  --fc-line-strong: #4e433b;
+  --fc-dock-head: #362e29;
+  --fc-text: #f3ede8;
+  --fc-text-2: #d2c7be;
+  --fc-text-3: #a89a8f;
+  --fc-accent: #ffab3d;
+  --fc-accent-text: #7dd3fc;
+  --fc-arc: #7dd3fc;
+  --fc-accent-soft: rgb(125 211 252 / 0.12);
+  --fc-accent-line: rgb(125 211 252 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54200;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #ef5350;
+  --fc-meter: #4ccf8f;
+}
+
+:root[data-theme='obsidian'],
+/* The marketing site keeps its near-black look: its dark is Obsidian, not the dashboard's Slate. */
+:root[data-app='site'][data-theme='dark'],
+[data-theme-preview='obsidian'] {
+  color-scheme: dark;
+  --fc-bg: #0a0b0d;
+  --fc-surface-1: #101216;
+  --fc-surface-2: #16191e;
+  --fc-surface-3: #1d2127;
+  --fc-surface-inset: #07080a;
+  --fc-stage: #0b0c0e;
+  --fc-stage-b: #121418;
+  --fc-canvas: #050506;
+  --fc-line: #252a31;
+  --fc-line-strong: #343a44;
+  --fc-dock-head: #191c22;
+  --fc-text: #eef0f4;
+  --fc-text-2: #e0e4ec;
+  --fc-text-3: #bac1cc;
+  --fc-accent: #ffa424;
+  --fc-accent-text: #33d4ff;
+  --fc-arc: #33d4ff;
+  --fc-accent-soft: rgb(51 212 255 / 0.12);
+  --fc-accent-line: rgb(51 212 255 / 0.4);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54100;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #e5484d;
+  --fc-meter: #3ecf8e;
+}
+
+/* Site, no theme chosen on a dark computer: Obsidian. */
+@media (prefers-color-scheme: dark) {
+  :root[data-app='site']:not([data-theme]) {
+    color-scheme: dark;
+    --fc-bg: #0a0b0d;
+    --fc-surface-1: #101216;
+    --fc-surface-2: #16191e;
+    --fc-surface-3: #1d2127;
+    --fc-surface-inset: #07080a;
+    --fc-stage: #0b0c0e;
+    --fc-stage-b: #121418;
+    --fc-canvas: #050506;
+    --fc-line: #252a31;
+    --fc-line-strong: #343a44;
+    --fc-dock-head: #191c22;
+    --fc-text: #eef0f4;
+    --fc-text-2: #e0e4ec;
+    --fc-text-3: #bac1cc;
+    --fc-accent: #ffa424;
+    --fc-accent-text: #33d4ff;
+    --fc-arc: #33d4ff;
+    --fc-accent-soft: rgb(51 212 255 / 0.12);
+    --fc-accent-line: rgb(51 212 255 / 0.4);
+    --fc-btn-primary: #c04d00;
+    --fc-btn-primary-hover: #a54100;
+    --fc-on-btn-primary: #ffffff;
+    --fc-live: #e5484d;
+    --fc-meter: #3ecf8e;
+  }
+}
+
+/* ---- Light themes. The meaning colours and graphics every light theme shares; each theme then
+   sets its own surfaces. `light` is an alias of Daylight (today's light). ---- */
+
+:root[data-theme='daylight'],
+:root[data-theme='mist'],
+:root[data-theme='linen'],
+:root[data-theme='contrast'],
+:root[data-theme='light'],
+[data-theme-preview='daylight'],
+[data-theme-preview='mist'],
+[data-theme-preview='linen'],
+[data-theme-preview='contrast'] {
   /* Picked: a deep Ferrocast blue on the light page (owner, 10 Nov); white text 7.7:1. */
   --fc-pick: #08597d;
   --fc-pick-hover: #064d6c;
   --fc-on-pick: #ffffff;
-  color-scheme: light;
-  --fc-bg: #f2f3f6;
-  --fc-surface-1: #ffffff;
-  --fc-surface-2: #f6f7fa;
-  --fc-surface-3: #eceef2;
-  --fc-surface-inset: #e7e9ee;
-  /* Round the Studio's canvas: a black canvas always stands out from it. */
-  --fc-stage: #e2e4ea;
-  --fc-line: #dfe2e8;
-  --fc-line-strong: #c9ced7;
-  --fc-dock-head: #eaedf3;
-  --fc-text: #0e1014;
-  --fc-text-2: #181d25;
-  --fc-text-3: #2f3641;
   /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
      fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface; Molten
      text also over an 18% Molten wash, the selected item in the sidebars). */
-  --fc-accent: #cf7400;
   --fc-accent-strong: #e08a1a;
   --fc-on-accent: #0a0600;
   --fc-molten-text: #8a4a00;
@@ -163,10 +375,6 @@
   --fc-btn-soft-hover: rgb(179 89 0 / 0.17);
   --fc-teal: #0f766e;
   --fc-teal-soft: rgb(15 118 110 / 0.09);
-  --fc-arc: #0888b8;
-  --fc-accent-text: #05678c;
-  --fc-accent-soft: rgb(8 136 184 / 0.1);
-  --fc-accent-line: rgb(8 136 184 / 0.38);
   --fc-ok: #0a6b46;
   --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
   --fc-ok-soft: rgb(17 160 100 / 0.13);
@@ -199,27 +407,133 @@
   --fc-shadow-pop: 0 24px 60px -22px rgb(16 24 48 / 0.32);
 }
 
+:root[data-theme='daylight'],
+:root[data-theme='light'],
+[data-theme-preview='daylight'] {
+  color-scheme: light;
+  --fc-bg: #f2f3f6;
+  --fc-surface-1: #ffffff;
+  --fc-surface-2: #f6f7fa;
+  --fc-surface-3: #eceef2;
+  --fc-surface-inset: #e7e9ee;
+  --fc-stage: #e6e8ed;
+  --fc-stage-b: #dcdfe6;
+  --fc-canvas: #1b1d22;
+  --fc-line: #dfe2e8;
+  --fc-line-strong: #c9ced7;
+  --fc-dock-head: #eaedf3;
+  --fc-text: #0e1014;
+  --fc-text-2: #181d25;
+  --fc-text-3: #2f3641;
+  --fc-accent: #cf7400;
+  --fc-accent-text: #05678c;
+  --fc-arc: #0888b8;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.38);
+  --fc-btn-primary: #c04d00;
+  --fc-btn-primary-hover: #a54100;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #d1343a;
+  --fc-meter: #17a26b;
+}
+
+:root[data-theme='mist'],
+[data-theme-preview='mist'] {
+  color-scheme: light;
+  --fc-bg: #d5dde7;
+  --fc-surface-1: #e3e9f0;
+  --fc-surface-2: #dbe2eb;
+  --fc-surface-3: #c9d3df;
+  --fc-surface-inset: #c2ccd8;
+  --fc-stage: #cbd4df;
+  --fc-stage-b: #bcc7d4;
+  --fc-canvas: #1b1d22;
+  --fc-line: #b9c4d2;
+  --fc-line-strong: #a3b0c1;
+  --fc-dock-head: #d2dae5;
+  --fc-text: #121a24;
+  --fc-text-2: #2b3746;
+  --fc-text-3: #4a5869;
+  --fc-accent: #c46b00;
+  --fc-accent-text: #0a5a78;
+  --fc-arc: #0888b8;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.38);
+  --fc-btn-primary: #b04700;
+  --fc-btn-primary-hover: #973d00;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #c62f35;
+  --fc-meter: #14915f;
+}
+
+:root[data-theme='linen'],
+[data-theme-preview='linen'] {
+  color-scheme: light;
+  --fc-bg: #efebe4;
+  --fc-surface-1: #faf8f4;
+  --fc-surface-2: #f4f1eb;
+  --fc-surface-3: #e7e2d9;
+  --fc-surface-inset: #e2dcd2;
+  --fc-stage: #e6e1d8;
+  --fc-stage-b: #ddd7cc;
+  --fc-canvas: #1b1d22;
+  --fc-line: #ddd6ca;
+  --fc-line-strong: #c9c0b2;
+  --fc-dock-head: #eeeae2;
+  --fc-text: #1d1a16;
+  --fc-text-2: #3a352e;
+  --fc-text-3: #5c554b;
+  --fc-accent: #c46b00;
+  --fc-accent-text: #0d5f6e;
+  --fc-arc: #0888b8;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.38);
+  --fc-btn-primary: #b04700;
+  --fc-btn-primary-hover: #973d00;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #c62f35;
+  --fc-meter: #2f8f5b;
+}
+
+:root[data-theme='contrast'],
+[data-theme-preview='contrast'] {
+  color-scheme: light;
+  --fc-bg: #ffffff;
+  --fc-surface-1: #ffffff;
+  --fc-surface-2: #f3f3f3;
+  --fc-surface-3: #e4e4e4;
+  --fc-surface-inset: #ececec;
+  --fc-stage: #f0f0f0;
+  --fc-stage-b: #e2e2e2;
+  --fc-canvas: #111111;
+  --fc-line: #1a1a1a;
+  --fc-line-strong: #000000;
+  --fc-dock-head: #ececec;
+  --fc-text: #000000;
+  --fc-text-2: #111111;
+  --fc-text-3: #2a2a2a;
+  --fc-accent: #b35c00;
+  --fc-accent-text: #004a99;
+  --fc-arc: #0888b8;
+  --fc-accent-soft: rgb(8 136 184 / 0.1);
+  --fc-accent-line: rgb(8 136 184 / 0.38);
+  --fc-btn-primary: #a33f00;
+  --fc-btn-primary-hover: #8c3600;
+  --fc-on-btn-primary: #ffffff;
+  --fc-live: #b00010;
+  --fc-meter: #00703c;
+}
+
+/* No theme chosen on a light computer: Daylight. */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']):not([data-theme='light']) {
+  :root:not([data-theme]) {
     /* Picked: a deep Ferrocast blue on the light page (owner, 10 Nov); white text 7.7:1. */
     --fc-pick: #08597d;
     --fc-pick-hover: #064d6c;
     --fc-on-pick: #ffffff;
-    color-scheme: light;
-    --fc-bg: #f2f3f6;
-    --fc-surface-1: #ffffff;
-    --fc-surface-2: #f6f7fa;
-    --fc-surface-3: #eceef2;
-    --fc-surface-inset: #e7e9ee;
-    /* Round the Studio's canvas: a black canvas always stands out from it. */
-    --fc-stage: #e2e4ea;
-    --fc-line: #dfe2e8;
-    --fc-line-strong: #c9ced7;
-    --fc-dock-head: #eaedf3;
-    --fc-text: #0e1014;
-    --fc-text-2: #181d25;
-    --fc-text-3: #2f3641;
-    --fc-accent: #cf7400;
+    /* Off-white: Molten #cf7400 and Arc #0888b8 stay for fills and graphics; as text they
+       fall below 4.5:1, so text uses the deeper -text values (4.85:1+ on every surface; Molten
+       text also over an 18% Molten wash, the selected item in the sidebars). */
     --fc-accent-strong: #e08a1a;
     --fc-on-accent: #0a0600;
     --fc-molten-text: #8a4a00;
@@ -227,10 +541,6 @@
     --fc-btn-soft-hover: rgb(179 89 0 / 0.17);
     --fc-teal: #0f766e;
     --fc-teal-soft: rgb(15 118 110 / 0.09);
-    --fc-arc: #0888b8;
-    --fc-accent-text: #05678c;
-    --fc-accent-soft: rgb(8 136 184 / 0.1);
-    --fc-accent-line: rgb(8 136 184 / 0.38);
     --fc-ok: #0a6b46;
     --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
     --fc-ok-soft: rgb(17 160 100 / 0.13);
@@ -261,6 +571,31 @@
     --fc-shadow-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 0 0 1px rgb(16 24 40 / 0.02);
     --fc-shadow-2: 0 12px 32px -14px rgb(16 24 48 / 0.22);
     --fc-shadow-pop: 0 24px 60px -22px rgb(16 24 48 / 0.32);
+    color-scheme: light;
+    --fc-bg: #f2f3f6;
+    --fc-surface-1: #ffffff;
+    --fc-surface-2: #f6f7fa;
+    --fc-surface-3: #eceef2;
+    --fc-surface-inset: #e7e9ee;
+    --fc-stage: #e6e8ed;
+    --fc-stage-b: #dcdfe6;
+    --fc-canvas: #1b1d22;
+    --fc-line: #dfe2e8;
+    --fc-line-strong: #c9ced7;
+    --fc-dock-head: #eaedf3;
+    --fc-text: #0e1014;
+    --fc-text-2: #181d25;
+    --fc-text-3: #2f3641;
+    --fc-accent: #cf7400;
+    --fc-accent-text: #05678c;
+    --fc-arc: #0888b8;
+    --fc-accent-soft: rgb(8 136 184 / 0.1);
+    --fc-accent-line: rgb(8 136 184 / 0.38);
+    --fc-btn-primary: #c04d00;
+    --fc-btn-primary-hover: #a54100;
+    --fc-on-btn-primary: #ffffff;
+    --fc-live: #d1343a;
+    --fc-meter: #17a26b;
   }
 }
 
