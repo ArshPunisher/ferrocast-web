@@ -18,6 +18,7 @@ import {
   IdentificationCard,
   PaperPlaneRight,
   Prohibit,
+  PushPin,
   Trash,
   X,
 } from '@phosphor-icons/react'
@@ -176,6 +177,8 @@ export interface ChatActions {
   remove: (e: FerroEvent) => void
   timeout: (e: FerroEvent, seconds: number) => void
   ban: (e: FerroEvent) => void
+  highlight?: ((e: FerroEvent) => void) | undefined
+  highlightedId?: string | null | undefined
   card: (a: Actor) => void
   /** Touch screens: tap a line to get its actions in a sheet. */
   sheet: (e: FerroEvent) => void
@@ -193,13 +196,21 @@ export interface ChatActions {
 
 /** What a chat line offers: deleting needs the platform's own message id (`source_id`). */
 export function lineActions(
-  actions: Pick<ChatActions, 'offline' | 'moderates'>,
+  actions: Pick<ChatActions, 'offline' | 'moderates' | 'highlight'>,
   event: FerroEvent,
-): { reply: boolean; card: boolean; remove: boolean; timeout: boolean; ban: boolean } {
+): {
+  reply: boolean
+  highlight: boolean
+  card: boolean
+  remove: boolean
+  timeout: boolean
+  ban: boolean
+} {
   const online = !actions.offline
   const mods = actions.moderates ? actions.moderates(event.platform) : true
   return {
     reply: online,
+    highlight: online && !!actions.highlight,
     card: online,
     remove: mods && !!event.source_id,
     timeout: mods,
@@ -230,11 +241,15 @@ export const ChatLine = memo(function ChatLine({
   const a = event.kind.actor
   const names = readableColors(a.color)
   const mine = (a.roles & Roles.BROADCASTER) !== 0
+  const pinned = !deleted && actions?.highlightedId === event.id
+  const canHighlight = !!(actions && !deleted && !held && lineActions(actions, event).highlight)
+  const showToolbar = !!(actions && !deleted && (!mine || canHighlight))
   const fallback = mine ? 'var(--color-accent-text)' : 'var(--color-text)'
   return (
     <li
       onClick={(ev) => {
-        if (!actions || deleted || mine || !coarse()) return
+        if (!actions || deleted || !coarse()) return
+        if (mine && !canHighlight) return
         if (!Object.values(lineActions(actions, event)).some(Boolean)) return
         if ((ev.target as HTMLElement).closest('button')) return
         actions.sheet(event)
@@ -243,8 +258,9 @@ export const ChatLine = memo(function ChatLine({
         'fc-row group relative flex gap-2.5 rounded-control px-2 hover:bg-surface-2 focus-within:bg-surface-2',
         dense ? 'py-1' : 'py-1.5',
         deleted && 'opacity-45',
+        pinned && 'bg-accent-soft ring-1 ring-inset ring-accent/40',
         held && !deleted && 'bg-warn-soft',
-        !held && !deleted && mark?.kind === 'first' && 'bg-accent-soft',
+        !held && !deleted && !pinned && mark?.kind === 'first' && 'bg-accent-soft',
       )}
     >
       <PlatformMark platform={event.platform} size={14} className="mt-[3px]" />
@@ -267,6 +283,11 @@ export const ChatLine = memo(function ChatLine({
             {tameText(a.display_name)}
           </button>
           <RoleChips roles={a.roles} mark={mark} />
+          {pinned && (
+            <Badge tone="accent" className="h-[18px] px-1.5 text-[11.5px]">
+              On stream
+            </Badge>
+          )}
           {held && (
             <Badge tone="warn" className="h-[18px] px-1.5 text-[11.5px]" title={held}>
               Held for review
@@ -285,7 +306,7 @@ export const ChatLine = memo(function ChatLine({
           </span>
         )}
       </div>
-      {actions && !deleted && !mine && <LineToolbar actions={actions} event={event} />}
+      {showToolbar && <LineToolbar actions={actions} event={event} mine={mine} />}
       {!dense && (
         <time className="mt-[3px] shrink-0 font-mono text-[13px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
           {relativeTime(event.received_at, now)}
@@ -296,13 +317,33 @@ export const ChatLine = memo(function ChatLine({
 })
 
 /** The hover toolbar on a chat line: only what works for this line right now. */
-function LineToolbar({ actions, event }: { actions: ChatActions; event: FerroEvent }) {
+function LineToolbar({
+  actions,
+  event,
+  mine,
+}: {
+  actions: ChatActions
+  event: FerroEvent
+  mine?: boolean
+}) {
   const can = lineActions(actions, event)
   if (event.kind.type !== 'chat_message' || !Object.values(can).some(Boolean)) return null
   const a = event.kind.actor
+  const pinned = actions.highlightedId === event.id
   return (
     <div className="absolute top-0.5 right-1 hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 group-hover:flex group-focus-within:flex">
-      {can.reply && (
+      {can.highlight && actions.highlight && (
+        <IconButton
+          size="sm"
+          variant={pinned ? 'secondary' : 'ghost'}
+          aria-pressed={pinned}
+          label={pinned ? 'Remove from stream' : 'Show on stream'}
+          onClick={() => actions.highlight?.(event)}
+        >
+          <PushPin size={15} weight={pinned ? 'fill' : 'regular'} />
+        </IconButton>
+      )}
+      {!mine && can.reply && (
         <IconButton
           size="sm"
           label="Reply on the same platform"
@@ -311,12 +352,12 @@ function LineToolbar({ actions, event }: { actions: ChatActions; event: FerroEve
           <ArrowBendUpLeft size={15} />
         </IconButton>
       )}
-      {can.remove && (
+      {!mine && can.remove && (
         <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
           <Trash size={15} />
         </IconButton>
       )}
-      {can.timeout && (
+      {!mine && can.timeout && (
         <IconButton
           size="sm"
           label="Time out for 10 minutes"
@@ -325,7 +366,7 @@ function LineToolbar({ actions, event }: { actions: ChatActions; event: FerroEve
           <Clock size={15} />
         </IconButton>
       )}
-      {can.ban && (
+      {!mine && can.ban && (
         <IconButton
           size="sm"
           label={actions.offline ? `Ban on ${PLATFORM_LABEL[event.platform]}` : 'Ban everywhere'}
@@ -335,11 +376,55 @@ function LineToolbar({ actions, event }: { actions: ChatActions; event: FerroEve
           <Prohibit size={15} />
         </IconButton>
       )}
-      {can.card && (
+      {!mine && can.card && (
         <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
           <IdentificationCard size={15} />
         </IconButton>
       )}
+    </div>
+  )
+}
+
+/** Compact banner above the chat scroller showing whichever message is pinned to the stream. */
+export function HighlightBanner() {
+  const client = useClient()
+  const { run, busy } = useAction()
+  const chatHighlight = useLive((s) => s.chatHighlight)
+  const setChatHighlight = useLive((s) => s.setChatHighlight)
+  const remote = useLive((s) => s.remote)
+  if (!chatHighlight || isLimited(remote) || remote?.role === 'mod') return null
+
+  const who = tameText(chatHighlight.actor.display_name)
+  const msg = tameText(chatHighlight.content.text)
+
+  return (
+    <div
+      data-testid="highlight-banner"
+      className="flex items-center gap-2.5 rounded-control border border-line-strong bg-surface-2 px-3 py-2 text-[14px]"
+    >
+      <PushPin size={15} weight="fill" className="shrink-0 text-accent" aria-hidden="true" />
+      <PlatformMark platform={chatHighlight.platform} size={13} />
+      <span className="max-w-[32%] shrink-0 truncate font-semibold text-text">{who}</span>
+      <span className="min-w-0 flex-1 truncate text-text-2">{msg}</span>
+      <Button
+        size="sm"
+        variant="ghost"
+        busy={busy === 'hl-banner'}
+        icon={<X size={14} />}
+        title="Remove highlighted message from stream"
+        onClick={() =>
+          void run(
+            'hl-banner',
+            async () => {
+              await client.clearChatHighlight()
+              setChatHighlight(null)
+            },
+            { success: 'Removed message from stream.' },
+          )
+        }
+      >
+        Remove
+      </Button>
     </div>
   )
 }
@@ -675,7 +760,24 @@ export function useChatActions(
   const [banning, setBanning] = useState<FerroEvent | null>(null)
   const [sheet, setSheet] = useState<FerroEvent | null>(null)
   const remote = useLive((s) => s.remote)
+  const chatHighlight = useLive((s) => s.chatHighlight)
+  const setChatHighlight = useLive((s) => s.setChatHighlight)
   const offline = isLimited(remote)
+  const isMod = remote?.role === 'mod'
+  const highlightedId = chatHighlight?.event_id ?? null
+  useEffect(() => {
+    if (chatHighlight !== undefined || offline || isMod) return
+    let alive = true
+    void client
+      .chatHighlight()
+      .then((h) => {
+        if (alive) setChatHighlight(h)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [chatHighlight, client, isMod, offline, setChatHighlight])
   // While the PC is off: where the cloud bot can moderate (a string keeps the memo stable).
   const modKey = offline ? cloudModerationKey(remote?.cloudModeration) : 'all'
   const actions = useMemo<ChatActions>(
@@ -712,11 +814,50 @@ export function useChatActions(
         )
       },
       ban: (e) => setBanning(e),
+      highlight:
+        offline || isMod
+          ? undefined
+          : (e) => {
+              if (e.kind.type !== 'chat_message') return
+              if (highlightedId === e.id) {
+                void run(
+                  'hl-off',
+                  async () => {
+                    await client.clearChatHighlight()
+                    setChatHighlight(null)
+                  },
+                  { success: 'Removed message from stream.' },
+                )
+              } else {
+                const name = tameText(e.kind.actor.display_name)
+                void run(
+                  'hl-on',
+                  async () => {
+                    const hl = await client.pinChatHighlight(e.id)
+                    setChatHighlight(hl)
+                  },
+                  { success: `Showing ${name} on stream.` },
+                )
+              }
+            },
+      highlightedId,
       card: openCard,
       sheet: (e) => setSheet(e),
     }),
     // Stable across renders so memo(ChatLine) can skip unchanged lines during a chat flood.
-    [client, run, setReply, openCard, approve, drop, offline, modKey],
+    [
+      client,
+      run,
+      setReply,
+      openCard,
+      approve,
+      drop,
+      offline,
+      isMod,
+      modKey,
+      highlightedId,
+      setChatHighlight,
+    ],
   )
   const sheetActor = sheet?.kind.type === 'chat_message' ? sheet.kind.actor : null
   const target = banning?.kind.type === 'chat_message' ? banning.kind.actor : null
@@ -739,6 +880,17 @@ export function useChatActions(
           <div className="grid grid-cols-1 gap-2 pb-2">
             {(
               [
+                [
+                  'highlight',
+                  actions.highlightedId === sheet.id ? 'Remove from stream' : 'Show on stream',
+                  () => actions.highlight?.(sheet),
+                  <PushPin
+                    key="h"
+                    size={17}
+                    weight={actions.highlightedId === sheet.id ? 'fill' : 'regular'}
+                  />,
+                  false,
+                ],
                 [
                   'reply',
                   'Reply on ' + PLATFORM_LABEL[sheet.platform],
@@ -778,7 +930,11 @@ export function useChatActions(
             )
               // Only what works for this line now (the PC off: no replies or cards; the
               // cloud bot without the opt-in on this platform: no bans).
-              .filter(([what]) => lineActions(actions, sheet)[what])
+              .filter(([what]) => {
+                const mine = (sheetActor.roles & Roles.BROADCASTER) !== 0
+                if (mine && what !== 'highlight') return false
+                return lineActions(actions, sheet)[what]
+              })
               .map(([, label, fn, icon, danger]) => (
                 <Button
                   key={label}

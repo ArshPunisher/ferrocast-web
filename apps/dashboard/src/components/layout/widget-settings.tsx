@@ -2,12 +2,17 @@
 
 import { useState } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   Bell,
   ChartBar,
+  FilmStrip,
   Gift,
   ChatsCircle,
   ListBullets,
   Plus,
+  PushPin,
+  Sparkle,
   Tag,
   Target,
   Trash,
@@ -16,7 +21,10 @@ import {
 import {
   DEFAULT_THEME,
   PLATFORM_LABEL,
+  isColor,
   type ChatPlatform,
+  type CreditsSection,
+  type EmotePhysics,
   type Goal,
   type LabelSource,
   type Platform,
@@ -24,6 +32,7 @@ import {
   type Widget,
   type WidgetKind,
 } from '@ferrocast/api'
+import { DESIGN_FONTS } from '@ferrocast/overlays'
 import { Button, Field, IconButton, Input, PlatformMark, Select, Switch, cx } from '@ferrocast/ui'
 import { useAction, useClient } from '../../lib/hooks'
 
@@ -38,8 +47,38 @@ export const KINDS: { kind: WidgetKind; label: string; icon: typeof Bell }[] = [
   { kind: 'viewers', label: 'Viewers', icon: UsersThree },
   { kind: 'poll', label: 'Poll', icon: ChartBar },
   { kind: 'giveaway', label: 'Giveaway', icon: Gift },
+  { kind: 'end_credits', label: 'End credits', icon: FilmStrip },
+  { kind: 'emote_wall', label: 'Emote wall', icon: Sparkle },
+  { kind: 'chat_highlight', label: 'Chat highlight', icon: PushPin },
 ]
 export const kindInfo = (k: WidgetKind) => KINDS.find((x) => x.kind === k) ?? KINDS[0]!
+
+const CREDITS_SECTION_LABEL: Record<CreditsSection, string> = {
+  followers: 'Followers',
+  subs: 'Subscribers',
+  gifters: 'Gifters',
+  tippers: 'Bits & tips',
+  raiders: 'Raiders',
+  mods: 'Moderators',
+}
+
+const ALL_CREDITS_SECTIONS: CreditsSection[] = [
+  'followers',
+  'subs',
+  'gifters',
+  'tippers',
+  'raiders',
+  'mods',
+]
+
+const HIGHLIGHT_DURATIONS = [
+  { value: '', label: 'Until dismissed' },
+  { value: '10', label: '10 seconds' },
+  { value: '20', label: '20 seconds' },
+  { value: '30', label: '30 seconds' },
+  { value: '60', label: '60 seconds' },
+  { value: '120', label: '2 minutes' },
+]
 
 const LABEL_SOURCES: { value: LabelSource; label: string }[] = [
   { value: 'latest_follower', label: 'Latest follower' },
@@ -122,6 +161,53 @@ export function newWidget(
       return { id, kind, ...center(560, 320), config: { theme: DEFAULT_THEME } }
     case 'giveaway':
       return { id, kind, ...center(560, 200), config: { theme: DEFAULT_THEME } }
+    case 'end_credits':
+      return {
+        id,
+        kind,
+        ...center(800, 720),
+        config: {
+          theme: DEFAULT_THEME,
+          title: 'Thanks for watching',
+          sections: ['followers', 'subs', 'gifters', 'tippers', 'raiders', 'mods'],
+          speed: 60,
+          font: 'system',
+          text_color: null,
+          accent_color: null,
+          background: null,
+          loop: true,
+        },
+      }
+    case 'emote_wall':
+      return {
+        id,
+        kind,
+        x: 0,
+        y: 0,
+        w: o.width,
+        h: o.height,
+        config: {
+          theme: DEFAULT_THEME,
+          platforms: [],
+          max_emotes: 40,
+          size: 56,
+          lifetime_s: 6,
+          physics: 'bounce',
+        },
+      }
+    case 'chat_highlight':
+      return {
+        id,
+        kind,
+        ...center(620, 220),
+        config: {
+          theme: DEFAULT_THEME,
+          duration_s: null,
+          font_size: 24,
+          show_badges: true,
+          show_platform: true,
+        },
+      }
     case 'layer':
       return {
         id,
@@ -487,6 +573,142 @@ export function WidgetSettings({
           </Field>
         </>
       )}
+      {w.kind === 'end_credits' && (
+        <EndCreditsFields w={w} onChange={(config) => onChange({ ...w, config })} />
+      )}
+      {w.kind === 'emote_wall' && (
+        <>
+          <Field label="Physics">
+            {(p) => (
+              <Select
+                {...p}
+                value={w.config.physics}
+                onChange={(e) =>
+                  onChange({
+                    ...w,
+                    config: { ...w.config, physics: e.target.value as EmotePhysics },
+                  })
+                }
+              >
+                <option value="bounce">Bounce around screen</option>
+                <option value="rain">Rain from top</option>
+                <option value="fountain">Fountain from bottom</option>
+              </Select>
+            )}
+          </Field>
+          <PlatformChecks
+            value={w.config.platforms}
+            onChange={(platforms) => onChange({ ...w, config: { ...w.config, platforms } })}
+          />
+          <Field label={`Max emotes on screen (${w.config.max_emotes})`}>
+            {(p) => (
+              <input
+                {...p}
+                type="range"
+                min={5}
+                max={120}
+                step={5}
+                value={w.config.max_emotes}
+                onChange={(e) =>
+                  onChange({
+                    ...w,
+                    config: { ...w.config, max_emotes: Number(e.target.value) },
+                  })
+                }
+                className="h-8 w-full"
+              />
+            )}
+          </Field>
+          <Field label={`Emote size (${w.config.size} px)`}>
+            {(p) => (
+              <input
+                {...p}
+                type="range"
+                min={24}
+                max={128}
+                step={4}
+                value={w.config.size}
+                onChange={(e) =>
+                  onChange({ ...w, config: { ...w.config, size: Number(e.target.value) } })
+                }
+                className="h-8 w-full"
+              />
+            )}
+          </Field>
+          <Field label={`On screen for ${w.config.lifetime_s} s`}>
+            {(p) => (
+              <input
+                {...p}
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={w.config.lifetime_s}
+                onChange={(e) =>
+                  onChange({ ...w, config: { ...w.config, lifetime_s: Number(e.target.value) } })
+                }
+                className="h-8 w-full"
+              />
+            )}
+          </Field>
+        </>
+      )}
+      {w.kind === 'chat_highlight' && (
+        <>
+          <Field
+            label="Auto-hide after"
+            hint="Pin a message from Chat with “Show on stream”. Clear it there or set a timer."
+          >
+            {(p) => (
+              <Select
+                {...p}
+                value={w.config.duration_s === null ? '' : String(w.config.duration_s)}
+                onChange={(e) =>
+                  onChange({
+                    ...w,
+                    config: {
+                      ...w.config,
+                      duration_s: e.target.value ? Number(e.target.value) : null,
+                    },
+                  })
+                }
+              >
+                {HIGHLIGHT_DURATIONS.map((opt) => (
+                  <option key={opt.label} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={`Text size (${w.config.font_size} px)`}>
+            {(p) => (
+              <input
+                {...p}
+                type="range"
+                min={14}
+                max={48}
+                step={2}
+                value={w.config.font_size}
+                onChange={(e) =>
+                  onChange({ ...w, config: { ...w.config, font_size: Number(e.target.value) } })
+                }
+                className="h-8 w-full"
+              />
+            )}
+          </Field>
+          <Switch
+            checked={w.config.show_platform}
+            onChange={(v) => onChange({ ...w, config: { ...w.config, show_platform: v } })}
+            label="Show platform icon"
+          />
+          <Switch
+            checked={w.config.show_badges}
+            onChange={(v) => onChange({ ...w, config: { ...w.config, show_badges: v } })}
+            label="Show viewer badges"
+          />
+        </>
+      )}
       <details className="rounded-[12px] border border-line">
         <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-text-2 hover:text-text">
           Exact position
@@ -499,5 +721,198 @@ export function WidgetSettings({
         </div>
       </details>
     </div>
+  )
+}
+
+function OptionalColorField({
+  label,
+  value,
+  fallbackHex,
+  onChange,
+}: {
+  label: string
+  value: string | null
+  fallbackHex: string
+  onChange: (next: string | null) => void
+}) {
+  return (
+    <Field label={label}>
+      {(p) => (
+        <div className="flex items-center gap-2">
+          <input
+            aria-label={`${label} colour picker`}
+            type="color"
+            value={value && isColor(value) ? value : fallbackHex}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-9 w-11 shrink-0 cursor-pointer rounded-control border border-line bg-surface-2 p-1"
+          />
+          <Input
+            {...p}
+            value={value ?? ''}
+            placeholder="Theme default"
+            maxLength={16}
+            onChange={(e) => {
+              const raw = e.target.value.trim()
+              onChange(raw === '' ? null : raw)
+            }}
+            className="font-mono"
+          />
+          {value !== null && (
+            <Button size="sm" variant="ghost" onClick={() => onChange(null)}>
+              Reset
+            </Button>
+          )}
+        </div>
+      )}
+    </Field>
+  )
+}
+
+function EndCreditsFields({
+  w,
+  onChange,
+}: {
+  w: Extract<Widget, { kind: 'end_credits' }>
+  onChange: (cfg: Extract<Widget, { kind: 'end_credits' }>['config']) => void
+}) {
+  const cfg = w.config
+  const active = cfg.sections.length ? cfg.sections : ALL_CREDITS_SECTIONS
+  const ordered: CreditsSection[] = [
+    ...active,
+    ...ALL_CREDITS_SECTIONS.filter((s) => !active.includes(s)),
+  ]
+  const toggleSection = (sec: CreditsSection) => {
+    if (active.includes(sec)) {
+      if (active.length <= 1) return
+      onChange({ ...cfg, sections: active.filter((s) => s !== sec) })
+    } else {
+      onChange({ ...cfg, sections: [...active, sec] })
+    }
+  }
+  const moveSection = (sec: CreditsSection, delta: -1 | 1) => {
+    const idx = active.indexOf(sec)
+    const nextIdx = idx + delta
+    if (idx < 0 || nextIdx < 0 || nextIdx >= active.length) return
+    const copy = [...active]
+    const [picked] = copy.splice(idx, 1)
+    if (!picked) return
+    copy.splice(nextIdx, 0, picked)
+    onChange({ ...cfg, sections: copy })
+  }
+
+  return (
+    <>
+      <Field label="Heading">
+        {(p) => (
+          <Input
+            {...p}
+            value={cfg.title ?? 'Thanks for watching'}
+            maxLength={80}
+            onChange={(e) => onChange({ ...cfg, title: e.target.value })}
+          />
+        )}
+      </Field>
+      <Field label="Sections" hint="Choose at least one group and order how they roll.">
+        {() => (
+          <ul className="flex flex-col gap-1.5">
+            {ordered.map((sec) => {
+              const checked = active.includes(sec)
+              const activeIdx = active.indexOf(sec)
+              const lastOne = checked && active.length === 1
+              return (
+                <li
+                  key={sec}
+                  className="flex items-center justify-between gap-2 rounded-control border border-line bg-surface-2 px-2.5 py-1.5"
+                >
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-[14px] font-medium">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={lastOne}
+                      onChange={() => toggleSection(sec)}
+                      className="size-4 accent-[var(--fc-accent)]"
+                    />
+                    <span className="truncate">{CREDITS_SECTION_LABEL[sec]}</span>
+                  </label>
+                  {checked && (
+                    <div className="flex items-center gap-0.5">
+                      <IconButton
+                        size="sm"
+                        label={`Move ${CREDITS_SECTION_LABEL[sec]} up`}
+                        disabled={activeIdx <= 0}
+                        onClick={() => moveSection(sec, -1)}
+                      >
+                        <ArrowUp size={14} />
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        label={`Move ${CREDITS_SECTION_LABEL[sec]} down`}
+                        disabled={activeIdx >= active.length - 1}
+                        onClick={() => moveSection(sec, 1)}
+                      >
+                        <ArrowDown size={14} />
+                      </IconButton>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Field>
+      <Field label={`Scroll speed (${cfg.speed} px/s)`}>
+        {(p) => (
+          <input
+            {...p}
+            type="range"
+            min={20}
+            max={240}
+            step={10}
+            value={cfg.speed}
+            onChange={(e) => onChange({ ...cfg, speed: Number(e.target.value) })}
+            className="h-8 w-full"
+          />
+        )}
+      </Field>
+      <Field label="Font">
+        {(p) => (
+          <Select
+            {...p}
+            value={cfg.font ?? 'system'}
+            onChange={(e) => onChange({ ...cfg, font: e.target.value })}
+          >
+            <option value="system">System UI</option>
+            {DESIGN_FONTS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <OptionalColorField
+        label="Text colour"
+        value={cfg.text_color ?? null}
+        fallbackHex="#eef0f5"
+        onChange={(text_color) => onChange({ ...cfg, text_color })}
+      />
+      <OptionalColorField
+        label="Accent colour"
+        value={cfg.accent_color ?? null}
+        fallbackHex="#ff7a59"
+        onChange={(accent_color) => onChange({ ...cfg, accent_color })}
+      />
+      <OptionalColorField
+        label="Background colour"
+        value={cfg.background ?? null}
+        fallbackHex="#12141a"
+        onChange={(background) => onChange({ ...cfg, background })}
+      />
+      <Switch
+        checked={cfg.loop !== false}
+        onChange={(loop) => onChange({ ...cfg, loop })}
+        label="Loop continuously"
+      />
+    </>
   )
 }
