@@ -32,7 +32,17 @@ import {
   type ProFeature,
   type ProView,
 } from '@ferrocast/api'
+import type { ThemePref } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
+import {
+  applyThemePref,
+  counterpart,
+  kindOf,
+  lastTheme,
+  parseThemePref,
+  prefersLight,
+  THEME_APPLIED_EVENT,
+} from '../lib/themes'
 import { isLimited, useLive } from '../lib/store'
 import { isCloud } from '../lib/boot'
 import { useClient, useMediaQuery } from '../lib/hooks'
@@ -160,26 +170,22 @@ function OpenInBrowser() {
   )
 }
 
-type ThemePref = 'system' | 'dark' | 'light'
+/** The quick controls' three-way choice: the computer's, or the kind of theme. */
+type QuickPref = 'system' | 'dark' | 'light'
 
 function useTheme(): {
   theme: 'dark' | 'light'
-  pref: ThemePref
-  setPref: (p: ThemePref) => void
+  pref: QuickPref
+  setPref: (p: QuickPref) => void
   toggle: () => void
 } {
   const client = useClient()
-  const readPref = (): ThemePref => {
-    const t = document.documentElement.dataset.theme
-    return t === 'dark' || t === 'light' ? t : 'system'
-  }
-  const resolve = (p: ThemePref): 'dark' | 'light' =>
-    p !== 'system' ? p : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  const readPref = (): ThemePref => parseThemePref(document.documentElement.dataset.theme)
   const [pref, setPrefState] = useState(readPref)
-  const [theme, setTheme] = useState(() => resolve(readPref()))
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => kindOf(readPref(), prefersLight()))
   useEffect(() => {
     const mq = matchMedia('(prefers-color-scheme: light)')
-    const on = () => setTheme(resolve(readPref()))
+    const on = () => setTheme(kindOf(readPref(), prefersLight()))
     // Settings › Appearance changes it too.
     const onSet = () => {
       setPrefState(readPref())
@@ -187,23 +193,17 @@ function useTheme(): {
     }
     mq.addEventListener('change', on)
     window.addEventListener(THEME_EVENT, onSet)
+    window.addEventListener(THEME_APPLIED_EVENT, onSet)
     return () => {
       mq.removeEventListener('change', on)
       window.removeEventListener(THEME_EVENT, onSet)
+      window.removeEventListener(THEME_APPLIED_EVENT, onSet)
     }
   }, [])
-  const setPref = (next: ThemePref) => {
-    const root = document.documentElement
-    if (next === 'system') delete root.dataset.theme
-    else root.dataset.theme = next
-    try {
-      if (next === 'system') localStorage.removeItem('fc-theme')
-      else localStorage.setItem('fc-theme', next)
-    } catch {
-      // ignore
-    }
+  const choose = (next: ThemePref) => {
+    applyThemePref(next)
     setPrefState(next)
-    setTheme(resolve(next))
+    setTheme(kindOf(next, prefersLight()))
     // Same place Settings › Appearance keeps it, so the two never disagree.
     void client
       .settings()
@@ -213,7 +213,13 @@ function useTheme(): {
         // The local choice above still applies; the engine copy catches up next time.
       })
   }
-  return { theme, pref, setPref, toggle: () => setPref(theme === 'dark' ? 'light' : 'dark') }
+  return {
+    theme,
+    pref: pref === 'system' ? 'system' : theme,
+    // Dark and Light here mean the last dark or light theme chosen, not always Slate and Daylight.
+    setPref: (q) => choose(q === 'system' ? 'system' : lastTheme(q)),
+    toggle: () => choose(counterpart(pref, prefersLight())),
+  }
 }
 
 function NavLink({

@@ -6,7 +6,24 @@
 
 @source '../../../packages/ui/src';
 
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@custom-variant dark (
+  &:where(
+    [data-theme='dark'],
+    [data-theme='graphite'],
+    [data-theme='slate'],
+    [data-theme='moonlight'],
+    [data-theme='forest'],
+    [data-theme='ember'],
+    [data-theme='obsidian'],
+    [data-theme='dark'] *,
+    [data-theme='graphite'] *,
+    [data-theme='slate'] *,
+    [data-theme='moonlight'] *,
+    [data-theme='forest'] *,
+    [data-theme='ember'] *,
+    [data-theme='obsidian'] *
+  )
+);
 
 /* Easy to read mid-stream: text a step bigger and bolder than a document's (owner, 26 Oct). */
 @theme {
@@ -56,11 +73,18 @@ input[type='range'] {
 .fc-name {
   color: var(--nc-d);
 }
-:root[data-theme='light'] .fc-name {
+:is(
+    :root[data-theme='daylight'],
+    :root[data-theme='light'],
+    :root[data-theme='mist'],
+    :root[data-theme='linen'],
+    :root[data-theme='contrast']
+  )
+  .fc-name {
   color: var(--nc-l);
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']):not([data-theme='light']) .fc-name {
+  :root:not([data-theme]) .fc-name {
     color: var(--nc-l);
   }
 }
@@ -227,7 +251,14 @@ input[type='range'] {
   background: linear-gradient(160deg, #2a3039 0%, #171a20 46%, #0f1115 100%);
   border-color: rgb(255 255 255 / 0.1);
 }
-:root[data-theme='light'] .fc-plate {
+:is(
+    :root[data-theme='daylight'],
+    :root[data-theme='light'],
+    :root[data-theme='mist'],
+    :root[data-theme='linen'],
+    :root[data-theme='contrast']
+  )
+  .fc-plate {
   --fc-plate-text: #0e1014;
   --fc-plate-text-2: #343a45;
   --fc-plate-gap: #eceff3;
@@ -235,7 +266,7 @@ input[type='range'] {
   border-color: rgb(16 24 40 / 0.12);
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']):not([data-theme='light']) .fc-plate {
+  :root:not([data-theme]) .fc-plate {
     --fc-plate-text: #0e1014;
     --fc-plate-text-2: #343a45;
     --fc-plate-gap: #eceff3;

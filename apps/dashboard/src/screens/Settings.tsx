@@ -35,7 +35,6 @@ import {
   Dialog,
   Field,
   Input,
-  Segmented,
   Select,
   Skeleton,
   copyText,
@@ -49,6 +48,14 @@ import { AccountRow, useConnect } from '../components/accounts'
 import { YoutubePrivacyGroup } from '../components/youtube-privacy'
 import { stateCopy } from '../components/StatusStrip'
 import { THEME_EVENT } from '../components/Shell'
+import { ThemePicker } from '../components/theme-picker'
+import {
+  THEME_APPLIED_EVENT,
+  applyThemePref,
+  parseThemePref,
+  prefersLight,
+  resolvedTheme,
+} from '../lib/themes'
 import { done, useAction, useClient, useNow, useResource } from '../lib/hooks'
 import { DOWNLOAD_PAGE, checkedLine, refreshUpdate, summarize } from '../lib/update'
 import { openUpdateDialog } from '../components/update'
@@ -531,39 +538,34 @@ function Appearance({
   save: (s: SettingsData) => void
 }) {
   const currencyId = useId()
-  const apply = (theme: SettingsData['theme']) => {
-    const root = document.documentElement
-    if (theme === 'system') delete root.dataset.theme
-    else root.dataset.theme = theme
-    try {
-      if (theme === 'system') localStorage.removeItem('fc-theme')
-      else localStorage.setItem('fc-theme', theme)
-    } catch {
-      // ignore
-    }
+  const choose = (theme: SettingsData['theme']) => {
+    applyThemePref(theme)
+    save({ ...settings, theme })
   }
+  // What the page shows now (not only what the engine remembers): the engine's copy catches
+  // up, and another window may have changed it.
+  const [applied, setApplied] = useState<SettingsData['theme']>(() =>
+    parseThemePref(document.documentElement.dataset.theme),
+  )
+  useEffect(() => {
+    const on = () => setApplied(parseThemePref(document.documentElement.dataset.theme))
+    window.addEventListener(THEME_APPLIED_EVENT, on)
+    return () => window.removeEventListener(THEME_APPLIED_EVENT, on)
+  }, [])
+  const following = applied === 'system'
+  const picked = following ? null : resolvedTheme(applied, prefersLight())
   return (
     <Section id="appearance" title="Appearance" description="How Ferrocast and your overlays look.">
       <Group title="Dashboard">
-        <Row
-          label="Theme"
-          description="Match system follows your computer’s light or dark mode."
-          control={
-            <Segmented
-              label="Theme"
-              value={settings.theme}
-              onChange={(theme) => {
-                apply(theme)
-                save({ ...settings, theme })
-              }}
-              options={[
-                { value: 'system', label: 'Match system' },
-                { value: 'dark', label: 'Dark' },
-                { value: 'light', label: 'Light' },
-              ]}
-            />
-          }
+        <SwitchRow
+          checked={following}
+          onChange={(on) => choose(on ? 'system' : resolvedTheme('system', prefersLight()))}
+          label="Match system"
+          description="Slate when your computer is dark, Daylight when it is light."
         />
+        <Row child label="Theme" description="Six dark, four light. The change shows at once.">
+          <ThemePicker value={picked} onChange={choose} />
+        </Row>
       </Group>
       <AppearanceGroups />
       <Group title="On stream">
