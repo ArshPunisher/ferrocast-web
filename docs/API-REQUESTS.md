@@ -220,3 +220,25 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+## R14. Selective recording: `show` on an item, and three edit words (22 Nov)
+
+Each source can be shown on the stream only (chat and alerts a clean recording leaves out), in the
+recording only (a face camera the stream doesn't carry), or both. Roadmap Phase 2 #9.
+
+Ask (done on the engine side, branch `feat/p2-selective-recording`):
+- `GET /api/v1/studio/engine/scenes/{scene}/items` lists `show` on every item and every child of a
+  group: `"both"` (the default, and what a collection from before had), `"stream"` or `"recording"`.
+  The dashboard reads a missing `show` as both.
+- `POST /api/v1/studio/engine/scenes/{scene}/items/{id}/edit` takes `{ do: "stream_only" }`,
+  `{ do: "recording_only" }` and `{ do: "stream_and_recording" }`. An unknown word is a 400 as before.
+  The choice is an undo step.
+- A flag on a group covers its children as a whole; a child of a shown group keeps its own. It
+  applies to the stream, the recording and the replay buffer's clips; the preview, Studio Mode,
+  thumbnails and the virtual camera show every item. While no visible item differs the two are one
+  picture, drawn once; once one does, a recording can't share the stream's encode (the encoder
+  budget's `why_not_shared` says why), so it runs its own.
+
+The demo engine has no Studio desk (the Studio engine needs the desktop app), so there is nothing
+to simulate there; the page's behaviour is covered by `e2e/studio-selective-recording.spec.ts`
+against mocked Studio endpoints.
+
