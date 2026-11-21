@@ -225,10 +225,10 @@ function snapLines(o: DragOpts): { lx: number[]; ly: number[] } {
     ly.push(H / 2)
   }
   for (const other of to.others) {
-    // Edge to edge, both sides: beside it or lined up with it.
+    // Edge to edge, both sides (beside it or lined up with it), and middle to middle.
     const b = bounds(other)
-    lx.push(b.left, b.right)
-    ly.push(b.top, b.bottom)
+    lx.push(b.left, (b.left + b.right) / 2, b.right)
+    ly.push(b.top, (b.top + b.bottom) / 2, b.bottom)
   }
   return { lx, ly }
 }
