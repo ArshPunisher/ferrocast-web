@@ -18,6 +18,7 @@ import {
   Sparkle,
   SpeakerHigh,
   Trash,
+  Info,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -56,6 +57,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk, type EngineApi } from './common'
+import { sharedNote } from './record-notes'
 import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
 import { RemoteControlSection } from './remote-control'
@@ -1391,7 +1393,7 @@ export function RecordPage({ s, set }: PageProps) {
       hour: sizeText(sizes.stream * 60),
       facts: [
         'Looks exactly like what your viewers saw.',
-        `Uses ${chip}. No extra work while live: it reuses the stream.`,
+        `Uses ${chip}. It reuses the stream's encode while live, when they can share.`,
         'Good for keeping a copy of each stream.',
       ],
     },
@@ -1485,6 +1487,8 @@ export function RecordPage({ s, set }: PageProps) {
   )
   const over = budget.data?.level === 'over'
   const atLimit = budget.data?.level === 'limit'
+  // When it can't share (a source for one side only, a VOD track…), say why whatever the level.
+  const cantShare = sharedNote(choice, budget.data)
   return (
     <>
       <Heading>Quality</Heading>
@@ -1543,6 +1547,17 @@ export function RecordPage({ s, set }: PageProps) {
           <span className="flex items-start gap-1.5 font-semibold text-warn">
             <Warning size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
             {picked.warn}
+          </span>
+        )}
+        {cantShare && !over && (
+          <span data-testid="not-shared" className="flex items-start gap-1.5 text-text-2">
+            <Info
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-0.5 shrink-0 text-accent-text"
+            />
+            <span>{cantShare}</span>
           </span>
         )}
         {over && (

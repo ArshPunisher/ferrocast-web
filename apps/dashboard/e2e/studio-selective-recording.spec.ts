@@ -9,6 +9,9 @@ import { expect, test, type Page } from '@playwright/test'
 async function mountMockStudio(page: Page) {
   // Where each item is shown, and every edit word the page sent for it.
   const shown: Record<number, 'both' | 'stream' | 'recording'> = {
+    8: 'both',
+    9: 'both',
+    10: 'both',
     5: 'both',
     6: 'stream',
     7: 'recording',
@@ -181,7 +184,7 @@ async function mountMockStudio(page: Page) {
     if (path === '/api/v1/studio/engine/scenes') {
       return route.fulfill({
         json: {
-          scenes: [{ name: 'Live', items: 3, current: true, transition: null }],
+          scenes: [{ name: 'Live', items: 6, current: true, transition: null }],
           current: 'Live',
           transition: { kind: 'fade_transition', ms: 300 },
         },
@@ -217,6 +220,9 @@ async function mountMockStudio(page: Page) {
           item(7, 'Face cam', 'av_capture_input'),
           item(6, 'Chat', 'browser_source'),
           item(5, 'Camera', 'av_capture_input'),
+          item(8, 'Twin', 'av_capture_input'),
+          item(9, 'Twin', 'av_capture_input'),
+          { ...item(10, 'Mic', 'coreaudio_input_capture'), audio: true },
         ],
       })
     }
@@ -227,6 +233,8 @@ async function mountMockStudio(page: Page) {
           { name: 'Camera', kind: 'av_capture_input', scenes: ['Live'] },
           { name: 'Chat', kind: 'browser_source', scenes: ['Live'] },
           { name: 'Face cam', kind: 'av_capture_input', scenes: ['Live'] },
+          { name: 'Twin', kind: 'av_capture_input', scenes: ['Live'] },
+          { name: 'Mic', kind: 'coreaudio_input_capture', scenes: ['Live'] },
         ],
       })
     }
@@ -460,6 +468,39 @@ for (const [name, size] of [
       await expect(
         page.getByRole('button', { name: /^Chat/ }).first().getByRole('img'),
       ).toHaveCount(0)
+      expect(errors).toEqual([])
+    })
+
+    test('a sound source has no Shown in, in its settings or its menu', async ({ page }) => {
+      await page.setViewportSize(size)
+      const { errors } = await mountMockStudio(page)
+      await openSources(page, size.width < 500)
+      // Its menu first: a picture has the entry, the microphone doesn't.
+      await page.getByRole('button', { name: /^Chat/ }).first().click({ button: 'right' })
+      await expect(page.getByRole('menuitem', { name: 'Shown in' })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: /^Mic/ }).first().click({ button: 'right' })
+      await expect(page.getByRole('menuitem', { name: 'Blending' })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Shown in' })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      expect(errors).toEqual([])
+    })
+
+    test('two items of one source: the settings are about the one picked', async ({ page }) => {
+      await page.setViewportSize(size)
+      const { errors, edits, shown } = await mountMockStudio(page)
+      await openSources(page, size.width < 500)
+      // The second Twin (id 9) is the lower row; pick it, open its settings, choose.
+      await page.getByRole('button', { name: /^Twin/ }).nth(1).click()
+      await page.getByRole('button', { name: 'Settings of Twin' }).click()
+      const drawer = page.getByRole('complementary', { name: 'Twin settings' })
+      await drawer
+        .getByRole('radiogroup', { name: 'Shown in' })
+        .getByText('Recording', { exact: true })
+        .click()
+      await expect.poll(() => edits).toEqual([{ id: 9, do: 'recording_only' }])
+      expect(shown[9]).toBe('recording')
+      expect(shown[8]).toBe('both')
       expect(errors).toEqual([])
     })
 

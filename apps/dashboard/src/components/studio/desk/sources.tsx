@@ -66,7 +66,7 @@ import { inDesktopApp } from '../../../lib/external'
 import { os, shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
 import { KindGlyph, useDesk, useDeskStats } from './common'
-import { ShownBadge, SHOWN_LONG, editForShow, showOf } from './shown-in'
+import { ShownBadge, SHOWN_LONG, canChooseWhere, editForShow, showOf } from './shown-in'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 import { addsToPick } from './stage-edit'
@@ -435,16 +435,23 @@ export function SourcesDock() {
         onSelect: () => void act(item, `scale_${f}`),
       })),
     },
-    {
-      label: 'Shown in',
-      icon: Broadcast,
-      items: (['both', 'stream', 'recording'] as const).map((s) => ({
-        label: SHOWN_LONG[s],
-        // One of three: a radio in the menu (`here`), not a tick box.
-        here: showOf(item) === s,
-        onSelect: () => void act(item, editForShow(s)),
-      })),
-    },
+    // A picture on the wide canvas only: a sound has none to leave out, the vertical picture
+    // has no recording.
+    ...(canChooseWhere(item.kind, desk.canvas)
+      ? ([
+          {
+            label: 'Shown in',
+            icon: Broadcast,
+            items: (['both', 'stream', 'recording'] as const).map((s) => ({
+              label: SHOWN_LONG[s],
+              // One of three: a radio in the menu (`here`), not a tick box.
+              here: showOf(item) === s,
+              // The one already chosen asks for nothing.
+              onSelect: () => showOf(item) !== s && void act(item, editForShow(s)),
+            })),
+          },
+        ] satisfies MenuItem[])
+      : []),
     {
       label: 'Blending',
       icon: Faders,

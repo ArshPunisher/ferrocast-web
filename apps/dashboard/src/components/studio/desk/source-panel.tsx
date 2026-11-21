@@ -83,7 +83,7 @@ import { KindSettings, SourcePreview } from './kind-settings'
 import { useFilterApi, useItemOf } from './item-filters'
 import { AreaPicker, CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
-import { ShownIn, editForShow } from './shown-in'
+import { ShownIn, canChooseWhere, editForShow, itemFor, showOf } from './shown-in'
 
 /** Sends edits once they've stopped changing for a moment (`live`: at once, one request at a
  *  time, the newest next, so a filter's picture follows the slider as a photo app's does;
@@ -192,13 +192,15 @@ function Panel({
   first: Tab | null
   onClose: () => void
 }) {
-  const { api, audio, items, scene, refresh, edit, kinds, canvas, undone } = useDesk()
+  const { api, audio, items, scene, refresh, edit, kinds, canvas, undone, selected } = useDesk()
   const { run, busy } = useAction()
   const [rename, setRename] = useState(name)
   // Removing asks once more: the button turns into "Sure? Remove".
   const [sure, setSure] = useState(false)
   const a = audio.data?.find((x) => x.name === name) ?? null
-  const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
+  // The one picked in the list when the same source is in the scene twice.
+  const item = itemFor(items.data ?? [], name, selected)
+  const parent = items.data?.find((i) => i.children.some((c) => c.id === item?.id)) ?? null
   const kind = a?.kind ?? item?.kind ?? ''
   const levels = useLevels(api, a ? [name] : [])
   const feed = useLevelFeed(api, a ? [name] : [])
@@ -439,10 +441,11 @@ function Panel({
               </Pad>
             )}
             {/* Where it is shown: the stream, the recording or both (a source in this scene). */}
-            {item && (
+            {item && canChooseWhere(kind, canvas) && (
               <Pad>
                 <ShownIn
                   item={item}
+                  parent={parent ? { name: parent.name, show: showOf(parent) } : null}
                   busy={busy === 'shown'}
                   onChoose={(to) =>
                     void run('shown', () =>
@@ -452,7 +455,8 @@ function Panel({
                 />
               </Pad>
             )}
-            <Settings name={name} kind={kind} />
+            {/* A group has no settings of its own to read: only where it is shown, above. */}
+            {kind !== 'group' && <Settings name={name} kind={kind} />}
             {kind === 'ferrocast_web' && (
               <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5">
                 <Button
