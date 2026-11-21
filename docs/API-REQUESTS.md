@@ -220,3 +220,13 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+
+## R15. Performance mode, hold-to-show/hide hotkeys and copy/paste across collections (22 Nov)
+
+All done on the engine side (branch `feat/p1-perf-hotkeys-copy`, `docs/API.md` Studio). The dashboard uses:
+
+- `GET` / `PUT /api/v1/studio/engine/preview/pause` `{ paused }` -> `{ paused }`: stops drawing the preview, Studio Mode's second picture and the vertical picture; never touches a stream, recording, replay buffer or virtual camera. The page reads it every ~2.5 s and when it is looked at again, because the hotkey actions `performance_mode`, `performance_mode_on` and `performance_mode_off` change it too.
+- Hotkey actions `push_show:<scene>\n<source>`, `push_hide:`, `push_filter_on:<source>\n<filter>`, `push_filter_off:` (held keys; back as they were on release; never saved). The Shortcuts page lists them in "Hold to show or hide", "Hold a filter on or off" and "Performance".
+- `GET` / `DELETE /studio/engine/clipboard`, `POST /studio/engine/clipboard/source` and `/filters`, `POST /studio/engine/clipboard/paste/source` and `/filters` (see the engine's API.md). An empty clipboard is a 404 `clipboard_empty`.
+
+The demo engine answers all `/studio/engine/*` with 422 `studio_unavailable` like the engine without the desktop app, so these need no demo behaviour (a test lists them with the other Studio calls). Not done: bind fields for these keys in the item and filter settings (they are set on the Shortcuts page only).
