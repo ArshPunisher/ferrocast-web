@@ -39,6 +39,7 @@ import {
   ruleBuiltinSound,
   sample,
   validateRule,
+  MAX_WEIGHT,
   type AlertRule,
   type Condition,
   type Design,
@@ -632,7 +633,7 @@ function VariationEditor({
             className="text-text-3 transition-transform duration-200 group-open:rotate-180"
           />
           <span className="ml-auto truncate text-[14px] font-medium text-text-3">
-            {isDefault ? 'Read aloud, custom CSS' : 'Read aloud, CSS, priority'}
+            {isDefault ? 'Read aloud, custom CSS' : 'Read aloud, CSS, priority, chance'}
           </span>
         </summary>
         <div className="flex flex-col gap-4 pt-4">
@@ -657,20 +658,46 @@ function VariationEditor({
             )}
           </Field>
           {!isDefault && (
-            <Field label="Priority" hint="When several looks match, the highest wins.">
-              {(p) => (
-                <Input
-                  {...p}
-                  type="number"
-                  min={-100}
-                  max={100}
-                  value={v.priority}
-                  onChange={(e) =>
-                    onChange({ ...v, priority: Math.round(Number(e.target.value) || 0) })
-                  }
-                />
-              )}
-            </Field>
+            <>
+              <Field label="Priority" hint="When several looks match, the highest wins.">
+                {(p) => (
+                  <Input
+                    {...p}
+                    type="number"
+                    min={-100}
+                    max={100}
+                    value={v.priority}
+                    onChange={(e) =>
+                      onChange({ ...v, priority: Math.round(Number(e.target.value) || 0) })
+                    }
+                  />
+                )}
+              </Field>
+              <Field
+                label="Chance"
+                hint="Looks with the same priority share the alerts by this weight. 0 means never while another one has a weight."
+              >
+                {(p) => (
+                  <Input
+                    {...p}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={MAX_WEIGHT}
+                    value={v.weight}
+                    onChange={(e) =>
+                      onChange({
+                        ...v,
+                        weight: Math.min(
+                          MAX_WEIGHT,
+                          Math.max(0, Math.round(Number(e.target.value) || 0)),
+                        ),
+                      })
+                    }
+                  />
+                )}
+              </Field>
+            </>
           )}
         </div>
       </details>
@@ -837,6 +864,15 @@ function RuleEditor({
               onChange={onToggle}
               label={`${rule.name} alert`}
               hideLabel
+            />
+          </div>
+
+          <div className="mb-5">
+            <Switch
+              checked={draft.interrupt}
+              onChange={(interrupt) => setDraft({ ...draft, interrupt })}
+              label="Interrupt the alert on screen"
+              description="A new one replaces the alert playing now instead of waiting. While alerts are paused it waits."
             />
           </div>
 
