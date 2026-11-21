@@ -477,7 +477,7 @@ export function MediaCheckStep({
                       const next = cameras.find((c) => c.value === e.target.value) ?? null
                       setSelectedCam(next)
                     }}
-                    className="h-8 max-w-[220px] rounded-control border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                   >
                     {cameras.map((cam) => (
                       <option key={cam.value} value={cam.value}>
@@ -586,7 +586,7 @@ export function MediaCheckStep({
                   aria-label="Choose microphone"
                   defaultValue={mics[0]?.value ?? 'default'}
                   onChange={(e) => void switchMicDevice(e.target.value)}
-                  className="h-8 max-w-[220px] rounded-control border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                  className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                 >
                   {mics.map((m) => (
                     <option key={m.value} value={m.value}>
@@ -618,8 +618,10 @@ export function MediaCheckStep({
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   <IconButton
-                    label={micAudio.muted ? `Unmute ${micAudio.name}` : `Mute ${micAudio.name}`}
+                    label={`Mute ${micAudio.name}`}
+                    aria-pressed={micAudio.muted}
                     size="sm"
+                    className="max-sm:size-11"
                     variant="outline"
                     onClick={() => void toggleMute()}
                   >

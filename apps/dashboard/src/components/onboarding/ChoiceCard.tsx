@@ -38,14 +38,14 @@ export function ChoiceCard({
         onChange={onPick}
       />
       <span className="flex flex-wrap items-center gap-2">
-        <span className="text-[15px] font-bold text-text">{title}</span>
+        <span className="min-w-0 text-[15px] font-bold break-words text-text">{title}</span>
         {badge && (
           <span className="rounded-full border border-current px-2 py-px text-[12px] font-medium opacity-80">
             {badge}
           </span>
         )}
       </span>
-      <span className="text-[13.5px] leading-snug text-text-2">{detail}</span>
+      <span className="min-w-0 text-[13.5px] leading-snug break-words text-text-2">{detail}</span>
     </label>
   )
 }

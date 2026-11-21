@@ -234,11 +234,10 @@ export function ImportStep({
       )}
 
       {imported ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex flex-col gap-4 rounded-[16px] border border-line-strong bg-surface-1 p-5"
-        >
+        <div className="flex flex-col gap-4 rounded-[16px] border border-line-strong bg-surface-1 p-5">
+          <span role="status" className="sr-only">
+            Imported {imported.report.name}
+          </span>
           <div className="flex items-start gap-3">
             <CheckCircle size={24} weight="fill" className="mt-0.5 shrink-0 text-ok" aria-hidden />
             <div className="min-w-0 flex-1">
@@ -467,6 +466,7 @@ export function ImportStep({
                       variant="ghost"
                       onClick={() => {
                         pickChoice('fresh')
+                        onContinue()
                       }}
                     >
                       Start fresh instead
@@ -588,6 +588,7 @@ export function ImportStep({
                           variant="ghost"
                           onClick={() => {
                             pickChoice('fresh')
+                            onContinue()
                           }}
                         >
                           Start fresh instead
@@ -701,7 +702,6 @@ export function ImportStep({
                             aria-label="Importing scene collection"
                             aria-valuemin={0}
                             aria-valuemax={100}
-                            aria-valuenow={65}
                             className="h-2 w-full overflow-hidden rounded-full bg-surface-3"
                           >
                             <div className="h-full w-2/3 animate-pulse rounded-full bg-btn-primary motion-reduce:animate-none" />
@@ -728,7 +728,8 @@ export function ImportStep({
                           busy={importing}
                           onClick={() => void runImport()}
                           icon={<ArrowRight size={18} />}
-                          className="flex-row-reverse"
+                          title={`Import “${preview.name}”`}
+                          className="h-auto! max-w-full flex-row-reverse py-2.5! text-left whitespace-normal! break-words"
                         >
                           Import &ldquo;{preview.name}&rdquo;
                         </Button>
