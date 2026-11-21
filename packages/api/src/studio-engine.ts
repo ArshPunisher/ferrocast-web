@@ -393,6 +393,8 @@ export interface EngineImportReport {
   web_pages: number
   /** Kinds of source this computer's OBS doesn't have. */
   missing: string[]
+  /** Browser sources whose page address was left empty (not an http(s) page or a plain local file). */
+  blocked_pages?: string[]
   device_resets?: EngineImportSkip[]
   skipped?: EngineImportSkip[]
   skipped_total?: number

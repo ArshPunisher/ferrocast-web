@@ -280,6 +280,20 @@ export function ImportStep({
             />
           </dl>
 
+          {(imported.report.blocked_pages?.length ?? 0) > 0 && (
+            <div
+              role="alert"
+              className="rounded-[12px] border border-warn/40 bg-warn-soft px-3.5 py-3 text-[13px] text-text"
+            >
+              <p className="font-semibold">Pages left empty for your safety</p>
+              <p className="mt-0.5 text-text-2">
+                {imported.report.blocked_pages?.join(', ')} pointed at an address that isn’t a
+                normal web page or a plain file on this computer. Set the address again in the
+                Studio if you trust it.
+              </p>
+            </div>
+          )}
+
           {deviceResets.length > 0 && (
             <div className="rounded-[12px] border border-line bg-surface-2 px-3.5 py-3 text-[13px] text-text-2">
               <p className="font-semibold text-text">Devices to pick in Studio</p>
