@@ -1,7 +1,7 @@
 // Chat and Events as Studio panels: Ferrocast's merged chat (Twitch, YouTube and Kick in one)
 // and the event feed beside the preview, where OBS has one platform's chat dock at a time.
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Roles, type Actor } from '@ferrocast/api'
 import { EmptyState, cx } from '@ferrocast/ui'
 import {
@@ -16,6 +16,20 @@ import { EventRow } from '../../EventRow'
 import { useNow } from '../../../lib/hooks'
 import { useLive } from '../../../lib/store'
 import { DockHeader } from './layout'
+import { MiniFeedBar, ReadMark } from './mini-feed'
+import {
+  filterEvents,
+  isUnread,
+  loadFilter,
+  loadRead,
+  markAllRead,
+  markRead,
+  saveFilter,
+  saveRead,
+  unreadCount,
+  type FeedFilter,
+  type ReadState,
+} from '../../../lib/mini-feed'
 
 export function ChatDock() {
   const now = useNow(15_000)
@@ -83,17 +97,49 @@ export function ChatDock() {
 export function EventsDock() {
   const now = useNow(15_000)
   const events = useLive((s) => s.events)
-  const feed = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const [filter, setFilterState] = useState<FeedFilter>(() => loadFilter())
+  const [read, setReadState] = useState<ReadState>(() => loadRead(Date.now()))
+  const setRead = useCallback((r: ReadState) => {
+    setReadState(r)
+    saveRead(r)
+  }, [])
+  const setFilter = useCallback((f: FeedFilter) => {
+    setFilterState(f)
+    saveFilter(f)
+  }, [])
+  const all = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const feed = useMemo(() => filterEvents(all, filter), [all, filter])
+  const unread = unreadCount(read, all)
   return (
     <section aria-label="Events" className="flex min-h-0 flex-1 flex-col">
       <DockHeader id="events" />
+      <MiniFeedBar
+        filter={filter}
+        onFilter={setFilter}
+        unread={unread}
+        onMarkAll={() => setRead(markAllRead(all, Date.now()))}
+      />
       <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {feed.length === 0 ? (
+        {all.length === 0 ? (
           <EmptyState compact title="No events yet" />
+        ) : feed.length === 0 ? (
+          <EmptyState compact title="Nothing of this type yet" />
         ) : (
           <ul className="flex flex-col">
             {feed.map((e) => (
-              <EventRow key={e.id} event={e} now={now} compact />
+              <EventRow
+                key={e.id}
+                event={e}
+                now={now}
+                compact
+                unread={isUnread(read, e)}
+                trailing={
+                  <ReadMark
+                    unread={isUnread(read, e)}
+                    onRead={() => setRead(markRead(read, e.id))}
+                  />
+                }
+              />
             ))}
           </ul>
         )}
