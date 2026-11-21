@@ -20,16 +20,17 @@ export function filterEvents(events: FerroEvent[], filter: FeedFilter): FerroEve
   return events.filter((e) => f.kinds.includes(e.kind.type))
 }
 
-/** What was read: everything received up to `before`, plus single events by id. */
+/** What was read: every event up to `upTo` (the engine's event numbers, so a phone's or a
+ * PC's clock never matters), plus single events by id. */
 export interface ReadState {
-  before: number
+  upTo: number
   ids: string[]
 }
 
 export const MAX_READ_IDS = 400
 
 export function isUnread(r: ReadState, e: FerroEvent): boolean {
-  return e.received_at > r.before && !r.ids.includes(e.id)
+  return e.seq > r.upTo && !r.ids.includes(e.id)
 }
 
 export function unreadCount(r: ReadState, events: FerroEvent[]): number {
@@ -38,27 +39,30 @@ export function unreadCount(r: ReadState, events: FerroEvent[]): number {
 
 export function markRead(r: ReadState, id: string): ReadState {
   if (r.ids.includes(id)) return r
-  return { before: r.before, ids: [...r.ids, id].slice(-MAX_READ_IDS) }
+  return { upTo: r.upTo, ids: [...r.ids, id].slice(-MAX_READ_IDS) }
 }
 
-/** Everything up to the newest event (or now) counts as read; the single marks are dropped. */
-export function markAllRead(events: FerroEvent[], now: number): ReadState {
-  return { before: Math.max(now, ...events.map((e) => e.received_at)), ids: [] }
+export function newestSeq(events: FerroEvent[]): number {
+  return events.reduce((n, e) => Math.max(n, e.seq), 0)
 }
 
-const KEY = 'fc-feed-read'
-const FILTER_KEY = 'fc-feed-filter'
+/** Everything seen so far counts as read; the single marks are dropped. */
+export function markAllRead(r: ReadState, events: FerroEvent[]): ReadState {
+  return { upTo: Math.max(r.upTo, newestSeq(events)), ids: [] }
+}
 
-export function loadRead(now: number): ReadState {
+const KEY = 'fc-feed-read-v2'
+
+/** What this browser kept; null the first time (the caller starts from what is already there). */
+export function loadRead(): ReadState | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<ReadState> | null
-    if (v && typeof v.before === 'number' && Array.isArray(v.ids))
-      return { before: v.before, ids: v.ids.filter((x) => typeof x === 'string') }
+    if (v && typeof v.upTo === 'number' && Array.isArray(v.ids))
+      return { upTo: v.upTo, ids: v.ids.filter((x) => typeof x === 'string') }
   } catch {
-    // Blocked or junk: fall through to a fresh state.
+    // Blocked or junk: treated as the first time.
   }
-  // First time here: what is already in the feed counts as read, only new events are unread.
-  return { before: now, ids: [] }
+  return null
 }
 
 export function saveRead(r: ReadState): void {
@@ -68,6 +72,8 @@ export function saveRead(r: ReadState): void {
     // Not saved; it still works for this page.
   }
 }
+
+const FILTER_KEY = 'fc-feed-filter'
 
 export function loadFilter(): FeedFilter {
   try {

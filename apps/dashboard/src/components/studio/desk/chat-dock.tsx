@@ -1,8 +1,8 @@
 // Chat and Events as Studio panels: Ferrocast's merged chat (Twitch, YouTube and Kick in one)
 // and the event feed beside the preview, where OBS has one platform's chat dock at a time.
 
-import { useCallback, useMemo, useState } from 'react'
-import { Roles, type Actor } from '@ferrocast/api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Roles, actorOf, describeEvent, tameText, type Actor } from '@ferrocast/api'
 import { EmptyState, cx } from '@ferrocast/ui'
 import {
   ChatLine,
@@ -24,6 +24,7 @@ import {
   loadRead,
   markAllRead,
   markRead,
+  newestSeq,
   saveFilter,
   saveRead,
   unreadCount,
@@ -98,7 +99,7 @@ export function EventsDock() {
   const now = useNow(15_000)
   const events = useLive((s) => s.events)
   const [filter, setFilterState] = useState<FeedFilter>(() => loadFilter())
-  const [read, setReadState] = useState<ReadState>(() => loadRead(Date.now()))
+  const [read, setReadState] = useState<ReadState | null>(() => loadRead())
   const setRead = useCallback((r: ReadState) => {
     setReadState(r)
     saveRead(r)
@@ -107,9 +108,15 @@ export function EventsDock() {
     setFilterState(f)
     saveFilter(f)
   }, [])
-  const all = useMemo(() => [...events].reverse().slice(0, 80), [events])
-  const feed = useMemo(() => filterEvents(all, filter), [all, filter])
-  const unread = unreadCount(read, all)
+  // The first time here, what is already in the feed counts as read, and that is kept at once
+  // (so leaving the panel and coming back doesn't make it all new). It waits for the feed to load.
+  useEffect(() => {
+    if (read === null && events.length > 0) setRead({ upTo: newestSeq(events), ids: [] })
+  }, [read, events, setRead])
+  const shown = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const feed = useMemo(() => filterEvents(shown, filter), [shown, filter])
+  const state = read ?? { upTo: Number.MAX_SAFE_INTEGER, ids: [] }
+  const unread = unreadCount(state, events)
   return (
     <section aria-label="Events" className="flex min-h-0 flex-1 flex-col">
       <DockHeader id="events" />
@@ -117,10 +124,10 @@ export function EventsDock() {
         filter={filter}
         onFilter={setFilter}
         unread={unread}
-        onMarkAll={() => setRead(markAllRead(all, Date.now()))}
+        onMarkAll={() => setRead(markAllRead(state, events))}
       />
       <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {all.length === 0 ? (
+        {shown.length === 0 ? (
           <EmptyState compact title="No events yet" />
         ) : feed.length === 0 ? (
           <EmptyState compact title="Nothing of this type yet" />
@@ -132,11 +139,12 @@ export function EventsDock() {
                 event={e}
                 now={now}
                 compact
-                unread={isUnread(read, e)}
+                unread={isUnread(state, e)}
                 trailing={
                   <ReadMark
-                    unread={isUnread(read, e)}
-                    onRead={() => setRead(markRead(read, e.id))}
+                    unread={isUnread(state, e)}
+                    label={`Mark ${tameText(actorOf(e)?.display_name ?? 'someone')} ${describeEvent(e).title} as read`}
+                    onRead={() => setRead(markRead(state, e.id))}
                   />
                 }
               />

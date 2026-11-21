@@ -35,52 +35,58 @@ export function MiniFeedBar({
   const paused = queue?.paused ?? false
   const muted = queue?.muted ?? false
   const playing = queue?.playing != null
+  // One queue action at a time: a slower answer can never overwrite a newer one.
+  const inFlight = busy !== null && busy.startsWith('q-')
   const status = queue ? queueStatus({ paused, muted, waiting: queue.waiting.length }) : null
   const act = (key: string, fn: () => Promise<NonNullable<typeof queue>>) =>
-    void run(key, fn, { once: true }).then((q) => q && setQueue(q))
+    !inFlight && void run(key, fn, { once: true }).then((q) => q && setQueue(q))
   return (
     <div className="flex flex-col gap-1.5 border-b border-line px-2 py-1.5">
-      <div role="toolbar" aria-label="Alert controls" className="flex flex-wrap items-center gap-1">
+      <div role="group" aria-label="Alert controls" className="flex flex-wrap items-center gap-1">
         <IconButton
-          size="xs"
-          label={paused ? 'Resume alerts' : 'Pause alerts'}
+          size="sm"
+          label="Pause alerts"
           aria-pressed={paused}
-          disabled={!queue || busy === 'q-pause'}
+          disabled={!queue}
+          aria-disabled={inFlight || undefined}
           className={cx(paused && 'bg-surface-3 text-text')}
           onClick={() => act('q-pause', paused ? client.queueResume : client.queuePause)}
         >
           {paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
         </IconButton>
         <IconButton
-          size="xs"
+          size="sm"
           label="Skip this alert"
-          disabled={!queue || !playing || busy === 'q-skip'}
+          disabled={!queue || !playing}
+          aria-disabled={inFlight || undefined}
           onClick={() => act('q-skip', client.queueSkip)}
         >
           <SkipForward size={15} weight="fill" />
         </IconButton>
         <IconButton
-          size="xs"
-          label={muted ? 'Unmute alert sounds' : 'Mute alert sounds'}
+          size="sm"
+          label="Mute alert sounds"
           aria-pressed={muted}
-          disabled={!queue || busy === 'q-mute'}
+          disabled={!queue}
+          aria-disabled={inFlight || undefined}
           className={cx(muted && 'bg-surface-3 text-text')}
           onClick={() => act('q-mute', muted ? client.queueUnmute : client.queueMute)}
         >
           {muted ? <SpeakerSimpleSlash size={15} /> : <SpeakerSimpleHigh size={15} />}
         </IconButton>
         <IconButton
-          size="xs"
+          size="sm"
           label="Send a test alert"
-          disabled={busy === 'q-test'}
+          aria-disabled={inFlight || undefined}
           onClick={() =>
+            !inFlight &&
             void run('q-test', () => client.test('follow'), { success: 'Test alert sent.' })
           }
         >
           <Flask size={15} />
         </IconButton>
         <span className="mx-0.5 h-4 w-px bg-line" aria-hidden />
-        <IconButton size="xs" label="Mark all as read" disabled={unread === 0} onClick={onMarkAll}>
+        <IconButton size="sm" label="Mark all as read" disabled={unread === 0} onClick={onMarkAll}>
           <Checks size={15} />
         </IconButton>
         <span aria-live="polite" className="ml-auto">
@@ -93,7 +99,7 @@ export function MiniFeedBar({
           )}
         </span>
       </div>
-      <div role="group" aria-label="Show event types" className="flex flex-wrap gap-1">
+      <div role="group" aria-label="Show event types" className="flex flex-wrap gap-1.5">
         {FEED_FILTERS.map((f) => (
           <button
             key={f.id}
@@ -101,7 +107,7 @@ export function MiniFeedBar({
             aria-pressed={filter === f.id}
             onClick={() => onFilter(f.id)}
             className={cx(
-              'h-6 rounded-full border px-2 text-[13px] font-semibold',
+              'h-8 rounded-full border px-3 text-[13px] font-semibold',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               filter === f.id
                 ? 'border-arc text-text'
@@ -122,10 +128,28 @@ export function MiniFeedBar({
   )
 }
 
-export function ReadMark({ unread, onRead }: { unread: boolean; onRead: () => void }) {
+export function ReadMark({
+  unread,
+  label,
+  onRead,
+}: {
+  unread: boolean
+  label: string
+  onRead: () => void
+}) {
   if (!unread) return null
   return (
-    <IconButton size="xs" label="Mark as read" onClick={onRead}>
+    <IconButton
+      size="sm"
+      label={label}
+      onClick={(e) => {
+        // The button goes away once read: keep the keyboard's place on the row.
+        const row = e.currentTarget.closest('li')
+        row?.setAttribute('tabindex', '-1')
+        onRead()
+        row?.focus()
+      }}
+    >
       <Check size={14} />
     </IconButton>
   )

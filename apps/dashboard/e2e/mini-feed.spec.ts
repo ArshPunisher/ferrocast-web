@@ -287,22 +287,22 @@ async function mount(page: Page, opts: { failSkip?: boolean; empty?: boolean } =
   const picture = page.getByRole('radiogroup', { name: 'Picture from' })
   if (await picture.isVisible().catch(() => false))
     await picture.getByText('Ferrocast', { exact: true }).click()
-  await expect(page.getByRole('toolbar', { name: 'Alert controls' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Alert controls' })).toBeVisible()
   return { calls, q }
 }
 
 function suite() {
   test('pause, mute and skip call the engine and show their state', async ({ page }) => {
     const { calls } = await mount(page)
-    const bar = page.getByRole('toolbar', { name: 'Alert controls' })
+    const bar = page.getByRole('group', { name: 'Alert controls' })
     await bar.getByRole('button', { name: 'Pause alerts' }).click()
-    await expect(bar.getByRole('button', { name: 'Resume alerts' })).toHaveAttribute(
+    await expect(bar.getByRole('button', { name: 'Pause alerts' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
     await expect(page.getByRole('status').filter({ hasText: 'Alerts paused' })).toBeVisible()
     await bar.getByRole('button', { name: 'Mute alert sounds' }).click()
-    await expect(bar.getByRole('button', { name: 'Unmute alert sounds' })).toHaveAttribute(
+    await expect(bar.getByRole('button', { name: 'Mute alert sounds' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -313,8 +313,8 @@ function suite() {
       })
     await bar.getByRole('button', { name: 'Skip this alert' }).click()
     await expect(bar.getByRole('button', { name: 'Skip this alert' })).toBeDisabled()
-    await bar.getByRole('button', { name: 'Resume alerts' }).click()
-    await bar.getByRole('button', { name: 'Unmute alert sounds' }).click()
+    await bar.getByRole('button', { name: 'Pause alerts' }).click()
+    await bar.getByRole('button', { name: 'Mute alert sounds' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Alert' })).toHaveCount(0)
     expect(calls).toEqual([
       'POST /api/v1/queue/pause',
@@ -327,15 +327,15 @@ function suite() {
 
   test('state survives a reload (it comes from the engine)', async ({ page }) => {
     await mount(page)
-    const bar = page.getByRole('toolbar', { name: 'Alert controls' })
+    const bar = page.getByRole('group', { name: 'Alert controls' })
     await bar.getByRole('button', { name: 'Pause alerts' }).click()
     await bar.getByRole('button', { name: 'Mute alert sounds' }).click()
     await page.reload()
-    await expect(page.getByRole('button', { name: 'Resume alerts' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Pause alerts' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    await expect(page.getByRole('button', { name: 'Unmute alert sounds' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Mute alert sounds' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -379,19 +379,56 @@ function suite() {
   test('unread count, mark one, mark all, and it is remembered', async ({ page }) => {
     await page.addInitScript(
       () =>
-        localStorage.getItem('fc-feed-read') ??
-        localStorage.setItem('fc-feed-read', JSON.stringify({ before: 0, ids: [] })),
+        localStorage.getItem('fc-feed-read-v2') ??
+        localStorage.setItem('fc-feed-read-v2', JSON.stringify({ upTo: 0, ids: [] })),
     )
     await mount(page)
     await expect(page.getByText('3 new')).toBeVisible()
     const first = page.getByRole('region', { name: 'Events' }).getByRole('listitem').first()
-    await first.getByRole('button', { name: 'Mark as read' }).click()
+    await first.getByRole('button', { name: /^Mark .* as read$/ }).click()
     await expect(page.getByText('2 new')).toBeVisible()
     await page.reload()
     await expect(page.getByText('2 new')).toBeVisible()
     await page.getByRole('button', { name: 'Mark all as read' }).click()
     await expect(page.getByText('All read')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Mark all as read' })).toBeDisabled()
+  })
+
+  test('the first visit counts what is there as read, and keeps that on a reload', async ({
+    page,
+  }) => {
+    await mount(page)
+    await expect(page.getByText('All read')).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('fc-feed-read-v2'))).toContain('"upTo":3')
+    await page.reload()
+    await expect(page.getByText('All read')).toBeVisible()
+  })
+
+  test('marking an event read by keyboard keeps the focus on its row', async ({ page }) => {
+    await page.addInitScript(
+      () =>
+        localStorage.getItem('fc-feed-read-v2') ??
+        localStorage.setItem('fc-feed-read-v2', JSON.stringify({ upTo: 0, ids: [] })),
+    )
+    await mount(page)
+    const mark = page.getByRole('button', { name: 'Mark Tomas followed as read' })
+    await mark.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('2 new')).toBeVisible()
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('LI')
+  })
+
+  test('only one queue action runs at a time', async ({ page }) => {
+    await mount(page)
+    const bar = page.getByRole('group', { name: 'Alert controls' })
+    const pause = bar.getByRole('button', { name: 'Pause alerts' })
+    const mute = bar.getByRole('button', { name: 'Mute alert sounds' })
+    await pause.click()
+    // While that answer is on its way the others cannot be pressed.
+    await expect(mute).toBeEnabled()
+    await mute.click()
+    await expect(pause).toHaveAttribute('aria-pressed', 'true')
+    await expect(mute).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('no events at all shows the empty state', async ({ page }) => {
@@ -412,7 +449,7 @@ function suite() {
     const pause = page.getByRole('button', { name: 'Pause alerts' })
     await pause.focus()
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('button', { name: 'Resume alerts' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Pause alerts' })).toBeVisible()
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: 'Skip this alert' })).toBeFocused()
   })

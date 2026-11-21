@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { FerroEvent } from '@ferrocast/api'
 import {
   FEED_FILTERS,
@@ -9,6 +9,7 @@ import {
   loadRead,
   markAllRead,
   markRead,
+  newestSeq,
   queueStatus,
   saveFilter,
   saveRead,
@@ -40,37 +41,57 @@ describe('mini feed filters', () => {
 })
 
 describe('read state', () => {
-  it('counts events newer than the marker that are not marked', () => {
-    const r = { before: 15, ids: [] as string[] }
+  it('counts events newer than the marker (by engine number) that are not marked', () => {
+    const r = { upTo: 15, ids: [] as string[] }
     expect(unreadCount(r, events)).toBe(3)
     expect(isUnread(markRead(r, 'b'), events[1]!)).toBe(false)
     expect(unreadCount(markRead(r, 'b'), events)).toBe(2)
   })
+  it('never depends on a clock: a phone minutes ahead of the PC still sees new events', () => {
+    const r = { upTo: newestSeq(events), ids: [] as string[] }
+    const later = ev('z', 'follow', 50)
+    // received_at far in the past (the PC's clock is behind): only the number matters.
+    later.received_at = 1
+    expect(isUnread(r, later)).toBe(true)
+  })
   it('marking twice changes nothing', () => {
-    const r = markRead({ before: 0, ids: [] }, 'a')
+    const r = markRead({ upTo: 0, ids: [] }, 'a')
     expect(markRead(r, 'a')).toBe(r)
   })
-  it('mark all clears the count and the single marks', () => {
-    const r = markAllRead(events, 5)
-    expect(r).toEqual({ before: 40, ids: [] })
+  it('mark all clears the count and the single marks, and never goes back', () => {
+    const r = markAllRead({ upTo: 0, ids: ['a'] }, events)
+    expect(r).toEqual({ upTo: 40, ids: [] })
     expect(unreadCount(r, events)).toBe(0)
     expect(unreadCount(r, [...events, ev('e', 'follow', 41)])).toBe(1)
+    expect(markAllRead({ upTo: 99, ids: [] }, events).upTo).toBe(99)
   })
   it('keeps at most MAX_READ_IDS single marks', () => {
-    let r = { before: 0, ids: [] as string[] }
+    let r = { upTo: 0, ids: [] as string[] }
     for (let i = 0; i < MAX_READ_IDS + 20; i++) r = markRead(r, `x${i}`)
     expect(r.ids).toHaveLength(MAX_READ_IDS)
     expect(r.ids.at(-1)).toBe(`x${MAX_READ_IDS + 19}`)
   })
-  it('first visit counts what is already there as read; storage round-trips; junk is ignored', () => {
+  it('the first visit has nothing stored; storage round-trips; junk and blocked storage read as the first visit', () => {
     localStorage.clear()
-    expect(loadRead(99)).toEqual({ before: 99, ids: [] })
-    saveRead({ before: 5, ids: ['q'] })
-    expect(loadRead(99)).toEqual({ before: 5, ids: ['q'] })
-    localStorage.setItem('fc-feed-read', '{oops')
-    expect(loadRead(7)).toEqual({ before: 7, ids: [] })
-    localStorage.setItem('fc-feed-read', JSON.stringify({ before: 'x', ids: 3 }))
-    expect(loadRead(8)).toEqual({ before: 8, ids: [] })
+    expect(loadRead()).toBeNull()
+    saveRead({ upTo: 5, ids: ['q'] })
+    expect(loadRead()).toEqual({ upTo: 5, ids: ['q'] })
+    localStorage.setItem('fc-feed-read-v2', '{oops')
+    expect(loadRead()).toBeNull()
+    localStorage.setItem('fc-feed-read-v2', JSON.stringify({ upTo: 'x', ids: 3 }))
+    expect(loadRead()).toBeNull()
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError')
+    })
+    expect(loadRead()).toBeNull()
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+    expect(() => saveRead({ upTo: 1, ids: [] })).not.toThrow()
+    expect(() => saveFilter('raids')).not.toThrow()
+    expect(loadFilter()).toBe('all')
+    get.mockRestore()
+    set.mockRestore()
   })
   it('remembers the filter and ignores an unknown one', () => {
     localStorage.clear()
