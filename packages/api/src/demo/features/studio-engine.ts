@@ -798,6 +798,15 @@ export class DemoStudioEngine {
       return {}
     }
 
+    if (method === 'PUT' && rest[2] === 'sources' && rest[4] === 'settings') {
+      // Like the engine: only the keys sent change, and the source keeps its filters and sound.
+      const name = decodeURIComponent(rest[3]!)
+      this.requireMicName(name)
+      const settings = (requireObj(body).settings as Record<string, unknown> | undefined) ?? {}
+      if (settings.device_id) this.micDeviceId = String(settings.device_id)
+      return undefined
+    }
+
     if (method === 'PUT' && rest[2] === 'sources' && rest[4] === 'audio') {
       const name = decodeURIComponent(rest[3]!)
       this.requireMicName(name)

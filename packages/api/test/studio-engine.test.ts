@@ -140,6 +140,28 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     return { engine, api }
   }
 
+  it('changing the mic device in place keeps its filters, volume and mute', async () => {
+    const { engine, api } = mkApi()
+    try {
+      await api.setChannel(3, {
+        kind: 'coreaudio_input_capture',
+        name: 'Mic',
+        settings: { device_id: 'default' },
+      })
+      await api.addFilter('Mic', { kind: 'noise_suppress_filter', name: 'Noise', settings: {} })
+      await api.setAudio('Mic', { volume_db: -6, muted: true })
+      await api.update('Mic', { device_id: 'usb-1' })
+      expect((await api.settings('Mic')).device_id).toBe('usb-1')
+      expect((await api.filters('Mic')).map((f) => f.name)).toEqual(['Noise'])
+      const scenes = await api.scenes()
+      const mic = (await api.audio(scenes.current)).find((a) => a.name === 'Mic')
+      expect([mic?.volume_db, mic?.muted]).toEqual([-6, true])
+      await expect(api.update('Nope', { device_id: 'x' })).rejects.toBeTruthy()
+    } finally {
+      engine.dispose()
+    }
+  })
+
   it('previews OBS and Streamlabs collections, imports with previous_id, and supports undo', async () => {
     const { engine, api } = mkApi()
     try {

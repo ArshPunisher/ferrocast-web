@@ -258,17 +258,21 @@ export function MediaCheckStep({
       if (foundMic) {
         setMicAudio(foundMic)
       } else if (micChoices.length > 0) {
+        // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
+        const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
+        let micNew = 'Mic'
+        for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
         await engine.setChannel(3, {
           kind: micKind,
-          name: 'Mic',
+          name: micNew,
           settings: { device_id: micChoices[0]!.value },
         })
         if (probeReqRef.current !== req) return
         const refreshed = await engine.audio(scenes.current).catch(() => [] as EngineAudio[])
         if (probeReqRef.current !== req) return
         setMicAudio(
-          refreshed.find((a) => a.name === 'Mic') ?? {
-            name: 'Mic',
+          refreshed.find((a) => a.name === micNew) ?? {
+            name: micNew,
             kind: micKind,
             channel: 3,
             volume_db: 0,
@@ -355,11 +359,9 @@ export function MediaCheckStep({
   const switchMicDevice = async (value: string) => {
     if (!micAudio) return
     try {
-      await engine.setChannel(micAudio.channel || 3, {
-        kind: micAudio.kind,
-        name: micAudio.name,
-        settings: { device_id: value },
-      })
+      // In place: only the device changes, so the mic keeps its filters, volume and mute (and
+      // a mic that lives in a scene, as in an imported collection, can be switched too).
+      await engine.update(micAudio.name, { device_id: value })
     } catch (e) {
       setMicError(e)
     }
