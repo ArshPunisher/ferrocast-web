@@ -2,6 +2,8 @@
 // dashboard can drive the same renderer for its previews.
 
 import type {
+  ChatHighlight,
+  Credits,
   Overlay,
   OverlayServerFrame,
   OverlayState,
@@ -18,6 +20,9 @@ import { ChatWidget } from './widgets/chat'
 import { EventsWidget, GoalWidget, LabelWidget, ViewersWidget } from './widgets/info'
 import { PollWidget } from './widgets/poll'
 import { GiveawayWidget } from './widgets/giveaway'
+import { EndCreditsWidget } from './widgets/end-credits'
+import { EmoteWallWidget } from './widgets/emote-wall'
+import { ChatHighlightWidget } from './widgets/chat-highlight'
 import { LayerWidget, applyTransform } from './widgets/layer'
 import { motionLayer } from './widgets/motion'
 import { applyWidgetStyle } from './design/style'
@@ -100,6 +105,12 @@ function build(w: Widget, ctx: WidgetContext, preview: boolean): WidgetView | nu
       return new PollWidget(w, ctx)
     case 'giveaway':
       return new GiveawayWidget(w, ctx)
+    case 'end_credits':
+      return new EndCreditsWidget(w, ctx, preview)
+    case 'emote_wall':
+      return new EmoteWallWidget(w, ctx, preview)
+    case 'chat_highlight':
+      return new ChatHighlightWidget(w, ctx)
     case 'layer':
       return motionLayer(w, ctx, preview) ?? new LayerWidget(w, ctx)
     default:
@@ -117,10 +128,6 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
   const mq =
     typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
   const low = () => !!opts.lowMotion || !!mq?.matches
-  const syncMotion = () => shell.classList.toggle('is-low', low())
-  syncMotion()
-  mq?.addEventListener?.('change', syncMotion)
-
   let state: OverlayState = emptyState()
   let overlay: Overlay | null = null
   let ready = false
@@ -128,6 +135,21 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
   let revoked = false
   const spoken = new Set<string>()
   const views = new Map<string, { kind: string; view: WidgetView }>()
+  const each = (fn: (v: WidgetView) => void) => {
+    for (const { view } of views.values()) {
+      try {
+        fn(view)
+      } catch (e) {
+        warnOnce('a widget failed to update', e)
+      }
+    }
+  }
+  const syncMotion = () => {
+    shell.classList.toggle('is-low', low())
+    each((w) => w.onMotion?.())
+  }
+  syncMotion()
+  mq?.addEventListener?.('change', syncMotion)
   const ctx: WidgetContext = {
     send: (d) => opts.send?.(d),
     audio: opts.audio ?? true,
@@ -149,16 +171,6 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
   if (opts.fit === 'contain' && typeof ResizeObserver === 'function') {
     ro = new ResizeObserver(fit)
     ro.observe(root)
-  }
-
-  const each = (fn: (v: WidgetView) => void) => {
-    for (const { view } of views.values()) {
-      try {
-        fn(view)
-      } catch (e) {
-        warnOnce('a widget failed to update', e)
-      }
-    }
   }
 
   function layout(o: Overlay, fresh: boolean): void {
@@ -249,6 +261,8 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         chat: Array.isArray(s?.chat) ? s.chat : [],
         poll: obj(s?.poll) ? (s.poll as PollView) : null,
         giveaway: obj(s?.giveaway) ? (s.giveaway as GiveawayCard) : null,
+        credits: obj(s?.credits) ? (s.credits as Credits) : null,
+        chat_highlight: obj(s?.chat_highlight) ? (s.chat_highlight as ChatHighlight) : null,
         show: { countdown_ends_at: showEnds(s?.show) },
         ...(parseMusic(s?.music) ? { music: parseMusic(s?.music) as MusicNow } : {}),
       }
@@ -291,6 +305,9 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
           state.viewers = { ...state.viewers, ...(d.viewers as OverlayState['viewers']) }
         if ('poll' in d) state.poll = obj(d.poll) ? (d.poll as PollView) : null
         if ('giveaway' in d) state.giveaway = obj(d.giveaway) ? (d.giveaway as GiveawayCard) : null
+        if ('credits' in d) state.credits = obj(d.credits) ? (d.credits as Credits) : null
+        if ('chat_highlight' in d)
+          state.chat_highlight = obj(d.chat_highlight) ? (d.chat_highlight as ChatHighlight) : null
         if ('show' in d) state.show = { countdown_ends_at: showEnds(d.show) }
         each((v) => v.onState?.())
         break
