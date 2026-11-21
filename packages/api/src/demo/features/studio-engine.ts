@@ -19,6 +19,8 @@ export interface DemoStudioEngineOptions {
   obsPreset?: DemoCollectionPreset
   streamlabsPreset?: DemoCollectionPreset
   hasCamera?: boolean
+  /** The camera is there but this computer won't let the app use it (macOS privacy). */
+  cameraDenied?: boolean
   hasMic?: boolean
   micPreset?: DemoMicPreset
   running?: boolean
@@ -382,6 +384,7 @@ export class DemoStudioEngine {
       obsPreset: opts.obsPreset ?? 'normal',
       streamlabsPreset: opts.streamlabsPreset ?? 'normal',
       hasCamera: opts.hasCamera ?? true,
+      cameraDenied: opts.cameraDenied ?? false,
       hasMic: opts.hasMic ?? true,
       micPreset: opts.micPreset ?? 'quiet',
       running: opts.running ?? false,
@@ -882,10 +885,16 @@ export class DemoStudioEngine {
     )
   }
 
-  stillForDevice(device: string | null): { image: string | null } {
+  stillForDevice(device: string | null): { image: string | null; error?: string | null } {
     if (!this.opts.hasCamera) {
       throw new HttpError(404, 'studio_no_source', 'No camera is available on this computer.')
     }
+    if (this.opts.cameraDenied)
+      return {
+        image: null,
+        error:
+          'The camera is turned off for Ferrocast. Open System Settings, Privacy & Security, Camera, turn Ferrocast on, then press Retry.',
+      }
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
   }
 }

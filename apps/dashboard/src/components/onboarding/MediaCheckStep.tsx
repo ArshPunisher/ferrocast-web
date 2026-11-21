@@ -197,6 +197,7 @@ export function MediaCheckStep({
   const [stillUrl, setStillUrl] = useState<string | null>(null)
   const [camLoading, setCamLoading] = useState(false)
   const [camError, setCamError] = useState<unknown>(null)
+  const [camProblem, setCamProblem] = useState<string | null>(null)
 
   const [mics, setMics] = useState<DeviceChoice[]>([])
   const [micAudio, setMicAudio] = useState<EngineAudio | null>(null)
@@ -310,9 +311,14 @@ export function MediaCheckStep({
     async (cam: DeviceChoice, signal?: AbortSignal) => {
       setCamLoading(true)
       setCamError(null)
+      setCamProblem(null)
       try {
         const res = await engine.sourceStill(cam.kind, 'device', cam.value, 480, signal)
-        if (!signal?.aborted) setStillUrl(res.image)
+        if (!signal?.aborted) {
+          setStillUrl(res.image)
+          // No picture with a reason (the camera is off for this app, or in use): say it.
+          if (!res.image && res.error) setCamProblem(res.error)
+        }
       } catch (e) {
         if (!signal?.aborted && (e as { name?: string })?.name !== 'AbortError') {
           setCamError(e)
@@ -522,6 +528,28 @@ export function MediaCheckStep({
                   {describedCamError.hint && (
                     <p className="mt-0.5 text-text-2">{describedCamError.hint}</p>
                   )}
+                </div>
+                {selectedCam && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<ArrowsClockwise size={15} />}
+                    onClick={() => void loadCameraStill(selectedCam)}
+                  >
+                    Retry camera
+                  </Button>
+                )}
+              </div>
+            ) : camProblem && !stillUrl ? (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-text">
+                    Ferrocast can’t see {selectedCam?.label ?? 'the camera'}.
+                  </p>
+                  <p className="mt-0.5 text-text-2">{camProblem}</p>
                 </div>
                 {selectedCam && (
                   <Button

@@ -140,6 +140,19 @@ test.describe('first-run import and camera/mic check', () => {
     await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
   })
 
+  test('a camera the computer will not let the app use says why and what to do', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty&cam=denied')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+    await expect(page.getByText(/turned off for Ferrocast/)).toBeVisible()
+    await expect(page.getByText(/Privacy & Security, Camera/)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry camera' })).toBeVisible()
+    await expect(page.getByText(/warming up/)).toHaveCount(0)
+  })
+
   test('fits 375px mobile viewport with zero horizontal overflow across Import and Camera/Mic check', async ({
     page,
   }) => {

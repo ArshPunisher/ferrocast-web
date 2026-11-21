@@ -1120,7 +1120,7 @@ export function studioEngineApi(c: FerroClient) {
       w = 240,
       signal?: AbortSignal,
     ) =>
-      c.request<{ image: string | null }>(
+      c.request<{ image: string | null; error?: string | null }>(
         'GET',
         `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
         undefined,
