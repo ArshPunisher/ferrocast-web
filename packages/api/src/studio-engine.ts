@@ -875,6 +875,9 @@ export interface PreviewRect {
   canvas?: { x: number; y: number; w: number; h: number }
   /** The page's colour round the canvas (0xRRGGBB), so the app's stage matches the theme. */
   bg?: number
+  /** The second colour of the diagonal stripes over the part of a source that runs past the
+   * canvas (0xRRGGBB; `bg` is the first). Missing: no stripes. */
+  stripe?: number
   /** Where the page's menus and panels lie over the box (CSS pixels from its top-left), at
    * most 16: the app leaves its picture out there so they show, instead of hiding it all. */
   /** Menus and panels over the box, with their corner radius (`r`). */

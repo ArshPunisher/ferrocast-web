@@ -10,6 +10,7 @@ import {
   StageBar,
   clampZoom,
   getPreviewView,
+  stripeOf,
   useStageEdit,
   usePreviewView,
   zoomAt,
@@ -34,6 +35,25 @@ describe('zoom maths', () => {
     expect(zoomAt(3, [0, 0], 10, [0, 0]).zoom).toBe(ZOOM_MAX)
     expect(zoomAt(0.3, [0, 0], 0.01, [0, 0]).zoom).toBe(ZOOM_MIN)
     expect(clampZoom(99)).toBe(ZOOM_MAX)
+  })
+})
+
+describe('the stripes round the canvas', () => {
+  const stage = (value: string) => {
+    const el = document.createElement('div')
+    document.body.append(el)
+    el.style.setProperty('--fc-stage-b', value)
+    return el
+  }
+  it('the second stripe colour is the theme’s, as 0xRRGGBB', () => {
+    expect(stripeOf(stage('#dcdfe6'))).toBe(0xdcdfe6)
+    expect(stripeOf(stage(' #121418 '))).toBe(0x121418)
+  })
+  it('is left out when the theme names none, or something that isn’t a hex colour', () => {
+    expect(stripeOf(document.createElement('div'))).toBeUndefined()
+    expect(stripeOf(stage('rgb(1 2 3)'))).toBeUndefined()
+    expect(stripeOf(stage('#fff'))).toBeUndefined()
+    expect(stripeOf(null)).toBeUndefined()
   })
 })
 

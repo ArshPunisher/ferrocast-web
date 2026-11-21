@@ -208,3 +208,15 @@ Ask: accept `system`, `dark`, `light` and the ten ids. `dark` and `light` stay v
 `theme`. Nothing else changes (the phone's remote page reads the same setting). The demo engine
 (`packages/api/src/demo/engine.ts`) already takes and checks the same list.
 
+## R13. Stripes over what runs past the canvas: `stripe` on the preview rect (21 Nov)
+
+The owner picked Streamlabs-style stripes for the part of a source outside the canvas. The native
+preview only draws the canvas, so the engine draws the stripes over each outlined source box's
+outside part, in the page's `bg` and a second colour.
+
+Ask (done on the engine side, branch `feat/overflow-stripes`): `PUT /api/v1/studio/engine/preview`
+(and `program`, `vertical`) takes an optional `rect.stripe`, 0xRRGGBB like `bg`. With it, diagonal
+stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined source that runs
+past the canvas; without it the surround stays plain. The dashboard sends the theme's
+`--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
+

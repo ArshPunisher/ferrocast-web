@@ -230,6 +230,17 @@ function bgOf(el: Element | null): number | undefined {
   return ((r ?? 0) << 16) | ((g ?? 0) << 8) | (b ?? 0)
 }
 
+/**
+ * The theme's second stripe colour round the canvas (`--fc-stage-b`) as 0xRRGGBB, or undefined
+ * when it isn't a six-digit hex colour. The app draws diagonal stripes in the stage's colour and
+ * this one over the part of a source that runs past the canvas.
+ */
+export function stripeOf(el: Element | null): number | undefined {
+  if (!el) return undefined
+  const m = /^#([0-9a-f]{6})$/i.exec(getComputedStyle(el).getPropertyValue('--fc-stage-b').trim())
+  return m?.[1] ? parseInt(m[1], 16) : undefined
+}
+
 type Hole = { x: number; y: number; w: number; h: number; r: number }
 
 /** What can lie over the preview: menus, lists and panels (dialogs mark theirs). */
@@ -393,6 +404,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       const r = box.getBoundingClientRect()
       // Cut where the top bar, the tab bar, menus or panels lie over it; hidden off the window.
       const bg = bgOf(box.closest('[data-stage-bg]'))
+      const stripe = stripeOf(box.closest('[data-stage-bg]'))
       const holes = cutOut(r, EDGE)
       return holes
         ? {
@@ -402,6 +414,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             h: r.height,
             vh: window.innerHeight,
             ...(bg === undefined ? {} : { bg }),
+            ...(stripe === undefined ? {} : { stripe }),
             ...(holes.length ? { holes } : {}),
           }
         : null
@@ -413,6 +426,7 @@ export function PreviewBox({ running }: { running: boolean }) {
       const s = stage.getBoundingClientRect()
       const c = box.getBoundingClientRect()
       const bg = bgOf(stage)
+      const stripe = stripeOf(stage)
       const holes = c.width > 1 && c.height > 1 ? cutOut(s, 0) : null
       return holes
         ? {
@@ -423,6 +437,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             vh: window.innerHeight,
             canvas: { x: c.left - s.left, y: c.top - s.top, w: c.width, h: c.height },
             ...(bg === undefined ? {} : { bg }),
+            ...(stripe === undefined ? {} : { stripe }),
             ...(holes.length ? { holes } : {}),
           }
         : null
