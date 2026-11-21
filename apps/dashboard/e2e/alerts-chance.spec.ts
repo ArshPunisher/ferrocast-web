@@ -77,6 +77,16 @@ function suite() {
     await expect(saveButton(page)).toBeEnabled()
   })
 
+  test('Home says alert sounds are muted and unmutes in one click', async ({ page }) => {
+    await open(page, 'home')
+    await demo(page, "(d) => d.queueControl('mute')")
+    const banner = page.getByRole('status').filter({ hasText: 'Alert sounds are muted' })
+    await expect(banner).toBeVisible()
+    await banner.getByRole('button', { name: 'Unmute' }).click()
+    await expect(banner).toHaveCount(0)
+    expect(await demo<boolean>(page, '(d) => d.queue.isMuted')).toBe(false)
+  })
+
   test('keyboard can reach and flip the interrupt switch; no axe violations', async ({ page }) => {
     await open(page, 'alerts/tip')
     const sw = page.getByRole('switch', { name: 'Interrupt the alert on screen' })
