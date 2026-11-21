@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { demo, fault, open } from './helpers'
+import { demo, fault, open, settled } from './helpers'
 
 // The alert editor's new controls: "Interrupt the alert on screen" (per alert type) and a
 // look's "Chance" (weight), in the demo engine, at 1280 and 375 px.
@@ -93,6 +93,7 @@ function suite() {
     await sw.focus()
     await page.keyboard.press('Space')
     await expect(sw).toHaveAttribute('aria-checked', 'true')
+    await settled(page)
     const r = await new AxeBuilder({ page })
       // The Message section's h3 under the page's h1 predates these controls.
       .disableRules(['heading-order'])
