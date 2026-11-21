@@ -35,6 +35,17 @@ interface Playing {
   acknowledged: boolean
 }
 
+/** The alert without its sound or speech, and without its design's sound and impact hits. */
+function silenced(a: RenderedAlert): RenderedAlert {
+  const quiet: RenderedAlert = { ...a, sound: null, tts_text: null, tts_audio: null }
+  if (a.design) {
+    const look = { ...a.design.look, sound: { ...a.design.look.sound, ref: null, volume: 0 } }
+    if (look.motion) look.motion = { ...look.motion, impact_sounds: false }
+    quiet.design = { ...a.design, look }
+  }
+  return quiet
+}
+
 export class AlertQueue {
   private waiting: Waiting[] = []
   private playing: Playing | null = null
@@ -46,13 +57,17 @@ export class AlertQueue {
 
   enqueue(alert: RenderedAlert, priority: number, now: number, interrupt = false): QueueAction[] {
     if (this.contains(alert.alert_id)) return []
-    if (interrupt && !this.paused && this.playing) {
-      // The new alert ends the one playing, with no gap, and goes to the front.
-      const actions: QueueAction[] = [{ type: 'hide', alert_id: this.playing.alert.alert_id }]
-      this.finish(now)
+    if (interrupt && !this.paused) {
+      // The new alert ends the one playing (if any) and goes first, skipping the gap.
+      const actions: QueueAction[] = []
+      if (this.playing) {
+        actions.push({ type: 'hide', alert_id: this.playing.alert.alert_id })
+        this.finish(now)
+      }
       this.nextAt = now
       this.waiting.unshift({ alert, priority, enqueued_at: now })
-      return [...actions, ...this.enforceCap(), ...this.tick(now)]
+      // It is playing by then, so the cap only folds waiting ones.
+      return [...actions, ...this.tick(now), ...this.enforceCap()]
     }
     let pos = this.waiting.findIndex((w) => w.priority < priority)
     if (pos < 0) pos = this.waiting.length
@@ -78,9 +93,7 @@ export class AlertQueue {
     const next = this.waiting.shift()
     if (next) {
       // Muted: the alert still shows, without its sound or speech.
-      const alert = this.muted
-        ? { ...next.alert, sound: null, tts_text: null, tts_audio: null }
-        : next.alert
+      const alert = this.muted ? silenced(next.alert) : next.alert
       actions.push({ type: 'show', alert })
       this.playing = {
         alert,
