@@ -158,4 +158,77 @@ test.describe('Community Theme Store (R37)', () => {
     await open(page, 'store/item/nothing', 'autoplay=0&latency=0')
     await expect(page.getByText(/That item isn’t in the Store/)).toBeVisible()
   })
+
+  test.describe('what the Store screen shows stays true', () => {
+    const link = (page: import('@playwright/test').Page, uri: string) =>
+      page.evaluate((u) => {
+        window.location.hash = `#/store?link=${encodeURIComponent(u)}`
+      }, uri)
+
+    const installViaLink = async (page: import('@playwright/test').Page, id: string) => {
+      await link(page, `ferrocast://store/install/${id}`)
+      await page.getByRole('button', { name: 'Confirm & Install' }).click()
+      await expect(page.getByTestId(`installed-row-${id}`)).toBeVisible()
+    }
+
+    test('the search box narrows the Installed list too', async ({ page }) => {
+      await open(page, 'store', 'autoplay=0&latency=0')
+      await installViaLink(page, 'aurora-pulse')
+      await installViaLink(page, 'foundry-goal-widget')
+      await page.getByRole('button', { name: /^Installed/ }).click()
+      await expect(page.getByTestId('installed-row-aurora-pulse')).toBeVisible()
+      await expect(page.getByTestId('installed-row-foundry-goal-widget')).toBeVisible()
+      await page.getByLabel('Search Community Store').fill('aurora')
+      await expect(page.getByTestId('installed-row-aurora-pulse')).toBeVisible()
+      await expect(page.getByTestId('installed-row-foundry-goal-widget')).toHaveCount(0)
+      await page.getByLabel('Search Community Store').fill('zzzz')
+      await expect(page.getByText(/No installed items match/)).toBeVisible()
+    })
+
+    test('View details on an item link closes the link dialog', async ({ page }) => {
+      await open(page, 'store', 'autoplay=0&latency=0')
+      await link(page, 'ferrocast://store/item/intermission-slate')
+      await page.getByRole('button', { name: 'View details' }).click()
+      await expect(page.getByTestId('store-item-detail')).toBeVisible()
+      await expect(page.getByTestId('ferrocast-link-dialog')).toHaveCount(0)
+    })
+
+    test('a catalog that failed to reload no longer offers Uninstall for what was removed', async ({
+      page,
+    }) => {
+      await open(page, 'store', 'autoplay=0&latency=0')
+      await installViaLink(page, 'aurora-pulse')
+      await page.evaluate(() => window.__ferrocastDemo?.setStoreFault('bad_signature'))
+      await page.getByRole('button', { name: 'Refresh catalog' }).click()
+      await expect(page.getByText(/signature isn’t valid/)).toBeVisible()
+      await page
+        .getByTestId('installed-row-aurora-pulse')
+        .getByRole('button', { name: 'Uninstall' })
+        .click()
+      await expect(page.getByTestId('installed-row-aurora-pulse')).toHaveCount(0)
+      await page.evaluate(() => {
+        window.location.hash = '#/store/item/aurora-pulse'
+      })
+      const detail = page.getByTestId('store-item-detail')
+      await expect(detail).toBeVisible()
+      await expect(detail.getByRole('button', { name: 'Uninstall' })).toHaveCount(0)
+      await expect(detail.getByRole('button', { name: 'Install package' })).toBeVisible()
+      await page.evaluate(() => window.__ferrocastDemo?.setStoreFault(null))
+    })
+
+    test('a link result that arrives after the dialog was closed is not shown', async ({
+      page,
+    }) => {
+      await open(page, 'store', 'autoplay=0&latency=350')
+      await expect(page.getByTestId('store-card-aurora-pulse')).toBeVisible()
+      await link(page, 'ferrocast://store/install/aurora-pulse')
+      await expect(page.getByTestId('ferrocast-link-dialog')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('ferrocast-link-dialog')).toHaveCount(0)
+      await page.getByRole('button', { name: 'Open ferrocast:// link' }).click()
+      await expect(page.getByTestId('ferrocast-link-dialog')).toBeVisible()
+      await page.waitForTimeout(1200)
+      await expect(page.getByText('Install “Aurora Pulse”?')).toHaveCount(0)
+    })
+  })
 })

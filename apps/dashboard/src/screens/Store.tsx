@@ -2,7 +2,7 @@
 // overlays, and safe sandboxed plugins, inspect creator pages, measure render performance
 // locally on this PC, install/update/uninstall with one-click undo, and confirm ferrocast:// links.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -52,6 +52,7 @@ import { canWords } from '../components/plugins-settings'
 import { externalLink } from '../lib/external'
 import { useClient } from '../lib/hooks'
 import { go, href, type Route } from '../lib/router'
+import { filterInstalled, latestOnly, withInstalled } from '../lib/store-state'
 import { estimateItemPerf, measureItemLocally, type LocalPerfReport } from '../lib/store-perf'
 
 type FilterKind = 'all' | StoreCategory | 'installed'
@@ -389,11 +390,19 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
   const [linkError, setLinkError] = useState<string | null>(null)
   const [linkBusy, setLinkBusy] = useState(false)
 
+  // Only the newest load may change the screen: a slow refresh that started before an install must
+  // not bring back the pre-install flags, and a link result that arrives late must not replace the
+  // link on screen now.
+  const loads = useRef(latestOnly())
+  const links = useRef(latestOnly())
+
   const loadAll = useCallback(
     async (fresh = false) => {
+      const gen = loads.current.next()
       if (fresh) setRefreshing(true)
       else setLoading(true)
       const [catRes, instRes] = await Promise.allSettled([api.catalog(fresh), api.installed()])
+      if (!loads.current.isCurrent(gen)) return
       if (instRes.status === 'fulfilled') {
         setInstalledFallback(instRes.value.installed)
         setLastUndo(instRes.value.last_undo)
@@ -405,6 +414,12 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         setLastUndo(catRes.value.last_undo)
       } else {
         setCatalogError(catRes.reason)
+        // Keep the catalog for browsing offline, but its installed flags follow the installed list
+        // that did load (what was just removed is no longer offered for removal).
+        if (instRes.status === 'fulfilled') {
+          const inst = instRes.value
+          setCatalog((prev) => (prev ? withInstalled(prev, inst.installed, inst.last_undo) : prev))
+        }
       }
       setLoading(false)
       setRefreshing(false)
@@ -414,7 +429,18 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
   useEffect(() => {
     void loadAll(false)
+    const l = loads.current
+    return () => l.invalidate()
   }, [loadAll])
+
+  /** Closes the link dialog and makes any lookup still in flight stale. */
+  const closeLinkDialog = useCallback(() => {
+    links.current.invalidate()
+    setLinkDialogOpen(false)
+    setLinkPreview(null)
+    setLinkError(null)
+    setLinkBusy(false)
+  }, [])
 
   // Measure each catalog item on this machine, a few at a time so a long catalog can't freeze
   // the page (cards show the quick estimate until their turn).
@@ -440,10 +466,12 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
   const resolveAndAsk = useCallback(
     async (uri: string) => {
+      const gen = links.current.next()
       setLinkInput(uri)
       setLinkDialogOpen(true)
       setLinkError(null)
       setLinkPreview(null)
+      setLinkBusy(false)
       if (!parseFerrocastStoreLink(uri)) {
         setLinkError(
           'That link does not match ferrocast://store/install/<id> or ferrocast://store/item/<id>.',
@@ -453,11 +481,11 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
       setLinkBusy(true)
       try {
         const preview = await api.resolveLink(uri)
-        setLinkPreview(preview)
+        if (links.current.isCurrent(gen)) setLinkPreview(preview)
       } catch (e) {
-        setLinkError(describeError(e).message)
+        if (links.current.isCurrent(gen)) setLinkError(describeError(e).message)
       } finally {
-        setLinkBusy(false)
+        if (links.current.isCurrent(gen)) setLinkBusy(false)
       }
     },
     [api],
@@ -491,8 +519,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
           ? `${res.designs.length} design${res.designs.length === 1 ? '' : 's'} added to Designs. One-click Undo is ready.`
           : 'One-click Undo is ready.',
       })
-      setLinkDialogOpen(false)
-      setLinkPreview(null)
+      closeLinkDialog()
       await loadAll(false)
     } catch (e) {
       const d = describeError(e)
@@ -577,6 +604,11 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
     })
   }, [catalog, filter, search, creatorsById])
 
+  const installedShown = useMemo(
+    () => filterInstalled(installedFallback, search),
+    [installedFallback, search],
+  )
+
   const selectedItemPerf = selectedItem
     ? (perfCache.get(selectedItem.id) ?? estimateItemPerf(selectedItem))
     : null
@@ -592,8 +624,10 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
               size="sm"
               variant="secondary"
               onClick={() => {
+                links.current.invalidate()
                 setLinkError(null)
                 setLinkPreview(null)
+                setLinkBusy(false)
                 setLinkDialogOpen(true)
               }}
             >
@@ -778,15 +812,19 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
           {(filter === 'installed' || !!catalogError || installedFallback.length > 0) && (
             <Panel
               id="store-installed-panel"
-              title={`Installed from Store (${installedFallback.length})`}
+              title={`Installed from Store (${installedShown.length === installedFallback.length ? installedFallback.length : `${installedShown.length} of ${installedFallback.length}`})`}
               description="Stored locally with SHA-256 verification. Keeps working even when the remote catalog is unavailable."
               icon={<Package weight="fill" />}
             >
               {installedFallback.length === 0 ? (
                 <p className="text-[14px] text-text-3">No Community Store items installed yet.</p>
+              ) : installedShown.length === 0 ? (
+                <p role="status" className="break-words text-[14px] text-text-3">
+                  No installed items match “{search.trim()}”. Clear the search to see them all.
+                </p>
               ) : (
                 <ul className="divide-y divide-line">
-                  {installedFallback.map((rec) => (
+                  {installedShown.map((rec) => (
                     <li
                       key={rec.item_id}
                       data-testid={`installed-row-${rec.item_id}`}
@@ -950,7 +988,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         <Dialog
           open
           onClose={() => {
-            setLinkDialogOpen(false)
+            closeLinkDialog()
             if (route.install) go({ name: 'store' })
           }}
           title="Open ferrocast:// install link"
@@ -1015,8 +1053,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      setLinkDialogOpen(false)
-                      setLinkPreview(null)
+                      closeLinkDialog()
                       if (route.install) go({ name: 'store' })
                     }}
                   >
@@ -1028,7 +1065,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                       variant="primary"
                       onClick={() => {
                         const id = linkPreview.item.id
-                        setLinkPreview(null)
+                        closeLinkDialog()
                         go({ name: 'store', item: id })
                       }}
                     >
