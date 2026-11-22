@@ -1367,6 +1367,8 @@ export interface Settings {
   reduced_motion: 'system' | 'on' | 'off'
   low_motion_overlays: boolean
   lan_access: boolean
+  /** Let local API keys work from other devices on the network (off: this PC only). */
+  api_keys_over_lan: boolean
   never_update_while_live: boolean
   launch_at_login: boolean
   close_to_tray: boolean

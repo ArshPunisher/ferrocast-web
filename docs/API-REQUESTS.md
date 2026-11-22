@@ -452,3 +452,12 @@ Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses
 - `StreamHealthRecord.destination_log` (`{ id, name, at, on }[]`, default empty) in the support report's recent streams.
 - The demo engine simulates all three refusals and the confirmations (`packages/api/src/demo/features/golive.ts`).
 
+## R34. Scoped local API keys & API specs (`#19`, 22 Nov)
+
+- `GET /api/v1/openapi.json` — OpenAPI 3.1.0 specification covering all local REST endpoints (`/api/v1/*`), including `x-ferrocast-scopes` computed from the route guard and `x-pc-only` markers.
+- `GET /api/v1/asyncapi.json` — AsyncAPI 3.0.0 specification covering `/api/v1/live` and `/o/{token}/ws` frames and client ack messages.
+- `GET /api/v1/api-keys` -> `{ keys: ApiKeySummary[], audit: ApiKeyAuditEntry[] }`. Keys never include hashes or plain secrets; `prefix` is the non-secret `fc_key_<8 hex>...` display identifier.
+- `POST /api/v1/api-keys` `{ name, scopes: ApiKeyScope[], expires_at?: number | null }` -> `201 Created` `{ key: ApiKeySummary, token: string }`. Scopes: `read_only`, `chat`, `alerts`, `studio_control`, `go_live`, `settings`. Token format `fc_key_<64 hex>` is returned once and stored only as a SHA-256 hash.
+- `DELETE /api/v1/api-keys/{id}` -> `204 No Content`. Revokes immediately.
+- `/api-keys*` is PC-only (`OWNER_DENIED` on remote sessions, never accessible via API keys). API keys also can never reach secrets, accounts, diagnostics export, plugin install/execution, session pairing, imports/exports/restores, or change `lan_access`. Per-key sliding-window rate limit returns `429 rate_limited` with `Retry-After` and `X-RateLimit-*` headers. Every API key use logs to tracing and SQLite audit without the key or hash.
+
