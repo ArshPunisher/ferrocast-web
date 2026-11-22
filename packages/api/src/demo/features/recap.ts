@@ -266,13 +266,18 @@ export function buildCredits(
 
 export class DemoRecap {
   constructor(
-    private readonly source: () => { events: FerroEvent[]; stats: SessionStats; live: boolean },
+    private readonly source: () => {
+      events: FerroEvent[]
+      creditEvents?: FerroEvent[]
+      stats: SessionStats
+      live: boolean
+    },
   ) {}
 
   route(method: string, seg: string[], _body: unknown, url: URL): Routed {
     if (seg[0] === 'credits' && seg.length === 1 && method === 'GET') {
-      const { events, stats } = this.source()
-      return buildCredits(events, stats)
+      const { events, creditEvents, stats } = this.source()
+      return buildCredits(creditEvents ?? events, stats)
     }
     if (seg[0] !== 'recap' || seg.length !== 1 || method !== 'GET') return NOT_MINE
     const raw = url.searchParams.get('since')

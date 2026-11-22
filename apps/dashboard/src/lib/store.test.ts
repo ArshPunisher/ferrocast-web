@@ -357,6 +357,9 @@ describe('what a chat line offers', () => {
     })
     expect(lineActions({ highlight: () => {} }, line('m1')).highlight).toBe(true)
     expect(lineActions({ offline: true, highlight: () => {} }, line('m1')).highlight).toBe(false)
+    // A message the filter is holding can't be shown on stream until it is approved.
+    expect(lineActions({ highlight: () => {} }, line('m1'), true).highlight).toBe(false)
+    expect(lineActions({ highlight: () => {} }, line('m1'), false).highlight).toBe(true)
     expect(Object.values(lineActions(offline, line('m2', 'kick'))).some(Boolean)).toBe(false)
   })
 })
