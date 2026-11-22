@@ -78,7 +78,8 @@ import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
-import { DemoRecap, buildRecap } from './features/recap'
+import { DemoRecap, buildCredits, buildRecap } from './features/recap'
+import { DemoHighlight } from './features/highlight'
 import { DemoDiscord } from './features/discord'
 import { DemoDiscordPro } from './features/discord-pro'
 import { DemoCloudBot, type DemoCloudBotState } from './features/cloud-bot'
@@ -403,6 +404,7 @@ export class DemoEngine {
   /** First-time chatter marks and the welcome setting. */
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
+  readonly highlight: DemoHighlight
   private readonly pro: DemoPro
   private account!: DemoAccount
   /** The Ferrocast bot in Discord (Pro): go-live posts and roles. */
@@ -630,6 +632,16 @@ export class DemoEngine {
     this.loyalty = new DemoLoyalty(this.host)
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
+    this.highlight = new DemoHighlight({
+      ...this.host,
+      visibleChatById: (id) => {
+        const e = this.events.find((x) => x.id === id)
+        if (!e || e.kind.type !== 'chat_message' || this.heldMsgs.has(id)) return null
+        return clone(e)
+      },
+      pushHighlightState: (highlight) =>
+        this.pushWidgetState('chat_highlight', { chat_highlight: highlight }),
+    })
     this.welcome = new DemoWelcome(this.host)
     this.studioEngine = opts.studioEngine
       ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {})
@@ -1742,6 +1754,7 @@ export class DemoEngine {
       this.loyalty,
       this.polls,
       this.giveaways,
+      this.highlight,
       this.welcome,
       this.recap,
       this.discord,
@@ -2013,8 +2026,18 @@ export class DemoEngine {
   private putOverlay(next: Overlay): Overlay {
     const saved = { ...clone(next), updated_at: Date.now() }
     this.overlays = this.overlays.map((x) => (x.id === saved.id ? saved : x))
-    for (const s of this.overlaySubs)
-      if (s.overlayId === saved.id) this.sendOverlay(s, 'config', clone(saved))
+    const patch: Record<string, unknown> = {}
+    if (saved.widgets.some((w) => w.kind === 'end_credits')) {
+      patch.credits = buildCredits(this.events, this.stats)
+    }
+    if (saved.widgets.some((w) => w.kind === 'chat_highlight')) {
+      patch.chat_highlight = this.highlight.view()
+    }
+    for (const s of this.overlaySubs) {
+      if (s.overlayId !== saved.id) continue
+      this.sendOverlay(s, 'config', clone(saved))
+      if (Object.keys(patch).length > 0) this.sendOverlay(s, 'state', clone(patch))
+    }
     return clone(saved)
   }
 
@@ -2782,13 +2805,20 @@ export class DemoEngine {
     return o.widgets.some((w) => {
       if (e.kind.type === 'chat_message')
         return (
-          w.kind === 'chat' &&
+          (w.kind === 'chat' || w.kind === 'emote_wall') &&
           (w.config.platforms.length === 0 || w.config.platforms.includes(e.platform))
         )
       return (
         w.kind === 'events' && (w.config.kinds.length === 0 || w.config.kinds.includes(e.kind.type))
       )
     })
+  }
+
+  private pushWidgetState(kind: Widget['kind'], partial: Record<string, unknown>): void {
+    for (const s of this.overlaySubs) {
+      const o = this.overlays.find((x) => x.id === s.overlayId)
+      if (o?.widgets.some((w) => w.kind === kind)) this.sendOverlay(s, 'state', clone(partial))
+    }
   }
 
   private sendOverlay(s: OverlaySub, type: string, data: unknown): void {
@@ -2800,14 +2830,19 @@ export class DemoEngine {
   private sendSnapshot(s: OverlaySub): void {
     const o = this.overlays.find((x) => x.id === s.overlayId)
     if (!o) return
+    const has = (k: Widget['kind']) => o.widgets.some((w) => w.kind === k)
     const state: OverlayState = {
       goals: clone(this.goals),
       labels: this.labelsFor(o),
       viewers: clone(this.viewers),
       events: clone(this.events.filter((e) => isAlertable(e)).slice(-25)),
-      chat: clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50)),
+      chat: has('chat')
+        ? clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50))
+        : [],
       poll: this.polls.view(),
       giveaway: this.giveaways.card(),
+      credits: has('end_credits') ? buildCredits(this.events, this.stats) : null,
+      chat_highlight: has('chat_highlight') ? this.highlight.view() : null,
       music: this.music.now(),
     }
     s.seq += 1
@@ -2927,6 +2962,18 @@ export class DemoEngine {
         const o = this.overlays.find((x) => x.id === s.overlayId)
         if (o) this.sendOverlay(s, 'state', { labels: this.labelsFor(o) })
       }
+    if (
+      k.type === 'follow' ||
+      k.type === 'subscription' ||
+      k.type === 'gift_batch' ||
+      (k.type === 'tip' && k.status === 'captured') ||
+      k.type === 'paid_message' ||
+      k.type === 'platform_gift' ||
+      k.type === 'raid' ||
+      (k.type === 'chat_message' && a && (a.roles & 2) !== 0 && (a.roles & 256) === 0)
+    ) {
+      this.pushWidgetState('end_credits', { credits: buildCredits(this.events, this.stats) })
+    }
   }
 
   private bumpGoal(kind: Goal['kind'], by: number): void {
@@ -2990,22 +3037,51 @@ export class DemoEngine {
     }
     const actor = this.chatter(p)
     const text = this.pickOf(MESSAGES)
-    const fragments:
-      | { type: 'text'; text: string }[]
-      | ({ type: 'text'; text: string } | { type: 'mention'; login: string })[] = text.startsWith(
-      'yo chat',
-    )
+    const demoEmote =
+      this.rand() < 0.3
+        ? p === 'kick'
+          ? {
+              type: 'emote' as const,
+              provider: 'native' as const,
+              id: '4148074',
+              name: 'HYPERCLAP',
+              url: 'https://files.kick.com/emotes/4148074/fullsize',
+              zero_width: false,
+            }
+          : p === 'youtube'
+            ? {
+                type: 'emote' as const,
+                provider: 'seven_tv' as const,
+                id: '01F6N',
+                name: 'catJAM',
+                url: 'https://cdn.7tv.app/emote/01F6N8W4M0000083K2R1V9H8Z3/1x.webp',
+                zero_width: false,
+              }
+            : {
+                type: 'emote' as const,
+                provider: 'native' as const,
+                id: '25',
+                name: 'Kappa',
+                url: 'https://static-cdn.jtvnw.net/emoticons/v2/25/static/dark/2.0',
+                zero_width: false,
+              }
+        : null
+    const baseFragments: import('../types').Fragment[] = text.startsWith('yo chat')
       ? [
           { type: 'text', text: 'yo ' },
           { type: 'mention', login: 'chat' },
           { type: 'text', text: text.slice(7) },
         ]
       : [{ type: 'text', text }]
+    const fragments = demoEmote
+      ? [...baseFragments, { type: 'text' as const, text: ' ' }, demoEmote]
+      : baseFragments
+    const fullText = demoEmote ? `${text} ${demoEmote.name}` : text
     this.ingest(
       {
         type: 'chat_message',
         actor,
-        content: { text, fragments },
+        content: { text: fullText, fragments },
         reply_to: null,
         is_action: false,
       },
@@ -3298,6 +3374,30 @@ export class DemoEngine {
       },
       'youtube',
       2 * 60_000,
+    )
+    add(
+      {
+        type: 'gift_batch',
+        gifter: t('GiftGoblin'),
+        tier: { type: 'tier1' },
+        count: 5,
+      },
+      'twitch',
+      3 * 60_000,
+    )
+    add(
+      {
+        type: 'chat_message',
+        actor: t('mira_exe', { color: '#9be15d', roles: 2 }),
+        content: {
+          text: 'Welcome in everyone! PogChamp',
+          fragments: [{ type: 'text', text: 'Welcome in everyone! PogChamp' }],
+        },
+        reply_to: null,
+        is_action: false,
+      },
+      'twitch',
+      90_000,
     )
     for (let i = 0; i < 24; i++) {
       const p: ChatPlatform = i % 4 === 0 ? 'youtube' : i % 5 === 0 ? 'kick' : 'twitch'

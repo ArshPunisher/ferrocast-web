@@ -35,7 +35,12 @@ function clampInt(v: unknown, min: number, max: number, def: number): number {
 }
 
 /** Renders fragments (or the plain text) as nodes, never as HTML. */
-export function renderFragments(parent: HTMLElement, text: string, fragments: unknown): void {
+export function renderFragments(
+  parent: HTMLElement,
+  text: string,
+  fragments: unknown,
+  imageUrl: (u: unknown) => string | null = safeImageUrl,
+): void {
   let budget = MAX_TEXT
   const add = (n: Node, len: number) => {
     parent.appendChild(n)
@@ -60,12 +65,13 @@ export function renderFragments(parent: HTMLElement, text: string, fragments: un
       }
       case 'emote': {
         const name = safeText(f.name, 60)
-        const url = safeImageUrl(f.url)
+        const url = imageUrl(f.url)
         if (url) {
           const img = el('img', f.zero_width ? 'fc-emote is-zw' : 'fc-emote')
           img.alt = name
           img.title = name
           img.decoding = 'async'
+          img.referrerPolicy = 'no-referrer'
           img.src = url
           img.addEventListener('error', () => img.replaceWith(document.createTextNode(name)))
           add(img, 2)
