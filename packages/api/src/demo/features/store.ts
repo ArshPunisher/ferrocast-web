@@ -28,6 +28,7 @@ export type StoreFault =
   | 'oversized'
   | 'invalid_schema'
   | 'unreachable'
+  | 'not_published'
   | 'tampered_asset'
   | 'stale'
   | null
@@ -782,6 +783,14 @@ export class DemoStore implements DemoFeature {
           'store_catalog_invalid',
           'The Community Store catalog schema isn’t valid.',
           'Installed items still work cleanly.',
+        )
+      case 'not_published':
+        // As the engine says it when the catalog address answers 404: nothing is published there.
+        throw new HttpError(
+          502,
+          'store_unreachable',
+          'The catalog server didn’t answer: it said 404 Not Found',
+          'Check the internet and try again.',
         )
       case 'unreachable':
         throw new HttpError(
