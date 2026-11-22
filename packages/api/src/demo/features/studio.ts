@@ -652,16 +652,25 @@ export class DemoStudio {
     for (const m of c.mic_sources) {
       const muted =
         studio && this.studioEngine ? this.studioEngine.isSourceMuted(m) : this.obs.muted[m]
+      const missing = studio && this.studioEngine ? !this.studioEngine.hasSource(m) : false
       checks.push(
-        muted
+        missing
           ? {
               id: `mic:${m}`,
               label: m,
               status: 'fail',
-              detail: `Muted in ${rigName}: nobody will hear you.`,
-              fix: { label: 'Unmute', href: `action:unmute:${m}` },
+              detail: `${rigTitle} has no source called "${m}" (renamed or removed?).`,
+              fix: { label: 'Pick the microphone again', href: '#/studio/show' },
             }
-          : { id: `mic:${m}`, label: m, status: 'ok', detail: 'Not muted.', fix: null },
+          : muted
+            ? {
+                id: `mic:${m}`,
+                label: m,
+                status: 'fail',
+                detail: `Muted in ${rigName}: nobody will hear you.`,
+                fix: { label: 'Unmute', href: `action:unmute:${m}` },
+              }
+            : { id: `mic:${m}`, label: m, status: 'ok', detail: 'Not muted.', fix: null },
       )
     }
     const scene = c.live_scene ?? c.starting_scene
@@ -892,11 +901,22 @@ export class DemoStudio {
       steps.push(this.rigSwitchStep('live_scene', 'Live scene', run.live_scene, studio))
     }
     if (z.unmute) {
+      const missing: string[] = []
       for (const m of this.showCfg.mic_sources) {
-        if (studio && this.studioEngine) this.studioEngine.setSourceMuted(m, false)
-        else this.obs.muted[m] = false
+        if (studio && this.studioEngine) {
+          if (!this.studioEngine.setSourceMuted(m, false)) missing.push(m)
+        } else this.obs.muted[m] = false
       }
-      steps.push({ id: 'zero_unmute', label: 'Mic', status: 'done', detail: 'On.' })
+      steps.push(
+        missing.length
+          ? {
+              id: 'zero_unmute',
+              label: 'Mic',
+              status: 'failed',
+              detail: `${rigTitle} has no source called ${missing.map((x) => `"${x}"`).join(', ')}.`,
+            }
+          : { id: 'zero_unmute', label: 'Mic', status: 'done', detail: 'On.' },
+      )
     }
     if (z.start_stream)
       steps.push(
@@ -1461,8 +1481,10 @@ export class DemoStudio {
       const action = String(requireObj(body).action ?? '').replace(/^action:/, '')
       if (action.startsWith('unmute:')) {
         const target = action.slice(7)
-        if (studio && this.studioEngine) this.studioEngine.setSourceMuted(target, false)
-        else this.obs.muted[target] = false
+        if (studio && this.studioEngine) {
+          if (!this.studioEngine.setSourceMuted(target, false))
+            throw new HttpError(400, 'invalid', `action: "${target}" isn't in the Studio.`)
+        } else this.obs.muted[target] = false
       } else if (action.startsWith('show:')) {
         const [scene, source] = action.slice(5).split('/')
         if (studio && this.studioEngine) {

@@ -12,8 +12,8 @@ afterEach(() => {
   engines.splice(0).forEach((e) => e.dispose())
 })
 
-function rig() {
-  const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+function rig(studioEngine: true | { hasMic?: boolean } = true) {
+  const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine })
   engines.push(engine)
   const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
   return { engine, client, studio: studioApi(client), eng: studioEngineApi(client) }
@@ -148,5 +148,29 @@ describe('stopping the show', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('the microphone check', () => {
+  it('fails when the configured microphone is not in the Studio, and says Not muted only for a real one', async () => {
+    const good = rig()
+    await good.eng.start()
+    const ok = (await good.studio.preflight()).checks.find((c) => c.id === 'mic:Mic')
+    expect(ok).toMatchObject({ status: 'ok', detail: 'Not muted.' })
+    const { studio, eng } = rig({ hasMic: false })
+    await eng.start()
+    const gone = (await studio.preflight()).checks.find((c) => c.id === 'mic:Mic')
+    expect(gone?.status).toBe('fail')
+    expect(gone?.detail).not.toBe('Not muted.')
+    expect(gone?.detail).toMatch(/no (source|microphone)/i)
+  })
+
+  it('the unmute fix for a missing microphone is refused, not reported as done', async () => {
+    const { client, eng } = rig({ hasMic: false })
+    await eng.start()
+    const e = await fail(
+      client.request('POST', '/api/v1/show/preflight/fix', { action: 'action:unmute:Mic' }),
+    )
+    expect(e?.status).toBe(400)
   })
 })

@@ -853,6 +853,10 @@ export class DemoStudioEngine {
     return this.sources.get(name)?.muted ?? false
   }
 
+  hasSource(name: string): boolean {
+    return this.sources.has(name)
+  }
+
   setSourceMuted(name: string, muted: boolean): boolean {
     const src = this.sources.get(name)
     if (!src) return false
