@@ -9,6 +9,7 @@ import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
 import { DemoMusic } from './features/music'
+import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
@@ -380,6 +381,7 @@ export class DemoEngine {
   readonly designs: DemoDesigns
   readonly obsTheme: DemoObsTheme
   readonly music: DemoMusic
+  readonly clips: DemoClips
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -784,6 +786,11 @@ export class DemoEngine {
         for (const s of this.overlaySubs) if (this.wantsMusic(s)) this.sendOverlay(s, 'music', now)
       },
       now: () => Date.now(),
+    })
+    this.clips = new DemoClips({
+      now: () => Date.now(),
+      later: (fn, ms) => this.later(fn, ms),
+      connectedChat: () => this.connectedChat(),
     })
     this.obsTheme = new DemoObsTheme({
       studio: this.studio,
@@ -1874,6 +1881,7 @@ export class DemoEngine {
       this.cloudBackups,
       this.obsTheme,
       this.music,
+      this.clips,
       this.designs,
       this.studio,
       this.golive,
