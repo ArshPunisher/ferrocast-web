@@ -728,7 +728,7 @@ export class DemoEngine {
     )
     this.studioEngine?.setAutoConfigDeps({
       runUploadCheck: () => this.golive.runUploadCheck(),
-      isLive: () => false,
+      isLive: () => this.golive.isCutRunning(),
       enabledPlatforms: () => this.golive.enabledMainDestinations(),
     })
     this.autoReplies = new DemoAutoReplies(this.host, {

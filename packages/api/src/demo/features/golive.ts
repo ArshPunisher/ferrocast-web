@@ -202,6 +202,10 @@ export class DemoGoLive {
       : { state: 'waiting' }
   }
 
+  isCutRunning(): boolean {
+    return this.cutState()?.state === 'running'
+  }
+
   /** As the engine: the cutter runs while cutting and a vertical destination is ticked. */
   private cutWanted(): boolean {
     return this.source === 'cut' && this.cfg.some((d) => d.enabled && d.canvas === 'vertical')

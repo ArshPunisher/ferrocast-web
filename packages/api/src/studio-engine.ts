@@ -2092,6 +2092,7 @@ export interface AutoConfigState {
   watch_remaining_s: number
   first_minute_drops: number
   first_minute_lags: number
+  rollback_offered: boolean
   rollback_trigger: RollbackTrigger | null
   rollback_reason: string | null
   restored: AutoConfigAppliedSummary | null

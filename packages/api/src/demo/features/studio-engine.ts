@@ -428,6 +428,10 @@ export class DemoStudioEngine {
   private audioMuted = new Map<string, boolean>()
   private streamActive = false
   private recordActive = false
+  private replayActive = false
+  private virtualCamActive = false
+  private ndiActive = false
+  private showActive = false
   private simDropped = 0
   private simLagged = 0
   private simSkipped = 0
@@ -436,9 +440,12 @@ export class DemoStudioEngine {
   private applyWatchToken = 0
   private confirmDeadlineAt = 0
   private watchDeadlineAt = 0
+  private wasLive = false
+  private watchStarted = false
+  private pendingOffer: { trigger: RollbackTrigger; reason: string } | null = null
   private snapshot: Record<string, unknown> | null = null
-  private baselineDropped = 0
   private baselineLagged = 0
+  private baselineSkipped = 0
   private autoConfigState: AutoConfigState = emptyAutoConfigState()
   private studioSettingsData: Record<string, unknown> = {
     encoder: 'hardware',
@@ -491,15 +498,38 @@ export class DemoStudioEngine {
 
   setStreamActive(on: boolean): void {
     this.streamActive = on
+    this.evaluateWatchStep()
   }
 
   setRecordActive(on: boolean): void {
     this.recordActive = on
+    this.evaluateWatchStep()
   }
 
-  injectDroppedFrames(dropped: number, lagged = 0): void {
+  setReplayActive(on: boolean): void {
+    this.replayActive = on
+    this.evaluateWatchStep()
+  }
+
+  setVirtualCamActive(on: boolean): void {
+    this.virtualCamActive = on
+    this.evaluateWatchStep()
+  }
+
+  setNdiActive(on: boolean): void {
+    this.ndiActive = on
+    this.evaluateWatchStep()
+  }
+
+  setShowActive(on: boolean): void {
+    this.showActive = on
+    this.evaluateWatchStep()
+  }
+
+  injectDroppedFrames(dropped: number, lagged = 0, skipped = 0): void {
     this.simDropped += dropped
     this.simLagged += lagged
+    this.simSkipped += skipped
     this.evaluateWatchStep()
   }
 
@@ -1628,7 +1658,26 @@ export class DemoStudioEngine {
       return clone(this.studioSettingsData)
     }
     if (is('PUT', 'studio/engine/settings')) {
-      this.studioSettingsData = { ...this.studioSettingsData, ...requireObj(body) }
+      const patch = requireObj(body)
+      const prev = this.studioSettingsData
+      this.studioSettingsData = { ...this.studioSettingsData, ...patch }
+      if (this.autoConfigState.state === 'applied' && this.autoConfigState.applied) {
+        const keys = ['encoder', 'video_encoder', 'encoder_settings', 'scale', 'fps', 'video_kbps']
+        const outputChanged = keys.some(
+          (k) =>
+            k in patch &&
+            JSON.stringify(prev[k] ?? null) !== JSON.stringify(this.studioSettingsData[k] ?? null),
+        )
+        if (outputChanged) {
+          this.applyWatchToken++
+          this.snapshot = null
+          this.wasLive = false
+          this.watchStarted = false
+          this.pendingOffer = null
+          this.autoConfigState = emptyAutoConfigState()
+          this.broadcastAutoConfig()
+        }
+      }
       return { settings: clone(this.studioSettingsData), restart: null }
     }
     if (is('GET', 'studio/engine/stats')) {
@@ -1756,7 +1805,15 @@ export class DemoStudioEngine {
   }
 
   private isBusyLive(): boolean {
-    return this.streamActive || this.recordActive || !!this.deps?.isLive()
+    return (
+      this.streamActive ||
+      this.recordActive ||
+      this.replayActive ||
+      this.virtualCamActive ||
+      this.ndiActive ||
+      this.showActive ||
+      !!this.deps?.isLive()
+    )
   }
 
   private schedule(fn: () => void, ms: number): void {
@@ -1772,12 +1829,15 @@ export class DemoStudioEngine {
     const out = clone(this.autoConfigState)
     if (out.state === 'applied') {
       const now = Date.now()
-      out.confirm_remaining_s = out.confirmed
-        ? 0
-        : Math.max(0, Math.ceil((this.confirmDeadlineAt - now) / 1000))
-      out.watch_remaining_s = Math.max(0, Math.ceil((this.watchDeadlineAt - now) / 1000))
-      out.first_minute_drops = Math.max(0, this.simDropped - this.baselineDropped)
-      out.first_minute_lags = Math.max(0, this.simLagged + this.simSkipped - this.baselineLagged)
+      out.confirm_remaining_s =
+        out.confirmed || out.rollback_offered
+          ? 0
+          : Math.max(0, Math.ceil((this.confirmDeadlineAt - now) / 1000))
+      out.watch_remaining_s = this.watchStarted
+        ? Math.max(0, Math.ceil((this.watchDeadlineAt - now) / 1000))
+        : Math.ceil(this.opts.watchWindowMs / 1000)
+      out.first_minute_drops = Math.max(0, this.simSkipped - this.baselineSkipped)
+      out.first_minute_lags = Math.max(0, this.simLagged - this.baselineLagged)
     }
     return out
   }
@@ -1819,7 +1879,12 @@ export class DemoStudioEngine {
     const canvas: [number, number] = [width, height]
     const startedAt = Date.now()
     const stepMs = Math.max(20, this.opts.benchStepMs)
-    const plan = buildDemoCandidates(this.opts.benchProfile, canvas, fpsPref as 30 | 60)
+    const plan = buildDemoCandidates(
+      this.opts.benchProfile,
+      canvas,
+      fpsPref as 30 | 60,
+      mode as AutoConfigMode,
+    )
 
     this.autoConfigState = {
       ...emptyAutoConfigState(),
@@ -1931,7 +1996,9 @@ export class DemoStudioEngine {
       throw new HttpError(400, 'invalid', 'Run the benchmark or provide settings to apply.')
     }
 
-    this.snapshot = clone(this.studioSettingsData)
+    if (this.autoConfigState.state !== 'applied' || this.snapshot === null) {
+      this.snapshot = clone(this.studioSettingsData)
+    }
     const next: Record<string, unknown> = clone(this.studioSettingsData)
     if (picked) {
       next.encoder = picked.encoder
@@ -1941,7 +2008,12 @@ export class DemoStudioEngine {
       next.fps = picked.fps
       next.video_kbps = picked.video_kbps
     }
-    if (req.encoder !== undefined) next.encoder = req.encoder
+    if (req.encoder !== undefined) {
+      next.encoder = req.encoder
+      if (req.encoder === 'software' && req.video_encoder === undefined) {
+        next.video_encoder = null
+      }
+    }
     if (req.video_encoder !== undefined) next.video_encoder = req.video_encoder
     if (req.encoder_settings !== undefined) next.encoder_settings = clone(req.encoder_settings)
     if (req.scale !== undefined) next.scale = req.scale ? [...(req.scale as number[])] : null
@@ -1963,10 +2035,14 @@ export class DemoStudioEngine {
     }
 
     const now = Date.now()
+    const liveNow = this.isBusyLive()
     this.confirmDeadlineAt = now + this.opts.confirmTimeoutMs
     this.watchDeadlineAt = now + this.opts.watchWindowMs
-    this.baselineDropped = this.simDropped
-    this.baselineLagged = this.simLagged + this.simSkipped
+    this.wasLive = liveNow
+    this.watchStarted = liveNow
+    this.pendingOffer = null
+    this.baselineLagged = this.simLagged
+    this.baselineSkipped = this.simSkipped
     const watchToken = ++this.applyWatchToken
 
     this.autoConfigState = {
@@ -1978,6 +2054,7 @@ export class DemoStudioEngine {
       watch_remaining_s: Math.ceil(this.opts.watchWindowMs / 1000),
       first_minute_drops: 0,
       first_minute_lags: 0,
+      rollback_offered: false,
       rollback_trigger: null,
       rollback_reason: null,
       restored: null,
@@ -2002,8 +2079,28 @@ export class DemoStudioEngine {
         'There are no newly applied settings waiting to be kept.',
       )
     }
+    const wasOffered = this.autoConfigState.rollback_offered
     this.autoConfigState.confirmed = true
     this.autoConfigState.confirm_remaining_s = 0
+    this.autoConfigState.rollback_offered = false
+    this.autoConfigState.rollback_trigger = null
+    this.autoConfigState.rollback_reason = null
+    this.pendingOffer = null
+    const doneWatch = this.watchStarted && Date.now() >= this.watchDeadlineAt
+    if (wasOffered || doneWatch) {
+      this.applyWatchToken++
+      this.snapshot = null
+      this.wasLive = false
+      this.watchStarted = false
+      this.autoConfigState = {
+        ...emptyAutoConfigState(),
+        mode: this.autoConfigState.mode,
+        candidates: this.autoConfigState.candidates,
+        upload_check: this.autoConfigState.upload_check,
+        picked: this.autoConfigState.picked,
+        duration_ms: this.autoConfigState.duration_ms,
+      }
+    }
     this.broadcastAutoConfig()
     return this.autoConfigView()
   }
@@ -2018,41 +2115,145 @@ export class DemoStudioEngine {
   private evaluateWatchStep(): boolean {
     if (this.autoConfigState.state !== 'applied') return true
     const now = Date.now()
-    const drops = Math.max(0, this.simDropped - this.baselineDropped)
-    const lags = Math.max(0, this.simLagged + this.simSkipped - this.baselineLagged)
-    if (now < this.watchDeadlineAt && drops + lags >= 5) {
-      this.performRollback(
-        'dropped_frames',
-        `Automatically rolled back because the first minute showed ${drops} dropped and ${lags} lagged/skipped frames.`,
-      )
-      return true
+    const live = this.isBusyLive()
+    const encoderSkips = Math.max(0, this.simSkipped - this.baselineSkipped)
+    const encoderLags = Math.max(0, this.simLagged - this.baselineLagged)
+    const encoderIssues = encoderSkips + encoderLags
+
+    if (live) {
+      if (!this.watchStarted) {
+        this.watchStarted = true
+        this.watchDeadlineAt = now + this.opts.watchWindowMs
+        this.baselineLagged = this.simLagged
+        this.baselineSkipped = this.simSkipped
+      } else if (!this.wasLive) {
+        this.baselineLagged = this.simLagged
+        this.baselineSkipped = this.simSkipped
+      }
+      this.wasLive = true
+      if (
+        now < this.watchDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered &&
+        encoderIssues >= 5
+      ) {
+        this.pendingOffer = {
+          trigger: 'dropped_frames',
+          reason: `First minute dropped ${encoderIssues} encoder-skipped frames. Undo to restore your previous settings, or Keep.`,
+        }
+      }
+      if (
+        !this.autoConfigState.confirmed &&
+        now >= this.confirmDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered
+      ) {
+        this.pendingOffer = {
+          trigger: 'timeout',
+          reason:
+            "Settings weren't confirmed within 30 s while live. Restore your previous settings or Keep.",
+        }
+      }
+      if (
+        this.autoConfigState.confirmed &&
+        now >= this.watchDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered
+      ) {
+        this.snapshot = null
+        this.wasLive = false
+        this.watchStarted = false
+        this.autoConfigState = {
+          ...emptyAutoConfigState(),
+          mode: this.autoConfigState.mode,
+          candidates: this.autoConfigState.candidates,
+          upload_check: this.autoConfigState.upload_check,
+          picked: this.autoConfigState.picked,
+          duration_ms: this.autoConfigState.duration_ms,
+        }
+        this.broadcastAutoConfig()
+        return true
+      }
+      return false
     }
-    if (!this.autoConfigState.confirmed && now >= this.confirmDeadlineAt) {
+
+    if (this.wasLive) {
+      this.wasLive = false
+      if (this.pendingOffer) {
+        const offer = this.pendingOffer
+        this.pendingOffer = null
+        this.autoConfigState = {
+          ...this.autoConfigState,
+          rollback_offered: true,
+          rollback_trigger: offer.trigger,
+          rollback_reason: offer.reason,
+          confirm_remaining_s: 0,
+        }
+        this.broadcastAutoConfig()
+        this.host?.broadcastLive({
+          v: 1,
+          type: 'notice',
+          data: {
+            key: 'auto_config_rollback_offer',
+            level: 'warn',
+            message: 'Encoder dropped frames during your stream — rollback ready',
+            detail: offer.reason,
+          },
+        })
+        return true
+      }
+    }
+
+    if (
+      !this.autoConfigState.confirmed &&
+      !this.autoConfigState.rollback_offered &&
+      !this.pendingOffer &&
+      now >= this.confirmDeadlineAt
+    ) {
       this.performRollback(
         'timeout',
         'Automatically rolled back after 30 s with no Keep confirmation.',
       )
       return true
     }
-    if (this.autoConfigState.confirmed && now >= this.watchDeadlineAt) {
+    if (
+      this.watchStarted &&
+      this.autoConfigState.confirmed &&
+      !this.autoConfigState.rollback_offered &&
+      now >= this.watchDeadlineAt
+    ) {
+      this.snapshot = null
+      this.watchStarted = false
       this.autoConfigState = {
-        ...this.autoConfigState,
-        state: this.autoConfigState.picked ? 'done' : 'idle',
-        applied: null,
-        confirmed: false,
-        confirm_remaining_s: 0,
-        watch_remaining_s: 0,
+        ...emptyAutoConfigState(),
+        mode: this.autoConfigState.mode,
+        candidates: this.autoConfigState.candidates,
+        upload_check: this.autoConfigState.upload_check,
+        picked: this.autoConfigState.picked,
+        duration_ms: this.autoConfigState.duration_ms,
       }
       this.broadcastAutoConfig()
       return true
     }
+    if (this.autoConfigState.rollback_offered) return true
     return false
   }
 
   private performRollback(trigger: RollbackTrigger, reason: string): AutoConfigState {
     this.applyWatchToken++
     const prev = this.snapshot ?? clone(this.studioSettingsData)
-    this.studioSettingsData = clone(prev)
+    this.snapshot = null
+    this.wasLive = false
+    this.watchStarted = false
+    this.pendingOffer = null
+    const merged: Record<string, unknown> = clone(this.studioSettingsData)
+    merged.encoder = prev.encoder
+    merged.video_encoder = prev.video_encoder ?? null
+    merged.encoder_settings = clone((prev.encoder_settings as Record<string, unknown>) ?? {})
+    merged.scale = prev.scale ? [...(prev.scale as number[])] : null
+    merged.fps = prev.fps
+    merged.video_kbps = prev.video_kbps
+    this.studioSettingsData = merged
     const restored: AutoConfigAppliedSummary = {
       encoder: (prev.encoder === 'software' ? 'software' : 'hardware') as 'hardware' | 'software',
       video_encoder: (prev.video_encoder as string | null) ?? null,
@@ -2069,6 +2270,7 @@ export class DemoStudioEngine {
       confirmed: false,
       confirm_remaining_s: 0,
       watch_remaining_s: 0,
+      rollback_offered: false,
       rollback_trigger: trigger,
       rollback_reason: reason,
       restored,
@@ -2111,6 +2313,7 @@ function emptyAutoConfigState(): AutoConfigState {
     watch_remaining_s: 0,
     first_minute_drops: 0,
     first_minute_lags: 0,
+    rollback_offered: false,
     rollback_trigger: null,
     rollback_reason: null,
     restored: null,
@@ -2177,15 +2380,30 @@ function demoCand(o: {
   }
 }
 
+function scaleForShortEdge(canvas: [number, number], targetShort: number): [number, number] {
+  const cw = Math.max(128, canvas[0] & ~1)
+  const ch = Math.max(72, canvas[1] & ~1)
+  const short = Math.min(cw, ch)
+  if (targetShort >= short) return [cw, ch]
+  const s = Math.max(72, targetShort & ~1)
+  if (cw <= ch) {
+    const h = Math.max(72, Math.round((ch * s) / cw / 2) * 2)
+    return [s, h]
+  }
+  const w = Math.max(128, Math.round((cw * s) / ch / 2) * 2)
+  return [w, s]
+}
+
 function buildDemoCandidates(
   profile: DemoBenchProfile,
   canvas: [number, number],
   fps: 30 | 60,
+  mode: AutoConfigMode = 'stream',
 ): AutoConfigCandidate[] {
-  const [cw, ch] = canvas
-  const hTop = Math.min(ch, 1080)
-  const wTop = hTop >= ch ? cw : Math.round((cw * hTop) / ch / 2) * 2
-  const w720 = Math.round((cw * 720) / ch / 2) * 2
+  const shortEdge = Math.min(canvas[0], canvas[1])
+  const topShort = mode === 'record' ? Math.min(shortEdge, 2160) : Math.min(shortEdge, 1080)
+  const [wTop, hTop] = scaleForShortEdge(canvas, topShort)
+  const [w720, h720] = scaleForShortEdge(canvas, Math.min(shortEdge, 720))
 
   if (profile === 'nvidia_nvenc') {
     return [
@@ -2258,7 +2476,7 @@ function buildDemoCandidates(
         label: 'Intel Quick Sync',
         family: 'qsv',
         w: w720,
-        h: 720,
+        h: h720,
         fps: 60,
         avg: 5.6,
         p95: 7.2,
@@ -2273,7 +2491,7 @@ function buildDemoCandidates(
         family: 'x264',
         preset: 'veryfast',
         w: w720,
-        h: 720,
+        h: h720,
         fps: 60,
         avg: 13.8,
         p95: 17.5,
@@ -2309,7 +2527,7 @@ function buildDemoCandidates(
         family: 'x264',
         preset: 'superfast',
         w: w720,
-        h: 720,
+        h: h720,
         fps: 30,
         avg: 12.1,
         p95: 15.8,
@@ -2369,6 +2587,22 @@ function buildDemoCandidates(
 
 const PLATFORM_CAPS: Record<string, number> = { twitch: 6000, kick: 8000, youtube: 12000 }
 
+function recordKbpsFor(shortEdge: number, fps: number): number {
+  const highFps = fps >= 60
+  if (shortEdge >= 2160) return highFps ? 32000 : 22000
+  if (shortEdge >= 1440) return highFps ? 18000 : 12000
+  if (shortEdge >= 1080) return highFps ? 12000 : 8000
+  if (shortEdge >= 720) return highFps ? 6500 : 4500
+  return 2500
+}
+
+function streamTierCap(shortEdge: number, fps: number): number {
+  const highFps = fps >= 60
+  if (shortEdge >= 1080) return highFps ? 12000 : 8000
+  if (shortEdge >= 720) return highFps ? 6000 : 4500
+  return 3000
+}
+
 function pickDemoRecommendation(
   candidates: AutoConfigCandidate[],
   mode: AutoConfigMode,
@@ -2377,56 +2611,68 @@ function pickDemoRecommendation(
   uploadKbps: number | null,
   platforms: { id: string; kind: Service; name: string; enhanced: boolean }[],
 ): AutoConfigRecommendation {
-  const [cw, ch] = canvas
+  const cw = Math.max(128, canvas[0] & ~1)
+  const ch = Math.max(72, canvas[1] & ~1)
+  const canvasShort = Math.min(cw, ch)
   const caps = platforms
-    .filter((p) => !(p.kind === 'twitch' && p.enhanced))
+    .filter((p) => !((p.kind === 'twitch' || p.kind === 'kick') && p.enhanced))
     .map((p) => PLATFORM_CAPS[p.kind] ?? 12000)
   const cap = Math.min(12000, ...(caps.length ? caps : [12000]))
   const n = Math.max(1, platforms.length)
 
   let capKbps = 12000
-  let maxW = cw
-  let maxH = Math.min(ch, 1080)
+  let [maxW, maxH] = scaleForShortEdge([cw, ch], Math.min(canvasShort, 2160))
   let maxFps: number = fpsPref
   let ceilLimited: LimitedBy = 'balanced'
   if (mode === 'stream') {
     const share = uploadKbps !== null ? (uploadKbps * 0.75) / n : 6000
-    capKbps = Math.max(1500, Math.min(cap, Math.floor(share / 500) * 500))
+    capKbps = Math.max(500, Math.min(cap, Math.floor(share / 500) * 500))
     ceilLimited =
       share < cap ? 'upload' : caps.some((c) => capKbps === c) ? 'platform_cap' : 'balanced'
-    let th: number
+    let targetShort: number
     if (fpsPref === 60) {
-      if (capKbps >= 6000) th = 1080
-      else if (capKbps >= 3500) th = 720
+      if (capKbps >= 6000) targetShort = 1080
+      else if (capKbps >= 3500) targetShort = 720
       else {
         maxFps = 30
-        th = capKbps >= 2500 ? 720 : 480
+        targetShort = capKbps >= 2500 ? 720 : 480
       }
-    } else th = capKbps >= 4500 ? 1080 : capKbps >= 2500 ? 720 : 480
-    th = Math.min(ch, th)
-    maxH = th
-    maxW = th >= ch ? cw : Math.round((cw * th) / ch / 2) * 2
+    } else targetShort = capKbps >= 4500 ? 1080 : capKbps >= 2500 ? 720 : 480
+    ;[maxW, maxH] = scaleForShortEdge([cw, ch], Math.min(canvasShort, targetShort))
   }
 
   const passing = candidates.filter((c) => c.passed)
-  const pool = passing.length ? passing : candidates
   const eff = (c: AutoConfigCandidate) => ({
     w: Math.min(c.width, maxW) & ~1,
     h: Math.min(c.height, maxH) & ~1,
     fps: Math.min(c.fps, maxFps),
   })
-  const best = [...pool].sort((a, b) => {
-    const ea = eff(a)
-    const eb = eff(b)
-    if (ea.w * ea.h !== eb.w * eb.h) return eb.w * eb.h - ea.w * ea.h
-    if (ea.fps !== eb.fps) return eb.fps - ea.fps
-    if (a.hardware !== b.hardware) return b.hardware ? 1 : -1
-    return b.headroom_pct - a.headroom_pct
-  })[0]!
+  const best = (
+    passing.length
+      ? [...passing].sort((a, b) => {
+          const ea = eff(a)
+          const eb = eff(b)
+          if (ea.w * ea.h !== eb.w * eb.h) return eb.w * eb.h - ea.w * ea.h
+          if (ea.fps !== eb.fps) return eb.fps - ea.fps
+          if (a.hardware !== b.hardware) return b.hardware ? 1 : -1
+          return b.headroom_pct - a.headroom_pct
+        })
+      : [...candidates].sort((a, b) => {
+          const aRate = (a.skipped_frames + a.lagged_frames) / Math.max(1, a.frames_tested)
+          const bRate = (b.skipped_frames + b.lagged_frames) / Math.max(1, b.frames_tested)
+          if (aRate !== bRate) return aRate - bRate
+          const aRatio = a.encode_ms_avg / Math.max(1, a.budget_ms)
+          const bRatio = b.encode_ms_avg / Math.max(1, b.budget_ms)
+          if (aRatio !== bRatio) return aRatio - bRatio
+          return b.hardware === a.hardware ? 0 : b.hardware ? -1 : 1
+        })
+  )[0]!
 
   const out = eff(best)
+  const outShort = Math.min(out.w, out.h)
   const scale: [number, number] | null = out.w === cw && out.h === ch ? null : [out.w, out.h]
-  const encoderDowngraded = mode === 'stream' && (out.h < maxH || out.fps < maxFps)
+  const encoderDowngraded =
+    mode === 'stream' && (out.w * out.h < maxW * maxH || out.fps < maxFps)
   const limited_by: LimitedBy =
     mode === 'record'
       ? best.passed && !scale
@@ -2437,17 +2683,9 @@ function pickDemoRecommendation(
         : ceilLimited
   const video_kbps =
     mode === 'record'
-      ? out.h >= 1080
-        ? out.fps >= 60
-          ? 12000
-          : 8000
-        : out.h >= 720
-          ? out.fps >= 60
-            ? 6500
-            : 4500
-          : 2500
+      ? recordKbpsFor(outShort, out.fps)
       : encoderDowngraded
-        ? Math.min(capKbps, out.h >= 720 ? 4500 : 2500)
+        ? Math.max(500, Math.min(capKbps, streamTierCap(outShort, out.fps)))
         : capKbps
   const split = n > 1 && uploadKbps !== null ? ` shared by ${n} platforms` : ''
   const upText =
@@ -2468,6 +2706,6 @@ function pickDemoRecommendation(
     video_kbps,
     headroom_pct: best.headroom_pct,
     limited_by,
-    why: `${best.label} held ${out.h}p${out.fps} at ${best.encode_ms_avg.toFixed(1)} ms/frame (${Math.round(best.headroom_pct)}% headroom).${upText}`,
+    why: `${best.label} held ${outShort}p${out.fps} at ${best.encode_ms_avg.toFixed(1)} ms/frame (${Math.round(best.headroom_pct)}% headroom).${upText}`,
   }
 }
