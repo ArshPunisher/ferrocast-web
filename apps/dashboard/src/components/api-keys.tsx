@@ -338,7 +338,9 @@ function CreateApiKeyDialog({
   return (
     <Dialog
       open
-      onClose={created && !copied ? () => setConfirmClose(true) : onClose}
+      // While the key is being made nothing closes it: the dialog is where its secret will show.
+      // (Escape, a click outside and the corner X all come through here.)
+      onClose={busy ? () => {} : created && !copied ? () => setConfirmClose(true) : onClose}
       size="md"
       title={created ? 'Save your new API key' : 'Create local API key'}
       description={
@@ -364,7 +366,7 @@ function CreateApiKeyDialog({
           )
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
             <Button type="submit" form="create-api-key-form" variant="primary" busy={busy}>

@@ -198,4 +198,93 @@ describe('ApiKeysSection', () => {
     expect(document.body.textContent).not.toContain('You haven’t copied it')
     expect(document.querySelector('input[aria-label="Generated API key secret"]')).toBeTruthy()
   })
+
+  it('keeps the create dialog open while the key is being made, so its secret can be shown', async () => {
+    let finish!: (v: ApiKeyCreated) => void
+    let fail!: (e: Error) => void
+    const pending = new Promise<ApiKeyCreated>((res, rej) => {
+      finish = res
+      fail = rej
+    })
+    const { client, createdToken } = await mount({ createApiKey: vi.fn(() => pending) })
+    const button = (label: string) =>
+      Array.from(document.querySelectorAll('button')).find((x) => x.textContent?.trim() === label)
+    const press = async (label: string) =>
+      act(async () => {
+        expect(button(label), label).toBeTruthy()
+        button(label)!.click()
+      })
+    await press('Create API key')
+    const nameInput = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Stream Deck XL"]',
+    )!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(nameInput, 'Node Reactor')
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await press('Create key')
+    expect(client.createApiKey).toHaveBeenCalledTimes(1)
+    const dialog = () => document.querySelector('dialog')
+    // Cancel is off, Escape and a click outside do nothing, the dialog stays.
+    expect(button('Cancel')?.disabled).toBe(true)
+    await act(async () => {
+      const cancel = new Event('cancel', { cancelable: true })
+      dialog()!.dispatchEvent(cancel)
+      expect(cancel.defaultPrevented).toBe(true)
+      dialog()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(document.body.textContent).toContain('Create local API key')
+    // Done: the secret is shown, not lost behind a closed dialog.
+    await act(async () => {
+      finish({
+        key: {
+          id: 'k_new',
+          name: 'Node Reactor',
+          prefix: `${createdToken.slice(0, 15)}...`,
+          scopes: ['read_only'],
+          created_at: Date.now(),
+          expires_at: null,
+          last_used_at: null,
+          revoked_at: null,
+        },
+        token: createdToken,
+      })
+      await pending
+    })
+    expect(
+      document.querySelector<HTMLInputElement>('input[aria-label="Generated API key secret"]')
+        ?.value,
+    ).toBe(createdToken)
+    void fail
+  })
+
+  it('lets the create dialog be closed again when the request failed', async () => {
+    let fail!: (e: Error) => void
+    const pending = new Promise<ApiKeyCreated>((_res, rej) => (fail = rej))
+    const { client } = await mount({ createApiKey: vi.fn(() => pending) })
+    const button = (label: string) =>
+      Array.from(document.querySelectorAll('button')).find((x) => x.textContent?.trim() === label)
+    await act(async () => button('Create API key')!.click())
+    const nameInput = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Stream Deck XL"]',
+    )!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(nameInput, 'Node Reactor')
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => button('Create key')!.click())
+    expect(client.createApiKey).toHaveBeenCalledTimes(1)
+    expect(button('Cancel')?.disabled).toBe(true)
+    await act(async () => {
+      fail(new Error('The engine said no'))
+      await pending.catch(() => undefined)
+    })
+    // Back to a form that can be retried or cancelled.
+    expect(button('Cancel')?.disabled).toBe(false)
+    expect(button('Create key')?.disabled).toBe(false)
+    await act(async () => button('Cancel')!.click())
+    expect(document.body.textContent).not.toContain('Create local API key')
+  })
 })
