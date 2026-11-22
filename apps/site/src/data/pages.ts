@@ -150,6 +150,15 @@ export const PAGES = {
     ogKicker: 'Getting started',
     crumb: 'Getting started',
   }),
+  storeSubmit: p({
+    path: '/docs/submit-to-store/',
+    title: 'Submit a theme to the Ferrocast Store',
+    description:
+      'Package and submit themes, sandboxed alerts, widgets, overlays or shaders to the signed Ferrocast Community Store via a reviewed pull request.',
+    ogTitle: 'Submit to the Community Store',
+    ogKicker: 'Creator guide',
+    crumb: 'Submit to store',
+  }),
   terms: p({
     path: '/terms/',
     title: 'Terms of service | Ferrocast',

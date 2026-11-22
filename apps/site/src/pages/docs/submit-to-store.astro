@@ -1,0 +1,258 @@
+---
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import { PAGES } from '../../data/pages'
+import { COMPANY, SITE } from '../../data/company'
+
+const page = PAGES.storeSubmit
+const url = new URL(page.path, SITE.url).href
+const steps = [
+  {
+    id: 'formats',
+    name: 'Choose a safe package format',
+    text: 'Export themes, scenes, widgets, or standard alerts as pure-data .ferrodesign archives, package custom HTML alerts as .ferroalert bundles validated by the p2e sandbox, or submit WGSL/WASM/CSP plugins.',
+  },
+  {
+    id: 'prepare',
+    name: 'Prepare creator metadata and checksums',
+    text: 'Compute exact SHA-256 digests and byte sizes for your package and preview assets. Ensure all titles, descriptions, links, and media conform to catalog schema rules.',
+  },
+  {
+    id: 'pr',
+    name: 'Open a pull request to the catalog repository',
+    text: 'Add your creator profile and catalog entry to the signed catalog repository via a reviewed GitHub pull request with clean licensing metadata.',
+  },
+  {
+    id: 'review',
+    name: 'Automated validation and maintainer signing',
+    text: 'CI checks every URL, hash, file limit, and sandbox rule before maintainers sign catalog.json with minisign. Approved items appear in-app immediately without a Ferrocast app update.',
+  },
+]
+const howTo = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Submit a theme or overlay to the Ferrocast Community Store',
+  description: page.description,
+  url,
+  totalTime: 'PT15M',
+  step: steps.map((s, i) => ({
+    '@type': 'HowToStep',
+    position: i + 1,
+    name: s.name,
+    text: s.text,
+    url: `${url}#${s.id}`,
+  })),
+}
+---
+
+<Base page={page} schema={[howTo]} ogType="article">
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Submit to the Store</h1>
+      <p class="lede">
+        Share free, open-format stream packs directly inside Ferrocast. Submissions go through a
+        reviewed pull request, verified by SHA-256 checksums and signed with minisign before
+        release.
+      </p>
+    </div>
+  </section>
+
+  <div class="container doc">
+    <nav aria-label="On this page" class="toc">
+      <p class="toc-title">On this page</p>
+      <ol>
+        {steps.map((s) => (
+          <li>
+            <a href={`#${s.id}`}>{s.name}</a>
+          </li>
+        ))}
+        <li>
+          <a href="#rules">Security and review rules</a>
+        </li>
+      </ol>
+    </nav>
+
+    <article class="prose">
+      <p class="callout">
+        <Icon name="shield-check" size={18} />
+        <span>
+          Ferrocast collects zero usage telemetry. Catalog install counts and star ratings are
+          read-only fields updated at catalog build time, never tracked in the desktop app.
+        </span>
+      </p>
+
+      <h2 id="formats">Choose a safe package format</h2>
+      <p>Every item in the Community Store belongs to one of three verifiable formats:</p>
+      <ul>
+        <li>
+          <strong>
+            Themes, overlays, widgets and alert looks (<code>.ferrodesign</code>)
+          </strong>
+          : Export directly from <a href="/features/overlays/">Designs</a> in Ferrocast. Contains
+          pure JSON layouts plus verified raster media (PNG, JPEG, WebP, GIF) and audio (MP3, OGG,
+          WAV) up to 100 MB. Zero scripts or HTML.
+        </li>
+        <li>
+          <strong>
+            Custom HTML alert bundles (<code>.ferroalert</code>)
+          </strong>
+          : JSON packages checked strictly against Ferrocast’s sandbox rules. Alerts run inside an
+          isolated <code>&lt;iframe sandbox="allow-scripts"&gt;</code> without{' '}
+          <code>allow-same-origin</code> or network access. Inline scripts, event handlers (
+          <code>onclick</code>), forms, iframes, and external fetches are rejected automatically.
+        </li>
+        <li>
+          <strong>
+            Shaders and plugins (<code>.zip</code>)
+          </strong>
+          : Only safe sandboxed <code>effect</code> (WGSL GPU shaders with bounded loops),{' '}
+          <code>logic</code> (WebAssembly with fuel and memory budgets), or <code>panel</code>{' '}
+          (strict CSP HTML) plugins are accepted.
+        </li>
+      </ul>
+
+      <h2 id="prepare">Prepare creator metadata and checksums</h2>
+      <p>
+        Before opening a pull request, verify every asset you reference and include clear open
+        licensing (such as <code>CC-BY-4.0</code>, <code>CC0-1.0</code>, or{' '}
+        <code>GPL-3.0-only</code>):
+      </p>
+      <ol>
+        <li>
+          Compute the 64-character lowercase SHA-256 hex digest and exact byte size of your package
+          file and every preview image.
+        </li>
+        <li>
+          Host files inside your PR folder in the catalog repository or on an approved HTTPS GitHub
+          release asset URL. Third-party CDNs and plain HTTP URLs are blocked.
+        </li>
+        <li>
+          Supply a creator profile (<code>id</code>, display name, <code>@handle</code>, plain-text
+          bio, and optional HTTPS links to your website, GitHub, Twitch, or YouTube).
+        </li>
+      </ol>
+
+      <h2 id="pr">Open a pull request to the catalog repository</h2>
+      <p>
+        Fork the public catalog repository from{' '}
+        <a href={COMPANY.github} rel="noopener">
+          GitHub
+        </a>
+        , place your validated package archive in <code>packages/</code>, add your creator and item
+        entries to <code>catalog.json</code>, and open a pull request explaining what the pack adds
+        and how it was tested locally.
+      </p>
+
+      <h2 id="review">Automated validation and maintainer signing</h2>
+      <p>
+        Pull requests run schema validation, SHA-256 digest matching, file-type inspection, and
+        HTML/CSS sandbox checks automatically. Once approved and merged, maintainers sign{' '}
+        <code>catalog.json</code> with the store minisign key and publish{' '}
+        <code>catalog.json.sig</code>. Any desktop install verifies that signature and every asset
+        hash locally before showing or unpacking your work.
+      </p>
+
+      <h2 id="rules">Security and review rules</h2>
+      <ul>
+        <li>
+          No remote scripts, external stylesheets, CSS <code>@import</code>, tracking pixels, or SVG
+          scripts anywhere in designs or metadata.
+        </li>
+        <li>
+          Size caps apply per artifact: catalog manifest under 2 MB, custom alerts under 512 KB,
+          plugins under 2 MB, and <code>.ferrodesign</code> packs under 100 MB.
+        </li>
+        <li>
+          Keep a working local backup or test in demo mode first. See{' '}
+          <a href="/docs/getting-started/">Getting started</a> for setting up overlays in OBS.
+        </li>
+      </ul>
+    </article>
+  </div>
+  <div class="spacer"></div>
+</Base>
+
+<style>
+  .head {
+    padding-block: 40px 24px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 40px;
+    }
+  }
+  .doc {
+    display: grid;
+    gap: 32px;
+  }
+  .toc-title {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--fc-text-3);
+    margin-bottom: 8px;
+  }
+  .toc ol {
+    margin: 0;
+    padding-left: 1.2em;
+    display: grid;
+    gap: 6px;
+    color: var(--fc-text-3);
+  }
+  .toc a {
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .toc a:hover {
+      color: var(--fc-text);
+      text-decoration: underline;
+    }
+  }
+  @media (min-width: 900px) {
+    .doc {
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 64px;
+    }
+    .toc {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }
+  }
+  .callout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 14px 18px;
+    border-radius: var(--fc-radius-card);
+    background: var(--fc-surface-1);
+    border: 1px solid var(--fc-line-strong);
+    color: var(--fc-text);
+    font-size: 0.9375rem;
+    margin-block: 0 24px;
+  }
+  .callout :global(svg) {
+    color: var(--fc-arc);
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .prose code {
+    font-family: var(--fc-mono);
+    font-size: 0.9em;
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: var(--fc-surface-2);
+    border: 1px solid var(--fc-line);
+    color: var(--fc-text);
+  }
+  .prose h2 {
+    scroll-margin-top: 90px;
+  }
+</style>
