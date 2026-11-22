@@ -32,7 +32,6 @@ import {
   Segmented,
   Select,
   Skeleton,
-  toast,
   cx,
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
@@ -241,8 +240,9 @@ export function TransitionsDialog({
         if (target) setSelectedName(target)
         refresh()
         if (note) {
+          // The dialog's own status line says it (and screen readers hear it); a toast too
+          // would be the same words twice.
           setAnnouncement(note)
-          toast({ tone: 'ok', message: note })
         }
         return true
       } catch (e) {
