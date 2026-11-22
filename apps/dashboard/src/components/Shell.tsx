@@ -651,7 +651,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <StatusStrip />
+              <StatusStrip summary={alerts} />
             </div>
             <button
               type="button"

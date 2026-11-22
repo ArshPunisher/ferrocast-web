@@ -32,7 +32,14 @@ function ConnectorIcon({ name, size }: { name: StatusChipItem['name']; size: num
  * One pill per connection. Degrades cleanly across widths (full labels -> icon + dot + count ->
  * top priority chip + `+N` overflow popover) so the top bar never scrolls horizontally.
  */
-export function StatusStrip({ loading = false }: { loading?: boolean }) {
+export function StatusStrip({
+  loading = false,
+  summary = false,
+}: {
+  loading?: boolean
+  /** One compact pill that opens the full list (a screen that shows platforms itself). */
+  summary?: boolean
+}) {
   const connectors = useLive((s) => s.connectors)
   const socket = useLive((s) => s.socket)
   const viewers = useLive((s) => s.viewers)
@@ -116,13 +123,29 @@ export function StatusStrip({ loading = false }: { loading?: boolean }) {
   )
 
   const layout = useMemo(() => {
+    if (summary) {
+      const worst = items.some((i) => i.streamIssue?.danger || i.tone === 'danger')
+        ? 'danger'
+        : items.some((i) => i.attention || i.tone === 'warn')
+          ? 'warn'
+          : 'none'
+      return {
+        ...computed,
+        mode: 'overflow' as const,
+        visibleItems: [],
+        overflowItems: items,
+        overflowAttention: worst as 'none' | 'warn' | 'danger',
+        compactTopChip: false,
+        compactSocket: computed.compactSocket,
+      }
+    }
     if (computed.mode !== 'overflow') return computed
     return {
       ...computed,
       compactTopChip: computed.compactTopChip || overflowStep >= 1,
       compactSocket: computed.compactSocket || overflowStep >= 2,
     }
-  }, [computed, overflowStep])
+  }, [computed, overflowStep, summary, items])
 
   // Real-DOM safety guard: measure initial container width synchronously before paint and step
   // down if font metrics make the chosen tier wider than the container.
@@ -254,6 +277,14 @@ export function StatusStrip({ loading = false }: { loading?: boolean }) {
   if (!connectors) return null
   if (items.length === 0 && socket === 'open') return null
 
+  const platformItems = items.filter((i) => i.name !== 'obs')
+  const connectedCount = platformItems.filter((i) => i.tone === 'ok').length
+  const summaryText =
+    platformItems.length === 0
+      ? 'No platforms'
+      : connectedCount === 0
+        ? `${platformItems.length} ${platformItems.length === 1 ? 'platform' : 'platforms'} · Not connected`
+        : `${connectedCount} of ${platformItems.length} connected`
   const compactChip = layout.mode === 'icons' || layout.mode === 'overflow'
   const socketText =
     socket === 'retrying'
@@ -363,7 +394,11 @@ export function StatusStrip({ loading = false }: { loading?: boolean }) {
               data-testid="connections-overflow"
               aria-expanded={open}
               aria-controls={popoverId}
-              aria-label={`${layout.overflowItems.length} other connections${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`}
+              aria-label={
+                summary
+                  ? `Connections: ${summaryText}`
+                  : `${layout.overflowItems.length} other connections${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`
+              }
               onClick={() => {
                 if (open) {
                   setOpen(false)
@@ -382,7 +417,7 @@ export function StatusStrip({ loading = false }: { loading?: boolean }) {
                     : 'border-line bg-surface-1 text-text-2 hover:border-line-strong hover:text-text',
               )}
             >
-              <span>+{layout.overflowItems.length}</span>
+              <span>{summary ? summaryText : `+${layout.overflowItems.length}`}</span>
               {layout.overflowAttention !== 'none' && (
                 <span
                   aria-hidden="true"
@@ -419,7 +454,7 @@ export function StatusStrip({ loading = false }: { loading?: boolean }) {
             ref={popRef}
             id={popoverId}
             role="region"
-            aria-label="Other connections"
+            aria-label={summary ? 'Connections' : 'Other connections'}
             data-over-preview
             data-testid="connections-overflow-popover"
             onKeyDown={onPopoverKeyDown}
