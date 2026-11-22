@@ -1409,6 +1409,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       // Handles are 10 screen pixels; a little more is easier to grab.
       // A finger needs more: 22 px each way is a 44 px target.
       reach: (e.pointerType === 'touch' ? 22 : 9) / f.scale,
+      least: 9 / f.scale,
       // Three screen pixels before a press becomes a drag.
       still: 3 / f.scale,
       // OBS's Snapping: how near (screen pixels), off when switched off.
@@ -1621,7 +1622,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       // The box round several picked sources: its handles size them together.
       if (groupRect && !e.altKey) {
-        const g = gripAt(groupFrame(groupRect), w.p, w.reach)
+        const g = gripAt(groupFrame(groupRect), w.p, w.reach, w.least)
         if (g && g.u >= 0) {
           e.currentTarget.setPointerCapture(e.pointerId)
           const items = together.filter((i) => !i.locked)
@@ -1644,7 +1645,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       let target: EngineItem | null = null
       let grip: Grip | null = null
       if (current?.frame && current.visible) {
-        grip = gripAt(current.frame, w.p, w.reach)
+        grip = gripAt(current.frame, w.p, w.reach, w.least)
         // As in OBS, a press inside the picked source keeps it, even under another one: a
         // source behind a full-screen camera can still be moved.
         if (!grip && inside(current.frame, w.p)) grip = MOVE
@@ -1763,10 +1764,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (!h) {
         // The cursor says what a press would do.
         const f = frameOf(selected)
-        const g = f ? gripAt(f, w.p, w.reach) : null
+        const g = f ? gripAt(f, w.p, w.reach, w.least) : null
         // The box round several picked has handles and a middle that moves it.
         const gf = groupRect ? groupFrame(groupRect) : null
-        const gg = gf && !e.altKey ? gripAt(gf, w.p, w.reach) : null
+        const gg = gf && !e.altKey ? gripAt(gf, w.p, w.reach, w.least) : null
         const over =
           gf && gg
             ? cursorFor(gf, gg)
