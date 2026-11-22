@@ -19,6 +19,18 @@ export function webUrl(raw: string, base = window.location.href): URL | null {
   }
 }
 
+/** The address as text when it is an absolute `https:` one without a password, else null. A link that
+ * came from outside (a platform's reply) is opened only through this: no `javascript:`, no path
+ * that would resolve against this page. */
+export function httpsUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw)
+    return u.protocol === 'https:' && !u.username && !u.password ? u.href : null
+  } catch {
+    return null
+  }
+}
+
 /** True in the desktop app's window (not a linked browser or a phone). */
 export function inDesktopApp(): boolean {
   const f = window.__FERROCAST__

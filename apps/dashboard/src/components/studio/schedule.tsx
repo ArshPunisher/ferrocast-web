@@ -16,6 +16,7 @@ import {
 import { Button, Dialog, Field, IconButton, Input, Select, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
+import { externalLink, httpsUrl } from '../../lib/external'
 
 /** A value for `<input type="datetime-local">`, in this computer's time. */
 function localInput(ms: number): string {
@@ -89,7 +90,7 @@ export function SchedulePanel() {
   )
 }
 
-function Plan({
+export function Plan({
   s,
   now,
   busy,
@@ -121,19 +122,23 @@ function Plan({
             {b.id ? (
               <>
                 scheduled
-                {b.url && (
-                  <>
-                    {' '}
-                    <a
-                      href={b.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-semibold text-accent-text hover:underline"
-                    >
-                      Open it
-                    </a>
-                  </>
-                )}
+                {(() => {
+                  // The address came from the platform: only a plain https one is a link.
+                  const href = b.url ? httpsUrl(b.url) : null
+                  return (
+                    href && (
+                      <>
+                        {' '}
+                        <a
+                          {...externalLink(href)}
+                          className="font-semibold text-accent-text hover:underline"
+                        >
+                          Open it
+                        </a>
+                      </>
+                    )
+                  )
+                })()}
               </>
             ) : (
               (b.note ?? 'reminder only')
