@@ -174,3 +174,17 @@ describe('the microphone check', () => {
     expect(e?.status).toBe(400)
   })
 })
+
+describe('the show and fade to black', () => {
+  it('a show switching the program scene clears a fade to black', async () => {
+    const { studio, eng } = rig()
+    await eng.start()
+    await studio.saveShowConfig({ starting_scene: 'Gameplay' })
+    await eng.fadeToBlack()
+    expect((await eng.scenes()).black).toBe(true)
+    await studio.startShow(true, true)
+    const after = await eng.scenes()
+    expect(after.current).toBe('Gameplay')
+    expect(after.black, 'still black though the show is on Gameplay').toBeFalsy()
+  })
+})

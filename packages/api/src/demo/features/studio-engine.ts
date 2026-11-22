@@ -834,6 +834,8 @@ export class DemoStudioEngine {
   switchShowScene(name: string): boolean {
     if (!this.hasScene(name)) return false
     this.currentScene = name
+    // On air for real, as when the person switches: not still faded to black.
+    this.black = false
     return true
   }
 
