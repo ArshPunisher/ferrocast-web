@@ -811,7 +811,7 @@ function NamedTransitionsTab({
                   key={`${selected.name}:${selected.kind}`}
                   transition={selected}
                   onPatch={(key, val) =>
-                    void run('set-tr', () =>
+                    run('set-tr', () =>
                       mutate('set-tr', () =>
                         api.updateNamedTransition(selected.name, {
                           settings: { [key]: val },
@@ -857,7 +857,8 @@ function NamedTransitionSettingsForm({
   onPatch,
 }: {
   transition: EngineNamedTransition
-  onPatch: (key: string, value: unknown) => void
+  /** Resolves to whether the engine took it (anything else: it didn't). */
+  onPatch: (key: string, value: unknown) => Promise<boolean | undefined>
 }) {
   const { api } = useDesk()
   const loaded = useResource(
@@ -865,6 +866,8 @@ function NamedTransitionSettingsForm({
     [api, transition.kind],
   )
   const [draft, setDraft] = useState<EngineSettings | null>(null)
+  // Which edit is the newest: an older one that fails must not undo a newer one.
+  const edits = useRef(0)
   // What the engine holds is the truth: another dashboard's change (or an undo) shows here
   // instead of leaving this form pinned to an old local copy.
   const settingsKey = JSON.stringify(transition.settings)
@@ -883,8 +886,13 @@ function NamedTransitionSettingsForm({
       opts={opts}
       values={shown}
       onChange={(key, value) => {
+        const mine = ++edits.current
         setDraft({ ...shown, [key]: value })
-        onPatch(key, value)
+        // Not taken: the form goes back to what the engine holds (it would otherwise keep showing
+        // the refused value, and the engine's settings didn't change to reset it).
+        void onPatch(key, value).then((ok) => {
+          if (ok !== true && edits.current === mine) setDraft(null)
+        })
       }}
     />
   )
