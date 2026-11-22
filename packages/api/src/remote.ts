@@ -257,6 +257,11 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/golive/destinations/*'],
   ['*', '/diagnostics'],
   ['*', '/diagnostics/**'],
+  ['*', '/store'],
+  ['*', '/store/**'],
+  // Clips are files on the PC.
+  ['*', '/clips'],
+  ['*', '/clips/**'],
 ]
 
 const SEGMENT_CHARS = /^[A-Za-z0-9\-_.~:@!$&'()*+,;=%]+$/
@@ -299,7 +304,7 @@ export const REMOTE_SCREENS: Record<RemoteRole, readonly string[] | 'all-but'> =
   owner: 'all-but',
 }
 /** Screens an owner's phone doesn't get (everything in them needs the PC itself). */
-export const OWNER_HIDDEN_SCREENS: readonly string[] = ['import']
+export const OWNER_HIDDEN_SCREENS: readonly string[] = ['import', 'store']
 /** Settings sections an owner's phone doesn't get. */
 export const OWNER_HIDDEN_SETTINGS: readonly string[] = [
   'accounts',

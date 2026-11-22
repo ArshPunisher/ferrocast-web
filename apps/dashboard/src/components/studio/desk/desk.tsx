@@ -73,6 +73,7 @@ import {
   type DrawerTab,
   type EngineApi,
 } from './common'
+import { AutoConfigDialog, AutoConfigRollbackBar } from './auto-config'
 import { GoLiveDock } from './golive-dock'
 import {
   BUILT_INS,
@@ -371,6 +372,7 @@ function Running({
   )
   const [editing, setEditing] = useState<string | null>(null)
   const [editTab, setEditTab] = useState<DrawerTab | null>(null)
+  const [autoConfigOpen, setAutoConfigOpen] = useState(false)
   const edit = useCallback((name: string | null, tab?: DrawerTab) => {
     setEditing(name)
     setEditTab(tab ?? null)
@@ -662,6 +664,7 @@ function Running({
         top={
           <>
             <ControlBar view={view} lead={lead} onStatus={onStatus} />
+            <AutoConfigRollbackBar onOpenWizard={() => setAutoConfigOpen(true)} />
             <MissingFiles />
             {readyBanner}
           </>
@@ -676,6 +679,15 @@ function Running({
       />
       <AddSourceDialog />
       <FileDrop />
+      {prefs.data && (
+        <AutoConfigDialog
+          open={autoConfigOpen}
+          onClose={() => setAutoConfigOpen(false)}
+          s={prefs.data}
+          onApply={() => {}}
+          onSynced={(next) => prefs.set(next)}
+        />
+      )}
       <SettingsDialog
         open={settingsAt !== null}
         start={settingsAt ?? undefined}

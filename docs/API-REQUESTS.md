@@ -444,6 +444,64 @@ All three stay PC-only (`remoteAllowed` denies paired phones).
 `top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
 `train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
 
+## R37. Community Theme Store (Phase 3 #18)
+
+In-app Community Theme Store (`#/store`) backed by a minisign-verified catalog (zero telemetry, local SHA-256 package & asset verification, pure-data `.ferrodesign` + p2e sandboxed `.ferroalert` + safe `.ferroplugin`, local render-cost performance scoring, and `ferrocast://` confirmation links):
+
+- `GET /api/v1/store/catalog?fresh=true|false` → `{ version: 1, generated_at, fetched_at, stale, creators, items, installed, last_undo, warnings }`.
+  - Verifies `.sig` with minisign before parsing JSON; enforces byte limits (`2 MB` catalog, `4 KB` sig), schema checks, URL allowlists (`https://` GitHub / relative path only, no traversal / SSRF / `javascript:`), and HTML/metadata sanitization.
+  - Errors: `503 catalog_not_open`, `413 store_catalog_too_large`, `502 store_bad_signature`, `422 store_catalog_invalid`, `502 store_unreachable`. Invalid/stale catalog keeps already-installed items working.
+- `GET /api/v1/store/installed` → `{ installed: StoreInstalledItem[], last_undo: StoreUndoSummary | null }` (always available offline).
+- `GET /api/v1/store/assets/{item_id}/{name}` → verified asset bytes after SHA-256 + length verification (`502 store_asset_tampered` on mismatch).
+- `POST /api/v1/store/install` `{ id }` → `201 Created` `StoreMutationResult` (installs verified `.ferrodesign`, sandboxed p2e `.ferroalert`, or sandboxed `.ferroplugin`; snapshots prior state into undo record).
+- `POST /api/v1/store/update` `{ id }` → `200 OK` `StoreMutationResult` (updates installed item to newer catalog version with full rollback snapshot in undo record).
+- `POST /api/v1/store/uninstall` `{ id }` → `200 OK` `StoreMutationResult` (removes installed designs/alert variations/plugin cleanly; works offline).
+- `POST /api/v1/store/undo` `{ token? }` → `200 OK` `StoreUndoResult` (one-click undo reverting install, update, or uninstall).
+- `POST /api/v1/store/resolve-link` `{ uri }` → `200 OK` `StoreLinkPreview` (validates `ferrocast://store/install/<id>`, `ferrocast://install/<id>`, or `ferrocast://store/item/<id>`, resolves verified catalog entry, returns `requires_confirmation: true` and safety breakdown; never installs automatically).
+- All `/api/v1/store` routes are PC-only (`OWNER_DENIED` rejects paired phones).
+- Demo engine (`packages/api/src/demo/features/store.ts`) serves a realistic signed-style fixture catalog across all categories (`theme`, `alert` incl. p2e custom HTML, `widget`, `overlay`, `plugin`), plus creator profiles, simulated update/install/uninstall/undo, `ferrocast://` resolution, and fault/tamper simulation hooks for tests.
+
+## R36. Clips and highlights (`#23`, 22 Nov)
+
+The Studio's **Clips** tab (`#/studio/clips`): the recordings folder as a library, with trims, compilations,
+captions and sending to YouTube. Engine branch `feat/p3-clips` in `ferrocast` (`docs/API.md` "Clips and
+highlights" has every field and error). A clip is named by its **file name** (`id`), never a path.
+- `GET /api/v1/clips?q=` → `{ folder, ffmpeg_ready, youtube_connected, clips: [{ id, name, kind, ext, size,
+  modified, has_captions }] }`; `GET /clips/{id}` → probe; `GET /clips/{id}/thumbnail` → `{ image }` (data URL);
+  `GET /clips/{id}/file` plays it with `Range` (`?session=` for a `<video>`); `PUT /clips/{id}` `{ name }` renames
+  (409 `clip_name_taken`); `DELETE /clips/{id}` → Trash (422 `trash_unavailable`, the clip stays).
+- Jobs (202 + `ClipJob { id, kind, label, state, progress, output?, link?, error?: { message, hint } }`, one at
+  a time): `POST /clips/{id}/trim`, `POST /clips/compile` (2 to 20 clips, `crossfade_s` 0 to 3, `normalize`),
+  `POST /clips/{id}/captions` (Whisper), `POST /clips/{id}/captions/burn`, `POST /clips/{id}/upload`.
+  `GET /clips/jobs`, `GET /clips/jobs/{id}`, `POST /clips/jobs/{id}/cancel`, `DELETE /clips/jobs/{id}`.
+- Captions: `GET` / `PUT /clips/{id}/captions` (`{ cues: [{ start_ms, end_ms, text }] }`) and
+  `GET /clips/{id}/captions.srt`.
+- Upload: `privacy` defaults to **private**; a Short needs a square or tall clip of at most 3 minutes;
+  counts as 1 of the **100 uploads a day** YouTube allows an app by default (`videos.insert` has its own "Video Uploads" quota bucket now, 1 unit a call; the roadmap's 1,600 of 10,000 units is out of date, per the Data API's own page, 22 Nov 2026); errors `youtube_not_connected`, `youtube_quota`,
+  `youtube_sign_in`, `youtube_unreachable`, `youtube_refused`, each with `error.hint` as the next step.
+- PC only: `/clips` and `/clips/**` are denied to paired phones (`remoteAllowed`, server and relay).
+- Open for the lead: when the p2g desktop-only guard (`DesktopOnly`, commit `5679c899`) merges, the
+  mutating clips routes (rename, delete, trim, compile, captions, upload) should take it as well; a paired LAN
+  browser can use them until then, like the other Studio routes.
+
+## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
+
+Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
+skipped/lagged frames, and CPU/GPU load across hardware encoders (`VideoToolbox`, `NVENC`,
+`QSV`, `AMF`) and software `x264` presets over a canvas-shaped load, combines results with
+`/golive/upload-check`, and provides snapshot + 30 s Keep/Undo + 1-minute drop-watch rollback.
+
+- `GET /api/v1/studio/engine/auto-config` → `AutoConfigState` (`idle | running | failed | done | applied | rolled_back`, progress `phase` & `progress_pct`, `candidates[]`, `upload_check`, `picked`, `applied`, `confirm_remaining_s`, `watch_remaining_s`, `first_minute_drops`, `first_minute_lags`, `rollback_trigger`, `rollback_reason`, `restored`).
+- `POST /api/v1/studio/engine/auto-config/benchmark` `{ mode?: "stream" | "record", fps_preference?: 30 | 60, include_upload?: boolean, max_seconds?: number }` → starts cancellable ~20-30 s benchmark. Refuses `409 studio_busy` while streaming/recording/replay is active, `409 conflict` while running, `400 invalid` for bad inputs.
+- `POST /api/v1/studio/engine/auto-config/cancel` → aborts immediately, removes temp scratch files, returns `idle`.
+- `POST /api/v1/studio/engine/auto-config/apply` `{ encoder?, video_encoder?, encoder_settings?, scale?, fps?, video_kbps?, label? }` → snapshots `StudioSettings`, applies changes, starts 30 s auto-rollback timeout and 1-minute dropped/lagged-frame watchdog → `applied`.
+- `POST /api/v1/studio/engine/auto-config/keep` → clears 30 s timeout while keeping 1-minute drop protection → `applied` (`confirmed: true`). `409` if nothing is applied.
+- The 30 s confirmation timeout has two outcomes, in both the engine (`studio/encoder_bench.rs`) and the demo engine: **idle** (not streaming or recording), the previous settings are restored automatically (`rolled_back`, `rollback_trigger: "timeout"`, notice `auto_config_rollback`); **live**, the new settings stay in place (a live encoder is never reshaped behind the streamer's back) and `rollback_offered: true` asks Keep or Undo once the live activity ends. The same live rule applies to the dropped-frame watchdog (`rollback_trigger: "dropped_frames"`), which counts only frames skipped or lagged while live.
+- `POST /api/v1/studio/engine/auto-config/benchmark` also answers `409 conflict` while new settings are still on trial (applied, Keep or Undo not chosen): a benchmark would replace the trial and leave Undo with nothing to restore.
+- Keep after a rollback offer: `keep` while the watch is still running answers `applied` with `confirmed: true`; Keep on an offer (`rollback_offered: true`) ends the trial for good: the snapshot is discarded and the answer is `idle` (nothing left to undo), not `applied`.
+- `POST /api/v1/studio/engine/auto-config/undo` → restores snapshot immediately → `rolled_back`. `409` if nothing is applied.
+- Live WebSocket frame: `auto_config AutoConfigState` (plus `notice` key `auto_config_rollback` on automatic rollback). PC-only (`/studio/engine/**` remains blocked to paired phones).
+
 ## R33. Add or remove destinations while live (Phase 2 #17, 22 Nov)
 
 Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses:
@@ -461,3 +519,8 @@ Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses
 - `DELETE /api/v1/api-keys/{id}` -> `204 No Content`. Revokes immediately.
 - `/api-keys*` is PC-only (`OWNER_DENIED` on remote sessions, never accessible via API keys). API keys also can never reach secrets, accounts, diagnostics export, plugin install/execution, session pairing, imports/exports/restores, or change `lan_access`. Per-key sliding-window rate limit returns `429 rate_limited` with `Retry-After` and `X-RateLimit-*` headers. Every API key use logs to tracing and SQLite audit without the key or hash.
 
+
+## R39. Store follow-ups: design ids kept on update, ferrocast:// registration (22 Nov)
+
+- `POST /api/v1/store/update` on a design package now replaces the installed designs in place: ids stay, so the active alert design, overlays made from the theme and rules keep working; Undo restores the earlier content under the same ids (the demo already behaved this way). `Design.origin.source` (optional, string or null) is the design's id inside its package file and is what an update matches on; ignore it in the UI.
+- No new routes. The desktop app registers the `ferrocast://` scheme with the OS and routes links to `#/store?link=…` as before (still "always ask").

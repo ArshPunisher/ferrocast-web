@@ -2,6 +2,7 @@
 // slice of the live store, so screens subscribe to just what they show.
 
 import type {
+  AutoConfigState,
   GoLiveFrame,
   LaneItem,
   LiveAlert,
@@ -25,6 +26,8 @@ export interface StudioLive {
   golive: GoLiveFrame | undefined
   /** The live watch's last word (a mistake while live, or that it's fixed). */
   alert: LiveAlert | null
+  /** Encoder stress benchmark and rollback state pushed by the engine. */
+  autoConfig: AutoConfigState | null
 }
 
 export const EMPTY_STUDIO: StudioLive = {
@@ -37,6 +40,7 @@ export const EMPTY_STUDIO: StudioLive = {
   counters: {},
   golive: undefined,
   alert: null,
+  autoConfig: null,
 }
 
 const TYPES = new Set([
@@ -48,6 +52,7 @@ const TYPES = new Set([
   'brb',
   'golive',
   'live_alert',
+  'auto_config',
 ])
 
 export function isStudioFrame(f: LiveFrame): boolean {
@@ -79,6 +84,8 @@ export function reduceStudio(s: StudioLive, f: LiveFrame): StudioLive {
       return { ...s, golive: f.data }
     case 'live_alert':
       return { ...s, alert: f.data }
+    case 'auto_config':
+      return { ...s, autoConfig: f.data }
     default:
       return s
   }

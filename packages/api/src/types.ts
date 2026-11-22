@@ -1032,7 +1032,7 @@ interface DesignBase {
   pro: boolean
   built_in: boolean
   branded: boolean
-  origin: { type: OriginKind; from: string | null }
+  origin: { type: OriginKind; from: string | null; source?: string | null }
   created_at: Millis
   updated_at: Millis
 }

@@ -32,6 +32,8 @@ import { useRigLists } from '../components/studio/rig-lists'
 import { LiveCaptions } from '../components/studio/captions'
 import { ShowStylePicker } from '../components/studio/show-style-picker'
 import { TranscriptPanel } from '../components/studio/transcript'
+import { ClipsTab } from '../components/studio/clips/clips-tab'
+import { useLive } from '../lib/store'
 
 const TABS: { value: StudioSection; label: ReactNode }[] = [
   { value: 'golive', label: 'Go live' },
@@ -41,7 +43,21 @@ const TABS: { value: StudioSection; label: ReactNode }[] = [
   { value: 'show', label: 'Show' },
   { value: 'obs', label: 'OBS' },
   { value: 'moments', label: 'Moments' },
+  { value: 'clips', label: 'Clips' },
 ]
+
+/** The tabs this window shows: OBS and Vertical only for those who stream from OBS, and no Clips
+ * on a paired phone (clips are files on the PC, and the PC refuses a phone those calls). */
+export function studioTabs<T extends { value: string }>(
+  tabs: T[],
+  { usesObs, onPhone }: { usesObs: boolean; onPhone: boolean },
+): T[] {
+  return tabs.filter(
+    (t) =>
+      !(!usesObs && (t.value === 'obs' || t.value === 'vertical')) &&
+      !(onPhone && t.value === 'clips'),
+  )
+}
 
 /** The Show tab, marked with a small dot (and said so to a screen reader) while a show runs. */
 export function markRunningShow<T extends { value: string; label: ReactNode; title?: string }>(
@@ -75,10 +91,9 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   // seen from the other tabs, and its 409 came with no hint it was still there (19 Nov).
   const [run] = useShow()
   const showOn = !!run && run.phase !== 'ended'
-  const tabs = markRunningShow(
-    usesObs ? TABS : TABS.filter((t) => t.value !== 'obs' && t.value !== 'vertical'),
-    showOn,
-  )
+  // Clips are files on this PC: a paired phone gets no Clips tab (its requests are denied).
+  const onPhone = useLive((s) => !!s.remote)
+  const tabs = markRunningShow(studioTabs(TABS, { usesObs, onPhone }), showOn)
   const info = useResource(() => studio.streamInfo(), [studio])
   // OBS's scenes only for its own tab: asked on every Studio page they failed without OBS (a
   // 422 on each load); elsewhere the request just waits, never sent.
@@ -194,6 +209,14 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
           </div>
         </div>
       )}
+      {section === 'clips' &&
+        (onPhone ? (
+          <p role="status" className="text-[15px] text-text-2">
+            Clips are files on your PC. Open the dashboard on the PC to use them.
+          </p>
+        ) : (
+          <ClipsTab />
+        ))}
       {section === 'moments' && (
         <div className="flex flex-col gap-5">
           <MomentsTimeline />

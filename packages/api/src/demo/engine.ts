@@ -9,6 +9,8 @@ import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
 import { DemoMusic } from './features/music'
+import { DemoStore, type StoreFault } from './features/store'
+import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
@@ -160,6 +162,8 @@ export interface DemoOptions {
   setupDone?: boolean
   /** Fake network delay in ms (default 60–180 random; 0 in tests). */
   latencyMs?: number
+  /** How long a clips job takes per step (default 450 ms; a test that stops one makes it long). */
+  clipStepMs?: number
   /** Accept any pairing code except these special ones (see `pair`). */
   token?: string
   /** Whether this build has a relay (default true). Without one, saving tips is a 422. */
@@ -379,8 +383,10 @@ export class DemoEngine {
   private mediaBlobs = new Map<string, Blob>()
   /** Designs: the catalogue, your own, Use, the alert design in use, share files. */
   readonly designs: DemoDesigns
+  readonly storeCatalog: DemoStore
   readonly obsTheme: DemoObsTheme
   readonly music: DemoMusic
+  readonly clips: DemoClips
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -686,9 +692,11 @@ export class DemoEngine {
     })
     this.welcome = new DemoWelcome(this.host)
     this.studioEngine = opts.studioEngine
-      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {}, {
-          onStreamChange: () => this.golive.notifyStreamChange(),
-        })
+      ? new DemoStudioEngine(
+          typeof opts.studioEngine === 'object' ? opts.studioEngine : {},
+          this.host,
+          { onStreamChange: () => this.golive.notifyStreamChange() },
+        )
       : null
     this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
       baseUrl: () => this.base,
@@ -737,6 +745,11 @@ export class DemoEngine {
       () => this.obs.state === 'connected',
       () => this.studioEngine?.isStreaming() ?? false,
     )
+    this.studioEngine?.setAutoConfigDeps({
+      runUploadCheck: () => this.golive.runUploadCheck(),
+      isLive: () => this.golive.isCutRunning(),
+      enabledPlatforms: () => this.golive.enabledMainDestinations(),
+    })
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>
         (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
@@ -793,12 +806,34 @@ export class DemoEngine {
       },
       opts.designs ?? [],
     )
+    this.storeCatalog = new DemoStore({
+      allDesigns: () => this.designs.all(),
+      addDesign: (d) => this.designs.addStored(d),
+      deleteDesign: (id) => this.designs.deleteStored(id),
+      activeAlert: () => this.designs.activeAlert(),
+      setActiveAlert: (id) => this.designs.setActiveStored(id),
+      rules: () => clone(this.rules),
+      saveRule: (r) => this.saveRule(r.id, r),
+      plugins: () => this.plugins.all(),
+      upsertPlugin: (p) => this.plugins.upsert(p),
+      removePlugin: (id) => this.plugins.removeById(id),
+      now: () => Date.now(),
+      newId: () => randomToken().slice(0, 16),
+    })
     this.music = new DemoMusic({
       pushMusic: (now) => {
         for (const s of this.overlaySubs) if (this.wantsMusic(s)) this.sendOverlay(s, 'music', now)
       },
       now: () => Date.now(),
     })
+    this.clips = new DemoClips(
+      {
+        now: () => Date.now(),
+        later: (fn, ms) => this.later(fn, ms),
+        connectedChat: () => this.connectedChat(),
+      },
+      opts.clipStepMs,
+    )
     this.obsTheme = new DemoObsTheme({
       studio: this.studio,
       designs: this.designs,
@@ -860,6 +895,16 @@ export class DemoEngine {
   /** Pro's own tip address: one added already, its status, today's changes. */
   setTipDomain(state: DemoTipDomainState): void {
     this.tipDomain.setState(state)
+  }
+
+  /** Simulates Community Store catalog signature/tamper/oversize/stale/offline faults (tests). */
+  setStoreFault(fault: StoreFault): void {
+    this.storeCatalog.fault = fault
+  }
+
+  /** Bumps a catalog item version in demo mode to test update + undo update flows. */
+  bumpStoreItemVersion(id: string, version: string): void {
+    this.storeCatalog.bumpVersion(id, version)
   }
 
   /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
@@ -1888,7 +1933,9 @@ export class DemoEngine {
       this.cloudBackups,
       this.obsTheme,
       this.music,
+      this.clips,
       this.designs,
+      this.storeCatalog,
       this.studio,
       this.golive,
       this.tipBrand,

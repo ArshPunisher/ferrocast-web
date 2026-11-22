@@ -18,6 +18,7 @@ export type Route =
   | { name: 'import'; source?: 'streamelements' | 'streamlabs' }
   | { name: 'designs'; tab?: GalleryTab }
   | { name: 'designer'; id: string }
+  | { name: 'store'; creator?: string; item?: string; install?: string }
   | { name: 'studio'; section?: StudioSection }
   /** Pro stream history (`#/history`). */
   | { name: 'history' }
@@ -32,7 +33,8 @@ export type Route =
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
 const GALLERY_TABS: GalleryTab[] = ['themes', 'alerts', 'widgets', 'mine']
 
-export type StudioSection = 'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'engine'
+export type StudioSection =
+  'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'clips' | 'engine'
 const STUDIO_SECTIONS: StudioSection[] = [
   'golive',
   'vertical',
@@ -40,6 +42,7 @@ const STUDIO_SECTIONS: StudioSection[] = [
   'info',
   'obs',
   'moments',
+  'clips',
   'engine',
 ]
 
@@ -76,6 +79,18 @@ export function parseRoute(hash: string): Route {
         : { name: 'designs' }
     case 'designer':
       return b ? { name: 'designer', id: b } : { name: 'designs' }
+    case 'store': {
+      const qs = new URLSearchParams(query)
+      const link = qs.get('link')
+      if (link) return { name: 'store', install: link }
+      const direct = qs.get('install')
+      // An item id only: anything else (a `?v=` or `#` smuggled in) is no link at all.
+      if (direct && /^[a-z0-9][a-z0-9._-]{2,79}$/.test(direct) && !direct.includes('..'))
+        return { name: 'store', install: `ferrocast://store/install/${direct}` }
+      if (b === 'creator' && parts[2]) return { name: 'store', creator: parts[2] }
+      if (b === 'item' && parts[2]) return { name: 'store', item: parts[2] }
+      return { name: 'store' }
+    }
     case 'studio':
       return STUDIO_SECTIONS.includes(b as StudioSection)
         ? { name: 'studio', section: b as StudioSection }
@@ -111,6 +126,11 @@ export function href(r: Route): string {
       return r.tab && r.tab !== 'themes' ? `#/designs/${r.tab}` : '#/designs'
     case 'designer':
       return `#/designer/${encodeURIComponent(r.id)}`
+    case 'store':
+      if (r.install) return `#/store?link=${encodeURIComponent(r.install)}`
+      if (r.creator) return `#/store/creator/${encodeURIComponent(r.creator)}`
+      if (r.item) return `#/store/item/${encodeURIComponent(r.item)}`
+      return '#/store'
     case 'studio':
       return r.section ? `#/studio/${r.section}` : '#/studio'
     default:
