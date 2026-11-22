@@ -509,6 +509,9 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
   }
 
   const doInstall = async (id: string) => {
+    // The dialog this install was confirmed in: it closes only if that is still the one on screen
+    // (a link opened meanwhile is a different dialog and stays).
+    const dialog = links.current.current()
     setBusyId(id)
     try {
       const res = await api.install(id)
@@ -519,7 +522,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
           ? `${res.designs.length} design${res.designs.length === 1 ? '' : 's'} added to Designs. One-click Undo is ready.`
           : 'One-click Undo is ready.',
       })
-      closeLinkDialog()
+      if (links.current.isCurrent(dialog)) closeLinkDialog()
       await loadAll(false)
     } catch (e) {
       const d = describeError(e)
@@ -1002,7 +1005,14 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
             <div className="flex gap-2">
               <Input
                 value={linkInput}
-                onChange={(e) => setLinkInput(e.target.value)}
+                onChange={(e) => {
+                  // An edit makes the lookup in flight, and what it found, no longer about this text.
+                  links.current.invalidate()
+                  setLinkInput(e.target.value)
+                  setLinkPreview(null)
+                  setLinkError(null)
+                  setLinkBusy(false)
+                }}
                 aria-label="Ferrocast install URI"
                 placeholder="ferrocast://store/install/aurora-pulse"
                 className="font-mono text-[13px]"

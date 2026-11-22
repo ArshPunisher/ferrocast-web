@@ -9,6 +9,8 @@ import type { StoreCatalogResponse, StoreInstalledItem, StoreUndoSummary } from 
 export function latestOnly() {
   let current = 0
   return {
+    /** The number now current: what a request that does not start a lookup (an install) holds. */
+    current: () => current,
     next: () => ++current,
     isCurrent: (n: number) => n === current,
     invalidate: () => {

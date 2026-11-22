@@ -186,13 +186,20 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
             <div className="grid gap-2 sm:grid-cols-2">
               {ca.fields.map((f) => {
                 const val = fieldOverrides[f.key] ?? f.default
+                const Field = f.type === 'color' ? 'div' : 'label'
                 return (
-                  <label key={f.key} className="flex flex-col gap-1 text-[13px] text-text-2">
+                  <Field
+                    key={f.key}
+                    role={f.type === 'color' ? 'group' : undefined}
+                    aria-label={f.type === 'color' ? f.label : undefined}
+                    className="flex flex-col gap-1 text-[13px] text-text-2"
+                  >
                     <span className="font-medium">{f.label}</span>
                     {f.type === 'color' ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
+                          aria-label={f.label}
                           value={String(val)}
                           onChange={(e) =>
                             setFieldOverrides((prev) => ({ ...prev, [f.key]: e.target.value }))
@@ -200,6 +207,7 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
                           className="h-8 w-10 cursor-pointer rounded border border-line bg-transparent p-0.5"
                         />
                         <Input
+                          aria-label={`${f.label} value`}
                           value={String(val)}
                           onChange={(e) =>
                             setFieldOverrides((prev) => ({ ...prev, [f.key]: e.target.value }))
@@ -215,7 +223,7 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
                         }
                       />
                     )}
-                  </label>
+                  </Field>
                 )
               })}
             </div>
