@@ -171,8 +171,8 @@ test.describe('platforms appear once on the Alerts screen', () => {
     // The header has no platform controls: the name and a labelled switch only.
     const editor = page.getByTestId('alert-editor')
     const header = editor.locator('header')
-    await expect(header.getByRole('switch', { name: 'Rule on' })).toBeVisible()
-    await expect(header.getByText('Rule on')).toBeVisible()
+    await expect(header.getByRole('switch', { name: 'Rule', exact: true })).toBeVisible()
+    await expect(header.getByText('Rule', { exact: true })).toBeVisible()
     await expect(header.getByText('Twitch')).toHaveCount(0)
     await expect(header.getByText('Kick')).toHaveCount(0)
     // "Rule listens on" is plain checkboxes in the right dock's This look group.
@@ -249,3 +249,14 @@ for (const [width, height] of [
     expect(bad).toEqual([])
   })
 }
+
+test('the Rule switch says its state once, to everyone', async ({ page }) => {
+  await open(page, 'alerts/follow')
+  const header = page.getByTestId('alert-editor').locator('header')
+  const sw = header.getByRole('switch', { name: 'Rule', exact: true })
+  await expect(sw).toHaveAttribute('aria-checked', 'true')
+  // No second "On" word beside it.
+  await expect(header.getByText(/^On$/)).toHaveCount(0)
+  await sw.click()
+  await expect(sw).toHaveAttribute('aria-checked', 'false')
+})

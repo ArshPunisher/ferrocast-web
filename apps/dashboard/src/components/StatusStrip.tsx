@@ -396,7 +396,7 @@ export function StatusStrip({
               aria-controls={popoverId}
               aria-label={
                 summary
-                  ? `Connections: ${summaryText}`
+                  ? `Connections: ${summaryText}${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`
                   : `${layout.overflowItems.length} other connections${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`
               }
               onClick={() => {

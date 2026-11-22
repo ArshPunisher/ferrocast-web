@@ -816,14 +816,9 @@ function RuleEditor({
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           className="min-w-[8rem] flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-lg font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none lg:w-40 lg:flex-none xl:w-52"
         />
-        <div className="inline-flex h-8 shrink-0 items-center gap-2.5 rounded-full border border-line-strong bg-surface-2 pr-1.5 pl-3">
-          <Switch checked={rule.enabled} onChange={onToggle} label="Rule on" />
-          <span
-            aria-hidden="true"
-            className={cx('w-6 text-[13px] font-bold', rule.enabled ? 'text-ok' : 'text-text-3')}
-          >
-            {rule.enabled ? 'On' : 'Off'}
-          </span>
+        <div className="inline-flex h-8 shrink-0 items-center rounded-full border border-line-strong bg-surface-2 pr-1.5 pl-3">
+          {/* The switch is the state (a screen reader hears "Rule, switch, on"). */}
+          <Switch checked={rule.enabled} onChange={onToggle} label="Rule" />
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {dirty && (

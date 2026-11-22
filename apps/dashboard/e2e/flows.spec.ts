@@ -143,7 +143,7 @@ test.describe('alerts', () => {
       .getByRole('navigation', { name: 'Alert rules' })
       .getByRole('link', { name: /Raids/ })
       .click()
-    await page.getByRole('switch', { name: 'Rule on' }).click()
+    await page.getByRole('switch', { name: 'Rule', exact: true }).click()
     await expect(page.getByText(/Raids off/)).toBeVisible()
   })
 
