@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeskProvider } from './common'
+import { PerformanceToggle } from './performance'
 import {
   ZOOM_MAX,
   ZOOM_MIN,
@@ -307,6 +308,18 @@ describe('the preview toolbar', () => {
     expect(getPreviewView().overflow).toBe('hide')
     await pick('Show what runs past the canvas')
     expect(getPreviewView().overflow).toBe('show')
+  })
+
+  it('spells out labels when PerformanceToggle and StageBar controls move into More tools', async () => {
+    const { desk } = fakeDesk()
+    await act(async () =>
+      root.render(
+        <DeskProvider value={desk as never}>
+          <PerformanceToggle panel />
+        </DeskProvider>,
+      ),
+    )
+    expect(host.textContent).toContain('Performance mode')
   })
 })
 

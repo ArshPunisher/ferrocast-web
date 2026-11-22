@@ -142,7 +142,7 @@ export function OverflowRow({
           aria-label={label}
           className={cx(
             open ? 'flex' : 'hidden',
-            'absolute right-0 bottom-full z-50 mb-1.5 w-max max-w-[min(92vw,320px)] flex-col items-start gap-2 rounded-[10px] border border-line-strong bg-surface-1 p-2 text-[13px] text-text-2 shadow-lg',
+            'absolute right-0 bottom-full z-50 mb-1.5 max-h-[min(60dvh,420px)] w-max max-w-[min(92vw,320px)] flex-col items-start gap-2 overflow-y-auto rounded-[10px] border border-line-strong bg-surface-1 p-2 text-[13px] text-text-2 shadow-lg',
           )}
         >
           {items

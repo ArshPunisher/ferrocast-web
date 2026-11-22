@@ -11,7 +11,7 @@ import {
   ArrowsHorizontal,
   ArrowsVertical,
 } from '@phosphor-icons/react'
-import { IconButton } from '@ferrocast/ui'
+import { Button, IconButton } from '@ferrocast/ui'
 import type { EngineItem } from '@ferrocast/api'
 import { done, useAction } from '../../../lib/hooks'
 import { useDesk } from './common'
@@ -120,21 +120,36 @@ export function useArrange() {
 }
 
 /** The preview bar's button: Align and Space out for the sources picked together. */
-export function ArrangeButton() {
+export function ArrangeButton({ panel = false }: { panel?: boolean } = {}) {
   const arrange = useArrange()
   const { open, menu } = useContextMenu()
   return (
     <>
-      <IconButton
-        size="sm"
-        label="Align and space out the picked sources"
-        aria-haspopup="menu"
-        disabled={!arrange.can.align || arrange.busy}
-        className="text-text-2"
-        onClick={(e) => open(e, 'Arrange', arrange.menu())}
-      >
-        <AlignCenterHorizontalSimple size={17} weight="bold" />
-      </IconButton>
+      {panel ? (
+        <Button
+          size="xs"
+          variant="ghost"
+          aria-label="Align and space out the picked sources"
+          aria-haspopup="menu"
+          disabled={!arrange.can.align || arrange.busy}
+          className="text-text-2"
+          onClick={(e) => open(e, 'Arrange', arrange.menu())}
+        >
+          <AlignCenterHorizontalSimple size={16} weight="bold" aria-hidden />
+          <span>Arrange</span>
+        </Button>
+      ) : (
+        <IconButton
+          size="sm"
+          label="Align and space out the picked sources"
+          aria-haspopup="menu"
+          disabled={!arrange.can.align || arrange.busy}
+          className="text-text-2"
+          onClick={(e) => open(e, 'Arrange', arrange.menu())}
+        >
+          <AlignCenterHorizontalSimple size={17} weight="bold" />
+        </IconButton>
+      )}
       {menu}
     </>
   )
