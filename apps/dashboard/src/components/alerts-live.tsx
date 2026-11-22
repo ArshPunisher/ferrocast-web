@@ -185,7 +185,7 @@ export function QueuePanel({ className }: { className?: string }) {
             </Button>
           </p>
         )}
-        <AnimatePresence mode="popLayout" initial={false}>
+        <AnimatePresence mode="wait" initial={false}>
           {playing ? (
             <motion.div
               key={playing.alert.alert_id}
@@ -222,7 +222,8 @@ export function QueuePanel({ className }: { className?: string }) {
               key="idle"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.16 }}
             >
               <EmptyState compact title="Nothing playing">
                 Alerts show up here while they play on your overlays.
