@@ -358,6 +358,10 @@ function Running({
       }),
     [],
   )
+  const pickSet = useCallback(
+    (ids: number[]) => setPicked({ id: ids[0] ?? null, also: ids.slice(1) }),
+    [],
+  )
   const [editing, setEditing] = useState<string | null>(null)
   const [editTab, setEditTab] = useState<DrawerTab | null>(null)
   const edit = useCallback((name: string | null, tab?: DrawerTab) => {
@@ -566,6 +570,7 @@ function Running({
       select,
       also: picked.also,
       pickMore,
+      pickSet,
       itemMenu,
       editing,
       edit,
@@ -608,6 +613,7 @@ function Running({
       select,
       picked.also,
       pickMore,
+      pickSet,
       editing,
       edit,
       editTab,

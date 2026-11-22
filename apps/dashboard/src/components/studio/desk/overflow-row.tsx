@@ -76,7 +76,10 @@ export function OverflowRow({
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     const onDown = (e: PointerEvent) => {
-      if (!moreRef.current?.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Element | null
+      // A menu opened from a button in the panel is drawn on the body, outside it: a press in
+      // that menu is not a press outside the panel.
+      if (!moreRef.current?.contains(t as Node) && !t?.closest?.('[role="menu"]')) setOpen(false)
     }
     document.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onDown)

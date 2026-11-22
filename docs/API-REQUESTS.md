@@ -281,6 +281,21 @@ Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat
 Also adds file-backed `GET/POST/PUT/DELETE` `/api/v1/studio/engine/library/*` fallback in `ferrocast-headless` when no desktop `StudioHost` is registered, and auto-loads `<FERROCAST_HOME>/fonts/` in `ferrocore::TextRenderer`.
 
 
+## R28. Moving several items at once: `PUT …/items/boxes` (22 Nov)
+
+Aligning, spacing out, and moving or resizing a group of picked sources in the preview change
+several items in one action. One `PUT …/items/{id}/box` per item made one undo step per item.
+
+Ask (done on the engine side, branch `feat/p2-snap-guides`): `PUT /api/v1/studio/engine/scenes/{scene}/items/boxes`
+`{ items: [{ id, x, y, w, h }], save?, reason? }` (`reason`: `align` or `distribute` for one click of those buttons: an undo step of its own, named for it, never joined to a drag) (canvas pixels, 1 to 500 items, each id once) → the items in
+the order given. Each box is applied as the single-item box is. All or none; one undo step (a
+drag of them, with `save: false` until the last, is one step, "Move 3 sources"). 400 for no items,
+more than 500, an id twice, a group together with one of its own sources, w or h under 1, or numbers
+past ±100000; 404 (`studio_no_source`) for an id not in the scene. Locked items are moved as asked
+(the dashboard doesn't send them). The preview's `holes` take up to 64 (it was 16). The dashboard uses it for the group box, the
+align and distribute buttons and the arrow keys with several sources picked; one source still uses
+`…/items/{id}/box`.
+
 
 ## R21. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
 

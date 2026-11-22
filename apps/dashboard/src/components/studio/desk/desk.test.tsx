@@ -8,7 +8,7 @@ import { cloneChoices } from './add-source'
 import { filterItems, projectorItem, type MenuItem } from './menu'
 import { scaleFor, shownSize } from './transform'
 import { fileName } from './library'
-import { historyMenu, overPreview, tbarEnd } from './preview'
+import { MAX_SENT_HOLES, historyMenu, overPreview, tbarEnd } from './preview'
 import { balanceLabel } from './advanced-audio'
 import { previewName, shortcutGroups } from './settings'
 import { kbpsBetween, lastsFor, share, sizeText } from './stats-panel'
@@ -460,6 +460,23 @@ describe('what lies over the preview', () => {
       { x: 200, y: 50, w: 200, h: 400, r: 10 },
       { x: 800, y: -100, w: 440, h: 800, r: 0 },
     ])
+  })
+  it('never sends more holes than the app takes; guide lines give way to menus and panels', () => {
+    document.body.innerHTML = ''
+    // A menu and a panel (the ones that matter), under a crowd of guide and handle holes.
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    place(menu, 10, 10, 100, 100)
+    for (let i = 0; i < 90; i++) {
+      const g = document.createElement('span')
+      g.dataset.overPreview = ''
+      g.dataset.guideHole = ''
+      place(g, 200 + i, 50, 2, 40)
+    }
+    const holes = overPreview(new DOMRect(0, 0, 1000, 600), 0)
+    expect(holes).not.toBeNull()
+    expect(holes!.length).toBeLessThanOrEqual(MAX_SENT_HOLES)
+    expect(holes![0]).toMatchObject({ x: 10, y: 10, w: 100, h: 100 }) // the menu is first and kept
   })
   it('a modal dialog counts by its panel, not its full-window box', () => {
     document.body.innerHTML = ''
