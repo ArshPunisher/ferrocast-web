@@ -391,6 +391,65 @@ describe('the Clips tab', () => {
     expect(q('[aria-label="Making captions"] [data-job]')).not.toBeNull()
   })
 
+  it('captions: closing and reopening the clip while they are made still shows them when done', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0, clipStepMs: 80 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    await mountWith(client)
+    await settle()
+    await click(openBtn('Replay 2026-11-22 20-31-55'))
+    await settle()
+    await choose('Captions')
+    await settle()
+    await click(buttonByText('Make captions'))
+    await settle(5)
+    // Close the clip and open it again while the job still runs.
+    await click(byLabel('Close'))
+    await settle(5)
+    await click(openBtn('Replay 2026-11-22 20-31-55'))
+    await settle(5)
+    await choose('Captions')
+    for (let i = 0; i < 80 && !q('ol[aria-label="Captions"]'); i++) await settle(50)
+    expect(
+      q('ol[aria-label="Captions"]'),
+      'the captions appear without another reopen',
+    ).not.toBeNull()
+  })
+
+  it('captions: words typed while the finished captions load are kept', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0, clipStepMs: 15 })
+    let slow = false
+    const base = engine.fetch
+    const client = new FerroClient({
+      base: engine.base,
+      token: DEMO_TOKEN,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (slow && /\/captions$/.test(url) && (init?.method ?? 'GET') === 'GET')
+          await new Promise((r) => setTimeout(r, 300))
+        return base(input, init)
+      }) as typeof engine.fetch,
+    })
+    await mountWith(client)
+    await settle()
+    await click(openBtn('Replay 2026-11-22 20-31-55'))
+    await settle()
+    await choose('Captions')
+    await settle()
+    await click(buttonByText('Make captions'))
+    // From here every read of the captions is slow: the one after the job is done too.
+    slow = true
+    // The job runs; the moment it is done the list is read again (slowly).
+    for (let i = 0; i < 100 && !q('[aria-label="Making captions"]'); i++) await settle(10)
+    expect(q('[aria-label="Making captions"]')).not.toBeNull()
+    for (let i = 0; i < 200 && q('[aria-label="Making captions"]'); i++) await settle(10)
+    // While that read is on its way, the person starts writing their own.
+    await click(buttonByText('Write them myself'))
+    await type(byLabel<HTMLTextAreaElement>('Caption 1 words'), 'my own words')
+    await settle(900)
+    expect(byLabel<HTMLTextAreaElement>('Caption 1 words')?.value).toBe('my own words')
+  })
+
   it('details: rename is checked, and the Trash asks first', async () => {
     await mountDemo()
     await settle()

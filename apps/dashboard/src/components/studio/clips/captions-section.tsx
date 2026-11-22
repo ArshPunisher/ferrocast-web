@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClosedCaptioning, DownloadSimple, Plus, Trash } from '@phosphor-icons/react'
 import {
   cuesProblem,
+  jobActive,
   renderSrt,
   type Clip,
   type ClipJob,
@@ -44,17 +45,34 @@ export function CaptionsSection({
   const [draft, setDraft] = useState<Cue[]>([])
   const [error, setError] = useState<unknown>(null)
   const [making, setMaking] = useState<string | null>(null)
+  // What the draft is now, so a read that comes back late can tell whether it was edited meanwhile.
+  const draftNow = useRef<Cue[]>([])
   const load = useCallback(() => {
     setError(null)
+    const before = JSON.stringify(draftNow.current)
     api
       .captions(clip.id)
       .then((r) => {
         setSaved(r.cues)
-        setDraft(r.cues)
+        // Only over a draft that is still what it was when the read began: words typed while it
+        // was on its way are kept (and still read as unsaved).
+        if (JSON.stringify(draftNow.current) === before) setDraft(r.cues)
       })
       .catch(setError)
   }, [api, clip.id])
   useEffect(load, [load])
+  // A captions job already running for this clip (the clip was closed and opened again while it
+  // worked) is picked up, so its result shows without opening the clip a third time.
+  const stem = clip.id.replace(/\.[^.]+$/, '')
+  const running = jobs.find(
+    (j) =>
+      j.kind === 'captions' &&
+      jobActive(j) &&
+      (j.label === `Captions for ${stem}` || j.label === `Captions for ${clip.name}`),
+  )
+  useEffect(() => {
+    if (making === null && running) setMaking(running.id)
+  }, [making, running])
   // The speech model's job: the captions appear when it is done, its trouble is said in place.
   const makingJob = making ? jobs.find((j) => j.id === making) : undefined
   const state = makingJob?.state
@@ -67,6 +85,7 @@ export function CaptionsSection({
     } else if (state === 'cancelled') setMaking(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
+  draftNow.current = draft
   const dirty = saved !== null && !same(saved, draft)
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
