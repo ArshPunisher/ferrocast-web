@@ -341,8 +341,8 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
     expect(autoConfigSpy.mock.calls.length).toBeGreaterThan(callsAfterMount)
 
     // Make an unrelated dirty edit on Audio page (switch sample rate) inside SettingsDialog
-    const rate44 = Array.from(document.querySelectorAll<HTMLElement>('[role="radio"]')).find(
-      (el) => el.textContent?.includes('44.1'),
+    const rate44 = Array.from(document.querySelectorAll<HTMLElement>('[role="radio"]')).find((el) =>
+      el.textContent?.includes('44.1'),
     )
     if (rate44) {
       await act(async () => {
@@ -440,7 +440,9 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
     expect(radiogroups[1]?.hasAttribute('aria-labelledby')).toBe(true)
 
     // M6.4: no hardcoded hex inline styles (#ef4444 / #64748b)
-    expect(host.innerHTML).not.toMatch(/#ef4444|#64748b|rgb\(239,\s*68,\s*68\)|rgb\(100,\s*116,\s*139\)/i)
+    expect(host.innerHTML).not.toMatch(
+      /#ef4444|#64748b|rgb\(239,\s*68,\s*68\)|rgb\(100,\s*116,\s*139\)/i,
+    )
 
     // Run to Done
     const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>

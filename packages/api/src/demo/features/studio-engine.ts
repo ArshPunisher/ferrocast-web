@@ -2671,8 +2671,7 @@ function pickDemoRecommendation(
   const out = eff(best)
   const outShort = Math.min(out.w, out.h)
   const scale: [number, number] | null = out.w === cw && out.h === ch ? null : [out.w, out.h]
-  const encoderDowngraded =
-    mode === 'stream' && (out.w * out.h < maxW * maxH || out.fps < maxFps)
+  const encoderDowngraded = mode === 'stream' && (out.w * out.h < maxW * maxH || out.fps < maxFps)
   const limited_by: LimitedBy =
     mode === 'record'
       ? best.passed && !scale

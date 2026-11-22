@@ -560,7 +560,11 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     try {
       await d.api.setStudioSettings({ width: 1080, height: 1920, fps: 60 } as never)
       d.engine.golive.setup({ upload_kbps: 24_000 })
-      await d.api.startAutoConfigBenchmark({ mode: 'stream', fps_preference: 60, include_upload: true })
+      await d.api.startAutoConfigBenchmark({
+        mode: 'stream',
+        fps_preference: 60,
+        include_upload: true,
+      })
       await new Promise((r) => setTimeout(r, 150))
       const portraitDone = await d.api.autoConfig()
       expect(portraitDone.state).toBe('done')
@@ -569,14 +573,22 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       expect(portraitDone.picked?.scale).toBeNull()
 
       d.engine.golive.setup({ upload_kbps: 900 })
-      await d.api.startAutoConfigBenchmark({ mode: 'stream', fps_preference: 60, include_upload: true })
+      await d.api.startAutoConfigBenchmark({
+        mode: 'stream',
+        fps_preference: 60,
+        include_upload: true,
+      })
       await new Promise((r) => setTimeout(r, 150))
       const lowUpload = await d.api.autoConfig()
       expect(lowUpload.picked!.video_kbps).toBeGreaterThanOrEqual(500)
       expect(lowUpload.picked!.video_kbps).toBeLessThan(1500)
 
       await d.api.setStudioSettings({ width: 2560, height: 1440, fps: 60 } as never)
-      await d.api.startAutoConfigBenchmark({ mode: 'record', fps_preference: 60, include_upload: false })
+      await d.api.startAutoConfigBenchmark({
+        mode: 'record',
+        fps_preference: 60,
+        include_upload: false,
+      })
       await new Promise((r) => setTimeout(r, 150))
       const rec1440 = await d.api.autoConfig()
       expect(rec1440.picked?.height).toBe(1440)

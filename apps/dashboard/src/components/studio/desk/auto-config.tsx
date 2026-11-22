@@ -188,11 +188,12 @@ function Big({
   )
 }
 
-function formatSummaryLine(
-  a: AutoConfigAppliedSummary,
-  canvas?: [number, number] | null,
-): string {
-  const res = a.scale ? `${a.scale[0]}×${a.scale[1]}` : canvas ? `${canvas[0]}×${canvas[1]}` : 'Canvas size'
+function formatSummaryLine(a: AutoConfigAppliedSummary, canvas?: [number, number] | null): string {
+  const res = a.scale
+    ? `${a.scale[0]}×${a.scale[1]}`
+    : canvas
+      ? `${canvas[0]}×${canvas[1]}`
+      : 'Canvas size'
   return `${a.label} · ${res} · ${a.fps} fps · ${(a.video_kbps / 1000).toFixed(1)} Mbps`
 }
 
@@ -988,7 +989,11 @@ function Wizard({
                 className="mt-0.5 h-8 font-mono text-[13.5px] tabular-nums"
               />
               {kbpsError && (
-                <p id="auto-config-kbps-error" role="alert" className="m-0 mt-1 text-[12px] text-danger">
+                <p
+                  id="auto-config-kbps-error"
+                  role="alert"
+                  className="m-0 mt-1 text-[12px] text-danger"
+                >
                   {kbpsError}
                 </p>
               )}
