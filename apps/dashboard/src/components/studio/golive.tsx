@@ -1314,7 +1314,14 @@ function AddDestination({
       },
     )
   }
+  // What the Add button needs: Enter in a field reaches `submit` too, and must not get past it.
+  const canAdd =
+    !!name.trim() &&
+    !!url.trim() &&
+    (!!direct || !!key.trim()) &&
+    !(!!direct && canvas === 'vertical')
   const submit = () => {
+    if (!canAdd) return
     setErr(null)
     void run(
       'add',
@@ -1327,6 +1334,7 @@ function AddDestination({
         }),
       {
         quiet: true,
+        once: true,
         success: (d) => `${d.name ?? 'Server'} added. It gets the stream next time you go live.`,
       },
     ).then((d) => {
@@ -1352,17 +1360,7 @@ function AddDestination({
           <Button busy={busy === 'test'} disabled={!url.trim()} onClick={tryIt}>
             Test
           </Button>
-          <Button
-            variant="primary"
-            busy={busy === 'add'}
-            disabled={
-              !name.trim() ||
-              !url.trim() ||
-              (!direct && !key.trim()) ||
-              (!!direct && canvas === 'vertical')
-            }
-            onClick={submit}
-          >
+          <Button variant="primary" busy={busy === 'add'} disabled={!canAdd} onClick={submit}>
             {brand ? `Add ${PASTE_BRANDS.find((x) => x.id === brand)?.label ?? ''}` : 'Add server'}
           </Button>
         </>
@@ -1385,7 +1383,8 @@ function AddDestination({
                 aria-pressed={brand === b.id}
                 onClick={() => pickBrand(b.id)}
                 className={cx(
-                  'fc-press inline-flex h-9 items-center rounded-full border px-3 text-[13.5px] font-semibold',
+                  // 44 px to press on a phone, the compact size from `sm` up.
+                  'fc-press inline-flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-[13.5px] font-semibold sm:h-9 sm:min-w-0',
                   'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                   brand === b.id
                     ? 'border-accent-line bg-accent-soft text-text'

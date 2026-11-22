@@ -2,7 +2,7 @@
 // get a scheduled broadcast; every platform gets one reminder. Nothing here goes live: Go live
 // is always your own press. API.md "Stream schedule".
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CalendarPlus, Trash } from '@phosphor-icons/react'
 import {
   PLATFORM_LABEL,
@@ -13,7 +13,17 @@ import {
   type SchedulePlatform,
   type ScheduledStream,
 } from '@ferrocast/api'
-import { Button, Dialog, Field, IconButton, Input, Select, Skeleton, cx } from '@ferrocast/ui'
+import {
+  Button,
+  ConfirmDialog,
+  Dialog,
+  Field,
+  IconButton,
+  Input,
+  Select,
+  Skeleton,
+  cx,
+} from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { externalLink, httpsUrl } from '../../lib/external'
@@ -31,6 +41,7 @@ const WHEN = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   hour: 'numeric',
   minute: '2-digit',
+  timeZoneName: 'short',
 })
 
 export function SchedulePanel() {
@@ -101,8 +112,23 @@ export function Plan({
   busy: boolean
   onDelete: () => void
 }) {
+  // A plan with a broadcast already made on a platform: removing it leaves that broadcast there,
+  // so that is said before, not only after.
+  const [asking, setAsking] = useState(false)
+  const made = s.broadcasts.some((b) => b.id)
   return (
     <li className="flex flex-col gap-2 rounded-[12px] border border-line p-3">
+      <ConfirmDialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={`Remove ${s.info.title ?? 'this plan'}?`}
+        description="The broadcast already made on a platform stays there. Delete it on that platform too."
+        confirm="Remove"
+        onConfirm={() => {
+          setAsking(false)
+          onDelete()
+        }}
+      />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="break-words text-sm font-semibold text-text">{s.info.title}</p>
@@ -110,7 +136,11 @@ export function Plan({
             {WHEN.format(s.start_ms)}, {scheduleStartLabel(s.start_ms, now)}
           </p>
         </div>
-        <IconButton label={`Remove ${s.info.title ?? 'plan'}`} disabled={busy} onClick={onDelete}>
+        <IconButton
+          label={`Remove ${s.info.title ?? 'plan'}`}
+          disabled={busy}
+          onClick={() => (made ? setAsking(true) : onDelete())}
+        >
           <Trash size={16} />
         </IconButton>
       </div>
@@ -150,7 +180,7 @@ export function Plan({
   )
 }
 
-function PlanDialog({
+export function PlanDialog({
   open,
   onClose,
   onSaved,
@@ -169,7 +199,16 @@ function PlanDialog({
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
   const toggle = (p: SchedulePlatform) =>
     setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]))
+  // Opened again: an hour from now, and no old error (the dialog stays mounted between times).
+  useEffect(() => {
+    if (!open) return
+    setStart(localInput(Date.now() + 3_600_000))
+    setErr(null)
+  }, [open])
+  const canPlan = !!title.trim() && platforms.length > 0
   const submit = () => {
+    // Enter reaches here too: it must not get past what the button's disabled state refuses.
+    if (!canPlan) return
     setErr(null)
     void run(
       'plan',
@@ -189,7 +228,7 @@ function PlanDialog({
             })
             throw e
           }),
-      { quiet: true, success: 'Planned. You’ll get a reminder before it starts.' },
+      { quiet: true, once: true, success: 'Planned. You’ll get a reminder before it starts.' },
     ).then((v) => {
       if (!v) return
       setTitle('')
@@ -205,12 +244,7 @@ function PlanDialog({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            busy={busy === 'plan'}
-            disabled={!title.trim() || platforms.length === 0}
-            onClick={submit}
-          >
+          <Button variant="primary" busy={busy === 'plan'} disabled={!canPlan} onClick={submit}>
             Plan it
           </Button>
         </>

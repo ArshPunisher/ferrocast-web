@@ -122,6 +122,24 @@ test.describe('go live everywhere', () => {
     ).toBeVisible()
   })
 
+  test('Enter in the empty add-a-destination form does nothing, and the platform buttons are big enough at 375px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await open(page, 'studio/golive')
+    await page.getByRole('button', { name: 'Add a destination' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add a destination' })
+    await dialog.getByLabel('Name').press('Enter')
+    // Nothing was sent: no server-side complaint appears, and the form is still open and empty.
+    await page.waitForTimeout(300)
+    await expect(dialog.getByText(/must start with|Name:|Key:/)).toHaveCount(0)
+    await expect(dialog.getByLabel('Name')).toHaveValue('')
+    const x = dialog.getByRole('button', { name: 'X', exact: true })
+    const box = await x.boundingBox()
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44)
+  })
+
   test('while live: a health line per platform, and one that reconnects can be stopped', async ({
     page,
   }) => {

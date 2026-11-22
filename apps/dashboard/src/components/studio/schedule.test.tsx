@@ -1,11 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ScheduledStream } from '@ferrocast/api'
-import { Plan } from './schedule'
+import { Plan, PlanDialog } from './schedule'
+import { StatusStrip } from '../StatusStrip'
+import { useLive } from '../../lib/store'
 import { httpsUrl } from '../../lib/external'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+HTMLDialogElement.prototype.showModal = function showModal() {
+  this.setAttribute('open', '')
+}
+HTMLDialogElement.prototype.close = function close() {
+  this.removeAttribute('open')
+}
 
 let root: Root | null = null
 let host: HTMLElement | null = null
@@ -76,5 +85,145 @@ describe('httpsUrl', () => {
     expect(httpsUrl('/relative')).toBeNull()
     expect(httpsUrl('javascript:1')).toBeNull()
     expect(httpsUrl('https://u:p@example.com')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------- the planning dialog
+
+function mount(node: React.ReactNode): HTMLElement {
+  host = document.createElement('div')
+  document.body.appendChild(host)
+  root = createRoot(host)
+  act(() => root?.render(node))
+  return host
+}
+
+function typeInto(input: HTMLInputElement, value: string) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  act(() => {
+    set?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+const submitForm = (el: HTMLElement) =>
+  act(() => {
+    el.querySelector('form')?.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    )
+  })
+
+describe('the planning dialog', () => {
+  function setup() {
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    return request
+  }
+
+  it('does not plan on Enter without a title, and plans once on a double Enter', async () => {
+    const request = setup()
+    const el = mount(<PlanDialog open onClose={() => {}} onSaved={() => {}} />)
+    submitForm(el)
+    await act(async () => {})
+    expect(request).not.toHaveBeenCalled()
+    typeInto(el.querySelector('input[name="title"]') as HTMLInputElement, 'Friday stream')
+    submitForm(el)
+    submitForm(el)
+    await act(async () => {})
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts an hour from when it is opened, not from when the page was', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-12-01T10:00:00'))
+      setup()
+      const el = mount(<PlanDialog open onClose={() => {}} onSaved={() => {}} />)
+      const start = () => (el.querySelector('input[name="start"]') as HTMLInputElement).value
+      expect(start()).toBe('2026-12-01T11:00')
+      act(() => root?.render(<PlanDialog open={false} onClose={() => {}} onSaved={() => {}} />))
+      vi.setSystemTime(new Date('2026-12-01T15:30:00'))
+      act(() => root?.render(<PlanDialog open onClose={() => {}} onSaved={() => {}} />))
+      expect(start()).toBe('2026-12-01T16:30')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('a plan in the list', () => {
+  it('names the time zone, and asks before removing one that has a broadcast', () => {
+    const onDelete = vi.fn()
+    const s = plan('https://www.facebook.com/page/videos/1')
+    const el = (() => {
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      root = createRoot(host)
+      act(() =>
+        root?.render(
+          <ul>
+            <Plan s={s} now={0} busy={false} onDelete={onDelete} />
+          </ul>,
+        ),
+      )
+      return host
+    })()
+    const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+      .formatToParts(s.start_ms)
+      .find((p) => p.type === 'timeZoneName')?.value
+    expect(zone).toBeTruthy()
+    expect(el.textContent).toContain(zone as string)
+    act(() => (el.querySelector('button[aria-label^="Remove"]') as HTMLButtonElement).click())
+    expect(onDelete).not.toHaveBeenCalled()
+    const confirm = Array.from(document.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Remove',
+    )
+    expect(confirm).toBeTruthy()
+    act(() => confirm?.click())
+    expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes one with no broadcast made at once', () => {
+    const onDelete = vi.fn()
+    const s = { ...plan(''), broadcasts: [{ platform: 'facebook' as const, note: 'Connect it' }] }
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    act(() =>
+      root?.render(
+        <ul>
+          <Plan s={s} now={0} busy={false} onDelete={onDelete} />
+        </ul>,
+      ),
+    )
+    act(() => (host?.querySelector('button[aria-label^="Remove"]') as HTMLButtonElement).click())
+    expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the status strip', () => {
+  const conn = (state: string) =>
+    ({ state, account: null, last_event_at: null, detail: null }) as never
+  const strip = (facebook: string) => {
+    useLive.setState({
+      conn: null,
+      connectors: {
+        twitch: conn('connected'),
+        youtube: conn('off'),
+        kick: conn('off'),
+        facebook: conn(facebook),
+        relay: conn('connected'),
+      } as never,
+    })
+    return mount(<StatusStrip />)
+  }
+  it('shows Facebook once it is connected or needs signing in, and not while it is off', () => {
+    expect(strip('off').textContent).not.toContain('Facebook')
+    act(() => root?.unmount())
+    host?.remove()
+    expect(strip('connected').textContent).toContain('Facebook')
+    act(() => root?.unmount())
+    host?.remove()
+    expect(strip('sign_in_needed').textContent).toContain('Facebook')
   })
 })
