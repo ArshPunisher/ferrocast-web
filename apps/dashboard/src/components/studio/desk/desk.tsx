@@ -51,7 +51,7 @@ import { Button, Dialog, IconButton, InfoLine, InfoTip, Skeleton, cx, toast } fr
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os } from '../../../lib/os'
-import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
+import { done, useAction, useMediaQuery, useResource, type Resource } from '../../../lib/hooks'
 import { useLive } from '../../../lib/store'
 import { useWidePage } from '../../../lib/wide'
 import { go } from '../../../lib/router'
@@ -103,7 +103,8 @@ import { clock, streamTime } from './stats-panel'
 import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
-import { ReadyCheck } from './ready-check'
+import { ReadyCheck, ReadyCheckRecallChip } from './ready-check'
+import { beginReadyCheckSession, resetReadyCheckState } from './ready-check-state'
 import { TransitionsDialog, type TransitionsDialogState } from './transitions'
 
 export function StudioDesk({
@@ -139,6 +140,7 @@ export function StudioDesk({
         const st = await api.start(opts)
         status.set(st)
         useLive.getState().setSafeMode(st.safe_mode ?? null)
+        beginReadyCheckSession(Boolean(st.recovered))
         setReady({ recovered: st.recovered ?? null })
       } catch (e) {
         const d = describeError(e)
@@ -154,11 +156,23 @@ export function StudioDesk({
   const reloadStatus = status.reload
   useEffect(() => {
     if (!off) return
+    resetReadyCheckState()
     const t = setInterval(() => {
       if (!document.hidden) reloadStatus()
     }, 3000)
     return () => clearInterval(t)
   }, [off, reloadStatus])
+  useEffect(() => () => resetReadyCheckState(), [])
+  const handleStatus = useCallback(
+    (next: StudioEngineStatus) => {
+      status.set(next)
+      if (!next.running) {
+        setReady(null)
+        resetReadyCheckState()
+      }
+    },
+    [status],
+  )
   if (status.error && !s) return <LoadError error={status.error} onRetry={status.reload} />
   if (!s) return <Skeleton className="h-[560px]" />
   if (!s.running)
@@ -180,9 +194,17 @@ export function StudioDesk({
       res={res}
       view={view}
       lead={lead}
-      onStatus={status.set}
-      readyBanner={
-        ready ? <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} /> : null
+      onStatus={handleStatus}
+      readyCorner={
+        ready ? (
+          <ReadyCheck
+            recovered={ready.recovered}
+            onClose={() => {
+              resetReadyCheckState()
+              setReady(null)
+            }}
+          />
+        ) : null
       }
     />
   )
@@ -311,13 +333,13 @@ function Running({
   view,
   lead,
   onStatus,
-  readyBanner,
+  readyCorner,
 }: {
   res: Resource<GoLiveView>
   view: GoLiveView | null
   lead?: React.ReactNode
   onStatus: (s: StudioEngineStatus) => void
-  readyBanner?: React.ReactNode
+  readyCorner?: React.ReactNode
 }) {
   const api = useEngine()
   const scenes = useResource(() => api.scenes(), [api])
@@ -666,7 +688,6 @@ function Running({
             <ControlBar view={view} lead={lead} onStatus={onStatus} />
             <AutoConfigRollbackBar onOpenWizard={() => setAutoConfigOpen(true)} />
             <MissingFiles />
-            {readyBanner}
           </>
         }
         stage={
@@ -676,6 +697,7 @@ function Running({
           </>
         }
         docks={docks}
+        corner={readyCorner}
       />
       <AddSourceDialog />
       <FileDrop />
@@ -763,6 +785,7 @@ export function ControlBar({
   onStatus: (s: StudioEngineStatus) => void
 }) {
   const api = useEngine()
+  const desk = useMediaQuery('(min-width: 1024px)')
   const { openSettings, prefs } = useDesk()
   const stats = useDeskStats()
   const setStats = useSetDeskStats()
@@ -1119,6 +1142,7 @@ export function ControlBar({
             </button>
           </div>
           <div className="flex items-center gap-2 sm:contents">
+            {!desk && <ReadyCheckRecallChip variant="mobile-bar" />}
             {recording && (
               <Button
                 variant="secondary"

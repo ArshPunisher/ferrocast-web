@@ -19,10 +19,13 @@ import { useSaveOrder } from '../save-order'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
+import { useReadyCheckState } from './ready-check-state'
 
 export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoLiveView | null }) {
   const api = useGoLive()
   const { run, busy } = useAction()
+  const readyState = useReadyCheckState()
+  const hasFloatingReady = Boolean(readyState?.active && !readyState.dismissed)
   // Which platforms Manage edits: the wide picture's or the vertical one's.
   const [managing, setManaging] = useState<'main' | 'vertical' | null>(null)
   const [optimizing, setOptimizing] = useState(false)
@@ -186,7 +189,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           </>
         }
       />
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={cx('min-h-0 flex-1 overflow-y-auto', hasFloatingReady && 'pb-14')}>
         {res.error && !view ? (
           <div className="p-3">
             <LoadError error={res.error} onRetry={res.reload} />
