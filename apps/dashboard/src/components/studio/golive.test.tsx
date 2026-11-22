@@ -448,6 +448,19 @@ describe('Contract C-1: PushState failed UI', () => {
     expect(el.textContent).toContain('allow multistreaming')
     expect(el.textContent).toContain('Trying again in 5 s.')
   })
+
+  it('LiveCard says it is live and not sending when every platform is off, with End stream', async () => {
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const view = baseView({
+      live: true,
+      destinations: [baseDest({ id: 'twitch', enabled: false, health: null })],
+    })
+    const el = await renderNode(<LiveCard view={view} onSaved={vi.fn()} />)
+    expect(el.textContent).toContain('Live, not sending to any platform.')
+    expect(el.textContent).toContain('keep going')
+    const end = [...el.querySelectorAll('button')].find((b) => b.textContent === 'End stream')
+    expect(end).toBeTruthy()
+  })
 })
 
 describe('RowText: a blocked row says it once', () => {

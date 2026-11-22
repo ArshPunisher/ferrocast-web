@@ -73,6 +73,7 @@ import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useSaveOrder } from './save-order'
+import { useStudio } from './common'
 import { useObsHealth } from './obs'
 import { InBar, StudioDesk } from './desk/desk'
 
@@ -311,6 +312,7 @@ export function LiveCard({
         <h2 className="sr-only">
           {canvas === 'main' ? 'Live on your platforms' : 'Vertical stream live'}
         </h2>
+        {on.length === 0 && <NotSending canvas={canvas} />}
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex h-7 items-center gap-2 rounded-full bg-[#c42339] px-3 font-mono text-[13px] font-extrabold tracking-[0.06em] text-white">
             <span className="size-[7px] rounded-full bg-white" aria-hidden />
@@ -497,6 +499,50 @@ export function LiveCard({
       </div>
       {saver.dialog}
     </Panel>
+  )
+}
+
+/** Every platform is switched off but the stream is still on air (a recording may need it). */
+function NotSending({ canvas }: { canvas: Canvas }) {
+  const studio = useStudio()
+  const { run, busy } = useAction()
+  const [ask, setAsk] = useState(false)
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[14.5px] text-text-2">
+        <b className="text-text">Live, not sending to any platform.</b> The stream and any recording
+        keep going until you end the stream.
+      </span>
+      {canvas === 'main' && (
+        <Button size="sm" variant="danger-ghost" onClick={() => setAsk(true)}>
+          End stream
+        </Button>
+      )}
+      <Dialog
+        open={ask}
+        onClose={() => setAsk(false)}
+        title="End the stream?"
+        description="Nothing is going to a platform now. Ending it also stops what depends on it, like a recording."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAsk(false)}>
+              Keep it on
+            </Button>
+            <Button
+              variant="danger"
+              busy={busy === 'end'}
+              onClick={() =>
+                void run('end', () => studio.setObsStream(false), {
+                  success: 'The stream ended.',
+                }).then(() => setAsk(false))
+              }
+            >
+              End stream
+            </Button>
+          </>
+        }
+      />
+    </div>
   )
 }
 
