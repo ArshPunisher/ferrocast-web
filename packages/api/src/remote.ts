@@ -231,6 +231,8 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/accounts'],
   ['*', '/accounts/**'],
   ['*', '/session/**'],
+  ['*', '/api-keys'],
+  ['*', '/api-keys/**'],
   ['*', '/pro'],
   ['*', '/pro/**'],
   ['PUT', '/tips'],

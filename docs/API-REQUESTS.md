@@ -467,6 +467,24 @@ highlights" has every field and error). A clip is named by its **file name** (`i
   mutating clips routes (rename, delete, trim, compile, captions, upload) should take it as well; a paired LAN
   browser can use them until then, like the other Studio routes.
 
+## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
+
+Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
+skipped/lagged frames, and CPU/GPU load across hardware encoders (`VideoToolbox`, `NVENC`,
+`QSV`, `AMF`) and software `x264` presets over a canvas-shaped load, combines results with
+`/golive/upload-check`, and provides snapshot + 30 s Keep/Undo + 1-minute drop-watch rollback.
+
+- `GET /api/v1/studio/engine/auto-config` → `AutoConfigState` (`idle | running | failed | done | applied | rolled_back`, progress `phase` & `progress_pct`, `candidates[]`, `upload_check`, `picked`, `applied`, `confirm_remaining_s`, `watch_remaining_s`, `first_minute_drops`, `first_minute_lags`, `rollback_trigger`, `rollback_reason`, `restored`).
+- `POST /api/v1/studio/engine/auto-config/benchmark` `{ mode?: "stream" | "record", fps_preference?: 30 | 60, include_upload?: boolean, max_seconds?: number }` → starts cancellable ~20-30 s benchmark. Refuses `409 studio_busy` while streaming/recording/replay is active, `409 conflict` while running, `400 invalid` for bad inputs.
+- `POST /api/v1/studio/engine/auto-config/cancel` → aborts immediately, removes temp scratch files, returns `idle`.
+- `POST /api/v1/studio/engine/auto-config/apply` `{ encoder?, video_encoder?, encoder_settings?, scale?, fps?, video_kbps?, label? }` → snapshots `StudioSettings`, applies changes, starts 30 s auto-rollback timeout and 1-minute dropped/lagged-frame watchdog → `applied`.
+- `POST /api/v1/studio/engine/auto-config/keep` → clears 30 s timeout while keeping 1-minute drop protection → `applied` (`confirmed: true`). `409` if nothing is applied.
+- The 30 s confirmation timeout has two outcomes, in both the engine (`studio/encoder_bench.rs`) and the demo engine: **idle** (not streaming or recording), the previous settings are restored automatically (`rolled_back`, `rollback_trigger: "timeout"`, notice `auto_config_rollback`); **live**, the new settings stay in place (a live encoder is never reshaped behind the streamer's back) and `rollback_offered: true` asks Keep or Undo once the live activity ends. The same live rule applies to the dropped-frame watchdog (`rollback_trigger: "dropped_frames"`), which counts only frames skipped or lagged while live.
+- `POST /api/v1/studio/engine/auto-config/benchmark` also answers `409 conflict` while new settings are still on trial (applied, Keep or Undo not chosen): a benchmark would replace the trial and leave Undo with nothing to restore.
+- Keep after a rollback offer: `keep` while the watch is still running answers `applied` with `confirmed: true`; Keep on an offer (`rollback_offered: true`) ends the trial for good: the snapshot is discarded and the answer is `idle` (nothing left to undo), not `applied`.
+- `POST /api/v1/studio/engine/auto-config/undo` → restores snapshot immediately → `rolled_back`. `409` if nothing is applied.
+- Live WebSocket frame: `auto_config AutoConfigState` (plus `notice` key `auto_config_rollback` on automatic rollback). PC-only (`/studio/engine/**` remains blocked to paired phones).
+
 ## R33. Add or remove destinations while live (Phase 2 #17, 22 Nov)
 
 Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses:
@@ -474,4 +492,13 @@ Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses
 - `PUT /api/v1/golive/destinations` also takes `confirm_upload?` and `confirm_last?` (booleans). While live, a destination the running encode can't serve answers **422 `golive_needs_new_encode`** (plain reason, hint to stop and start again); one the last upload check says won't fit answers **409 `golive_upload_exceeded`**; removing the last answers **409 `golive_last_destination`**. The dashboard asks, and sends the flag when the streamer confirms.
 - `StreamHealthRecord.destination_log` (`{ id, name, at, on }[]`, default empty) in the support report's recent streams.
 - The demo engine simulates all three refusals and the confirmations (`packages/api/src/demo/features/golive.ts`).
+
+## R34. Scoped local API keys & API specs (`#19`, 22 Nov)
+
+- `GET /api/v1/openapi.json` — OpenAPI 3.1.0 specification covering all local REST endpoints (`/api/v1/*`), including `x-ferrocast-scopes` computed from the route guard and `x-pc-only` markers.
+- `GET /api/v1/asyncapi.json` — AsyncAPI 3.0.0 specification covering `/api/v1/live` and `/o/{token}/ws` frames and client ack messages.
+- `GET /api/v1/api-keys` -> `{ keys: ApiKeySummary[], audit: ApiKeyAuditEntry[] }`. Keys never include hashes or plain secrets; `prefix` is the non-secret `fc_key_<8 hex>...` display identifier.
+- `POST /api/v1/api-keys` `{ name, scopes: ApiKeyScope[], expires_at?: number | null }` -> `201 Created` `{ key: ApiKeySummary, token: string }`. Scopes: `read_only`, `chat`, `alerts`, `studio_control`, `go_live`, `settings`. Token format `fc_key_<64 hex>` is returned once and stored only as a SHA-256 hash.
+- `DELETE /api/v1/api-keys/{id}` -> `204 No Content`. Revokes immediately.
+- `/api-keys*` is PC-only (`OWNER_DENIED` on remote sessions, never accessible via API keys). API keys also can never reach secrets, accounts, diagnostics export, plugin install/execution, session pairing, imports/exports/restores, or change `lan_access`. Per-key sliding-window rate limit returns `429 rate_limited` with `Retry-After` and `X-RateLimit-*` headers. Every API key use logs to tracing and SQLite audit without the key or hash.
 
