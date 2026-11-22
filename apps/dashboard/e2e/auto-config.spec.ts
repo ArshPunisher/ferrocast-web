@@ -94,9 +94,10 @@ test.describe('auto-config encoder benchmark and rollback', () => {
 
     // Close dialog (not confirm) and verify non-blocking RollbackBar appears on Desk
     await dlg.getByRole('button', { name: 'Close' }).first().click()
-    const bar = page.getByRole('status', { name: 'Auto-config confirmation' })
+    const bar = page.getByRole('region', { name: 'Auto-config confirmation' })
     await expect(bar).toBeVisible()
     await expect(bar.getByText(/Testing new encoder settings:/i)).toBeVisible()
+    await expect(bar.getByText(/1920×1080/)).toBeVisible()
 
     // Keep then Undo from RollbackBar
     await bar.getByRole('button', { name: 'Keep' }).click()
@@ -105,7 +106,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
     await expect(bar).toBeHidden()
   })
 
-  test('automatic rollback after timeout and after first-minute dropped frames, plus 409 live refusal', async ({
+  test('automatic rollback after timeout and post-stream offer on live encoder drops, plus 409 live refusal', async ({
     page,
   }) => {
     await enterStudioDesk(page)
@@ -124,7 +125,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
       timeout: 5000,
     })
 
-    // 2. Keep + dropped frames in first minute -> automatic rollback notice on Desk
+    // 2. Keep + live encoder drops -> never mutates live, offers rollback once stream ends
     await demo(
       page,
       '(d) => { d.studioEngine?.configure({ confirmTimeoutMs: 5000, watchWindowMs: 5000 }) }',
@@ -141,10 +142,18 @@ test.describe('auto-config encoder benchmark and rollback', () => {
       .first()
       .click()
 
-    await demo(page, '(d) => { d.studioEngine?.injectDroppedFrames(6, 2) }')
-    const notice = page.getByRole('status', { name: 'Auto-config rollback notice' })
-    await expect(notice).toBeVisible({ timeout: 5000 })
-    await expect(notice.getByText(/dropped/i)).toBeVisible()
+    await demo(
+      page,
+      '(d) => { d.studioEngine?.setStreamActive(true); d.studioEngine?.injectDroppedFrames(10, 0); d.studioEngine?.injectDroppedFrames(0, 7) }',
+    )
+    const offerBar = page.getByRole('region', { name: 'Auto-config rollback offer' })
+    await expect(offerBar).toBeHidden()
+
+    await demo(page, '(d) => { d.studioEngine?.setStreamActive(false) }')
+    await expect(offerBar).toBeVisible({ timeout: 5000 })
+    await expect(offerBar.getByText(/dropped/i)).toBeVisible()
+    await offerBar.getByRole('button', { name: 'Undo' }).click()
+    await expect(offerBar).toBeHidden()
 
     // 3. Refuses with 409 while streaming
     await demo(page, '(d) => { d.studioEngine?.setStreamActive(true) }')
@@ -187,52 +196,96 @@ test.describe('auto-config encoder benchmark and rollback', () => {
       () => document.documentElement.scrollWidth - window.innerWidth,
     )
     expect(overflowApplied).toBeLessThanOrEqual(0)
+
+    // Close both dialogs so AutoConfigRollbackBar actually renders at 375 px
+    await dlg.getByRole('button', { name: 'Close' }).first().click()
+    await page
+      .getByRole('dialog', { name: 'Studio settings' })
+      .getByRole('button', { name: 'Close' })
+      .first()
+      .click()
+    const bar = page.getByRole('region', { name: 'Auto-config confirmation' })
+    await expect(bar).toBeVisible()
+    const overflowBar = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflowBar).toBeLessThanOrEqual(0)
+    const keepBox = await bar.getByRole('button', { name: 'Keep' }).boundingBox()
+    expect(keepBox && keepBox.height >= 24 && keepBox.width >= 24).toBe(true)
+    const barScan = await new AxeBuilder({ page })
+      .include('[aria-label="Auto-config confirmation"]')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    expect(
+      barScan.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical'),
+    ).toEqual([])
   })
 
   for (const scheme of ['dark', 'light'] as const) {
     test(`has no serious accessibility violations (${scheme})`, async ({ page }) => {
+      const scanClean = async (scopeSelector?: string) => {
+        await settled(page)
+        const builder = new AxeBuilder({ page }).withTags([
+          'wcag2a',
+          'wcag2aa',
+          'wcag21a',
+          'wcag21aa',
+        ])
+        if (scopeSelector) builder.include(scopeSelector)
+        const r = await builder.analyze()
+        const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+        expect(
+          bad.map(
+            (v) =>
+              `${v.id}: ${v.nodes
+                .map((n) => n.target.join(' '))
+                .slice(0, 3)
+                .join(', ')}`,
+          ),
+        ).toEqual([])
+      }
+
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
       await enterStudioDesk(page)
       await demo(
         page,
-        '(d) => { d.studioEngine?.configure({ benchProfile: "nvidia_nvenc", benchStepMs: 20 }) }',
+        '(d) => { d.studioEngine?.configure({ benchProfile: "nvidia_nvenc", benchStepMs: 320, confirmTimeoutMs: 10_000, watchWindowMs: 20_000 }) }',
       )
       await openWizardViaSettings(page)
       const dlg = page.getByRole('dialog', { name: 'Set up for me' })
-      await settled(page)
-      const idleScan = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze()
-      const badIdle = idleScan.violations.filter(
-        (v) => v.impact === 'serious' || v.impact === 'critical',
-      )
-      expect(
-        badIdle.map(
-          (v) =>
-            `${v.id}: ${v.nodes
-              .map((n) => n.target.join(' '))
-              .slice(0, 3)
-              .join(', ')}`,
-        ),
-      ).toEqual([])
+      await scanClean()
 
+      // Running state
       await dlg.getByRole('button', { name: 'Run benchmark' }).click()
-      await expect(dlg.getByText(/Recommended:/i)).toBeVisible({ timeout: 10_000 })
-      await settled(page)
+      await expect(dlg.getByRole('progressbar', { name: 'Benchmark progress' })).toBeVisible()
+      await scanClean()
 
-      const r = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze()
-      const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
-      expect(
-        bad.map(
-          (v) =>
-            `${v.id}: ${v.nodes
-              .map((n) => n.target.join(' '))
-              .slice(0, 3)
-              .join(', ')}`,
-        ),
-      ).toEqual([])
+      // Done state
+      await expect(dlg.getByText(/Recommended:/i)).toBeVisible({ timeout: 10_000 })
+      await scanClean()
+
+      // Applied state
+      await dlg.getByRole('button', { name: 'Apply settings' }).click()
+      await expect(dlg.getByText('Settings applied. Keep these changes?')).toBeVisible()
+      await scanClean()
+
+      // AutoConfigRollbackBar on Desk
+      await dlg.getByRole('button', { name: 'Close' }).first().click()
+      await page
+        .getByRole('dialog', { name: 'Studio settings' })
+        .getByRole('button', { name: 'Close' })
+        .first()
+        .click()
+      const bar = page.getByRole('region', { name: 'Auto-config confirmation' })
+      await expect(bar).toBeVisible()
+      await scanClean('[aria-label="Auto-config confirmation"]')
+
+      // RolledBack state (via Undo + reopening Details -> RolledBack panel)
+      await bar.getByRole('button', { name: 'Undo' }).click()
+      await expect(bar).toBeHidden()
+      await openWizardViaSettings(page)
+      await expect(dlg.getByText('Restored your previous settings', { exact: true })).toBeVisible()
+      await scanClean()
     })
   }
 })
