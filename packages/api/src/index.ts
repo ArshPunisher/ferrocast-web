@@ -42,6 +42,7 @@ export {
   pick,
   render as renderAlert,
   select as selectAlert,
+  validateCustomVariation,
   validateRule,
   MAX_WEIGHT,
   MIN_DURATION_MS,

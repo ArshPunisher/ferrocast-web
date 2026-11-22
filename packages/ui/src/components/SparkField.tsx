@@ -174,6 +174,7 @@ export function SparkField({
   return (
     <canvas
       ref={ref}
+      data-tone={light ? 'light' : 'dark'}
       className={cx('block', className)}
       role={label ? 'img' : undefined}
       aria-label={label}

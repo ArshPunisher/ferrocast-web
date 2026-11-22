@@ -1156,14 +1156,19 @@ export function Settings({ section }: { section?: string | undefined }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)]">
         <nav
           aria-label="Settings sections"
-          className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0"
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:max-h-[calc(100dvh-5.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
         >
-          {GROUPS.map((g) => {
+          {GROUPS.map((g, gi) => {
             const items = g.items.filter(([id]) => visible(id))
             if (items.length === 0) return null
             return (
-              <div key={g.label} className="flex shrink-0 gap-1 lg:flex-col">
-                <span className="hidden px-3 pt-3 pb-1 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase lg:block">
+              <div key={g.label} className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5">
+                <span
+                  className={cx(
+                    'hidden px-3 pb-1 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase lg:block',
+                    gi === 0 ? 'pt-0.5' : 'pt-2.5',
+                  )}
+                >
                   {g.label}
                 </span>
                 {items.map(([id, label, SectionIcon]) => (
@@ -1172,7 +1177,7 @@ export function Settings({ section }: { section?: string | undefined }) {
                     href={href({ name: 'settings', section: id })}
                     aria-current={at === id ? 'page' : undefined}
                     className={cx(
-                      'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap',
+                      'flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-[15px] font-semibold whitespace-nowrap lg:py-1.5 lg:text-[14.5px]',
                       at === id
                         ? 'bg-[var(--fc-accent-soft)] font-bold text-text shadow-[inset_3px_0_0_var(--fc-arc)] [&>svg]:text-accent-text'
                         : 'text-text-2 hover:bg-surface-2 hover:text-text',
@@ -1189,7 +1194,7 @@ export function Settings({ section }: { section?: string | undefined }) {
             <a
               href={href({ name: 'settings', section: 'updates' })}
               data-testid="app-version"
-              className="mt-3 hidden rounded-control px-3 py-1 text-[13.5px] text-text-3 hover:text-text lg:block"
+              className="mt-2 hidden rounded-control px-3 py-1 text-[13.5px] text-text-3 hover:text-text lg:block"
             >
               Version <span className="font-mono tabular-nums">{current}</span>
             </a>

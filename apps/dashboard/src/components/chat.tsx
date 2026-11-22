@@ -128,7 +128,10 @@ export function MessageText({ event }: { event: FerroEvent }) {
     ? content.fragments
     : [{ type: 'text' as const, text: content.text }]
   return (
-    <span dir="auto" className={cx('break-words [overflow-wrap:anywhere]', is_action && 'italic')}>
+    <span
+      dir="auto"
+      className={cx('min-w-0 break-words [overflow-wrap:anywhere]', is_action && 'italic')}
+    >
       {frags.map((f, i) => {
         switch (f.type) {
           case 'text':
@@ -258,7 +261,7 @@ export const ChatLine = memo(function ChatLine({
         actions.sheet(event)
       }}
       className={cx(
-        'fc-row group relative flex gap-2.5 rounded-control px-2 hover:bg-surface-2 focus-within:bg-surface-2',
+        'fc-row group relative flex min-w-0 gap-2.5 rounded-control px-2 hover:bg-surface-2 focus-within:bg-surface-2',
         dense ? 'py-1' : 'py-1.5',
         deleted && 'opacity-45',
         pinned && 'bg-accent-soft ring-1 ring-inset ring-accent/40',
@@ -267,8 +270,8 @@ export const ChatLine = memo(function ChatLine({
       )}
     >
       <PlatformMark platform={event.platform} size={14} className="mt-[3px]" />
-      <div className="min-w-0 flex-1 text-sm leading-relaxed text-text-2">
-        <span className="mr-1.5 inline-flex flex-wrap items-center gap-1 align-baseline">
+      <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-text-2">
+        <span className="mr-1.5 inline-flex max-w-full flex-wrap items-center gap-1 align-baseline">
           <button
             type="button"
             disabled={!actions || a.id === null || actions.offline === true}
@@ -280,7 +283,7 @@ export const ChatLine = memo(function ChatLine({
                 '--nc-l': names.light ?? fallback,
               } as CSSProperties
             }
-            className="fc-name max-w-[22ch] truncate text-left font-semibold enabled:hover:underline focus-visible:underline focus-visible:outline-none"
+            className="fc-name min-w-0 max-w-full truncate text-left font-semibold sm:max-w-[22ch] enabled:hover:underline focus-visible:underline focus-visible:outline-none"
             title={`${tameText(a.display_name)} on ${PLATFORM_LABEL[event.platform]}`}
           >
             {tameText(a.display_name)}
@@ -303,9 +306,11 @@ export const ChatLine = memo(function ChatLine({
           <MessageText event={event} />
         )}
         {held && !deleted && actions && (
-          <span className="mt-1.5 flex flex-wrap items-center gap-2">
+          <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-2">
             <HeldButtons event={event} onApprove={actions.approve} onRemove={actions.drop} />
-            <span className="text-[13.5px] text-text-2">{held}</span>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere] text-[13.5px] text-text-2">
+              {held}
+            </span>
           </span>
         )}
       </div>
@@ -412,12 +417,16 @@ export function HighlightBanner() {
       data-testid="highlight-banner"
       role="region"
       aria-label="Pinned on stream"
-      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-control border border-line-strong bg-surface-2 px-3 py-2 text-[14px]"
+      className="flex min-w-0 items-start gap-x-2.5 gap-y-1.5 rounded-control border border-line-strong bg-surface-2 px-3 py-2 text-[14px]"
     >
-      <PushPin size={15} weight="fill" className="shrink-0 text-accent" aria-hidden="true" />
-      <PlatformMark platform={chatHighlight.platform} size={13} />
-      <span className="max-w-[32%] shrink-0 truncate font-semibold text-text">{who}</span>
-      <span className="min-w-0 flex-1 truncate text-text-2">{msg}</span>
+      <PushPin size={15} weight="fill" className="mt-1 shrink-0 text-accent" aria-hidden="true" />
+      <PlatformMark platform={chatHighlight.platform} size={13} className="mt-1 shrink-0" />
+      <div className="min-w-0 flex-1 pt-0.5 leading-snug break-words [overflow-wrap:anywhere]">
+        <span className="mr-2 font-semibold text-text">{who}</span>
+        <span data-highlight-text className="text-text-2">
+          {msg}
+        </span>
+      </div>
       <Button
         size="sm"
         variant="ghost"
@@ -425,6 +434,7 @@ export function HighlightBanner() {
         icon={<X size={14} />}
         title="Remove highlighted message from stream"
         aria-label={`Remove ${who}'s message from stream`}
+        className="shrink-0"
         onClick={() =>
           void run(
             'hl-banner',
@@ -659,7 +669,7 @@ export function Composer({
             type="button"
             onClick={onClearReply}
             aria-label="Cancel reply"
-            className="inline-flex size-6 items-center justify-center rounded-[6px] hover:bg-surface-3"
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-[6px] hover:bg-surface-3"
           >
             <X size={13} />
           </button>
@@ -692,7 +702,7 @@ export function Composer({
             }
             if (e.key === 'Escape' && reply) onClearReply()
           }}
-          className="max-h-32 min-h-10 flex-1 resize-none py-[9px] leading-5!"
+          className="max-h-32 min-h-10 min-w-0 flex-1 resize-none py-[9px] leading-5!"
         />
         <Button
           type="submit"
@@ -700,7 +710,7 @@ export function Composer({
           busy={sending}
           disabled={!text.trim()}
           aria-label="Send"
-          className="h-10 px-3"
+          className="h-10 shrink-0 px-3"
         >
           {!sending && <PaperPlaneRight size={17} weight="fill" />}
         </Button>

@@ -4,6 +4,7 @@ import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
 import { parseLiveFrame } from '../src/live'
 import { checkStreamInfo, streamInfoFor, studioApi, timecode, type Marker } from '../src/studio'
+import { studioEngineApi } from '../src/studio-engine'
 import { markersCsv, markersTxt, youtubeChapters } from '../src/demo/features/studio'
 
 let engine: DemoEngine
@@ -229,5 +230,44 @@ describe('demo studio (same contract as API.md §4 Studio)', () => {
     expect(
       (await fail(client.downloadFile('/api/v1/moments/markers/export?format=pdf')))?.status,
     ).toBe(400)
+  })
+
+  it('uses Studio copy and drives Studio stream when Studio Engine is running (Problem 3)', async () => {
+    const se = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      se.studio.obs.streaming = false
+      const c = new FerroClient({ base: se.base, token: DEMO_TOKEN, fetch: se.fetch })
+      const st = studioApi(c)
+      const eng = studioEngineApi(c)
+      await eng.start()
+
+      const pf = await st.preflight()
+      expect(pf.checks.find((x) => x.id === 'obs')).toMatchObject({
+        label: 'Studio',
+        status: 'ok',
+        detail: 'Running.',
+      })
+      for (const chk of pf.checks) expect(chk.detail).not.toMatch(/\bOBS\b/)
+
+      const started = await st.startShow(true, true)
+      expect(started.show.phase).toBe('countdown')
+      expect(started.show.steps.find((s) => s.id === 'stream')).toMatchObject({
+        status: 'done',
+        detail: 'The Studio is streaming.',
+      })
+      for (const step of started.show.steps) expect(step.detail).not.toMatch(/\bOBS\b/)
+      expect((await eng.streamStats())?.active).toBe(true)
+      expect((await st.obsStream()).streaming).toBe(false)
+
+      const ended = await st.endShow(true)
+      expect(ended.show.steps.find((s) => s.id === 'stop_stream')).toMatchObject({
+        status: 'done',
+        detail: 'The Studio stopped streaming.',
+      })
+      for (const step of ended.show.steps) expect(step.detail).not.toMatch(/\bOBS\b/)
+      expect(await eng.streamStats()).toBeNull()
+    } finally {
+      se.dispose()
+    }
   })
 })

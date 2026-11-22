@@ -72,6 +72,7 @@ export function AlertStage({
   theme,
   className,
   label = 'Alert preview',
+  emptyMessage,
   controls = true,
   sound: soundProp,
   replay = 0,
@@ -80,6 +81,7 @@ export function AlertStage({
   theme: string
   className?: string
   label?: string
+  emptyMessage?: string
   /** Show the mute and replay buttons on the stage. Off when the caller draws its own. */
   controls?: boolean
   /** Play the alert's sound (controlled). Leave unset to use the stage's own button. */
@@ -126,8 +128,8 @@ export function AlertStage({
           }}
         />
         {!alert && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-white/60">
-            This rule has nothing to preview yet.
+          <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-white/60">
+            {emptyMessage ?? 'This rule has nothing to preview yet.'}
           </p>
         )}
       </div>

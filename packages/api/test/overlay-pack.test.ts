@@ -240,4 +240,63 @@ describe('.overlay theme pack preview, import, fonts, and undo in DemoEngine', (
       ).rejects.toMatchObject({ status: 415, code: 'unsafe_overlay_file' })
     }
   })
+
+  it('syncs imported .overlay collection, scenes, sources, busy lock, and undo when studioEngine is enabled', async () => {
+    const demo = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: { running: true } })
+    const client = new FerroClient({ base: demo.base, token: DEMO_TOKEN, fetch: demo.fetch })
+    const eng = studioEngineApi(client)
+
+    const initialShelf = await eng.shelf('collections')
+    expect(initialShelf.current).toBe('untitled')
+    expect(initialShelf.list.map((c) => c.name)).toEqual(['Untitled'])
+    expect((await eng.scenes()).scenes.map((s) => s.name)).toEqual([
+      'Main',
+      'Gameplay',
+      'Chatting',
+      'BRB',
+      'Starting Soon',
+      'Ending',
+    ])
+
+    const preview = await eng.previewOverlayPack(makeValidStreamlabsPack(), 'NeonPack.overlay')
+    const imported = await eng.importOverlayPack({ preview_id: preview.preview_id })
+    expect(imported.previous_id).toBe('untitled')
+    expect(imported.name).toBe('NeonPack')
+
+    const afterImportShelf = await eng.shelf('collections')
+    expect(afterImportShelf.current).toBe(imported.id)
+    expect(afterImportShelf.list.some((c) => c.id === imported.id && c.name === 'NeonPack')).toBe(
+      true,
+    )
+
+    const afterScenes = await eng.scenes()
+    expect(afterScenes.scenes.map((s) => s.name)).toEqual(['Live'])
+    expect(afterScenes.current).toBe('Live')
+
+    const items = await eng.items('Live')
+    expect(items.some((it) => it.kind === 'ferrocast_web')).toBe(true)
+
+    demo.studioEngine!.setRecording(true)
+    await expect(eng.undoOverlayPack(imported.undo_token)).rejects.toMatchObject({
+      status: 409,
+      code: 'studio_busy',
+    })
+    demo.studioEngine!.setRecording(false)
+
+    const undone = await eng.undoOverlayPack(imported.undo_token)
+    expect(undone.removed_collection_id).toBe(imported.id)
+    expect(undone.restored_collection_id).toBe('untitled')
+
+    const afterUndoShelf = await eng.shelf('collections')
+    expect(afterUndoShelf.current).toBe('untitled')
+    expect(afterUndoShelf.list.some((c) => c.id === imported.id)).toBe(false)
+    expect((await eng.scenes()).scenes.map((s) => s.name)).toEqual([
+      'Main',
+      'Gameplay',
+      'Chatting',
+      'BRB',
+      'Starting Soon',
+      'Ending',
+    ])
+  })
 })

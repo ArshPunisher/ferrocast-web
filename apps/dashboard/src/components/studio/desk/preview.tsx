@@ -6,9 +6,11 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ComponentProps,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
 } from 'react'
 import {
   ArrowUUpLeft,
@@ -2119,7 +2121,44 @@ const zoomButton = (on: boolean) =>
       : 'text-text-2 hover:bg-surface-3 hover:text-text',
   )
 
-function ViewControls() {
+function ToolButton({
+  panel,
+  text,
+  label,
+  size = 'sm',
+  className,
+  children,
+  ...rest
+}: {
+  panel: boolean
+  text: string
+  label: string
+  size?: 'xs' | 'sm'
+  children: ReactNode
+} & Omit<ComponentProps<typeof Button>, 'size' | 'variant' | 'children'>) {
+  if (panel) {
+    return (
+      <Button
+        size="xs"
+        variant="ghost"
+        aria-label={label}
+        title={rest.title ?? label}
+        className={cx('text-text-2', className)}
+        {...rest}
+      >
+        {children}
+        <span>{text}</span>
+      </Button>
+    )
+  }
+  return (
+    <IconButton size={size} label={label} className={className} {...rest}>
+      {children}
+    </IconButton>
+  )
+}
+
+function ViewControls({ panel = false }: { panel?: boolean }) {
   const { api, scene, scenes, items, selected, refresh, size } = useDesk()
   const { run } = useAction()
   const [pv, setPv] = usePreviewView()
@@ -2162,7 +2201,11 @@ function ViewControls() {
         </button>
       )}
       {!scenes.data?.preview && (
-        <div role="group" aria-label="Zoom" className="flex items-center gap-0.5">
+        <div
+          role="group"
+          aria-label="Zoom"
+          className={cx('flex items-center gap-0.5', panel && 'flex-wrap gap-1')}
+        >
           {ZOOMS.map((z) => (
             <button
               key={z}
@@ -2187,35 +2230,43 @@ function ViewControls() {
           >
             100%
           </button>
-          <IconButton
+          <ToolButton
+            panel={panel}
+            text="Zoom out"
             size="sm"
             label="Zoom out (⌘−)"
             disabled={pv.zoom <= ZOOM_MIN}
             onClick={() => zoomView(1 / ZOOM_STEP)}
           >
-            <MagnifyingGlassMinus size={16} weight="bold" />
-          </IconButton>
-          <IconButton
+            <MagnifyingGlassMinus size={16} weight="bold" aria-hidden />
+          </ToolButton>
+          <ToolButton
+            panel={panel}
+            text="Zoom in"
             size="sm"
             label="Zoom in (⌘+)"
             disabled={pv.zoom >= ZOOM_MAX}
             onClick={() => zoomView(ZOOM_STEP)}
           >
-            <MagnifyingGlassPlus size={16} weight="bold" />
-          </IconButton>
+            <MagnifyingGlassPlus size={16} weight="bold" aria-hidden />
+          </ToolButton>
         </div>
       )}
-      <span aria-hidden className="h-5 w-px bg-line" />
-      <IconButton
+      {!panel && <span aria-hidden className="h-5 w-px bg-line" />}
+      <ToolButton
+        panel={panel}
+        text={pv.frames ? 'Outlines on' : 'Source outlines'}
         size="sm"
         label={pv.frames ? 'Hide source outlines' : 'Show every source’s outline'}
         aria-pressed={pv.frames}
         className={cx(pv.frames ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
         onClick={() => setPv({ frames: !pv.frames })}
       >
-        <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} />
-      </IconButton>
-      <IconButton
+        <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} aria-hidden />
+      </ToolButton>
+      <ToolButton
+        panel={panel}
+        text={pv.keep ? 'Keep shape' : 'Free stretch'}
         size="sm"
         label={
           pv.keep
@@ -2226,8 +2277,12 @@ function ViewControls() {
         className={cx(pv.keep ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
         onClick={() => setPv({ keep: !pv.keep })}
       >
-        {pv.keep ? <LockSimple size={17} weight="fill" /> : <LockSimpleOpen size={17} />}
-      </IconButton>
+        {pv.keep ? (
+          <LockSimple size={17} weight="fill" aria-hidden />
+        ) : (
+          <LockSimpleOpen size={17} aria-hidden />
+        )}
+      </ToolButton>
     </>
   )
 }
@@ -2432,12 +2487,14 @@ export function StageBar() {
       wrap: 'hidden @[1040px]:flex',
       render: () => <span aria-hidden className="h-5 w-px bg-line" />,
     },
-    { key: 'view', rank: 6, render: () => <ViewControls /> },
+    { key: 'view', rank: 6, render: (panel) => <ViewControls panel={panel} /> },
     {
       key: 'lock',
       rank: 8,
-      render: () => (
-        <IconButton
+      render: (panel) => (
+        <ToolButton
+          panel={panel}
+          text={pv.locked ? 'Unlock preview' : 'Lock preview'}
           size="sm"
           label={
             pv.locked
@@ -2448,22 +2505,28 @@ export function StageBar() {
           className={cx(pv.locked ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
           onClick={() => setPv({ locked: !pv.locked })}
         >
-          {pv.locked ? <Lock size={17} weight="fill" /> : <LockOpen size={17} />}
-        </IconButton>
+          {pv.locked ? (
+            <Lock size={17} weight="fill" aria-hidden />
+          ) : (
+            <LockOpen size={17} aria-hidden />
+          )}
+        </ToolButton>
       ),
     },
     {
       key: 'arrange',
       rank: 7,
-      render: () => <ArrangeButton />,
+      render: (panel) => <ArrangeButton panel={panel} />,
     },
     {
       key: 'guides',
       rank: 7,
-      render: () =>
+      render: (panel) =>
         scenes.data?.preview ? null : (
           <span className="flex items-center gap-1">
-            <IconButton
+            <ToolButton
+              panel={panel}
+              text="Guides"
               size="sm"
               label="Guides: safe areas, centre cross, what runs past the canvas"
               aria-haspopup="menu"
@@ -2477,19 +2540,21 @@ export function StageBar() {
               )}
               onClick={(e) => open(e, 'Guides', guideItems)}
             >
-              <FrameCorners size={17} weight="bold" />
-            </IconButton>
-            <InfoTip label="About the guides">
-              Safe areas mark where a TV or phone may crop the picture (EBU R95: action 93%, titles
-              90%). Hide what runs past the canvas to see only the picture that goes out.
-            </InfoTip>
+              <FrameCorners size={17} weight="bold" aria-hidden />
+            </ToolButton>
+            {!panel && (
+              <InfoTip label="About the guides">
+                Safe areas mark where a TV or phone may crop the picture (EBU R95: action 93%,
+                titles 90%). Hide what runs past the canvas to see only the picture that goes out.
+              </InfoTip>
+            )}
           </span>
         ),
     },
     {
       key: 'performance',
       rank: 5,
-      render: () => <PerformanceToggle />,
+      render: (panel) => <PerformanceToggle panel={panel} />,
     },
     { key: 'sep2', render: () => <span aria-hidden className="h-5 w-px bg-line" /> },
     {
@@ -2546,8 +2611,10 @@ export function StageBar() {
         t && (
           <span className="ml-1 flex flex-wrap items-center gap-1.5">
             {(HAS_SETTINGS.has(t.kind) || openTransitions) && (
-              <IconButton
+              <ToolButton
+                panel={panel}
                 size="xs"
+                text={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
                 label={
                   openTransitions
                     ? `Manage transition settings for ${activeNamed?.name ?? TRANSITIONS[t.kind] ?? 'Transition'}`
@@ -2562,8 +2629,8 @@ export function StageBar() {
                     : setTuning(t.kind)
                 }
               >
-                <GearSix size={16} weight="bold" />
-              </IconButton>
+                <GearSix size={16} weight="bold" aria-hidden />
+              </ToolButton>
             )}
             {openTransitions && (
               <Button
@@ -2577,7 +2644,6 @@ export function StageBar() {
                 {matrixCount > 0 && <Badge tone="accent">{matrixCount}</Badge>}
               </Button>
             )}
-            {panel && <span>{TRANSITIONS[t.kind] ?? 'Transition'} settings</span>}
           </span>
         ),
     },
@@ -2624,17 +2690,21 @@ export function StageBar() {
     {
       key: 'history',
       rank: 4,
-      render: () => (
-        <span className="flex items-center">
-          <IconButton
+      render: (panel) => (
+        <span className={cx('flex items-center', panel && 'flex-wrap gap-1')}>
+          <ToolButton
+            panel={panel}
+            text="Undo"
             size="sm"
             label={history?.undo ? `Undo ${history.undo} (${shortcut('Z')})` : 'Nothing to undo'}
             disabled={!history?.undo}
             onClick={() => step(false)}
           >
-            <ArrowUUpLeft size={16} weight="bold" />
-          </IconButton>
-          <IconButton
+            <ArrowUUpLeft size={16} weight="bold" aria-hidden />
+          </ToolButton>
+          <ToolButton
+            panel={panel}
+            text="Redo"
             size="sm"
             label={
               history?.redo ? `Redo ${history.redo} (${shortcut('Z', true)})` : 'Nothing to redo'
@@ -2642,22 +2712,34 @@ export function StageBar() {
             disabled={!history?.redo}
             onClick={() => step(true)}
           >
-            <ArrowUUpRight size={16} weight="bold" />
-          </IconButton>
-          <IconButton size="sm" label="History: step back to any change" onClick={historyList}>
-            <ClockCounterClockwise size={16} weight="bold" />
-          </IconButton>
+            <ArrowUUpRight size={16} weight="bold" aria-hidden />
+          </ToolButton>
+          <ToolButton
+            panel={panel}
+            text="History"
+            size="sm"
+            label="History: step back to any change"
+            onClick={historyList}
+          >
+            <ClockCounterClockwise size={16} weight="bold" aria-hidden />
+          </ToolButton>
         </span>
       ),
     },
     {
       key: 'projectors',
       rank: 3,
-      render: () =>
+      render: (panel) =>
         inDesktopApp() && (
-          <IconButton size="sm" label="Projectors and multiview" onClick={projectors}>
-            <ProjectorScreen size={17} weight="bold" />
-          </IconButton>
+          <ToolButton
+            panel={panel}
+            text="Projectors"
+            size="sm"
+            label="Projectors and multiview"
+            onClick={projectors}
+          >
+            <ProjectorScreen size={17} weight="bold" aria-hidden />
+          </ToolButton>
         ),
     },
   ]

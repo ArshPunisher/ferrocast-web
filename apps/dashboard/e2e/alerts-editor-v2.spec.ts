@@ -233,7 +233,7 @@ test.describe('Custom HTML/CSS sandbox security isolation', () => {
 
     await page.getByLabel('Custom HTML', { exact: true }).fill(hostileHtml)
 
-    // The editor says why it can't be saved.
+    // The editor refuses invalid custom HTML before rendering it, preventing CSP console errors.
     await expect(
       page
         .getByRole('alert')
@@ -241,19 +241,15 @@ test.describe('Custom HTML/CSS sandbox security isolation', () => {
         .first(),
     ).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
-
-    // The preview frame still draws the harmless part and runs none of the rest.
-    const report = frame.locator('#exfil-report')
-    await expect(report).toHaveText('running')
-    await expect(frame.locator('#viewer')).toHaveText('NovaRiver')
-    await expect(
-      frame.locator('#fc-custom-root').locator('script, meta, form, input, [onerror]'),
-    ).toHaveCount(0)
-    await expect(frame.locator('#bad-link')).not.toHaveAttribute('href', /.+/)
-    // Give an onerror or a refresh time to fire, were it still there.
-    await page.waitForTimeout(800)
-    await expect(report).toHaveText('running')
+    await expect(iframeLocator).toHaveCount(0)
+    await expect(page.locator('[aria-label="Live preview"]')).toContainText(/Preview paused:/)
+    await page.waitForTimeout(300)
     expect(blockedRequests).toEqual([])
+
+    // Restoring valid custom HTML resumes the isolated sandboxed preview cleanly.
+    await page.getByLabel('Custom HTML', { exact: true }).fill('<p id="viewer">{name}</p>')
+    await expect(iframeLocator).toBeVisible()
+    await expect(frame.locator('#viewer')).toHaveText('NovaRiver')
     const text = await frame.locator('body').innerText()
     expect(text).not.toContain('secret_cookie_val')
     expect(text).not.toContain('secret_local_token')

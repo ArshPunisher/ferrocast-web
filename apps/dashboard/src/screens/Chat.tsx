@@ -64,7 +64,7 @@ export function Chat() {
   const chatPane = (
     <section
       aria-labelledby="chat-title"
-      className="flex min-h-0 flex-1 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
+      className="flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5 sm:px-4">
         <h1
@@ -142,7 +142,7 @@ export function Chat() {
             </EmptyState>
           )
         ) : (
-          <ul className="flex flex-col px-1 py-2 sm:px-2">
+          <ul className="flex min-w-0 flex-col px-1 py-2 sm:px-2">
             {lines.map((e) => (
               <ChatLine
                 key={e.id}
@@ -177,7 +177,7 @@ export function Chat() {
   const feedPane = (
     <section
       aria-labelledby="events-title"
-      className="flex min-h-0 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
+      className="flex min-h-0 min-w-0 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
     >
       <header className="flex items-center gap-1 border-b border-line px-4 py-3">
         <h2 id="events-title" className="font-display text-[18px] font-extrabold tracking-tight">
@@ -191,7 +191,7 @@ export function Chat() {
         {feed.length === 0 ? (
           <EmptyState compact title="No events yet" />
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex min-w-0 flex-col">
             {feed.map((e) => (
               <EventRow key={e.id} event={e} now={now} />
             ))}
@@ -225,10 +225,10 @@ export function Chat() {
             ]}
             className="self-start"
           />
-          <div className={cx('flex min-h-0 flex-1 flex-col', tab !== 'chat' && 'hidden')}>
+          <div className={cx('flex min-h-0 min-w-0 flex-1 flex-col', tab !== 'chat' && 'hidden')}>
             {chatPane}
           </div>
-          <div className={cx('flex min-h-0 flex-1 flex-col', tab !== 'events' && 'hidden')}>
+          <div className={cx('flex min-h-0 min-w-0 flex-1 flex-col', tab !== 'events' && 'hidden')}>
             {feedPane}
           </div>
         </>

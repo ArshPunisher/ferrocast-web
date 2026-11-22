@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
-import { AllFailedBanner, LiveCard, RowText, liveStatus } from './golive'
+import { AllFailedBanner, GoLiveTab, LiveCard, RowText, liveStatus } from './golive'
 import { LiveLine } from './desk/golive-dock'
 
 let root: Root | null = null
@@ -501,5 +501,103 @@ describe('liveStatus', () => {
     expect(liveStatus(dest({ enabled: false, backup_for: 'Twitch' }), true, 6000)).toBe('6.0 Mbps')
     expect(liveStatus(dest({ enabled: false }), true, 6000)).toBe('Off')
     expect(liveStatus(dest({ enabled: false, standby_for: 'Twitch' }), true, 6000)).toBe('Standby')
+  })
+})
+
+describe('Setup in OBS mode when OBS is already streaming (Problem 3)', () => {
+  it('offers Stop streaming in OBS alongside disabled Point OBS at Ferrocast and clears the block', async () => {
+    localStorage.setItem('fc-golive-picture', 'obs')
+    window.dispatchEvent(new CustomEvent('fc-picture-source', { detail: 'obs' }))
+    let streaming = true
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (method === 'GET' && path === '/api/v1/golive') {
+        return {
+          ingest: 'rtmp://127.0.0.1:1935/live',
+          obs: {
+            connected: true,
+            points_here: false,
+            streaming,
+            before: null,
+            aitum: null,
+            vertical: null,
+          },
+          live: false,
+          stats: {
+            kbps: 0,
+            keyframe_interval_ms: null,
+            video_codec: null,
+            width: null,
+            height: null,
+            fps: null,
+          },
+          vertical_live: false,
+          vertical_stats: {
+            kbps: 0,
+            keyframe_interval_ms: null,
+            video_codec: null,
+            width: null,
+            height: null,
+            fps: null,
+          },
+          destinations: [],
+          upload: null,
+          protect: true,
+          aitum_ok: false,
+          auto_quality: true,
+          cut: {
+            source: 'canvas',
+            config: {
+              layout: 'camera_top',
+              camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+              game: { x: 0, y: 0, w: 1, h: 1 },
+              camera_share: 35,
+              width: 1080,
+              height: 1920,
+              fps: 30,
+              kbps: 4500,
+              encoder: 'auto',
+            },
+            state: null,
+            ffmpeg: { state: 'ready' },
+          },
+          advanced: {
+            rules: {
+              slow_pct: 70,
+              trouble_s: 4,
+              calm_s: 10,
+              first_pause_s: 60,
+              max_pause_s: 600,
+              first_to_pause: null,
+            },
+            keep_free_pct: 20,
+            port: 1935,
+            per: {},
+          },
+        }
+      }
+      if (method === 'GET' && path === '/api/v1/obs/stream') return { streaming }
+      if (method === 'POST' && path === '/api/v1/obs/stream') {
+        streaming = Boolean((body as { on?: boolean })?.on)
+        return { streaming }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const el = await renderNode(<GoLiveTab />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const buttons = Array.from(el.querySelectorAll('button'))
+    const pointBtn = buttons.find((b) => b.textContent?.includes('Point OBS at Ferrocast'))
+    const stopBtn = buttons.find((b) => b.textContent?.includes('Stop streaming in OBS'))
+    expect(pointBtn?.disabled).toBe(true)
+    expect(stopBtn).toBeTruthy()
+    await act(async () => stopBtn!.click())
+    expect(request).toHaveBeenCalledWith('POST', '/api/v1/obs/stream', { on: false })
+    expect(
+      Array.from(el.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Point OBS at Ferrocast'),
+      )?.disabled,
+    ).toBe(false)
   })
 })

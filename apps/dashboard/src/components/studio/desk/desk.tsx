@@ -176,10 +176,15 @@ export function StudioDesk({
       </>
     )
   return (
-    <>
-      <Running res={res} view={view} lead={lead} onStatus={status.set} />
-      {ready && <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} />}
-    </>
+    <Running
+      res={res}
+      view={view}
+      lead={lead}
+      onStatus={status.set}
+      readyBanner={
+        ready ? <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} /> : null
+      }
+    />
   )
 }
 
@@ -306,11 +311,13 @@ function Running({
   view,
   lead,
   onStatus,
+  readyBanner,
 }: {
   res: Resource<GoLiveView>
   view: GoLiveView | null
   lead?: React.ReactNode
   onStatus: (s: StudioEngineStatus) => void
+  readyBanner?: React.ReactNode
 }) {
   const api = useEngine()
   const scenes = useResource(() => api.scenes(), [api])
@@ -659,6 +666,7 @@ function Running({
             <ControlBar view={view} lead={lead} onStatus={onStatus} />
             <AutoConfigRollbackBar onOpenWizard={() => setAutoConfigOpen(true)} />
             <MissingFiles />
+            {readyBanner}
           </>
         }
         stage={
@@ -819,7 +827,16 @@ export function ControlBar({
               : null,
         },
       )
-      if (r) setShow(r.show)
+      if (r) {
+        setShow(r.show)
+        resetUploadRate()
+        if (typeof api.stats === 'function') {
+          await api
+            .stats()
+            .then(setStats)
+            .catch(() => undefined)
+        }
+      }
       return
     }
     const v = await run('stream', () => api.stream(!on), {
@@ -848,6 +865,12 @@ export function ControlBar({
       if (r) {
         setShow(r.show)
         resetUploadRate()
+        if (typeof api.stats === 'function') {
+          await api
+            .stats()
+            .then(setStats)
+            .catch(() => undefined)
+        }
       }
     })
   // Said with the file's name, its whole path behind an (i), and a way to copy it: the streamer

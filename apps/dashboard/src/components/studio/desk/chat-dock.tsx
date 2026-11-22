@@ -51,7 +51,7 @@ export function ChatDock() {
     [chat, hideBots],
   )
   return (
-    <section aria-label="Chat" className="flex min-h-0 flex-1 flex-col">
+    <section aria-label="Chat" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <DockHeader
         id="chat"
         actions={
@@ -74,7 +74,7 @@ export function ChatDock() {
         {lines.length === 0 ? (
           <EmptyState compact title="Chat is quiet" />
         ) : (
-          <ul className="flex flex-col px-1 py-1.5">
+          <ul className="flex min-w-0 flex-col px-1 py-1.5">
             {lines.map((e) => (
               <ChatLine
                 key={e.id}
@@ -120,7 +120,7 @@ export function EventsDock() {
   const state = read ?? { upTo: Number.MAX_SAFE_INTEGER, ids: [] }
   const unread = unreadCount(state, events)
   return (
-    <section aria-label="Events" className="flex min-h-0 flex-1 flex-col">
+    <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <DockHeader id="events" />
       <MiniFeedBar
         filter={filter}
@@ -134,7 +134,7 @@ export function EventsDock() {
         ) : feed.length === 0 ? (
           <EmptyState compact title="Nothing of this type yet" />
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex min-w-0 flex-col">
             {feed.map((e) => (
               <EventRow
                 key={e.id}

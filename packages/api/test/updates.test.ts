@@ -46,7 +46,8 @@ function liveUpdates(): UpdateInfo[] {
 describe('updates (demo engine, API.md §4 UpdateView)', () => {
   it('offers the update with notes, and never while live', async () => {
     const u = await client.updates()
-    expect(u.latest).not.toBe(u.current)
+    expect(u.current).toBe('3.4.0')
+    expect(u.latest).toBe('3.4.1')
     expect(u.notes).toContain('- ')
     expect(u.can_install).toBe(true)
     expect(u.install?.phase).toBe('idle')

@@ -206,11 +206,11 @@ export const DEMO_TAKEN_HANDLES: readonly string[] = ['asha', 'rohanlive', 'megh
 export const DEMO_TOKEN = 'demo-session'
 
 /** The version the demo engine says it is. */
-const DEMO_VERSION = '0.4.0'
+const DEMO_VERSION = '3.4.0'
 const DEMO_UPDATE_BYTES = 18_400_000
 const DEMO_UPDATE = () => ({
   current: DEMO_VERSION,
-  latest: '0.4.1' as string | null,
+  latest: '3.4.1' as string | null,
   checking: false,
   checked_at: (Date.now() - 42 * 60_000) as number | null,
   installed: false,
@@ -337,7 +337,7 @@ export class DemoEngine {
   private faults: (Fault & { left: number })[] = []
   private offline = false
   private timers = new Set<ReturnType<typeof setTimeout>>()
-  /** The pretend update: 0.4.1 is out, nothing downloaded yet. */
+  /** The pretend update: 3.4.1 is out, nothing downloaded yet. */
   private upd = DEMO_UPDATE()
   private autoplayOn = false
 
@@ -695,11 +695,12 @@ export class DemoEngine {
       ? new DemoStudioEngine(
           typeof opts.studioEngine === 'object' ? opts.studioEngine : {},
           this.host,
+          { onStreamChange: () => this.golive.notifyStreamChange() },
         )
       : null
     this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
       baseUrl: () => this.base,
-      isLive: () => this.studio.library.busy,
+      isLive: () => this.studio.library.busy || Boolean(this.studioEngine?.isBusy()),
       isOffline: () => this.offline,
       createOverlay: (input) => {
         const id = `ov-${randomToken().slice(0, 10)}`
@@ -728,12 +729,21 @@ export class DemoEngine {
         this.overlays = this.overlays.filter((o) => o.id !== id)
       },
       now: () => Date.now(),
+      ...(this.studioEngine
+        ? {
+            collectionNames: () => this.studioEngine!.collectionNames(),
+            applyOverlayCollection: (input) => this.studioEngine!.importOverlayCollection(input),
+            undoOverlayCollection: (collectionId, previousId) =>
+              this.studioEngine!.undoOverlayCollection(collectionId, previousId),
+          }
+        : {}),
     })
     this.golive = new DemoGoLive(
       this.host,
       () => this.accounts,
       () => this.studio.obs.streaming,
       () => this.obs.state === 'connected',
+      () => this.studioEngine?.isStreaming() ?? false,
     )
     this.studioEngine?.setAutoConfigDeps({
       runUploadCheck: () => this.golive.runUploadCheck(),
@@ -3553,10 +3563,10 @@ export class DemoEngine {
           : p === 'youtube'
             ? {
                 type: 'emote' as const,
-                provider: 'seven_tv' as const,
-                id: '01F6N',
+                provider: 'bttv' as const,
+                id: '5f1b0186cf6d2144653d2970',
                 name: 'catJAM',
-                url: 'https://cdn.7tv.app/emote/01F6N8W4M0000083K2R1V9H8Z3/1x.webp',
+                url: 'https://cdn.betterttv.net/emote/5f1b0186cf6d2144653d2970/1x',
                 zero_width: false,
               }
             : {

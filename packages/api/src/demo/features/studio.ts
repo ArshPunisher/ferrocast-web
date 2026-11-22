@@ -558,6 +558,58 @@ export class DemoStudio {
     return this.obs.scenes.find((s) => s.name === name)
   }
 
+  private isStudioRig(): boolean {
+    return Boolean(this.studioEngine?.isRunning())
+  }
+
+  private rigTitle(studio = this.isStudioRig()): 'The Studio' | 'OBS' {
+    return studio ? 'The Studio' : 'OBS'
+  }
+
+  private rigName(studio = this.isStudioRig()): 'the Studio' | 'OBS' {
+    return studio ? 'the Studio' : 'OBS'
+  }
+
+  private rigCurrentScene(studio = this.isStudioRig()): string {
+    return studio ? this.studioEngine!.currentSceneName() : this.obs.current
+  }
+
+  private rigHasScene(name: string, studio = this.isStudioRig()): boolean {
+    return studio ? this.studioEngine!.hasScene(name) : Boolean(this.findScene(name))
+  }
+
+  private rigStreaming(studio = this.isStudioRig()): boolean {
+    return studio ? this.studioEngine!.isStreaming() : this.obs.streaming
+  }
+
+  private rigSetStreaming(on: boolean, studio = this.isStudioRig()): void {
+    if (studio && this.studioEngine) this.studioEngine.setStreaming(on)
+    else this.obs.streaming = on
+  }
+
+  private rigSwitchStep(
+    id: string,
+    label: string,
+    scene: string,
+    studio = this.isStudioRig(),
+  ): ShowStep {
+    if (studio && this.studioEngine) {
+      return this.studioEngine.switchShowScene(scene)
+        ? { id, label, status: 'done', detail: `The Studio is on "${scene}".` }
+        : {
+            id,
+            label,
+            status: 'failed',
+            detail: `The Studio has no scene called "${scene}".`,
+          }
+    }
+    if (!this.findScene(scene)) {
+      return { id, label, status: 'failed', detail: `OBS has no scene called "${scene}".` }
+    }
+    this.obs.current = scene
+    return { id, label, status: 'done', detail: `OBS is on "${scene}".` }
+  }
+
   private switchTo(scene: string) {
     if (!this.findScene(scene))
       throw new HttpError(
@@ -571,8 +623,13 @@ export class DemoStudio {
 
   private preflight(): Preflight {
     const c = this.showCfg
+    const studio = this.isStudioRig()
+    const rigName = this.rigName(studio)
+    const rigTitle = this.rigTitle(studio)
     const checks: PreflightCheck[] = [
-      { id: 'obs', label: 'OBS', status: 'ok', detail: 'Connected.', fix: null },
+      studio
+        ? { id: 'obs', label: 'Studio', status: 'ok', detail: 'Running.', fix: null }
+        : { id: 'obs', label: 'OBS', status: 'ok', detail: 'Connected.', fix: null },
     ]
     for (const [id, l, s] of [
       ['starting_scene', 'Starting scene', c.starting_scene],
@@ -581,34 +638,56 @@ export class DemoStudio {
     ] as const) {
       if (!s) continue
       checks.push(
-        this.findScene(s)
-          ? { id, label: l, status: 'ok', detail: `"${s}" is in OBS.`, fix: null }
+        this.rigHasScene(s, studio)
+          ? { id, label: l, status: 'ok', detail: `"${s}" is in ${rigName}.`, fix: null }
           : {
               id,
               label: l,
               status: 'fail',
-              detail: `OBS has no scene called "${s}" (renamed or deleted?).`,
+              detail: `${rigTitle} has no scene called "${s}" (renamed or deleted?).`,
               fix: { label: 'Pick the scene again', href: '#/studio/show' },
             },
       )
     }
-    for (const m of c.mic_sources)
+    for (const m of c.mic_sources) {
+      const muted =
+        studio && this.studioEngine ? this.studioEngine.isSourceMuted(m) : this.obs.muted[m]
+      const missing = studio && this.studioEngine ? !this.studioEngine.hasSource(m) : false
       checks.push(
-        this.obs.muted[m]
+        missing
           ? {
               id: `mic:${m}`,
               label: m,
               status: 'fail',
-              detail: 'Muted in OBS: nobody will hear you.',
-              fix: { label: 'Unmute', href: `action:unmute:${m}` },
+              detail: `${rigTitle} has no source called "${m}" (renamed or removed?).`,
+              fix: { label: 'Pick the microphone again', href: '#/studio/show' },
             }
-          : { id: `mic:${m}`, label: m, status: 'ok', detail: 'Not muted.', fix: null },
+          : muted
+            ? {
+                id: `mic:${m}`,
+                label: m,
+                status: 'fail',
+                detail: `Muted in ${rigName}: nobody will hear you.`,
+                fix: { label: 'Unmute', href: `action:unmute:${m}` },
+              }
+            : { id: `mic:${m}`, label: m, status: 'ok', detail: 'Not muted.', fix: null },
       )
+    }
     const scene = c.live_scene ?? c.starting_scene
     for (const cam of c.cam_sources) {
-      const item = scene ? this.findScene(scene)?.items.find((i) => i.source === cam) : undefined
+      const enabled =
+        studio && this.studioEngine
+          ? scene
+            ? this.studioEngine.sceneItemEnabled(scene, cam)
+            : null
+          : (() => {
+              const item = scene
+                ? this.findScene(scene)?.items.find((i) => i.source === cam)
+                : undefined
+              return item ? item.enabled : null
+            })()
       checks.push(
-        !item
+        enabled === null
           ? {
               id: `cam:${cam}`,
               label: cam,
@@ -616,7 +695,7 @@ export class DemoStudio {
               detail: `Not in "${scene}".`,
               fix: { label: 'Pick the camera again', href: '#/studio/show' },
             }
-          : item.enabled
+          : enabled
             ? {
                 id: `cam:${cam}`,
                 label: cam,
@@ -633,12 +712,14 @@ export class DemoStudio {
               },
       )
     }
+    const replayOn =
+      studio && this.studioEngine ? this.studioEngine.isReplayActive() : this.obs.replay
     if (c.replay_buffer)
       checks.push({
         id: 'replay',
         label: 'Replay buffer',
         status: 'ok',
-        detail: this.obs.replay ? 'Running.' : 'Starts with the show.',
+        detail: replayOn ? 'Running.' : 'Starts with the show.',
         fix: null,
       })
     checks.push({
@@ -694,9 +775,11 @@ export class DemoStudio {
         'Fix what the checklist shows, or press Start anyway.',
       )
     const c = this.showCfg
+    const studio = this.isStudioRig()
+    const rigTitle = this.rigTitle(studio)
+    const curScene = this.rigCurrentScene(studio)
     const liveScene =
-      c.live_scene ??
-      (c.starting_scene && this.obs.current !== c.starting_scene ? this.obs.current : null)
+      c.live_scene ?? (c.starting_scene && curScene !== c.starting_scene ? curScene : null)
     const shouldStream = stream ?? c.start_stream
     const steps: ShowStep[] = []
     const preset = this.presets.find((p) => p.id === c.preset_id)
@@ -725,7 +808,8 @@ export class DemoStudio {
       }
     }
     if (c.replay_buffer) {
-      this.obs.replay = true
+      if (studio && this.studioEngine) this.studioEngine.setReplayActive(true)
+      else this.obs.replay = true
       steps.push({
         id: 'replay',
         label: 'Replay buffer',
@@ -734,21 +818,15 @@ export class DemoStudio {
       })
     }
     if (c.starting_scene) {
-      this.switchTo(c.starting_scene)
-      steps.push({
-        id: 'starting_scene',
-        label: 'Starting scene',
-        status: 'done',
-        detail: `OBS is on "${c.starting_scene}".`,
-      })
+      steps.push(this.rigSwitchStep('starting_scene', 'Starting scene', c.starting_scene, studio))
     }
     if (shouldStream) {
-      this.obs.streaming = true
+      this.rigSetStreaming(true, studio)
       steps.push({
         id: 'stream',
-        label: 'Go live in OBS',
+        label: studio ? 'Go live' : 'Go live in OBS',
         status: 'done',
-        detail: 'OBS is streaming.',
+        detail: `${rigTitle} is streaming.`,
       })
     }
     if (c.alerts_on) steps.push({ id: 'alerts', label: 'Alerts', status: 'done', detail: 'On.' })
@@ -788,13 +866,7 @@ export class DemoStudio {
       this.setRun(run)
       return clone(run)
     } else if (liveScene) {
-      this.switchTo(liveScene)
-      steps.push({
-        id: 'live_scene',
-        label: 'Live scene',
-        status: 'done',
-        detail: `OBS is on "${liveScene}".`,
-      })
+      steps.push(this.rigSwitchStep('live_scene', 'Live scene', liveScene, studio))
       phase = 'live'
     }
     const run: ShowRun = {
@@ -819,49 +891,61 @@ export class DemoStudio {
         'There’s no countdown running.',
         'Start the show first.',
       )
+    const studio = this.isStudioRig()
+    const rigTitle = this.rigTitle(studio)
     const steps = run.steps.filter(
       (s) => s.id !== 'countdown' && s.id !== 'live_scene' && !s.id.startsWith('zero_'),
     )
     const z = { ...AT_ZERO_DEFAULT, ...this.showCfg.at_zero }
     if (z.switch && run.live_scene) {
-      this.switchTo(run.live_scene)
-      steps.push({
-        id: 'live_scene',
-        label: 'Live scene',
-        status: 'done',
-        detail: `OBS is on "${run.live_scene}".`,
-      })
+      steps.push(this.rigSwitchStep('live_scene', 'Live scene', run.live_scene, studio))
     }
     if (z.unmute) {
-      for (const m of this.showCfg.mic_sources) this.obs.muted[m] = false
-      steps.push({ id: 'zero_unmute', label: 'Mic', status: 'done', detail: 'On.' })
+      const missing: string[] = []
+      for (const m of this.showCfg.mic_sources) {
+        if (studio && this.studioEngine) {
+          if (!this.studioEngine.setSourceMuted(m, false)) missing.push(m)
+        } else this.obs.muted[m] = false
+      }
+      steps.push(
+        missing.length
+          ? {
+              id: 'zero_unmute',
+              label: 'Mic',
+              status: 'failed',
+              detail: `${rigTitle} has no source called ${missing.map((x) => `"${x}"`).join(', ')}.`,
+            }
+          : { id: 'zero_unmute', label: 'Mic', status: 'done', detail: 'On.' },
+      )
     }
     if (z.start_stream)
       steps.push(
-        this.obs.streaming
+        this.rigStreaming(studio)
           ? {
               id: 'zero_stream',
-              label: 'Go live in OBS',
+              label: studio ? 'Go live' : 'Go live in OBS',
               status: 'skipped',
-              detail: 'OBS is streaming already.',
+              detail: `${rigTitle} is streaming already.`,
             }
           : (() => {
-              this.obs.streaming = true
+              this.rigSetStreaming(true, studio)
               return {
                 id: 'zero_stream',
-                label: 'Go live in OBS',
+                label: studio ? 'Go live' : 'Go live in OBS',
                 status: 'done' as const,
-                detail: 'OBS is streaming.',
+                detail: `${rigTitle} is streaming.`,
               }
             })(),
       )
-    if (z.record)
+    if (z.record) {
+      if (studio && this.studioEngine) this.studioEngine.setRecording(true)
       steps.push({
         id: 'zero_record',
         label: 'Recording',
         status: 'done',
-        detail: 'OBS is recording.',
+        detail: `${rigTitle} is recording.`,
       })
+    }
     if (z.chat) {
       this.host.say(z.chat)
       steps.push({ id: 'zero_chat', label: 'Chat', status: 'done', detail: z.chat })
@@ -983,6 +1067,13 @@ export class DemoStudio {
         return
       case '!clip':
         if (!this.scenesCfg.clip_command || !isMod) return
+        if (this.isStudioRig() && this.studioEngine) {
+          // The Studio's own replay buffer (the show starts that one, not OBS's).
+          if (!this.studioEngine.saveReplayNow())
+            return this.say('Couldn’t clip: the Studio’s replay buffer isn’t running.')
+          this.addMarker('clip', `Clip by ${name}`, null, true)
+          return this.say('Clipped! It’s saved in the Studio’s recordings folder.')
+        }
         if (!this.obs.replay) return this.say('Couldn’t clip: OBS’s replay buffer isn’t running.')
         this.obs.saves += 1
         this.addMarker('clip', `Clip by ${name}`, null, true)
@@ -1386,15 +1477,29 @@ export class DemoStudio {
     }
     if (is('GET', 'show', 'preflight')) return this.preflight()
     if (is('POST', 'show', 'preflight', 'fix')) {
+      const studio = this.isStudioRig()
       const action = String(requireObj(body).action ?? '').replace(/^action:/, '')
-      if (action.startsWith('unmute:')) this.obs.muted[action.slice(7)] = false
-      else if (action.startsWith('show:')) {
+      if (action.startsWith('unmute:')) {
+        const target = action.slice(7)
+        if (studio && this.studioEngine) {
+          if (!this.studioEngine.setSourceMuted(target, false))
+            throw new HttpError(400, 'invalid', `action: "${target}" isn't in the Studio.`)
+        } else this.obs.muted[target] = false
+      } else if (action.startsWith('show:')) {
         const [scene, source] = action.slice(5).split('/')
-        const it = this.findScene(scene ?? '')?.items.find((i) => i.source === source)
-        if (!it) throw new HttpError(400, 'invalid', `action: "${source}" isn't in "${scene}".`)
-        it.enabled = true
-      } else if (action === 'start_replay_buffer') this.obs.replay = true
-      else
+        if (studio && this.studioEngine) {
+          if (!this.studioEngine.setSceneItemEnabled(scene ?? '', source ?? '', true)) {
+            throw new HttpError(400, 'invalid', `action: "${source}" isn't in "${scene}".`)
+          }
+        } else {
+          const it = this.findScene(scene ?? '')?.items.find((i) => i.source === source)
+          if (!it) throw new HttpError(400, 'invalid', `action: "${source}" isn't in "${scene}".`)
+          it.enabled = true
+        }
+      } else if (action === 'start_replay_buffer') {
+        if (studio && this.studioEngine) this.studioEngine.setReplayActive(true)
+        else this.obs.replay = true
+      } else
         throw new HttpError(
           400,
           'invalid',
@@ -1438,6 +1543,8 @@ export class DemoStudio {
     if (is('POST', 'show', 'live-scene')) return { show: this.goLive() }
     if (is('POST', 'show', 'end')) {
       const now = Boolean((body as { now?: boolean } | null)?.now)
+      const studio = this.isStudioRig()
+      const rigTitle = this.rigTitle(studio)
       // Stop now on a show already ending: only its waiting stop comes forward.
       const cur = this.run
       if (
@@ -1445,12 +1552,12 @@ export class DemoStudio {
         cur?.phase === 'ended' &&
         cur.steps.some((x) => x.id === 'stop_stream' && x.status === 'waiting')
       ) {
-        this.obs.streaming = false
+        this.rigSetStreaming(false, studio)
         this.setRun({
           ...cur,
           steps: cur.steps.map((x) =>
             x.id === 'stop_stream'
-              ? { ...x, status: 'done' as const, detail: 'OBS stopped streaming.' }
+              ? { ...x, status: 'done' as const, detail: `${rigTitle} stopped streaming.` }
               : x,
           ),
         })
@@ -1458,13 +1565,9 @@ export class DemoStudio {
       }
       const steps: ShowStep[] = []
       if (this.showCfg.ending_scene) {
-        this.switchTo(this.showCfg.ending_scene)
-        steps.push({
-          id: 'ending_scene',
-          label: 'Ending scene',
-          status: 'done',
-          detail: `OBS is on "${this.showCfg.ending_scene}".`,
-        })
+        steps.push(
+          this.rigSwitchStep('ending_scene', 'Ending scene', this.showCfg.ending_scene, studio),
+        )
       }
       if (this.showCfg.recap_message) {
         const text = this.showCfg.recap_message
@@ -1480,29 +1583,32 @@ export class DemoStudio {
       if (this.showCfg.stop_stream || now) {
         const delay = now ? 0 : this.showCfg.stop_delay_s
         if (delay === 0) {
-          this.obs.streaming = false
+          this.rigSetStreaming(false, studio)
           steps.push({
             id: 'stop_stream',
             label: 'Stop streaming',
             status: 'done',
-            detail: 'OBS stopped streaming.',
+            detail: `${rigTitle} stopped streaming.`,
           })
         } else {
           steps.push({
             id: 'stop_stream',
             label: 'Stop streaming',
             status: 'waiting',
-            detail: `OBS stops streaming in ${delay} seconds.`,
+            detail: `${rigTitle} stops streaming in ${delay} seconds.`,
           })
           this.host.later(() => {
             const r = this.run
             if (!r || r.id !== showId || r.phase !== 'ended') return
-            this.obs.streaming = false
+            // Only while this stop is still waiting: Stop now already did it, and a stream started
+            // again since is the person's.
+            if (!r.steps.some((x) => x.id === 'stop_stream' && x.status === 'waiting')) return
+            this.rigSetStreaming(false, studio)
             this.setRun({
               ...r,
               steps: r.steps.map((x) =>
                 x.id === 'stop_stream'
-                  ? { ...x, status: 'done' as const, detail: 'OBS stopped streaming.' }
+                  ? { ...x, status: 'done' as const, detail: `${rigTitle} stopped streaming.` }
                   : x,
               ),
             })

@@ -66,7 +66,7 @@ export function Panel({
       )}
       <div
         className={cx(
-          'min-h-0 flex-1 px-4 pb-4 sm:px-5',
+          'min-h-0 min-w-0 flex-1 px-4 pb-4 sm:px-5',
           title || actions ? 'pt-2' : 'pt-4',
           bodyClassName,
         )}

@@ -88,12 +88,29 @@ export function usePausePreview(): {
 }
 
 /** The toolbar's performance mode button. */
-export function PerformanceToggle() {
+export function PerformanceToggle({ panel = false }: { panel?: boolean } = {}) {
   const { paused, busy, toggle } = usePausePreview()
+  const label = paused ? 'Resume the preview' : 'Pause the preview to save power (performance mode)'
+  if (panel) {
+    return (
+      <Button
+        size="xs"
+        variant="ghost"
+        aria-label={label}
+        aria-pressed={paused}
+        disabled={busy}
+        className={cx(paused ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+        onClick={() => toggle()}
+      >
+        <Gauge size={16} weight="bold" aria-hidden />
+        <span>{paused ? 'Resume preview' : 'Performance mode'}</span>
+      </Button>
+    )
+  }
   return (
     <IconButton
       size="xs"
-      label={paused ? 'Resume the preview' : 'Pause the preview to save power (performance mode)'}
+      label={label}
       aria-pressed={paused}
       disabled={busy}
       className={cx(paused ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
