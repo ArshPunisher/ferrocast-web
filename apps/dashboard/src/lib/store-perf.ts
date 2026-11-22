@@ -227,15 +227,16 @@ export function measureItemLocally(item: StoreItem, force = false): LocalPerfRep
           ca.css.includes('backdrop-filter') ||
           ca.css.includes('@keyframes') ||
           ca.css.includes('filter:')
-        const styleEl = document.createElement('style')
-        styleEl.textContent = ca.css
+        // The alert is untrusted: it is only read as data, in a document that is never shown
+        // (a DOMParser document runs no script and loads nothing). Its HTML and CSS never go into
+        // this page, where they would load pictures and frames and could style the dashboard.
         const doc = new DOMParser().parseFromString(ca.html, 'text/html')
-        const wrap = document.createElement('div')
-        wrap.append(styleEl, ...Array.from(doc.body.childNodes).map((n) => n.cloneNode(true)))
-        hidden.appendChild(wrap)
-        hidden.getBoundingClientRect()
-        nodeCount = Math.max(4, wrap.querySelectorAll('*').length)
-        layerCount = Math.max(layerCount, wrap.children.length)
+        nodeCount = Math.max(4, doc.body.querySelectorAll('*').length)
+        layerCount = Math.max(layerCount, doc.body.children.length)
+        // The cost of its styling, counted from the text: rules, animations and filters.
+        const rules = (ca.css.match(/\{/g) ?? []).length
+        const animations = (ca.css.match(/@keyframes/g) ?? []).length
+        nodeCount += Math.min(40, Math.floor(rules / 2) + animations * 2)
       }
       mountMs = Math.max(0.2, performance.now() - t0)
     } catch {
