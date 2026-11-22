@@ -1202,12 +1202,36 @@ export class DemoStudioEngine {
     }
   }
 
-  private restoreSnapshot(snap: CollectionSnapshot): void {
+  /**
+   * Puts a snapshot back. `keepLive` (undo and redo of an edit): what is on air and the live
+   * mixer controls (mute, fader, monitoring) are the person's right now and stay, as long as
+   * they still make sense (the scene is still there; the source is still there).
+   */
+  private restoreSnapshot(snap: CollectionSnapshot, keepLive = false): void {
+    const live = {
+      currentScene: this.currentScene,
+      previewScene: this.previewScene,
+      audio: new Map(
+        [...this.sources].map(([k, v]) => [
+          k,
+          { muted: v.muted, volume_db: v.volume_db, monitor: v.monitor },
+        ]),
+      ),
+    }
     this.activeScenes = [...snap.activeScenes]
     this.currentScene = snap.currentScene
     this.previewScene = snap.previewScene
     this.sceneItems = new Map(Object.entries(clone(snap.sceneItems)))
     this.sources = new Map(Object.entries(clone(snap.sources)))
+    if (keepLive) {
+      if (this.activeScenes.includes(live.currentScene)) this.currentScene = live.currentScene
+      if (live.previewScene === null || this.activeScenes.includes(live.previewScene))
+        this.previewScene = live.previewScene
+      for (const [name, a] of live.audio) {
+        const src = this.sources.get(name)
+        if (src) Object.assign(src, a)
+      }
+    }
     this.transforms = new Map(
       Object.entries(clone(snap.transforms)).map(([k, v]) => [Number(k), v]),
     )
@@ -2501,7 +2525,7 @@ export class DemoStudioEngine {
       const top = this.undoStack.shift()
       if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
       this.redoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot)
+      this.restoreSnapshot(top.snapshot, true)
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,
@@ -2512,7 +2536,7 @@ export class DemoStudioEngine {
       const top = this.redoStack.shift()
       if (!top) return { done: null, undo: this.undoStack[0]?.label ?? null, redo: null }
       this.undoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot)
+      this.restoreSnapshot(top.snapshot, true)
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,

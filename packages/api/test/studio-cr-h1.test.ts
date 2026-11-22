@@ -85,3 +85,23 @@ describe('device identity and renames', () => {
     expect((await eng.filters('Webcam')).length).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe('undo', () => {
+  it('undoing an item edit leaves what is on air and the mute state alone', async () => {
+    const { eng } = rig()
+    await eng.start()
+    await eng.setAudio('Mic', { muted: true })
+    await eng.addSource('Main', { kind: 'color_source_v3', name: 'Banner' })
+    await eng.setCurrent('Gameplay')
+    await eng.setAudio('Mic', { muted: false })
+    await eng.undo()
+    const main = await eng.items('Main')
+    expect(
+      main.some((i) => i.name === 'Banner'),
+      'the item edit was undone',
+    ).toBe(false)
+    expect((await eng.stats()).scene, 'still on Gameplay').toBe('Gameplay')
+    const mic = (await eng.audio('Main')).find((a) => a.name === 'Mic')
+    expect(mic?.muted, 'the mic is still unmuted').toBe(false)
+  })
+})
