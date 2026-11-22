@@ -100,6 +100,8 @@ export class EndCreditsWidget implements WidgetView {
   private raf: number | null = null
   private lastTs = 0
   private dataSig = ''
+  private lastCredits: unknown = undefined
+  private lastCfgSig = ''
   private ro: ResizeObserver | null = null
 
   constructor(
@@ -162,6 +164,14 @@ export class EndCreditsWidget implements WidgetView {
 
   private render(resetPosition: boolean): void {
     const credits = this.ctx.state.credits
+    // Frames about something else (viewer counts, goals) leave the roster as it is.
+    const cfgSig = `${this.cfg.title}|${this.cfg.sections.join(',')}|${this.cfg.loop}`
+    if (!resetPosition && credits === this.lastCredits && cfgSig === this.lastCfgSig && this.dataSig !== '') {
+      this.syncMotion()
+      return
+    }
+    this.lastCredits = credits
+    this.lastCfgSig = cfgSig
     const sectionsDom: HTMLElement[] = []
 
     const titleEl = el('h2', 'fc-credits-title')
@@ -224,6 +234,10 @@ export class EndCreditsWidget implements WidgetView {
       }
     }
     if (resetPosition && this.cfg.loop === false) {
+      this.finished = false
+      this.offsetY = this.viewportH
+    }
+    if (this.finished && this.cfg.loop) {
       this.finished = false
       this.offsetY = this.viewportH
     }

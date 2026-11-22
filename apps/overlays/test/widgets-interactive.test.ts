@@ -195,6 +195,46 @@ describe('end_credits widget', () => {
   })
 })
 
+describe('end_credits upkeep', () => {
+  function rafQueue() {
+    const q: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      q.push(cb)
+      return q.length
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    return q
+  }
+
+  it('does not rebuild the roster for frames that carry no credits', () => {
+    rafQueue()
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({ credits: makeCredits() }, overlay([creditsWidget()])))
+    const heading = root.querySelector('.fc-credits-heading')
+    expect(heading).not.toBeNull()
+    const made = vi.spyOn(document, 'createElement')
+    rt.apply(frame('state', { viewers: { twitch: 3 } }))
+    expect(made, 'no throwaway rows for an unrelated frame').not.toHaveBeenCalled()
+    made.mockRestore()
+    expect(root.querySelector('.fc-credits-heading')).toBe(heading)
+    rt.apply(frame('state', { credits: { ...makeCredits(), followers: [] } }))
+    expect(root.querySelector('.fc-credits-heading')).not.toBe(heading)
+  })
+
+  it('plays again when loop is switched on after a one-shot roll finished', () => {
+    const q = rafQueue()
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({ credits: makeCredits() }, overlay([creditsWidget({ loop: false })])))
+    const track = root.querySelector<HTMLElement>('.fc-credits-track')!
+    let t = 1000
+    for (let i = 0; i < 400 && q.length; i++) q.shift()!((t += 100))
+    expect(track.style.opacity).toBe('0')
+    rt.apply(frame('config', overlay([creditsWidget({ loop: true })])))
+    expect(track.style.opacity).toBe('1')
+    expect(q.length).toBeGreaterThan(0)
+  })
+})
+
 describe('emote_wall widget', () => {
   it('allows only Ferrocast platform CDN URLs and rejects hostile URLs', () => {
     rt = createOverlay(root, { audio: false })
