@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   alignDeltas,
   distributeDeltas,
+  enqueueJob,
   frameOfBox,
+  pickedGroup,
+  revertCrop,
   hasSize,
   pickedBoxes,
   queuedIds,
@@ -13,6 +16,8 @@ import {
   pickWith,
   rectOf,
   scaleGroup,
+  union,
+  type Rect,
   snapReach,
   snapTargets,
   type ItemLike,
@@ -495,5 +500,93 @@ describe('review fixes: guides, gaps, spacing, sizing', () => {
     )
     expect(out[0]!.w).toBeGreaterThanOrEqual(4)
     expect(out[0]!.x).toBeGreaterThanOrEqual(240) // not mirrored across the group's left
+  })
+})
+
+describe('CodeRabbit pass 2', () => {
+  it('queued requests go out in the order they were made when they overlap', () => {
+    type J = { save: boolean; id?: number; boxes?: { id: number }[] }
+    const next = new Map<string, J>()
+    const ab = (x: number) => ({ save: false, boxes: [{ id: 1, x } as { id: number }, { id: 2 }] })
+    enqueueJob(next, 'ab', ab(1))
+    enqueueJob(next, 'a', { save: false, id: 1 })
+    enqueueJob(next, 'ab', ab(3)) // the newest A+B, after A
+    expect([...next.keys()]).toEqual(['a', 'ab']) // A's older move is not sent after the newer A+B
+    expect((next.get('ab')?.boxes?.[0] as unknown as { x: number }).x).toBe(3)
+    // Requests that don't overlap still replace in place.
+    const apart = new Map<string, J>()
+    enqueueJob(apart, 'ab', ab(1))
+    enqueueJob(apart, 'c', { save: false, id: 3 })
+    enqueueJob(apart, 'ab', ab(2))
+    expect([...apart.keys()]).toEqual(['ab', 'c'])
+    // A save is never lost to a later move without one.
+    const saved = new Map<string, J>()
+    enqueueJob(saved, 'a', { save: true, id: 1 })
+    enqueueJob(saved, 'a', { save: false, id: 1 })
+    expect(saved.get('a')?.save).toBe(true)
+  })
+
+  it('Escape in a crop drag goes back to the crop the drag started with', () => {
+    const from = { left: 1, top: 2, right: 3, bottom: 4 }
+    expect(revertCrop({ from, size: { width: 10, height: 10 } })).toEqual(from)
+    expect(revertCrop('reading')).toBeNull()
+    expect(revertCrop(null)).toBeNull()
+  })
+
+  it('zero-size sources are not places to line up with', () => {
+    const list = [item(1, [0, 0, 0, 0, 500, 500]), item(2, box(100, 100, 50, 50))]
+    expect(snapTargets(list, [])).toEqual([box(100, 100, 50, 50)])
+    const group = item(3, box(0, 0, 400, 400), {
+      children: [item(4, [0, 0, 0, 0, 9, 9]), item(5, box(10, 10, 20, 20))],
+    })
+    expect(snapTargets([group], [])).toEqual([box(0, 0, 400, 400), box(10, 10, 20, 20)])
+  })
+
+  it('the box round the picked is made of the visible, sized, unlocked ones only', () => {
+    const list = [
+      item(1, box(0, 0, 100, 100)),
+      item(2, box(200, 0, 100, 100)),
+      item(3, box(900, 900, 100, 100), { visible: false }),
+      item(4, [0, 0, 0, 0, 5, 5]),
+      item(5, box(400, 0, 100, 100), { locked: true }),
+    ]
+    const g = pickedGroup(list, [1, 2, 3, 4, 5])
+    expect(g.members.map((m) => m.id)).toEqual([1, 2])
+    expect(g.rect).toEqual({ left: 0, top: 0, right: 300, bottom: 100 })
+    expect(pickedGroup(list, [1, 3]).rect).toBeNull() // one is not a group
+  })
+
+  it('a marquee touches a turned source only where the source is', () => {
+    // A diamond (a square turned 45 degrees) centred at (200,200): its bounds are 100..300.
+    const diamond = turned(200, 100, 100, 100, 45)
+    const d = rectOf(diamond)
+    expect(d.left).toBeLessThan(150)
+    const list = [item(1, diamond)]
+    // A marquee in the bounds' upper-left corner, clear of the diamond's edge.
+    expect(
+      marqueeHits(list, { left: d.left, top: d.top, right: d.left + 20, bottom: d.top + 20 }),
+    ).toEqual([])
+    // One over its middle, and one that only touches its edge.
+    expect(marqueeHits(list, { left: 190, top: 190, right: 210, bottom: 210 })).toEqual([1])
+    expect(
+      marqueeHits([item(2, box(100, 100, 50, 50))], {
+        left: 150,
+        top: 120,
+        right: 200,
+        bottom: 130,
+      }),
+    ).toEqual([2])
+  })
+
+  it('a turned source in a group sized one way grows evenly, so it stays inside the new box', () => {
+    const diamond = turned(250, 100, 100, 100, 45)
+    const from = union([rectOf(diamond), rectOf(box(0, 0, 50, 50))]) as Rect
+    // Double the width only.
+    const to = { ...from, right: from.left + (from.right - from.left) * 2 }
+    const out = scaleGroup([{ id: 1, frame: diamond, locked: false }], from, to)[0]!
+    const r = rectOf(frameOfBox(diamond, out))
+    expect(r.right).toBeLessThanOrEqual(to.right + 1e-6)
+    expect(r.top).toBeGreaterThanOrEqual(from.top - 1e-6)
+    expect(r.bottom).toBeLessThanOrEqual(from.bottom + 1e-6)
   })
 })

@@ -75,7 +75,10 @@ import {
   frameOfBox,
   gapsFor,
   guidesFor,
+  enqueueJob,
   marqueeHits,
+  pickedGroup,
+  revertCrop,
   queuedIds,
   revertBoxes,
   pickedBoxes,
@@ -1466,14 +1469,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   const queue = (key: number | string, job: JobBody) => {
     const q = sending.current
     const k = queueKey(scene, key)
-    // A save never gets replaced by a later move without one.
-    const prev = q.next.get(k)
-    q.next.set(k, {
-      ...job,
-      scene,
-      ...(typeof key === 'number' ? { id: key } : {}),
-      save: job.save || !!prev?.save,
-    })
+    // A newer request replaces an older one for the same source(s), keeping a save; requests
+    // that overlap are sent in the order they were made.
+    enqueueJob(q.next, k, { ...job, scene, ...(typeof key === 'number' ? { id: key } : {}) })
     pump()
   }
   const send = (id: number, b: Box, save: boolean) => queue(id, { box: b, save })
@@ -1510,8 +1508,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     const h = held.current
     held.current = null
     if (!h?.moved) return
-    // A crop is kept as it is (it has no start to go back to here).
-    if (h.crop || h.lastCrop) return finish(h)
+    // A crop goes back to the one the drag started with (nothing read yet: nothing was changed).
+    if (h.crop || h.lastCrop) {
+      const original = revertCrop(h.crop)
+      if (original && h.lastCrop) queue(h.id, { crop: original, save: true })
+      return
+    }
     const boxes = revertBoxes(h)
     const only = boxes[0]
     if (boxes.length === 1 && only) send(h.id, only, true)
@@ -1523,13 +1525,11 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
 
   // The picked sources that can be moved together, and the one box round them: where the
   // handles are, what the group moves and is sized by.
-  const together = pickedBoxes(list, pickedIds).flatMap((i) =>
-    i.visible && i.frame ? [{ id: i.id, frame: i.frame, locked: i.locked }] : [],
+  const pg = pickedGroup(list, pickedIds)
+  const together = pg.members.flatMap((i) =>
+    i.frame ? [{ id: i.id, frame: i.frame, locked: i.locked }] : [],
   )
-  const groupRect =
-    !pv.locked && together.filter((i) => !i.locked).length >= 2
-      ? union(together.filter((i) => !i.locked).map((i) => rectOf(i.frame)))
-      : null
+  const groupRect = !pv.locked ? pg.rect : null
   const groupFrame = (r: Rect): Frame => [r.right - r.left, 0, 0, r.bottom - r.top, r.left, r.top]
   // What snapping reaches for while these are dragged, from the settings: the canvas's edges and
   // middle and other sources' edges and middles.
@@ -1697,8 +1697,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           picked &&
           grip.u < 0 &&
           !list.some((g) => pickedIds.includes(g.id) && g.children.some((c) => c.id === target.id))
-            ? pickedBoxes(list, pickedIds).flatMap((i) =>
-                i.id !== target.id && !i.locked && i.frame ? [{ id: i.id, from: i.frame }] : [],
+            ? // The displayed group's members: a hidden picked source stays where it is.
+              together.flatMap((i) =>
+                i.id !== target.id && !i.locked ? [{ id: i.id, from: i.frame }] : [],
               )
             : [],
         crop: cropping ? 'reading' : null,
@@ -1984,13 +1985,8 @@ function EditHints({
   const [pv] = usePreviewView()
   if (!size) return null
   const ids = [selected, ...also].filter((id): id is number => id !== null)
-  const movable = (items.data ?? [])
-    .flatMap((i) => [i, ...i.children])
-    .filter((i) => ids.includes(i.id) && i.visible && i.frame && !i.locked)
-  const rect =
-    active && !pv.locked && movable.length >= 2
-      ? union(movable.map((i) => rectOf(i.frame as Frame)))
-      : null
+  // The same sources the editor moves and sizes with (pickedGroup).
+  const rect = active && !pv.locked ? pickedGroup(items.data ?? [], ids).rect : null
   return (
     <>
       <SnapOverlay boxRef={boxRef} canvas={size} />
