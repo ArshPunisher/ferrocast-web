@@ -217,6 +217,8 @@ export function parseFerrocastStoreLink(
     return null
   }
   if (u.protocol !== 'ferrocast:' || u.username || u.password) return null
+  // No port, no fragment (the engine refuses them too).
+  if (u.port || u.hash || raw.includes('#')) return null
   if (u.pathname.includes('%')) return null
   const segs = u.pathname
     .replace(/^\/+|\/+$/g, '')

@@ -168,7 +168,9 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <Badge tone="accent">
               <LockKey size={12} aria-hidden="true" />
-              <span>Rendered inside p2e sandboxed iframe (allow-scripts only, no network)</span>
+              <span>
+                Rendered in a sandboxed frame: no fetching, pictures only from approved hosts
+              </span>
             </Badge>
             <Button size="sm" variant="secondary" onClick={() => setReplay((n) => n + 1)}>
               <Play size={14} weight="fill" aria-hidden="true" />

@@ -100,8 +100,10 @@ const howTo = {
           </strong>
           : JSON packages checked strictly against Ferrocast’s sandbox rules. Alerts run inside an
           isolated <code>&lt;iframe sandbox="allow-scripts"&gt;</code> without{' '}
-          <code>allow-same-origin</code> or network access. Inline scripts, event handlers (
-          <code>onclick</code>), forms, iframes, and external fetches are rejected automatically.
+          <code>allow-same-origin</code>. They can’t run your own scripts or fetch anything;
+          pictures may come only from a short list of approved image hosts. Inline scripts, event
+          handlers (<code>onclick</code>), forms, iframes, and external fetches are rejected
+          automatically.
         </li>
         <li>
           <strong>
@@ -137,12 +139,12 @@ const howTo = {
       <h2 id="pr">Open a pull request to the catalog repository</h2>
       <p>
         Fork the public catalog repository from{' '}
-        <a href={COMPANY.github} rel="noopener">
+        <a href="https://github.com/ArshPunisher/ferrocast-store" rel="noopener">
           GitHub
         </a>
         , place your validated package archive in <code>packages/</code>, add your creator and item
-        entries to <code>catalog.json</code>, and open a pull request explaining what the pack adds
-        and how it was tested locally.
+        entries to <code>store-catalog.json</code>, and open a pull request explaining what the pack
+        adds and how it was tested locally.
       </p>
 
       <h2 id="review">Automated validation and maintainer signing</h2>

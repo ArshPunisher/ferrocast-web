@@ -168,4 +168,21 @@ describe('Community Store client & demo engine (R37)', () => {
       'http://127.0.0.1:47820/api/v1/store/assets/aurora-pulse/preview%201.png?session=tok123',
     )
   })
+
+  it('a Ferrocast link has no port or fragment and only a version parameter', () => {
+    expect(parseFerrocastStoreLink('ferrocast://store/install/aurora-pulse?v=1.0.0')).toEqual({
+      action: 'install',
+      id: 'aurora-pulse',
+      version: '1.0.0',
+    })
+    for (const bad of [
+      'ferrocast://store:8080/install/aurora-pulse',
+      'ferrocast://store/install/aurora-pulse#frag',
+      'ferrocast://store/install/aurora-pulse?x=1',
+      'ferrocast://store/install/aurora-pulse?v=1.0.0&x=1',
+      'ferrocast://evil/install/aurora-pulse',
+    ]) {
+      expect(parseFerrocastStoreLink(bad), bad).toBeNull()
+    }
+  })
 })

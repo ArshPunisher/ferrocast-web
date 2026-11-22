@@ -990,7 +990,8 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <h3 className="font-display text-[17px] font-extrabold text-text">
-                      Install “{linkPreview.item.title}”?
+                      {linkPreview.action === 'view' ? '' : 'Install '}“{linkPreview.item.title}”
+                      {linkPreview.action === 'view' ? '' : '?'}
                     </h3>
                     <p className="text-[13px] text-text-3">
                       By {linkPreview.creator.name} ({linkPreview.creator.handle}) · v
@@ -1021,18 +1022,32 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                   >
                     Cancel
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    disabled={busyId === linkPreview.item.id || !!linkPreview.installed}
-                    onClick={() => void doInstall(linkPreview.item.id)}
-                  >
-                    {linkPreview.installed
-                      ? `Already installed (v${linkPreview.installed.version})`
-                      : busyId === linkPreview.item.id
-                        ? 'Installing…'
-                        : 'Confirm & Install'}
-                  </Button>
+                  {linkPreview.action === 'view' ? (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => {
+                        const id = linkPreview.item.id
+                        setLinkPreview(null)
+                        go({ name: 'store', item: id })
+                      }}
+                    >
+                      View details
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={busyId === linkPreview.item.id || !!linkPreview.installed}
+                      onClick={() => void doInstall(linkPreview.item.id)}
+                    >
+                      {linkPreview.installed
+                        ? `Already installed (v${linkPreview.installed.version})`
+                        : busyId === linkPreview.item.id
+                          ? 'Installing…'
+                          : 'Confirm & Install'}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

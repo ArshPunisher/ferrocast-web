@@ -82,7 +82,9 @@ export function parseRoute(hash: string): Route {
       const link = qs.get('link')
       if (link) return { name: 'store', install: link }
       const direct = qs.get('install')
-      if (direct) return { name: 'store', install: `ferrocast://store/install/${direct}` }
+      // An item id only: anything else (a `?v=` or `#` smuggled in) is no link at all.
+      if (direct && /^[a-z0-9][a-z0-9._-]{2,79}$/.test(direct) && !direct.includes('..'))
+        return { name: 'store', install: `ferrocast://store/install/${direct}` }
       if (b === 'creator' && parts[2]) return { name: 'store', creator: parts[2] }
       if (b === 'item' && parts[2]) return { name: 'store', item: parts[2] }
       return { name: 'store' }
