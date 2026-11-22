@@ -67,7 +67,6 @@ import { TestAlertMenu } from '../components/alerts-live'
 import { AlertStage, alertHasSound } from '../components/AlertStage'
 import { AlertTimeline } from '../components/alerts/AlertTimeline'
 import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
-import { PlatformTestBar } from '../components/alerts/PlatformTestBar'
 import { PropertyGroup } from '../components/alerts/PropertyGroup'
 import { DockHandle, useDockWidth } from '../components/alerts/DockHandle'
 import { LEFT_DOCK, RIGHT_DOCK } from '../lib/dock-size'
@@ -420,6 +419,8 @@ function ConditionEditor({
 
 /** A short settings group with its own heading, divided from the one above by a hairline. */
 function VariationEditor({
+  ruleName,
+  listens,
   v,
   isDefault,
   media,
@@ -428,6 +429,9 @@ function VariationEditor({
   onUploaded,
   onDelete,
 }: {
+  ruleName: string
+  /** The rule's platforms (they apply to every look), shown in this look's group. */
+  listens: { shown: Platform[]; on: Platform[]; toggle: (p: Platform) => void }
   v: Variation
   isDefault: boolean
   media: Media[]
@@ -446,29 +450,59 @@ function VariationEditor({
 
   return (
     <div className="flex flex-col gap-2.5">
-      {!isDefault && (
-        <PropertyGroup title="This look" summary={v.name || 'Untitled look'} defaultOpen>
-          <div className="flex items-end gap-2">
-            <Field label="Look name" className="flex-1">
-              {(p) => (
-                <Input
-                  {...p}
-                  value={v.name}
-                  maxLength={40}
-                  onChange={(e) => onChange({ ...v, name: e.target.value })}
+      <PropertyGroup
+        title="This look"
+        summary={isDefault ? 'Default' : v.name || 'Untitled look'}
+        defaultOpen
+      >
+        {!isDefault && (
+          <>
+            <div className="flex items-end gap-2">
+              <Field label="Look name" className="flex-1">
+                {(p) => (
+                  <Input
+                    {...p}
+                    value={v.name}
+                    maxLength={40}
+                    onChange={(e) => onChange({ ...v, name: e.target.value })}
+                  />
+                )}
+              </Field>
+              <IconButton label="Delete this look" variant="danger-ghost" onClick={onDelete}>
+                <Trash size={17} />
+              </IconButton>
+            </div>
+            <ConditionEditor
+              value={v.condition}
+              onChange={(condition) => onChange({ ...v, condition })}
+            />
+          </>
+        )}
+        <fieldset className="m-0 flex flex-col gap-0.5 border-0 p-0">
+          <legend className="fc-label mb-1 px-0">Rule listens on</legend>
+          {listens.shown.map((p) => {
+            const on = listens.on.includes(p)
+            const onlyOne = on && listens.on.length === 1
+            return (
+              <label
+                key={p}
+                className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-[8px] px-1.5 text-[14.5px] font-medium text-text hover:bg-surface-2 has-[:disabled]:cursor-default has-[:disabled]:hover:bg-transparent"
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={onlyOne}
+                  onChange={() => listens.toggle(p)}
+                  className="size-4 accent-[var(--fc-accent)]"
                 />
-              )}
-            </Field>
-            <IconButton label="Delete this look" variant="danger-ghost" onClick={onDelete}>
-              <Trash size={17} />
-            </IconButton>
-          </div>
-          <ConditionEditor
-            value={v.condition}
-            onChange={(condition) => onChange({ ...v, condition })}
-          />
-        </PropertyGroup>
-      )}
+                <PlatformMark platform={p} size={14} />
+                {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
+              </label>
+            )
+          })}
+          <p className="px-1.5 pt-1 text-[13px] text-text-3">Applies to every look in {ruleName}</p>
+        </fieldset>
+      </PropertyGroup>
 
       <PropertyGroup title="Message and tokens" summary={v.title} defaultOpen>
         <TokenChipField
@@ -740,6 +774,8 @@ function RuleEditor({
   const togglePlatform = (p: Platform) => {
     const all = draft.platforms.length === 0 ? [...kindPlatforms] : draft.platforms
     const next = all.includes(p) ? all.filter((x) => x !== p) : [...all, p]
+    // At least one stays: an empty list would mean "every platform".
+    if (next.length === 0) return
     setDraft({ ...draft, platforms: next.length === kindPlatforms.length ? [] : next })
   }
   const firePlatformTest = (p: Platform) => {
@@ -755,6 +791,11 @@ function RuleEditor({
   const kindPlatformsShown = (
     kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms
   ) as Platform[]
+  const listening = kindPlatformsShown.filter(
+    (p) => draft.platforms.length === 0 || draft.platforms.includes(p),
+  )
+  const previewOff =
+    !listening.includes(previewPlatform) && kindPlatformsShown.includes(previewPlatform)
   const banner = saveError ?? (dirty && error ? { message: error } : null)
 
   return (
@@ -775,48 +816,9 @@ function RuleEditor({
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           className="min-w-[8rem] flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-lg font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none lg:w-40 lg:flex-none xl:w-52"
         />
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {kindPlatforms.length > 1 ? (
-            <div role="group" aria-label="Platforms" className="flex flex-wrap gap-1.5">
-              {kindPlatforms.map((p) => {
-                const on = draft.platforms.length === 0 || draft.platforms.includes(p)
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    aria-pressed={on}
-                    title={on ? `Plays for ${PLATFORM_LABEL[p]}` : `Off for ${PLATFORM_LABEL[p]}`}
-                    onClick={() => togglePlatform(p)}
-                    className={cx(
-                      'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                      on
-                        ? 'border-accent-line bg-accent-soft text-text'
-                        : 'border-line text-text-3 line-through decoration-text-3/60 hover:text-text-2',
-                    )}
-                  >
-                    <PlatformMark platform={p} size={12} />
-                    {PLATFORM_LABEL[p]}
-                  </button>
-                )
-              })}
-            </div>
-          ) : (
-            kindPlatformsShown.map((p) => (
-              <span
-                key={p}
-                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[13.5px] font-semibold text-text-2"
-              >
-                <PlatformMark platform={p} size={12} />
-                {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
-              </span>
-            ))
-          )}
-          <Switch
-            checked={rule.enabled}
-            onChange={onToggle}
-            label={`${rule.name} alert`}
-            hideLabel
-          />
+        <div className="inline-flex h-8 shrink-0 items-center rounded-full border border-line-strong bg-surface-2 pr-1.5 pl-3">
+          {/* The switch is the state (a screen reader hears "Rule, switch, on"). */}
+          <Switch checked={rule.enabled} onChange={onToggle} label="Rule" />
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {dirty && (
@@ -929,57 +931,108 @@ function RuleEditor({
           aria-label="Live preview"
           className="fc-scroll order-1 flex min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <PlatformTestBar
-              compact
-              selected={previewPlatform}
-              platforms={kindPlatformsShown}
-              statusText={previewStatus}
-              onTestPlatform={firePlatformTest}
-              onTestOnStream={() => undefined}
+          <div className="relative">
+            <AlertStage
+              alert={preview}
+              theme="molten"
+              controls={false}
+              sound={sound}
+              replay={replay}
+              className="shadow-1"
+              {...(customPreviewError
+                ? {
+                    emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
+                  }
+                : {})}
             />
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                icon={<ArrowCounterClockwise size={15} />}
-                onClick={() => setReplay((n) => n + 1)}
+            {/* On the stage: which platform's sample to preview, replay and sound, what it is. */}
+            <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-2">
+              <div
+                role="group"
+                aria-label="Preview"
+                className="pointer-events-auto inline-flex items-center gap-1 rounded-[10px] bg-black/60 p-1 pl-2.5"
               >
-                Replay
-              </Button>
-              {alertHasSound(preview) ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-pressed={!sound}
-                  title={sound ? 'Mute the preview' : 'Play the preview with sound'}
-                  icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-                  onClick={() => {
-                    unlockAudio()
-                    setSound((s) => !s)
-                  }}
-                >
-                  Mute
-                </Button>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-[14px] text-text-3">
-                  <SpeakerSlash size={15} aria-hidden="true" /> No sound
+                <span aria-hidden="true" className="mr-1 text-[12.5px] font-semibold text-white/90">
+                  Preview
                 </span>
-              )}
+                {(['twitch', 'youtube', 'kick', 'tips'] as Platform[]).map((p) => {
+                  const supported = kindPlatformsShown.includes(p)
+                  const active = previewPlatform === p
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      data-platform-test={p}
+                      aria-pressed={active}
+                      aria-label={`Preview as ${p === 'tips' ? 'Tips' : PLATFORM_LABEL[p]}`}
+                      title={
+                        supported
+                          ? `Preview as ${PLATFORM_LABEL[p]}`
+                          : `${PLATFORM_LABEL[p]} has no alert of this kind`
+                      }
+                      disabled={!supported}
+                      onClick={() => firePlatformTest(p)}
+                      className={cx(
+                        'fc-press grid size-8 place-items-center rounded-[8px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40',
+                        active
+                          ? 'border-white/70 bg-white/25'
+                          : 'border-white/15 bg-white/5 hover:bg-white/15',
+                      )}
+                    >
+                      <PlatformMark platform={p} size={15} />
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="pointer-events-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setReplay((n) => n + 1)}
+                  className="fc-press inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] font-semibold text-white hover:bg-black/75 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                >
+                  <ArrowCounterClockwise size={15} aria-hidden="true" />
+                  Replay
+                </button>
+                {alertHasSound(preview) ? (
+                  <button
+                    type="button"
+                    aria-pressed={!sound}
+                    title={sound ? 'Mute the preview' : 'Play the preview with sound'}
+                    onClick={() => {
+                      unlockAudio()
+                      setSound((x) => !x)
+                    }}
+                    className="fc-press inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] font-semibold text-white hover:bg-black/75 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                  >
+                    {sound ? (
+                      <SpeakerHigh size={15} aria-hidden="true" />
+                    ) : (
+                      <SpeakerSlash size={15} aria-hidden="true" />
+                    )}
+                    Mute
+                  </button>
+                ) : (
+                  <span className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] text-white/80">
+                    <SpeakerSlash size={15} aria-hidden="true" /> No sound
+                  </span>
+                )}
+              </div>
             </div>
+            <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
+              <PlatformMark platform={previewPlatform} size={12} />
+              Simulated {previewPlatform === 'tips' ? 'Tips' : PLATFORM_LABEL[previewPlatform]}{' '}
+              sample
+            </p>
+            <span className="sr-only" aria-live="polite">
+              {previewStatus}
+            </span>
           </div>
-          <AlertStage
-            alert={preview}
-            theme="molten"
-            controls={false}
-            sound={sound}
-            replay={replay}
-            className="shadow-1"
-            {...(customPreviewError
-              ? {
-                  emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
-                }
-              : {})}
-          />
+          {previewOff && (
+            <p role="status" className="text-[14px] font-medium text-warn">
+              This rule doesn’t listen on {PLATFORM_LABEL[previewPlatform]}, so a real{' '}
+              {PLATFORM_LABEL[previewPlatform]} event would not play it.
+            </p>
+          )}
           <AlertTimeline
             durationMs={v.duration_ms}
             anim={v.anim ?? defaultAlertAnim()}
@@ -1039,6 +1092,8 @@ function RuleEditor({
                 transition={{ duration: 0.18 }}
               >
                 <VariationEditor
+                  ruleName={draft.name}
+                  listens={{ shown: kindPlatformsShown, on: listening, toggle: togglePlatform }}
                   v={v}
                   isDefault={v.condition === null}
                   media={media}

@@ -157,3 +157,106 @@ for (const [width, height] of [
     })
   })
 }
+
+test.describe('platforms appear once on the Alerts screen', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('one connection pill, one Listens on block, one Preview as control', async ({ page }) => {
+    await open(page, 'alerts/follow')
+    await expect(page.getByTestId('alert-editor')).toBeVisible()
+    // The app's strip is one summary pill, not three platform pills.
+    const strip = page.getByRole('list', { name: 'Connections' })
+    await expect(strip.getByRole('listitem')).toHaveCount(1)
+    await expect(page.getByTestId('connections-overflow')).toContainText(/platforms|connected/)
+    // The header has no platform controls: the name and a labelled switch only.
+    const editor = page.getByTestId('alert-editor')
+    const header = editor.locator('header')
+    await expect(header.getByRole('switch', { name: 'Rule', exact: true })).toBeVisible()
+    await expect(header.getByText('Rule', { exact: true })).toBeVisible()
+    await expect(header.getByText('Twitch')).toHaveCount(0)
+    await expect(header.getByText('Kick')).toHaveCount(0)
+    // "Rule listens on" is plain checkboxes in the right dock's This look group.
+    const listens = page
+      .getByRole('complementary', { name: 'Look properties' })
+      .getByRole('group', { name: 'Rule listens on' })
+    await expect(listens.getByRole('checkbox')).toHaveCount(2)
+    await expect(listens.getByText('Applies to every look in Follows')).toBeVisible()
+    await expect(page.locator('[data-platform-test]')).toHaveCount(4)
+    // Across the whole editor the platform names are in exactly two groups: the checkboxes
+    // (what the rule listens on) and the preview buttons (what to look at).
+    await expect(editor.getByRole('checkbox')).toHaveCount(2)
+    await expect(editor.locator('[data-platform-test]')).toHaveCount(4)
+    // Preview is on the stage, icon only, with its caption; no separate row.
+    await expect(page.getByRole('group', { name: 'Preview' })).toBeVisible()
+    await expect(page.getByText('Simulated Twitch sample')).toBeVisible()
+  })
+
+  test('previewing a platform the rule does not listen on says so', async ({ page }) => {
+    await open(page, 'alerts/follow')
+    await page.getByRole('checkbox', { name: /Kick/ }).uncheck()
+    await page.locator('[data-platform-test="kick"]').click()
+    await expect(page.getByText(/doesn’t listen on Kick/)).toBeVisible()
+    await page.locator('[data-platform-test="twitch"]').click()
+    await expect(page.getByText(/doesn’t listen on/)).toHaveCount(0)
+    // The last platform cannot be unchecked (an empty list would mean every platform).
+    await expect(page.getByRole('checkbox', { name: /Twitch/ })).toBeDisabled()
+  })
+
+  test('the full connection list is one click away, and other pages keep the usual strip', async ({
+    page,
+  }) => {
+    await open(page, 'alerts/follow')
+    await page.getByTestId('connections-overflow').click()
+    await expect(page.getByTestId('connections-overflow-popover')).toContainText('Twitch')
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => (location.hash = '#/home'))
+    await expect(
+      page.getByRole('list', { name: 'Connections' }).getByRole('listitem').first(),
+    ).toBeVisible()
+    expect(
+      await page.getByRole('list', { name: 'Connections' }).getByRole('listitem').count(),
+    ).toBeGreaterThan(1)
+  })
+})
+
+for (const [width, height] of [
+  [1280, 800],
+  [1440, 900],
+] as const) {
+  test(`no horizontal scrollbar anywhere in the editor at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, 'alerts/follow')
+    await expect(page.getByTestId('alert-editor')).toBeVisible()
+    // Open the groups with the widest content too.
+    await page.getByRole('button', { name: /^Custom HTML, CSS and schema/ }).click()
+    await page.getByRole('button', { name: /^Read aloud/ }).click()
+    const bad = await page.evaluate(() => {
+      const out: string[] = []
+      for (const el of document.querySelectorAll(
+        '[data-testid="alert-editor"], [data-testid="alert-editor"] *',
+      )) {
+        const cs = getComputedStyle(el)
+        if (
+          (cs.overflowX === 'auto' || cs.overflowX === 'scroll') &&
+          el.scrollWidth > el.clientWidth + 1
+        )
+          out.push(
+            `${el.tagName.toLowerCase()}.${String((el as HTMLElement).className).slice(0, 60)} ${el.scrollWidth}>${el.clientWidth}`,
+          )
+      }
+      return out
+    })
+    expect(bad).toEqual([])
+  })
+}
+
+test('the Rule switch says its state once, to everyone', async ({ page }) => {
+  await open(page, 'alerts/follow')
+  const header = page.getByTestId('alert-editor').locator('header')
+  const sw = header.getByRole('switch', { name: 'Rule', exact: true })
+  await expect(sw).toHaveAttribute('aria-checked', 'true')
+  // No second "On" word beside it.
+  await expect(header.getByText(/^On$/)).toHaveCount(0)
+  await sw.click()
+  await expect(sw).toHaveAttribute('aria-checked', 'false')
+})

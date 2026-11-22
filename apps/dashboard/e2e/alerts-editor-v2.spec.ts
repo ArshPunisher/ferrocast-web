@@ -28,11 +28,11 @@ for (const width of [1280, 375] as const) {
       // Per-platform test buttons fire real platform samples into the live preview
       await page.locator('[data-platform-test="youtube"]').click()
       await expect(shadowTitle).toContainText('Meera Plays')
-      await expect(page.getByText(/Previewing YouTube test alert/)).toBeVisible()
+      await expect(page.getByText('Simulated YouTube sample')).toBeVisible()
 
       await page.locator('[data-platform-test="kick"]').click()
       await expect(shadowTitle).toContainText('PixelPanda')
-      await expect(page.getByText(/Previewing Kick test alert/)).toBeVisible()
+      await expect(page.getByText('Simulated Kick sample')).toBeVisible()
 
       // A subscription never comes from tips: that button is off rather than previewing
       // a broken headline.
