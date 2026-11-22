@@ -228,4 +228,16 @@ describe('cropping with Alt (OBS)', () => {
     const t: Frame = [0, 500, -250, 0, 400, 100]
     expect(cropDrag(t, { u: 1, v: 0.5 }, { x: 0, y: -50 }, none, size).right).toBe(100)
   })
+  it("a finger's wider reach never takes the middle of a wide, short box from moving it", () => {
+    // 600 x 100 at (100,100): on a phone a 22 px reach is 122 canvas pixels, which reached from
+    // the left-middle handle to a press 100 pixels in (Neon: a group drag became a resize).
+    const wide: Frame = [600, 0, 0, 100, 100, 100]
+    const press = { x: 200, y: 150 }
+    expect(gripAt(wide, press, 122, 50)).toEqual(MOVE)
+    // A mouse's reach (the least) is kept: a press right at a handle still takes it.
+    expect(gripAt(wide, { x: 100, y: 150 }, 122, 50)?.u).toBe(0) // a handle on its left side
+    // A box smaller than the reach still gives its handles the least reach, never less.
+    const tiny: Frame = [20, 0, 0, 20, 500, 500]
+    expect(gripAt(tiny, { x: 530, y: 510 }, 122, 50)?.u).toBeGreaterThanOrEqual(0) // a handle
+  })
 })

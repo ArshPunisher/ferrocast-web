@@ -47,11 +47,17 @@ export function inside(f: Frame, p: Pt): boolean {
   return !!l && l.u >= 0 && l.u <= 1 && l.v >= 0 && l.v <= 1
 }
 
-/** The handle of `f` within `reach` canvas pixels of `p`, else MOVE inside it, else null. */
-export function gripAt(f: Frame, p: Pt, reach: number): Grip | null {
+/**
+ * The handle of `f` within `reach` canvas pixels of `p`, else MOVE inside it, else null. A wide
+ * reach (a finger's) is cut to a third of the box's shorter side so the middle still moves it,
+ * but never below `least` (a mouse's reach, the default: all of `reach`).
+ */
+export function gripAt(f: Frame, p: Pt, reach: number, least = reach): Grip | null {
+  const third = Math.min(Math.hypot(f[0], f[1]), Math.hypot(f[2], f[3])) / 3
+  const r = Math.max(Math.min(least, reach), Math.min(reach, third))
   for (const g of GRIPS) {
     const h = at(f, g.u, g.v)
-    if (Math.hypot(h.x - p.x, h.y - p.y) <= reach) return g
+    if (Math.hypot(h.x - p.x, h.y - p.y) <= r) return g
   }
   return inside(f, p) ? MOVE : null
 }
