@@ -42,6 +42,7 @@ import {
   Dialog,
   EmptyState,
   IconButton,
+  InfoTip,
   Input,
   Skeleton,
   cx,
@@ -118,16 +119,14 @@ function SafetyBadge({ item }: { item: StoreItem }) {
     return (
       <Badge tone="accent">
         <LockKey size={12} aria-hidden="true" />
-        <span>p2e Sandbox</span>
+        <span>Sandboxed</span>
       </Badge>
     )
   }
   return (
     <Badge tone="accent">
       <Cpu size={12} aria-hidden="true" />
-      <span>
-        {item.plugin_kind === 'effect' ? 'WGSL Sandbox' : `${item.plugin_kind ?? 'Plugin'} Sandbox`}
-      </span>
+      <span>{item.plugin_kind === 'effect' ? 'Shader (sandboxed)' : 'Plugin (sandboxed)'}</span>
     </Badge>
   )
 }
@@ -369,7 +368,7 @@ function StoreItemCard({
 
 /** The catalog address answers "not found": nothing is published yet. Said plainly, since the
  * internet is fine, and what still works is named. */
-function CatalogNotPublished({ onCheck, onLink }: { onCheck: () => void; onLink: () => void }) {
+function CatalogNotPublished({ onCheck }: { onCheck: () => void }) {
   return (
     <div
       role="status"
@@ -382,14 +381,10 @@ function CatalogNotPublished({ onCheck, onLink }: { onCheck: () => void; onLink:
         </p>
         <p className="mt-1 text-[14px] text-text-2">
           Your internet connection is fine: there is no catalog at the Store’s address yet. What you
-          installed keeps working, and you can install a shared package with a ferrocast:// link.
+          installed keeps working.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="primary" onClick={onLink}>
-          <LinkSimple size={15} aria-hidden="true" />
-          Open ferrocast:// link
-        </Button>
         <a
           href={href({ name: 'designs' })}
           className="fc-press inline-flex h-8 items-center rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text hover:border-text-3"
@@ -843,22 +838,17 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                   {installedFallback.length} installed
                 </strong>
                 <br />
-                SHA-256 checked on this PC. Works offline.
+                Verified on this PC. Works offline.{' '}
+                <InfoTip label="About verification">
+                  Every package has a fingerprint that is checked on this PC before it is used, so
+                  what you install is what the creator published.
+                </InfoTip>
               </p>
             </aside>
             <div className="min-w-0 flex-1 space-y-5">
               {catalogError ? (
                 catalogNotPublished(catalogError) ? (
-                  <CatalogNotPublished
-                    onCheck={() => void loadAll(true)}
-                    onLink={() => {
-                      links.current.invalidate()
-                      setLinkError(null)
-                      setLinkPreview(null)
-                      setLinkBusy(false)
-                      setLinkDialogOpen(true)
-                    }}
-                  />
+                  <CatalogNotPublished onCheck={() => void loadAll(true)} />
                 ) : (
                   <LoadError error={catalogError} onRetry={() => void loadAll(true)} />
                 )
@@ -891,6 +881,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                             onClick={() => {
                               setFilter('all')
                               setSearch('')
+                              setTrust({ data: true, sandbox: true })
                             }}
                           >
                             Reset filters
@@ -926,7 +917,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                 <Panel
                   id="store-installed-panel"
                   title={`Installed from Store (${installedShown.length === installedFallback.length ? installedFallback.length : `${installedShown.length} of ${installedFallback.length}`})`}
-                  description="Stored locally with SHA-256 verification. Keeps working even when the remote catalog is unavailable."
+                  description="Verified on this PC. Keeps working even when the catalog is unavailable."
                   icon={<Package weight="fill" />}
                 >
                   {installedFallback.length === 0 ? (
@@ -955,7 +946,10 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                               )}
                             </div>
                             <p className="text-[13px] text-text-3">
-                              By {rec.creator_name} · SHA-256 {rec.package_sha256.slice(0, 12)}…
+                              By {rec.creator_name} · Verified on this PC{' '}
+                              <InfoTip label={`About the fingerprint of ${rec.title}`}>
+                                Fingerprint {rec.package_sha256.slice(0, 12)}…
+                              </InfoTip>
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1036,9 +1030,10 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
             {/* Security & Verification Breakdown */}
             <div className="rounded-ctrl border border-line bg-surface-2 p-3.5 space-y-1.5 text-[13px] text-text-2">
-              <p className="font-semibold text-text">Verification & sandbox</p>
+              <p className="font-semibold text-text">Verified on this PC</p>
               <p className="font-mono text-[12px] text-text-3 break-all">
-                SHA-256: {selectedItem.package.sha256} · {formatBytes(selectedItem.package.size)}
+                Fingerprint: {selectedItem.package.sha256} ·{' '}
+                {formatBytes(selectedItem.package.size)}
               </p>
               {selectedItem.kind === 'plugin' && (
                 <p>

@@ -92,7 +92,9 @@ for (const size of SIZES) {
       await expect(note).toContainText('isn’t published yet')
       await expect(note).toContainText('internet connection is fine')
       await expect(page.getByText(/Check the internet/)).toHaveCount(0)
-      await expect(note.getByRole('button', { name: 'Open ferrocast:// link' })).toBeVisible()
+      // Nothing here promises installing from a link: that needs the catalog too.
+      await expect(note).not.toContainText('ferrocast://')
+      await expect(note.getByRole('button', { name: 'Check again' })).toBeVisible()
       await expect(note.getByRole('link', { name: 'Browse built-in designs' })).toBeVisible()
       expect(await noSidewaysScroll(page)).toBe(true)
       // A real outage still says to check the connection.
@@ -100,6 +102,49 @@ for (const size of SIZES) {
       await note.getByRole('button', { name: 'Check again' }).click()
       await expect(page.getByRole('alert')).toContainText(/connection/i)
       await page.evaluate(() => window.__ferrocastDemo?.setStoreFault(null))
+    })
+
+    test('Store: plain words (no internal names), and Reset brings the Trust filters back', async ({
+      page,
+    }) => {
+      const jargon = /\bp2e\b|WGSL|WASM|SHA-256/i
+      await open(page, 'store', 'autoplay=0&latency=0')
+      await expect(page.getByTestId('store-card-soft-dimmer-shader')).toBeVisible()
+      // The list: cards, chips, the rail.
+      expect(await page.locator('#main').innerText()).not.toMatch(jargon)
+      await expect(page.getByText('Shader (sandboxed)').first()).toBeVisible()
+      // The rail's note about local installs shows from the desktop widths up.
+      if (size.width >= 1024)
+        await expect(page.getByText('Verified on this PC').first()).toBeVisible()
+      // An item's own page, for an alert and a shader.
+      for (const id of ['arcade-ticker-alert', 'soft-dimmer-shader']) {
+        await page.evaluate((i) => {
+          window.location.hash = `#/store/item/${i}`
+        }, id)
+        const detail = page.getByTestId('store-item-detail')
+        await expect(detail).toBeVisible()
+        expect(await detail.innerText()).not.toMatch(/\bp2e\b|WGSL|WASM/i)
+        await page.keyboard.press('Escape')
+        await expect(detail).toHaveCount(0)
+      }
+      // What a link says it will check.
+      await page.evaluate(() => {
+        window.location.hash = `#/store?link=${encodeURIComponent('ferrocast://store/install/arcade-ticker-alert')}`
+      })
+      const dlg = page.getByTestId('ferrocast-link-dialog')
+      await expect(dlg.getByText(/Install “Arcade Ticker Alert”/)).toBeVisible()
+      expect(await dlg.innerText()).not.toMatch(jargon)
+      await dlg.getByRole('button', { name: 'Cancel' }).click()
+      await expect(dlg).toHaveCount(0)
+
+      // Reset filters: both Trust boxes are back, with the category and search.
+      await page.getByLabel('Pure data').uncheck()
+      await page.getByLabel('Sandboxed', { exact: true }).uncheck()
+      await expect(page.getByText('No store items match that search')).toBeVisible()
+      await page.getByRole('button', { name: 'Reset filters' }).click()
+      await expect(page.getByLabel('Pure data')).toBeChecked()
+      await expect(page.getByLabel('Sandboxed', { exact: true })).toBeChecked()
+      await expect(page.getByTestId('store-card-aurora-pulse')).toBeVisible()
     })
   })
 }

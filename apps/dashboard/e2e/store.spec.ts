@@ -23,7 +23,7 @@ test.describe('Community Theme Store (R37)', () => {
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
 
     await cats.getByRole('button', { name: /^All\b/ }).click()
-    await page.getByLabel('Search Community Store').fill('WGSL')
+    await page.getByLabel('Search Community Store').fill('shader')
     await expect(page.getByTestId('store-card-soft-dimmer-shader')).toBeVisible()
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
     await page.getByLabel('Search Community Store').fill('')
