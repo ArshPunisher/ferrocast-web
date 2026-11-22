@@ -213,6 +213,8 @@ export function MediaCheckStep({
   const [camLoading, setCamLoading] = useState(false)
   const [camError, setCamError] = useState<unknown>(null)
   const [camProblem, setCamProblem] = useState<string | null>(null)
+  // The option that names the camera (it differs by system).
+  const [camKey, setCamKey] = useState('device')
 
   const [mics, setMics] = useState<DeviceChoice[]>([])
   const [micAudio, setMicAudio] = useState<EngineAudio | null>(null)
@@ -253,7 +255,10 @@ export function MediaCheckStep({
       ])
       if (probeReqRef.current !== req) return
 
-      const devOpt = camOpts.find((o) => o.key === 'device' || o.key === 'video_device_id')
+      const devOpt = camOpts.find(
+        (o) => o.key === 'device' || o.key === 'video_device_id' || o.key === 'device_id',
+      )
+      setCamKey(devOpt?.key ?? 'device')
       const camChoices: DeviceChoice[] = (devOpt?.choices ?? []).map((label, i) => ({
         label,
         value: String(devOpt?.values?.[i] ?? label),
@@ -276,7 +281,7 @@ export function MediaCheckStep({
         null
       if (foundMic) {
         setMicAudio(foundMic)
-      } else if (micChoices.length > 0) {
+      } else if (micChoices.some((c) => c.value !== 'default')) {
         // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
         const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
         if (probeReqRef.current !== req) return
@@ -329,7 +334,7 @@ export function MediaCheckStep({
       setCamError(null)
       setCamProblem(null)
       try {
-        const res = await engine.sourceStill(cam.kind, 'device', cam.value, 480, signal)
+        const res = await engine.sourceStill(cam.kind, camKey, cam.value, 480, signal)
         if (!signal?.aborted) {
           setStillUrl(res.image)
           // No picture with a reason (the camera is off for this app, or in use): say it.
@@ -343,7 +348,7 @@ export function MediaCheckStep({
         if (!signal?.aborted) setCamLoading(false)
       }
     },
-    [engine],
+    [engine, camKey],
   )
 
   useEffect(() => {

@@ -165,9 +165,16 @@ export function ImportStep({
         choice === 'obs'
           ? await engine.importObs(selectedId)
           : await engine.importStreamlabs(selectedId)
+      // What the preview knew (devices to pick again, what was skipped) stays with the result, so
+      // coming back to this step later still shows it, on the real engine too.
       onImportedChange({
         source: choice,
-        report,
+        report: {
+          ...report,
+          device_resets: report.device_resets ?? preview?.device_resets ?? [],
+          skipped: report.skipped ?? preview?.skipped ?? [],
+          skipped_total: report.skipped_total ?? preview?.skipped_total ?? 0,
+        },
         previousId: report.previous_id ?? 'untitled',
       })
     } catch (e) {
