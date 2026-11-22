@@ -286,8 +286,8 @@ export function CustomCodePanel({
                       data-schema-field={f.key}
                       className="flex flex-col gap-2.5 rounded-control border border-line bg-surface-1 p-3"
                     >
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <div className="flex flex-col gap-1">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(11.5rem,1.25fr)]">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <label
                             htmlFor={`fk-${idx}`}
                             className="text-[12px] font-semibold text-text-2"
@@ -302,7 +302,7 @@ export function CustomCodePanel({
                             className="font-mono text-[13px]"
                           />
                         </div>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <label
                             htmlFor={`fl-${idx}`}
                             className="text-[12px] font-semibold text-text-2"
@@ -316,7 +316,7 @@ export function CustomCodePanel({
                             onChange={(e) => updateField(idx, { label: e.target.value })}
                           />
                         </div>
-                        <div className="flex items-end gap-1.5">
+                        <div className="flex min-w-0 items-end gap-1.5">
                           <Field label="Type" className="min-w-0 flex-1">
                             {(p) => (
                               <Select
