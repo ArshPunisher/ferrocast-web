@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FerroClient } from '../src/client'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { ApiError } from '../src/errors'
-import { studioEngineApi } from '../src/studio-engine'
+import {
+  studioEngineApi,
+  resolveTransitionFromScenes,
+  type EngineScenes,
+} from '../src/studio-engine'
 
 describe('levels request', () => {
   it("sends window only when asked (default stays the engine's 300 ms window)", async () => {
@@ -325,6 +329,96 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       expect(deviceOpt?.choices).toEqual([])
     } finally {
       noCam.engine.dispose()
+    }
+  })
+
+  it('resolves named transitions and matrix precedence, lifecycle cleanup, and switch paths', async () => {
+    const sample: EngineScenes = {
+      scenes: [
+        { name: 'Main', items: 1, current: true, transition: null },
+        { name: 'BRB', items: 1, current: false, transition: { kind: 'cut_transition', ms: 0 } },
+        { name: 'Outro', items: 1, current: false, transition: null },
+      ],
+      current: 'Main',
+      transition: { kind: 'fade_transition', ms: 300 },
+      named_transitions: [
+        { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+        {
+          name: 'PairSwipe',
+          kind: 'swipe_transition',
+          ms: 450,
+          settings: { direction: 'right' },
+          default: false,
+        },
+        {
+          name: 'MainOut',
+          kind: 'slide_transition',
+          ms: 500,
+          settings: { direction: 'up' },
+          default: false,
+        },
+      ],
+      transition_matrix: [
+        { from: 'Main', to: 'BRB', transition: 'PairSwipe' },
+        { from: 'Main', to: null, transition: 'MainOut' },
+      ],
+    }
+
+    expect(resolveTransitionFromScenes(sample, 'Main', 'BRB')).toMatchObject({
+      name: 'PairSwipe',
+      via: 'pair',
+      ms: 450,
+    })
+    expect(resolveTransitionFromScenes(sample, 'Outro', 'BRB')).toMatchObject({
+      kind: 'cut_transition',
+      via: 'to',
+      ms: 0,
+    })
+    expect(resolveTransitionFromScenes(sample, 'Main', 'Outro')).toMatchObject({
+      name: 'MainOut',
+      via: 'from',
+      ms: 500,
+    })
+    expect(resolveTransitionFromScenes(sample, 'BRB', 'Outro')).toMatchObject({
+      name: 'Fade',
+      via: 'default',
+      ms: 300,
+    })
+
+    const { engine, api } = mkApi({ studioEngine: { running: true } })
+    try {
+      const added = await api.addNamedTransition({
+        name: 'Stinger 1',
+        kind: 'obs_stinger_transition',
+        ms: 0,
+        settings: { path: '/a.mp4', transition_point: 350 },
+      })
+      expect(added.name).toBe('Stinger 1')
+
+      const dup = await api.duplicateNamedTransition('Stinger 1')
+      expect(dup.name).toBe('Stinger 1 2')
+      expect(dup.default).toBe(false)
+
+      await api.setTransitionMatrixRule({ from: 'Main', to: 'Chatting', transition: 'Stinger 1' })
+      await api.renameNamedTransition('Stinger 1', 'Intro Stinger')
+      await api.setCurrent('Chatting')
+      expect(engine.studioEngine?.lastResolvedTransition?.name).toBe('Intro Stinger')
+
+      await api.setDefaultNamedTransition('Intro Stinger')
+      await api.deleteNamedTransition('Intro Stinger')
+      const after = await api.scenes()
+      expect(after.named_transitions?.some((t) => t.default)).toBe(true)
+      expect(after.transition_matrix?.some((r) => r.transition === 'Intro Stinger')).toBe(false)
+
+      // Deleting last remaining transition fails cleanly.
+      for (const extra of after.named_transitions ?? []) {
+        if (!extra.default) await api.deleteNamedTransition(extra.name)
+      }
+      await expect(
+        api.deleteNamedTransition((await api.scenes()).named_transitions![0]!.name),
+      ).rejects.toMatchObject({ status: 409, code: 'studio_last_transition' })
+    } finally {
+      engine.dispose()
     }
   })
 })
