@@ -422,13 +422,11 @@ describe('the Clips tab', () => {
     const client = new FerroClient({
       base: engine.base,
       token: DEMO_TOKEN,
-      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-        if (slow && /\/captions$/.test(url) && (init?.method ?? 'GET') === 'GET')
+      fetch: async (input: string, init?: RequestInit) => {
+        if (slow && /\/captions$/.test(input) && (init?.method ?? 'GET') === 'GET')
           await new Promise((r) => setTimeout(r, 300))
         return base(input, init)
-      }) as typeof engine.fetch,
+      },
     })
     await mountWith(client)
     await settle()
