@@ -105,3 +105,19 @@ describe('undo', () => {
     expect(mic?.muted, 'the mic is still unmuted').toBe(false)
   })
 })
+
+describe('filters', () => {
+  it('pasting a source’s filters onto itself answers and doubles nothing it is reading', async () => {
+    const { client, eng } = rig()
+    await eng.start()
+    await eng.addFilter('Mic', { kind: 'gain_filter', name: 'Boost', settings: { db: 3 } })
+    const before = (await eng.filters('Mic')).length
+    const done = client.request<void>('POST', '/api/v1/studio/engine/sources/Mic/paste-filters', {
+      from: 'Mic',
+    })
+    await done
+    const after = await eng.filters('Mic')
+    // Each filter that was there once is copied once (the copy is named apart).
+    expect(after.length).toBe(before * 2)
+  })
+})

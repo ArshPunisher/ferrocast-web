@@ -3405,11 +3405,15 @@ export class DemoStudioEngine {
     srcList: EngineFilter[],
     srcSettings: Record<string, EngineSettings>,
   ): void {
-    for (const f of srcList) {
+    // Read from detached copies: the source and the destination can be the same lists (a paste
+    // onto the source it came from), which must not grow under the loop that reads them.
+    const filters = clone(srcList)
+    const settings = clone(srcSettings)
+    for (const f of filters) {
       let name = f.name
       for (let n = 2; dstList.some((x) => x.name === name); n++) name = `${f.name} ${n}`
-      dstList.push({ ...clone(f), name })
-      dstSettings[name] = clone(srcSettings[f.name] ?? {})
+      dstList.push({ ...f, name })
+      dstSettings[name] = clone(settings[f.name] ?? {})
     }
   }
 
