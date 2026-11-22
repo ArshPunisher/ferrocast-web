@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { open } from './helpers'
+import { open, settled } from './helpers'
 
 const section = (page: Page) => page.locator('#api-keys')
 
@@ -62,7 +62,8 @@ test.describe('Local API keys in Settings › Advanced', () => {
     await revokeDialog.getByRole('button', { name: 'Revoke key' }).click()
     await expect(row).toContainText('Revoked')
 
-    // Accessibility check
+    // Accessibility check, at rest (axe reads colours mid-transition otherwise)
+    await settled(page)
     const a11y = await new AxeBuilder({ page }).include('#api-keys').analyze()
     expect(a11y.violations).toEqual([])
     await noSideScroll(page)
@@ -87,10 +88,15 @@ test.describe('Local API keys at 375 px mobile', () => {
     await createBtn.click()
     const dialog = page.getByRole('dialog', { name: 'Create local API key' })
     await expect(dialog).toBeVisible()
+    await settled(page)
     await dialog.getByLabel('Key name').fill('Mobile Key')
     await dialog.getByRole('button', { name: 'Create key' }).click()
 
     await expect(page.getByTestId('api-key-once')).toBeVisible()
+    // The dialog's own fade and the button's colour change are still running at this moment on a
+    // busy machine, and axe reads the colours mid-way (3.9:1 on the way to the real ones): measure
+    // at rest.
+    await settled(page)
     await noSideScroll(page)
     const a11y = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(a11y.violations).toEqual([])
