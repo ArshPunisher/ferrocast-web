@@ -1,5 +1,6 @@
 import { ALLOWED_ASSET_HOSTS } from '@ferrocast/api/alert'
 import type { CustomAlertRender, CustomFieldValue } from '@ferrocast/api/types'
+import bootstrapSource from './alert-sandbox-bootstrap.js?raw'
 
 const MAX_HTML_LEN = 80_000
 const MAX_CSS_LEN = 80_000
@@ -15,14 +16,14 @@ export interface ValidatedCustomPayload {
   fields: Record<string, CustomFieldValue>
 }
 
-export function customAlertCsp(): string {
+/** The frame's policy: only the bootstrap (by nonce) may run; nothing is fetched but pictures. */
+export function customAlertCsp(nonce = ''): string {
   const assetHosts = ALLOWED_ASSET_HOSTS.filter((u) => !u.includes('fonts.gstatic')).join(' ')
   return [
     "default-src 'none'",
-    "script-src 'unsafe-inline'",
+    nonce ? `script-src 'nonce-${nonce}'` : "script-src 'none'",
     "style-src 'unsafe-inline'",
     `img-src data: blob: ${assetHosts}`,
-    'media-src data: blob:',
     'font-src data: https://fonts.gstatic.com',
     "connect-src 'none'",
     "form-action 'none'",
@@ -44,7 +45,7 @@ export function validateCustomRenderPayload(
     for (const [k, v] of Object.entries(custom.vars)) {
       if (count >= MAX_KEYS) break
       if (/^[a-zA-Z0-9_:]{1,40}$/.test(k) && typeof v === 'string') {
-        vars[k] = v.slice(0, 2000)
+        vars[k] = Array.from(v).slice(0, 2000).join('')
         count += 1
       }
     }
@@ -57,7 +58,7 @@ export function validateCustomRenderPayload(
       if (count >= MAX_FIELDS) break
       if (!VALID_FIELD_KEY.test(k)) continue
       if (typeof v === 'string') {
-        fields[k] = v.slice(0, 500)
+        fields[k] = Array.from(v).slice(0, 500).join('')
         count += 1
       } else if (typeof v === 'number' && Number.isFinite(v)) {
         fields[k] = v
@@ -78,22 +79,25 @@ export function validateCustomRenderPayload(
   }
 }
 
-export function buildSandboxSrcdoc(expectedOrigin: string): string {
-  const csp = customAlertCsp()
-  const originLiteral = JSON.stringify(expectedOrigin || '')
+function randomNonce(): string {
+  const b = new Uint8Array(16)
+  crypto.getRandomValues(b)
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+}
+
+function attrEscape(v: string): string {
+  return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+/** The frame's page when the host has no `/alert-sandbox` route: same bootstrap, same rules. */
+export function buildSandboxSrcdoc(parentOrigin: string, nonce = randomNonce()): string {
+  const csp = customAlertCsp(nonce)
   return (
-    `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">` +
+    `<!doctype html><html data-parent="${attrEscape(parentOrigin || '')}"><meta charset="utf-8">` +
+    `<meta http-equiv="Content-Security-Policy" content="${attrEscape(csp)}">` +
     '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center}#fc-custom-root{width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative}</style>' +
     '<style id="fc-custom-style"></style><div id="fc-custom-root" role="status" aria-live="polite"></div>' +
-    `<script>(function(){var root=document.getElementById('fc-custom-root');var styleEl=document.getElementById('fc-custom-style');var expectedOrigin=${originLiteral};` +
-    "function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;')}" +
-    "function validFieldKey(k){return typeof k==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(k)}" +
-    "function isObj(v){return typeof v==='object'&&v!==null&&!Array.isArray(v)}" +
-    "function validatePayload(msg){if(!isObj(msg)||msg.type!=='ferro-custom-alert')return null;var p=msg.payload;if(!isObj(p)||typeof p.html!=='string'||p.html.length>80000||typeof p.css!=='string'||p.css.length>80000||!isObj(p.vars)||!isObj(p.fields))return null;return p}" +
-    "function renderTokens(html,vars,fields){var map=Object.create(null);for(var k in vars)if(Object.prototype.hasOwnProperty.call(vars,k)&&typeof vars[k]==='string')map[k]=vars[k];for(var fk in fields)if(Object.prototype.hasOwnProperty.call(fields,fk)&&validFieldKey(fk)){var fv=fields[fk];if(typeof fv==='string'||typeof fv==='number'||typeof fv==='boolean')map[fk]=String(fv)}return html.replace(/\\{\\{?([a-zA-Z0-9_]+)(?:\\|([^}]*))?\\}?\\}/g,function(full,name,filt){if(full.indexOf('{{')===0)return full.slice(1,-1);if(Object.prototype.hasOwnProperty.call(map,name)&&map[name]!=='')return esc(map[name]);if(filt&&filt.indexOf('default:')===0)return esc(filt.slice(8).replace(/^[\"']|[\"']$/g,''));return ''})}" +
-    "function safeCssVal(v){var s=String(v==null?'':v);if(/[;{}<>]|url\\s*\\(|@import|expression\\s*\\(|javascript:/i.test(s))return '';return s}" +
-    "window.addEventListener('message',function(ev){if(ev.source!==window.parent)return;if(expectedOrigin&&expectedOrigin!=='null'&&ev.origin!==expectedOrigin)return;var p=validatePayload(ev.data);if(!p)return;var decls=[];for(var fk in p.fields)if(Object.prototype.hasOwnProperty.call(p.fields,fk)&&validFieldKey(fk)){var sv=safeCssVal(p.fields[fk]);if(sv!=='')decls.push('--field-'+fk+':'+sv+';')}styleEl.textContent=(decls.length?':root{'+decls.join('')+'}\\n':'')+p.css;while(root.firstChild)root.removeChild(root.firstChild);var frag=document.createRange().createContextualFragment(renderTokens(p.html,p.vars,p.fields));root.appendChild(frag);window.parent.postMessage({type:'ferro-custom-alert-rendered',id:p.alert_id||''},'*')});" +
-    "window.parent.postMessage({type:'ferro-custom-alert-ready'},'*');})();</script>"
+    `<script nonce="${nonce}">${bootstrapSource.replace(/<\/script/gi, '<\\/script')}</script></html>`
   )
 }
 
@@ -115,28 +119,27 @@ export function mountSandboxedAlert(
   const payload = validateCustomRenderPayload(alertId, custom)
   let loads = 0
   let stopped = false
+  let sent = false
 
-  const sendPayload = () => {
-    if (stopped || !payload || loads > 1) return
-    iframe.contentWindow?.postMessage({ type: 'ferro-custom-alert', payload }, '*')
-  }
-
+  // One handshake: the frame says it is ready, the payload goes once. (The frame has an
+  // opaque origin, so the only possible target origin for this direction is '*'; the
+  // message goes to that one window, never broadcast.)
   const onMessage = (ev: MessageEvent) => {
     const win = iframe.contentWindow
-    if (stopped || !win || ev.source !== win || ev.origin !== 'null' || loads > 1) return
+    if (stopped || sent || !payload || !win || ev.source !== win || ev.origin !== 'null') return
     const data = ev.data as { type?: unknown } | null
-    if (data?.type === 'ferro-custom-alert-ready') sendPayload()
+    if (data?.type !== 'ferro-custom-alert-ready') return
+    sent = true
+    win.postMessage({ type: 'ferro-custom-alert', payload }, '*')
   }
 
   const onLoad = () => {
     loads += 1
     if (loads > 1) {
-      // Sandboxed frame attempted navigation: refuse to run untrusted page.
+      // The frame navigated itself: drop it.
       iframe.remove()
       stopped = true
-      return
     }
-    sendPayload()
   }
 
   window.addEventListener('message', onMessage)

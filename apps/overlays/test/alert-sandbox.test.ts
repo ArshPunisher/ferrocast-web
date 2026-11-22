@@ -18,7 +18,10 @@ describe('custom alert sandbox & anim rendering (R25)', () => {
   })
 
   it('builds strict CSP without network leaks or allow-same-origin', () => {
-    const csp = customAlertCsp()
+    const csp = customAlertCsp('abc123')
+    expect(csp).toContain("script-src 'nonce-abc123'")
+    expect(csp).not.toContain("'unsafe-inline'; style")
+    expect(csp).not.toContain('media-src')
     expect(csp).toContain("default-src 'none'")
     expect(csp).toContain("connect-src 'none'")
     expect(csp).toContain("form-action 'none'")
@@ -30,7 +33,11 @@ describe('custom alert sandbox & anim rendering (R25)', () => {
     const srcdoc = buildSandboxSrcdoc('http://localhost:5280')
     expect(srcdoc).toContain('http-equiv="Content-Security-Policy"')
     expect(srcdoc).toContain("connect-src 'none'")
-    expect(srcdoc).toContain('ev.origin')
+    const nonce = /script-src 'nonce-([0-9a-f]+)'/.exec(srcdoc)?.[1]
+    expect(nonce?.length).toBeGreaterThanOrEqual(16)
+    expect(srcdoc).toContain(`<script nonce="${nonce}">`)
+    expect(srcdoc.match(/<script/g)?.length).toBe(1)
+    expect(srcdoc).toContain('data-parent="http://localhost:5280"')
   })
 
   it('validates custom payload strictly before postMessage', () => {
@@ -126,6 +133,16 @@ describe('custom alert sandbox & anim rendering (R25)', () => {
       }),
       '*',
     )
+    // The handshake answers once: a second ready is ignored.
+    postSpy.mockClear()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'ferro-custom-alert-ready' },
+        origin: 'null',
+        source: iframe!.contentWindow as Window,
+      }),
+    )
+    expect(postSpy).not.toHaveBeenCalled()
   })
 
   it('applies animation metadata and per-character spans for rule text effects when motion is full', () => {
