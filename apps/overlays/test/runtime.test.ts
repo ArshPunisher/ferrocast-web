@@ -956,6 +956,67 @@ describe('review fixes', () => {
     }
   })
 
+  it('an expired hype train stays hidden when an unrelated state frame arrives', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = { source: 'hype_train', template: '{timer}', theme: 'molten' }
+      rt.apply(
+        snapshot(
+          {
+            labels: { wl: '00:10' },
+            label_trains: {
+              wl: {
+                active: true,
+                level: 1,
+                events: 3,
+                contributors: 2,
+                latest_actor: 'Ann',
+                remaining_ms: 10_000,
+                ends_at: Date.now() + 10_000,
+                warmup_count: 3,
+                threshold: 3,
+              },
+            },
+          },
+          overlay(ws),
+        ),
+      )
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      const labelEl = root.querySelector('.fc-w-label') as HTMLElement
+      vi.advanceTimersByTime(11_000)
+      expect(labelEl.hidden).toBe(true)
+      // Viewer counts arrive; the train object in the state is still the expired one.
+      rt.apply(frame('state', { viewers: { twitch: 12 } }))
+      expect(textEl.textContent).toBe('')
+      expect(labelEl.hidden).toBe(true)
+      vi.advanceTimersByTime(30_000)
+      expect(labelEl.hidden).toBe(true)
+      // A new train observation shows again.
+      rt.apply(
+        frame('state', {
+          label_trains: {
+            wl: {
+              active: true,
+              level: 1,
+              events: 3,
+              contributors: 2,
+              latest_actor: 'Ben',
+              remaining_ms: 20_000,
+              ends_at: Date.now() + 20_000,
+              warmup_count: 3,
+              threshold: 3,
+            },
+          },
+        }),
+      )
+      expect(labelEl.hidden).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves hype train countdown across unrelated state frames and supports template filters & $& names', () => {
     vi.useFakeTimers()
     try {

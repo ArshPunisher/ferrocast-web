@@ -182,6 +182,8 @@ export class LabelWidget implements WidgetView {
   private template = '{value}'
   private readonly text = textSpan('fc-label-text', '')
   private train: LabelTrainView | null = null
+  /** The train whose countdown ran out; it stays hidden until a different one arrives. */
+  private expiredTrain: LabelTrainView | null = null
   private trainDeadlineMs = 0
   private tickId: ReturnType<typeof setInterval> | null = null
 
@@ -217,7 +219,14 @@ export class LabelWidget implements WidgetView {
         this.setText('')
         return
       }
+      if (tr === this.expiredTrain) {
+        // The countdown already ran out: the state still holds that same train until a new one
+        // arrives, and an unrelated frame must not start it again.
+        this.setText('')
+        return
+      }
       if (tr !== this.train) {
+        this.expiredTrain = null
         this.train = tr
         this.trainDeadlineMs = Date.now() + Math.max(0, tr.remaining_ms)
       }
@@ -260,6 +269,7 @@ export class LabelWidget implements WidgetView {
     }
     const remMs = Math.max(0, this.trainDeadlineMs - Date.now())
     if (remMs <= 0) {
+      this.expiredTrain = tr
       this.clearTrain()
       this.setText('')
       return
