@@ -92,6 +92,7 @@ interface CollectionSnapshot {
 interface CopiedSourceBundle {
   item: EngineItem
   transforms: Record<number, EngineTransform>
+  itemFilters: Record<number, ItemFilterState>
   sources: StoredSource[]
 }
 
@@ -186,6 +187,15 @@ const MIC_DEVICES = [
 
 function svgDataUrl(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
 function cameraFrameSvg(deviceValue: unknown): string {
@@ -602,22 +612,44 @@ export class DemoStudioEngine {
     this.replayActive = on
   }
 
-  setRecording(on: boolean): void {
-    if (on && !this.recording) {
-      const folder = String(
-        this.studioSettingsData.record_folder ??
-          this.studioSettingsData.record_folder_default ??
-          '/Users/demo/Movies/Ferrocast',
-      )
-      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
-      this.recording = true
-      this.recordingPaused = false
-      this.recordFile = `${folder}/Ferrocast ${Date.now()}.${fmt}`
-    } else if (!on) {
-      this.recording = false
-      this.recordingPaused = false
-      this.recordFile = null
+  private recordFolder(): string {
+    return String(
+      this.studioSettingsData.record_folder ??
+        this.studioSettingsData.record_folder_default ??
+        '/Users/demo/Movies/Ferrocast',
+    )
+  }
+
+  private recordFormat(): string {
+    return String(this.studioSettingsData.record_format ?? 'mp4')
+  }
+
+  private startRecordingState(): EngineRecordStats {
+    this.recording = true
+    this.recordingPaused = false
+    this.recordFile = `${this.recordFolder()}/Ferrocast ${Date.now()}.${this.recordFormat()}`
+    return {
+      active: true,
+      paused: false,
+      bytes: 0,
+      frames: 0,
+      file: this.recordFile,
+      seconds: 0,
+      error: null,
+      encoder: 'VideoToolbox',
     }
+  }
+
+  private stopRecordingState(): void {
+    this.recording = false
+    this.recordingPaused = false
+    this.recordFile = null
+    this.sourceRecords.clear()
+  }
+
+  setRecording(on: boolean): void {
+    if (on && !this.recording) this.startRecordingState()
+    else if (!on) this.stopRecordingState()
   }
 
   isBusy(): boolean {
@@ -1375,8 +1407,7 @@ export class DemoStudioEngine {
       const wasStreaming = this.streamActive
       this.streamActive = false
       this.streamStartedAt = 0
-      this.recording = false
-      this.recordingPaused = false
+      this.stopRecordingState()
       if (wasStreaming) this.onStreamChange?.(false)
       return {
         available: true,
@@ -1870,7 +1901,7 @@ export class DemoStudioEngine {
         image: svgDataUrl(
           `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
             `<rect width="${w}" height="${h}" fill="#141922"/>` +
-            `<text x="12" y="24" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="13" font-weight="600">${scene}</text>` +
+            `<text x="12" y="24" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="13" font-weight="600">${escapeXml(scene)}</text>` +
             `<text x="12" y="42" fill="#9fb0c7" font-family="system-ui,sans-serif" font-size="11">${list.length} source${list.length === 1 ? '' : 's'}</text>` +
             `</svg>`,
         ),
@@ -2280,19 +2311,13 @@ export class DemoStudioEngine {
       return { black: this.black }
     }
     if (is('GET', 'studio/engine/stats')) {
-      const folder = String(
-        this.studioSettingsData.record_folder ??
-          this.studioSettingsData.record_folder_default ??
-          '/Users/demo/Movies/Ferrocast',
-      )
-      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
       const record: EngineRecordStats | null = this.recording
         ? {
             active: true,
             paused: this.recordingPaused,
             bytes: 1_240_000,
             frames: 900,
-            file: this.recordFile ?? `${folder}/Demo recording.${fmt}`,
+            file: this.recordFile ?? `${this.recordFolder()}/Demo recording.${this.recordFormat()}`,
             seconds: 15,
             error: null,
             encoder: 'VideoToolbox',
@@ -2378,41 +2403,13 @@ export class DemoStudioEngine {
       if (!this.replayActive) {
         throw new HttpError(422, 'studio_failed', 'The replay buffer is off.')
       }
-      const folder = String(
-        this.studioSettingsData.record_folder ??
-          this.studioSettingsData.record_folder_default ??
-          '/Users/demo/Movies/Ferrocast',
-      )
-      this.replayLast = `${folder}/Replay-${Date.now()}.mp4`
+      this.replayLast = `${this.recordFolder()}/Replay-${Date.now()}.mp4`
       return { file: this.replayLast }
     }
     if (is('POST', 'studio/engine/record')) {
       const on = Boolean(requireObj(body).on)
-      if (on) {
-        const folder = String(
-          this.studioSettingsData.record_folder ??
-            this.studioSettingsData.record_folder_default ??
-            '/Users/demo/Movies/Ferrocast',
-        )
-        const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
-        this.recording = true
-        this.recordingPaused = false
-        this.recordFile = `${folder}/Ferrocast ${Date.now()}.${fmt}`
-        return {
-          active: true,
-          paused: false,
-          bytes: 0,
-          frames: 0,
-          file: this.recordFile,
-          seconds: 0,
-          error: null,
-          encoder: 'VideoToolbox',
-        } satisfies EngineRecordStats
-      }
-      this.recording = false
-      this.recordingPaused = false
-      this.recordFile = null
-      this.sourceRecords.clear()
+      if (on) return this.startRecordingState()
+      this.stopRecordingState()
       return null
     }
     if (is('POST', 'studio/engine/record/pause')) {
@@ -2577,13 +2574,16 @@ export class DemoStudioEngine {
         throw new HttpError(400, 'invalid', 'items: 1 to 500 boxes.')
       }
       const seen = new Set<number>()
+      const touchedParents = new Set<EngineItem>()
       const resolved: { item: EngineItem; x: number; y: number; w: number; h: number }[] = []
       for (const entry of list) {
         if (seen.has(entry.id)) throw new HttpError(400, 'invalid', 'items: each id only once.')
         seen.add(entry.id)
         this.validateBoxCoords(entry)
+        const loc = this.findItem(scene, entry.id)
+        if (loc.parent) touchedParents.add(loc.parent)
         resolved.push({
-          item: this.findItem(scene, entry.id).item,
+          item: loc.item,
           x: entry.x,
           y: entry.y,
           w: entry.w,
@@ -2605,6 +2605,7 @@ export class DemoStudioEngine {
         this.pushUndo(label)
       }
       for (const { item, x, y, w, h } of resolved) this.applyBox(item, { x, y, w, h })
+      for (const parent of touchedParents) this.syncGroupFrame(parent)
       return clone(resolved.map((r) => r.item))
     }
 
@@ -3060,8 +3061,11 @@ export class DemoStudioEngine {
       const ids = new Set<number>()
       this.collectItemIds(item, ids)
       const transforms: Record<number, EngineTransform> = {}
+      const itemFilters: Record<number, ItemFilterState> = {}
       for (const tid of ids) {
         transforms[tid] = clone(this.transforms.get(tid) ?? defaultTransform())
+        const flt = this.itemFilters.get(tid)
+        if (flt) itemFilters[tid] = clone(flt)
       }
       const collectedSources = new Map<string, StoredSource>()
       const walkSources = (it: EngineItem) => {
@@ -3073,7 +3077,7 @@ export class DemoStudioEngine {
       }
       walkSources(item)
       const sources = Array.from(collectedSources.values())
-      this.clipboardSource = { item: clone(item), transforms, sources }
+      this.clipboardSource = { item: clone(item), transforms, itemFilters, sources }
       this.clipboardFiltersData = null
       this.clipboardSummary = {
         kind: 'source',
@@ -3134,6 +3138,7 @@ export class DemoStudioEngine {
         this.clipboardSource.item,
         renameMap,
         this.clipboardSource.transforms,
+        this.clipboardSource.itemFilters,
       )
       list.unshift(pasted)
       return { item: clone(pasted), notes } satisfies EnginePasteResult
@@ -3279,14 +3284,8 @@ export class DemoStudioEngine {
         this.sourceRecords.delete(name)
         return { file: null }
       }
-      const folder = String(
-        this.studioSettingsData.record_folder ??
-          this.studioSettingsData.record_folder_default ??
-          '/Users/demo/Movies/Ferrocast',
-      )
-      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
       const safe = name.replace(/[/\\:*?"<>|]/g, '-')
-      const file = `${folder}/${safe} demo.${fmt}`
+      const file = `${this.recordFolder()}/${safe} demo.${this.recordFormat()}`
       this.sourceRecords.set(name, file)
       return { file }
     }
@@ -3294,12 +3293,7 @@ export class DemoStudioEngine {
       if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
         throw new HttpError(404, 'studio_no_source', `There’s no source called "${name}".`)
       }
-      const folder = String(
-        this.studioSettingsData.record_folder ??
-          this.studioSettingsData.record_folder_default ??
-          '/Users/demo/Movies/Ferrocast',
-      )
-      return { file: `${folder}/${name.replace(/[/\\]/g, '-')} screenshot.png` }
+      return { file: `${this.recordFolder()}/${name.replace(/[/\\]/g, '-')} screenshot.png` }
     }
     const src = this.requireSource(name)
     if (method === 'GET' && tail[0] === 'picture' && tail.length === 1) {
@@ -3376,7 +3370,7 @@ export class DemoStudioEngine {
     return svgDataUrl(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
         `<rect width="${w}" height="${h}" fill="#17202e"/>` +
-        `<text x="${Math.round(w / 2)}" y="${Math.round(h / 2)}" text-anchor="middle" fill="#dce5f2" font-family="system-ui,sans-serif" font-size="22" font-weight="600">${name}</text>` +
+        `<text x="${Math.round(w / 2)}" y="${Math.round(h / 2)}" text-anchor="middle" fill="#dce5f2" font-family="system-ui,sans-serif" font-size="22" font-weight="600">${escapeXml(name)}</text>` +
         `</svg>`,
     )
   }

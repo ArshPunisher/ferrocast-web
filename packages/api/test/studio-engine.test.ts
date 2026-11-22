@@ -700,6 +700,48 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('escapes XML special characters in SVG previews, preserves per-item filters on clipboard paste, and clears source recordings on stop', async () => {
+      const { engine, api } = mkApi()
+      try {
+        await api.addScene('S & <Live>')
+        const created = await api.addSource('S & <Live>', {
+          kind: 'color_source_v3',
+          name: 'Banner <1> & "2"',
+        })
+
+        const pic = await api.itemPicture('S & <Live>', created.item.id)
+        const svgPic = decodeURIComponent(String(pic.image).split(',')[1] ?? '')
+        expect(svgPic).toContain('Banner &lt;1&gt; &amp; &quot;2&quot;')
+        expect(svgPic).not.toContain('Banner <1>')
+
+        const thumb = await api.thumbnail('S & <Live>')
+        const svgThumb = decodeURIComponent(thumb.image.split(',')[1] ?? '')
+        expect(svgThumb).toContain('S &amp; &lt;Live&gt;')
+        expect(svgThumb).not.toContain('S & <Live>')
+
+        await api.setItemFilterScope('S & <Live>', created.item.id, true)
+        await api.addItemFilter('S & <Live>', created.item.id, {
+          kind: 'color_filter_v2',
+          name: 'OwnTint',
+        })
+        await api.copySource('S & <Live>', created.item.id)
+        await api.newShelf('collections', 'After Copy', false)
+        const destScene = (await api.scenes()).current
+        const pasted = await api.pasteSource(destScene)
+        expect(pasted.item?.own_filters).toBe(true)
+        const pastedFilters = await api.itemFilters(destScene, pasted.item!.id)
+        expect(pastedFilters.map((f) => f.name)).toContain('OwnTint')
+
+        await api.recordSource(pasted.item!.name, true)
+        expect((await api.stats()).source_records?.length).toBe(1)
+        await api.stop()
+        await api.start()
+        expect((await api.stats()).source_records ?? []).toEqual([])
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 
   describe('stream control, ticking stats, and Go live integration (Problem 3)', () => {
