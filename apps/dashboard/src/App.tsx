@@ -68,6 +68,7 @@ const Recap = lazy(() => import('./screens/Recap').then((m) => ({ default: m.Rec
 const Tips = lazy(() => import('./screens/Tips').then((m) => ({ default: m.Tips })))
 const Designs = lazy(() => import('./screens/Designs').then((m) => ({ default: m.Designs })))
 const Designer = lazy(() => import('./screens/Designer').then((m) => ({ default: m.Designer })))
+const Store = lazy(() => import('./screens/Store').then((m) => ({ default: m.Store })))
 const Import = lazy(() => import('./screens/Import').then((m) => ({ default: m.Import })))
 const Studio = lazy(() => import('./screens/Studio').then((m) => ({ default: m.Studio })))
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })))
@@ -252,7 +253,16 @@ export function App() {
       })
     }
     window.addEventListener('ferrocast:menu', onMenu)
-    return () => window.removeEventListener('ferrocast:menu', onMenu)
+    const onDeeplink = (e: Event) => {
+      const detail = (e as CustomEvent<{ uri?: unknown }>).detail
+      const uri = typeof detail?.uri === 'string' ? detail.uri : null
+      if (uri) window.location.hash = `#/store?link=${encodeURIComponent(uri)}`
+    }
+    window.addEventListener('ferrocast:deeplink', onDeeplink)
+    return () => {
+      window.removeEventListener('ferrocast:menu', onMenu)
+      window.removeEventListener('ferrocast:deeplink', onDeeplink)
+    }
   }, [menuClient])
 
   // The app restarted (or forgot this browser): the live socket only retries, so ask once
@@ -427,6 +437,9 @@ export function App() {
       break
     case 'designer':
       screen = <Designer id={shown.id} />
+      break
+    case 'store':
+      screen = <Store route={shown} />
       break
     case 'studio':
       screen = <Studio section={shown.section} />

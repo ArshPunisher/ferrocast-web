@@ -84,6 +84,24 @@ export class DemoPlugins {
     [PANEL.id, { html: PANEL_HTML, actions: PANEL.actions }],
   ])
 
+  /** Store integration: lists installed plugins. */
+  all(): Plugin[] {
+    return clone(this.list)
+  }
+
+  /** Store integration: inserts or updates a sandboxed plugin. */
+  upsert(p: Plugin): void {
+    this.list = [...this.list.filter((x) => x.id !== p.id), clone(p)].sort((a, b) =>
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+    )
+  }
+
+  /** Store integration: uninstalls a store plugin. */
+  removeById(id: string): void {
+    this.list = this.list.filter((x) => x.id !== id)
+    this.pages.delete(id)
+  }
+
   /** The effects of the plugins that are on (the Effect list shows them). */
   effects(): { id: string; name: string }[] {
     return this.list

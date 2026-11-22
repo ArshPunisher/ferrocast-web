@@ -444,6 +444,23 @@ All three stay PC-only (`remoteAllowed` denies paired phones).
 `top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
 `train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
 
+## R37. Community Theme Store (Phase 3 #18)
+
+In-app Community Theme Store (`#/store`) backed by a minisign-verified catalog (zero telemetry, local SHA-256 package & asset verification, pure-data `.ferrodesign` + p2e sandboxed `.ferroalert` + safe `.ferroplugin`, local render-cost performance scoring, and `ferrocast://` confirmation links):
+
+- `GET /api/v1/store/catalog?fresh=true|false` → `{ version: 1, generated_at, fetched_at, stale, creators, items, installed, last_undo, warnings }`.
+  - Verifies `.sig` with minisign before parsing JSON; enforces byte limits (`2 MB` catalog, `4 KB` sig), schema checks, URL allowlists (`https://` GitHub / relative path only, no traversal / SSRF / `javascript:`), and HTML/metadata sanitization.
+  - Errors: `503 catalog_not_open`, `413 store_catalog_too_large`, `502 store_bad_signature`, `422 store_catalog_invalid`, `502 store_unreachable`. Invalid/stale catalog keeps already-installed items working.
+- `GET /api/v1/store/installed` → `{ installed: StoreInstalledItem[], last_undo: StoreUndoSummary | null }` (always available offline).
+- `GET /api/v1/store/assets/{item_id}/{name}` → verified asset bytes after SHA-256 + length verification (`502 store_asset_tampered` on mismatch).
+- `POST /api/v1/store/install` `{ id }` → `201 Created` `StoreMutationResult` (installs verified `.ferrodesign`, sandboxed p2e `.ferroalert`, or sandboxed `.ferroplugin`; snapshots prior state into undo record).
+- `POST /api/v1/store/update` `{ id }` → `200 OK` `StoreMutationResult` (updates installed item to newer catalog version with full rollback snapshot in undo record).
+- `POST /api/v1/store/uninstall` `{ id }` → `200 OK` `StoreMutationResult` (removes installed designs/alert variations/plugin cleanly; works offline).
+- `POST /api/v1/store/undo` `{ token? }` → `200 OK` `StoreUndoResult` (one-click undo reverting install, update, or uninstall).
+- `POST /api/v1/store/resolve-link` `{ uri }` → `200 OK` `StoreLinkPreview` (validates `ferrocast://store/install/<id>`, `ferrocast://install/<id>`, or `ferrocast://store/item/<id>`, resolves verified catalog entry, returns `requires_confirmation: true` and safety breakdown; never installs automatically).
+- All `/api/v1/store` routes are PC-only (`OWNER_DENIED` rejects paired phones).
+- Demo engine (`packages/api/src/demo/features/store.ts`) serves a realistic signed-style fixture catalog across all categories (`theme`, `alert` incl. p2e custom HTML, `widget`, `overlay`, `plugin`), plus creator profiles, simulated update/install/uninstall/undo, `ferrocast://` resolution, and fault/tamper simulation hooks for tests.
+
 ## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
 
 Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,

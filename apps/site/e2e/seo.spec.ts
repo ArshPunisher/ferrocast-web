@@ -21,6 +21,7 @@ test('the sitemap lists every page', () => {
       '/compare/',
       '/faq/',
       '/docs/getting-started/',
+      '/docs/submit-to-store/',
       '/terms/',
       '/privacy/',
       '/refunds/',
