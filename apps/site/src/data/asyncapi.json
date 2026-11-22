@@ -12,10 +12,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -25,11 +22,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ferrocast cloud account sign-in transition (PC session only, never sent to API keys).",
@@ -42,10 +35,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -55,11 +45,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS BRB scene state (`{ on, scene }`).",
@@ -72,10 +58,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -85,11 +68,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Pinned or cleared featured chat message.",
@@ -102,10 +81,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -115,11 +91,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated tracked chatter metadata.",
@@ -132,10 +104,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -145,11 +114,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated bot counter (`{ name, value }`).",
@@ -173,10 +138,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -186,11 +148,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Normalized stream event (follow, sub, gift_sub, tip, bits, raid, chat_message, etc.).",
@@ -203,10 +161,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -216,11 +171,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active giveaway state, entry count, or winner.",
@@ -233,10 +184,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -246,11 +194,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated stream goals array.",
@@ -263,10 +207,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -276,11 +217,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Multistream output state and live bitrate telemetry.",
@@ -293,10 +230,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -306,11 +240,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Message/event held by safety filters (`{ event_id, reason }`).",
@@ -323,10 +253,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -336,11 +263,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Held event released or dropped (`{ event_id, outcome }`).",
@@ -358,10 +281,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -371,11 +291,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Initial handshake with highest sequence number (`{ seq }`).",
@@ -388,10 +304,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -401,11 +314,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live Moments lane items.",
@@ -418,10 +327,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -431,11 +337,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live stream encoder/audio/network alert banner.",
@@ -448,10 +350,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -461,11 +360,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "New stream marker created.",
@@ -477,10 +372,7 @@
               "data": {
                 "properties": {
                   "key": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "level": {
                     "type": "string"
@@ -492,10 +384,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -505,11 +394,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Engine status notice or panic warning (`account:*` notices suppressed for API keys).",
@@ -522,10 +407,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -535,11 +417,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS FPS/dropped-frames health snapshot.",
@@ -552,10 +430,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -565,11 +440,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Panic lockdown toggled (`{ on, plan }`).",
@@ -582,10 +453,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -595,11 +463,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active poll progress or end state.",
@@ -612,10 +476,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -625,11 +486,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Alert queue snapshot (active/paused/muted/pending count).",
@@ -647,10 +504,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -660,11 +514,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ring buffer gap notice (`{ missed }`); clients should re-fetch state over REST.",
@@ -677,10 +527,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -690,11 +537,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Show countdown and live rundown state (`{ show }`).",
@@ -707,10 +550,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -720,11 +560,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Smart Moderation triage card.",
@@ -737,10 +573,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -750,11 +583,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Overlay reconnect full state snapshot.",
@@ -772,10 +601,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -785,11 +611,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Connector and OBS health snapshots.",
@@ -802,10 +624,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -815,11 +634,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "TTS queue items awaiting approval.",
@@ -832,10 +647,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "type": "string"
@@ -845,11 +657,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Application update check/download state.",

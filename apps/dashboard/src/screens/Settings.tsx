@@ -1055,6 +1055,12 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
           label="Allow other devices on my network"
           description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
         />
+        <SwitchRow
+          checked={settings.api_keys_over_lan}
+          onChange={(v) => save({ ...settings, api_keys_over_lan: v })}
+          label="Allow API keys from other devices"
+          description="Off: a key only works from this computer. On: a script on your network can use one, over plain HTTP that others on the network can read."
+        />
         {lanPending && (
           <Row child>
             <p role="status" className="text-[14.5px] font-medium text-warn">
