@@ -164,15 +164,25 @@ export function AlertTimeline({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-control border border-line bg-surface-2/60 p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[13.5px] font-bold text-text">Timeline & text effects</span>
-        <span className="font-mono text-[12px] text-text-2 tabular-nums">
-          {(total / 1000).toFixed(1)}s total
+    <div className="@container flex flex-col gap-2.5 rounded-panel border border-line bg-surface-1 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <span className="text-[14px] font-bold text-text">Timeline and text effects</span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[12.5px] text-text-2 tabular-nums">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
+            In {anim.in_ms} ms
+          </span>
+          <span>Hold {holdMs} ms</span>
+          {anim.text !== 'none' && <span>Text {anim.text_delay_ms} ms</span>}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-arc" aria-hidden="true" />
+            Out {anim.out_ms} ms
+          </span>
+          <strong className="font-bold text-text">{(total / 1000).toFixed(1)}s total</strong>
         </span>
       </div>
 
-      <div className="relative pt-2 pb-1 select-none">
+      <div className="relative pt-2 pb-0.5 select-none">
         <div
           ref={trackRef}
           onPointerMove={(e) => updateFromPointer(e.clientX)}
@@ -276,39 +286,7 @@ export function AlertTimeline({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[12px] text-text-2 tabular-nums">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
-          In: {anim.in_ms} ms
-        </span>
-        <span>Hold: {holdMs} ms</span>
-        {anim.text !== 'none' && <span>Text delay: {anim.text_delay_ms} ms</span>}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-arc" aria-hidden="true" />
-          Out: {anim.out_ms} ms
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between text-[12.5px] font-semibold text-text-2">
-          <label htmlFor="alert-total-duration">On screen duration</label>
-          <span className="font-mono tabular-nums">{(total / 1000).toFixed(1)} s</span>
-        </div>
-        <input
-          id="alert-total-duration"
-          type="range"
-          min={MIN_DURATION_MS}
-          max={MAX_DURATION_MS}
-          step={500}
-          value={total}
-          aria-label="Total alert duration"
-          aria-valuetext={`${(total / 1000).toFixed(1)} seconds`}
-          onChange={(e) => updateDuration(Number(e.target.value))}
-          className="h-8 w-full"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 @xl:grid-cols-4">
         <Field label="Entrance">
           {(p) => (
             <Select
@@ -352,6 +330,23 @@ export function AlertTimeline({
                 </option>
               ))}
             </Select>
+          )}
+        </Field>
+        <Field label={`On screen ${(total / 1000).toFixed(1)} s`}>
+          {(p) => (
+            <input
+              {...p}
+              id="alert-total-duration"
+              type="range"
+              min={MIN_DURATION_MS}
+              max={MAX_DURATION_MS}
+              step={500}
+              value={total}
+              aria-label="Total alert duration"
+              aria-valuetext={`${(total / 1000).toFixed(1)} seconds`}
+              onChange={(e) => updateDuration(Number(e.target.value))}
+              className="h-9 w-full"
+            />
           )}
         </Field>
       </div>

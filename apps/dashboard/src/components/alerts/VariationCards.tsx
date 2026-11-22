@@ -44,17 +44,20 @@ export function VariationCards({
   onSelect,
   onAdd,
   onDelete,
+  compact = false,
 }: {
   variations: Variation[]
   selectedIndex: number
   onSelect: (index: number) => void
   onAdd: () => void
   onDelete: (index: number) => void
+  /** The editor's left dock: one column, tighter. */
+  compact?: boolean
 }) {
   const hasConditionals = variations.some((v) => v.condition !== null)
 
   return (
-    <div className="mb-5 flex flex-col gap-2.5">
+    <div className={cx(compact ? 'flex flex-col gap-2' : 'mb-5 flex flex-col gap-2.5')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="fc-label">Variations ({variations.length})</span>
         <button
@@ -70,7 +73,7 @@ export function VariationCards({
       <div
         role="group"
         aria-label="Alert variations"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        className={cx('grid grid-cols-1 gap-2', !compact && 'sm:grid-cols-2')}
       >
         {variations.map((v, i) => {
           const isDefault = v.condition === null
@@ -85,7 +88,8 @@ export function VariationCards({
               data-variation-card={v.id}
               data-active={active ? 'true' : undefined}
               className={cx(
-                'relative flex items-start gap-2 rounded-control border p-3 transition-colors',
+                'relative flex items-start gap-2 rounded-control border transition-colors',
+                compact ? 'p-2.5' : 'p-3',
                 active
                   ? 'border-arc bg-arc-soft/35 shadow-1'
                   : 'border-line bg-surface-2/70 hover:border-line-strong',

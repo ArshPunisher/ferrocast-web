@@ -1,5 +1,5 @@
-import { useId, useMemo, useRef, useState } from 'react'
-import { Plus, Warning, X } from '@phosphor-icons/react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { BracketsCurly, Plus, Warning, X } from '@phosphor-icons/react'
 import { KNOWN_VARS, checkTemplate } from '@ferrocast/api'
 import { Input, Textarea, cx } from '@ferrocast/ui'
 
@@ -120,7 +120,10 @@ export function TokenChipField({
   const inputId = useId()
   const errId = useId()
   const [announcement, setAnnouncement] = useState('')
-  const [showAllTokens, setShowAllTokens] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const paletteBtn = useRef<HTMLButtonElement>(null)
+  const palettePanel = useRef<HTMLDivElement>(null)
+  const paletteId = useId()
   const inputEl = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([])
   const paletteRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -131,10 +134,24 @@ export function TokenChipField({
   const error = !check.ok
     ? check.error
     : unknownToken
-      ? `Unknown token '${unknownToken.raw}'. Pick one of the chips below or define a custom field.`
+      ? `Unknown token '${unknownToken.raw}'. Pick one from Tokens or define a custom field.`
       : null
 
-  const quickOptions = showAllTokens ? options : options.slice(0, 7)
+  const quickOptions = options
+  // The palette is a small popover: Escape or a click elsewhere closes it, and focus goes back.
+  useEffect(() => {
+    if (!paletteOpen) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (palettePanel.current?.contains(t) || paletteBtn.current?.contains(t)) return
+      setPaletteOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [paletteOpen])
+  useEffect(() => {
+    if (paletteOpen) paletteRefs.current[0]?.focus()
+  }, [paletteOpen])
 
   const insertToken = (key: string) => {
     const token = `{${key}}`
@@ -209,9 +226,76 @@ export function TokenChipField({
         <label htmlFor={inputId} className="fc-label">
           {label}
         </label>
-        <span className="font-mono text-[12px] text-text-3 tabular-nums">
-          {value.length}/{maxLength}
-        </span>
+        <div className="relative flex items-center gap-2">
+          <span className="font-mono text-[12px] text-text-3 tabular-nums">
+            {value.length}/{maxLength}
+          </span>
+          <button
+            ref={paletteBtn}
+            type="button"
+            aria-expanded={paletteOpen}
+            aria-controls={paletteOpen ? paletteId : undefined}
+            aria-label={`Tokens for ${label}`}
+            onClick={() => setPaletteOpen((o) => !o)}
+            className="fc-press inline-flex h-7 items-center gap-1 rounded-full border border-line-strong bg-surface-1 px-2.5 text-[13px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+          >
+            <BracketsCurly size={13} weight="bold" aria-hidden="true" />
+            Tokens
+          </button>
+          {paletteOpen && (
+            <div
+              ref={palettePanel}
+              id={paletteId}
+              role="group"
+              aria-label={`Insert token into ${label}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  setPaletteOpen(false)
+                  paletteBtn.current?.focus()
+                }
+              }}
+              className="absolute top-full right-0 z-30 mt-1.5 flex max-h-64 w-[min(18rem,calc(100vw-2rem))] flex-col gap-1 overflow-y-auto rounded-control border border-line-strong bg-surface-1 p-2 shadow-pop"
+            >
+              {quickOptions.map((opt, i) => (
+                <button
+                  key={opt.key}
+                  ref={(el) => {
+                    paletteRefs.current[i] = el
+                  }}
+                  type="button"
+                  data-insert-token={opt.key}
+                  title={`Insert {${opt.key}} (${opt.label})`}
+                  onClick={() => {
+                    insertToken(opt.key)
+                    setPaletteOpen(false)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                      e.preventDefault()
+                      paletteRefs.current[(i + 1) % quickOptions.length]?.focus()
+                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                      e.preventDefault()
+                      paletteRefs.current[
+                        (i - 1 + quickOptions.length) % quickOptions.length
+                      ]?.focus()
+                    }
+                  }}
+                  className="fc-press flex min-h-9 items-center gap-2 rounded-[8px] px-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                >
+                  <Plus
+                    size={11}
+                    weight="bold"
+                    aria-hidden="true"
+                    className="shrink-0 text-text-3"
+                  />
+                  <span className="font-mono text-[13px] font-semibold text-text">{`{${opt.key}}`}</span>
+                  <span className="ml-auto truncate text-[13px] text-text-3">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div
@@ -279,42 +363,6 @@ export function TokenChipField({
             ))}
           </div>
         )}
-
-        <div
-          role="group"
-          aria-label={`Insert token into ${label}`}
-          className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-line/70 pt-2"
-        >
-          <span className="text-[11.5px] font-semibold text-text-3">Insert:</span>
-          {quickOptions.map((opt, i) => (
-            <button
-              key={opt.key}
-              ref={(el) => {
-                paletteRefs.current[i] = el
-              }}
-              type="button"
-              data-insert-token={opt.key}
-              title={`Insert {${opt.key}} (${opt.label})`}
-              onClick={() => insertToken(opt.key)}
-              onKeyDown={(e) =>
-                handleRovingKeyDown(e, i, paletteRefs.current.slice(0, quickOptions.length))
-              }
-              className="fc-press inline-flex items-center gap-1 rounded-full border border-line bg-surface-1 px-2 py-0.5 font-mono text-[12px] font-medium text-text-2 hover:border-arc/60 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-            >
-              <Plus size={10} weight="bold" aria-hidden="true" />
-              <span>{`{${opt.key}}`}</span>
-            </button>
-          ))}
-          {options.length > 7 && (
-            <button
-              type="button"
-              onClick={() => setShowAllTokens((s) => !s)}
-              className="rounded-full px-2 py-0.5 text-[12px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-            >
-              {showAllTokens ? 'Fewer tokens' : `+${options.length - 7} more`}
-            </button>
-          )}
-        </div>
       </div>
 
       {error && (
