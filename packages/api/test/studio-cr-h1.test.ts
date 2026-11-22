@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
@@ -119,5 +119,34 @@ describe('filters', () => {
     const after = await eng.filters('Mic')
     // Each filter that was there once is copied once (the copy is named apart).
     expect(after.length).toBe(before * 2)
+  })
+})
+
+describe('stopping the show', () => {
+  it('a stop scheduled before Stop now does not stop a stream started again later', async () => {
+    vi.useFakeTimers()
+    try {
+      const { studio, eng } = rig()
+      await eng.start()
+      const cfg = await studio.showConfig()
+      await studio.saveShowConfig({
+        ...cfg,
+        stop_stream: true,
+        stop_delay_s: 30,
+        ending_scene: null,
+      })
+      await studio.startShow(true, true)
+      await studio.endShow()
+      // Stop now brings the waiting stop forward; the person then streams again.
+      await studio.endShow(true)
+      expect(await eng.streamStats()).toBeNull()
+      await eng.stream(true)
+      expect((await eng.streamStats())?.active).toBe(true)
+      // The first deadline passes: the new stream is not touched.
+      await vi.advanceTimersByTimeAsync(31_000)
+      expect((await eng.streamStats())?.active, 'the restarted stream was stopped').toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -1578,6 +1578,9 @@ export class DemoStudio {
           this.host.later(() => {
             const r = this.run
             if (!r || r.id !== showId || r.phase !== 'ended') return
+            // Only while this stop is still waiting: Stop now already did it, and a stream started
+            // again since is the person's.
+            if (!r.steps.some((x) => x.id === 'stop_stream' && x.status === 'waiting')) return
             this.rigSetStreaming(false, studio)
             this.setRun({
               ...r,
