@@ -54,7 +54,9 @@ export class ChatHighlightWidget implements WidgetView {
   private timedOutId: string | null = null
   private lastSpokenId: string | null = null
   /** When the current highlight first showed: the auto-hide counts from here. */
-  private shownAt = 0
+  /** Visible time used so far (OBS hiding the source pauses the clock). */
+  private usedMs = 0
+  private since = 0
   /** What the card was last built from, so unrelated state frames don't rebuild it. */
   private builtSig = ''
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -90,6 +92,8 @@ export class ChatHighlightWidget implements WidgetView {
   }
 
   onVisibility(visible: boolean): void {
+    if (this.visible && !visible) this.usedMs += Date.now() - this.since
+    if (!this.visible && visible) this.since = Date.now()
     this.visible = visible
     if (!visible) {
       this.clearTimer()
@@ -163,7 +167,10 @@ export class ChatHighlightWidget implements WidgetView {
     this.current = h
     const isNew = h.id !== this.lastShownId
     this.lastShownId = h.id
-    if (isNew) this.shownAt = Date.now()
+    if (isNew) {
+      this.usedMs = 0
+      this.since = Date.now()
+    }
     const sig = `${h.id}|${this.cfg.theme}|${this.cfg.showBadges}|${this.cfg.showPlatform}`
     if (!isNew && sig === this.builtSig && !this.el.hidden) {
       this.armTimeout(h)
@@ -225,7 +232,12 @@ export class ChatHighlightWidget implements WidgetView {
       candidates.push(Math.max(0, h.expires_at - Date.now()))
     }
     if (this.cfg.durationS !== null) {
-      candidates.push(Math.max(0, this.shownAt + this.cfg.durationS * 1000 - Date.now()))
+      candidates.push(
+        Math.max(
+          0,
+          this.cfg.durationS * 1000 - this.usedMs - (this.visible ? Date.now() - this.since : 0),
+        ),
+      )
     }
     if (candidates.length === 0) return
     const ms = Math.min(...candidates)
