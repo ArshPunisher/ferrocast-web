@@ -487,9 +487,13 @@ function Canvas({
             )}
             {(!preview || sel) && (
               <span
+                data-widget-tag={w.id}
                 onPointerDown={passthrough ? (e) => onDown(e, w, 'move') : undefined}
                 className={cx(
-                  'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
+                  'absolute z-10 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
+                  w.y * scale >= 26
+                    ? 'bottom-[calc(100%+4px)] left-0 whitespace-nowrap'
+                    : 'top-1 left-1 max-w-[calc(100%-8px)] truncate',
                   passthrough && 'pointer-events-auto',
                   sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                 )}
@@ -1605,7 +1609,7 @@ export function LayoutEditor({
         </div>
       </div>
       <aside
-        className="flex flex-col gap-4 self-start rounded-panel border border-line bg-surface-1 p-4 shadow-1 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto"
+        className="flex flex-col gap-4 self-start rounded-panel border border-line bg-surface-1 p-4 shadow-1 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto"
         aria-label="Inspector"
       >
         {sel ? (

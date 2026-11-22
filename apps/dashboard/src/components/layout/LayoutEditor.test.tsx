@@ -98,4 +98,47 @@ describe('LayoutEditor full-canvas Emote wall pointer transparency (Problem 5)',
     expect(labelBox.getAttribute('aria-pressed')).toBe('true')
     expect(emoteBox.getAttribute('aria-pressed')).toBe('false')
   })
+
+  it('positions the widget tag above the widget when vertical clearance exists so live text stays uncovered', async () => {
+    const labelWidget: Widget = {
+      id: 'w-label',
+      kind: 'label',
+      x: 200,
+      y: 400,
+      w: 420,
+      h: 64,
+      config: {
+        source: 'latest_follower',
+        template: 'Latest: {value}',
+        theme: 'molten',
+      },
+    }
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <LayoutEditor
+          layout={{ name: 'Main', width: 1920, height: 1080, widgets: [labelWidget] }}
+          onWidgets={vi.fn()}
+          state={EMPTY_STATE}
+          themes={[]}
+          goals={[]}
+          onGoalCreated={vi.fn()}
+          preview={true}
+          media={[]}
+          onUploaded={vi.fn()}
+        />,
+      ),
+    )
+
+    const labelBox = host.querySelector<HTMLElement>('[role="button"][aria-label^="Label widget"]')!
+    await act(async () => {
+      labelBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    const tag = host.querySelector<HTMLElement>('[data-widget-tag="w-label"]')
+    expect(tag).not.toBeNull()
+    expect(tag!.className).toContain('bottom-[calc(100%+4px)]')
+    expect(tag!.className).not.toContain('top-1')
+  })
 })
