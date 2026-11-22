@@ -158,7 +158,11 @@ export function uploadProblem(i: UploadInput): string | null {
     return `The title is up to ${UPLOAD_MAX_TITLE} characters.`
   if (/[<>]/.test(i.title) || /[<>]/.test(i.description ?? ''))
     return 'YouTube does not accept < or >.'
-  if ((i.description ?? '').length > UPLOAD_MAX_DESCRIPTION)
+  // The engine counts bytes, and a Short gets "\n\n#Shorts" (9 bytes) added unless it has one.
+  const description = i.description ?? ''
+  const tagged = /#shorts/i.test(title) || /#shorts/i.test(description)
+  const room = i.shorts && !tagged ? 9 : 0
+  if (new TextEncoder().encode(description).length + room > UPLOAD_MAX_DESCRIPTION)
     return `The description is up to ${UPLOAD_MAX_DESCRIPTION} characters.`
   const tags = i.tags ?? []
   if (tags.length > MAX_TAGS) return `Up to ${MAX_TAGS} tags.`

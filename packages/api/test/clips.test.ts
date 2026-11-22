@@ -143,4 +143,17 @@ describe('times and sizes', () => {
     for (const state of ['done', 'failed', 'cancelled'] as const)
       expect(jobActive({ state })).toBe(false)
   })
+
+  it('counts a description in bytes like the engine, with room for the Shorts tag', () => {
+    // 2,000 three-byte characters are 6,000 bytes: over, though only 2,000 UTF-16 units.
+    expect(uploadProblem({ title: 'x', description: '€'.repeat(2000) })).toMatch(/description/)
+    expect(uploadProblem({ title: 'x', description: 'x'.repeat(5000) })).toBeNull()
+    expect(uploadProblem({ title: 'x', description: 'x'.repeat(4995), shorts: true })).toMatch(
+      /description/,
+    )
+    expect(uploadProblem({ title: 'x', description: 'x'.repeat(4980), shorts: true })).toBeNull()
+    expect(
+      uploadProblem({ title: 'x #shorts', description: 'x'.repeat(4995), shorts: true }),
+    ).toBeNull()
+  })
 })
