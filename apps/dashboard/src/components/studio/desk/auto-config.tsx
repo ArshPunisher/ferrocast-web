@@ -218,6 +218,8 @@ function limitedLabel(l: LimitedBy): { text: string; tone: 'neutral' | 'warn' | 
       return { text: 'Encoder headroom', tone: 'warn' }
     case 'upload':
       return { text: 'Upload bandwidth', tone: 'warn' }
+    case 'upload_too_slow':
+      return { text: 'Upload too slow', tone: 'warn' }
     case 'platform_cap':
       return { text: 'Platform cap', tone: 'accent' }
     case 'balanced':

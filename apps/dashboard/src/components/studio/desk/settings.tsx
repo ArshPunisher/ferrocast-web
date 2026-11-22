@@ -120,6 +120,19 @@ function outputSignature(s: StudioSettings): string {
   ])
 }
 
+/**
+ * Whether the preferences changed since they were last looked at: the first look only records
+ * what they are (cached preferences are not a newer update than the fresh read), and a later
+ * different signature is a real change (an auto-config applied elsewhere).
+ */
+export function prefsChanged(
+  seen: string | null,
+  next: string,
+): { changed: boolean; seen: string } {
+  if (seen === null) return { changed: false, seen: next }
+  return { changed: next !== seen, seen: next }
+}
+
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
@@ -127,6 +140,9 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const [draft, setDraft] = useState<StudioSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const lastOutputSigRef = useRef<string | null>(null)
+  // The preferences as last looked at, apart from the settings read: a stale cached copy that
+  // differs from the fresh read is not a newer update.
+  const seenPrefsSigRef = useRef<string | null>(null)
   useEffect(() => {
     if (loaded.data && !draft) {
       setDraft(loaded.data)
@@ -136,9 +152,10 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const prefsData = prefs?.data ?? null
   useEffect(() => {
     if (!prefsData || !draft) return
-    const nextSig = outputSignature(prefsData)
-    if (lastOutputSigRef.current && nextSig !== lastOutputSigRef.current) {
-      lastOutputSigRef.current = nextSig
+    const look = prefsChanged(seenPrefsSigRef.current, outputSignature(prefsData))
+    seenPrefsSigRef.current = look.seen
+    if (look.changed) {
+      lastOutputSigRef.current = look.seen
       loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, prefsData) : prefsData))
       setDraft((d) => (d ? mergeAutoConfigOutput(d, prefsData) : d))
     }
@@ -146,6 +163,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const syncFromAutoConfig = useCallback(
     (next: StudioSettings) => {
       lastOutputSigRef.current = outputSignature(next)
+      seenPrefsSigRef.current = outputSignature(next)
       loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, next) : next))
       prefs.set(next)
       setDraft((d) => (d ? mergeAutoConfigOutput(d, next) : d))
@@ -166,6 +184,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     try {
       const r = await api.setStudioSettings(draft)
       lastOutputSigRef.current = outputSignature(r.settings)
+      seenPrefsSigRef.current = outputSignature(r.settings)
       loaded.set(r.settings)
       prefs.set(r.settings)
       setDraft(r.settings)
