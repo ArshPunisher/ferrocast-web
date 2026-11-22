@@ -9,6 +9,7 @@ import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
 import { DemoMusic } from './features/music'
+import { DemoStore, type StoreFault } from './features/store'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
@@ -379,6 +380,7 @@ export class DemoEngine {
   private mediaBlobs = new Map<string, Blob>()
   /** Designs: the catalogue, your own, Use, the alert design in use, share files. */
   readonly designs: DemoDesigns
+  readonly storeCatalog: DemoStore
   readonly obsTheme: DemoObsTheme
   readonly music: DemoMusic
   private obs: ObsState = {
@@ -790,6 +792,20 @@ export class DemoEngine {
       },
       opts.designs ?? [],
     )
+    this.storeCatalog = new DemoStore({
+      allDesigns: () => this.designs.all(),
+      addDesign: (d) => this.designs.addStored(d),
+      deleteDesign: (id) => this.designs.deleteStored(id),
+      activeAlert: () => this.designs.activeAlert(),
+      setActiveAlert: (id) => this.designs.setActiveStored(id),
+      rules: () => clone(this.rules),
+      saveRule: (r) => this.saveRule(r.id, r),
+      plugins: () => this.plugins.all(),
+      upsertPlugin: (p) => this.plugins.upsert(p),
+      removePlugin: (id) => this.plugins.removeById(id),
+      now: () => Date.now(),
+      newId: () => randomToken().slice(0, 16),
+    })
     this.music = new DemoMusic({
       pushMusic: (now) => {
         for (const s of this.overlaySubs) if (this.wantsMusic(s)) this.sendOverlay(s, 'music', now)
@@ -857,6 +873,16 @@ export class DemoEngine {
   /** Pro's own tip address: one added already, its status, today's changes. */
   setTipDomain(state: DemoTipDomainState): void {
     this.tipDomain.setState(state)
+  }
+
+  /** Simulates Community Store catalog signature/tamper/oversize/stale/offline faults (tests). */
+  setStoreFault(fault: StoreFault): void {
+    this.storeCatalog.fault = fault
+  }
+
+  /** Bumps a catalog item version in demo mode to test update + undo update flows. */
+  bumpStoreItemVersion(id: string, version: string): void {
+    this.storeCatalog.bumpVersion(id, version)
   }
 
   /** Ferrocast voices: the relay-wide cap reached (`resting`), or this month's characters. */
@@ -1886,6 +1912,7 @@ export class DemoEngine {
       this.obsTheme,
       this.music,
       this.designs,
+      this.storeCatalog,
       this.studio,
       this.golive,
       this.tipBrand,

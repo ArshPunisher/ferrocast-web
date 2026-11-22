@@ -19,6 +19,7 @@ import {
   UserCircle,
   ShieldCheck,
   SquaresFour,
+  Storefront,
   Sun,
   UsersThree,
 } from '@phosphor-icons/react'
@@ -87,6 +88,12 @@ export const NAV: NavItem[] = [
     label: 'Designs',
     icon: PaintBrushBroad,
     match: ['designs', 'designer'],
+  },
+  {
+    route: { name: 'store' },
+    label: 'Store',
+    icon: Storefront,
+    match: ['store'],
   },
   { route: { name: 'moderation' }, label: 'Moderation', icon: ShieldCheck, match: ['moderation'] },
   { route: { name: 'bot' }, label: 'Bot', icon: Command, match: ['bot'] },
@@ -716,6 +723,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                   'overlay',
                   'bot',
                   'community',
+                  'store',
                   'tips',
                   'history',
                   'settings',

@@ -81,6 +81,8 @@ describe('the role rules (same as the PC and the relay)', () => {
       ['POST', '/updates/install'],
       ['POST', '/updates/check'],
       ['POST', '/updates/restart'],
+      ['GET', '/store/catalog'],
+      ['POST', '/store/install'],
       ['PATCH', '/settings'],
     ] as const)
       expect(remoteAllowed('owner', m, p), `${m} ${p}`).toBe(false)
