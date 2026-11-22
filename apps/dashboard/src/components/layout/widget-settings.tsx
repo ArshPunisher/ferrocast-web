@@ -21,7 +21,6 @@ import {
 import {
   DEFAULT_THEME,
   PLATFORM_LABEL,
-  isColor,
   type ChatPlatform,
   type CreditsSection,
   type EmotePhysics,
@@ -738,11 +737,12 @@ function OptionalColorField({
   return (
     <Field label={label}>
       {(p) => (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             aria-label={`${label} colour picker`}
             type="color"
-            value={value && isColor(value) ? value : fallbackHex}
+            // A picker only takes #rrggbb; a valid #fff or #rrggbbaa stays in the text box.
+            value={value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallbackHex}
             onChange={(e) => onChange(e.target.value)}
             className="h-9 w-11 shrink-0 cursor-pointer rounded-control border border-line bg-surface-2 p-1"
           />
@@ -866,7 +866,7 @@ function EndCreditsFields({
             {...p}
             type="range"
             min={20}
-            max={240}
+            max={300}
             step={10}
             value={cfg.speed}
             onChange={(e) => onChange({ ...cfg, speed: Number(e.target.value) })}

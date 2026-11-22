@@ -3,15 +3,7 @@
 // and visibility pause, and reacts to message deletion / user bans / clear chat.
 
 import type { ChatHighlight, ChatHighlightConfig, Platform, Widget } from '@ferrocast/api/types'
-import {
-  DARK_THEMES,
-  el,
-  platformGlyph,
-  readableColor,
-  safeText,
-  textSpan,
-  themeOf,
-} from '../dom'
+import { DARK_THEMES, el, platformGlyph, readableColor, safeText, textSpan, themeOf } from '../dom'
 import { isTrustedEmoteUrl } from '@ferrocast/api'
 import { renderFragments } from './chat'
 import { place, type WidgetContext, type WidgetView } from '../widget'

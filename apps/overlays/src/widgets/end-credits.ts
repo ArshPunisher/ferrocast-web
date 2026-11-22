@@ -166,7 +166,12 @@ export class EndCreditsWidget implements WidgetView {
     const credits = this.ctx.state.credits
     // Frames about something else (viewer counts, goals) leave the roster as it is.
     const cfgSig = `${this.cfg.title}|${this.cfg.sections.join(',')}|${this.cfg.loop}`
-    if (!resetPosition && credits === this.lastCredits && cfgSig === this.lastCfgSig && this.dataSig !== '') {
+    if (
+      !resetPosition &&
+      credits === this.lastCredits &&
+      cfgSig === this.lastCfgSig &&
+      this.dataSig !== ''
+    ) {
       this.syncMotion()
       return
     }

@@ -382,10 +382,31 @@ describe('chat_highlight widget', () => {
     h.content = {
       text: 'Kappa Kappa',
       fragments: [
-        { type: 'emote', provider: 'native', id: '1', name: 'Kappa', url: 'https://evil.example/e.png', zero_width: false },
+        {
+          type: 'emote',
+          provider: 'native',
+          id: '1',
+          name: 'Kappa',
+          url: 'https://evil.example/e.png',
+          zero_width: false,
+        },
         { type: 'text', text: ' ' },
-        { type: 'emote', provider: 'native', id: '2', name: 'Kappa', url: 'http://127.0.0.1:9/e.png', zero_width: false },
-        { type: 'emote', provider: 'native', id: '3', name: 'Kappa', url: 'https://cdn.7tv.app/emote/1/2x.webp', zero_width: false },
+        {
+          type: 'emote',
+          provider: 'native',
+          id: '2',
+          name: 'Kappa',
+          url: 'http://127.0.0.1:9/e.png',
+          zero_width: false,
+        },
+        {
+          type: 'emote',
+          provider: 'native',
+          id: '3',
+          name: 'Kappa',
+          url: 'https://cdn.7tv.app/emote/1/2x.webp',
+          zero_width: false,
+        },
       ],
     } as never
     rt.apply(frame('state', { chat_highlight: h }))
