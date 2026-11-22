@@ -479,10 +479,19 @@ for (const [name, size] of [
       await page.getByRole('button', { name: /^Chat/ }).first().click({ button: 'right' })
       await expect(page.getByRole('menuitem', { name: 'Shown in' })).toBeVisible()
       await page.keyboard.press('Escape')
-      await page.getByRole('button', { name: /^Mic/ }).first().click({ button: 'right' })
-      await expect(page.getByRole('menuitem', { name: 'Blending' })).toBeVisible()
+      // The first menu is gone before the next one opens (not a fixed wait).
+      await expect(page.getByRole('menu')).toHaveCount(0)
+      // A list that is still settling can swallow the first right-click: ask again until the
+      // menu is open (a state, not a wait).
+      await expect(async () => {
+        await page.getByRole('button', { name: /^Mic/ }).first().click({ button: 'right' })
+        await expect(page.getByRole('menuitem', { name: 'Blending' })).toBeVisible({
+          timeout: 1500,
+        })
+      }).toPass()
       await expect(page.getByRole('menuitem', { name: 'Shown in' })).toHaveCount(0)
       await page.keyboard.press('Escape')
+      await expect(page.getByRole('menu')).toHaveCount(0)
       expect(errors).toEqual([])
     })
 
