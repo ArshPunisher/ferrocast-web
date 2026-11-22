@@ -297,5 +297,24 @@ describe('interactive widgets API contract', () => {
         code: 'highlight_not_found',
       })
     })
+
+    it('demo chat emotes use trusted, non-dead emote URLs across platforms', async () => {
+      const { demo, client } = make()
+      const tick = (demo as unknown as { randomChat: () => void }).randomChat.bind(demo)
+      for (let i = 0; i < 150; i++) tick()
+      const msgs = await client.chat(150)
+      const emoteUrls: string[] = []
+      for (const m of msgs) {
+        if (m.kind.type !== 'chat_message') continue
+        for (const f of m.kind.content.fragments) {
+          if (f.type === 'emote') emoteUrls.push(f.url)
+        }
+      }
+      expect(emoteUrls.length).toBeGreaterThan(0)
+      for (const url of emoteUrls) {
+        expect(url).not.toContain('01F6N8W4M0000083K2R1V9H8Z3')
+        expect(isTrustedEmoteUrl(url), url).toBe(true)
+      }
+    })
   })
 })

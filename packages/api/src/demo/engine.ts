@@ -3516,10 +3516,10 @@ export class DemoEngine {
           : p === 'youtube'
             ? {
                 type: 'emote' as const,
-                provider: 'seven_tv' as const,
-                id: '01F6N',
+                provider: 'bttv' as const,
+                id: '5f1b0186cf6d2144653d2970',
                 name: 'catJAM',
-                url: 'https://cdn.7tv.app/emote/01F6N8W4M0000083K2R1V9H8Z3/1x.webp',
+                url: 'https://cdn.betterttv.net/emote/5f1b0186cf6d2144653d2970/1x',
                 zero_width: false,
               }
             : {
