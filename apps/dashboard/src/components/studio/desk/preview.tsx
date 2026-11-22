@@ -70,7 +70,7 @@ import { OverflowRow, type OverflowItem } from './overflow-row'
 import { GuideOverlay, OverflowMask } from './preview-guides'
 import { OptionsForm } from './options'
 import { ArrangeButton } from './arrange'
-import { GroupBox, SnapOverlay, clearHints, setHints } from './snap-overlay'
+import { GroupBox, HOLES_CHANGED, SnapOverlay, clearHints, setHints } from './snap-overlay'
 import {
   frameOfBox,
   gapsFor,
@@ -643,6 +643,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
       attributeFilter: ['class', 'data-theme', 'style'],
     })
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
+    // The edit overlays (marquee, group box, guides) move by style alone.
+    window.addEventListener(HOLES_CHANGED, schedule)
     // Straight away when hidden: a hidden page gets no animation frames.
     const onVisible = () => (document.hidden ? send() : schedule())
     document.addEventListener('visibilitychange', onVisible)
@@ -694,6 +696,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
       ro.disconnect()
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
+      window.removeEventListener(HOLES_CHANGED, schedule)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
       unfreeze()

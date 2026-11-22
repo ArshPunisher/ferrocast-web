@@ -3,7 +3,7 @@
 // several, and the one box round several picked sources with its handles. Like the safe areas,
 // each is marked `data-over-preview` so the app leaves its native picture out under it and the
 // page's own pixels show through.
-import { useSyncExternalStore, type CSSProperties } from 'react'
+import { useEffect, useSyncExternalStore, type CSSProperties } from 'react'
 import { cx } from '@ferrocast/ui'
 import type { Gap, Guide, Rect } from './snap'
 
@@ -41,6 +41,70 @@ export function useHints(): Hints {
   )
 }
 
+/**
+ * Fired (on window) whenever an overlay's holes may have moved. They move by `style` alone (a
+ * marquee growing, the group box following a drag), which no MutationObserver on the page is
+ * set to watch, so without this the app's picture kept the old holes for up to half a second.
+ */
+export const HOLES_CHANGED = 'fc:preview-holes'
+
+/** Says so after every render of the overlay that holds the holes. */
+function useTellHoles(): void {
+  useEffect(() => {
+    window.dispatchEvent(new Event(HOLES_CHANGED))
+  })
+}
+
+/**
+ * The border of a rectangle as four thin edges, each a hole in the native picture
+ * (`data-over-preview`): the inside stays the live picture, not a blank one.
+ */
+function Edges({
+  rect,
+  canvas,
+  tag,
+}: {
+  rect: Rect
+  canvas: { width: number; height: number }
+  tag?: string
+}) {
+  const { width: W, height: H } = canvas
+  const left = Math.min(rect.left, rect.right)
+  const top = Math.min(rect.top, rect.bottom)
+  const w = Math.abs(rect.right - rect.left)
+  const h = Math.abs(rect.bottom - rect.top)
+  return (
+    <>
+      {(
+        [
+          ['top', left, top, w, 0],
+          ['bottom', left, top + h, w, 0],
+          ['left', left, top, 0, h],
+          ['right', left + w, top, 0, h],
+        ] as const
+      ).map(([side, x, y, ew, eh]) => (
+        <span
+          key={side}
+          data-over-preview
+          data-guide-hole
+          {...(tag ? { [tag]: side } : {})}
+          style={{
+            left: pct(x, W),
+            top: pct(y, H),
+            ...(side === 'top' || side === 'bottom'
+              ? { width: pct(ew, W), height: 2, marginTop: -1 }
+              : { width: 2, height: pct(eh, H), marginLeft: -1 }),
+          }}
+          className={cx(
+            'absolute border-dashed border-[var(--fc-arc)]',
+            side === 'top' || side === 'bottom' ? 'border-t' : 'border-l',
+          )}
+        />
+      ))}
+    </>
+  )
+}
+
 /** A guide line's thickness, screen px. */
 const LINE = 1.5
 
@@ -61,6 +125,7 @@ export function SnapOverlay({
   canvas: { width: number; height: number } | null
 }) {
   const h = useHints()
+  useTellHoles()
   if (!canvas || !h.owner || h.owner !== boxRef.current) return null
   const { width: W, height: H } = canvas
   return (
@@ -136,18 +201,20 @@ export function SnapOverlay({
         )
       })}
       {h.marquee && (
-        <span
-          data-over-preview
-          data-guide-hole
-          data-marquee
-          style={{
-            left: pct(Math.min(h.marquee.left, h.marquee.right), W),
-            top: pct(Math.min(h.marquee.top, h.marquee.bottom), H),
-            width: pct(Math.abs(h.marquee.right - h.marquee.left), W),
-            height: pct(Math.abs(h.marquee.bottom - h.marquee.top), H),
-          }}
-          className="absolute border border-dashed border-[var(--fc-arc)] bg-accent-soft"
-        />
+        <>
+          {/* The fill is only a tint (no hole); the dashed border is four thin edges. */}
+          <span
+            data-marquee
+            style={{
+              left: pct(Math.min(h.marquee.left, h.marquee.right), W),
+              top: pct(Math.min(h.marquee.top, h.marquee.bottom), H),
+              width: pct(Math.abs(h.marquee.right - h.marquee.left), W),
+              height: pct(Math.abs(h.marquee.bottom - h.marquee.top), H),
+            }}
+            className="absolute bg-accent-soft"
+          />
+          <Edges rect={h.marquee} canvas={canvas} />
+        </>
       )}
     </div>
   )
@@ -178,6 +245,7 @@ export function GroupBox({
   canvas: { width: number; height: number } | null
   className?: string
 }) {
+  useTellHoles()
   if (!rect || !canvas) return null
   const { width: W, height: H } = canvas
   const w = rect.right - rect.left
@@ -188,33 +256,7 @@ export function GroupBox({
       data-group-box
       className={cx('pointer-events-none absolute inset-0', className)}
     >
-      {/* The border is four thin edges, not one big box: each is a hole in the native picture
-          (`data-over-preview`), and the inside must stay the picture. */}
-      {(
-        [
-          ['top', rect.left, rect.top, w, 0],
-          ['bottom', rect.left, rect.bottom, w, 0],
-          ['left', rect.left, rect.top, 0, h],
-          ['right', rect.right, rect.top, 0, h],
-        ] as const
-      ).map(([side, x, y, ew, eh]) => (
-        <span
-          key={side}
-          data-over-preview
-          data-guide-hole
-          style={{
-            left: pct(x, W),
-            top: pct(y, H),
-            ...(ew
-              ? { width: pct(ew, W), height: 2, marginTop: -1 }
-              : { width: 2, height: pct(eh, H), marginLeft: -1 }),
-          }}
-          className={cx(
-            'absolute border-dashed border-[var(--fc-arc)]',
-            ew ? 'border-t' : 'border-l',
-          )}
-        />
-      ))}
+      <Edges rect={rect} canvas={canvas} />
       {HANDLES.map(([u, v]) => (
         <span
           key={`${u}-${v}`}
