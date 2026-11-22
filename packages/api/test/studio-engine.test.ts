@@ -506,4 +506,198 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       expect(['ok', 'limit', 'over', 'unknown']).toContain(b.level)
     })
   })
+
+  describe('scenes, items, clipboard, push-to-show, and selective recording (Problem 1)', () => {
+    it('models scene items matching scene counts and supports item CRUD, layout, and undo/redo', async () => {
+      const { engine, api } = mkApi()
+      try {
+        const scenes = await api.scenes()
+        for (const s of scenes.scenes) {
+          const list = await api.items(s.name)
+          expect(list.length).toBe(s.items)
+        }
+        const mainItems = await api.items('Main')
+        expect(mainItems.length).toBeGreaterThanOrEqual(2)
+        expect(mainItems.some((i) => i.name === 'Webcam')).toBe(true)
+
+        const created = await api.addSource(
+          'Main',
+          { kind: 'color_source_v3', name: 'Backdrop', settings: { color: 0xff112233 } },
+          true,
+        )
+        expect(created.item.name).toBe('Backdrop')
+        expect(created.item.frame).toEqual([1920, 0, 0, 1080, 0, 0])
+        expect((await api.items('Main'))[0]?.id).toBe(created.item.id)
+
+        const moved = await api.setItemBox('Main', created.item.id, {
+          x: 100,
+          y: 50,
+          w: 640,
+          h: 360,
+          save: true,
+        })
+        expect(moved.frame).toEqual([640, 0, 0, 360, 100, 50])
+
+        await api.editItem('Main', created.item.id, 'hide')
+        await api.editItem('Main', created.item.id, 'lock')
+        await api.editItem('Main', created.item.id, 'blend_screen')
+        await api.editItem('Main', created.item.id, 'scale_lanczos')
+        const edited = (await api.items('Main')).find((i) => i.id === created.item.id)!
+        expect(edited).toMatchObject({
+          visible: false,
+          locked: true,
+          blend: 'screen',
+          scale_filter: 'lanczos',
+        })
+
+        // Undo & Redo track mutations cleanly.
+        const histBeforeUndo = await api.history()
+        expect(histBeforeUndo.undo.length).toBeGreaterThan(0)
+        await api.undo()
+        expect((await api.items('Main')).find((i) => i.id === created.item.id)?.scale_filter).toBe(
+          'off',
+        )
+        await api.redo()
+        expect((await api.items('Main')).find((i) => i.id === created.item.id)?.scale_filter).toBe(
+          'lanczos',
+        )
+
+        // Shared existing source and grouping across scenes.
+        const existing = await api.addExisting('Gameplay', 'Backdrop')
+        expect(existing.item.name).toBe('Backdrop')
+        const grp = await api.groupItems('Main', [created.item.id], 'Stage Group')
+        expect(grp.group).toBe(true)
+        expect(grp.children.map((c) => c.id)).toEqual([created.item.id])
+        await api.ungroup('Main', grp.id)
+        expect((await api.items('Main')).some((i) => i.id === created.item.id)).toBe(true)
+
+        // Batch boxes rejects invalid id atomically without mutating others.
+        const beforeBoxes = await api.items('Main')
+        await expect(
+          api.setItemBoxes('Main', {
+            items: [
+              { id: created.item.id, x: 10, y: 10, w: 300, h: 200 },
+              { id: 999999, x: 0, y: 0, w: 100, h: 100 },
+            ],
+            save: true,
+          }),
+        ).rejects.toMatchObject({ status: 404, code: 'studio_no_source' })
+        expect((await api.items('Main')).find((i) => i.id === created.item.id)?.frame).toEqual(
+          beforeBoxes.find((i) => i.id === created.item.id)?.frame,
+        )
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('supports copy/paste across scenes & collections matching clipboard error semantics', async () => {
+      const { engine, api } = mkApi()
+      try {
+        await expect(api.clipboard()).rejects.toMatchObject({
+          status: 404,
+          code: 'clipboard_empty',
+        })
+
+        const mainItems = await api.items('Main')
+        const cam = mainItems.find((i) => i.name === 'Webcam')!
+        await api.addFilter('Webcam', { kind: 'compressor_filter', name: 'Comp', settings: {} })
+        const clip = await api.copySource('Main', cam.id)
+        expect(clip).toEqual({ kind: 'source', name: 'Webcam', from: 'Main', count: 1 })
+        expect(await api.clipboard()).toEqual(clip)
+
+        // Switch collection: copied source survives on the clipboard and pastes cleanly.
+        const colB = await api.newShelf('collections', 'Secondary Show', false)
+        expect((await api.shelf('collections')).current).toBe(colB.id)
+        const targetScene = (await api.scenes()).current
+        const pasted = await api.pasteSource(targetScene)
+        expect(pasted.item?.name).toBe('Webcam')
+        expect((await api.items(targetScene)).some((i) => i.name === 'Webcam')).toBe(true)
+
+        // Copy & paste filters, refusing empty filter lists and wrong clipboard kind.
+        await api.pasteSource(targetScene) // second paste renames to avoid collision
+        const namesAfter = (await api.items(targetScene)).map((i) => i.name)
+        expect(namesAfter.some((n) => n === 'Webcam 2')).toBe(true)
+
+        await api.addSource(targetScene, { kind: 'color_source_v3', name: 'Filterless' }, true)
+        await expect(api.pasteFilterClip('Webcam')).rejects.toMatchObject({ status: 400 })
+        await expect(api.copyFilters('Filterless')).rejects.toMatchObject({ status: 400 })
+        const filterClip = await api.copyFilters('Webcam')
+        expect(filterClip).toMatchObject({ kind: 'filters', name: 'Webcam', count: 1 })
+        await expect(api.pasteSource(targetScene)).rejects.toMatchObject({ status: 400 })
+        await api.pasteFilterClip('Filterless')
+        expect((await api.filters('Filterless')).map((f) => f.name)).toContain('Comp')
+
+        await api.clearClipboard()
+        await expect(api.clipboard()).rejects.toMatchObject({
+          status: 404,
+          code: 'clipboard_empty',
+        })
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('supports selective recording, source recording, encode budget, and push-to-show hotkeys', async () => {
+      const { engine, api } = mkApi()
+      try {
+        const items = await api.items('Main')
+        const cam = items.find((i) => i.name === 'Webcam')!
+
+        // Item show modes & encode budget reflection.
+        await api.editItem('Main', cam.id, 'stream_only')
+        expect((await api.items('Main')).find((i) => i.id === cam.id)?.show).toBe('stream')
+        const splitBudget = await api.encodeBudget()
+        expect(splitBudget.shared).toBe(false)
+        expect(splitBudget.why_not_shared).toBeTruthy()
+
+        await api.editItem('Main', cam.id, 'recording_only')
+        expect((await api.items('Main')).find((i) => i.id === cam.id)?.show).toBe('recording')
+
+        await api.editItem('Main', cam.id, 'stream_and_recording')
+        expect((await api.items('Main')).find((i) => i.id === cam.id)?.show).toBe('both')
+        expect((await api.encodeBudget()).shared).toBe(true)
+
+        // While recording with shared encode ("stream"), selective visibility change is refused.
+        const settings = await api.studioSettings()
+        await api.setStudioSettings({ ...settings, record_quality: 'stream' })
+        await api.record(true)
+        expect((await api.stats()).record?.active).toBe(true)
+        await expect(api.editItem('Main', cam.id, 'stream_only')).rejects.toMatchObject({
+          status: 422,
+          code: 'studio_failed',
+        })
+        await api.record(false)
+        expect((await api.stats()).record).toBeNull()
+
+        // Source-isolated recording populates stats.source_records and stops cleanly.
+        const started = await api.recordSource('Webcam', true)
+        expect(started.file).toContain('Webcam')
+        expect((await api.stats()).source_records).toEqual([{ name: 'Webcam', file: started.file }])
+        const stopped = await api.recordSource('Webcam', false)
+        expect(stopped.file).toBeNull()
+        expect((await api.stats()).source_records ?? []).toEqual([])
+        await expect(api.recordSource('Missing Source', true)).rejects.toMatchObject({
+          status: 422,
+          code: 'studio_failed',
+        })
+
+        // Push-to-show hotkey capture and persistence succeed cleanly.
+        await api.captureKeys(true)
+        await api.setStudioSettings({
+          ...(await api.studioSettings()),
+          hotkeys: {
+            'push_show:Main\nWebcam': 'F9',
+            'push_hide:Main\nWebcam': 'F10',
+          },
+        })
+        await api.captureKeys(false)
+        expect((await api.studioSettings()).hotkeys).toMatchObject({
+          'push_show:Main\nWebcam': 'F9',
+          'push_hide:Main\nWebcam': 'F10',
+        })
+      } finally {
+        engine.dispose()
+      }
+    })
+  })
 })

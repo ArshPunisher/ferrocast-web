@@ -1,17 +1,31 @@
 import {
+  ENGINE_BLENDS,
+  ENGINE_DEINTERLACE,
+  ENGINE_SCALE_FILTERS,
   resolveTransitionFromScenes,
   type EncodeBudget,
+  type EngineBlend,
+  type EngineClipboard,
+  type EngineDeinterlace,
   type EngineFilter,
   type EngineImportPreview,
   type EngineImportReport,
   type EngineImportSkip,
+  type EngineItem,
   type EngineLevel,
+  type EngineMonitor,
   type EngineNamedTransition,
   type EngineObsCollection,
   type EngineOption,
+  type EnginePasteResult,
+  type EngineRecordStats,
+  type EngineScaleFilter,
   type EngineSettings,
   type EngineShelf,
+  type EngineShow,
+  type EngineSourceUse,
   type EngineStudioOptions,
+  type EngineTransform,
   type EngineTransition,
   type EngineTransitionMatrixRule,
   type NewEngineSource,
@@ -37,6 +51,116 @@ interface StoredCollection {
   list: EngineObsCollection
   preview: EngineImportPreview
   scenes: string[]
+}
+
+interface StoredSource {
+  name: string
+  kind: string
+  audio: boolean
+  settings: EngineSettings
+  volume_db: number
+  muted: boolean
+  monitor: EngineMonitor
+  filters: EngineFilter[]
+  filterSettings: Record<string, EngineSettings>
+  deinterlace?: EngineDeinterlace | null
+  top_field_first?: boolean
+  media?: boolean
+  channel?: number | null
+}
+
+interface ItemFilterState {
+  filters: EngineFilter[]
+  settings: Record<string, EngineSettings>
+}
+
+interface CollectionSnapshot {
+  activeScenes: string[]
+  currentScene: string
+  previewScene: string | null
+  sceneItems: Record<string, EngineItem[]>
+  sources: Record<string, StoredSource>
+  transforms: Record<number, EngineTransform>
+  itemFilters: Record<number, ItemFilterState>
+  nextItemId: number
+  namedTransitions: EngineNamedTransition[]
+  transitionMatrix: EngineTransitionMatrixRule[]
+  legacySceneTransitions: Record<string, EngineTransition>
+}
+
+interface CopiedSourceBundle {
+  item: EngineItem
+  transforms: Record<number, EngineTransform>
+  sources: StoredSource[]
+}
+
+interface UndoEntry {
+  label: string
+  snapshot: CollectionSnapshot
+}
+
+const CANVAS_W = 1920
+const CANVAS_H = 1080
+const AUDIO_KINDS = new Set([
+  'coreaudio_input_capture',
+  'coreaudio_output_capture',
+  'sck_audio_capture',
+  'wasapi_input_capture',
+  'wasapi_output_capture',
+  'pulse_input_capture',
+  'pulse_output_capture',
+])
+const CAMERA_KINDS = new Set(['av_capture_input_v2', 'dshow_input', 'v4l2_input'])
+const BLEND_SET = new Set<string>(ENGINE_BLENDS)
+const SCALE_SET = new Set<string>(ENGINE_SCALE_FILTERS)
+const DEINTERLACE_SET = new Set<string>(ENGINE_DEINTERLACE)
+
+function computeBox(t: EngineTransform): { x: number; y: number; w: number; h: number } {
+  const croppedW = Math.max(1, t.width - t.crop_left - t.crop_right)
+  const croppedH = Math.max(1, t.height - t.crop_top - t.crop_bottom)
+  const w =
+    t.bounds !== 'none' && t.bounds_width > 0
+      ? t.bounds_width
+      : Math.max(1, croppedW * Math.abs(t.scale_x))
+  const h =
+    t.bounds !== 'none' && t.bounds_height > 0
+      ? t.bounds_height
+      : Math.max(1, croppedH * Math.abs(t.scale_y))
+  return { x: t.x, y: t.y, w, h }
+}
+
+function frameFromTransform(t: EngineTransform): [number, number, number, number, number, number] {
+  const { x, y, w, h } = computeBox(t)
+  const rad = (t.rotation * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const sx = (t.scale_x < 0 ? -1 : 1) * w
+  const sy = (t.scale_y < 0 ? -1 : 1) * h
+  const clean = (n: number) => (Math.abs(n) < 1e-6 ? 0 : Math.round(n * 1000) / 1000)
+  return [clean(sx * cos), clean(sx * sin), clean(-sy * sin), clean(sy * cos), clean(x), clean(y)]
+}
+
+function defaultTransform(
+  box: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H },
+): EngineTransform {
+  return {
+    x: box.x,
+    y: box.y,
+    rotation: 0,
+    scale_x: 1,
+    scale_y: 1,
+    alignment: 5,
+    bounds: 'stretch',
+    bounds_alignment: 5,
+    bounds_width: box.w,
+    bounds_height: box.h,
+    crop_left: 0,
+    crop_top: 0,
+    crop_right: 0,
+    crop_bottom: 0,
+    width: Math.max(1, Math.round(box.w)),
+    height: Math.max(1, Math.round(box.h)),
+  }
 }
 
 const CAMERA_SVGS = [
@@ -396,9 +520,24 @@ export class DemoStudioEngine {
   private micSourceName = 'Mic'
   private micDeviceId = 'mic-builtin'
   private cameraSourceName = 'Webcam'
-  private filters = new Map<string, EngineFilter[]>()
-  private audioVolumeDb = new Map<string, number>()
-  private audioMuted = new Map<string, boolean>()
+  private sceneItems = new Map<string, EngineItem[]>()
+  private sources = new Map<string, StoredSource>()
+  private transforms = new Map<number, EngineTransform>()
+  private itemFilters = new Map<number, ItemFilterState>()
+  private nextItemId = 1
+  private undoStack: UndoEntry[] = []
+  private redoStack: UndoEntry[] = []
+  private collections = new Map<string, CollectionSnapshot>()
+  private clipboardSummary: EngineClipboard | null = null
+  private clipboardSource: CopiedSourceBundle | null = null
+  private clipboardFiltersData: ItemFilterState | null = null
+  private recording = false
+  private recordingPaused = false
+  private recordFile: string | null = null
+  private sourceRecords = new Map<string, string>()
+  private replayActive = false
+  private replayLast: string | null = null
+  private virtualcam: { active: boolean; source: string | null } = { active: false, source: null }
   private studioSettingsData: Record<string, unknown> = {
     encoder: 'hardware',
     video_kbps: 6000,
@@ -435,12 +574,18 @@ export class DemoStudioEngine {
       micPreset: opts.micPreset ?? 'quiet',
       running: opts.running ?? false,
     }
-    this.filters.set('Mic', [])
-    this.filters.set('Desktop Audio', [])
+    this.seedDefaults()
+    this.collections.set(this.shelfCollections.current, this.captureSnapshot())
   }
 
   configure(next: Partial<DemoStudioEngineOptions>): void {
+    const prevCam = this.opts.hasCamera
+    const prevMic = this.opts.hasMic
     Object.assign(this.opts, next)
+    if (prevCam !== this.opts.hasCamera || prevMic !== this.opts.hasMic) {
+      if (!this.opts.hasCamera) this.removeSourceEverywhere(this.cameraSourceName)
+      if (!this.opts.hasMic) this.removeSourceEverywhere(this.micSourceName)
+    }
   }
 
   private obsList(): StoredCollection[] {
@@ -501,6 +646,7 @@ export class DemoStudioEngine {
 
   private applyImport(entry: StoredCollection): EngineImportReport {
     const previous_id = this.shelfCollections.current
+    this.collections.set(previous_id, this.captureSnapshot())
     let name = entry.list.name
     let idx = 2
     while (this.shelfCollections.list.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
@@ -520,9 +666,17 @@ export class DemoStudioEngine {
     this.shelfCollections.list.push({ id, name })
     this.shelfCollections.current = id
     if (entry.scenes.length > 0) {
-      this.activeScenes = [...entry.scenes]
-      this.currentScene = entry.scenes[0]!
+      this.seedForScenes(entry.scenes, true)
+      const cam = this.opts.hasCamera
+        ? this.makeSource(this.cameraSourceName, 'av_capture_input_v2', {
+            device: CAMERA_SVGS[0].id,
+          })
+        : null
+      if (cam) this.sources.set(cam.name, cam)
+      const firstScene = entry.scenes[0]!
+      if (cam) this.sceneItems.set(firstScene, [this.createSceneItem(cam)])
     }
+    this.collections.set(id, this.captureSnapshot())
     return {
       id,
       previous_id,
@@ -537,20 +691,400 @@ export class DemoStudioEngine {
     }
   }
 
-  private requireMicName(name: string): void {
-    if (!this.opts.hasMic || name !== this.micSourceName) {
-      if (name !== 'Desktop Audio' && name !== this.cameraSourceName) {
-        throw new HttpError(
-          404,
-          'studio_no_source',
-          `There’s no source called "${name}".`,
-          'Refresh the list of sources.',
-        )
-      }
+  private ensureGlobalSources(): void {
+    if (!this.sources.has('Desktop Audio')) {
+      this.sources.set('Desktop Audio', {
+        name: 'Desktop Audio',
+        kind: 'sck_audio_capture',
+        audio: true,
+        settings: {},
+        volume_db: 0,
+        muted: false,
+        monitor: 'off',
+        filters: [],
+        filterSettings: {},
+        channel: 1,
+      })
+    }
+    if (this.opts.hasMic && !this.sources.has(this.micSourceName)) {
+      this.sources.set(this.micSourceName, {
+        name: this.micSourceName,
+        kind: 'coreaudio_input_capture',
+        audio: true,
+        settings: { device_id: this.micDeviceId },
+        volume_db: 0,
+        muted: false,
+        monitor: 'off',
+        filters: [],
+        filterSettings: {},
+        channel: 3,
+      })
     }
   }
 
+  private makeSource(
+    name: string,
+    kind: string,
+    settings: EngineSettings = {},
+    opts: { channel?: number | null; audio?: boolean } = {},
+  ): StoredSource {
+    const audio = opts.audio ?? (AUDIO_KINDS.has(kind) || kind === 'ferrocast_web')
+    return {
+      name,
+      kind,
+      audio,
+      settings: clone(settings),
+      volume_db: 0,
+      muted: false,
+      monitor: 'off',
+      filters: [],
+      filterSettings: {},
+      channel: opts.channel ?? null,
+    }
+  }
+
+  private createSceneItem(
+    source: StoredSource,
+    box: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H },
+  ): EngineItem {
+    const id = this.nextItemId++
+    const tr = defaultTransform(box)
+    this.transforms.set(id, tr)
+    return {
+      id,
+      name: source.name,
+      kind: source.kind,
+      visible: true,
+      locked: false,
+      audio: source.audio,
+      group: false,
+      show: 'both',
+      blend: 'normal',
+      scale_filter: 'off',
+      frame: frameFromTransform(tr),
+      children: [],
+    }
+  }
+
+  private seedDefaults(): void {
+    this.activeScenes = ['Main', 'Gameplay', 'Chatting', 'BRB']
+    this.currentScene = 'Main'
+    this.previewScene = null
+    this.sceneItems.clear()
+    this.sources.clear()
+    this.transforms.clear()
+    this.itemFilters.clear()
+    this.nextItemId = 1
+    this.ensureGlobalSources()
+
+    const overlayMain = this.makeSource('Ferrocast: Main', 'ferrocast_web', {
+      url: 'http://127.0.0.1:47820/o/demo/',
+      width: CANVAS_W,
+      height: CANVAS_H,
+    })
+    const game = this.makeSource('Game', 'screen_capture', { width: CANVAS_W, height: CANVAS_H })
+    const chatBox = this.makeSource('Chat Box', 'ferrocast_web', {
+      url: 'http://127.0.0.1:47820/o/demo-chat/',
+      width: 560,
+      height: 780,
+    })
+    const brbCard = this.makeSource('BRB Card', 'image_source', {})
+    for (const s of [overlayMain, game, chatBox, brbCard]) this.sources.set(s.name, s)
+
+    const cam = this.opts.hasCamera
+      ? this.makeSource(this.cameraSourceName, 'av_capture_input_v2', { device: CAMERA_SVGS[0].id })
+      : null
+    if (cam) this.sources.set(cam.name, cam)
+    const mic = this.opts.hasMic ? this.sources.get(this.micSourceName)! : null
+
+    const mainList: EngineItem[] = [
+      this.createSceneItem(overlayMain, { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H }),
+      ...(cam ? [this.createSceneItem(cam, { x: 1380, y: 720, w: 480, h: 270 })] : []),
+      ...(mic ? [this.createSceneItem(mic, { x: 0, y: 0, w: 120, h: 120 })] : []),
+    ]
+    const gameplayList: EngineItem[] = [
+      ...(cam ? [this.createSceneItem(cam, { x: 1380, y: 720, w: 480, h: 270 })] : []),
+      this.createSceneItem(game, { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H }),
+    ]
+    const chattingList: EngineItem[] = [
+      this.createSceneItem(chatBox, { x: 40, y: 120, w: 560, h: 780 }),
+      ...(cam ? [this.createSceneItem(cam, { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H })] : []),
+    ]
+    const brbList: EngineItem[] = [
+      this.createSceneItem(brbCard, { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H }),
+    ]
+    this.sceneItems.set('Main', mainList)
+    this.sceneItems.set('Gameplay', gameplayList)
+    this.sceneItems.set('Chatting', chattingList)
+    this.sceneItems.set('BRB', brbList)
+  }
+
+  private captureSnapshot(): CollectionSnapshot {
+    const sceneItems: Record<string, EngineItem[]> = {}
+    for (const [k, v] of this.sceneItems) sceneItems[k] = clone(v)
+    const sources: Record<string, StoredSource> = {}
+    for (const [k, v] of this.sources) sources[k] = clone(v)
+    const transforms: Record<number, EngineTransform> = {}
+    for (const [k, v] of this.transforms) transforms[k] = clone(v)
+    const itemFilters: Record<number, ItemFilterState> = {}
+    for (const [k, v] of this.itemFilters) itemFilters[k] = clone(v)
+    const legacySceneTransitions: Record<string, EngineTransition> = {}
+    for (const [k, v] of this.legacySceneTransitions) legacySceneTransitions[k] = clone(v)
+    return {
+      activeScenes: [...this.activeScenes],
+      currentScene: this.currentScene,
+      previewScene: this.previewScene,
+      sceneItems,
+      sources,
+      transforms,
+      itemFilters,
+      nextItemId: this.nextItemId,
+      namedTransitions: clone(this.namedTransitions),
+      transitionMatrix: clone(this.transitionMatrix),
+      legacySceneTransitions,
+    }
+  }
+
+  private restoreSnapshot(snap: CollectionSnapshot): void {
+    this.activeScenes = [...snap.activeScenes]
+    this.currentScene = snap.currentScene
+    this.previewScene = snap.previewScene
+    this.sceneItems = new Map(Object.entries(clone(snap.sceneItems)))
+    this.sources = new Map(Object.entries(clone(snap.sources)))
+    this.transforms = new Map(
+      Object.entries(clone(snap.transforms)).map(([k, v]) => [Number(k), v]),
+    )
+    this.itemFilters = new Map(
+      Object.entries(clone(snap.itemFilters)).map(([k, v]) => [Number(k), v]),
+    )
+    this.nextItemId = snap.nextItemId
+    this.namedTransitions = clone(snap.namedTransitions)
+    this.transitionMatrix = clone(snap.transitionMatrix)
+    this.legacySceneTransitions = new Map(Object.entries(clone(snap.legacySceneTransitions)))
+  }
+
+  private pushUndo(label: string): void {
+    this.undoStack.unshift({ label, snapshot: this.captureSnapshot() })
+    if (this.undoStack.length > 50) this.undoStack.pop()
+    this.redoStack = []
+  }
+
+  private seedForScenes(sceneNames: string[], clearAll = false): void {
+    this.activeScenes = [...sceneNames]
+    this.currentScene = sceneNames[0] ?? 'Scene'
+    this.previewScene = this.previewScene ? this.currentScene : null
+    this.sceneItems.clear()
+    if (clearAll) this.sources.clear()
+    this.transforms.clear()
+    this.itemFilters.clear()
+    this.nextItemId = 1
+    this.undoStack = []
+    this.redoStack = []
+    this.ensureGlobalSources()
+    for (const s of this.activeScenes) this.sceneItems.set(s, [])
+  }
+
+  private removeSourceEverywhere(sourceName: string): void {
+    const prune = (list: EngineItem[]): EngineItem[] =>
+      list
+        .filter((it) => it.name !== sourceName)
+        .map((it) => (it.children.length ? { ...it, children: prune(it.children) } : it))
+    for (const [scene, list] of this.sceneItems) this.sceneItems.set(scene, prune(list))
+    this.sources.delete(sourceName)
+  }
+
+  private pruneOrphanSource(sourceName: string): void {
+    const src = this.sources.get(sourceName)
+    if (!src || src.channel != null || sourceName === 'Desktop Audio') return
+    if (this.opts.hasMic && sourceName === this.micSourceName) return
+    const used = (list: EngineItem[]): boolean =>
+      list.some((it) => (!it.group && it.name === sourceName) || used(it.children))
+    for (const list of this.sceneItems.values()) {
+      if (used(list)) return
+    }
+    this.sources.delete(sourceName)
+  }
+
+  private requireScene(scene: string): EngineItem[] {
+    if (!this.activeScenes.includes(scene)) {
+      throw new HttpError(404, 'studio_no_scene', `There's no scene called "${scene}".`)
+    }
+    let list = this.sceneItems.get(scene)
+    if (!list) {
+      list = []
+      this.sceneItems.set(scene, list)
+    }
+    return list
+  }
+
+  private findItem(
+    scene: string,
+    id: number,
+  ): { list: EngineItem[]; index: number; item: EngineItem; parent: EngineItem | null } {
+    const root = this.requireScene(scene)
+    const search = (
+      list: EngineItem[],
+      parent: EngineItem | null,
+    ): {
+      list: EngineItem[]
+      index: number
+      item: EngineItem
+      parent: EngineItem | null
+    } | null => {
+      for (let i = 0; i < list.length; i++) {
+        const it = list[i]!
+        if (it.id === id) return { list, index: i, item: it, parent }
+        if (it.children.length) {
+          const inner = search(it.children, it)
+          if (inner) return inner
+        }
+      }
+      return null
+    }
+    const found = search(root, null)
+    if (!found) {
+      throw new HttpError(
+        404,
+        'studio_no_source',
+        `There's no source #${id} in "${scene}".`,
+        'Refresh the scene list.',
+      )
+    }
+    return found
+  }
+
+  private requireSource(name: string): StoredSource {
+    const found = this.sources.get(name)
+    if (!found) {
+      throw new HttpError(
+        404,
+        'studio_no_source',
+        `There’s no source called "${name}".`,
+        'Refresh the list of sources.',
+      )
+    }
+    return found
+  }
+
+  private uniqueSourceName(base: string): string {
+    const taken = new Set<string>([...this.sources.keys(), ...this.activeScenes])
+    if (!taken.has(base)) return base
+    for (let n = 2; ; n++) {
+      const candidate = `${base} ${n}`
+      if (!taken.has(candidate)) return candidate
+    }
+  }
+
+  private setItemTransform(item: EngineItem, next: EngineTransform): void {
+    this.transforms.set(item.id, clone(next))
+    item.frame = frameFromTransform(next)
+  }
+
+  private validateBoxCoords(box: { x: number; y: number; w: number; h: number }): void {
+    const { x, y, w, h } = box
+    if (
+      ![x, y, w, h].every((v) => typeof v === 'number' && Number.isFinite(v)) ||
+      w < 1 ||
+      h < 1 ||
+      [x, y, w, h].some((v) => Math.abs(v) > 100_000)
+    ) {
+      throw new HttpError(400, 'invalid', 'box: valid position and size (1 to 100000 pixels).')
+    }
+  }
+
+  private applyBox(item: EngineItem, box: { x: number; y: number; w: number; h: number }): void {
+    const cur = clone(this.transforms.get(item.id) ?? defaultTransform())
+    cur.x = box.x
+    cur.y = box.y
+    cur.bounds = 'stretch'
+    cur.bounds_width = box.w
+    cur.bounds_height = box.h
+    this.setItemTransform(item, cur)
+  }
+
+  private collectItemIds(item: EngineItem, out: Set<number>): void {
+    out.add(item.id)
+    for (const c of item.children) this.collectItemIds(c, out)
+  }
+
+  private cloneItemDeep(
+    srcItem: EngineItem,
+    renameMap: Map<string, string>,
+    srcTransforms?: Record<number, EngineTransform>,
+    srcItemFilters?: Record<number, ItemFilterState>,
+  ): EngineItem {
+    const newId = this.nextItemId++
+    const mappedName = srcItem.group ? srcItem.name : (renameMap.get(srcItem.name) ?? srcItem.name)
+    const oldTr = srcTransforms?.[srcItem.id] ?? this.transforms.get(srcItem.id)
+    if (oldTr) this.transforms.set(newId, clone(oldTr))
+    else this.transforms.set(newId, defaultTransform())
+    const oldIf = srcItemFilters?.[srcItem.id] ?? this.itemFilters.get(srcItem.id)
+    if (oldIf) this.itemFilters.set(newId, clone(oldIf))
+    return {
+      ...clone(srcItem),
+      id: newId,
+      name: mappedName,
+      frame: frameFromTransform(this.transforms.get(newId)!),
+      children: srcItem.children.map((c) =>
+        this.cloneItemDeep(c, renameMap, srcTransforms, srcItemFilters),
+      ),
+    }
+  }
+
+  private allFilterNamesOk(name: string): StoredSource {
+    return this.requireSource(name)
+  }
+
+  private syncGroupFrame(group: EngineItem): void {
+    if (!group.group || group.children.length === 0) return
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const c of group.children) {
+      const f = c.frame ?? [100, 0, 0, 100, 0, 0]
+      const xs = [f[4], f[4] + f[0], f[4] + f[2], f[4] + f[0] + f[2]]
+      const ys = [f[5], f[5] + f[1], f[5] + f[3], f[5] + f[1] + f[3]]
+      minX = Math.min(minX, ...xs)
+      minY = Math.min(minY, ...ys)
+      maxX = Math.max(maxX, ...xs)
+      maxY = Math.max(maxY, ...ys)
+    }
+    if (Number.isFinite(minX) && Number.isFinite(maxX)) {
+      this.applyBox(group, {
+        x: minX,
+        y: minY,
+        w: Math.max(1, maxX - minX),
+        h: Math.max(1, maxY - minY),
+      })
+    }
+  }
+
+  private scenesWithSplitShow(): boolean {
+    const walk = (list: EngineItem[]): boolean =>
+      list.some(
+        (it) =>
+          (it.visible && (it.show === 'stream' || it.show === 'recording')) ||
+          (it.visible && walk(it.children)),
+      )
+    for (const list of this.sceneItems.values()) {
+      if (walk(list)) return true
+    }
+    return false
+  }
+
+  private sceneUsingSource(name: string): string[] {
+    const out: string[] = []
+    const has = (list: EngineItem[]): boolean =>
+      list.some((it) => (!it.group && it.name === name) || has(it.children))
+    for (const scene of this.activeScenes) {
+      if (has(this.sceneItems.get(scene) ?? [])) out.push(scene)
+    }
+    return out
+  }
+
   private levelFor(name: string): EngineLevel {
+    const src = this.sources.get(name)
     if (name !== this.micSourceName || !this.opts.hasMic || this.opts.micPreset === 'silent') {
       if (name === 'Desktop Audio') {
         return {
@@ -565,8 +1099,8 @@ export class DemoStudioEngine {
         input_peak: [-100, -100],
       }
     }
-    const muted = this.audioMuted.get(name) ?? false
-    const volDb = this.audioVolumeDb.get(name) ?? 0
+    const muted = src?.muted ?? false
+    const volDb = src?.volume_db ?? 0
     const phase = (Date.now() % 1800) / 1800
     const ripple = Math.sin(phase * Math.PI * 2) * 3.5 + Math.cos(phase * Math.PI * 4) * 1.2
     const rawBase =
@@ -575,7 +1109,7 @@ export class DemoStudioEngine {
     if (muted) {
       return { peak: [-100, -100], magnitude: [-100, -100], input_peak: [raw, raw] }
     }
-    const chain = (this.filters.get(name) ?? []).filter((f) => f.enabled)
+    const chain = (src?.filters ?? []).filter((f) => f.enabled)
     const hasGain = chain.find((f) => f.kind === 'gain_filter')
     const hasComp = chain.some((f) => f.kind === 'compressor_filter' || f.kind === 'limiter_filter')
     let out = raw + volDb
@@ -651,15 +1185,77 @@ export class DemoStudioEngine {
     }
 
     if (rest[2] === 'library' && (rest[3] === 'collections' || rest[3] === 'profiles')) {
-      const shelf = rest[3] === 'collections' ? this.shelfCollections : this.shelfProfiles
+      const isCol = rest[3] === 'collections'
+      const shelf = isCol ? this.shelfCollections : this.shelfProfiles
       if (method === 'GET' && rest.length === 4) return clone(shelf)
+      if (method === 'POST' && rest.length === 4) {
+        const b = requireObj(body)
+        const raw = String(b.name ?? '').trim()
+        if (!raw) throw new HttpError(400, 'invalid', 'name: 1 to 80 letters.')
+        const name = raw.slice(0, 80)
+        const base =
+          name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 40) || 'set'
+        let id = base
+        for (let n = 2; shelf.list.some((x) => x.id === id); n++) id = `${base}-${n}`
+        if (isCol) {
+          this.collections.set(shelf.current, this.captureSnapshot())
+          if (!b.copy) {
+            this.seedForScenes(['Main'], true)
+          }
+          this.collections.set(id, this.captureSnapshot())
+        }
+        shelf.list.push({ id, name })
+        shelf.current = id
+        return { id }
+      }
       if (method === 'PUT' && rest.length === 5 && rest[4] === 'current') {
         const id = String(requireObj(body).id ?? '')
         if (!shelf.list.some((x) => x.id === id)) {
           throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
         }
+        if (isCol && shelf.current !== id) {
+          this.collections.set(shelf.current, this.captureSnapshot())
+          const nextSnap = this.collections.get(id)
+          if (nextSnap) this.restoreSnapshot(nextSnap)
+          else {
+            this.seedForScenes(['Main'], true)
+            this.collections.set(id, this.captureSnapshot())
+          }
+          this.undoStack = []
+          this.redoStack = []
+        }
         shelf.current = id
         return { id }
+      }
+      if (method === 'POST' && rest.length === 6 && rest[5] === 'rename') {
+        const id = decodeURIComponent(rest[4]!)
+        const name = String(requireObj(body).name ?? '').trim()
+        const entry = shelf.list.find((x) => x.id === id)
+        if (!entry) throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
+        if (!name) throw new HttpError(400, 'invalid', 'name: 1 to 80 letters.')
+        entry.name = name
+        return undefined
+      }
+      if (method === 'GET' && rest.length === 6 && rest[5] === 'export') {
+        const id = decodeURIComponent(rest[4]!)
+        const entry = shelf.list.find((x) => x.id === id)
+        if (!entry) throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
+        const snap =
+          isCol && id === shelf.current
+            ? this.captureSnapshot()
+            : isCol
+              ? this.collections.get(id)
+              : null
+        return {
+          name: entry.name,
+          current_scene: snap?.currentScene ?? this.currentScene,
+          scenes: snap?.activeScenes ?? [],
+          sources: snap ? Object.values(snap.sources) : [],
+        }
       }
       if (method === 'DELETE' && rest.length === 5) {
         const id = decodeURIComponent(rest[4]!)
@@ -674,6 +1270,7 @@ export class DemoStudioEngine {
           )
         }
         shelf.list = shelf.list.filter((x) => x.id !== id)
+        if (isCol) this.collections.delete(id)
         return undefined
       }
     }
@@ -972,10 +1569,12 @@ export class DemoStudioEngine {
       if (!name || name.length > 100) {
         throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
       }
-      if (this.activeScenes.includes(name)) {
+      if (this.activeScenes.includes(name) || this.sources.has(name)) {
         throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
       }
+      this.pushUndo(`Add ${name}`)
       this.activeScenes.push(name)
+      this.sceneItems.set(name, [])
       return { name, items: 0, current: false, preview: false, transition: null }
     }
     if (method === 'DELETE' && rest[2] === 'scenes' && rest.length === 4) {
@@ -986,11 +1585,15 @@ export class DemoStudioEngine {
       if (this.activeScenes.length < 2) {
         throw new HttpError(409, 'studio_last_scene', 'A collection keeps at least one scene.')
       }
+      this.pushUndo(`Delete ${name}`)
+      const oldItems = this.sceneItems.get(name) ?? []
+      this.sceneItems.delete(name)
       this.activeScenes = this.activeScenes.filter((s) => s !== name)
       this.transitionMatrix = this.transitionMatrix.filter((r) => r.from !== name && r.to !== name)
       this.legacySceneTransitions.delete(name)
       if (this.currentScene === name) this.currentScene = this.activeScenes[0]!
       if (this.previewScene === name) this.previewScene = this.activeScenes[0]!
+      for (const it of oldItems) if (!it.group) this.pruneOrphanSource(it.name)
       return undefined
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'current') {
@@ -1013,11 +1616,14 @@ export class DemoStudioEngine {
       if (!this.activeScenes.includes(src)) {
         throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
       }
-      if (!name || this.activeScenes.includes(name)) {
+      if (!name || this.activeScenes.includes(name) || this.sources.has(name)) {
         throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
       }
+      this.pushUndo(`Duplicate ${src}`)
       const idx = this.activeScenes.indexOf(src)
       this.activeScenes.splice(idx + 1, 0, name)
+      const cloned = (this.sceneItems.get(src) ?? []).map((it) => this.cloneItemDeep(it, new Map()))
+      this.sceneItems.set(name, cloned)
       return { name }
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'move') {
@@ -1025,22 +1631,47 @@ export class DemoStudioEngine {
       const to = Number(requireObj(body).to ?? 0)
       const idx = this.activeScenes.indexOf(src)
       if (idx < 0) throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
+      this.pushUndo(`Move ${src}`)
       const [item] = this.activeScenes.splice(idx, 1)
       this.activeScenes.splice(Math.max(0, Math.min(to, this.activeScenes.length)), 0, item!)
       return undefined
     }
-    if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'items') {
-      return []
+    if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'thumbnail' && rest.length === 5) {
+      const scene = decodeURIComponent(rest[3]!)
+      const list = this.requireScene(scene)
+      const w = Math.max(64, Math.min(640, Number(url?.searchParams.get('w') ?? 256) || 256))
+      const h = Math.round((w * 9) / 16)
+      return {
+        image: svgDataUrl(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+            `<rect width="${w}" height="${h}" fill="#141922"/>` +
+            `<text x="12" y="24" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="13" font-weight="600">${scene}</text>` +
+            `<text x="12" y="42" fill="#9fb0c7" font-family="system-ui,sans-serif" font-size="11">${list.length} source${list.length === 1 ? '' : 's'}</text>` +
+            `</svg>`,
+        ),
+      }
+    }
+    if (rest[2] === 'scenes' && rest[4] === 'items') {
+      const scene = decodeURIComponent(rest[3]!)
+      return this.handleSceneItemsRoute(method, scene, rest.slice(5), body, url)
     }
     if (method === 'POST' && rest[2] === 'sources' && rest[4] === 'rename') {
       const from = decodeURIComponent(rest[3]!)
       const to = String(requireObj(body).name ?? '').trim()
-      if (!to) throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
+      if (!to || to.length > 100) {
+        throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
+      }
       if (this.activeScenes.includes(from)) {
-        if (from !== to && this.activeScenes.includes(to)) {
+        if (from !== to && (this.activeScenes.includes(to) || this.sources.has(to))) {
           throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
         }
+        this.pushUndo(`Rename ${from}`)
         this.activeScenes = this.activeScenes.map((s) => (s === from ? to : s))
+        const items = this.sceneItems.get(from)
+        if (items) {
+          this.sceneItems.delete(from)
+          this.sceneItems.set(to, items)
+        }
         if (this.currentScene === from) this.currentScene = to
         if (this.previewScene === from) this.previewScene = to
         this.transitionMatrix = this.transitionMatrix.map((r) => ({
@@ -1052,6 +1683,46 @@ export class DemoStudioEngine {
         if (leg) {
           this.legacySceneTransitions.delete(from)
           this.legacySceneTransitions.set(to, leg)
+        }
+        return undefined
+      }
+      const src = this.sources.get(from)
+      if (!src) {
+        // Group rename within current scene(s) if no source/scene matches.
+        let renamedGroup = false
+        for (const list of this.sceneItems.values()) {
+          for (const it of list) {
+            if (it.group && it.name === from) {
+              if (!renamedGroup) this.pushUndo(`Rename ${from}`)
+              it.name = to
+              renamedGroup = true
+            }
+          }
+        }
+        if (renamedGroup) return undefined
+        throw new HttpError(404, 'studio_no_source', `There's no source called "${from}".`)
+      }
+      if (from !== to && (this.sources.has(to) || this.activeScenes.includes(to))) {
+        throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
+      }
+      this.pushUndo(`Rename ${from}`)
+      if (from !== to) {
+        this.sources.delete(from)
+        src.name = to
+        this.sources.set(to, src)
+        if (this.micSourceName === from) this.micSourceName = to
+        if (this.cameraSourceName === from) this.cameraSourceName = to
+        const renameItems = (list: EngineItem[]) => {
+          for (const it of list) {
+            if (!it.group && it.name === from) it.name = to
+            renameItems(it.children)
+          }
+        }
+        for (const list of this.sceneItems.values()) renameItems(list)
+        if (this.sourceRecords.has(from)) {
+          const rec = this.sourceRecords.get(from)!
+          this.sourceRecords.delete(from)
+          this.sourceRecords.set(to, rec)
         }
       }
       return undefined
@@ -1384,21 +2055,146 @@ export class DemoStudioEngine {
       return { black: this.black }
     }
     if (is('GET', 'studio/engine/stats')) {
+      const folder = String(
+        this.studioSettingsData.record_folder ??
+          this.studioSettingsData.record_folder_default ??
+          '/Users/demo/Movies/Ferrocast',
+      )
+      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
+      const record: EngineRecordStats | null = this.recording
+        ? {
+            active: true,
+            paused: this.recordingPaused,
+            bytes: 1_240_000,
+            frames: 900,
+            file: this.recordFile ?? `${folder}/Demo recording.${fmt}`,
+            seconds: 15,
+            error: null,
+            encoder: 'VideoToolbox',
+          }
+        : null
+      const sourceRecords = Array.from(this.sourceRecords.entries()).map(([name, file]) => ({
+        name,
+        file,
+      }))
       return {
         engine: { cpu: 4.2, fps: 60, frame_ms: 4.1, lagged: 0, frames: 3600, memory_mb: 240 },
-        canvas: { width: 1920, height: 1080, fps: 60 },
+        canvas: {
+          width: Number(this.studioSettingsData.width ?? CANVAS_W),
+          height: Number(this.studioSettingsData.height ?? CANVAS_H),
+          fps: Number(this.studioSettingsData.fps ?? 60),
+        },
         stream: null,
-        record: null,
+        record,
         scene: this.currentScene,
+        history: {
+          undo: this.undoStack[0]?.label ?? null,
+          redo: this.redoStack[0]?.label ?? null,
+        },
+        replay: this.replayActive ? { active: true, last: this.replayLast, error: null } : null,
+        virtualcam: this.virtualcam.active
+          ? { active: true, every_app: false, source: this.virtualcam.source }
+          : null,
+        source_records: sourceRecords,
       }
     }
-    if (is('GET', 'studio/engine/history')) return { undo: [], redo: [] }
+    if (is('GET', 'studio/engine/history')) {
+      return {
+        undo: this.undoStack.map((u) => u.label),
+        redo: this.redoStack.map((r) => r.label),
+      }
+    }
+    if (is('POST', 'studio/engine/undo')) {
+      const top = this.undoStack.shift()
+      if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
+      this.redoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
+      this.restoreSnapshot(top.snapshot)
+      return {
+        done: top.label,
+        undo: this.undoStack[0]?.label ?? null,
+        redo: this.redoStack[0]?.label ?? null,
+      }
+    }
+    if (is('POST', 'studio/engine/redo')) {
+      const top = this.redoStack.shift()
+      if (!top) return { done: null, undo: this.undoStack[0]?.label ?? null, redo: null }
+      this.undoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
+      this.restoreSnapshot(top.snapshot)
+      return {
+        done: top.label,
+        undo: this.undoStack[0]?.label ?? null,
+        redo: this.redoStack[0]?.label ?? null,
+      }
+    }
     if (is('GET', 'studio/engine/audio-care')) return { ducking: null, loudness_lufs: null }
     if (is('GET', 'studio/engine/privacy')) return { hide_notifications: true, hide_apps: [] }
     if (is('GET', 'studio/engine/screens')) return []
     if (is('GET', 'studio/engine/missing-files')) return []
     if (is('GET', 'studio/engine/stream')) return null
     if (is('GET', 'studio/engine/virtualcam/setup')) return { active: false, every_app: false }
+    if (is('POST', 'studio/engine/virtualcam')) {
+      const b = requireObj(body)
+      this.virtualcam = {
+        active: Boolean(b.on),
+        source: typeof b.source === 'string' && b.source ? b.source : null,
+      }
+      return { active: this.virtualcam.active, every_app: false }
+    }
+    if (is('POST', 'studio/engine/replay')) {
+      this.replayActive = Boolean(requireObj(body).on)
+      return { active: this.replayActive }
+    }
+    if (is('POST', 'studio/engine/replay/save')) {
+      if (!this.replayActive) {
+        throw new HttpError(422, 'studio_failed', 'The replay buffer is off.')
+      }
+      const folder = String(
+        this.studioSettingsData.record_folder ??
+          this.studioSettingsData.record_folder_default ??
+          '/Users/demo/Movies/Ferrocast',
+      )
+      this.replayLast = `${folder}/Replay-${Date.now()}.mp4`
+      return { file: this.replayLast }
+    }
+    if (is('POST', 'studio/engine/record')) {
+      const on = Boolean(requireObj(body).on)
+      if (on) {
+        const folder = String(
+          this.studioSettingsData.record_folder ??
+            this.studioSettingsData.record_folder_default ??
+            '/Users/demo/Movies/Ferrocast',
+        )
+        const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
+        this.recording = true
+        this.recordingPaused = false
+        this.recordFile = `${folder}/Ferrocast ${Date.now()}.${fmt}`
+        return {
+          active: true,
+          paused: false,
+          bytes: 0,
+          frames: 0,
+          file: this.recordFile,
+          seconds: 0,
+          error: null,
+          encoder: 'VideoToolbox',
+        } satisfies EngineRecordStats
+      }
+      this.recording = false
+      this.recordingPaused = false
+      this.recordFile = null
+      this.sourceRecords.clear()
+      return null
+    }
+    if (is('POST', 'studio/engine/record/pause')) {
+      if (!this.recording) throw new HttpError(422, 'studio_failed', 'Nothing is recording.')
+      this.recordingPaused = Boolean(requireObj(body).on)
+      return undefined
+    }
+    if (is('POST', 'studio/engine/record/split') || is('POST', 'studio/engine/record/chapter')) {
+      if (!this.recording) throw new HttpError(422, 'studio_failed', 'Nothing is recording.')
+      return undefined
+    }
+    if (is('POST', 'studio/engine/keys/capture')) return undefined
     if (is('GET', 'studio/engine/preview/pause')) return { paused: this.previewPaused }
     if (is('PUT', 'studio/engine/preview/pause')) {
       this.previewPaused = Boolean(requireObj(body).paused)
@@ -1412,146 +2208,96 @@ export class DemoStudioEngine {
       return undefined
     }
     if (is('GET', 'studio/engine/encode-budget') || is('POST', 'studio/engine/encode-budget')) {
+      const split = this.scenesWithSplitShow()
       const budget: EncodeBudget = {
         budget_mpx: null,
-        shared: true,
-        why_not_shared: null,
+        shared: !split,
+        why_not_shared: split
+          ? 'Some sources are shown only on the stream or only in the recording.'
+          : null,
         level: 'unknown',
       }
       return budget
     }
 
+    if (rest[2] === 'clipboard') {
+      return this.handleClipboardRoute(method, rest.slice(3), body)
+    }
+
     if (is('GET', 'studio/engine/sources')) {
-      const list = [
-        ...(this.opts.hasCamera
-          ? [
-              {
-                name: this.cameraSourceName,
-                kind: 'av_capture_input_v2',
-                scenes: [this.currentScene],
-              },
-            ]
-          : []),
-        ...(this.opts.hasMic
-          ? [
-              {
-                name: this.micSourceName,
-                kind: 'coreaudio_input_capture',
-                scenes: [this.currentScene],
-              },
-            ]
-          : []),
-        { name: 'Desktop Audio', kind: 'sck_audio_capture', scenes: [this.currentScene] },
-      ]
+      const list: EngineSourceUse[] = []
+      for (const s of this.sources.values()) {
+        const scenes = this.sceneUsingSource(s.name)
+        if (scenes.length > 0 || s.channel != null || s.name === 'Desktop Audio') {
+          list.push({
+            name: s.name,
+            kind: s.kind,
+            scenes: scenes.length > 0 ? scenes : [this.currentScene],
+          })
+        }
+      }
       return list
     }
 
     if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'audio') {
-      return [
-        ...(this.opts.hasMic
-          ? [
-              {
-                name: this.micSourceName,
-                kind: 'coreaudio_input_capture',
-                channel: 3,
-                volume_db: this.audioVolumeDb.get(this.micSourceName) ?? 0,
-                muted: this.audioMuted.get(this.micSourceName) ?? false,
-                monitor: 'off',
-              },
-            ]
-          : []),
-        {
-          name: 'Desktop Audio',
-          kind: 'sck_audio_capture',
-          channel: 1,
-          volume_db: this.audioVolumeDb.get('Desktop Audio') ?? 0,
-          muted: this.audioMuted.get('Desktop Audio') ?? false,
-          monitor: 'off',
-        },
-      ]
+      const scene = decodeURIComponent(rest[3]!)
+      const items = this.requireScene(scene)
+      const byName = new Map<string, StoredSource>()
+      for (const s of this.sources.values()) {
+        if (s.channel != null) byName.set(s.name, s)
+      }
+      const addFromItems = (list: EngineItem[]) => {
+        for (const it of list) {
+          if (!it.group) {
+            const s = this.sources.get(it.name)
+            if (s && s.audio) byName.set(s.name, s)
+          }
+          addFromItems(it.children)
+        }
+      }
+      addFromItems(items)
+      return Array.from(byName.values()).map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        channel: s.channel ?? null,
+        volume_db: s.volume_db,
+        muted: s.muted,
+        monitor: s.monitor,
+        active: true,
+      }))
     }
 
     if (method === 'PUT' && rest[2] === 'channels' && rest.length === 4) {
+      const ch = Number(rest[3])
       const b = requireObj(body)
-      if (b.name) this.micSourceName = String(b.name)
+      const nextName = String(b.name ?? this.micSourceName).trim() || this.micSourceName
       const settings = (b.settings as Record<string, unknown> | undefined) ?? {}
-      if (settings.device_id) this.micDeviceId = String(settings.device_id)
-      if (!this.filters.has(this.micSourceName)) this.filters.set(this.micSourceName, [])
-      return undefined
-    }
-
-    if (method === 'GET' && rest[2] === 'sources' && rest[4] === 'picture') {
-      return {
-        image: this.opts.hasCamera ? cameraFrameSvg(CAMERA_SVGS[0].id) : null,
-        width: 1920,
-        height: 1080,
-      }
-    }
-
-    if (method === 'GET' && rest[2] === 'sources' && rest[4] === 'settings') {
-      const name = decodeURIComponent(rest[3]!)
-      if (name === this.micSourceName) return { device_id: this.micDeviceId }
-      return {}
-    }
-
-    if (method === 'PUT' && rest[2] === 'sources' && rest[4] === 'settings') {
-      // Like the engine: only the keys sent change, and the source keeps its filters and sound.
-      const name = decodeURIComponent(rest[3]!)
-      this.requireMicName(name)
-      const settings = (requireObj(body).settings as Record<string, unknown> | undefined) ?? {}
-      if (settings.device_id) this.micDeviceId = String(settings.device_id)
-      return undefined
-    }
-
-    if (method === 'PUT' && rest[2] === 'sources' && rest[4] === 'audio') {
-      const name = decodeURIComponent(rest[3]!)
-      this.requireMicName(name)
-      const b = requireObj(body)
-      if (typeof b.volume_db === 'number') this.audioVolumeDb.set(name, b.volume_db)
-      if (typeof b.muted === 'boolean') this.audioMuted.set(name, b.muted)
-      return undefined
-    }
-
-    if (rest[2] === 'sources' && rest[4] === 'filters') {
-      const name = decodeURIComponent(rest[3]!)
-      this.requireMicName(name)
-      const list = this.filters.get(name) ?? []
-      this.filters.set(name, list)
-      if (method === 'GET' && rest.length === 5) return clone(list)
-      if (method === 'POST' && rest.length === 5) {
-        const b = body as NewEngineSource
-        const fName = String(b.name ?? '').trim()
-        if (!fName) throw new HttpError(400, 'invalid', 'name: 1 to 100 characters.')
-        if (list.some((x) => x.name === fName)) {
-          throw new HttpError(409, 'studio_name_taken', `Filter "${fName}" already exists.`)
+      if (ch === 3) {
+        const prev = this.sources.get(this.micSourceName)
+        if (prev && prev.name !== nextName) {
+          this.sources.delete(prev.name)
+          prev.name = nextName
+          this.sources.set(nextName, prev)
+        } else if (!prev) {
+          this.sources.set(
+            nextName,
+            this.makeSource(nextName, String(b.kind ?? 'coreaudio_input_capture'), settings, {
+              channel: ch,
+              audio: true,
+            }),
+          )
         }
-        const created: EngineFilter = { name: fName, kind: String(b.kind), enabled: true }
-        list.push(created)
-        return clone(created)
+        this.micSourceName = nextName
+        if (settings.device_id) {
+          this.micDeviceId = String(settings.device_id)
+          this.sources.get(nextName)!.settings.device_id = this.micDeviceId
+        }
       }
-      if (method === 'POST' && rest.length === 7 && rest[6] === 'edit') {
-        const fName = decodeURIComponent(rest[5]!)
-        const idx = list.findIndex((x) => x.name === fName)
-        if (idx === -1) throw new HttpError(404, 'studio_no_filter', `No filter "${fName}".`)
-        const act = String(requireObj(body).do ?? '')
-        const [item] = list.splice(idx, 1)
-        if (act === 'enable') item!.enabled = true
-        if (act === 'disable') item!.enabled = false
-        if (act === 'top') list.unshift(item!)
-        else if (act === 'bottom') list.push(item!)
-        else if (act === 'up') list.splice(Math.max(0, idx - 1), 0, item!)
-        else if (act === 'down') list.splice(Math.min(list.length, idx + 1), 0, item!)
-        else list.splice(idx, 0, item!)
-        return undefined
-      }
-      if (method === 'DELETE' && rest.length === 6) {
-        const fName = decodeURIComponent(rest[5]!)
-        this.filters.set(
-          name,
-          list.filter((x) => x.name !== fName),
-        )
-        return undefined
-      }
+      return undefined
+    }
+
+    if (rest[2] === 'sources' && rest.length >= 4) {
+      return this.handleSourceRoute(method, decodeURIComponent(rest[3]!), rest.slice(4), body)
     }
 
     if (is('GET', 'studio/engine/settings')) {
@@ -1578,6 +2324,833 @@ export class DemoStudioEngine {
     )
   }
 
+  private handleSceneItemsRoute(
+    method: string,
+    scene: string,
+    tail: string[],
+    body: unknown,
+    url?: URL,
+  ): unknown {
+    const items = this.requireScene(scene)
+    if (method === 'GET' && tail.length === 0) {
+      return clone(items)
+    }
+    if (method === 'POST' && tail.length === 0) {
+      return this.addSceneItem(scene, items, body)
+    }
+    if (method === 'PUT' && tail[0] === 'boxes' && tail.length === 1) {
+      const b = requireObj(body)
+      const list = Array.isArray(b.items)
+        ? (b.items as { id: number; x: number; y: number; w: number; h: number }[])
+        : []
+      if (list.length < 1 || list.length > 500) {
+        throw new HttpError(400, 'invalid', 'items: 1 to 500 boxes.')
+      }
+      const seen = new Set<number>()
+      const resolved: { item: EngineItem; x: number; y: number; w: number; h: number }[] = []
+      for (const entry of list) {
+        if (seen.has(entry.id)) throw new HttpError(400, 'invalid', 'items: each id only once.')
+        seen.add(entry.id)
+        this.validateBoxCoords(entry)
+        resolved.push({
+          item: this.findItem(scene, entry.id).item,
+          x: entry.x,
+          y: entry.y,
+          w: entry.w,
+          h: entry.h,
+        })
+      }
+      for (const { item } of resolved) {
+        if (item.group && item.children.some((c) => seen.has(c.id))) {
+          throw new HttpError(400, 'invalid', 'Cannot move a group and its child together.')
+        }
+      }
+      if (b.save) {
+        const label =
+          b.reason === 'align'
+            ? `Align ${resolved.length} sources`
+            : b.reason === 'distribute'
+              ? `Space out ${resolved.length} sources`
+              : `Move ${resolved.length} sources`
+        this.pushUndo(label)
+      }
+      for (const { item, x, y, w, h } of resolved) this.applyBox(item, { x, y, w, h })
+      return clone(resolved.map((r) => r.item))
+    }
+
+    const id = Number(tail[0])
+    if (!Number.isInteger(id)) {
+      throw new HttpError(404, 'studio_no_source', 'Unknown scene item.')
+    }
+    const loc = this.findItem(scene, id)
+
+    if (method === 'POST' && tail[1] === 'edit' && tail.length === 2) {
+      return this.applyItemEdit(scene, loc, String(requireObj(body).do ?? ''))
+    }
+    if (method === 'PUT' && tail[1] === 'box' && tail.length === 2) {
+      const b = requireObj(body) as { x: number; y: number; w: number; h: number; save?: boolean }
+      this.validateBoxCoords(b)
+      if (b.save) this.pushUndo(`Move ${loc.item.name}`)
+      this.applyBox(loc.item, b)
+      if (loc.parent) this.syncGroupFrame(loc.parent)
+      return clone(loc.item)
+    }
+    if (method === 'PUT' && tail[1] === 'crop' && tail.length === 2) {
+      const b = requireObj(body) as {
+        left: number
+        top: number
+        right: number
+        bottom: number
+        save?: boolean
+      }
+      if (b.save) this.pushUndo(`Crop ${loc.item.name}`)
+      const cur = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
+      cur.crop_left = Math.max(0, Math.round(Number(b.left ?? 0)))
+      cur.crop_top = Math.max(0, Math.round(Number(b.top ?? 0)))
+      cur.crop_right = Math.max(0, Math.round(Number(b.right ?? 0)))
+      cur.crop_bottom = Math.max(0, Math.round(Number(b.bottom ?? 0)))
+      this.setItemTransform(loc.item, cur)
+      return clone(loc.item)
+    }
+    if (tail[1] === 'transform' && tail.length === 2) {
+      if (method === 'GET') {
+        return clone(this.transforms.get(loc.item.id) ?? defaultTransform())
+      }
+      if (method === 'PUT') {
+        const next = requireObj(body) as unknown as EngineTransform
+        this.pushUndo(`Transform ${loc.item.name}`)
+        this.setItemTransform(loc.item, next)
+        return clone(loc.item)
+      }
+    }
+    if (method === 'PUT' && tail[1] === 'order' && tail.length === 2) {
+      const to = Math.max(
+        0,
+        Math.min(loc.list.length - 1, Math.trunc(Number(requireObj(body).to ?? 0))),
+      )
+      this.pushUndo(`Reorder ${loc.item.name}`)
+      const [moved] = loc.list.splice(loc.index, 1)
+      loc.list.splice(to, 0, moved!)
+      return undefined
+    }
+    if (method === 'PUT' && tail[1] === 'group' && tail.length === 2) {
+      const groupId = requireObj(body).group as number | null
+      this.pushUndo(groupId ? `Group ${loc.item.name}` : `Ungroup ${loc.item.name}`)
+      if (groupId === null) {
+        if (!loc.parent) return undefined
+        const [moved] = loc.list.splice(loc.index, 1)
+        const pIdx = items.findIndex((i) => i.id === loc.parent!.id)
+        items.splice(Math.max(0, pIdx), 0, moved!)
+        this.syncGroupFrame(loc.parent)
+        return undefined
+      }
+      const dst = this.findItem(scene, Number(groupId))
+      if (!dst.item.group || loc.item.group) {
+        throw new HttpError(400, 'invalid', 'group: target must be a group in this scene.')
+      }
+      const [moved] = loc.list.splice(loc.index, 1)
+      dst.item.children.unshift(moved!)
+      this.syncGroupFrame(dst.item)
+      return undefined
+    }
+    if (method === 'POST' && tail[1] === 'ungroup' && tail.length === 2) {
+      if (!loc.item.group) throw new HttpError(400, 'invalid', 'Item is not a group.')
+      this.pushUndo(`Ungroup ${loc.item.name}`)
+      const [grp] = loc.list.splice(loc.index, 1)
+      loc.list.splice(loc.index, 0, ...grp!.children)
+      return undefined
+    }
+    if (method === 'PUT' && tail[1] === 'transition' && tail.length === 2) {
+      const b = requireObj(body)
+      const show = Boolean(b.show)
+      const tr = (b.transition as EngineTransition | null | undefined) ?? null
+      this.pushUndo(`Transition for ${loc.item.name}`)
+      if (show) loc.item.show_transition = tr ? clone(tr) : null
+      else loc.item.hide_transition = tr ? clone(tr) : null
+      return undefined
+    }
+    if (method === 'GET' && tail[1] === 'picture' && tail.length === 2) {
+      const w = Math.max(64, Math.min(640, Number(url?.searchParams.get('w') ?? 480) || 480))
+      const h = Math.round((w * 9) / 16)
+      return {
+        image: this.sourceSvg(loc.item.name, loc.item.kind, w, h),
+        width: CANVAS_W,
+        height: CANVAS_H,
+      }
+    }
+    if (method === 'POST' && tail[1] === 'paste-filters' && tail.length === 2) {
+      const from = String(requireObj(body).from ?? '')
+      const src = this.requireSource(from)
+      const target = loc.item.own_filters
+        ? this.ensureItemFilterState(loc.item.id)
+        : (() => {
+            const s = this.requireSource(loc.item.name)
+            return { filters: s.filters, settings: s.filterSettings }
+          })()
+      this.pushUndo(`Paste filters onto ${loc.item.name}`)
+      this.mergeFilters(target.filters, target.settings, src.filters, src.filterSettings)
+      return undefined
+    }
+    if (tail[1] === 'filters') {
+      if (method === 'PUT' && tail[2] === 'scope' && tail.length === 3) {
+        const own = Boolean(requireObj(body).own)
+        this.pushUndo(`Filter scope on ${loc.item.name}`)
+        if (own && !loc.item.own_filters) {
+          const src = this.requireSource(loc.item.name)
+          this.itemFilters.set(loc.item.id, {
+            filters: clone(src.filters),
+            settings: clone(src.filterSettings),
+          })
+          loc.item.own_filters = true
+        } else if (!own && loc.item.own_filters) {
+          this.itemFilters.delete(loc.item.id)
+          loc.item.own_filters = false
+        }
+        return clone(loc.item)
+      }
+      const state = loc.item.own_filters
+        ? this.ensureItemFilterState(loc.item.id)
+        : (() => {
+            const s = this.requireSource(loc.item.name)
+            return { filters: s.filters, settings: s.filterSettings }
+          })()
+      return this.handleFilterListRoute(
+        method,
+        tail.slice(2),
+        body,
+        state.filters,
+        state.settings,
+        loc.item.name,
+      )
+    }
+
+    throw new HttpError(404, 'not_found', 'Unknown item action.')
+  }
+
+  private ensureItemFilterState(id: number): ItemFilterState {
+    let st = this.itemFilters.get(id)
+    if (!st) {
+      st = { filters: [], settings: {} }
+      this.itemFilters.set(id, st)
+    }
+    return st
+  }
+
+  private addSceneItem(scene: string, items: EngineItem[], body: unknown): unknown {
+    const b = requireObj(body)
+    if (b.group !== undefined) {
+      const name = String(b.group ?? '').trim()
+      if (!name || name.length > 100) {
+        throw new HttpError(400, 'invalid', 'group: 1 to 100 characters.')
+      }
+      if (Array.isArray(b.items)) {
+        const ids = b.items.map(Number)
+        const idSet = new Set(ids)
+        const picked: EngineItem[] = []
+        for (const it of items) {
+          if (idSet.has(it.id)) {
+            if (it.group)
+              throw new HttpError(400, 'invalid', 'Cannot nest a group inside another group.')
+            picked.push(it)
+          }
+        }
+        if (picked.length !== ids.length) {
+          throw new HttpError(
+            404,
+            'studio_no_source',
+            'Some selected sources are not top-level in this scene.',
+          )
+        }
+        this.pushUndo(`Group ${picked.length} sources`)
+        const firstIdx = items.findIndex((it) => idSet.has(it.id))
+        const kept = items.filter((it) => !idSet.has(it.id))
+        items.splice(0, items.length, ...kept)
+        const grp: EngineItem = {
+          id: this.nextItemId++,
+          name,
+          kind: 'group',
+          visible: true,
+          locked: false,
+          audio: false,
+          group: true,
+          show: 'both',
+          blend: 'normal',
+          scale_filter: 'off',
+          children: picked,
+        }
+        this.transforms.set(grp.id, defaultTransform({ x: 0, y: 0, w: CANVAS_W, h: CANVAS_H }))
+        this.syncGroupFrame(grp)
+        items.splice(Math.max(0, firstIdx), 0, grp)
+        return clone(grp)
+      }
+      this.pushUndo(`Add group ${name}`)
+      const grp: EngineItem = {
+        id: this.nextItemId++,
+        name,
+        kind: 'group',
+        visible: true,
+        locked: false,
+        audio: false,
+        group: true,
+        show: 'both',
+        blend: 'normal',
+        scale_filter: 'off',
+        frame: [CANVAS_W, 0, 0, CANVAS_H, 0, 0],
+        children: [],
+      }
+      this.transforms.set(grp.id, defaultTransform())
+      items.unshift(grp)
+      return clone(grp)
+    }
+
+    if (typeof b.existing === 'string') {
+      const src = this.requireSource(b.existing)
+      if (b.copy) {
+        const newName = this.uniqueSourceName(src.name)
+        this.pushUndo(`Paste copy of ${src.name}`)
+        const copySrc: StoredSource = {
+          ...clone(src),
+          name: newName,
+          channel: null,
+        }
+        this.sources.set(newName, copySrc)
+        const item = this.createSceneItem(copySrc)
+        items.unshift(item)
+        return clone(item)
+      }
+      this.pushUndo(`Add ${src.name} to ${scene}`)
+      const item = this.createSceneItem(src)
+      items.unshift(item)
+      return { item: clone(item) }
+    }
+
+    const kind = String(b.kind ?? '').trim()
+    const name = String(b.name ?? '').trim()
+    const settings = (b.settings as EngineSettings | undefined) ?? {}
+    if (!kind || !name || name.length > 100 || kind.includes('..') || kind.includes('/')) {
+      throw new HttpError(400, 'invalid', 'kind and name are required.')
+    }
+    if (CAMERA_KINDS.has(kind) && settings.device) {
+      for (const existing of this.sources.values()) {
+        if (CAMERA_KINDS.has(existing.kind) && existing.settings.device === settings.device) {
+          this.pushUndo(`Add ${existing.name} to ${scene}`)
+          const item = this.createSceneItem(existing)
+          items.unshift(item)
+          return { item: clone(item), settings: clone(existing.settings), reused: true }
+        }
+      }
+    }
+    if (this.sources.has(name) || this.activeScenes.includes(name)) {
+      throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
+    }
+    this.pushUndo(`Add ${name}`)
+    const created = this.makeSource(name, kind, settings)
+    this.sources.set(name, created)
+    const item = this.createSceneItem(created)
+    items.unshift(item)
+    return { item: clone(item), settings: clone(created.settings) }
+  }
+
+  private applyItemEdit(
+    scene: string,
+    loc: { list: EngineItem[]; index: number; item: EngineItem; parent: EngineItem | null },
+    edit: string,
+  ): undefined {
+    const { list, index, item, parent } = loc
+    const t = clone(this.transforms.get(item.id) ?? defaultTransform())
+    if (edit === 'show' || edit === 'hide') {
+      this.pushUndo(`${edit === 'show' ? 'Show' : 'Hide'} ${item.name}`)
+      item.visible = edit === 'show'
+      return undefined
+    }
+    if (edit === 'lock' || edit === 'unlock') {
+      this.pushUndo(`${edit === 'lock' ? 'Lock' : 'Unlock'} ${item.name}`)
+      item.locked = edit === 'lock'
+      return undefined
+    }
+    if (edit === 'remove') {
+      this.pushUndo(`Remove ${item.name}`)
+      const [removed] = list.splice(index, 1)
+      if (parent) this.syncGroupFrame(parent)
+      if (removed) {
+        const pruneNames = (it: EngineItem) => {
+          if (it.group) it.children.forEach(pruneNames)
+          else this.pruneOrphanSource(it.name)
+        }
+        pruneNames(removed)
+      }
+      return undefined
+    }
+    if (edit === 'up' || edit === 'down' || edit === 'top' || edit === 'bottom') {
+      this.pushUndo(`Move ${item.name} ${edit}`)
+      const [moved] = list.splice(index, 1)
+      if (edit === 'top') list.unshift(moved!)
+      else if (edit === 'bottom') list.push(moved!)
+      else if (edit === 'up') list.splice(Math.max(0, index - 1), 0, moved!)
+      else list.splice(Math.min(list.length, index + 1), 0, moved!)
+      return undefined
+    }
+    if (edit === 'fit' || edit === 'stretch') {
+      this.pushUndo(`${edit === 'fit' ? 'Fit' : 'Stretch'} ${item.name}`)
+      t.x = 0
+      t.y = 0
+      t.rotation = 0
+      t.bounds = edit === 'fit' ? 'fit' : 'stretch'
+      t.bounds_width = CANVAS_W
+      t.bounds_height = CANVAS_H
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'center') {
+      this.pushUndo(`Centre ${item.name}`)
+      const box = computeBox(t)
+      t.x = Math.round((CANVAS_W - box.w) / 2)
+      t.y = Math.round((CANVAS_H - box.h) / 2)
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'reset') {
+      this.pushUndo(`Reset ${item.name}`)
+      t.x = 0
+      t.y = 0
+      t.rotation = 0
+      t.scale_x = 1
+      t.scale_y = 1
+      t.bounds = 'none'
+      t.crop_left = 0
+      t.crop_top = 0
+      t.crop_right = 0
+      t.crop_bottom = 0
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'flip_h') {
+      this.pushUndo(`Flip ${item.name} sideways`)
+      t.scale_x *= -1
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'flip_v') {
+      this.pushUndo(`Flip ${item.name} upside down`)
+      t.scale_y *= -1
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'rotate_cw' || edit === 'rotate_ccw' || edit === 'rotate180') {
+      this.pushUndo(`Turn ${item.name}`)
+      const delta = edit === 'rotate_cw' ? 90 : edit === 'rotate_ccw' ? 270 : 180
+      t.rotation = (t.rotation + delta) % 360
+      this.setItemTransform(item, t)
+      return undefined
+    }
+    if (edit === 'duplicate') {
+      this.pushUndo(`Duplicate ${item.name}`)
+      const renameMap = new Map<string, string>()
+      const cloneSources = (it: EngineItem) => {
+        if (it.group) {
+          it.children.forEach(cloneSources)
+          return
+        }
+        const orig = this.sources.get(it.name)
+        if (orig && !renameMap.has(orig.name)) {
+          const unique = this.uniqueSourceName(orig.name)
+          renameMap.set(orig.name, unique)
+          this.sources.set(unique, { ...clone(orig), name: unique, channel: null })
+        }
+      }
+      cloneSources(item)
+      const dup = this.cloneItemDeep(item, renameMap)
+      if (dup.group) dup.name = this.uniqueSourceName(dup.name)
+      list.splice(index, 0, dup)
+      return undefined
+    }
+    if (edit === 'stream_and_recording' || edit === 'stream_only' || edit === 'recording_only') {
+      if (
+        (edit === 'stream_only' || edit === 'recording_only') &&
+        this.recording &&
+        this.studioSettingsData.record_quality === 'stream'
+      ) {
+        throw new HttpError(
+          422,
+          'studio_failed',
+          'Stop the recording first, then choose where this source is shown.',
+          'Recording uses the stream encoder, so both share one picture.',
+        )
+      }
+      const nextShow: EngineShow =
+        edit === 'stream_only' ? 'stream' : edit === 'recording_only' ? 'recording' : 'both'
+      this.pushUndo(`Show ${item.name} in ${nextShow}`)
+      item.show = nextShow
+      return undefined
+    }
+    if (edit === 'blend_method_default' || edit === 'blend_method_srgb_off') {
+      this.pushUndo(`Blending on ${item.name}`)
+      item.srgb_off = edit === 'blend_method_srgb_off'
+      return undefined
+    }
+    if (edit.startsWith('blend_') && BLEND_SET.has(edit.slice(6))) {
+      this.pushUndo(`Blend mode on ${item.name}`)
+      item.blend = edit.slice(6) as EngineBlend
+      return undefined
+    }
+    if (edit.startsWith('scale_') && SCALE_SET.has(edit.slice(6))) {
+      this.pushUndo(`Scaling on ${item.name}`)
+      item.scale_filter = edit.slice(6) as EngineScaleFilter
+      return undefined
+    }
+    throw new HttpError(400, 'invalid', `Unknown item edit "${edit}" in "${scene}".`)
+  }
+
+  private handleClipboardRoute(method: string, tail: string[], body: unknown): unknown {
+    if (method === 'GET' && tail.length === 0) {
+      if (!this.clipboardSummary) {
+        throw new HttpError(
+          404,
+          'clipboard_empty',
+          'Nothing is copied yet.',
+          'Copy a source or its filters first, then paste.',
+        )
+      }
+      return clone(this.clipboardSummary)
+    }
+    if (method === 'DELETE' && tail.length === 0) {
+      this.clipboardSummary = null
+      this.clipboardSource = null
+      this.clipboardFiltersData = null
+      return undefined
+    }
+    if (method === 'POST' && tail[0] === 'source' && tail.length === 1) {
+      const b = requireObj(body)
+      const scene = String(b.scene ?? '').trim()
+      const id = Number(b.id)
+      if (!scene || !Number.isInteger(id)) {
+        throw new HttpError(400, 'invalid', 'scene and numeric id are required.')
+      }
+      const { item } = this.findItem(scene, id)
+      const ids = new Set<number>()
+      this.collectItemIds(item, ids)
+      const transforms: Record<number, EngineTransform> = {}
+      for (const tid of ids) {
+        transforms[tid] = clone(this.transforms.get(tid) ?? defaultTransform())
+      }
+      const collectedSources = new Map<string, StoredSource>()
+      const walkSources = (it: EngineItem) => {
+        if (it.group) it.children.forEach(walkSources)
+        else {
+          const s = this.sources.get(it.name)
+          if (s && !collectedSources.has(s.name)) collectedSources.set(s.name, clone(s))
+        }
+      }
+      walkSources(item)
+      const sources = Array.from(collectedSources.values())
+      this.clipboardSource = { item: clone(item), transforms, sources }
+      this.clipboardFiltersData = null
+      this.clipboardSummary = {
+        kind: 'source',
+        name: item.name,
+        from: scene,
+        count: Math.max(1, sources.length),
+      }
+      return clone(this.clipboardSummary)
+    }
+    if (method === 'POST' && tail[0] === 'filters' && tail.length === 1) {
+      const target = this.resolveFilterTarget(requireObj(body))
+      if (target.filters.length === 0) {
+        throw new HttpError(400, 'invalid', `"${target.label}" has no filters to copy.`)
+      }
+      this.clipboardSource = null
+      this.clipboardFiltersData = {
+        filters: clone(target.filters),
+        settings: clone(target.settings),
+      }
+      this.clipboardSummary = {
+        kind: 'filters',
+        name: target.label,
+        from: target.label,
+        count: target.filters.length,
+      }
+      return clone(this.clipboardSummary)
+    }
+    if (method === 'POST' && tail[0] === 'paste' && tail[1] === 'source' && tail.length === 2) {
+      if (!this.clipboardSummary) {
+        throw new HttpError(
+          404,
+          'clipboard_empty',
+          'Nothing is copied yet.',
+          'Copy a source or its filters first, then paste.',
+        )
+      }
+      if (this.clipboardSummary.kind !== 'source' || !this.clipboardSource) {
+        throw new HttpError(
+          400,
+          'invalid',
+          'The clipboard holds filters, not a source: copy a source first.',
+        )
+      }
+      const b = requireObj(body)
+      const scene = typeof b.scene === 'string' ? b.scene.trim() : ''
+      if (!scene) throw new HttpError(400, 'invalid', 'scene: target scene name is required.')
+      const list = this.requireScene(scene)
+      this.pushUndo(`Paste ${this.clipboardSource.item.name}`)
+      const renameMap = new Map<string, string>()
+      const notes: string[] = []
+      for (const s of this.clipboardSource.sources) {
+        const unique = this.uniqueSourceName(s.name)
+        if (unique !== s.name) notes.push(`Renamed "${s.name}" to "${unique}".`)
+        renameMap.set(s.name, unique)
+        this.sources.set(unique, { ...clone(s), name: unique, channel: null })
+      }
+      const pasted = this.cloneItemDeep(
+        this.clipboardSource.item,
+        renameMap,
+        this.clipboardSource.transforms,
+      )
+      list.unshift(pasted)
+      return { item: clone(pasted), notes } satisfies EnginePasteResult
+    }
+    if (method === 'POST' && tail[0] === 'paste' && tail[1] === 'filters' && tail.length === 2) {
+      if (!this.clipboardSummary) {
+        throw new HttpError(
+          404,
+          'clipboard_empty',
+          'Nothing is copied yet.',
+          'Copy a source or its filters first, then paste.',
+        )
+      }
+      if (this.clipboardSummary.kind !== 'filters' || !this.clipboardFiltersData) {
+        throw new HttpError(
+          400,
+          'invalid',
+          'The clipboard holds a source, not filters: copy filters first.',
+        )
+      }
+      const target = this.resolveFilterTarget(requireObj(body))
+      this.pushUndo(`Paste filters onto ${target.label}`)
+      this.mergeFilters(
+        target.filters,
+        target.settings,
+        this.clipboardFiltersData.filters,
+        this.clipboardFiltersData.settings,
+      )
+      return { notes: [] } satisfies EnginePasteResult
+    }
+    throw new HttpError(404, 'not_found', 'Unknown clipboard route.')
+  }
+
+  private resolveFilterTarget(b: Record<string, unknown>): {
+    label: string
+    filters: EngineFilter[]
+    settings: Record<string, EngineSettings>
+  } {
+    const itemTarget = b.item as { scene?: string; id?: number } | undefined
+    if (itemTarget && typeof itemTarget.scene === 'string' && typeof itemTarget.id === 'number') {
+      const { item } = this.findItem(itemTarget.scene, itemTarget.id)
+      const st = item.own_filters ? this.ensureItemFilterState(item.id) : null
+      if (st) return { label: item.name, filters: st.filters, settings: st.settings }
+      const s = this.requireSource(item.name)
+      return { label: item.name, filters: s.filters, settings: s.filterSettings }
+    }
+    const name = typeof b.name === 'string' ? b.name.trim() : ''
+    if (!name) throw new HttpError(400, 'invalid', 'name: a source name is required.')
+    const s = this.requireSource(name)
+    return { label: name, filters: s.filters, settings: s.filterSettings }
+  }
+
+  private mergeFilters(
+    dstList: EngineFilter[],
+    dstSettings: Record<string, EngineSettings>,
+    srcList: EngineFilter[],
+    srcSettings: Record<string, EngineSettings>,
+  ): void {
+    for (const f of srcList) {
+      let name = f.name
+      for (let n = 2; dstList.some((x) => x.name === name); n++) name = `${f.name} ${n}`
+      dstList.push({ ...clone(f), name })
+      dstSettings[name] = clone(srcSettings[f.name] ?? {})
+    }
+  }
+
+  private handleFilterListRoute(
+    method: string,
+    tail: string[],
+    body: unknown,
+    list: EngineFilter[],
+    settingsMap: Record<string, EngineSettings>,
+    ownerLabel: string,
+  ): unknown {
+    if (method === 'GET' && tail.length === 0) return clone(list)
+    if (method === 'POST' && tail.length === 0) {
+      const b = body as NewEngineSource
+      const fName = String(b.name ?? '').trim()
+      if (!fName) throw new HttpError(400, 'invalid', 'name: 1 to 100 characters.')
+      if (list.some((x) => x.name === fName)) {
+        throw new HttpError(409, 'studio_name_taken', `Filter "${fName}" already exists.`)
+      }
+      this.pushUndo(`Add filter ${fName} to ${ownerLabel}`)
+      const created: EngineFilter = { name: fName, kind: String(b.kind), enabled: true }
+      list.push(created)
+      settingsMap[fName] = clone(b.settings ?? {})
+      return clone(created)
+    }
+    const fName = tail[0] ? decodeURIComponent(tail[0]) : ''
+    const idx = list.findIndex((x) => x.name === fName)
+    if (idx === -1) throw new HttpError(404, 'studio_no_filter', `No filter "${fName}".`)
+    if (method === 'DELETE' && tail.length === 1) {
+      this.pushUndo(`Remove filter ${fName}`)
+      list.splice(idx, 1)
+      delete settingsMap[fName]
+      return undefined
+    }
+    if (method === 'POST' && tail[1] === 'edit' && tail.length === 2) {
+      const act = String(requireObj(body).do ?? '')
+      this.pushUndo(`Edit filter ${fName}`)
+      const [item] = list.splice(idx, 1)
+      if (act === 'enable') item!.enabled = true
+      if (act === 'disable') item!.enabled = false
+      if (act === 'top') list.unshift(item!)
+      else if (act === 'bottom') list.push(item!)
+      else if (act === 'up') list.splice(Math.max(0, idx - 1), 0, item!)
+      else if (act === 'down') list.splice(Math.min(list.length, idx + 1), 0, item!)
+      else list.splice(idx, 0, item!)
+      return undefined
+    }
+    if (method === 'GET' && tail[1] === 'settings' && tail.length === 2) {
+      return clone(settingsMap[fName] ?? {})
+    }
+    if (method === 'PUT' && tail[1] === 'settings' && tail.length === 2) {
+      this.pushUndo(`Update filter ${fName}`)
+      const next = (requireObj(body).settings as EngineSettings | undefined) ?? {}
+      settingsMap[fName] = { ...(settingsMap[fName] ?? {}), ...clone(next) }
+      return undefined
+    }
+    if (method === 'GET' && tail[1] === 'options' && tail.length === 2) {
+      return []
+    }
+    throw new HttpError(404, 'not_found', 'Unknown filter route.')
+  }
+
+  private handleSourceRoute(method: string, name: string, tail: string[], body: unknown): unknown {
+    if (method === 'POST' && tail[0] === 'record' && tail.length === 1) {
+      if (
+        !name ||
+        [...name].length > 100 ||
+        [...name].some((ch) => {
+          const c = ch.codePointAt(0) ?? 32
+          return c < 32 || c === 0x7f
+        })
+      ) {
+        throw new HttpError(400, 'invalid', "name: a scene or source's name.")
+      }
+      const on = Boolean(requireObj(body).on)
+      if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
+        throw new HttpError(422, 'studio_failed', `There's no scene or source called "${name}".`)
+      }
+      if (!on) {
+        this.sourceRecords.delete(name)
+        return { file: null }
+      }
+      const folder = String(
+        this.studioSettingsData.record_folder ??
+          this.studioSettingsData.record_folder_default ??
+          '/Users/demo/Movies/Ferrocast',
+      )
+      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
+      const safe = name.replace(/[/\\:*?"<>|]/g, '-')
+      const file = `${folder}/${safe} demo.${fmt}`
+      this.sourceRecords.set(name, file)
+      return { file }
+    }
+    if (method === 'POST' && tail[0] === 'screenshot' && tail.length === 1) {
+      if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
+        throw new HttpError(404, 'studio_no_source', `There’s no source called "${name}".`)
+      }
+      const folder = String(
+        this.studioSettingsData.record_folder ??
+          this.studioSettingsData.record_folder_default ??
+          '/Users/demo/Movies/Ferrocast',
+      )
+      return { file: `${folder}/${name.replace(/[/\\]/g, '-')} screenshot.png` }
+    }
+    const src = this.requireSource(name)
+    if (method === 'GET' && tail[0] === 'picture' && tail.length === 1) {
+      if (src.name === this.cameraSourceName && !this.opts.hasCamera) {
+        return { image: null, width: CANVAS_W, height: CANVAS_H }
+      }
+      return {
+        image: this.sourceSvg(src.name, src.kind, CANVAS_W, CANVAS_H),
+        width: CANVAS_W,
+        height: CANVAS_H,
+      }
+    }
+    if (method === 'GET' && tail[0] === 'status' && tail.length === 1) {
+      return { web_text: null, page: { ok: true, error: null }, app_on: [1] }
+    }
+    if (method === 'GET' && tail[0] === 'settings' && tail.length === 1) {
+      return clone(src.settings)
+    }
+    if (method === 'PUT' && tail[0] === 'settings' && tail.length === 1) {
+      const next = (requireObj(body).settings as EngineSettings | undefined) ?? {}
+      this.pushUndo(`Update ${name}`)
+      src.settings = { ...src.settings, ...clone(next) }
+      if (name === this.micSourceName && typeof next.device_id === 'string') {
+        this.micDeviceId = next.device_id
+      }
+      return undefined
+    }
+    if (method === 'GET' && tail[0] === 'options' && tail.length === 1) {
+      return []
+    }
+    if (method === 'PUT' && tail[0] === 'audio' && tail.length === 1) {
+      const b = requireObj(body)
+      if (typeof b.volume_db === 'number') src.volume_db = b.volume_db
+      if (typeof b.muted === 'boolean') src.muted = b.muted
+      if (typeof b.monitor === 'string') src.monitor = b.monitor as EngineMonitor
+      return undefined
+    }
+    if (method === 'PUT' && tail[0] === 'deinterlace' && tail.length === 1) {
+      const b = requireObj(body)
+      const mode = String(b.mode ?? 'off')
+      if (!DEINTERLACE_SET.has(mode))
+        throw new HttpError(400, 'invalid', 'Unknown deinterlace mode.')
+      src.deinterlace = mode as EngineDeinterlace
+      src.top_field_first = Boolean(b.top_field_first ?? true)
+      return undefined
+    }
+    if (method === 'POST' && tail[0] === 'paste-filters' && tail.length === 1) {
+      const from = String(requireObj(body).from ?? '')
+      const other = this.requireSource(from)
+      this.pushUndo(`Paste filters onto ${name}`)
+      this.mergeFilters(src.filters, src.filterSettings, other.filters, other.filterSettings)
+      return undefined
+    }
+    if (method === 'POST' && tail[0] === 'web' && tail.length === 1) {
+      return undefined
+    }
+    if (tail[0] === 'filters') {
+      return this.handleFilterListRoute(
+        method,
+        tail.slice(1),
+        body,
+        src.filters,
+        src.filterSettings,
+        name,
+      )
+    }
+    throw new HttpError(404, 'not_found', 'Unknown source action.')
+  }
+
+  private sourceSvg(name: string, kind: string, w: number, h: number): string {
+    if (kind === 'av_capture_input_v2' || kind === 'dshow_input' || kind === 'v4l2_input') {
+      return cameraFrameSvg(this.sources.get(name)?.settings.device ?? CAMERA_SVGS[0].id)
+    }
+    return svgDataUrl(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+        `<rect width="${w}" height="${h}" fill="#17202e"/>` +
+        `<text x="${Math.round(w / 2)}" y="${Math.round(h / 2)}" text-anchor="middle" fill="#dce5f2" font-family="system-ui,sans-serif" font-size="22" font-weight="600">${name}</text>` +
+        `</svg>`,
+    )
+  }
+
   private scenesPayload() {
     const def = this.namedTransitions.find((t) => t.default) ?? this.namedTransitions[0]!
     return {
@@ -1590,7 +3163,7 @@ export class DemoStudioEngine {
         const leg = this.legacySceneTransitions.get(name)
         return {
           name,
-          items: name === this.currentScene ? 2 : 1,
+          items: this.sceneItems.get(name)?.length ?? 0,
           current: name === this.currentScene,
           preview: this.previewScene === name,
           transition: anyToT
