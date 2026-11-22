@@ -983,6 +983,7 @@ function RuleEditor({
         </div>
         <PlatformTestBar
           selected={previewPlatform}
+          platforms={kind === 'tip' ? ['tips'] : kindPlatforms}
           statusText={previewStatus}
           busy={busy === 'test'}
           onTestPlatform={firePlatformTest}

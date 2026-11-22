@@ -9,12 +9,15 @@ export function PlatformTestBar({
   statusText,
   onTestPlatform,
   onTestOnStream,
+  platforms = TEST_PLATFORMS,
   busy = false,
 }: {
   selected: Platform
   statusText: string | null
   onTestPlatform: (platform: Platform) => void
   onTestOnStream: () => void
+  /** The platforms this kind of alert can really come from; the rest are shown off. */
+  platforms?: readonly Platform[]
   busy?: boolean
 }) {
   return (
@@ -40,14 +43,18 @@ export function PlatformTestBar({
         {TEST_PLATFORMS.map((p) => {
           const active = selected === p
           const label = PLATFORM_LABEL[p]
+          const supported = platforms.includes(p)
           return (
             <button
               key={p}
               type="button"
               data-platform-test={p}
               aria-pressed={active}
+              disabled={!supported}
+              title={supported ? undefined : `${label} has no alert of this kind`}
               onClick={() => onTestPlatform(p)}
               className={cx(
+                'disabled:cursor-not-allowed disabled:opacity-45',
                 'fc-press inline-flex h-9 items-center justify-center gap-1.5 rounded-control border px-2.5 text-[13px] font-semibold transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                 active
                   ? 'border-accent-line bg-accent-soft text-text'

@@ -34,9 +34,9 @@ for (const width of [1280, 375] as const) {
       await expect(shadowTitle).toContainText('PixelPanda')
       await expect(page.getByText(/Previewing Kick test alert/)).toBeVisible()
 
-      await page.locator('[data-platform-test="tips"]').click()
-      await expect(shadowTitle).toContainText('Asha')
-      await expect(page.getByText(/Previewing Tips test alert/)).toBeVisible()
+      // A subscription never comes from tips: that button is off rather than previewing
+      // a broken headline.
+      await expect(page.locator('[data-platform-test="tips"]')).toBeDisabled()
 
       await page.locator('[data-platform-test="twitch"]').click()
       await expect(shadowTitle).toContainText('PixelPanda')

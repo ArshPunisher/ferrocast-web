@@ -294,7 +294,14 @@ describe('alerts', () => {
         'alert',
         alert('t1', {
           duration_ms: 2000,
-          anim: { in: 'fade', out: 'fade', text: 'none', in_ms: 300, out_ms: 400, text_delay_ms: 0 },
+          anim: {
+            in: 'fade',
+            out: 'fade',
+            text: 'none',
+            in_ms: 300,
+            out_ms: 400,
+            text_delay_ms: 0,
+          },
         }),
       ),
     )
