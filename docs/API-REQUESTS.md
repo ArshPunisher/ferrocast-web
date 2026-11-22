@@ -447,7 +447,7 @@ All three stay PC-only (`remoteAllowed` denies paired phones).
 ## R36. Clips and highlights (`#23`, 22 Nov)
 
 The Studio's **Clips** tab (`#/studio/clips`): the recordings folder as a library, with trims, compilations,
-captions and sending to YouTube. Engine commit `fab5c473` on `feat/p3-clips` (`docs/API.md` "Clips and
+captions and sending to YouTube. Engine branch `feat/p3-clips` in `ferrocast` (`docs/API.md` "Clips and
 highlights" has every field and error). A clip is named by its **file name** (`id`), never a path.
 - `GET /api/v1/clips?q=` → `{ folder, ffmpeg_ready, youtube_connected, clips: [{ id, name, kind, ext, size,
   modified, has_captions }] }`; `GET /clips/{id}` → probe; `GET /clips/{id}/thumbnail` → `{ image }` (data URL);
