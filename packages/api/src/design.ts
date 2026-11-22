@@ -1336,7 +1336,9 @@ export function isTrustedEmoteUrl(raw: unknown): raw is string {
     !authority ||
     authority.includes('@') ||
     authority.includes(':') ||
-    rest[authority.length] === '\\'
+    !/^[A-Za-z0-9.-]+$/.test(authority) ||
+    rest[authority.length] !== '/' ||
+    rest.length <= authority.length + 1
   )
     return false
   try {
