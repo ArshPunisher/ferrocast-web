@@ -53,6 +53,14 @@ export interface DemoOverlayHost {
   createOverlay(input: { name: string; width: number; height: number; widgets: Widget[] }): Overlay
   deleteOverlay(id: string): void
   now(): number
+  collectionNames?(): string[]
+  applyOverlayCollection?(input: {
+    name: string
+    scenes: string[]
+    overlays: { scene: string; overlay: Overlay }[]
+    canvas: { width: number; height: number }
+  }): { id: string; name: string; previousId: string }
+  undoOverlayCollection?(collectionId: string, previousId: string): string | null
 }
 
 interface StoredCollection {
@@ -569,11 +577,12 @@ export class DemoStudioLibrary {
     if (reqName.length > 100) {
       throw new HttpError(400, 'invalid', 'name: 1 to 100 characters.')
     }
+    const knownNames = this.host.collectionNames?.() ?? this.collections.map((c) => c.name)
     let uniqueName = reqName
-    if (this.collections.some((c) => c.name.toLowerCase() === uniqueName.toLowerCase())) {
+    if (knownNames.some((n) => n.toLowerCase() === uniqueName.toLowerCase())) {
       for (let i = 2; ; i++) {
         const cand = `${reqName} (${i})`
-        if (!this.collections.some((c) => c.name.toLowerCase() === cand.toLowerCase())) {
+        if (!knownNames.some((n) => n.toLowerCase() === cand.toLowerCase())) {
           uniqueName = cand
           break
         }
@@ -583,6 +592,7 @@ export class DemoStudioLibrary {
     const createOverlays = o.create_overlays !== false
     const fetchFonts = o.fetch_fonts !== false
     const createdOverlays: Overlay[] = []
+    const sceneOverlays: { scene: string; overlay: Overlay }[] = []
     if (createOverlays) {
       for (const pl of parsed.plannedOverlays) {
         const ov = this.host.createOverlay({
@@ -592,13 +602,31 @@ export class DemoStudioLibrary {
           widgets: pl.widgets,
         })
         createdOverlays.push(ov)
+        sceneOverlays.push({ scene: pl.scene, overlay: ov })
       }
     }
 
-    const previousId = this.currentCollection
-    const id = slugId(uniqueName, new Set(this.collections.map((c) => c.id)))
-    this.collections.push({ id, name: uniqueName, doc: clone(parsed.doc) })
-    this.currentCollection = id
+    let previousId: string
+    let id: string
+    if (this.host.applyOverlayCollection) {
+      const synced = this.host.applyOverlayCollection({
+        name: uniqueName,
+        scenes: parsed.scenes.map((s) => s.name),
+        overlays: sceneOverlays,
+        canvas: parsed.canvas,
+      })
+      previousId = synced.previousId
+      id = synced.id
+      if (!this.collections.some((c) => c.id === id)) {
+        this.collections.push({ id, name: uniqueName, doc: clone(parsed.doc) })
+      }
+      this.currentCollection = id
+    } else {
+      previousId = this.currentCollection
+      id = slugId(uniqueName, new Set(this.collections.map((c) => c.id)))
+      this.collections.push({ id, name: uniqueName, doc: clone(parsed.doc) })
+      this.currentCollection = id
+    }
 
     const offline = this.fontsOffline || this.host.isOffline()
     const installedSet = new Set(['arial', 'helvetica', 'inter'])
@@ -729,11 +757,18 @@ export class DemoStudioLibrary {
       )
     }
     this.undos.delete(token)
-    const restored = this.collections.some((c) => c.id === rec.previousId)
-      ? rec.previousId
-      : (this.collections.find((c) => c.id !== rec.collectionId)?.id ?? null)
-    if (restored) this.currentCollection = restored
-    this.collections = this.collections.filter((c) => c.id !== rec.collectionId)
+    let restored: string | null
+    if (this.host.undoOverlayCollection) {
+      restored = this.host.undoOverlayCollection(rec.collectionId, rec.previousId)
+      this.collections = this.collections.filter((c) => c.id !== rec.collectionId)
+      if (restored) this.currentCollection = restored
+    } else {
+      restored = this.collections.some((c) => c.id === rec.previousId)
+        ? rec.previousId
+        : (this.collections.find((c) => c.id !== rec.collectionId)?.id ?? null)
+      if (restored) this.currentCollection = restored
+      this.collections = this.collections.filter((c) => c.id !== rec.collectionId)
+    }
     for (const oid of rec.overlayIds) {
       try {
         this.host.deleteOverlay(oid)

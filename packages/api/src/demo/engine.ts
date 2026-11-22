@@ -692,7 +692,7 @@ export class DemoEngine {
       : null
     this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
       baseUrl: () => this.base,
-      isLive: () => this.studio.library.busy,
+      isLive: () => this.studio.library.busy || Boolean(this.studioEngine?.isBusy()),
       isOffline: () => this.offline,
       createOverlay: (input) => {
         const id = `ov-${randomToken().slice(0, 10)}`
@@ -721,6 +721,14 @@ export class DemoEngine {
         this.overlays = this.overlays.filter((o) => o.id !== id)
       },
       now: () => Date.now(),
+      ...(this.studioEngine
+        ? {
+            collectionNames: () => this.studioEngine!.collectionNames(),
+            applyOverlayCollection: (input) => this.studioEngine!.importOverlayCollection(input),
+            undoOverlayCollection: (collectionId, previousId) =>
+              this.studioEngine!.undoOverlayCollection(collectionId, previousId),
+          }
+        : {}),
     })
     this.golive = new DemoGoLive(
       this.host,

@@ -620,6 +620,111 @@ export class DemoStudioEngine {
     }
   }
 
+  isBusy(): boolean {
+    return this.isStreaming() || (this.opts.running && this.recording)
+  }
+
+  collectionNames(): string[] {
+    return this.shelfCollections.list.map((c) => c.name)
+  }
+
+  /** Switch the simulated Studio engine to an imported `.overlay` theme-pack collection. */
+  importOverlayCollection(input: {
+    name: string
+    scenes: string[]
+    overlays: { scene: string; overlay: { id: string; name: string; url: string } }[]
+    canvas: { width: number; height: number }
+  }): { id: string; name: string; previousId: string } {
+    const previousId = this.shelfCollections.current
+    this.collections.set(previousId, this.captureSnapshot())
+    const baseSlug =
+      input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40) || 'set'
+    let id = baseSlug
+    let n = 2
+    while (
+      this.shelfCollections.list.some((x) => x.id === id) ||
+      ['current', 'import', 'overlay'].includes(id)
+    ) {
+      id = `${baseSlug}-${n++}`
+    }
+    this.shelfCollections.list.push({ id, name: input.name })
+    this.shelfCollections.current = id
+
+    const sceneNames = input.scenes.length > 0 ? input.scenes : ['Main']
+    this.seedForScenes(sceneNames, true)
+
+    const byScene = new Map<string, { id: string; name: string; url: string }[]>()
+    for (const ov of input.overlays) {
+      const list = byScene.get(ov.scene) ?? []
+      list.push(ov.overlay)
+      byScene.set(ov.scene, list)
+    }
+
+    for (const scene of sceneNames) {
+      const items = this.sceneItems.get(scene) ?? []
+      for (const ov of byScene.get(scene) ?? []) {
+        let srcName = ov.name
+        let k = 2
+        while (this.sources.has(srcName)) srcName = `${ov.name} (${k++})`
+        const src = this.makeSource(srcName, 'ferrocast_web', {
+          url: ov.url,
+          width: input.canvas.width,
+          height: input.canvas.height,
+        })
+        this.sources.set(src.name, src)
+        items.push(
+          this.createSceneItem(src, {
+            x: 0,
+            y: 0,
+            w: input.canvas.width,
+            h: input.canvas.height,
+          }),
+        )
+      }
+      this.sceneItems.set(scene, items)
+    }
+
+    if (this.opts.hasCamera && sceneNames[0]) {
+      const cam = this.makeSource(this.cameraSourceName, 'av_capture_input_v2', {
+        device: CAMERA_SVGS[0].id,
+      })
+      this.sources.set(cam.name, cam)
+      const firstItems = this.sceneItems.get(sceneNames[0]) ?? []
+      firstItems.push(this.createSceneItem(cam, { x: 1380, y: 720, w: 480, h: 270 }))
+      this.sceneItems.set(sceneNames[0], firstItems)
+    }
+
+    this.collections.set(id, this.captureSnapshot())
+    return { id, name: input.name, previousId }
+  }
+
+  /** Revert an `.overlay` theme-pack import in the simulated Studio engine and restore the prior snapshot. */
+  undoOverlayCollection(collectionId: string, previousId: string): string | null {
+    const restored = this.shelfCollections.list.some(
+      (c) => c.id === previousId && c.id !== collectionId,
+    )
+      ? previousId
+      : (this.shelfCollections.list.find((c) => c.id !== collectionId)?.id ?? null)
+    if (restored) {
+      this.shelfCollections.current = restored
+      const snap = this.collections.get(restored)
+      if (snap) this.restoreSnapshot(snap)
+      else {
+        this.seedForScenes(['Main'], true)
+        this.collections.set(restored, this.captureSnapshot())
+      }
+      this.undoStack = []
+      this.redoStack = []
+    }
+    this.shelfCollections.list = this.shelfCollections.list.filter((c) => c.id !== collectionId)
+    this.collections.delete(collectionId)
+    return restored
+  }
+
   sceneNames(): string[] {
     return [...this.activeScenes]
   }
