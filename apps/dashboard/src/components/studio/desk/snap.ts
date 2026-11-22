@@ -78,8 +78,9 @@ export function snapTargets(items: ItemLike[], moving: number[]): Frame[] {
     // A moving source's own group is no target (its edges go with it); its other sources are.
     const holdsMoving = it.children.some((c) => skip.has(c.id))
     if (it.visible && it.frame && !skip.has(it.id) && !holdsMoving) out.push(it.frame)
-    // A moving group takes its sources along: none of them is a target.
-    if (skip.has(it.id)) continue
+    // A moving group takes its sources along: none of them is a target. A hidden group hides
+    // what is in it, so there is nothing to line up to.
+    if (skip.has(it.id) || !it.visible) continue
     for (const c of it.children) if (c.visible && c.frame && !skip.has(c.id)) out.push(c.frame)
   }
   return out
@@ -119,8 +120,12 @@ export function guidesFor(
   o: GuideOpts,
 ): Guide[] {
   const out: Guide[] = []
+  // The same line met twice (two boxes on one edge) is one line, long enough to reach both.
   const add = (g: Guide) => {
-    if (!out.some((x) => x.axis === g.axis && x.at === g.at && x.kind === g.kind)) out.push(g)
+    const same = out.find((x) => x.axis === g.axis && x.at === g.at && x.kind === g.kind)
+    if (!same) return void out.push(g)
+    same.from = Math.min(same.from, g.from)
+    same.to = Math.max(same.to, g.to)
   }
   const mine = {
     x: [r.left, (r.left + r.right) / 2, r.right],

@@ -102,6 +102,16 @@ describe('guide lines', () => {
     const x = g.find((l) => l.axis === 'x' && l.at === 500)
     expect(x && [x.from, x.to]).toEqual([300, 400])
   })
+  it('join every box on a shared line: one line, reaching the farthest of them', () => {
+    // Two boxes share the left edge x 500, one high up (y 0-20) and one low (y 300-400).
+    const hi = box(500, 0, 100, 20)
+    const lo = box(500, 300, 100, 100)
+    const g = guidesFor(rectOf(box(500, 100, 80, 100)), [hi, lo], canvas, opts).filter(
+      (l) => l.axis === 'x' && l.at === 500,
+    )
+    expect(g.length).toBe(1)
+    expect([g[0]!.from, g[0]!.to]).toEqual([0, 400])
+  })
   it('only show what is lined up, within half a pixel', () => {
     const other = box(500, 300, 200, 100)
     expect(
@@ -197,6 +207,13 @@ describe('what a box can snap to', () => {
   it('leave out the sources of a moving group', () => {
     const t = snapTargets(list, [10])
     expect(t).toEqual([box(500, 0, 50, 50)])
+  })
+  it('leave out the sources of a hidden group (the picture does not show them)', () => {
+    const hidden = item(20, box(0, 0, 400, 400), {
+      visible: false,
+      children: [item(21, box(10, 10, 100, 100))],
+    })
+    expect(snapTargets([hidden, item(1, box(500, 0, 50, 50))], [])).toEqual([box(500, 0, 50, 50)])
   })
   it('keep a locked source as a place to line up with, and skip one with no frame yet', () => {
     const t = snapTargets([item(1, box(0, 0, 10, 10), { locked: true }), item(2, undefined)], [])

@@ -1248,8 +1248,15 @@ interface Held {
 type Job =
   { box: Box; save: boolean } | { crop: Crop; save: boolean } | { boxes: BoxFor[]; save: boolean }
 
-/** Key of the one request for several sources (a source's own id is never negative). */
-const MANY = -1
+/**
+ * Key of the one request for several sources: the set of them, so a final batch for A and B is
+ * never replaced by a later drag of C and D (a source's own key is its number).
+ */
+const manyKey = (boxes: BoxFor[]) =>
+  `many:${boxes
+    .map((b) => b.id)
+    .sort((a, b) => a - b)
+    .join(',')}`
 
 /**
  * Pick, move and resize sources in the preview, as in OBS: click picks (the engine outlines
@@ -1301,7 +1308,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
   // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
   const [over, setOver] = useState(false)
-  const sending = useRef<{ busy: boolean; next: Map<number, Job> }>({
+  const sending = useRef<{ busy: boolean; next: Map<number | string, Job> }>({
     busy: false,
     next: new Map(),
   })
@@ -1378,15 +1385,15 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     if (q.busy) return
     const first = q.next.entries().next()
     if (first.done) return
-    const [id, job] = first.value
-    q.next.delete(id)
+    const [key, job] = first.value
+    q.next.delete(key)
     q.busy = true
     const go: Promise<EngineItem | EngineItem[]> =
       'boxes' in job
         ? api.setItemBoxes(scene, { items: job.boxes, save: job.save })
         : 'box' in job
-          ? api.setItemBox(scene, id, { ...job.box, save: job.save })
-          : api.setItemCrop(scene, id, { ...job.crop, save: job.save })
+          ? api.setItemBox(scene, Number(key), { ...job.box, save: job.save })
+          : api.setItemCrop(scene, Number(key), { ...job.crop, save: job.save })
     const done = job.save ? run('move', () => go) : go.catch(() => undefined)
     void done
       .then((res) => {
@@ -1397,7 +1404,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         pump()
       })
   }
-  const queue = (id: number, job: Job) => {
+  const queue = (id: number | string, job: Job) => {
     const q = sending.current
     // A save never gets replaced by a later move without one.
     const prev = q.next.get(id)
@@ -1420,13 +1427,13 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       const ob = boxOf(o.from)
       boxes.push({ id: o.id, ...ob, x: ob.x + dx, y: ob.y + dy })
     }
-    queue(MANY, { boxes, save })
+    queue(manyKey(boxes), { boxes, save })
   }
   const finish = (h: Held | null) => {
     clearHints()
     if (!h?.moved) return
     if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true })
-    else if (h.group && h.lastBoxes) queue(MANY, { boxes: h.lastBoxes, save: true })
+    else if (h.group && h.lastBoxes) queue(manyKey(h.lastBoxes), { boxes: h.lastBoxes, save: true })
     else if (h.last) moveAll(h, h.last, true)
   }
 
@@ -1488,6 +1495,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         if (touches.current.size === 2) {
           // A second finger: zoom and pan, not a drag of a source.
           held.current = null
+          // ...nor a box being dragged round some (its points are the old view's).
+          marquee.current = null
+          clearHints()
           const [a, b] = [...touches.current.values()] as [
             { x: number; y: number },
             { x: number; y: number },
@@ -1712,7 +1722,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         const boxes = scaleGroup(h.group.items, h.group.rect, next)
         h.last = b
         h.lastBoxes = boxes
-        queue(MANY, { boxes, save: false })
+        queue(manyKey(boxes), { boxes, save: false })
         showHints(next, movingIds, snap > 0)
         return
       }
@@ -1845,7 +1855,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         boxes.push({ id: it.id, ...b, x: b.x + d.x, y: b.y + d.y })
       }
       // One request for all of them, so a nudge of several is one undo step.
-      if (boxes.length > 1) queue(MANY, { boxes, save: true })
+      if (boxes.length > 1) queue(manyKey(boxes), { boxes, save: true })
       else if (boxes[0]) send(boxes[0].id, boxes[0], true)
     },
   }

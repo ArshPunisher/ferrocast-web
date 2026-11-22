@@ -188,17 +188,33 @@ export function GroupBox({
       data-group-box
       className={cx('pointer-events-none absolute inset-0', className)}
     >
-      <span
-        data-over-preview
-        data-guide-hole
-        style={{
-          left: pct(rect.left, W),
-          top: pct(rect.top, H),
-          width: pct(w, W),
-          height: pct(h, H),
-        }}
-        className="absolute border border-dashed border-[var(--fc-arc)]"
-      />
+      {/* The border is four thin edges, not one big box: each is a hole in the native picture
+          (`data-over-preview`), and the inside must stay the picture. */}
+      {(
+        [
+          ['top', rect.left, rect.top, w, 0],
+          ['bottom', rect.left, rect.bottom, w, 0],
+          ['left', rect.left, rect.top, 0, h],
+          ['right', rect.right, rect.top, 0, h],
+        ] as const
+      ).map(([side, x, y, ew, eh]) => (
+        <span
+          key={side}
+          data-over-preview
+          data-guide-hole
+          style={{
+            left: pct(x, W),
+            top: pct(y, H),
+            ...(ew
+              ? { width: pct(ew, W), height: 2, marginTop: -1 }
+              : { width: 2, height: pct(eh, H), marginLeft: -1 }),
+          }}
+          className={cx(
+            'absolute border-dashed border-[var(--fc-arc)]',
+            ew ? 'border-t' : 'border-l',
+          )}
+        />
+      ))}
       {HANDLES.map(([u, v]) => (
         <span
           key={`${u}-${v}`}

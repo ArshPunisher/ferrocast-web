@@ -344,8 +344,6 @@ export function SourcesDock() {
           { sep: true },
         ] satisfies MenuItem[])
       : []),
-    // With several picked: align them, or space them out (the same as the preview bar's).
-    ...(arrange.count >= 2 ? [...arrange.menu(), { sep: true as const }] : []),
     { label: 'Settings', icon: SlidersHorizontal, onSelect: () => edit(item.name) },
     { label: 'Filters', icon: Funnel, onSelect: () => edit(item.name, 'filters') },
     {
@@ -649,6 +647,9 @@ export function SourcesDock() {
             select(g.id)
           }, `${picked.length} sources grouped.`),
       },
+      { sep: true },
+      // Line them up or space them out (the same as the preview bar's button).
+      ...arrange.menu(),
       { sep: true },
       {
         label: allHidden ? 'Show all' : 'Hide all',
