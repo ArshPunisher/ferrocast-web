@@ -36,7 +36,7 @@ export {
   newVariation,
   normalizeVariation,
   defaultAlertAnim,
-  findUnknownHtmlToken,
+  checkCustomHtml,
   isValidFieldKey,
   pick,
   render as renderAlert,

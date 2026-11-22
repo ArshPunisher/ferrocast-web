@@ -148,4 +148,57 @@ describe('Alert Editor v2 validation and rendering (R25)', () => {
     expect(saved.variations[0]!.field_values).toEqual({ badge: 'Hero' })
     e.dispose()
   })
+
+  it('refuses custom HTML that can run code, navigate or fetch (same rules as the engine)', () => {
+    const run = (html: string) => {
+      const r = baseRule()
+      r.variations[0]!.custom_enabled = true
+      r.variations[0]!.html = html
+      return validateRule(r)
+    }
+    for (const bad of [
+      '<p>{message}</p><img src="data:," onerror="location.replace(\'https://evil.example/\')">',
+      '<div onclick="x()">hi</div>',
+      '<DIV ONMOUSEOVER=x>hi</DIV>',
+      "<script>fetch('https://evil.example')</script>",
+      '<svg><script>1</script></svg>',
+      '<meta http-equiv="refresh" content="0;url=https://evil.example">',
+      '<base href="https://evil.example/">',
+      '<form action="https://evil.example"><button>go</button></form>',
+      '<iframe src="https://evil.example"></iframe>',
+      '<a href="javascript:alert(1)">x</a>',
+      '<a href=" Java\tscript:alert(1)">x</a>',
+      '<a href="&#106;avascript:alert(1)">x</a>',
+      '<img src="https://evil.example/p.gif">',
+      '<img src="data:image/svg+xml,<svg onload=alert(1)>">',
+      '<audio src="data:audio/wav;base64,AAAA" autoplay></audio>',
+      '<div style="background:url(https://evil.example/a.png)">x</div>',
+      '<style>@import url(https://evil.example/a.css);</style>',
+      '<style>.a{background:u\\72l(https://evil.example/a.png)}</style>',
+      '<div class="{name}">x</div>',
+      '<div class={name}>x</div>',
+      '<img src="{message}">',
+      '<div style="color:{message}">x</div>',
+    ]) {
+      expect(run(bad), bad).not.toBeNull()
+    }
+    for (const good of [
+      "<div class='card'><span>{name}</span><b>{message}</b></div>",
+      '<img src="https://cdn.discordapp.com/a.png" alt="{name}">',
+      '<img src="data:image/png;base64,AAAA" alt="">',
+      '<div style="color:#fff;background:linear-gradient(red,blue)" title="{name}">x</div>',
+      '<style>.card{color:#fff}</style><p class="card" data-who="{name}">{{literal}}</p>',
+      '<!-- a note --><p>{amount|default:"0"}</p>',
+      "<style>.a{content:'{bogus}'}</style><p>{name}</p>",
+    ]) {
+      expect(run(good), good).toBeNull()
+    }
+    expect(run('<p>{bogus}</p>')).toMatch(/bogus/)
+  })
+
+  it('caps the looks per rule', () => {
+    const r = baseRule()
+    r.variations = Array.from({ length: 21 }, () => ({ ...r.variations[0]! }))
+    expect(validateRule(r)).toMatch(/up to 20 looks/)
+  })
 })

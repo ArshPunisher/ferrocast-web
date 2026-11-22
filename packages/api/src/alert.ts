@@ -31,6 +31,9 @@ export const MAX_FIELD_LABEL_LEN = 80
 export const MAX_FIELD_TEXT_LEN = 500
 export const MAX_SELECT_OPTIONS = 20
 
+/** Most looks one rule may hold (the engine's MAX_VARIATIONS). */
+export const MAX_VARIATIONS = 20
+
 export const ALLOWED_ASSET_HOSTS = [
   'https://static-cdn.jtvnw.net',
   'https://yt3.ggpht.com',
@@ -412,42 +415,234 @@ function validateCustomFields(
   return { keys }
 }
 
-function stripCodeBlocks(html: string): string {
-  return html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '')
+const BANNED_TAGS = new Set([
+  'script',
+  'meta',
+  'base',
+  'form',
+  'iframe',
+  'frame',
+  'frameset',
+  'object',
+  'embed',
+  'link',
+  'applet',
+  'noscript',
+  'noembed',
+  'noframes',
+  'xmp',
+  'plaintext',
+  'textarea',
+  'title',
+  'template',
+  'math',
+  'foreignobject',
+  'use',
+  'animate',
+  'set',
+  'animatemotion',
+  'animatetransform',
+  'input',
+  'button',
+  'select',
+  'audio',
+  'video',
+  'source',
+  'track',
+])
+const URL_ATTRS = new Set([
+  'href',
+  'src',
+  'xlink:href',
+  'poster',
+  'data',
+  'background',
+  'srcset',
+  'cite',
+  'longdesc',
+  'manifest',
+  'icon',
+])
+const BANNED_ATTRS = new Set(['srcdoc', 'formaction', 'action', 'http-equiv', 'ping'])
+
+function tokenAttrOk(name: string): boolean {
+  return (
+    ['alt', 'title', 'aria-label', 'aria-description', 'aria-valuetext'].includes(name) ||
+    name.startsWith('data-')
+  )
 }
 
-export function findUnknownHtmlToken(
-  html: string,
-  customKeys: Iterable<string> = [],
-): string | null {
-  const customSet = new Set(customKeys)
-  const visible = stripCodeBlocks(html)
-  for (let i = 0; i < visible.length; i++) {
-    if (visible[i] !== '{') continue
-    if (visible[i + 1] === '{') {
+/** `{token}` names in `text` (a `{{` is a literal brace). */
+function tokensIn(text: string): string[] {
+  const out: string[] = []
+  const chars = Array.from(text)
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] !== '{') continue
+    if (chars[i + 1] === '{') {
       i += 1
       continue
     }
-    const end = visible.indexOf('}', i + 1)
+    const end = chars.indexOf('}', i + 1)
     if (end === -1) break
-    const inner = visible.slice(i + 1, end)
-    const rawTok = inner.split('|')[0] ?? ''
-    if (
-      rawTok.length > 0 &&
-      /^[A-Za-z0-9_:]+$/.test(rawTok) &&
-      !KNOWN_VAR_SET.has(rawTok) &&
-      !customSet.has(rawTok)
-    ) {
-      return rawTok
-    }
+    const raw = (
+      chars
+        .slice(i + 1, end)
+        .join('')
+        .split('|')[0] ?? ''
+    ).trim()
+    if (raw && /^[A-Za-z0-9_:]+$/.test(raw)) out.push(raw)
     i = end
   }
-  return null
+  return out
 }
 
-function validateHtmlTokens(varName: string, html: string, customKeys: Set<string>): string | null {
-  const bad = findUnknownHtmlToken(html, customKeys)
-  return bad ? `Variation '${varName}': unknown token '{${bad}}'.` : null
+function urlAttrOk(value: string): boolean {
+  const v = value.trim().toLowerCase()
+  // eslint-disable-next-line no-control-regex
+  if (/[\s\u0000-\u001f\u007f&\\]/.test(v)) return false
+  if (v.startsWith('#')) return true
+  if (/^data:image\/(png|jpeg|gif|webp|avif);/.test(v)) return true
+  if (v.startsWith('https://')) {
+    const host = v.slice(8).split(/[/?#]/)[0] ?? ''
+    return ALLOWED_ASSET_HOSTS.some((h) => h === `https://${host}`)
+  }
+  return false
+}
+
+/**
+ * Reads custom HTML the way a browser splits it into tags, text and <style> blocks, and
+ * refuses what could run code, navigate, fetch or break out of a token's context (the engine's
+ * `check_custom_html`; the overlay's sandbox page enforces the same on the parsed document).
+ */
+export function checkCustomHtml(
+  varName: string,
+  html: string,
+  customKeys: Iterable<string> = [],
+): string | null {
+  const keys = new Set(customKeys)
+  const fail = (reason: string) => `Variation '${varName}': custom HTML ${reason}.`
+  const tokenErr = (tok: string) =>
+    !KNOWN_VAR_SET.has(tok) && !keys.has(tok)
+      ? `Variation '${varName}': unknown token '{${tok}}'.`
+      : null
+  const chars = Array.from(html)
+  const lower = chars.map((c) => c.toLowerCase())
+  const lowerStr = lower.join('')
+  let text = ''
+  const flush = (): string | null => {
+    for (const tok of tokensIn(text)) {
+      const e = tokenErr(tok)
+      if (e) return e
+    }
+    text = ''
+    return null
+  }
+  let i = 0
+  while (i < chars.length) {
+    if (chars[i] !== '<') {
+      text += chars[i]
+      i += 1
+      continue
+    }
+    const here = lower.slice(i, i + 4).join('')
+    if (here === '<!--') {
+      const end = lowerStr.indexOf('-->', i + 4)
+      if (end === -1) return fail('has a comment that never closes')
+      i = end + 3
+      continue
+    }
+    if (here.startsWith('<!') || here.startsWith('<?')) {
+      const end = lowerStr.indexOf('>', i)
+      if (end === -1) return fail('has markup that never closes')
+      i = end + 1
+      continue
+    }
+    const next = chars[i + 1] ?? ' '
+    const isLetter = (c: string | undefined) => !!c && /[A-Za-z]/.test(c)
+    if (!(isLetter(next) || (next === '/' && isLetter(chars[i + 2])))) {
+      text += '<'
+      i += 1
+      continue
+    }
+    const flushed = flush()
+    if (flushed) return flushed
+    const closing = next === '/'
+    i += closing ? 2 : 1
+    const start = i
+    while (i < chars.length && !/[\s/>]/.test(chars[i]!)) i += 1
+    const tag = lower.slice(start, i).join('')
+    if (tag.includes('{')) return fail("can't put a {token} in a tag name")
+    if (BANNED_TAGS.has(tag)) return fail(`can't use <${tag}>: custom alerts are HTML and CSS only`)
+    const attrs: [string, string][] = []
+    for (;;) {
+      while (i < chars.length && /[\s/]/.test(chars[i]!)) i += 1
+      if (i >= chars.length) return fail('has a tag that never closes')
+      if (chars[i] === '>') {
+        i += 1
+        break
+      }
+      const astart = i
+      while (i < chars.length && !/[\s=>/]/.test(chars[i]!)) i += 1
+      const aname = lower.slice(astart, i).join('')
+      if (!aname || aname.includes('{'))
+        return fail("can't put a {token} where an attribute name goes")
+      while (i < chars.length && /\s/.test(chars[i]!)) i += 1
+      let value = ''
+      if (chars[i] === '=') {
+        i += 1
+        while (i < chars.length && /\s/.test(chars[i]!)) i += 1
+        const q = chars[i]
+        if (q === '"' || q === "'") {
+          i += 1
+          const vstart = i
+          while (i < chars.length && chars[i] !== q) i += 1
+          if (i >= chars.length) return fail('has an attribute that never closes')
+          value = chars.slice(vstart, i).join('')
+          i += 1
+        } else {
+          const vstart = i
+          while (i < chars.length && !/[\s>]/.test(chars[i]!)) i += 1
+          value = chars.slice(vstart, i).join('')
+        }
+      }
+      attrs.push([aname, value])
+    }
+    if (closing) continue
+    for (const [aname, value] of attrs) {
+      if (aname.startsWith('on') || BANNED_ATTRS.has(aname))
+        return fail(`can't use the "${aname}" attribute`)
+      if (URL_ATTRS.has(aname)) {
+        if (tokensIn(value).length > 0) return fail(`can't put a {token} in "${aname}"`)
+        if (!urlAttrOk(value))
+          return fail(
+            `"${aname}" can only be a #anchor, a data:image/ picture or an allowed picture host`,
+          )
+        continue
+      }
+      if (aname === 'style') {
+        if (tokensIn(value).length > 0) return fail("can't put a {token} in a style attribute")
+        const cssErr = checkCss(`variation '${varName}' style attribute`, `x{${value}}`)
+        if (cssErr) return cssErr
+        continue
+      }
+      for (const tok of tokensIn(value)) {
+        if (!tokenAttrOk(aname))
+          return fail(
+            `can only put a {token} in text or in alt, title, aria-label and data-* (not "${aname}")`,
+          )
+        const e = tokenErr(tok)
+        if (e) return e
+      }
+    }
+    if (tag === 'style') {
+      const close = lowerStr.indexOf('</style', i)
+      const end = close === -1 ? chars.length : close
+      const cssErr = checkCss(`variation '${varName}' <style>`, chars.slice(i, end).join(''))
+      if (cssErr) return cssErr
+      i = end
+    }
+  }
+  return flush()
 }
 
 /** The editor's save check (core::AlertRule::validate). Returns the message or null. */
@@ -455,6 +650,7 @@ export function validateRule(r: AlertRule): string | null {
   if (r.kinds.length === 0) return 'The rule needs at least one event type.'
   const bad = r.kinds.find((k) => !(ALERT_KINDS as readonly string[]).includes(k))
   if (bad) return `'${bad}' isn't an event type that can show an alert.`
+  if (r.variations.length > MAX_VARIATIONS) return `A rule can have up to ${MAX_VARIATIONS} looks.`
   if (!r.variations.some((v) => v.condition === null))
     return 'The rule needs a default look (a variation without a condition).'
   for (const rawV of r.variations) {
@@ -505,8 +701,8 @@ export function validateRule(r: AlertRule): string | null {
         return `Variation '${v.name}': ${e instanceof Error ? e.message : String(e)}`
       }
     }
-    const htmlTokErr = validateHtmlTokens(v.name, html, customKeys)
-    if (htmlTokErr) return htmlTokErr
+    const htmlErr = checkCustomHtml(v.name, html, customKeys)
+    if (htmlErr) return htmlErr
   }
   return null
 }
