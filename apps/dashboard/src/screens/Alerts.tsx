@@ -744,6 +744,7 @@ function RuleEditor({
   }
   const save = async () => {
     setSaveError(null)
+    const submittedId = draft.id
     const saved = await run(
       'save',
       async () => {
@@ -751,7 +752,10 @@ function RuleEditor({
           return await client.saveAlertRule(draft)
         } catch (e) {
           const d = describeError(e)
-          setSaveError({ message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+          // The user may have moved to another rule while this was in flight: its form
+          // must not show this one's refusal.
+          if (lastRule.current.id === submittedId)
+            setSaveError({ message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
           throw e
         }
       },
@@ -1104,12 +1108,23 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
     })
   }
 
+  /** Starter rules that failed to come back last time: offered again until they do. */
+  const [restoreLeft, setRestoreLeft] = useState(0)
   const restoreDefaults = () => {
     void run(
       'restore',
       async () => {
-        const created = await Promise.all(defaultRules().map((r) => client.createAlertRule(r)))
-        rules.set(created)
+        // Only what is missing, so a retry after a partial failure doesn't clash with the
+        // rules that did get created.
+        const have = new Set((rules.data ?? []).map((r) => r.id))
+        const todo = defaultRules().filter((r) => !have.has(r.id))
+        const results = await Promise.allSettled(todo.map((r) => client.createAlertRule(r)))
+        const created = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+        if (created.length > 0) rules.set((prev) => [...(prev ?? []), ...created])
+        const failed = results.length - created.length
+        setRestoreLeft(failed)
+        const firstFailure = results.find((r) => r.status === 'rejected')
+        if (failed > 0 && firstFailure?.status === 'rejected') throw firstFailure.reason
       },
       { success: 'Starter alert rules restored.' },
     )
@@ -1129,6 +1144,14 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
       {queue?.paused && (
         <p className="mb-4 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14.5px] font-medium text-warn">
           Alerts are paused. Resume them from Home.
+        </p>
+      )}
+      {restoreLeft > 0 && list.length > 0 && (
+        <p className="mb-4 flex flex-wrap items-center gap-3 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14.5px] font-medium text-warn">
+          {restoreLeft} starter {restoreLeft === 1 ? 'rule' : 'rules'} couldn&apos;t be restored.
+          <Button size="sm" busy={busy === 'restore'} onClick={restoreDefaults}>
+            Restore the rest
+          </Button>
         </p>
       )}
       {rules.error ? (
