@@ -461,6 +461,29 @@ In-app Community Theme Store (`#/store`) backed by a minisign-verified catalog (
 - All `/api/v1/store` routes are PC-only (`OWNER_DENIED` rejects paired phones).
 - Demo engine (`packages/api/src/demo/features/store.ts`) serves a realistic signed-style fixture catalog across all categories (`theme`, `alert` incl. p2e custom HTML, `widget`, `overlay`, `plugin`), plus creator profiles, simulated update/install/uninstall/undo, `ferrocast://` resolution, and fault/tamper simulation hooks for tests.
 
+## R36. Clips and highlights (`#23`, 22 Nov)
+
+The Studio's **Clips** tab (`#/studio/clips`): the recordings folder as a library, with trims, compilations,
+captions and sending to YouTube. Engine branch `feat/p3-clips` in `ferrocast` (`docs/API.md` "Clips and
+highlights" has every field and error). A clip is named by its **file name** (`id`), never a path.
+- `GET /api/v1/clips?q=` → `{ folder, ffmpeg_ready, youtube_connected, clips: [{ id, name, kind, ext, size,
+  modified, has_captions }] }`; `GET /clips/{id}` → probe; `GET /clips/{id}/thumbnail` → `{ image }` (data URL);
+  `GET /clips/{id}/file` plays it with `Range` (`?session=` for a `<video>`); `PUT /clips/{id}` `{ name }` renames
+  (409 `clip_name_taken`); `DELETE /clips/{id}` → Trash (422 `trash_unavailable`, the clip stays).
+- Jobs (202 + `ClipJob { id, kind, label, state, progress, output?, link?, error?: { message, hint } }`, one at
+  a time): `POST /clips/{id}/trim`, `POST /clips/compile` (2 to 20 clips, `crossfade_s` 0 to 3, `normalize`),
+  `POST /clips/{id}/captions` (Whisper), `POST /clips/{id}/captions/burn`, `POST /clips/{id}/upload`.
+  `GET /clips/jobs`, `GET /clips/jobs/{id}`, `POST /clips/jobs/{id}/cancel`, `DELETE /clips/jobs/{id}`.
+- Captions: `GET` / `PUT /clips/{id}/captions` (`{ cues: [{ start_ms, end_ms, text }] }`) and
+  `GET /clips/{id}/captions.srt`.
+- Upload: `privacy` defaults to **private**; a Short needs a square or tall clip of at most 3 minutes;
+  counts as 1 of the **100 uploads a day** YouTube allows an app by default (`videos.insert` has its own "Video Uploads" quota bucket now, 1 unit a call; the roadmap's 1,600 of 10,000 units is out of date, per the Data API's own page, 22 Nov 2026); errors `youtube_not_connected`, `youtube_quota`,
+  `youtube_sign_in`, `youtube_unreachable`, `youtube_refused`, each with `error.hint` as the next step.
+- PC only: `/clips` and `/clips/**` are denied to paired phones (`remoteAllowed`, server and relay).
+- Open for the lead: when the p2g desktop-only guard (`DesktopOnly`, commit `5679c899`) merges, the
+  mutating clips routes (rename, delete, trim, compile, captions, upload) should take it as well; a paired LAN
+  browser can use them until then, like the other Studio routes.
+
 ## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
 
 Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
