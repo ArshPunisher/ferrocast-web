@@ -20,6 +20,54 @@ describe('levels request', () => {
   })
 })
 
+describe('performance mode and the clipboard requests', () => {
+  it('send the shapes the engine takes', async () => {
+    const calls: { m: string; u: string; b: unknown }[] = []
+    const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({
+        m: String(init?.method),
+        u: new URL(url).pathname,
+        b: init?.body ? JSON.parse(String(init.body)) : undefined,
+      })
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    const api = studioEngineApi(
+      new FerroClient({ base: 'http://x', token: 't', fetch: fetchFn as unknown as typeof fetch }),
+    )
+    await api.previewPaused()
+    await api.setPreviewPaused(true)
+    await api.copySource('Main', 4)
+    await api.copyFilters('Mic')
+    await api.copyFilters('Mic', { scene: 'Main', id: 2 })
+    await api.pasteSource('Two')
+    await api.pasteFilterClip('Voice')
+    await api.pasteFilterClip('', { scene: 'Main', id: 2 })
+    await api.clipboard()
+    expect(calls.map((c) => `${c.m} ${c.u}`)).toEqual([
+      'GET /api/v1/studio/engine/preview/pause',
+      'PUT /api/v1/studio/engine/preview/pause',
+      'POST /api/v1/studio/engine/clipboard/source',
+      'POST /api/v1/studio/engine/clipboard/filters',
+      'POST /api/v1/studio/engine/clipboard/filters',
+      'POST /api/v1/studio/engine/clipboard/paste/source',
+      'POST /api/v1/studio/engine/clipboard/paste/filters',
+      'POST /api/v1/studio/engine/clipboard/paste/filters',
+      'GET /api/v1/studio/engine/clipboard',
+    ])
+    expect(calls.map((c) => c.b)).toEqual([
+      undefined,
+      { paused: true },
+      { scene: 'Main', id: 4 },
+      { name: 'Mic' },
+      { name: 'Mic', item: { scene: 'Main', id: 2 } },
+      { scene: 'Two' },
+      { name: 'Voice' },
+      { name: '', item: { scene: 'Main', id: 2 } },
+      undefined,
+    ])
+  })
+})
+
 describe('the Studio engine in the demo (no desktop app)', () => {
   let engine: DemoEngine
   let api: ReturnType<typeof studioEngineApi>
@@ -80,6 +128,14 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.editItem('Gameplay', 3, 'flip_h'),
       () => api.editItem('Gameplay', 3, 'blend_screen'),
       () => api.pasteFilters('Mic', 'Cam'),
+      () => api.previewPaused(),
+      () => api.setPreviewPaused(true),
+      () => api.clipboard(),
+      () => api.copySource('Gameplay', 3),
+      () => api.copyFilters('Mic'),
+      () => api.pasteSource('Gameplay'),
+      () => api.pasteFilterClip('Mic'),
+      () => api.clearClipboard(),
       () => api.web('Alerts', 'interact'),
       () => api.obsCollections(),
       () => api.importObs('Untitled'),

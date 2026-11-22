@@ -306,11 +306,43 @@ describe('shortcuts', () => {
       'hide:Gameplay\nCamera',
       'push_to_mute:Mic',
       'filter:Mic\nGate',
+      'push_show:Gameplay\nCamera',
+      'push_hide:Gameplay\nCamera',
+      'push_filter_on:Mic\nGate',
+      'push_filter_off:Mic\nGate',
+      'performance_mode',
+      'performance_mode_on',
+      'performance_mode_off',
       'media_restart:Intro',
       'undo',
     ])
       expect(ids).toContain(id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('names the hold actions the way the engine parses them (scene, newline, source)', () => {
+    const groups = shortcutGroups(
+      [],
+      [{ scene: 'Main', source: 'Cam' }],
+      [],
+      [{ source: 'Mic', filter: 'Gate' }],
+      [],
+      [],
+    )
+    const hold = groups.find((g) => g.title === 'Hold to show or hide')
+    expect(hold?.actions.map((a) => a.label)).toEqual([
+      'Hold to show Cam in Main',
+      'Hold to hide Cam in Main',
+    ])
+    const filters = groups.find((g) => g.title === 'Hold a filter on or off')
+    expect(filters?.actions.map((a) => a.id)).toEqual([
+      'push_filter_on:Mic\nGate',
+      'push_filter_off:Mic\nGate',
+    ])
+    // Nothing to hold when there are no sources: the groups are there, empty.
+    const none = shortcutGroups([], [], [], [], [], [])
+    expect(none.find((g) => g.title === 'Hold to show or hide')?.actions).toEqual([])
+    expect(none.find((g) => g.title === 'Performance')?.actions).toHaveLength(3)
   })
 })
 

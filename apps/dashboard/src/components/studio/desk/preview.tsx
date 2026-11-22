@@ -69,6 +69,7 @@ import { projectorItem, useContextMenu, type MenuItem } from './menu'
 import { OverflowRow, type OverflowItem } from './overflow-row'
 import { GuideOverlay, OverflowMask } from './preview-guides'
 import { OptionsForm } from './options'
+import { PausedCard, PerformanceToggle, PreviewPausedSync } from './performance'
 import {
   MOVE,
   at,
@@ -315,6 +316,15 @@ function cutOut(box: DOMRect, edge: number): Hole[] | null {
  * Mode there are two: the preview being edited, and what's on air, with the ways to switch
  * between them in the middle. */
 export function PreviewBox({ running }: { running: boolean }) {
+  return (
+    <>
+      <PreviewPausedSync running={running} />
+      <PreviewBoxes running={running} />
+    </>
+  )
+}
+
+function PreviewBoxes({ running }: { running: boolean }) {
   const api = useEngine()
   const apiRef = useRef(api)
   apiRef.current = api
@@ -712,6 +722,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
           >
             {!desktop && 'The live picture shows in the Ferrocast app.'}
+            <PausedCard />
             <GuideOverlay safe={pv.safe} />
             <OverflowMask on={pv.overflow === 'hide'} />
           </div>
@@ -735,6 +746,7 @@ export function PreviewBox({ running }: { running: boolean }) {
         >
           <div ref={vRef} className={cx(screen, 'aspect-[9/16]! w-[min(100cqw,100cqh*9/16)] p-0!')}>
             {!desktop && 'Vertical'}
+            <PausedCard compact />
             <GuideOverlay safe={pv.safe} />
           </div>
         </div>
@@ -760,6 +772,7 @@ export function PreviewBox({ running }: { running: boolean }) {
           className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
         >
           {!desktop && 'The live picture shows in the Ferrocast app.'}
+          <PausedCard />
           <GuideOverlay safe={pv.safe} />
           <OverflowMask on={pv.overflow === 'hide'} />
         </div>
@@ -790,6 +803,7 @@ export function PreviewBox({ running }: { running: boolean }) {
             {...editing}
           >
             {!desktop && 'The live picture shows in the Ferrocast app.'}
+            <PausedCard compact />
           </div>
         </figure>
         <figure className="m-0 flex flex-col gap-3">
@@ -797,7 +811,9 @@ export function PreviewBox({ running }: { running: boolean }) {
             <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
             On air: {scenes.data?.current}
           </figcaption>
-          <div ref={programRef} aria-label="What's on air" className={cx(screen, half)} />
+          <div ref={programRef} aria-label="What's on air" className={cx(screen, half)}>
+            <PausedCard compact />
+          </div>
         </figure>
       </div>
       <SwitchBar />
@@ -2165,6 +2181,11 @@ export function StageBar() {
             </InfoTip>
           </span>
         ),
+    },
+    {
+      key: 'performance',
+      rank: 5,
+      render: () => <PerformanceToggle />,
     },
     { key: 'sep2', render: () => <span aria-hidden className="h-5 w-px bg-line" /> },
     {

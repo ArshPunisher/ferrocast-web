@@ -33,7 +33,7 @@ export default defineConfig({
       use: { ...devices['iPhone 13'], browserName: 'chromium' },
       // pro-foundation, history, tip-brand, cloud-backups, autoreplies, tts-voices, discord-pro, remote, cloud-bot, weekly-email, tip-domain and cloud-mode check their screens on a phone too (their 375 px tests also run on desktop).
       testMatch:
-        /mobile|pro-foundation|history|tip-brand|cloud-backups|autoreplies|tts-voices|discord-pro|remote|cloud-bot|weekly-email|tip-domain|cloud-mode|mini-feed|alerts-chance/,
+        /mobile|pro-foundation|history|tip-brand|cloud-backups|autoreplies|tts-voices|discord-pro|remote|cloud-bot|weekly-email|tip-domain|cloud-mode|mini-feed|alerts-chance|studio-perf-clipboard/,
     },
   ],
 })

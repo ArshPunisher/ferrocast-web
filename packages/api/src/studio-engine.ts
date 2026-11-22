@@ -216,6 +216,22 @@ export const ENGINE_SHOWS = ['both', 'stream', 'recording'] as const
 export type EngineShow = (typeof ENGINE_SHOWS)[number]
 
 /** A source in a scene, top first. A group lists its own items. */
+/** What the Studio has copied (`GET /studio/engine/clipboard`): a source with `count` sources
+ * (a group carries its children), or `count` filters. */
+export interface EngineClipboard {
+  kind: 'source' | 'filters'
+  name: string
+  from: string
+  count: number
+}
+
+/** A paste: the new item (sources only) and what changed on the way (a name taken, a
+ * sidechain set to none). */
+export interface EnginePasteResult {
+  item?: EngineItem
+  notes: string[]
+}
+
 export interface EngineItem {
   id: number
   name: string
@@ -1428,6 +1444,37 @@ export function studioEngineApi(c: FerroClient) {
     /** The cursor over the pictures, by its CSS name (Windows: they take the mouse themselves). */
     previewCursor: (cursor: string) =>
       c.request<void>('PUT', '/api/v1/studio/engine/preview/cursor', { cursor }),
+    /** Performance mode: whether the preview is paused (it can change by a shortcut). */
+    previewPaused: () =>
+      c.request<{ paused: boolean }>('GET', '/api/v1/studio/engine/preview/pause'),
+    /** Performance mode on or off: stops drawing the pictures to save GPU and CPU. Never
+     * touches the stream, a recording or the virtual camera. */
+    setPreviewPaused: (paused: boolean) =>
+      c.request<{ paused: boolean }>('PUT', '/api/v1/studio/engine/preview/pause', { paused }),
+    /** What is copied; a 404 `clipboard_empty` when nothing is. */
+    clipboard: () => c.request<EngineClipboard>('GET', '/api/v1/studio/engine/clipboard'),
+    clearClipboard: () => c.request<void>('DELETE', '/api/v1/studio/engine/clipboard'),
+    /** Copies an item with its source (a group with every source in it). It stays copied while
+     * another collection is opened. */
+    copySource: (scene: string, id: number) =>
+      c.request<EngineClipboard>('POST', '/api/v1/studio/engine/clipboard/source', { scene, id }),
+    /** Copies a source's filters (or an item's own, with `item`). */
+    copyFilters: (name: string, item?: { scene: string; id: number }) =>
+      c.request<EngineClipboard>('POST', '/api/v1/studio/engine/clipboard/filters', {
+        name,
+        ...(item ? { item } : {}),
+      }),
+    /** Pastes the copied source into `scene`; a name taken gets a number. */
+    pasteSource: (scene: string) =>
+      c.request<EnginePasteResult>('POST', '/api/v1/studio/engine/clipboard/paste/source', {
+        scene,
+      }),
+    /** Pastes the copied filters onto a source (or an item, with `item`). */
+    pasteFilterClip: (name: string, item?: { scene: string; id: number }) =>
+      c.request<EnginePasteResult>('POST', '/api/v1/studio/engine/clipboard/paste/filters', {
+        name,
+        ...(item ? { item } : {}),
+      }),
     /** Studio Mode on (its preview starts as what's on air) or off. */
     studioMode: (on: boolean) =>
       c.request<void>('PUT', '/api/v1/studio/engine/studio-mode', { on }),
