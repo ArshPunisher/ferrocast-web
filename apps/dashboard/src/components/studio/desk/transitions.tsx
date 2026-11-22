@@ -94,7 +94,8 @@ export function cellEffectiveInfo(
   effectiveName: string
   via: 'pair' | 'to' | 'from' | 'default'
 } {
-  const rules = scenes.transition_matrix ?? []
+  // Last rule wins (the engine's order for a repeated pair).
+  const rules = [...(scenes.transition_matrix ?? [])].reverse()
   const list = scenes.named_transitions ?? []
   const def = list.find((t) => t.default) ?? list[0]
   const defName = def?.name ?? TRANSITIONS[scenes.transition.kind] ?? 'Fade'

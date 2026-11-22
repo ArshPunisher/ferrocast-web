@@ -421,4 +421,25 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       engine.dispose()
     }
   })
+
+  it('resolves a repeated pair the way the engine does: the last rule wins', () => {
+    const scenes = {
+      scenes: [
+        { name: 'Main', items: 1, current: true, transition: null },
+        { name: 'BRB', items: 1, current: false, transition: null },
+      ],
+      current: 'Main',
+      transition: { kind: 'fade_transition', ms: 300 },
+      named_transitions: [
+        { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+        { name: 'First', kind: 'swipe_transition', ms: 400, settings: {}, default: false },
+        { name: 'Second', kind: 'slide_transition', ms: 500, settings: {}, default: false },
+      ],
+      transition_matrix: [
+        { from: 'Main', to: 'BRB', transition: 'First' },
+        { from: 'Main', to: 'BRB', transition: 'Second' },
+      ],
+    } as never
+    expect(resolveTransitionFromScenes(scenes, 'Main', 'BRB')).toMatchObject({ name: 'Second' })
+  })
 })

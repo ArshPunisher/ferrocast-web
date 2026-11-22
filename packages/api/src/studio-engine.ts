@@ -179,7 +179,8 @@ export function resolveTransitionFromScenes(
   via: 'pair' | 'to' | 'from' | 'default'
 } {
   const list = data.named_transitions ?? []
-  const rules = data.transition_matrix ?? []
+  // Last rule wins, as the engine resolves a hand-edited collection with a repeated pair.
+  const rules = [...(data.transition_matrix ?? [])].reverse()
   const byName = (name: string) => list.find((t) => t.name === name)
   const pair = rules.find((r) => r.from === from && r.to === to)
   const pairT = pair ? byName(pair.transition) : undefined
