@@ -154,6 +154,8 @@ export interface Desk {
   /** Opens Studio settings, at a page ("stream", "audio", "picture", "record", "keys",
    * "advanced"). */
   openSettings: (page?: string) => void
+  /** Opens the named transitions and matrix dialog. */
+  openTransitions?: (opts?: { tab?: 'list' | 'matrix'; transitionName?: string }) => void
 }
 
 export interface DeskStatsStore {

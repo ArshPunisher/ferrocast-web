@@ -29,7 +29,7 @@ import { done, useAction } from '../../../lib/hooks'
 import { KindTile, useDesk } from './common'
 import { DockHeader } from './layout'
 import { ImportObsDialog } from './import-obs'
-import { TRANSITIONS } from './preview'
+import { TRANSITIONS, transitionSummary } from './transitions'
 import { pretty } from './settings'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
 
@@ -114,7 +114,7 @@ export function topLayerItem(
 
 export function ScenesDock() {
   const desk = useDesk()
-  const { api, scenes, refresh, edit } = desk
+  const { api, scenes, refresh, edit, openTransitions } = desk
   const { busy, run } = useAction()
   const { open, menu } = useContextMenu()
   const [naming, setNaming] = useState<{ from: string | null; value: string } | null>(null)
@@ -152,12 +152,35 @@ export function ScenesDock() {
     void run('shot', () => api.screenshot(name), {
       success: 'Screenshot saved with your recordings.',
     })
+  const overrideBadge = (s: EngineScene, compactGrid: boolean) => {
+    if ((!s.transition_name && !s.transition) || s.current) return null
+    const label = s.transition_name ?? TRANSITIONS[s.transition!.kind] ?? s.transition!.kind
+    return (
+      <span
+        title={`Transition override: ${label}`}
+        className={cx(
+          'shrink-0 items-center gap-1 rounded-[5px] bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent-text',
+          compactGrid ? 'inline-flex' : 'hidden @[230px]:inline-flex',
+        )}
+      >
+        <ArrowsLeftRight size={11} weight="bold" aria-hidden />
+        {!compactGrid && <span className="max-w-20 truncate">{label}</span>}
+      </span>
+    )
+  }
   const sceneMenu = (scene: EngineScene, i: number): MenuItem[] => {
     const { name, current: onAir } = scene
     const t = scene.transition
+    const namedList = scenes.data?.named_transitions ?? []
     const ms = scenes.data?.transition.ms ?? 300
     const setT = (next: EngineTransition | null) =>
       void act('transition', () => api.setSceneTransition(name, next))
+    const setNamedOverride = (trName: string | null) =>
+      void act('transition', () =>
+        namedList.length > 0
+          ? api.setTransitionMatrixRule({ from: null, to: name, transition: trName })
+          : api.setSceneTransition(name, null),
+      )
     return [
       {
         label: 'Put on air',
@@ -214,21 +237,40 @@ export function ScenesDock() {
       },
       { sep: true },
       {
-        label: 'Transition',
+        label: 'Transition override',
         icon: ArrowsLeftRight,
         items: [
-          { label: 'Same as all', checked: !t, onSelect: () => setT(null) },
+          {
+            label: 'Use matrix / default',
+            checked: !scene.transition_name && !t,
+            onSelect: () => setNamedOverride(null),
+          },
           { sep: true },
-          ...Object.entries(TRANSITIONS).map(([kind, label]) => ({
-            label:
-              // Cut has no length; a stinger lasts as long as its video.
-              kind === 'cut_transition' || kind === 'obs_stinger_transition'
-                ? label
-                : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
-            checked: t?.kind === kind,
-            onSelect: () =>
-              setT({ kind, ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms }),
-          })),
+          ...(namedList.length > 0
+            ? namedList.map((nt) => ({
+                label: `${nt.name} (${transitionSummary(nt)})`,
+                checked: scene.transition_name === nt.name,
+                onSelect: () => setNamedOverride(nt.name),
+              }))
+            : Object.entries(TRANSITIONS).map(([kind, label]) => ({
+                label:
+                  kind === 'cut_transition' || kind === 'obs_stinger_transition'
+                    ? label
+                    : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
+                checked: t?.kind === kind,
+                onSelect: () =>
+                  setT({ kind, ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms }),
+              }))),
+          ...(openTransitions
+            ? [
+                { sep: true } as const,
+                {
+                  label: 'Transitions and matrix...',
+                  icon: ArrowsLeftRight,
+                  onSelect: () => openTransitions({ tab: 'matrix' }),
+                },
+              ]
+            : []),
         ],
       },
       ...(tall
@@ -323,6 +365,15 @@ export function ScenesDock() {
                 <SquaresFour size={16} weight="bold" />
               )}
             </IconButton>
+            {openTransitions && !tall && (
+              <IconButton
+                size="sm"
+                label="Manage transitions and matrix"
+                onClick={() => openTransitions({ tab: 'matrix' })}
+              >
+                <ArrowsLeftRight size={16} weight="bold" />
+              </IconButton>
+            )}
             <IconButton size="sm" label="Import scenes from OBS" onClick={() => setImporting(true)}>
               <DownloadSimple size={16} weight="bold" />
             </IconButton>
@@ -461,6 +512,7 @@ export function ScenesDock() {
                         </span>
                         <span className="flex min-w-0 items-center gap-1.5 px-1 pb-0.5">
                           <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                          {overrideBadge(s, true)}
                           {keys[`scene:${s.name}`] && (
                             <kbd className="shrink-0 rounded-[5px] border border-current/25 px-1 py-px font-mono text-[11px] font-bold opacity-80">
                               {pretty(keys[`scene:${s.name}`] as string)}
@@ -476,6 +528,7 @@ export function ScenesDock() {
                           tone={s.current ? 'var(--fc-danger)' : undefined}
                         />
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        {overrideBadge(s, false)}
                         {top === s.name && (
                           <span
                             title="Shown over every scene"
