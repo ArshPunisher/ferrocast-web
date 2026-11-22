@@ -4,10 +4,9 @@
 import { useState } from 'react'
 import { YoutubeLogo } from '@phosphor-icons/react'
 import {
-  DAILY_QUOTA_UNITS,
+  DAILY_UPLOADS,
   UPLOAD_MAX_DESCRIPTION,
   UPLOAD_MAX_TITLE,
-  UPLOAD_QUOTA_UNITS,
   jobActive,
   shortsProblem,
   uploadProblem,
@@ -180,10 +179,10 @@ export function UploadSection({
           Send to YouTube
         </Button>
         <span className="flex items-center gap-1 text-[14px] text-text-3">
-          Uses {num(UPLOAD_QUOTA_UNITS)} of your {num(DAILY_QUOTA_UNITS)} daily YouTube units
-          <InfoTip label="About YouTube's daily limit">
-            YouTube gives every app a daily allowance. One upload costs {num(UPLOAD_QUOTA_UNITS)} of{' '}
-            {num(DAILY_QUOTA_UNITS)}, so about six a day. It resets after midnight Pacific time.
+          One of {num(DAILY_UPLOADS)} uploads a day
+          <InfoTip label="About YouTube's daily upload limit">
+            YouTube lets an app send about {num(DAILY_UPLOADS)} videos a day by default, apart from
+            the allowance other requests share. It resets after midnight Pacific time.
           </InfoTip>
         </span>
       </div>

@@ -453,7 +453,7 @@ export class DemoClips {
         }
         return
       }
-      job.link = `https://www.youtube.com/${b.shorts ? 'shorts' : 'watch?v='}demo${job.id.replace('job-', '')}`
+      job.link = `https://www.youtube.com/${b.shorts ? 'shorts/' : 'watch?v='}demo${job.id.replace('job-', '')}`
     })
   }
 

@@ -145,7 +145,7 @@ describe('the demo jobs', () => {
     const vertical = (await api.list('vertical')).clips[0]!.id
     expect(
       (await finish((await api.upload(vertical, { title: 'x', shorts: true })).id)).link,
-    ).toContain('/shorts')
+    ).toMatch(/\/shorts\/demo\d+$/)
     // Not connected: refused before a job starts.
     await client.disconnect('youtube')
     expect((await err(api.upload(id, { title: 'x' }))).code).toBe('youtube_not_connected')

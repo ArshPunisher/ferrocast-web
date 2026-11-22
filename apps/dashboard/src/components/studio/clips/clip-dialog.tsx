@@ -150,58 +150,58 @@ export function ClipDialog({
               { value: 'details', label: 'Details' },
             ]}
           />
-          {probe.error != null && ffmpegReady && probe.data === null ? (
-            <LoadError error={probe.error} onRetry={probe.reload} />
-          ) : probe.loading && probe.data === null && ffmpegReady ? (
-            <div className="flex flex-col gap-2" aria-label="Reading the clip">
-              <Skeleton className="h-10" />
-              <Skeleton className="h-24" />
-            </div>
-          ) : (
-            <>
-              {section === 'trim' && (
-                <TrimSection
-                  api={api}
-                  clip={clip}
-                  probe={probe.data}
-                  playhead={playhead}
-                  seek={seek}
-                  ffmpegReady={ffmpegReady}
-                  onStarted={started}
-                />
-              )}
-              {section === 'captions' && (
-                <CaptionsSection
-                  api={api}
-                  clip={clip}
-                  jobs={jobs}
-                  playhead={playhead}
-                  ffmpegReady={ffmpegReady}
-                  onStarted={onJobStarted}
-                  onChanged={onChanged}
-                />
-              )}
-              {section === 'youtube' && (
-                <UploadSection
-                  api={api}
-                  clip={clip}
-                  probe={probe.data}
-                  jobs={jobs}
-                  connected={youtubeConnected}
-                  onStarted={onJobStarted}
-                />
-              )}
-              {section === 'details' && (
-                <DetailsSection
-                  api={api}
-                  clip={clip}
-                  onRenamed={onRenamed}
-                  onChanged={onChanged}
-                  onDeleted={onDeleted}
-                />
-              )}
-            </>
-          )}
+          {/* All four stay mounted (hidden when not picked), so what is typed in one, a caption
+              not yet saved or a trim's times, is still there when the person comes back. */}
+          <div hidden={section !== 'trim'} data-section="trim">
+            {probe.error != null && ffmpegReady && probe.data === null ? (
+              <LoadError error={probe.error} onRetry={probe.reload} />
+            ) : probe.loading && probe.data === null && ffmpegReady ? (
+              <div className="flex flex-col gap-2" aria-label="Reading the clip">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-24" />
+              </div>
+            ) : (
+              <TrimSection
+                api={api}
+                clip={clip}
+                probe={probe.data}
+                playhead={playhead}
+                seek={seek}
+                ffmpegReady={ffmpegReady}
+                onStarted={started}
+              />
+            )}
+          </div>
+          <div hidden={section !== 'captions'} data-section="captions">
+            <CaptionsSection
+              api={api}
+              clip={clip}
+              jobs={jobs}
+              playhead={playhead}
+              ffmpegReady={ffmpegReady}
+              onStarted={onJobStarted}
+              onChanged={onChanged}
+            />
+          </div>
+          <div hidden={section !== 'youtube'} data-section="youtube">
+            <UploadSection
+              api={api}
+              clip={clip}
+              probe={probe.data}
+              jobs={jobs}
+              connected={youtubeConnected}
+              onStarted={onJobStarted}
+            />
+          </div>
+          <div hidden={section !== 'details'} data-section="details">
+            <DetailsSection
+              api={api}
+              clip={clip}
+              onRenamed={onRenamed}
+              onChanged={onChanged}
+              onDeleted={onDeleted}
+            />
+          </div>
         </div>
       </div>
     </Dialog>

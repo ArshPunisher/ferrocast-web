@@ -78,12 +78,14 @@ export function CaptionsSection({
     setDraft(next)
   }
   const save = async () => {
-    const r = await run('save', () => api.saveCaptions(clip.id, draft), {
+    const sent = draft
+    const r = await run('save', () => api.saveCaptions(clip.id, sent), {
       success: 'Captions saved.',
     })
     if (r) {
       setSaved(r.cues)
-      setDraft(r.cues)
+      // Typing went on while it saved: those newer words stay (and it still says unsaved).
+      setDraft((now) => (same(now, sent) ? r.cues : now))
       onChanged()
     }
   }

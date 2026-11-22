@@ -102,9 +102,12 @@ export const MAX_TAGS = 30
 export const MAX_TAG_CHARS = 60
 /** A trim keeps at least this much (ms). */
 export const MIN_TRIM_MS = 200
-/** `videos.insert` costs this much of YouTube's daily quota. */
-export const UPLOAD_QUOTA_UNITS = 1600
-export const DAILY_QUOTA_UNITS = 10_000
+/**
+ * What YouTube allows an app by default: 100 uploads a day (`videos.insert` has its own "Video
+ * Uploads" quota bucket, 1 unit a call, apart from the 10,000 units other calls share; the
+ * Data API's own page, checked 22 Nov 2026). It was 1,600 of the 10,000 before.
+ */
+export const DAILY_UPLOADS = 100
 /** A Short is square or tall and at most this long (ms). */
 export const SHORTS_MAX_MS = 180_000
 
@@ -179,8 +182,8 @@ export function cuesProblem(cues: Cue[]): string | null {
   if (cues.length > MAX_CUES) return `There can be up to ${MAX_CUES} captions.`
   for (const [i, c] of cues.entries()) {
     const n = i + 1
-    if (!Number.isFinite(c.start_ms) || !Number.isFinite(c.end_ms))
-      return `Caption ${n} needs a start and an end.`
+    if (!Number.isInteger(c.start_ms) || !Number.isInteger(c.end_ms) || c.start_ms < 0)
+      return `Caption ${n} needs a start and an end, in whole milliseconds, not before 0.`
     if (c.end_ms <= c.start_ms) return `Caption ${n} ends before it starts.`
     if (c.end_ms > 24 * 3_600_000) return `Caption ${n} is past 24 hours.`
     const t = c.text.trim()

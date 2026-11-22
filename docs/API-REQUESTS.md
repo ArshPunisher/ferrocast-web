@@ -460,7 +460,7 @@ highlights" has every field and error). A clip is named by its **file name** (`i
 - Captions: `GET` / `PUT /clips/{id}/captions` (`{ cues: [{ start_ms, end_ms, text }] }`) and
   `GET /clips/{id}/captions.srt`.
 - Upload: `privacy` defaults to **private**; a Short needs a square or tall clip of at most 3 minutes;
-  costs **1,600 of YouTube's 10,000 daily quota units**; errors `youtube_not_connected`, `youtube_quota`,
+  counts as 1 of the **100 uploads a day** YouTube allows an app by default (`videos.insert` has its own "Video Uploads" quota bucket now, 1 unit a call; the roadmap's 1,600 of 10,000 units is out of date, per the Data API's own page, 22 Nov 2026); errors `youtube_not_connected`, `youtube_quota`,
   `youtube_sign_in`, `youtube_unreachable`, `youtube_refused`, each with `error.hint` as the next step.
 - PC only: `/clips` and `/clips/**` are denied to paired phones (`remoteAllowed`, server and relay).
 - Open for the lead: when the p2g desktop-only guard (`DesktopOnly`, commit `5679c899`) merges, the

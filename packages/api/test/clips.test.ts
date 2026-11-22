@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DAILY_QUOTA_UNITS,
-  UPLOAD_QUOTA_UNITS,
+  DAILY_UPLOADS,
   clipLength,
   clipNameProblem,
   clipSize,
@@ -88,7 +87,7 @@ describe('upload', () => {
     expect(shortsProblem({ ...p, width: 1920, height: 1080 })).toMatch(/square or tall/)
     expect(shortsProblem({ ...p, duration_ms: 181_000 })).toMatch(/3 minutes/)
     expect(shortsProblem(undefined)).toBeNull()
-    expect(UPLOAD_QUOTA_UNITS / DAILY_QUOTA_UNITS).toBeCloseTo(0.16)
+    expect(DAILY_UPLOADS).toBe(100)
   })
 })
 
@@ -102,6 +101,11 @@ describe('captions', () => {
     expect(cuesProblem([cue(0, 1000, 'a\n\nb')])).toMatch(/character/)
     expect(cuesProblem([cue(5000, 6000), cue(1000, 2000)])).toMatch(/Caption 2 starts before/)
     expect(cuesProblem([cue(0, 25 * 3_600_000)])).toMatch(/24 hours/)
+    // Whole milliseconds, not before 0: an .srt can't hold anything else.
+    expect(cuesProblem([cue(-1000, 1000)])).toMatch(/whole milliseconds/)
+    expect(cuesProblem([cue(0.5, 1000)])).toMatch(/whole milliseconds/)
+    expect(cuesProblem([cue(0, 1000.5)])).toMatch(/whole milliseconds/)
+    expect(cuesProblem([cue(0, 1)])).toBeNull()
     expect(cuesProblem([cue(0, 1000, 'two\nlines')])).toBeNull()
   })
   it('writes an .srt the engine reads back', () => {

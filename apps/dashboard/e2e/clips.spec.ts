@@ -128,7 +128,7 @@ for (const vp of [
       await shot(page, `${vp.name}-10-youtube-failed`)
 
       await dialog.getByText('Details', { exact: true }).click()
-      await dialog.getByLabel('Name').fill('a/b')
+      await dialog.locator('[data-section="details"]').getByLabel('Name').fill('a/b')
       await expect(dialog.getByText(/No \//)).toBeVisible()
       await dialog.getByRole('button', { name: 'Move to Trash' }).click()
       await expect(page.getByRole('dialog', { name: /Move Boss fight to the Trash/ })).toBeVisible()

@@ -65,6 +65,12 @@ const openBtn = (name: string) =>
     b.textContent?.startsWith(`Open ${name}`),
   ) ?? null
 
+/** A switch by its visible label. */
+const switchNamed = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].find(
+    (b) => document.querySelector(`label[for="${b.id}"]`)?.textContent === label,
+  ) ?? null
+
 /** Picks a section of the open clip (the segmented control's radios). */
 const choose = async (label: string) => {
   const radio = [
@@ -290,9 +296,9 @@ describe('the Clips tab', () => {
     await choose('YouTube')
     const privacy = q<HTMLSelectElement>('select')!
     expect(privacy.value).toBe('private')
-    const shorts = q<HTMLButtonElement>('button[role="switch"][aria-checked]')!
+    const shorts = switchNamed('Send as a Short')!
     expect(shorts.disabled).toBe(false) // the clip is tall and short
-    expect(text()).toContain('Uses 1,600 of your 10,000 daily YouTube units')
+    expect(text()).toContain('One of 100 uploads a day')
     expect(buttonByText('Send to YouTube')?.disabled).toBe(false)
     const title = [...document.querySelectorAll<HTMLInputElement>('input')].find(
       (i) => i.labels?.[0]?.textContent === 'Title',
@@ -312,7 +318,7 @@ describe('the Clips tab', () => {
     await click(openBtn('Replay 2026-11-22 21-04-12'))
     await settle()
     await choose('YouTube')
-    expect(q<HTMLButtonElement>('button[role="switch"][aria-checked]')!.disabled).toBe(true)
+    expect(switchNamed('Send as a Short')!.disabled).toBe(true)
     expect(text()).toContain('A Short is square or tall')
   })
 
@@ -384,6 +390,104 @@ describe('the Clips tab', () => {
     await click(buttonByText('Move to Trash'))
     expect(text()).toContain('Move Boss fight to the Trash?')
     expect(document.body.querySelector('[data-cancel]')).not.toBeNull()
+  })
+})
+
+describe('the open clip', () => {
+  const clip = {
+    id: 'A.mp4',
+    name: 'A',
+    kind: 'recording' as const,
+    ext: 'mp4',
+    size: 5000,
+    modified: Date.now() - 60_000,
+    has_captions: true,
+  }
+  const cues = [{ start_ms: 0, end_ms: 2000, text: 'Hello' }]
+  type Handler = (m: string, p: string, b?: unknown) => Promise<unknown>
+  const stub = (over: Handler) => ({
+    request: vi.fn(async (m: string, p: string, b?: unknown) => {
+      if (p.includes('/jobs')) return { jobs: [] }
+      if (p === '/api/v1/clips')
+        return { folder: '/x', ffmpeg_ready: true, youtube_connected: true, clips: [clip] }
+      if (p.endsWith('/thumbnail')) return { image: 'data:image/svg+xml;utf8,x' }
+      return over(m, p, b)
+    }),
+    clipFileUrl: () => '',
+  })
+
+  it('keeps a caption edit when another section is looked at and comes back', async () => {
+    await mountWith(
+      stub(async (m, p) =>
+        p.endsWith('/captions') && m === 'GET'
+          ? { cues }
+          : { duration_ms: 5000, width: 640, height: 360, has_audio: true, has_video: true },
+      ),
+    )
+    await settle()
+    await click(openBtn('A'))
+    await settle()
+    await choose('Captions')
+    await settle()
+    await type(byLabel<HTMLTextAreaElement>('Caption 1 words'), 'My fixed words')
+    expect(buttonByText('Save captions')?.disabled).toBe(false)
+    await choose('Details')
+    await choose('Captions')
+    expect(byLabel<HTMLTextAreaElement>('Caption 1 words')?.value).toBe('My fixed words')
+    expect(text()).toContain('Unsaved changes')
+  })
+
+  it('still offers rename and the Trash when the clip cannot be read', async () => {
+    await mountWith(
+      stub(async (m, p) => {
+        if (p.endsWith('/captions')) return { cues: [] }
+        if (m === 'GET')
+          throw new ApiError(
+            422,
+            'not_a_clip',
+            "That file isn't a video ffmpeg can read.",
+            'It may be damaged.',
+          )
+        return {}
+      }),
+    )
+    await settle()
+    await click(openBtn('A'))
+    await settle()
+    expect(q('[data-section="trim"] [role="alert"]')?.textContent).toContain(
+      "isn't a video ffmpeg can read",
+    )
+    await choose('Details')
+    expect(buttonByText('Move to Trash')).not.toBeNull()
+    expect(buttonByText('Rename')).not.toBeNull()
+  })
+
+  it('does not lose words typed while a save is on its way', async () => {
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    await mountWith(
+      stub(async (m, p, b) => {
+        if (p.endsWith('/captions') && m === 'GET') return { cues }
+        if (p.endsWith('/captions') && m === 'PUT') {
+          await held
+          return b
+        }
+        return { duration_ms: 5000, width: 640, height: 360, has_audio: true, has_video: true }
+      }),
+    )
+    await settle()
+    await click(openBtn('A'))
+    await settle()
+    await choose('Captions')
+    await settle()
+    await type(byLabel<HTMLTextAreaElement>('Caption 1 words'), 'First version')
+    await click(buttonByText('Save captions'))
+    // Typing goes on while the save is out.
+    await type(byLabel<HTMLTextAreaElement>('Caption 1 words'), 'First version, and more')
+    await act(async () => release())
+    await settle()
+    expect(byLabel<HTMLTextAreaElement>('Caption 1 words')?.value).toBe('First version, and more')
+    expect(buttonByText('Save captions')?.disabled).toBe(false) // the newer words are still unsaved
   })
 })
 

@@ -7,7 +7,13 @@ import type { Clip, ClipsApi } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
 
 const CACHE_MAX = 300
-const cache = new Map<string, string | null>()
+/** Pictures by clip, kept per connection: two engines can list clips of the same name and size. */
+let caches = new WeakMap<ClipsApi, Map<string, string | null>>()
+const cacheOf = (api: ClipsApi): Map<string, string | null> => {
+  let c = caches.get(api)
+  if (!c) caches.set(api, (c = new Map()))
+  return c
+}
 const waiting: (() => void)[] = []
 let running = 0
 
@@ -39,7 +45,7 @@ export const thumbKey = (c: Pick<Clip, 'id' | 'size' | 'modified'>) =>
 
 /** For tests: forgets every picture. */
 export function resetThumbs(): void {
-  cache.clear()
+  caches = new WeakMap()
 }
 
 export type ThumbState =
@@ -53,7 +59,7 @@ export function useThumb(
 ): ThumbState {
   const key = thumbKey(clip)
   const [state, setState] = useState<ThumbState>(() => {
-    const hit = cache.get(key)
+    const hit = cacheOf(api).get(key)
     return hit
       ? { status: 'ready', src: hit }
       : hit === null
@@ -62,6 +68,7 @@ export function useThumb(
   })
   useEffect(() => {
     if (!enabled) return
+    const cache = cacheOf(api)
     const hit = cache.get(key)
     if (hit !== undefined) {
       setState(hit ? { status: 'ready', src: hit } : { status: 'none' })
@@ -75,6 +82,7 @@ export function useThumb(
     )
       .then((r) => {
         if (!r) return
+        const cache = cacheOf(api)
         cache.set(key, r.image)
         // The oldest go: a long folder's pictures don't all stay in memory.
         if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value as string)
