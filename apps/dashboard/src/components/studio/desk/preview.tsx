@@ -2046,7 +2046,11 @@ export function StageBar() {
   const named = scenes.data?.named_transitions ?? []
   const activeNamed = named.find((x) => x.default) ?? named[0] ?? null
   const matrixCount = scenes.data?.transition_matrix?.length ?? 0
-  const [ms, setMs] = useState<number | null>(null)
+  // The length being typed, with the transition it was typed for: if the default changes under
+  // the field (another dashboard), the draft isn't written to the new one.
+  const [draftMs, setDraftMs] = useState<{ for: string; ms: number } | null>(null)
+  const lengthOwner = activeNamed?.name ?? t?.kind ?? ''
+  const ms = draftMs && draftMs.for === lengthOwner ? draftMs.ms : null
   const [tuning, setTuning] = useState<string | null>(null)
   const kindsOn = (kinds.data?.transitions ?? []).filter((k) => TRANSITIONS[k.id])
   const set = async (kind: string, dur: number) => {
@@ -2082,12 +2086,16 @@ export function StageBar() {
           className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
           value={ms ?? t.ms}
           onChange={(e) =>
-            setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
+            setDraftMs(
+              Number.isFinite(e.target.valueAsNumber)
+                ? { for: lengthOwner, ms: e.target.valueAsNumber }
+                : null,
+            )
           }
           onBlur={() => {
             if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
               void set(t.kind, Math.round(ms))
-            setMs(null)
+            setDraftMs(null)
           }}
         />
         <span aria-hidden>ms</span>
