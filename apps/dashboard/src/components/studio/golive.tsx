@@ -28,7 +28,6 @@ import {
   aitumClashes,
   allDestinationsFailed,
   andList,
-  ApiError,
   describeError,
   directKind,
   goliveApi,
@@ -73,6 +72,7 @@ import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
+import { useSaveOrder } from './save-order'
 import { useObsHealth } from './obs'
 import { InBar, StudioDesk } from './desk/desk'
 
@@ -294,9 +294,10 @@ export function LiveCard({
   const failed = on.filter((d) => d.health?.state === 'failed').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
   const since = Math.min(...on.map((d) => d.health?.since_ms ?? Infinity))
+  const saver = useSaveOrder(api, onSaved)
   const stopTrying = (id: string) =>
     void run(`stop:${id}`, () =>
-      api.saveOrder(
+      saver.request(
         view.destinations.map((d) => ({ id: d.id, enabled: d.enabled && d.id !== id })),
       ),
     ).then((r) => r && onSaved())
@@ -494,6 +495,7 @@ export function LiveCard({
           Adding or removing a platform below doesn’t end the stream.
         </p>
       </div>
+      {saver.dialog}
     </Panel>
   )
 }
@@ -566,52 +568,19 @@ export function Platforms({
   }
   const merged = rows.map((r) => mine.find((d) => d.id === r.id) ?? r)
 
-  // What a change while live asks first: the upload won't carry it, or it was the last one.
-  const [ask, setAsk] = useState<{
-    code: 'golive_upload_exceeded' | 'golive_last_destination'
-    message: string
-    hint: string
-    all: { id: string; enabled: boolean }[]
-  } | null>(null)
+  // What a change while live asks first (the upload won't carry it, or it was the last one).
+  const saver = useSaveOrder(api, onSaved)
   // The other picture's destinations go along unchanged (the engine wants every one).
-  const save = (
-    next: DestinationView[],
-    label: string,
-    confirm: { upload?: boolean; last?: boolean } = {},
-  ) => {
+  const save = (next: DestinationView[], label: string) => {
     setRows(next)
     const all = (canvas === 'main' ? [...next, ...others] : [...others, ...next]).map((d) => ({
       id: d.id,
       enabled: d.enabled,
     }))
-    void run(
-      'order',
-      () =>
-        api.saveOrder(all, confirm).catch((e: unknown) => {
-          if (
-            e instanceof ApiError &&
-            (e.code === 'golive_upload_exceeded' || e.code === 'golive_last_destination')
-          ) {
-            setAsk({ code: e.code, message: e.message, hint: e.hint ?? '', all })
-            return null
-          }
-          throw e
-        }),
-      { success: label },
-    ).then((r) => {
+    void run('order', () => saver.request(all), { success: label }).then((r) => {
       if (r) onSaved()
       else setRows(mine)
     })
-  }
-  const confirmAsk = () => {
-    if (!ask) return
-    const next = rows.map((d) => ({
-      ...d,
-      enabled: ask.all.find((x) => x.id === d.id)?.enabled ?? d.enabled,
-    }))
-    const code = ask.code
-    setAsk(null)
-    save(next, '', code === 'golive_upload_exceeded' ? { upload: true } : { last: true })
   }
   const move = (from: number, to: number) => {
     if (to < 0 || to >= rows.length || from === to) return
@@ -842,30 +811,7 @@ export function Platforms({
         onAdded={onSaved}
         canvas={canvas}
       />
-      <Dialog
-        open={ask !== null}
-        onClose={() => setAsk(null)}
-        title={
-          ask?.code === 'golive_last_destination'
-            ? 'Stop sending to your last platform?'
-            : 'Your upload may not carry this'
-        }
-        description={ask ? `${ask.message} ${ask.hint}`.trim() : ''}
-        size="sm"
-        footer={
-          <>
-            <Button onClick={() => setAsk(null)}>
-              {ask?.code === 'golive_last_destination' ? 'Keep it on' : 'Not now'}
-            </Button>
-            <Button
-              variant={ask?.code === 'golive_last_destination' ? 'danger' : 'primary'}
-              onClick={confirmAsk}
-            >
-              {ask?.code === 'golive_last_destination' ? 'Stop sending' : 'Add it anyway'}
-            </Button>
-          </>
-        }
-      />
+      {saver.dialog}
       <Dialog
         open={removing !== null}
         onClose={() => setRemoving(null)}

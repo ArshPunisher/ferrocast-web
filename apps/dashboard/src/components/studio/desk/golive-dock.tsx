@@ -15,6 +15,7 @@ import { IconButton, Button, Dialog, InfoLine, Skeleton, Switch, cx, toast } fro
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
 import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
+import { useSaveOrder } from '../save-order'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
@@ -104,6 +105,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           : { tone: 'ok', message: `Video bitrate set to ${kbps.toLocaleString()} kbps.` },
       )
     })
+  const saver = useSaveOrder(api, () => res.reload())
   const toggle = (d: DestinationView, enabled: boolean) => {
     if (!view) return
     // The engine wants every destination, in order, both pictures.
@@ -115,7 +117,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       ...(v ?? view),
       destinations: (v ?? view).destinations.map((x) => (x.id === d.id ? { ...x, enabled } : x)),
     }))
-    void run(`on:${d.id}`, () => api.saveOrder(all)).then((r) => {
+    void run(`on:${d.id}`, () => saver.request(all)).then((r) => {
       if (!r) res.reload()
     })
   }
@@ -236,6 +238,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       >
         {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
       </Dialog>
+      {saver.dialog}
     </section>
   )
 }
