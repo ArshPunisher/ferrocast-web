@@ -519,3 +519,8 @@ Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses
 - `DELETE /api/v1/api-keys/{id}` -> `204 No Content`. Revokes immediately.
 - `/api-keys*` is PC-only (`OWNER_DENIED` on remote sessions, never accessible via API keys). API keys also can never reach secrets, accounts, diagnostics export, plugin install/execution, session pairing, imports/exports/restores, or change `lan_access`. Per-key sliding-window rate limit returns `429 rate_limited` with `Retry-After` and `X-RateLimit-*` headers. Every API key use logs to tracing and SQLite audit without the key or hash.
 
+
+## R39. Store follow-ups: design ids kept on update, ferrocast:// registration (22 Nov)
+
+- `POST /api/v1/store/update` on a design package now replaces the installed designs in place: ids stay, so the active alert design, overlays made from the theme and rules keep working; Undo restores the earlier content under the same ids (the demo already behaved this way). `Design.origin.source` (optional, string or null) is the design's id inside its package file and is what an update matches on; ignore it in the UI.
+- No new routes. The desktop app registers the `ferrocast://` scheme with the OS and routes links to `#/store?link=…` as before (still "always ask").
