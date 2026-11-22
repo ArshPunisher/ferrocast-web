@@ -311,4 +311,37 @@ describe('chat_highlight widget', () => {
     rt.apply(frame('delete_message', { platform: 'twitch', message_id: 'tw-1' }))
     expect(w.hidden).toBe(true)
   })
+
+  it('only loads emotes and badges from the trusted CDNs, never any https host', () => {
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({}, overlay([highlightWidget()])))
+    const h = makeHighlight('hl-cdn', 'ev-cdn', 'Kappa Kappa')
+    h.actor = actor('MiraMod', { badges: [] })
+    h.actor.badges = [
+      { set: 'bad', version: '1', title: 'Evil', image_url: 'https://evil.example/b.png' },
+      {
+        set: 'ok',
+        version: '1',
+        title: 'Good',
+        image_url: 'https://static-cdn.jtvnw.net/badges/v1/x/2',
+      },
+    ] as never
+    h.content = {
+      text: 'Kappa Kappa',
+      fragments: [
+        { type: 'emote', provider: 'native', id: '1', name: 'Kappa', url: 'https://evil.example/e.png', zero_width: false },
+        { type: 'text', text: ' ' },
+        { type: 'emote', provider: 'native', id: '2', name: 'Kappa', url: 'http://127.0.0.1:9/e.png', zero_width: false },
+        { type: 'emote', provider: 'native', id: '3', name: 'Kappa', url: 'https://cdn.7tv.app/emote/1/2x.webp', zero_width: false },
+      ],
+    } as never
+    rt.apply(frame('state', { chat_highlight: h }))
+    const srcs = deepAll(root, 'img').map((i) => (i as HTMLImageElement).getAttribute('src'))
+    expect(srcs.sort()).toEqual(
+      ['https://cdn.7tv.app/emote/1/2x.webp', 'https://static-cdn.jtvnw.net/badges/v1/x/2'].sort(),
+    )
+    for (const img of deepAll(root, 'img')) {
+      expect((img as HTMLImageElement).referrerPolicy).toBe('no-referrer')
+    }
+  })
 })

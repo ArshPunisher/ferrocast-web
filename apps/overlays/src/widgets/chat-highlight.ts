@@ -8,13 +8,18 @@ import {
   el,
   platformGlyph,
   readableColor,
-  safeImageUrl,
   safeText,
   textSpan,
   themeOf,
 } from '../dom'
+import { isTrustedEmoteUrl } from '@ferrocast/api'
 import { renderFragments } from './chat'
 import { place, type WidgetContext, type WidgetView } from '../widget'
+
+/** Pinned messages show other people's images: only the known emote and badge CDNs. */
+function trustedImage(u: unknown): string | null {
+  return isTrustedEmoteUrl(u) ? u : null
+}
 
 const PLATFORMS = new Set<string>(['twitch', 'youtube', 'kick'])
 
@@ -171,11 +176,14 @@ export class ChatHighlightWidget implements WidgetView {
     }
     if (this.cfg.showBadges && Array.isArray(h.actor.badges)) {
       for (const b of h.actor.badges.slice(0, 6)) {
-        const url = safeImageUrl(b?.image_url)
+        const url = trustedImage(b?.image_url)
         if (!url) continue
         const img = document.createElement('img')
         img.className = 'fc-badge'
         img.alt = safeText(b.title ?? b.set, 40)
+        img.referrerPolicy = 'no-referrer'
+        img.decoding = 'async'
+        img.addEventListener('error', () => img.remove())
         img.src = url
         metaNodes.push(img)
       }
@@ -191,7 +199,7 @@ export class ChatHighlightWidget implements WidgetView {
     this.meta.replaceChildren(...metaNodes)
     this.body.replaceChildren()
     this.body.classList.toggle('is-action', !!h.is_action)
-    renderFragments(this.body, h.content.text, h.content.fragments)
+    renderFragments(this.body, h.content.text, h.content.fragments, trustedImage)
 
     this.el.hidden = false
     if (isNew) {
