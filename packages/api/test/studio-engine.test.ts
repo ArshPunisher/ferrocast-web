@@ -8,6 +8,16 @@ import {
   type EngineScenes,
 } from '../src/studio-engine'
 
+/** Waits (bounded) until a started benchmark has reached a state that isn't `running`. */
+async function benchmarkSettled(api: ReturnType<typeof studioEngineApi>) {
+  let st = await api.autoConfig()
+  for (let i = 0; i < 200 && st.state === 'running'; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+    st = await api.autoConfig()
+  }
+  return st
+}
+
 describe('levels request', () => {
   it("sends window only when asked (default stays the engine's 300 ms window)", async () => {
     const bodies: unknown[] = []
@@ -565,7 +575,7 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         fps_preference: 60,
         include_upload: true,
       })
-      await new Promise((r) => setTimeout(r, 150))
+      await benchmarkSettled(d.api)
       const portraitDone = await d.api.autoConfig()
       expect(portraitDone.state).toBe('done')
       expect(portraitDone.picked?.width).toBe(1080)
@@ -578,7 +588,7 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         fps_preference: 60,
         include_upload: true,
       })
-      await new Promise((r) => setTimeout(r, 150))
+      await benchmarkSettled(d.api)
       const lowUpload = await d.api.autoConfig()
       expect(lowUpload.picked!.video_kbps).toBeGreaterThanOrEqual(500)
       expect(lowUpload.picked!.video_kbps).toBeLessThan(1500)
@@ -589,7 +599,7 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         fps_preference: 60,
         include_upload: false,
       })
-      await new Promise((r) => setTimeout(r, 150))
+      await benchmarkSettled(d.api)
       const rec1440 = await d.api.autoConfig()
       expect(rec1440.picked?.height).toBe(1440)
 
@@ -688,6 +698,82 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       const b = await api.encodeBudget()
       expect(b).toHaveProperty('budget_mpx')
       expect(['ok', 'limit', 'over', 'unknown']).toContain(b.level)
+    })
+
+    it('refuses a benchmark while a new setting is still on trial, and checks what an apply sends', async () => {
+      const d = mkApi({
+        studioEngine: { confirmTimeoutMs: 400, watchWindowMs: 800, benchStepMs: 15 },
+      })
+      try {
+        await d.api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 3500 })
+        const refused = await d.api
+          .startAutoConfigBenchmark({ mode: 'stream' })
+          .catch((e: unknown) => e)
+        expect((refused as ApiError).status).toBe(409)
+        // The trial is untouched: Undo still restores what was there.
+        expect((await d.api.autoConfig()).state).toBe('applied')
+        const undone = await d.api.undoAutoConfig()
+        expect(undone.state).toBe('rolled_back')
+        expect((await d.api.studioSettings()).video_kbps).toBe(6000)
+        // A bitrate that isn't a number is refused before anything changes.
+        const nan = await d.api
+          .applyAutoConfig({ video_kbps: 'fast' } as never)
+          .catch((e: unknown) => e)
+        expect((nan as ApiError).status).toBe(400)
+        expect((await d.api.studioSettings()).video_kbps).toBe(6000)
+        // A scale on its own is a valid request, with no benchmark behind it.
+        const scaled = await d.api.applyAutoConfig({ scale: [1280, 720] } as never)
+        expect(scaled.state).toBe('applied')
+        expect((await d.api.studioSettings()).scale).toEqual([1280, 720])
+      } finally {
+        d.engine.dispose()
+      }
+    })
+
+    it('shows an active stream in the stats, and idle lag never counts against a stream', async () => {
+      const d = mkApi({
+        studioEngine: { confirmTimeoutMs: 400, watchWindowMs: 800, benchStepMs: 15 },
+      })
+      try {
+        d.engine.studioEngine!.setStreamActive(true)
+        const live = await d.api.stats()
+        expect(live.stream).not.toBeNull()
+        expect(live.scene).toBeTruthy()
+        d.engine.studioEngine!.setStreamActive(false)
+        // Six frames lag while idle, after the apply: the first live check must not count them.
+        await d.api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 5000 })
+        await d.api.keepAutoConfig()
+        d.engine.studioEngine!.injectDroppedFrames(0, 6)
+        d.engine.studioEngine!.setStreamActive(true)
+        await d.api.autoConfig()
+        d.engine.studioEngine!.setStreamActive(false)
+        const after = await d.api.autoConfig()
+        expect(after.rollback_offered).toBe(false)
+      } finally {
+        d.engine.dispose()
+      }
+    })
+
+    it('says so when the upload cannot carry the encoder minimum', async () => {
+      const d = mkApi({ studioEngine: { benchStepMs: 15 } })
+      d.engine.golive.setup({ upload_kbps: 900 })
+      try {
+        await d.api.startAutoConfigBenchmark({
+          mode: 'stream',
+          fps_preference: 60,
+          include_upload: true,
+        })
+        let st = await d.api.autoConfig()
+        for (let i = 0; i < 100 && st.state === 'running'; i++) {
+          await new Promise((r) => setTimeout(r, 15))
+          st = await d.api.autoConfig()
+        }
+        expect(st.state).toBe('done')
+        expect(st.picked!.limited_by).toBe('upload_too_slow')
+        expect(st.picked!.why).toMatch(/can't carry|cannot carry/i)
+      } finally {
+        d.engine.dispose()
+      }
     })
   })
 })

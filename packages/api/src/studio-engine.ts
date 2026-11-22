@@ -2015,7 +2015,7 @@ export type AutoConfigStateKind = 'idle' | 'running' | 'failed' | 'done' | 'appl
 export type AutoConfigPhase = 'upload' | 'discovering' | 'encoding' | 'picking'
 export type RollbackTrigger = 'user_undo' | 'timeout' | 'dropped_frames'
 export type EncoderFamily = 'videotoolbox' | 'nvenc' | 'qsv' | 'amf' | 'media_foundation' | 'x264'
-export type LimitedBy = 'headroom' | 'upload' | 'platform_cap' | 'balanced'
+export type LimitedBy = 'headroom' | 'upload' | 'upload_too_slow' | 'platform_cap' | 'balanced'
 
 export interface AutoConfigCandidate {
   encoder_backend: string

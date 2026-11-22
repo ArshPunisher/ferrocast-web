@@ -1483,15 +1483,7 @@ export class DemoStudioEngine {
       this.black = !this.black
       return { black: this.black }
     }
-    if (is('GET', 'studio/engine/stats')) {
-      return {
-        engine: { cpu: 4.2, fps: 60, frame_ms: 4.1, lagged: 0, frames: 3600, memory_mb: 240 },
-        canvas: { width: 1920, height: 1080, fps: 60 },
-        stream: null,
-        record: null,
-        scene: this.currentScene,
-      }
-    }
+    if (is('GET', 'studio/engine/stats')) return this.engineStatsSnapshot()
     if (is('GET', 'studio/engine/history')) return { undo: [], redo: [] }
     if (is('GET', 'studio/engine/audio-care')) return { ducking: null, loudness_lufs: null }
     if (is('GET', 'studio/engine/privacy')) return { hide_notifications: true, hide_apps: [] }
@@ -1680,9 +1672,6 @@ export class DemoStudioEngine {
       }
       return { settings: clone(this.studioSettingsData), restart: null }
     }
-    if (is('GET', 'studio/engine/stats')) {
-      return this.engineStatsSnapshot()
-    }
     if (is('GET', 'studio/engine/auto-config')) {
       return this.autoConfigView()
     }
@@ -1780,6 +1769,7 @@ export class DemoStudioEngine {
         memory_mb: 310,
       },
       canvas: { width, height, fps },
+      scene: this.currentScene,
       stream: this.streamActive
         ? {
             active: true,
@@ -1869,6 +1859,15 @@ export class DemoStudioEngine {
     if (this.autoConfigState.state === 'running') {
       throw new HttpError(409, 'conflict', 'An encoder benchmark is already running.')
     }
+    // New settings are still on trial (Keep or Undo not chosen): a benchmark would replace the
+    // trial and leave Undo with nothing to restore, as the engine refuses.
+    if (this.autoConfigState.state === 'applied') {
+      throw new HttpError(
+        409,
+        'conflict',
+        'Keep or undo the new settings before testing the encoder again.',
+      )
+    }
 
     const includeUpload =
       b.include_upload === undefined ? mode === 'stream' : Boolean(b.include_upload)
@@ -1902,12 +1901,34 @@ export class DemoStudioEngine {
     this.broadcastAutoConfig()
 
     let uploadCheck: UploadCheck | null = null
+    let uploadTried = false
     let stepIdx = 0
+    const fail = (message: string) => {
+      if (this.benchCancelToken !== token) return
+      this.autoConfigState = {
+        ...this.autoConfigState,
+        state: 'failed',
+        job_id: null,
+        phase: null,
+        current_label: null,
+        error: message,
+        elapsed_ms: Date.now() - startedAt,
+      }
+      this.broadcastAutoConfig()
+    }
 
     const runStep = () => {
       if (this.benchCancelToken !== token || this.autoConfigState.state !== 'running') return
-      if (includeUpload && mode === 'stream' && !uploadCheck) {
-        uploadCheck = this.deps?.runUploadCheck() ?? null
+      if (includeUpload && mode === 'stream' && !uploadTried) {
+        // Once: with no checker, or one that throws, the run goes on without a measurement.
+        uploadTried = true
+        try {
+          uploadCheck = this.deps?.runUploadCheck() ?? null
+        } catch (e) {
+          uploadCheck = null
+          this.autoConfigState.upload_error =
+            e instanceof Error ? e.message : 'Upload check failed.'
+        }
         this.autoConfigState.upload_check = uploadCheck
         this.autoConfigState.phase = 'encoding'
         this.autoConfigState.progress_pct = 24
@@ -1936,15 +1957,21 @@ export class DemoStudioEngine {
         return
       }
 
-      const platforms = this.deps?.enabledPlatforms() ?? []
-      const picked = pickDemoRecommendation(
-        this.autoConfigState.candidates,
-        mode as AutoConfigMode,
-        fpsPref as 30 | 60,
-        canvas,
-        uploadCheck?.verdict.upload_kbps ?? null,
-        platforms,
-      )
+      let picked: AutoConfigRecommendation
+      try {
+        const platforms = this.deps?.enabledPlatforms() ?? []
+        picked = pickDemoRecommendation(
+          this.autoConfigState.candidates,
+          mode as AutoConfigMode,
+          fpsPref as 30 | 60,
+          canvas,
+          uploadCheck?.verdict.upload_kbps ?? null,
+          platforms,
+        )
+      } catch (e) {
+        fail(e instanceof Error ? e.message : 'The benchmark could not pick a configuration.')
+        return
+      }
       this.autoConfigState = {
         ...this.autoConfigState,
         state: 'done',
@@ -1987,12 +2014,22 @@ export class DemoStudioEngine {
     }
     if (
       req.video_kbps !== undefined &&
-      (Number(req.video_kbps) < 500 || Number(req.video_kbps) > 60_000)
+      (!Number.isFinite(Number(req.video_kbps)) ||
+        Number(req.video_kbps) < 500 ||
+        Number(req.video_kbps) > 60_000)
     ) {
       throw new HttpError(400, 'invalid', 'video_kbps: 500 to 60000.')
     }
     const picked = this.autoConfigState.picked
-    if (!picked && req.fps === undefined && req.video_kbps === undefined && !req.encoder) {
+    const anySetting = [
+      req.fps,
+      req.video_kbps,
+      req.encoder,
+      req.video_encoder,
+      req.encoder_settings,
+      req.scale,
+    ].some((v) => v !== undefined)
+    if (!picked && !anySetting) {
       throw new HttpError(400, 'invalid', 'Run the benchmark or provide settings to apply.')
     }
 
@@ -2116,10 +2153,7 @@ export class DemoStudioEngine {
     if (this.autoConfigState.state !== 'applied') return true
     const now = Date.now()
     const live = this.isBusyLive()
-    const encoderSkips = Math.max(0, this.simSkipped - this.baselineSkipped)
-    const encoderLags = Math.max(0, this.simLagged - this.baselineLagged)
-    const encoderIssues = encoderSkips + encoderLags
-
+    // The baseline moves first, so frames that lagged while idle can't count against the stream.
     if (live) {
       if (!this.watchStarted) {
         this.watchStarted = true
@@ -2130,6 +2164,12 @@ export class DemoStudioEngine {
         this.baselineLagged = this.simLagged
         this.baselineSkipped = this.simSkipped
       }
+    }
+    const encoderSkips = Math.max(0, this.simSkipped - this.baselineSkipped)
+    const encoderLags = Math.max(0, this.simLagged - this.baselineLagged)
+    const encoderIssues = encoderSkips + encoderLags
+
+    if (live) {
       this.wasLive = true
       if (
         now < this.watchDeadlineAt &&
@@ -2628,7 +2668,13 @@ function pickDemoRecommendation(
     const share = uploadKbps !== null ? (uploadKbps * 0.75) / n : 6000
     capKbps = Math.max(500, Math.min(cap, Math.floor(share / 500) * 500))
     ceilLimited =
-      share < cap ? 'upload' : caps.some((c) => capKbps === c) ? 'platform_cap' : 'balanced'
+      share < 500
+        ? 'upload_too_slow'
+        : share < cap
+          ? 'upload'
+          : caps.some((c) => capKbps === c)
+            ? 'platform_cap'
+            : 'balanced'
     let targetShort: number
     if (fpsPref === 60) {
       if (capKbps >= 6000) targetShort = 1080
@@ -2689,7 +2735,11 @@ function pickDemoRecommendation(
   const split = n > 1 && uploadKbps !== null ? ` shared by ${n} platforms` : ''
   const upText =
     uploadKbps !== null && mode === 'stream'
-      ? ` ${(uploadKbps / 1000).toFixed(1)} Mbps upload${split}.`
+      ? ` ${(uploadKbps / 1000).toFixed(1)} Mbps upload${split}.${
+          limited_by === 'upload_too_slow'
+            ? " Your upload can't carry even the 500 kbps minimum for each platform: stream to fewer platforms or test a faster connection."
+            : ''
+        }`
       : ''
   return {
     encoder: best.hardware ? 'hardware' : 'software',
