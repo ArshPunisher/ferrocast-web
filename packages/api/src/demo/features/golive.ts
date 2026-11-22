@@ -681,6 +681,7 @@ export class DemoGoLive {
         throw new HttpError(400, 'invalid', 'destinations: enabled must be true or false.')
       next.push({ ...d, enabled: item.enabled })
     }
+    this.midstreamChecks(next, b)
     this.cfg = next
     for (const d of next)
       if (!d.enabled) {
@@ -690,6 +691,50 @@ export class DemoGoLive {
       }
     this.tick()
     return { destinations: clone(this.cfg) }
+  }
+
+  /**
+   * While live, as the engine: a destination the running encode can't serve is refused (422),
+   * one that would overload the last measured upload and removing the last destination ask
+   * first (409; send `confirm_upload` / `confirm_last` to go ahead).
+   */
+  private midstreamChecks(next: DestinationConfig[], b: Record<string, unknown>): void {
+    if (!this.live() && !this.verticalLive()) return
+    const added = next.filter((n) => n.enabled && this.cfg.some((o) => o.id === n.id && !o.enabled))
+    for (const d of added) {
+      if (d.canvas === 'vertical' && !this.verticalLive())
+        throw new HttpError(
+          422,
+          'golive_needs_new_encode',
+          'The vertical stream isn’t running, so this destination can’t join it now.',
+          'Stop and start the stream again with it ticked.',
+        )
+      const limit = d.kind === 'twitch' ? 6000 : d.kind === 'kick' ? 8000 : 0
+      if (d.canvas !== 'vertical' && limit > 0 && this.stats().kbps > limit)
+        throw new HttpError(
+          422,
+          'golive_needs_new_encode',
+          `${d.kind === 'twitch' ? 'Twitch' : 'Kick'} takes at most ${limit.toLocaleString()} kbps and this stream is sending ${this.stats().kbps.toLocaleString()}. Changing the live encode would change every other output.`,
+          'Stop and start the stream again with it ticked.',
+        )
+    }
+    if (b.confirm_last !== true && this.cfg.some((d) => d.enabled) && !next.some((d) => d.enabled))
+      throw new HttpError(
+        409,
+        'golive_last_destination',
+        'That’s the last destination: nothing will be sent to a platform any more.',
+        'The stream and the recording keep going. Confirm to stop sending.',
+      )
+    if (b.confirm_upload !== true && added.length > 0 && this.upload) {
+      const need = next.filter((d) => d.enabled).length * (this.stats().kbps || 6100)
+      if (need > Math.floor(this.upload.verdict.upload_kbps * 0.8))
+        throw new HttpError(
+          409,
+          'golive_upload_exceeded',
+          `Upload ${mbOf(this.upload.verdict.upload_kbps)}, ${mbOf(need)} needed.`,
+          'Confirm to add it anyway, or lower the bitrate first.',
+        )
+    }
   }
 
   private addCustom(body: unknown): DestinationConfig {
@@ -956,6 +1001,11 @@ function urlProblem(url: string): string | null {
   if (!app.join('/').replace(/\/+/g, ''))
     return 'The server address is missing the part after the host (for example /live).'
   return null
+}
+
+const mbOf = (k: number) => {
+  const m = k / 1000
+  return m < 10 ? `${m.toFixed(1)} Mbps` : `${Math.round(m)} Mbps`
 }
 
 /** As the engine's `probe::verdict`: 20% kept free, the first ones in order fit. */

@@ -28,6 +28,7 @@ import {
   aitumClashes,
   allDestinationsFailed,
   andList,
+  ApiError,
   describeError,
   directKind,
   goliveApi,
@@ -511,6 +512,32 @@ function elapsed(ms: number): string {
 
 // ---------------------------------------------------------------- 2A: the platforms
 
+/**
+ * What a destination's row says about itself on the right: while the stream runs, where it
+ * is (starting, connecting, live with its rate, reconnecting, failed, paused, off); before, its rate.
+ */
+export function liveStatus(d: DestinationView, streaming: boolean, plan: number): string {
+  if (!d.enabled) return streaming ? 'Off' : ''
+  if (!streaming) return d.health?.state === 'failed' ? 'Failed' : mbps(d.health?.kbps || plan)
+  switch (d.health?.state) {
+    case undefined:
+    case 'waiting':
+      return 'Starting'
+    case 'connecting':
+      return 'Connecting'
+    case 'reconnecting':
+      return 'Reconnecting'
+    case 'failed':
+      return 'Failed'
+    case 'paused':
+      return 'Paused'
+    case 'stopped':
+      return 'Stopped'
+    default:
+      return mbps(d.health?.kbps || plan)
+  }
+}
+
 export function Platforms({
   view,
   onSaved,
@@ -539,16 +566,52 @@ export function Platforms({
   }
   const merged = rows.map((r) => mine.find((d) => d.id === r.id) ?? r)
 
+  // What a change while live asks first: the upload won't carry it, or it was the last one.
+  const [ask, setAsk] = useState<{
+    code: 'golive_upload_exceeded' | 'golive_last_destination'
+    message: string
+    hint: string
+    all: { id: string; enabled: boolean }[]
+  } | null>(null)
   // The other picture's destinations go along unchanged (the engine wants every one).
-  const save = (next: DestinationView[], label: string) => {
+  const save = (
+    next: DestinationView[],
+    label: string,
+    confirm: { upload?: boolean; last?: boolean } = {},
+  ) => {
     setRows(next)
-    const all = canvas === 'main' ? [...next, ...others] : [...others, ...next]
-    void run('order', () => api.saveOrder(all.map((d) => ({ id: d.id, enabled: d.enabled }))), {
-      success: label,
-    }).then((r) => {
+    const all = (canvas === 'main' ? [...next, ...others] : [...others, ...next]).map((d) => ({
+      id: d.id,
+      enabled: d.enabled,
+    }))
+    void run(
+      'order',
+      () =>
+        api.saveOrder(all, confirm).catch((e: unknown) => {
+          if (
+            e instanceof ApiError &&
+            (e.code === 'golive_upload_exceeded' || e.code === 'golive_last_destination')
+          ) {
+            setAsk({ code: e.code, message: e.message, hint: e.hint ?? '', all })
+            return null
+          }
+          throw e
+        }),
+      { success: label },
+    ).then((r) => {
       if (r) onSaved()
       else setRows(mine)
     })
+  }
+  const confirmAsk = () => {
+    if (!ask) return
+    const next = rows.map((d) => ({
+      ...d,
+      enabled: ask.all.find((x) => x.id === d.id)?.enabled ?? d.enabled,
+    }))
+    const code = ask.code
+    setAsk(null)
+    save(next, '', code === 'golive_upload_exceeded' ? { upload: true } : { last: true })
   }
   const move = (from: number, to: number) => {
     if (to < 0 || to >= rows.length || from === to) return
@@ -672,20 +735,32 @@ export function Platforms({
               <div className="flex items-center gap-1.5 sm:gap-3">
                 <span
                   className={cx(
-                    'hidden text-right font-mono text-[13px] leading-tight sm:block',
+                    'text-right font-mono text-[12.5px] leading-tight sm:block sm:text-[13px]',
+                    (vertical ? view.vertical_live : view.live) ? 'block' : 'hidden',
                     d.enabled && d.health?.state === 'failed'
                       ? 'font-semibold text-danger'
                       : 'text-text-2',
                   )}
                 >
-                  {!d.enabled
-                    ? ''
-                    : d.health?.state === 'failed'
-                      ? 'Failed'
-                      : d.health?.state === 'paused'
-                        ? 'Paused'
-                        : mbps(d.health?.kbps || plan)}
+                  {liveStatus(d, vertical ? view.vertical_live : view.live, plan)}
                 </span>
+                {d.enabled &&
+                  (vertical ? view.vertical_live : view.live) &&
+                  d.health?.state === 'failed' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      busy={busy === `retry:${d.id}`}
+                      aria-label={`Retry ${d.name}`}
+                      onClick={() =>
+                        void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
+                          success: `Trying ${d.name} again.`,
+                        }).then((r) => r && onSaved())
+                      }
+                    >
+                      Retry
+                    </Button>
+                  )}
                 {(d.kind === 'custom' || d.connected) && (
                   <IconButton
                     label={`Test connection to ${d.name}`}
@@ -766,6 +841,30 @@ export function Platforms({
         onClose={() => setAdding(false)}
         onAdded={onSaved}
         canvas={canvas}
+      />
+      <Dialog
+        open={ask !== null}
+        onClose={() => setAsk(null)}
+        title={
+          ask?.code === 'golive_last_destination'
+            ? 'Stop sending to your last platform?'
+            : 'Your upload may not carry this'
+        }
+        description={ask ? `${ask.message} ${ask.hint}`.trim() : ''}
+        size="sm"
+        footer={
+          <>
+            <Button onClick={() => setAsk(null)}>
+              {ask?.code === 'golive_last_destination' ? 'Keep it on' : 'Not now'}
+            </Button>
+            <Button
+              variant={ask?.code === 'golive_last_destination' ? 'danger' : 'primary'}
+              onClick={confirmAsk}
+            >
+              {ask?.code === 'golive_last_destination' ? 'Stop sending' : 'Add it anyway'}
+            </Button>
+          </>
+        }
       />
       <Dialog
         open={removing !== null}

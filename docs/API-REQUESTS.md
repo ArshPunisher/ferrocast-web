@@ -406,3 +406,12 @@ All three stay PC-only (`remoteAllowed` denies paired phones).
 `-720..840`), All-time (`alltime_*`,
 `top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
 `train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
+
+## R33. Add or remove destinations while live (Phase 2 #17, 22 Nov)
+
+Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses:
+
+- `PUT /api/v1/golive/destinations` also takes `confirm_upload?` and `confirm_last?` (booleans). While live, a destination the running encode can't serve answers **422 `golive_needs_new_encode`** (plain reason, hint to stop and start again); one the last upload check says won't fit answers **409 `golive_upload_exceeded`**; removing the last answers **409 `golive_last_destination`**. The dashboard asks, and sends the flag when the streamer confirms.
+- `StreamHealthRecord.destination_log` (`{ id, name, at, on }[]`, default empty) in the support report's recent streams.
+- The demo engine simulates all three refusals and the confirmations (`packages/api/src/demo/features/golive.ts`).
+
