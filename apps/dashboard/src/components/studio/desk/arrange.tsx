@@ -20,6 +20,7 @@ import {
   alignDeltas,
   distributeDeltas,
   moved,
+  pickedBoxes,
   type Align,
   type Arrangeable,
   type BoxFor,
@@ -31,10 +32,11 @@ export type Arrange = Align | 'distribute-x' | 'distribute-y'
 
 /** The picked sources that have a place on the canvas (a hidden one still counts: it is picked). */
 export function arrangeable(items: EngineItem[], ids: number[]): Arrangeable[] {
-  return items
-    .flatMap((i) => [i, ...i.children])
-    .filter((i) => ids.includes(i.id) && i.frame)
-    .map((i) => ({ id: i.id, frame: i.frame as Frame, locked: i.locked }))
+  return pickedBoxes(items, ids).map((i) => ({
+    id: i.id,
+    frame: i.frame as Frame,
+    locked: i.locked,
+  }))
 }
 
 /** The boxes after `how`, for the picked sources. Empty when nothing would move. */

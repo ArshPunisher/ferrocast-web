@@ -76,6 +76,7 @@ import {
   gapsFor,
   guidesFor,
   marqueeHits,
+  pickedBoxes,
   pickWith,
   rectOf,
   scaleGroup,
@@ -1474,10 +1475,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
 
   // The picked sources that can be moved together, and the one box round them: where the
   // handles are, what the group moves and is sized by.
-  const together = flat.flatMap((i) =>
-    pickedIds.includes(i.id) && i.visible && i.frame
-      ? [{ id: i.id, frame: i.frame, locked: i.locked }]
-      : [],
+  const together = pickedBoxes(list, pickedIds).flatMap((i) =>
+    i.visible && i.frame ? [{ id: i.id, frame: i.frame, locked: i.locked }] : [],
   )
   const groupRect =
     !pv.locked && together.filter((i) => !i.locked).length >= 2
@@ -1638,12 +1637,14 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         grip,
         moved: false,
         last: null,
+        // A source dragged while its own group is picked too moves alone (the group can't be in
+        // the same batch as one of its sources).
         others:
-          picked && grip.u < 0
-            ? flat.flatMap((i) =>
-                i.id !== target.id && pickedIds.includes(i.id) && !i.locked && i.frame
-                  ? [{ id: i.id, from: i.frame }]
-                  : [],
+          picked &&
+          grip.u < 0 &&
+          !list.some((g) => pickedIds.includes(g.id) && g.children.some((c) => c.id === target.id))
+            ? pickedBoxes(list, pickedIds).flatMap((i) =>
+                i.id !== target.id && !i.locked && i.frame ? [{ id: i.id, from: i.frame }] : [],
               )
             : [],
         crop: cropping ? 'reading' : null,
@@ -1876,9 +1877,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         ArrowUp: { x: 0, y: -step },
         ArrowDown: { x: 0, y: step },
       }[e.key]
-      const moving = pv.locked
-        ? []
-        : flat.filter((i) => pickedIds.includes(i.id) && i.frame && !i.locked)
+      const moving = pv.locked ? [] : pickedBoxes(list, pickedIds).filter((i) => !i.locked)
       if (!d || moving.length === 0) return
       e.preventDefault()
       const boxes: BoxFor[] = []

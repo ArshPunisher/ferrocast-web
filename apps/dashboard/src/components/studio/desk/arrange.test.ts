@@ -64,4 +64,10 @@ describe('what the buttons and the menu send', () => {
       { id: 2, x: 0, y: 330, w: 10, h: 40 },
     ])
   })
+  it('leaves out a source with no size, and a source of a group picked with it', () => {
+    const kid = item(11, box(0, 0, 10, 10))
+    const group = item(10, box(0, 0, 100, 100), { group: true, children: [kid] })
+    const list = [group, item(20, [0, 0, 0, 0, 0, 0]), item(30, box(300, 0, 10, 10))]
+    expect(arrangeable(list, [10, 11, 20, 30]).map((a) => a.id)).toEqual([10, 30])
+  })
 })

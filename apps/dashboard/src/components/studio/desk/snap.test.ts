@@ -3,6 +3,8 @@ import {
   alignDeltas,
   distributeDeltas,
   frameOfBox,
+  hasSize,
+  pickedBoxes,
   gapsFor,
   guidesFor,
   marqueeHits,
@@ -381,5 +383,25 @@ describe('the box dragged on empty canvas', () => {
     expect(pickWith([1, 2], [2, 3], 'add')).toEqual([1, 2, 3])
     expect(pickWith([1, 2], [2, 3], 'toggle')).toEqual([1, 3])
     expect(pickWith([], [], 'toggle')).toEqual([])
+  })
+})
+
+describe('which picked sources can be placed', () => {
+  it('a source with no size yet has no place to move or line up', () => {
+    expect(hasSize(box(0, 0, 100, 50))).toBe(true)
+    expect(hasSize([0, 0, 0, 0, 10, 10])).toBe(false)
+    expect(hasSize([0.4, 0, 0, 50, 0, 0])).toBe(false)
+    expect(hasSize(undefined)).toBe(false)
+  })
+  it('keeps those with a size, and a source of a picked group only through the group', () => {
+    const kid1 = item(11, box(10, 10, 50, 50))
+    const kid2 = item(12, box(80, 10, 50, 50))
+    const group = item(10, box(10, 10, 120, 50), { children: [kid1, kid2] })
+    const empty = item(20, [0, 0, 0, 0, 5, 5])
+    const list = [group, empty, item(30, box(300, 0, 10, 10))]
+    const ids = (picked: number[]) => pickedBoxes(list, picked).map((i) => i.id)
+    expect(ids([10, 11, 20, 30])).toEqual([10, 30]) // the child rides on its group; no size, no place
+    expect(ids([11, 12])).toEqual([11, 12]) // two sources of the group, without the group
+    expect(ids([11, 30])).toEqual([11, 30])
   })
 })

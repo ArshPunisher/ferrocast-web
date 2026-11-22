@@ -28,6 +28,33 @@ export function rectOf(f: Frame, d: Pt = { x: 0, y: 0 }): Rect {
   }
 }
 
+/**
+ * Whether a source has a picture to place: a source whose size isn't known yet (a camera still
+ * opening, an empty group) has a frame of zeros, and the engine refuses a box under 1 pixel, so
+ * sending it would fail the whole batch for the others.
+ */
+export function hasSize(f: Frame | undefined): f is Frame {
+  return !!f && Math.hypot(f[0], f[1]) >= 1 && Math.hypot(f[2], f[3]) >= 1
+}
+
+/**
+ * The picked sources that can be moved, sized or lined up: those with a size, and a source of a
+ * group only when the group is not picked too (it moves with its group, and the engine refuses
+ * both in one batch). `items` are the scene's top-level items, each with its `children`.
+ */
+export function pickedBoxes<T extends ItemLike>(items: T[], ids: number[]): T[] {
+  const picked = new Set(ids)
+  const out: T[] = []
+  for (const i of items) {
+    if (picked.has(i.id)) {
+      if (hasSize(i.frame)) out.push(i)
+    } else {
+      for (const c of i.children as T[]) if (picked.has(c.id) && hasSize(c.frame)) out.push(c)
+    }
+  }
+  return out
+}
+
 /** The bounds that hold every one of `rects`; null for none. */
 export function union(rects: Rect[]): Rect | null {
   if (rects.length === 0) return null
