@@ -210,6 +210,8 @@ export class EndCreditsWidget implements WidgetView {
         this.el.hidden = false
       } else {
         this.track.replaceChildren()
+        // The track is empty now, so the next data must rebuild it even if it matches the last.
+        this.dataSig = ''
         this.el.hidden = true
         this.stopLoop()
         return

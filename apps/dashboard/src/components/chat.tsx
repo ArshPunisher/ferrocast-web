@@ -199,6 +199,8 @@ export interface ChatActions {
 export function lineActions(
   actions: Pick<ChatActions, 'offline' | 'moderates' | 'highlight'>,
   event: FerroEvent,
+  /** The chat filter is holding it: nothing goes on stream until a mod approves it. */
+  held = false,
 ): {
   reply: boolean
   highlight: boolean
@@ -211,7 +213,7 @@ export function lineActions(
   const mods = actions.moderates ? actions.moderates(event.platform) : true
   return {
     reply: online,
-    highlight: online && !!actions.highlight,
+    highlight: online && !held && !!actions.highlight,
     card: online,
     remove: mods && !!event.source_id,
     timeout: mods,
@@ -243,7 +245,7 @@ export const ChatLine = memo(function ChatLine({
   const names = readableColors(a.color)
   const mine = (a.roles & Roles.BROADCASTER) !== 0
   const pinned = !deleted && actions?.highlightedId === event.id
-  const canHighlight = !!(actions && !deleted && !held && lineActions(actions, event).highlight)
+  const canHighlight = !!(actions && !deleted && lineActions(actions, event, !!held).highlight)
   const showToolbar = !!(actions && !deleted && (!mine || canHighlight))
   const fallback = mine ? 'var(--color-accent-text)' : 'var(--color-text)'
   return (
@@ -251,7 +253,7 @@ export const ChatLine = memo(function ChatLine({
       onClick={(ev) => {
         if (!actions || deleted || !coarse()) return
         if (mine && !canHighlight) return
-        if (!Object.values(lineActions(actions, event)).some(Boolean)) return
+        if (!Object.values(lineActions(actions, event, !!held)).some(Boolean)) return
         if ((ev.target as HTMLElement).closest('button')) return
         actions.sheet(event)
       }}
@@ -307,7 +309,7 @@ export const ChatLine = memo(function ChatLine({
           </span>
         )}
       </div>
-      {showToolbar && <LineToolbar actions={actions} event={event} mine={mine} />}
+      {showToolbar && <LineToolbar actions={actions} event={event} mine={mine} held={!!held} />}
       {!dense && (
         <time className="mt-[3px] shrink-0 font-mono text-[13px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
           {relativeTime(event.received_at, now)}
@@ -322,12 +324,14 @@ function LineToolbar({
   actions,
   event,
   mine,
+  held = false,
 }: {
   actions: ChatActions
   event: FerroEvent
   mine?: boolean
+  held?: boolean
 }) {
-  const can = lineActions(actions, event)
+  const can = lineActions(actions, event, held)
   if (event.kind.type !== 'chat_message' || !Object.values(can).some(Boolean)) return null
   const a = event.kind.actor
   const pinned = actions.highlightedId === event.id
@@ -878,6 +882,7 @@ export function useChatActions(
     ],
   )
   const sheetActor = sheet?.kind.type === 'chat_message' ? sheet.kind.actor : null
+  const sheetHeld = useLive((s) => (sheet ? s.held.has(sheet.id) : false))
   const target = banning?.kind.type === 'chat_message' ? banning.kind.actor : null
   const dialogs = (
     <>
@@ -951,7 +956,7 @@ export function useChatActions(
               .filter(([what]) => {
                 const mine = (sheetActor.roles & Roles.BROADCASTER) !== 0
                 if (mine && what !== 'highlight') return false
-                return lineActions(actions, sheet)[what]
+                return lineActions(actions, sheet, sheetHeld)[what]
               })
               .map(([, label, fn, icon, danger]) => (
                 <Button
