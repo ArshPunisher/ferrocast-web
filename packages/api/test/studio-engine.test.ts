@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FerroClient } from '../src/client'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { ApiError } from '../src/errors'
+import { goliveApi } from '../src/golive'
 import {
   studioEngineApi,
   resolveTransitionFromScenes,
@@ -696,6 +697,53 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
           'push_hide:Main\nWebcam': 'F10',
         })
       } finally {
+        engine.dispose()
+      }
+    })
+  })
+
+  describe('stream control, ticking stats, and Go live integration (Problem 3)', () => {
+    it('starts/stops Studio stream, ticks frames & bytes in stats, and marks Go live active without OBS points_here', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-22T12:00:00Z'))
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const golive = goliveApi(client)
+        engine.studio.obs.streaming = false
+
+        await api.start()
+        expect(await api.streamStats()).toBeNull()
+        expect((await api.stats()).stream).toBeNull()
+        expect((await golive.view()).live).toBe(false)
+
+        const started = await api.stream(true)
+        expect(started).toMatchObject({
+          active: true,
+          reconnecting: false,
+          dropped: 0,
+          error: null,
+        })
+        expect((await api.streamStats())?.active).toBe(true)
+        expect((await golive.view()).live).toBe(true)
+
+        vi.advanceTimersByTime(3000)
+        const s1 = await api.stats()
+        expect(s1.stream?.active).toBe(true)
+        expect(s1.stream?.frames ?? 0).toBeGreaterThanOrEqual(85)
+        expect(s1.stream?.bytes ?? 0).toBeGreaterThan(1_000_000)
+
+        await api.stream(false)
+        expect(await api.streamStats()).toBeNull()
+        expect((await api.stats()).stream).toBeNull()
+        expect((await golive.view()).live).toBe(false)
+      } finally {
+        vi.useRealTimers()
         engine.dispose()
       }
     })

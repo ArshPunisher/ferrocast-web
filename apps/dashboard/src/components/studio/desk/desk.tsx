@@ -807,7 +807,16 @@ export function ControlBar({
               : null,
         },
       )
-      if (r) setShow(r.show)
+      if (r) {
+        setShow(r.show)
+        resetUploadRate()
+        if (typeof api.stats === 'function') {
+          await api
+            .stats()
+            .then(setStats)
+            .catch(() => undefined)
+        }
+      }
       return
     }
     const v = await run('stream', () => api.stream(!on), {
@@ -836,6 +845,12 @@ export function ControlBar({
       if (r) {
         setShow(r.show)
         resetUploadRate()
+        if (typeof api.stats === 'function') {
+          await api
+            .stats()
+            .then(setStats)
+            .catch(() => undefined)
+        }
       }
     })
   // Said with the file's name, its whole path behind an (i), and a way to copy it: the streamer

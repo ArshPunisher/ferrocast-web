@@ -25,6 +25,7 @@ import {
   type EngineShow,
   type EngineSourceUse,
   type EngineStudioOptions,
+  type EngineStreamStats,
   type EngineTransform,
   type EngineTransition,
   type EngineTransitionMatrixRule,
@@ -534,6 +535,9 @@ export class DemoStudioEngine {
   private recording = false
   private recordingPaused = false
   private recordFile: string | null = null
+  private streamActive = false
+  private streamStartedAt = 0
+  private onStreamChange?: ((active: boolean) => void) | undefined
   private sourceRecords = new Map<string, string>()
   private replayActive = false
   private replayLast: string | null = null
@@ -564,7 +568,10 @@ export class DemoStudioEngine {
     hotkeys: {},
   }
 
-  constructor(opts: DemoStudioEngineOptions = {}) {
+  constructor(
+    opts: DemoStudioEngineOptions = {},
+    hooks?: { onStreamChange?: (active: boolean) => void },
+  ) {
     this.opts = {
       obsPreset: opts.obsPreset ?? 'normal',
       streamlabsPreset: opts.streamlabsPreset ?? 'normal',
@@ -574,8 +581,115 @@ export class DemoStudioEngine {
       micPreset: opts.micPreset ?? 'quiet',
       running: opts.running ?? false,
     }
+    this.onStreamChange = hooks?.onStreamChange
     this.seedDefaults()
     this.collections.set(this.shelfCollections.current, this.captureSnapshot())
+  }
+
+  isRunning(): boolean {
+    return this.opts.running
+  }
+
+  isStreaming(): boolean {
+    return this.opts.running && this.streamActive
+  }
+
+  isReplayActive(): boolean {
+    return this.opts.running && this.replayActive
+  }
+
+  setReplayActive(on: boolean): void {
+    this.replayActive = on
+  }
+
+  setRecording(on: boolean): void {
+    if (on && !this.recording) {
+      const folder = String(
+        this.studioSettingsData.record_folder ??
+          this.studioSettingsData.record_folder_default ??
+          '/Users/demo/Movies/Ferrocast',
+      )
+      const fmt = String(this.studioSettingsData.record_format ?? 'mp4')
+      this.recording = true
+      this.recordingPaused = false
+      this.recordFile = `${folder}/Ferrocast ${Date.now()}.${fmt}`
+    } else if (!on) {
+      this.recording = false
+      this.recordingPaused = false
+      this.recordFile = null
+    }
+  }
+
+  sceneNames(): string[] {
+    return [...this.activeScenes]
+  }
+
+  hasScene(name: string): boolean {
+    return this.activeScenes.includes(name)
+  }
+
+  currentSceneName(): string {
+    return this.currentScene
+  }
+
+  switchShowScene(name: string): boolean {
+    if (!this.hasScene(name)) return false
+    this.currentScene = name
+    return true
+  }
+
+  sceneItemEnabled(scene: string, source: string): boolean | null {
+    const it = this.sceneItems.get(scene)?.find((x) => x.name === source)
+    return it ? it.visible : null
+  }
+
+  setSceneItemEnabled(scene: string, source: string, visible: boolean): boolean {
+    const it = this.sceneItems.get(scene)?.find((x) => x.name === source)
+    if (!it) return false
+    it.visible = visible
+    return true
+  }
+
+  isSourceMuted(name: string): boolean {
+    return this.sources.get(name)?.muted ?? false
+  }
+
+  setSourceMuted(name: string, muted: boolean): boolean {
+    const src = this.sources.get(name)
+    if (!src) return false
+    src.muted = muted
+    return true
+  }
+
+  currentStreamStats(): EngineStreamStats | null {
+    if (!this.opts.running || !this.streamActive) return null
+    const elapsedSec = Math.max(0.05, (Date.now() - this.streamStartedAt) / 1000)
+    const fps = Number(this.studioSettingsData.fps ?? 60) || 60
+    const kbps = Number(this.studioSettingsData.video_kbps ?? 6000) || 6000
+    return {
+      active: true,
+      reconnecting: false,
+      bytes: Math.floor(elapsedSec * kbps * 125),
+      frames: Math.max(1, Math.floor(elapsedSec * fps)),
+      dropped: 0,
+      error: null,
+      encoder: 'VideoToolbox',
+    }
+  }
+
+  setStreaming(on: boolean): EngineStreamStats | null {
+    if (on && !this.opts.running) {
+      throw new HttpError(
+        422,
+        'studio_not_running',
+        'The Studio isn’t running.',
+        'Start the Studio first.',
+      )
+    }
+    this.streamActive = on
+    this.streamStartedAt = on ? Date.now() : 0
+    this.onStreamChange?.(on)
+    return this.currentStreamStats()
   }
 
   configure(next: Partial<DemoStudioEngineOptions>): void {
@@ -1153,6 +1267,12 @@ export class DemoStudioEngine {
     }
     if (is('POST', 'studio/engine/stop')) {
       this.opts.running = false
+      const wasStreaming = this.streamActive
+      this.streamActive = false
+      this.streamStartedAt = 0
+      this.recording = false
+      this.recordingPaused = false
+      if (wasStreaming) this.onStreamChange?.(false)
       return {
         available: true,
         running: false,
@@ -2084,7 +2204,7 @@ export class DemoStudioEngine {
           height: Number(this.studioSettingsData.height ?? CANVAS_H),
           fps: Number(this.studioSettingsData.fps ?? 60),
         },
-        stream: null,
+        stream: this.currentStreamStats(),
         record,
         scene: this.currentScene,
         history: {
@@ -2130,7 +2250,12 @@ export class DemoStudioEngine {
     if (is('GET', 'studio/engine/privacy')) return { hide_notifications: true, hide_apps: [] }
     if (is('GET', 'studio/engine/screens')) return []
     if (is('GET', 'studio/engine/missing-files')) return []
-    if (is('GET', 'studio/engine/stream')) return null
+    if (is('GET', 'studio/engine/stream')) return this.currentStreamStats()
+    if (is('POST', 'studio/engine/stream')) {
+      const b = requireObj(body)
+      if (typeof b.on !== 'boolean') throw new HttpError(400, 'invalid', 'on: true or false.')
+      return this.setStreaming(b.on)
+    }
     if (is('GET', 'studio/engine/virtualcam/setup')) return { active: false, every_app: false }
     if (is('POST', 'studio/engine/virtualcam')) {
       const b = requireObj(body)

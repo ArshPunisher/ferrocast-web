@@ -19,6 +19,7 @@ import {
   Plus,
   Plug,
   Pulse,
+  Stop,
   Trash,
   Warning,
   WarningCircle,
@@ -1537,8 +1538,13 @@ function Setup({
   onUpload: (u: UploadCheck) => void
 }) {
   const api = useGoLive()
+  const studio = useStudio()
   const { run, busy } = useAction()
   const { obs, upload } = view
+  const stopObs = () =>
+    void run('stop-obs', () => studio.setObsStream(false), {
+      success: 'OBS stopped streaming.',
+    }).then((r) => r && onObs({ ...obs, streaming: r.streaming }))
   const point = () =>
     void run('point', () => api.pointObs(), { success: 'OBS now streams to Ferrocast.' }).then(
       (o) => o && onObs(o),
@@ -1611,6 +1617,15 @@ function Setup({
                 >
                   Point OBS at Ferrocast
                 </Button>
+                {obs.connected && obs.streaming && (
+                  <Button
+                    icon={<Stop size={15} weight="fill" />}
+                    busy={busy === 'stop-obs'}
+                    onClick={stopObs}
+                  >
+                    Stop streaming in OBS
+                  </Button>
+                )}
               </div>
             </>
           )}

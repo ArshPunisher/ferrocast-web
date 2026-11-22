@@ -686,7 +686,9 @@ export class DemoEngine {
     })
     this.welcome = new DemoWelcome(this.host)
     this.studioEngine = opts.studioEngine
-      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {})
+      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {}, {
+          onStreamChange: () => this.golive.notifyStreamChange(),
+        })
       : null
     this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
       baseUrl: () => this.base,
@@ -725,6 +727,7 @@ export class DemoEngine {
       () => this.accounts,
       () => this.studio.obs.streaming,
       () => this.obs.state === 'connected',
+      () => this.studioEngine?.isStreaming() ?? false,
     )
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>

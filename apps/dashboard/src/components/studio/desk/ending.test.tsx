@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act } from 'react'
+import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { EngineStats, ShowRun } from '@ferrocast/api'
 import { useLive } from '../../../lib/store'
@@ -375,5 +375,89 @@ describe('the desk bar while the show ends', () => {
     const starts = calls.filter((c) => c[0] === 'POST' && c[1].endsWith('/show/start'))
     expect(starts).toHaveLength(1)
     expect(starts[0]?.[2]).toEqual({ force: true, stream: true })
+  })
+
+  it('Go live with a Show style immediately refreshes stats & show so the button enters LIVE countdown state', async () => {
+    const view = {
+      live: false,
+      destinations: [
+        { id: 'a', kind: 'custom', canvas: 'main', name: 'Local test', enabled: true },
+      ],
+    } as never
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const idle = { stream: null, record: null, canvas: { fps: 30 } } as unknown as EngineStats
+    const liveStats = {
+      stream: { active: true, reconnecting: false, bytes: 0, frames: 1, dropped: 0, error: null },
+      record: null,
+      canvas: { fps: 30 },
+    } as unknown as EngineStats
+    let streaming = false
+    let currentShow: ShowRun | null = null
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      calls.push([method, path, body])
+      if (path.endsWith('/show/config'))
+        return {
+          starting_scene: 'Main',
+          countdown_s: 300,
+          live_scene: null,
+          start_stream: false,
+          stop_stream: false,
+          stop_delay_s: 30,
+          discord: false,
+          ending_scene: null,
+        }
+      if (path.endsWith('/show/start')) {
+        streaming = true
+        currentShow = run({
+          phase: 'countdown',
+          countdown_ends_at: Date.now() + 300_000,
+          ended_at: null,
+          steps: [],
+        })
+        return { show: currentShow }
+      }
+      if (path.endsWith('/show')) return { show: currentShow }
+      if (path.endsWith('/studio/engine/stats')) return streaming ? liveStats : idle
+      if (path.includes('/stream-info')) return { last: null, history: [], presets: [] }
+      return []
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    function Harness() {
+      const [st, setSt] = useState<EngineStats | null>(idle)
+      const desk = {
+        stats: st,
+        setStats: setSt,
+        openSettings: vi.fn(),
+        prefs: { data: {}, reload: vi.fn() },
+        api: {
+          shelf: async () => ({ list: [], current: null }),
+          stats: async () => (streaming ? liveStats : idle),
+        },
+        library: 0,
+        refresh: vi.fn(),
+      } as unknown as Desk
+      return (
+        <DeskProvider value={desk}>
+          <DockWorkspace
+            top={<ControlBar view={view} onStatus={vi.fn()} />}
+            stage={<div />}
+            docks={() => null}
+          />
+        </DeskProvider>
+      )
+    }
+    const el = document.body.appendChild(document.createElement('div'))
+    root = createRoot(el)
+    await act(async () => root!.render(<Harness />))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    await act(async () => button('Go live')!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const liveBtn = button(/^LIVE/)
+    expect(liveBtn).toBeTruthy()
+    expect(liveBtn?.querySelector('[data-countdown]')).toBeTruthy()
   })
 })

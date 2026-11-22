@@ -140,7 +140,12 @@ export class DemoGoLive {
     private readonly accounts: () => Account[],
     private readonly obsStreaming: () => boolean,
     private readonly obsConnected: () => boolean,
+    private readonly studioStreaming: () => boolean = () => false,
   ) {}
+
+  notifyStreamChange(): void {
+    this.tick()
+  }
 
   setup(s: DemoGoLiveSetup): void {
     if (s.upload_kbps !== undefined) this.uploadKbps = s.upload_kbps
@@ -171,7 +176,7 @@ export class DemoGoLive {
   }
 
   private live(): boolean {
-    return this.pointsHere && this.obsStreaming()
+    return (this.pointsHere && this.obsStreaming()) || this.studioStreaming()
   }
 
   private verticalLive(): boolean {
