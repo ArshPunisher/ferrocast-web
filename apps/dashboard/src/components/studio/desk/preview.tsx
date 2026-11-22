@@ -1540,7 +1540,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     setHints({
       owner: ref.current,
       guides: guidesFor(r, targets, canvas, snapOpts),
-      gaps: gapsFor(r, targets),
+      // The distances are to other sources: with snapping to sources off there are none.
+      gaps: snapOpts.others ? gapsFor(r, targets) : [],
       marquee: null,
     })
   }

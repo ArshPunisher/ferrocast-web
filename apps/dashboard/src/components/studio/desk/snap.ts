@@ -147,12 +147,18 @@ export function guidesFor(
   o: GuideOpts,
 ): Guide[] {
   const out: Guide[] = []
-  // The same line met twice (two boxes on one edge) is one line, long enough to reach both.
+  // The same line met twice (two boxes on one edge, a source on the canvas's edge or middle) is
+  // one line, long enough to reach both; the canvas's own line is what it is called then.
+  const rank = { canvas: 0, centre: 1, item: 2 } as const
   const add = (g: Guide) => {
-    const same = out.find((x) => x.axis === g.axis && x.at === g.at && x.kind === g.kind)
+    const same = out.find((x) => x.axis === g.axis && Math.abs(x.at - g.at) <= SAME)
     if (!same) return void out.push(g)
     same.from = Math.min(same.from, g.from)
     same.to = Math.max(same.to, g.to)
+    if (rank[g.kind] < rank[same.kind]) {
+      same.kind = g.kind
+      same.at = g.at
+    }
   }
   const mine = {
     x: [r.left, (r.left + r.right) / 2, r.right],
@@ -253,7 +259,8 @@ export function gapsFor(r: Rect, targets: Frame[]): Gap[] {
       at: mid(r.left, r.right, below.left, below.right),
       px: below.top - r.bottom,
     })
-  return out
+  // Boxes that touch have no gap to say (a '0' label sits on the snap line).
+  return out.filter((g) => g.px >= 0.5)
 }
 
 /** A source the toolbar and the menu can arrange. */
@@ -310,19 +317,30 @@ export function distributeDeltas(items: Arrangeable[], axis: 'x' | 'y'): Delta[]
     return axis === 'x' ? { lo: r.left, hi: r.right } : { lo: r.top, hi: r.bottom }
   }
   const sorted = [...items].sort((a, b) => side(a).lo + side(a).hi - (side(b).lo + side(b).hi))
-  const first = side(sorted[0]!)
-  const last = side(sorted[sorted.length - 1]!)
-  const total = sorted.reduce((n, i) => n + (side(i).hi - side(i).lo), 0)
-  const gap = (last.hi - first.lo - total) / (sorted.length - 1)
+  // The first and the last stay, and so does any locked one: each is a fixed end of the stretch
+  // of movable ones between it and the next, and a stretch is spaced evenly by itself.
+  const fixed = (i: number) => i === 0 || i === sorted.length - 1 || sorted[i]!.locked
   const out: Delta[] = []
-  let cursor = first.lo
-  for (const it of sorted) {
-    const s = side(it)
-    const move = cursor - s.lo
-    if (!it.locked && Math.abs(move) > 1e-9) {
-      out.push(axis === 'x' ? { id: it.id, dx: move, dy: 0 } : { id: it.id, dx: 0, dy: move })
+  let from = 0
+  for (let i = 1; i < sorted.length; i++) {
+    if (!fixed(i)) continue
+    const run = sorted.slice(from + 1, i)
+    if (run.length > 0) {
+      const a = side(sorted[from]!)
+      const b = side(sorted[i]!)
+      const total = run.reduce((n, it) => n + (side(it).hi - side(it).lo), 0)
+      const gap = (b.lo - a.hi - total) / (run.length + 1)
+      let cursor = a.hi + gap
+      for (const it of run) {
+        const s = side(it)
+        const move = cursor - s.lo
+        if (Math.abs(move) > 1e-9) {
+          out.push(axis === 'x' ? { id: it.id, dx: move, dy: 0 } : { id: it.id, dx: 0, dy: move })
+        }
+        cursor += s.hi - s.lo + gap
+      }
     }
-    cursor += s.hi - s.lo + gap
+    from = i
   }
   return out
 }
@@ -355,8 +373,9 @@ const LEAST = 4
 export function scaleGroup(items: Arrangeable[], from: Rect, to: Rect): BoxFor[] {
   const fw = from.right - from.left
   const fh = from.bottom - from.top
-  const sx = fw > 1e-9 ? (to.right - to.left) / fw : 1
-  const sy = fh > 1e-9 ? (to.bottom - to.top) / fh : 1
+  // Never negative: a box dragged inside out is as small as it can be, not a mirror image.
+  const sx = fw > 1e-9 ? Math.max(0, (to.right - to.left) / fw) : 1
+  const sy = fh > 1e-9 ? Math.max(0, (to.bottom - to.top) / fh) : 1
   const out: BoxFor[] = []
   for (const it of items) {
     if (it.locked) continue

@@ -149,7 +149,7 @@ export function SnapOverlay({
               }
         return (
           <span
-            key={`${g.axis}${g.at}${g.kind}`}
+            key={`${g.axis}-${g.at}-${g.from}-${g.to}`}
             data-over-preview
             data-guide-hole
             data-snap-guide={g.axis}
@@ -180,7 +180,7 @@ export function SnapOverlay({
           ? { left: pct((g.from + g.to) / 2, W), top: pct(g.at, H) }
           : { left: pct(g.at, W), top: pct((g.from + g.to) / 2, H) }
         return (
-          <span key={`gap-${g.axis}-${g.from}`}>
+          <span key={`gap-${g.axis}-${g.from}-${g.to}-${g.at}`}>
             <span
               data-over-preview
               data-guide-hole

@@ -447,3 +447,53 @@ describe('what is still waiting to be sent', () => {
     expect([...queuedIds(next)].sort()).toEqual([1, 2, 5])
   })
 })
+
+describe('review fixes: guides, gaps, spacing, sizing', () => {
+  const opts = { screen: true, centre: true, others: true }
+  it('one guide where a canvas line and a source line coincide, or two sources differ by a hair', () => {
+    const edge = box(0, 300, 80, 50)
+    const g = guidesFor(rectOf(box(0, 100, 50, 50)), [edge], canvas, opts).filter(
+      (l) => l.axis === 'x',
+    )
+    expect(g.filter((l) => Math.abs(l.at) < 0.5).length).toBe(1)
+    expect(g.find((l) => Math.abs(l.at) < 0.5)?.kind).toBe('canvas') // the canvas's own line wins
+    const a = box(500, 0, 50, 50)
+    const b = box(500.2, 200, 50, 50)
+    const two = guidesFor(rectOf(box(500, 100, 40, 40)), [a, b], canvas, opts).filter(
+      (l) => l.axis === 'x' && Math.abs(l.at - 500) < 1,
+    )
+    expect(two.length).toBe(1)
+  })
+  it('no gap line or "0" label where two boxes touch', () => {
+    expect(gapsFor(rectOf(box(100, 0, 50, 50)), [box(0, 0, 100, 50)])).toEqual([])
+    expect(gapsFor(rectOf(box(100, 0, 50, 50)), [box(0, 0, 99, 50)]).length).toBe(1)
+  })
+  it('spaces out around a locked one, which stays and is a fixed end of its stretch', () => {
+    const mk = (id: number, x: number, locked = false) => ({
+      id,
+      frame: box(x, 0, 100, 10),
+      locked,
+    })
+    // 4 items, #2 locked in the middle: #3 spaces between #2 and #4, #1..#2 has nothing between.
+    const d = distributeDeltas([mk(1, 0), mk(2, 150, true), mk(3, 200), mk(4, 700)], 'x')
+    expect(d.map((x) => x.id)).toEqual([3]) // the locked one isn't moved; #1 and #4 are ends
+    const only = d[0]!
+    // between #2 (150-250) and #4 (700-800): gap = (700 - 250 - 100) / 2 = 175, so #3 starts at 425
+    expect(only.dx).toBeCloseTo(425 - 200, 6)
+  })
+  it('never mirrors a group dragged inside out', () => {
+    const items = [{ id: 1, frame: box(100, 100, 100, 100), locked: false }]
+    const out = scaleGroup(
+      items,
+      { left: 100, top: 100, right: 200, bottom: 200 },
+      {
+        left: 300,
+        top: 100,
+        right: 250,
+        bottom: 200,
+      },
+    )
+    expect(out[0]!.w).toBeGreaterThanOrEqual(4)
+    expect(out[0]!.x).toBeGreaterThanOrEqual(240) // not mirrored across the group's left
+  })
+})
