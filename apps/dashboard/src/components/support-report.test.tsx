@@ -242,4 +242,40 @@ describe('SupportReportSection (#7)', () => {
       'Folder cannot be written.',
     )
   })
+
+  it('shows the refreshed diagnostics after a desktop save, keeping the saved archive line', async () => {
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { desktop: true }
+    const changed: SupportReport = {
+      ...sampleReport,
+      likely_causes: [
+        {
+          severity: 'critical',
+          code: 'disk_low',
+          title: 'Disk space is nearly full',
+          detail: '1 GB free',
+          recommendation: 'Free some space.',
+        },
+      ],
+    }
+    const diagnosticsPreview = vi.fn(async () => sampleReport)
+    const { el } = await mount({ diagnosticsPreview })
+    const press = async (label: string) => {
+      const b = Array.from(el.querySelectorAll('button')).find((x) =>
+        x.textContent?.includes(label),
+      )!
+      await act(async () => {
+        b.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+    await press('Create support report')
+    expect(el.textContent).toContain('Audio device sample rate differs')
+    diagnosticsPreview.mockImplementation(async () => changed)
+    await press('Refresh')
+    expect(el.textContent).toContain('Disk space is nearly full')
+    expect(el.querySelector('[data-testid="support-report-saved"]')?.textContent).toContain(
+      'ferrocast-support-demo.zip',
+    )
+  })
 })

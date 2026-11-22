@@ -83,6 +83,8 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
   const preview = useResource((c) => c.diagnosticsPreview(), [], { enabled: !compact })
   const [busyAction, setBusyAction] = useState<'save' | 'download' | null>(null)
   const [saved, setSaved] = useState<WrittenSupportReport | null>(null)
+  // The report of the last save is what was written; a Refresh asks for what is true now.
+  const [showSaved, setShowSaved] = useState(true)
   const [downloaded, setDownloaded] = useState<string | null>(null)
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
 
@@ -98,6 +100,7 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
           return
         }
         setSaved(res)
+        setShowSaved(true)
         setDownloaded(null)
         toast({
           tone: 'ok',
@@ -123,7 +126,8 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
     }
   }
 
-  const report: SupportReport | null = saved?.report ?? preview.data ?? null
+  const report: SupportReport | null =
+    (showSaved ? saved?.report : undefined) ?? preview.data ?? saved?.report ?? null
 
   return (
     <div id="support" className="scroll-mt-8">
@@ -208,7 +212,10 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
                 <ReportSummaryCard
                   report={report}
                   refreshing={preview.loading}
-                  onRefresh={preview.reload}
+                  onRefresh={() => {
+                    setShowSaved(false)
+                    preview.reload()
+                  }}
                 />
               )}
               <p className="m-0 text-[13px] text-text-3">
