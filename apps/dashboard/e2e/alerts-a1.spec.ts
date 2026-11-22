@@ -26,10 +26,12 @@ for (const [width, height] of [
         ih: window.innerHeight,
       }))
       expect(m.sh).toBeLessThanOrEqual(m.ih)
-      // The top bar: Back, the name, Alert designs, Discard, Save, Test on stream.
+      // The top bar: the name, Alert designs, Discard, Save, Test on stream (no Back: the
+      // sidebar is the way out, and it is still there beside the editor).
       await expect(
         page.getByTestId('alert-editor').getByRole('button', { name: 'Back', exact: true }),
-      ).toBeVisible()
+      ).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /the menu$/ })).toBeVisible()
       await expect(page.getByLabel('Rule name')).toHaveValue('Follows')
       await expect(page.getByRole('link', { name: /Alert design/ })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Discard' })).toBeDisabled()

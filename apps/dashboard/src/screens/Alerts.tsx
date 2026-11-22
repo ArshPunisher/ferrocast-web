@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowCounterClockwise,
-  ArrowLeft,
   Bell,
   ChatCircleText,
   Diamond,
@@ -70,6 +69,8 @@ import { AlertTimeline } from '../components/alerts/AlertTimeline'
 import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
 import { PlatformTestBar } from '../components/alerts/PlatformTestBar'
 import { PropertyGroup } from '../components/alerts/PropertyGroup'
+import { DockHandle, useDockWidth } from '../components/alerts/DockHandle'
+import { LEFT_DOCK, RIGHT_DOCK } from '../lib/dock-size'
 import { TokenChipField, tokensForAlert } from '../components/alerts/TokenChipField'
 import { VariationCards } from '../components/alerts/VariationCards'
 import { useAction, useClient, useResource } from '../lib/hooks'
@@ -630,6 +631,8 @@ function RuleEditor({
   const { run, busy } = useAction()
   const [draft, setDraft] = useState(rule)
   const [vi, setVi] = useState(0)
+  const leftDock = useDockWidth(LEFT_DOCK)
+  const rightDock = useDockWidth(RIGHT_DOCK)
   const [previewPlatform, setPreviewPlatform] = useState<Platform>(() =>
     rule.kinds[0] === 'tip' ? 'tips' : (platformsFor(rule.kinds[0] ?? 'follow')[0] ?? 'twitch'),
   )
@@ -752,23 +755,16 @@ function RuleEditor({
   const kindPlatformsShown = (
     kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms
   ) as Platform[]
-  const back = () => {
-    if (window.history.length > 1) window.history.back()
-    else window.location.hash = '#/home'
-  }
   const banner = saveError ?? (dirty && error ? { message: error } : null)
 
   return (
     <div
       data-testid="alert-editor"
-      className="fc-editor flex min-h-0 flex-col bg-bg lg:fixed lg:inset-0 lg:z-40"
+      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px))] lg:overflow-hidden"
     >
       {/* Top bar: where I am, what is unsaved, and the ways out. */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">
         <h1 className="sr-only">Alerts</h1>
-        <Button size="sm" variant="ghost" icon={<ArrowLeft size={16} />} onClick={back}>
-          Back
-        </Button>
         <label htmlFor="rule-name" className="sr-only">
           Rule name
         </label>
@@ -892,26 +888,41 @@ function RuleEditor({
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Left dock: the alert rules, and this rule's looks. */}
-        <aside
-          aria-label="Alert rules and looks"
-          className="fc-scroll order-2 flex min-w-0 flex-col gap-3 border-b border-line bg-surface-1 p-3 lg:order-none lg:w-[222px] lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0 xl:w-[248px]"
+        <div
+          className="relative order-2 min-w-0 lg:order-none lg:w-[var(--dock-l)] lg:shrink-0"
+          style={{ '--dock-l': `${leftDock.width}px` } as React.CSSProperties}
         >
-          <RuleList list={rules} selectedId={rule.id} />
-          <div className="border-t border-line pt-3">
-            <VariationCards
-              compact
-              variations={draft.variations}
-              selectedIndex={vi}
-              onSelect={setVi}
-              onAdd={addVariation}
-              onDelete={(idx) => {
-                if (draft.variations[idx]?.condition === null) return
-                setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== idx) })
-                setVi((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur))
-              }}
-            />
-          </div>
-        </aside>
+          <aside
+            aria-label="Alert rules and looks"
+            className="fc-scroll flex min-w-0 flex-col gap-3 border-b border-line bg-surface-1 p-3 lg:h-full lg:overflow-y-auto lg:border-r lg:border-b-0"
+          >
+            <RuleList list={rules} selectedId={rule.id} />
+            <div className="border-t border-line pt-3">
+              <VariationCards
+                compact
+                variations={draft.variations}
+                selectedIndex={vi}
+                onSelect={setVi}
+                onAdd={addVariation}
+                onDelete={(idx) => {
+                  if (draft.variations[idx]?.condition === null) return
+                  setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== idx) })
+                  setVi((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur))
+                }}
+              />
+            </div>
+          </aside>
+          <DockHandle
+            spec={LEFT_DOCK}
+            label="Resize the alert rules dock"
+            width={leftDock.width}
+            otherWidth={rightDock.width}
+            growsRight={1}
+            onResize={leftDock.set}
+            onReset={leftDock.reset}
+            className="-right-1.5"
+          />
+        </div>
 
         {/* Centre: the live stage and, right under it, the timeline. */}
         <section
@@ -989,43 +1000,60 @@ function RuleEditor({
         </section>
 
         {/* Right dock: collapsible property groups for the look picked on the left. */}
-        <aside
-          aria-label="Look properties"
-          className="fc-scroll order-3 flex min-w-0 flex-col gap-2.5 border-t border-line bg-surface-1 p-3 lg:order-none lg:w-[312px] lg:shrink-0 lg:overflow-y-auto lg:border-t-0 lg:border-l xl:w-[356px]"
+        <div
+          className="relative order-3 min-w-0 lg:order-none lg:w-[var(--dock-r)] lg:shrink-0"
+          style={{ '--dock-r': `${rightDock.width}px` } as React.CSSProperties}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-line pb-2.5">
-            <Switch
-              checked={draft.interrupt}
-              onChange={(interrupt) => setDraft({ ...draft, interrupt })}
-              label="Interrupt the alert on screen"
-              description="A new one replaces the alert playing now instead of waiting. While alerts are paused it waits."
-            />
-          </div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={v.id}
-              role="tabpanel"
-              aria-label={v.condition === null ? 'Default look' : v.name || 'Untitled look'}
-              initial={reduce ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4, transition: { duration: 0.1 } }}
-              transition={{ duration: 0.18 }}
-            >
-              <VariationEditor
-                v={v}
-                isDefault={v.condition === null}
-                media={media}
-                event={event}
-                onChange={setV}
-                onUploaded={onUploaded}
-                onDelete={() => {
-                  setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== vi) })
-                  setVi(0)
-                }}
+          <DockHandle
+            spec={RIGHT_DOCK}
+            label="Resize the properties dock"
+            width={rightDock.width}
+            otherWidth={leftDock.width}
+            growsRight={-1}
+            onResize={rightDock.set}
+            onReset={rightDock.reset}
+            className="-left-1.5"
+          />
+          <aside
+            aria-label="Look properties"
+            className="fc-scroll flex min-w-0 flex-col gap-2.5 border-t border-line bg-surface-1 p-3 lg:h-full lg:overflow-y-auto lg:border-t-0 lg:border-l"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-2.5">
+              <Switch
+                checked={draft.interrupt}
+                onChange={(interrupt) => setDraft({ ...draft, interrupt })}
+                label="Interrupt the alert on screen"
+                description="A new one replaces the alert playing now instead of waiting. While alerts are paused it waits."
               />
-            </motion.div>
-          </AnimatePresence>
-        </aside>
+            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={v.id}
+                role="tabpanel"
+                aria-label={v.condition === null ? 'Default look' : v.name || 'Untitled look'}
+                initial={reduce ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={
+                  reduce ? { opacity: 0 } : { opacity: 0, y: -4, transition: { duration: 0.1 } }
+                }
+                transition={{ duration: 0.18 }}
+              >
+                <VariationEditor
+                  v={v}
+                  isDefault={v.condition === null}
+                  media={media}
+                  event={event}
+                  onChange={setV}
+                  onUploaded={onUploaded}
+                  onDelete={() => {
+                    setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== vi) })
+                    setVi(0)
+                  }}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </aside>
+        </div>
       </div>
     </div>
   )
@@ -1142,14 +1170,6 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
   if (inEditor && selected)
     return (
       <>
-        {queue?.paused && (
-          <p
-            role="status"
-            className="fixed top-14 right-4 z-[45] rounded-control border border-warn/30 bg-warn-soft px-3 py-1.5 text-[14px] font-medium text-warn max-lg:static max-lg:m-3"
-          >
-            Alerts are paused. Resume them from Home.
-          </p>
-        )}
         <RuleEditor
           rule={selected}
           rules={list}
@@ -1158,14 +1178,26 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           onSaved={(r) => rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))}
           onToggle={(on) => toggle(selected, on)}
           notice={
-            restoreLeft > 0 ? (
-              <p className="flex flex-wrap items-center gap-3 border-b border-warn/30 bg-warn-soft px-4 py-2 text-[14.5px] font-medium text-warn">
-                {restoreLeft} starter {restoreLeft === 1 ? 'rule' : 'rules'} couldn&apos;t be
-                restored.
-                <Button size="sm" busy={busy === 'restore'} onClick={restoreDefaults}>
-                  Restore the rest
-                </Button>
-              </p>
+            queue?.paused || restoreLeft > 0 ? (
+              <>
+                {queue?.paused && (
+                  <p
+                    role="status"
+                    className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-[14.5px] font-medium text-warn"
+                  >
+                    Alerts are paused. Resume them from Home.
+                  </p>
+                )}
+                {restoreLeft > 0 && (
+                  <p className="flex flex-wrap items-center gap-3 border-b border-warn/30 bg-warn-soft px-4 py-2 text-[14.5px] font-medium text-warn">
+                    {restoreLeft} starter {restoreLeft === 1 ? 'rule' : 'rules'} couldn&apos;t be
+                    restored.
+                    <Button size="sm" busy={busy === 'restore'} onClick={restoreDefaults}>
+                      Restore the rest
+                    </Button>
+                  </p>
+                )}
+              </>
             ) : null
           }
         />

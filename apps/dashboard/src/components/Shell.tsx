@@ -36,6 +36,14 @@ import {
 import type { ThemePref } from '@ferrocast/api'
 import { href, useRoute, type Route } from '../lib/router'
 import {
+  enterFolding,
+  initialNav,
+  isFolded,
+  leaveFolding,
+  toggleNav,
+  type NavState,
+} from '../lib/nav-fold'
+import {
   applyThemePref,
   counterpart,
   kindOf,
@@ -286,14 +294,32 @@ const NAV_KEY = 'fc-nav-folded'
  * "A joined", 10 Nov); remembered on this computer. Folded by default: the Studio gets the
  * room. Its width is `--fc-nav-w` on the page, for the content and the Studio's status bar.
  */
-function useNavFold(): [boolean, () => void] {
-  const [folded, setFolded] = useState(() => {
+function useNavFold(folding: boolean): [boolean, () => void] {
+  const [nav, setNav] = useState<NavState>(() => {
     try {
-      return localStorage.getItem(NAV_KEY) !== '0'
+      return initialNav(localStorage.getItem(NAV_KEY) !== '0')
     } catch {
-      return true
+      return initialNav(true)
     }
   })
+  // A screen that folds the sidebar for room (Alerts): folded on arriving, the person's own
+  // choice back on leaving (see lib/nav-fold.ts).
+  useLayoutEffect(() => {
+    setNav((s) => (folding ? enterFolding(s) : leaveFolding(s)))
+  }, [folding])
+  const view = folding ? enterFolding(nav) : nav
+  const folded = isFolded(view)
+  // The choice is saved only when it changes (never from the folding screen).
+  const savedPref = useRef(nav.pref)
+  useEffect(() => {
+    if (savedPref.current === nav.pref) return
+    savedPref.current = nav.pref
+    try {
+      localStorage.setItem(NAV_KEY, nav.pref ? '1' : '0')
+    } catch {
+      // Private windows: it still folds, just isn't remembered.
+    }
+  }, [nav.pref])
   // Before paint, so the Studio's status bar never starts at the other width.
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -302,15 +328,7 @@ function useNavFold(): [boolean, () => void] {
       root.style.removeProperty('--fc-nav-w')
     }
   }, [folded])
-  const flip = () =>
-    setFolded((f) => {
-      try {
-        localStorage.setItem(NAV_KEY, f ? '0' : '1')
-      } catch {
-        // Private windows: it still folds, just isn't remembered.
-      }
-      return !f
-    })
+  const flip = () => setNav((s) => toggleNav(folding ? enterFolding(s) : s))
   return [folded, flip]
 }
 
@@ -401,7 +419,8 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
   const flush = useIsFlush()
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleTheme } = useTheme()
   const [more, setMore] = useState(false)
-  const [folded, flipNav] = useNavFold()
+  const alerts = route.name === 'alerts'
+  const [folded, flipNav] = useNavFold(alerts)
   const studio = route.name === 'studio'
   const notices = useLive((s) => s.notices)
   const safeMode = useLive((s) => s.status?.safe_mode ?? null)
@@ -670,11 +689,13 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
             // Full-width screens (the Studio's desk and Chat+Events fill the window).
             studio && wide
               ? 'max-w-none lg:px-3 lg:pt-2 lg:pb-[calc(0.5rem+var(--fc-statusbar,0px))]'
-              : flush && wide
-                ? 'max-w-none lg:px-3.5 lg:pt-3 lg:pb-[calc(0.75rem+var(--fc-statusbar,0px))]'
-                : wide
-                  ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
-                  : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
+              : alerts
+                ? 'max-w-none lg:p-0'
+                : flush && wide
+                  ? 'max-w-none lg:px-3.5 lg:pt-3 lg:pb-[calc(0.75rem+var(--fc-statusbar,0px))]'
+                  : wide
+                    ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
+                    : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
           )}
         >
           {children}
