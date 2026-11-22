@@ -2,7 +2,7 @@
 // same routes, 400 field errors, scheduled broadcasts only where a platform has them (YouTube,
 // Facebook, when connected), one reminder before the start, and never a go-live.
 
-import { SCHEDULE_PLATFORMS, scheduleStartLabel } from '../../schedule'
+import { SCHEDULE_PLATFORMS } from '../../schedule'
 import type { NewScheduledStream, PlatformBroadcast, ScheduledStream } from '../../schedule'
 import type { SchedulePlatform } from '../../schedule'
 import { HttpError } from '../http-error'
@@ -15,6 +15,14 @@ const LABEL: Record<SchedulePlatform, string> = {
   kick: 'Kick',
   facebook: 'Facebook',
 }
+/** A plan this long past its start is dropped (the engine's `KEEP_AFTER_START_MS`). */
+const KEEP_AFTER_START_MS = 24 * 3_600_000
+/** Past this long after its start a reminder is not said any more. */
+const STALE_REMINDER_MS = 30 * 60_000
+/** A plan can start at most this far ahead. */
+const MAX_AHEAD_MS = 366 * 24 * 3_600_000
+/** A title is at most this long (Twitch's limit). */
+const MAX_TITLE = 140
 /** `setTimeout` can't wait longer than this. */
 const MAX_DELAY = 2_000_000_000
 
@@ -29,8 +37,11 @@ export class DemoSchedule implements DemoFeature {
 
   route(method: string, seg: string[], body: unknown): Routed {
     if (seg[0] !== 'schedule') return NOT_MINE
-    if (seg.length === 1 && method === 'GET')
+    if (seg.length === 1 && method === 'GET') {
+      // Old plans go when the list is read, as the engine's tick drops them.
+      this.plans = this.plans.filter((p) => Date.now() < p.start_ms + KEEP_AFTER_START_MS)
       return { streams: clone([...this.plans].sort((a, b) => a.start_ms - b.start_ms)) }
+    }
     if (seg.length === 1 && method === 'POST') return this.create(body)
     if (seg.length === 2 && method === 'DELETE') {
       const before = this.plans.length
@@ -45,8 +56,10 @@ export class DemoSchedule implements DemoFeature {
   private create(body: unknown): ScheduledStream {
     const b = requireObj(body) as Partial<NewScheduledStream> & Record<string, unknown>
     const start = typeof b.start_ms === 'number' ? b.start_ms : 0
-    if (start <= Date.now())
+    if (!Number.isFinite(start) || start <= Date.now())
       throw new HttpError(400, 'invalid', 'start: pick a time in the future.')
+    if (start > Date.now() + MAX_AHEAD_MS)
+      throw new HttpError(400, 'invalid', 'start: at most a year ahead.')
     const platforms = Array.isArray(b.platforms) ? b.platforms : []
     if (
       platforms.length === 0 ||
@@ -61,8 +74,17 @@ export class DemoSchedule implements DemoFeature {
     if (!Number.isInteger(remind) || remind < 1 || remind > 1440)
       throw new HttpError(400, 'invalid', 'remind_minutes: 1 to 1440.')
     const info = requireObj(b.info ?? {})
-    const title = typeof info.title === 'string' ? info.title.trim() : ''
+    // As the engine: control characters become spaces, then it is trimmed.
+    // eslint-disable-next-line no-control-regex
+    const title =
+      typeof info.title === 'string' ? info.title.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : ''
     if (!title) throw new HttpError(400, 'invalid', 'title: give the stream a title.')
+    if ([...title].length > MAX_TITLE)
+      throw new HttpError(
+        400,
+        'invalid',
+        `title: ${MAX_TITLE} characters at most (Twitch’s limit).`,
+      )
     if (this.plans.length >= MAX_PLANS)
       throw new HttpError(
         409,
@@ -112,14 +134,19 @@ export class DemoSchedule implements DemoFeature {
     const plan = this.plans.find((p) => p.id === id)
     if (!plan || plan.reminded) return
     plan.reminded = true
+    const now = Date.now()
+    // Long past the start (the computer slept): marked done, nothing said (as the engine).
+    if (now > plan.start_ms + STALE_REMINDER_MS) return
+    const title = plan.info.title ?? ''
+    const mins = Math.ceil((plan.start_ms - now) / 60_000)
+    const message =
+      now >= plan.start_ms
+        ? `Time to stream: "${title}" was planned for now.`
+        : `"${title}" starts in ${mins} minute${mins === 1 ? '' : 's'}.`
     this.host.broadcastLive({
       v: 1,
       type: 'notice',
-      data: {
-        key: `schedule:${id}`,
-        level: 'info',
-        message: `“${plan.info.title ?? ''}” starts ${scheduleStartLabel(plan.start_ms, Date.now())}.`,
-      },
+      data: { key: `schedule:${id}`, level: 'info', message },
     })
   }
 }

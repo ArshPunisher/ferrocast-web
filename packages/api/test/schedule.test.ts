@@ -4,6 +4,7 @@ import { goliveApi } from '../src/golive'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
+import { DemoSchedule } from '../src/demo/features/schedule'
 
 function demo() {
   const engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
@@ -114,5 +115,113 @@ describe('pasted servers for X, Instagram and Facebook', () => {
       golive.addCustom('T', 'rtmp://a.example/live', 'k', 'main', 'tiktok' as never),
     )
     expect(err.message).toMatch(/^brand/)
+  })
+})
+
+describe('the demo schedule is the engine’s', () => {
+  it('refuses a start that is not a sane time, a long title, and tidies control characters', async () => {
+    const { api } = demo()
+    for (const start_ms of [1e20, Date.now() + 367 * 24 * HOUR]) {
+      const e = await refusal(api.create({ info: { title: 'x' }, platforms: ['twitch'], start_ms }))
+      expect(e.message, String(start_ms)).toMatch(/^start/)
+    }
+    const long = await refusal(
+      api.create({
+        info: { title: 'x'.repeat(141) },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      }),
+    )
+    expect(long.message).toMatch(/^title.*140/)
+    const tidy = await api.create({
+      info: { title: '  Hello\u0007World\n ' },
+      platforms: ['twitch'],
+      start_ms: Date.now() + HOUR,
+    })
+    expect(tidy.info.title).toBe('Hello World')
+  })
+
+  function direct(connected = false) {
+    const later: { fn: () => void; ms: number }[] = []
+    const frames: { data: { message: string } }[] = []
+    const s = new DemoSchedule(
+      {
+        later: (fn: () => void, ms: number) => later.push({ fn, ms }),
+        broadcastLive: (f: unknown) => frames.push(f as { data: { message: string } }),
+      },
+      () => connected,
+    )
+    const call = (m: string, seg: string[], body?: unknown) => s.route(m, seg, body) as never
+    return { later, frames, call }
+  }
+
+  it('says its reminder in the engine’s words', () => {
+    const { later, frames, call } = direct()
+    call('POST', ['schedule'], {
+      info: { title: 'Friday' },
+      platforms: ['twitch'],
+      start_ms: Date.now() + 2 * HOUR,
+      remind_minutes: 10,
+    })
+    const realNow = Date.now
+    const start = Date.now() + 2 * HOUR
+    // The reminder fires 10 minutes before the start.
+    Date.now = () => start - 10 * 60_000
+    try {
+      later[0]!.fn()
+    } finally {
+      Date.now = realNow
+    }
+    expect(frames[0]!.data.message).toBe('"Friday" starts in 10 minutes.')
+  })
+
+  it('drops a plan a day past its start when the list is read', () => {
+    const { call } = direct()
+    const made = call('POST', ['schedule'], {
+      info: { title: 'Old' },
+      platforms: ['twitch'],
+      start_ms: Date.now() + HOUR,
+    }) as { start_ms: number }
+    expect((call('GET', ['schedule']) as { streams: unknown[] }).streams).toHaveLength(1)
+    const realNow = Date.now
+    Date.now = () => made.start_ms + 25 * HOUR
+    try {
+      expect((call('GET', ['schedule']) as { streams: unknown[] }).streams).toHaveLength(0)
+    } finally {
+      Date.now = realNow
+    }
+  })
+
+  it('checks the 50-plan limit before it builds anything', () => {
+    const { call } = direct()
+    for (let i = 0; i < 50; i++)
+      call('POST', ['schedule'], {
+        info: { title: `S${i}` },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      })
+    expect(() =>
+      call('POST', ['schedule'], {
+        info: { title: 'one more' },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      }),
+    ).toThrow(/50/)
+  })
+})
+
+describe('connecting a platform again', () => {
+  it('signs in again, as the engine does, instead of refusing', async () => {
+    const { engine } = demo()
+    const post = () =>
+      engine.fetch(`${engine.base}/api/v1/accounts/facebook/connect`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${DEMO_TOKEN}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+    expect((await post()).status).toBe(200)
+    // Let the demo sign-in finish, so the platform shows connected, then connect once more.
+    await new Promise((r) => setTimeout(r, 2700))
+    expect((await post()).status).toBe(200)
   })
 })
