@@ -740,7 +740,7 @@ export function ImportStep({
                               <li key={`${item.kind}-${idx}`} className="break-words">
                                 <span className="mr-1.5 inline-block rounded bg-surface-3 px-1.5 py-px text-[11px] font-semibold text-text">
                                   {SKIP_CATEGORY_LABEL[item.category] ?? 'Item'}
-                                </span>
+                                </span>{' '}
                                 <span className="font-medium text-text">{item.name}</span>:{' '}
                                 {item.reason}
                               </li>

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { FerroClient } from '@ferrocast/api'
 import { DEMO_TOKEN, DemoEngine, type DemoOptions } from '@ferrocast/api/demo'
 import { currentToasts, dismissToast } from '@ferrocast/ui'
+import { THEME_EVENT } from '../components/Shell'
 import { useLive } from '../lib/store'
 import { Onboarding } from './Onboarding'
 
@@ -241,5 +242,24 @@ describe('Onboarding first-run import and camera/mic check', () => {
       4000,
       () => host.textContent ?? '',
     )
+  })
+
+  it('updates SparkField to light palette on contrast theme change and separates skipped badges with spaces', async () => {
+    const { host } = await mountOnboarding({ studioEngine: true })
+    await act(async () => clickRadio(host, 'Import from OBS Studio'))
+    await waitFor(() => host.textContent?.includes('Uses NDI') ?? false)
+
+    const skippedTexts = [...host.querySelectorAll('li')].map((li) => li.textContent ?? '')
+    expect(skippedTexts.some((t) => /Source\s+NDI Studio Cam|Plugin\s+|Filter\s+/.test(t))).toBe(
+      true,
+    )
+
+    await act(async () => {
+      document.documentElement.dataset.theme = 'contrast'
+      window.dispatchEvent(new Event(THEME_EVENT))
+    })
+    const sparkCanvas = host.querySelector('canvas')
+    expect(sparkCanvas?.getAttribute('data-tone')).toBe('light')
+    delete document.documentElement.dataset.theme
   })
 })

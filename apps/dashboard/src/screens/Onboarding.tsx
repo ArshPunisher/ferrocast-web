@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react'
 import { studioEngineApi } from '@ferrocast/api'
 import { Button, SparkField, Wordmark, cx } from '@ferrocast/ui'
+import { THEME_EVENT } from '../components/Shell'
 import { AccountRow, useConnect } from '../components/accounts'
 import { ChoiceCard } from '../components/onboarding/ChoiceCard'
 import {
@@ -62,9 +63,27 @@ function bgHex(): string {
 }
 
 // a light page background means the light theme
+const LIGHT_THEMES = new Set(['daylight', 'mist', 'linen', 'contrast', 'light'])
+const DARK_THEMES = new Set([
+  'graphite',
+  'slate',
+  'moonlight',
+  'forest',
+  'ember',
+  'obsidian',
+  'dark',
+])
+
 const isLight = (hex: string) => {
   const n = parseInt(hex.slice(1), 16)
   return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114 > 140
+}
+
+function isThemeLight(): boolean {
+  const theme = document.documentElement.dataset.theme
+  if (theme && LIGHT_THEMES.has(theme)) return true
+  if (theme && DARK_THEMES.has(theme)) return false
+  return isLight(bgHex())
 }
 
 export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void }) {
@@ -77,7 +96,24 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
   const overlays = useResource((c) => c.overlays())
   const { run, busy: saving } = useAction()
   const engine = useMemo(() => studioEngineApi(client), [client])
-  const bg = useMemo(bgHex, [])
+  const [lightTheme, setLightTheme] = useState(isThemeLight)
+  useEffect(() => {
+    const sync = () => setLightTheme(isThemeLight())
+    sync()
+    window.addEventListener(THEME_EVENT, sync)
+    const mq = window.matchMedia?.('(prefers-color-scheme: light)')
+    mq?.addEventListener?.('change', sync)
+    const mo = new MutationObserver(sync)
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class', 'style'],
+    })
+    return () => {
+      window.removeEventListener(THEME_EVENT, sync)
+      mq?.removeEventListener?.('change', sync)
+      mo.disconnect()
+    }
+  }, [])
   const shouldFocusRef = useRef(false)
   const headingRef = useCallback((el: HTMLHeadingElement | null) => {
     if (!el || !shouldFocusRef.current) return
@@ -169,7 +205,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     <div className="grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="relative hidden overflow-hidden border-r border-line lg:block">
         <SparkField
-          light={isLight(bg)}
+          light={lightTheme}
           className="absolute inset-0 h-full w-full"
           label="The Ferrocast Spark forming from points of light"
         />
