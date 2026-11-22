@@ -10,6 +10,7 @@ import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
 import { DemoMusic } from './features/music'
 import { DemoStore, type StoreFault } from './features/store'
+import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
@@ -161,6 +162,8 @@ export interface DemoOptions {
   setupDone?: boolean
   /** Fake network delay in ms (default 60–180 random; 0 in tests). */
   latencyMs?: number
+  /** How long a clips job takes per step (default 450 ms; a test that stops one makes it long). */
+  clipStepMs?: number
   /** Accept any pairing code except these special ones (see `pair`). */
   token?: string
   /** Whether this build has a relay (default true). Without one, saving tips is a 422. */
@@ -383,6 +386,7 @@ export class DemoEngine {
   readonly storeCatalog: DemoStore
   readonly obsTheme: DemoObsTheme
   readonly music: DemoMusic
+  readonly clips: DemoClips
   private obs: ObsState = {
     state: 'connected',
     version: '31.1.2',
@@ -812,6 +816,14 @@ export class DemoEngine {
       },
       now: () => Date.now(),
     })
+    this.clips = new DemoClips(
+      {
+        now: () => Date.now(),
+        later: (fn, ms) => this.later(fn, ms),
+        connectedChat: () => this.connectedChat(),
+      },
+      opts.clipStepMs,
+    )
     this.obsTheme = new DemoObsTheme({
       studio: this.studio,
       designs: this.designs,
@@ -1911,6 +1923,7 @@ export class DemoEngine {
       this.cloudBackups,
       this.obsTheme,
       this.music,
+      this.clips,
       this.designs,
       this.storeCatalog,
       this.studio,

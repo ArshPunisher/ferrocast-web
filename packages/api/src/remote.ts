@@ -259,6 +259,9 @@ export const OWNER_DENIED: readonly Rule[] = [
   ['*', '/diagnostics/**'],
   ['*', '/store'],
   ['*', '/store/**'],
+  // Clips are files on the PC.
+  ['*', '/clips'],
+  ['*', '/clips/**'],
 ]
 
 const SEGMENT_CHARS = /^[A-Za-z0-9\-_.~:@!$&'()*+,;=%]+$/
