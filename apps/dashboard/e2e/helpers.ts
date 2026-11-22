@@ -25,9 +25,23 @@ export async function openSidebar(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('fc-nav-folded', '0'))
 }
 
-/** First run: past "What will you use Ferrocast for?" (Streaming) and the picture (as
- *  suggested), to "Connect where you stream". */
+/** First run: past Import ("Start fresh") and Camera & mic check to "What will you use Ferrocast for?". */
+export async function pastImportAndMedia(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('heading', { name: 'Bring your scenes, or start fresh' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'What will you use Ferrocast for?' }),
+  ).toBeVisible()
+}
+
+/** First run: past Import, Camera & mic check, "What will you use Ferrocast for?" (Streaming),
+ *  and Picture (as suggested), to "Connect where you stream". */
 export async function pastSetupQuestions(page: Page): Promise<void> {
+  await pastImportAndMedia(page)
   await page.getByRole('button', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Use these settings' }).click()
   await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()

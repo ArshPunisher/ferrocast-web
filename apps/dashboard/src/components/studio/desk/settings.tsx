@@ -18,6 +18,7 @@ import {
   Sparkle,
   SpeakerHigh,
   Trash,
+  Info,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -56,6 +57,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useDesk, type EngineApi } from './common'
+import { sharedNote } from './record-notes'
 import { AutoConfigDialog } from './auto-config'
 import { LogDialog } from './log-viewer'
 import { RemoteControlSection } from './remote-control'
@@ -1391,7 +1393,7 @@ export function RecordPage({ s, set }: PageProps) {
       hour: sizeText(sizes.stream * 60),
       facts: [
         'Looks exactly like what your viewers saw.',
-        `Uses ${chip}. No extra work while live: it reuses the stream.`,
+        `Uses ${chip}. It reuses the stream's encode while live, when they can share.`,
         'Good for keeping a copy of each stream.',
       ],
     },
@@ -1485,6 +1487,8 @@ export function RecordPage({ s, set }: PageProps) {
   )
   const over = budget.data?.level === 'over'
   const atLimit = budget.data?.level === 'limit'
+  // When it can't share (a source for one side only, a VOD track…), say why whatever the level.
+  const cantShare = sharedNote(choice, budget.data)
   return (
     <>
       <Heading>Quality</Heading>
@@ -1543,6 +1547,17 @@ export function RecordPage({ s, set }: PageProps) {
           <span className="flex items-start gap-1.5 font-semibold text-warn">
             <Warning size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
             {picked.warn}
+          </span>
+        )}
+        {cantShare && !over && (
+          <span data-testid="not-shared" className="flex items-start gap-1.5 text-text-2">
+            <Info
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-0.5 shrink-0 text-accent-text"
+            />
+            <span>{cantShare}</span>
           </span>
         )}
         {over && (
@@ -1971,6 +1986,19 @@ export function shortcutGroups(
       ]),
     },
     {
+      title: 'Hold to show or hide',
+      actions: items.flatMap((x) => [
+        {
+          id: `push_show:${x.scene}\n${x.source}`,
+          label: `Hold to show ${x.source} in ${x.scene}`,
+        },
+        {
+          id: `push_hide:${x.scene}\n${x.source}`,
+          label: `Hold to hide ${x.source} in ${x.scene}`,
+        },
+      ]),
+    },
+    {
       title: 'Sound',
       actions: sounds.flatMap((n) => [
         { id: `mute:${n}`, label: `Mute or unmute ${n}` },
@@ -1986,6 +2014,19 @@ export function shortcutGroups(
       })),
     },
     {
+      title: 'Hold a filter on or off',
+      actions: filters.flatMap((f) => [
+        {
+          id: `push_filter_on:${f.source}\n${f.filter}`,
+          label: `Hold to turn on ${f.filter} on ${f.source}`,
+        },
+        {
+          id: `push_filter_off:${f.source}\n${f.filter}`,
+          label: `Hold to turn off ${f.filter} on ${f.source}`,
+        },
+      ]),
+    },
+    {
       title: 'Media',
       actions: media.flatMap((n) => [
         { id: `media_play_pause:${n}`, label: `Play or pause ${n}` },
@@ -1994,6 +2035,14 @@ export function shortcutGroups(
         { id: `media_next:${n}`, label: `Next in ${n}` },
         { id: `media_previous:${n}`, label: `Previous in ${n}` },
       ]),
+    },
+    {
+      title: 'Performance',
+      actions: [
+        { id: 'performance_mode', label: 'Pause or resume the preview' },
+        { id: 'performance_mode_on', label: 'Pause the preview' },
+        { id: 'performance_mode_off', label: 'Resume the preview' },
+      ],
     },
     {
       title: 'Editing',
@@ -2068,7 +2117,7 @@ export function KeysPage({ s, set }: PageProps) {
   return (
     <>
       <Heading
-        info={`They work while a game has the keyboard. An action can have up to ${MAX_KEYS} keys, and one key can run several actions. Push to talk mutes the sound until held; push to mute is the other way round.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
+        info={`They work while a game has the keyboard. An action can have up to ${MAX_KEYS} keys, and one key can run several actions. Push to talk mutes the sound until held; push to mute is the other way round. Hold to show or hide puts a source (or a filter) back as it was when you let go; nothing is saved.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
       >
         How they work
       </Heading>

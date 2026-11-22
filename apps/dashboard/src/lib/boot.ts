@@ -413,6 +413,7 @@ export async function connect(): Promise<ConnectResult> {
   if (injected?.remote === true && typeof injected.api === 'string')
     return remoteConnect(injected.api)
   if (injected && typeof injected.api === 'string' && typeof injected.token === 'string') {
+    document.documentElement.dataset.fcSandbox = '/alert-sandbox'
     return {
       mode: 'desktop',
       client: new FerroClient({ base: injected.api, token: injected.token }),
@@ -424,6 +425,7 @@ export async function connect(): Promise<ConnectResult> {
   if (base && code) return { pairing: { base, code } }
   const saved = readSession()
   if (saved && (!base || saved.api === base)) {
+    document.documentElement.dataset.fcSandbox = '/alert-sandbox'
     return {
       mode: 'browser',
       client: new FerroClient({ base: saved.api, token: saved.token }),
@@ -452,9 +454,28 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
   ])
   const params = new URLSearchParams(location.search)
   const setupDone = opts.setupDone ?? params.get('firstrun') === null
+  const useStudioEngine =
+    params.get('studioEngine') !== '0' && (!setupDone || params.get('studioEngine') === '1')
+  const colPreset = (v: string | null) =>
+    v === 'empty' || v === 'broken' || v === 'huge' || v === 'normal' ? v : undefined
+  const micPresetParam = (v: string | null) =>
+    v === 'quiet' || v === 'good' || v === 'loud' || v === 'silent' ? v : undefined
   window.__ferrocastDemo?.dispose()
   const engine = new DemoEngine({
     setupDone,
+    persistQueue: true,
+    ...(useStudioEngine
+      ? {
+          studioEngine: {
+            obsPreset: colPreset(params.get('obs')) ?? 'normal',
+            streamlabsPreset: colPreset(params.get('sl')) ?? 'normal',
+            hasCamera: params.get('cam') !== 'none',
+            cameraDenied: params.get('cam') === 'denied',
+            hasMic: params.get('mic') !== 'none',
+            micPreset: micPresetParam(params.get('mic')) ?? 'quiet',
+          },
+        }
+      : {}),
     autoplay: params.get('autoplay') !== '0',
     ...(params.has('latency') ? { latencyMs: Number(params.get('latency')) } : {}),
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
@@ -537,6 +558,8 @@ export async function pair(base: string, code: string): Promise<Connection> {
   const { token } = await client.pair(code)
   client.setToken(token)
   saveSession(base, token)
+  // The same as a returning session: custom alerts need the engine's sandbox page.
+  document.documentElement.dataset.fcSandbox = '/alert-sandbox'
   history.replaceState(null, '', location.pathname + location.search + '#/home')
   return { mode: 'browser', client, socket: wsFactory }
 }

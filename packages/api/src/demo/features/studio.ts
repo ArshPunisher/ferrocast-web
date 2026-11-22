@@ -38,6 +38,7 @@ import type { ChatPlatform, Command, FerroEvent, Platform } from '../../types'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, isWhole, requireObj, type DemoHost, type Routed } from './host'
 import { DemoStudioLibrary, type DemoOverlayHost } from './overlay-pack'
+import type { DemoStudioEngine } from './studio-engine'
 
 /** The demo's Twitch and Kick categories: what its search offers and its preview finds. */
 const DEMO_CATEGORIES = [
@@ -235,6 +236,7 @@ export class DemoStudio {
     private readonly commands: () => Command[],
     /** Kick's demo sign-in predates the editor: it shows the reconnect flow. */
     private readonly kickNeedsReconnect = true,
+    private readonly studioEngine: DemoStudioEngine | null = null,
     overlayHost?: DemoOverlayHost,
   ) {
     this.library = new DemoStudioLibrary(
@@ -1526,8 +1528,13 @@ export class DemoStudio {
       return { show: clone(run) }
     }
 
-    // The Studio's engine needs the desktop app (libobs in its window), like the engine says.
+    // The Studio's engine runs locally when simulated (onboarding/tests); otherwise needs desktop.
     if (a === 'studio' && b === 'engine') {
+      // A simulated Studio engine answers everything but the theme-pack routes (it has none).
+      const packRoute = c === 'library' && seg[3] === 'collections' && seg[4] === 'overlay'
+      if (this.studioEngine && !packRoute) {
+        return this.studioEngine.route(method, seg, body, url)
+      }
       if (c === 'library') {
         const [, , , kind, sub1, sub2] = seg
         if (
@@ -1602,6 +1609,9 @@ export class DemoStudio {
         ) {
           return this.library.exportEntry(kind, sub1)
         }
+      }
+      if (this.studioEngine) {
+        return this.studioEngine.route(method, seg, body, url)
       }
       if (is('GET', 'studio', 'engine'))
         return {

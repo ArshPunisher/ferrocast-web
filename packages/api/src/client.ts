@@ -13,9 +13,11 @@ import type {
   RestoreResult,
   BanEntry,
   BanResult,
+  ChatHighlight,
   ChatPlatform,
   Command,
   ConnectFlow,
+  Credits,
   DiscordSettings,
   DiscordSettingsInput,
   FerroEvent,
@@ -390,6 +392,8 @@ export class FerroClient {
   queuePause = () => this.post<Queue>('/api/v1/queue/pause')
   queueResume = () => this.post<Queue>('/api/v1/queue/resume')
   queueSkip = () => this.post<Queue>('/api/v1/queue/skip')
+  queueMute = () => this.post<Queue>('/api/v1/queue/mute')
+  queueUnmute = () => this.post<Queue>('/api/v1/queue/unmute')
   queueClear = () => this.post<Queue>('/api/v1/queue/clear')
   queueRemove = (alertId: string) => this.post<Queue>(`/api/v1/queue/${enc(alertId)}/remove`)
   replay = (eventId: string) =>
@@ -505,6 +509,13 @@ export class FerroClient {
   endGiveaway = () => this.post<GiveawayView>('/api/v1/giveaways/current/end')
   /** Cancels it and refunds every entry fee. */
   cancelGiveaway = () => this.request<{ refunded: number }>('DELETE', '/api/v1/giveaways/current')
+
+  // Interactive widget data: End Credits and Chat Highlight
+  credits = () => this.get<Credits>('/api/v1/credits')
+  chatHighlight = () => this.get<ChatHighlight | null>('/api/v1/chat/highlight')
+  pinChatHighlight = (event_id: string, duration_s: number | null = null) =>
+    this.post<ChatHighlight>('/api/v1/chat/highlight', { event_id, duration_s })
+  clearChatHighlight = () => this.del('/api/v1/chat/highlight')
 
   // TTS
   tts = () => this.get<TtsSettings>('/api/v1/tts')

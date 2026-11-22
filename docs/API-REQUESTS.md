@@ -17,8 +17,16 @@ Status: R1–R19 are **done** in the engine (17 Oct 2026); `docs/API.md` there i
 `GET /api/v1/mod/bans` → `BanEntry[]`
 
 ```ts
-type BanEntry = { platform: "twitch" | "youtube" | "kick"; user_id: string; login: string; display_name: string;
-                  reason: string | null; banned_at: number; everywhere: boolean; by: string | null }
+type BanEntry = {
+  platform: 'twitch' | 'youtube' | 'kick'
+  user_id: string
+  login: string
+  display_name: string
+  reason: string | null
+  banned_at: number
+  everywhere: boolean
+  by: string | null
+}
 ```
 
 Newest first. `POST /api/v1/mod/unban` returns 404 when the person isn't on the list.
@@ -28,16 +36,21 @@ Newest first. `POST /api/v1/mod/unban` returns 404 when the person isn't on the 
 `GET / PUT /api/v1/mod/filters`
 
 ```ts
-type FilterAction = "delete" | "timeout" | "ban" | "hold"
+type FilterAction = 'delete' | 'timeout' | 'ban' | 'hold'
 type Filters = {
   words: { enabled: boolean; list: string[]; lookalikes: boolean; action: FilterAction }
-  links: { enabled: boolean; allow_roles: number /* Roles bits */; allow_domains: string[]; action: FilterAction }
+  links: {
+    enabled: boolean
+    allow_roles: number /* Roles bits */
+    allow_domains: string[]
+    action: FilterAction
+  }
   caps: { enabled: boolean; min_length: number; max_percent: number; action: FilterAction }
   emotes: { enabled: boolean; max: number; action: FilterAction }
   symbols: { enabled: boolean; max_percent: number; action: FilterAction }
-  solicitation: { enabled: boolean; action: FilterAction }   // "I do commissions / buy followers" (Reddit #2 pain)
-  timeout_seconds: number                                      // 1 … 1 209 600
-  exempt_roles: number                                         // Roles bits never filtered
+  solicitation: { enabled: boolean; action: FilterAction } // "I do commissions / buy followers" (Reddit #2 pain)
+  timeout_seconds: number // 1 … 1 209 600
+  exempt_roles: number // Roles bits never filtered
 }
 ```
 
@@ -48,9 +61,16 @@ type Filters = {
 `GET / PUT /api/v1/mod/panic/config`
 
 ```ts
-type PanicConfig = { followers_only: boolean; followers_only_minutes: number; emote_only: boolean;
-                     slow_mode_seconds: number; hold_new_accounts: boolean; pause_alerts: boolean;
-                     pause_tts: boolean; hotkey: string /* "Ctrl+Shift+P" */ }
+type PanicConfig = {
+  followers_only: boolean
+  followers_only_minutes: number
+  emote_only: boolean
+  slow_mode_seconds: number
+  hold_new_accounts: boolean
+  pause_alerts: boolean
+  pause_tts: boolean
+  hotkey: string /* "Ctrl+Shift+P" */
+}
 ```
 
 `POST /api/v1/mod/panic` also sends a live `notice` (`warn` when on, `info` when off) so every open dashboard shows the state.
@@ -60,8 +80,15 @@ type PanicConfig = { followers_only: boolean; followers_only_minutes: number; em
 `GET /api/v1/tts/pending` and the live `tts_pending` frame carry:
 
 ```ts
-type TtsPending = { id: string; event_id: string; platform: Platform; name: string; text: string;
-                    amount: string | null /* display string, "₹500" */; received_at: number }
+type TtsPending = {
+  id: string
+  event_id: string
+  platform: Platform
+  name: string
+  text: string
+  amount: string | null /* display string, "₹500" */
+  received_at: number
+}
 ```
 
 A mod deleting the source message removes the item (R-48).
@@ -71,20 +98,38 @@ A mod deleting the source message removes the item (R-48).
 `GET / PUT /api/v1/settings`
 
 ```ts
-type Settings = { theme: "system" | "dark" | "light"; reduced_motion: "system" | "on" | "off";
-                  low_motion_overlays: boolean /* R-40 Linux preset */; lan_access: boolean;
-                  never_update_while_live: boolean;
-                  launch_at_login: boolean; close_to_tray: boolean; language: string }
+type Settings = {
+  theme: 'system' | 'dark' | 'light'
+  reduced_motion: 'system' | 'on' | 'off'
+  low_motion_overlays: boolean /* R-40 Linux preset */
+  lan_access: boolean
+  never_update_while_live: boolean
+  launch_at_login: boolean
+  close_to_tray: boolean
+  language: string
+}
 ```
 
 ## R6. Viewer card
 
-`GET /api/v1/viewers/{platform}/{user_id}` → 
+`GET /api/v1/viewers/{platform}/{user_id}` →
 
 ```ts
-type ViewerCard = { platform; user_id; login; display_name; avatar_url: string | null; roles: number;
-                    first_seen: number | null; messages: number; follows_since: number | null; note: string;
-                    banned: boolean; timeouts: number; other_identities: { platform; login }[] }
+type ViewerCard = {
+  platform
+  user_id
+  login
+  display_name
+  avatar_url: string | null
+  roles: number
+  first_seen: number | null
+  messages: number
+  follows_since: number | null
+  note: string
+  banned: boolean
+  timeouts: number
+  other_identities: { platform; login }[]
+}
 ```
 
 404 `viewer_not_found` when we have never seen them.
@@ -94,8 +139,16 @@ type ViewerCard = { platform; user_id; login; display_name; avatar_url: string |
 `GET /api/v1/stats/session` →
 
 ```ts
-type SessionStats = { started_at: number | null; follows: number; subs: number; tips: Money[] /* one per currency */;
-                      bits: number; messages: number; peak_viewers: number; viewers: { twitch?: number; youtube?: number; kick?: number } }
+type SessionStats = {
+  started_at: number | null
+  follows: number
+  subs: number
+  tips: Money[] /* one per currency */
+  bits: number
+  messages: number
+  peak_viewers: number
+  viewers: { twitch?: number; youtube?: number; kick?: number }
+}
 ```
 
 ## R8. Themes ("pick a look")
@@ -151,7 +204,6 @@ Until then the dashboard shows held messages with Delete, Time out and Ban only.
 
 When `/o/<token>/ws` is opened with a token the engine doesn't know (the URL was regenerated or the overlay deleted while the page was offline, so it never got the `revoked` frame), close the WebSocket with code **4404** (or 4401 for "not allowed"). The overlay page treats either code like `revoked`: it clears itself and stops reconnecting, instead of knocking forever.
 
-
 ## R19. Tips: take the page down, and API.md's tips section
 
 The engine and relay already save tip pages (`PUT /api/v1/tips` → relay `PUT /v1/tips/config`), and the relay has `DELETE /v1/tips/config`, but the engine has no route for it. Proposed:
@@ -184,7 +236,6 @@ nothing breaks today; please add the same checks the web side makes
   `countdown_done` up to 80 characters.
 
 The overlay ignores any value it doesn't know, and never passes one to CSS.
-
 
 ## Level meters: raw peaks, pushed (requested 21 Nov)
 
@@ -220,7 +271,7 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
-## R14. `.overlay` theme-pack import, Google Fonts & Undo (Phase 2 #13, 22 Nov)
+## R29. `.overlay` theme-pack import, Google Fonts & Undo (Phase 2 #13, 22 Nov)
 
 Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat/p2-overlay-import`):
 - `POST /api/v1/studio/engine/library/collections/overlay/preview` (multipart `file` upload)
@@ -230,3 +281,106 @@ Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat
 Also adds file-backed `GET/POST/PUT/DELETE` `/api/v1/studio/engine/library/*` fallback in `ferrocast-headless` when no desktop `StudioHost` is registered, and auto-loads `<FERROCAST_HOME>/fonts/` in `ferrocore::TextRenderer`.
 
 
+
+## R21. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
+
+The Studio's events dock now has pause, skip, mute, filters, read marks and a test alert. Pause, skip and test already exist; the rest needs the engine (done on branch `feat/p1-minifeed-alerts`, see the engine's `docs/API.md` Alerts):
+
+- `GET /api/v1/queue` gains `muted: boolean` (saved with the queue, survives a restart).
+- `POST /api/v1/queue/mute` and `/unmute` -> queue. A muted queue shows alerts without `sound`, `tts_text` and `tts_audio`.
+- `AlertRule.interrupt: boolean` (default false): a new alert from the rule ends the playing one and shows at once; paused queues just queue it.
+- `Variation.weight: number` (0 to 1000, default 1): among matching looks with the same top priority, picked by weight; 400 over 1000.
+
+Read marks and the type filter are per browser (localStorage `fc-feed-read-v2` (by the engine's event number), `fc-feed-filter`), not engine state. The demo engine implements all of it (`persistQueue` keeps pause and mute over a reload in the dashboard's demo). A phone's owner role can call mute (the relay's audit log names it); the cloud `queue_op` has no mute and its queue frame always says `muted: false`.
+
+## R22. Selective recording: `show` on an item, and three edit words (22 Nov)
+
+Each source can be shown on the stream only (chat and alerts a clean recording leaves out), in the
+recording only (a face camera the stream doesn't carry), or both. Roadmap Phase 2 #9.
+
+Ask (done on the engine side, branch `feat/p2-selective-recording`):
+- `GET /api/v1/studio/engine/scenes/{scene}/items` lists `show` on every item and every child of a
+  group: `"both"` (the default, and what a collection from before had), `"stream"` or `"recording"`.
+  The dashboard reads a missing `show` as both.
+- `POST /api/v1/studio/engine/scenes/{scene}/items/{id}/edit` takes `{ do: "stream_only" }`,
+  `{ do: "recording_only" }` and `{ do: "stream_and_recording" }`. An unknown word is a 400 as before.
+  The choice is an undo step.
+- A flag on a group covers its children as a whole; a child of a shown group keeps its own. It
+  applies to the stream, the recording and the replay buffer's clips; the preview, Studio Mode,
+  thumbnails and the virtual camera show every item. While no visible item differs the two are one
+  picture, drawn once; once one does, a recording can't share the stream's encode (the encoder
+  budget's `why_not_shared` says why), so it runs its own.
+
+The demo engine has no Studio desk (the Studio engine needs the desktop app), so there is nothing
+to simulate there; the page's behaviour is covered by `e2e/studio-selective-recording.spec.ts`
+against mocked Studio endpoints.
+
+
+## R23. Performance mode, hold-to-show/hide hotkeys and copy/paste across collections (22 Nov)
+
+All done on the engine side (branch `feat/p1-perf-hotkeys-copy`, `docs/API.md` Studio). The dashboard uses:
+
+- `GET` / `PUT /api/v1/studio/engine/preview/pause` `{ paused }` -> `{ paused }`: stops drawing the preview, Studio Mode's second picture and the vertical picture; never touches a stream, recording, replay buffer or virtual camera. The page reads it every ~2.5 s and when it is looked at again, because the hotkey actions `performance_mode`, `performance_mode_on` and `performance_mode_off` change it too.
+- Hotkey actions `push_show:<scene>\n<source>`, `push_hide:`, `push_filter_on:<source>\n<filter>`, `push_filter_off:` (held keys; back as they were on release; never saved). The Shortcuts page lists them in "Hold to show or hide", "Hold a filter on or off" and "Performance".
+- `GET` / `DELETE /studio/engine/clipboard`, `POST /studio/engine/clipboard/source` and `/filters`, `POST /studio/engine/clipboard/paste/source` and `/filters` (see the engine's API.md). An empty clipboard is a 404 `clipboard_empty`.
+
+The demo engine answers all `/studio/engine/*` with 422 `studio_unavailable` like the engine without the desktop app, so these need no demo behaviour (a test lists them with the other Studio calls). Not done: bind fields for these keys in the item and filter settings (they are set on the Shortcuts page only).
+
+## R24. Scene collection import preview and undo id (22 Nov)
+
+Onboarding shows a read-only preview of an OBS Studio or Streamlabs Desktop collection before
+importing (counts, conversions, devices that arrive empty to re-pick, and unsupported items with
+reasons), plus one-click Undo / Start over back to the previous collection.
+
+Done on the engine side (`feat/p1-onboarding-import`):
+
+- `POST /api/v1/studio/engine/obs-collections/preview` `{ id }` → `ImportPreview` (`source`, `id`,
+  `name`, `scenes`, `sources`, `web_pages`, `scene_names`, `truncated_scenes`, `device_resets`,
+  `skipped`, `skipped_total`, `missing`). 400 invalid id, 404 `studio_no_obs_collection`, 413
+  `studio_collection_too_large`, 422 `studio_collection_broken`.
+- `POST /api/v1/studio/engine/streamlabs-collections/preview` `{ id }` → `ImportPreview`
+  (`source: "streamlabs"`), same errors and read-only behaviour.
+- `POST /api/v1/studio/engine/obs-collections/import` and `streamlabs-collections/import` now
+  also return `previous_id` alongside `id`, so switching back to `previous_id` and removing `id`
+  via `/studio/engine/library/collections` undoes an onboarding import cleanly.
+
+## R25. Alert box editor v2: timing, text effects and sandboxed custom HTML/CSS with field schema
+
+Roadmap Phase 2 #11 (`feat/p2-alert-editor`). Additive fields on `Variation` and `RenderedAlert`
+with backward-compatible defaults (`#[serde(default)]`):
+
+- `Variation.anim` (`{ in, out, text, in_ms, out_ms, text_delay_ms }`, defaults
+  `{ in: "fade", out: "fade", text: "none", in_ms: 400, out_ms: 350, text_delay_ms: 150 }`):
+  - `in_ms` and `out_ms` `0` to `3000`, `text_delay_ms` `0` to `10000`,
+    `in_ms + out_ms < duration_ms` and `text_delay_ms < duration_ms`.
+- `Variation.custom_enabled` (bool, default `false`), `Variation.html` (string, up to `20000` chars),
+  existing `Variation.css` (`check_css`, up to `20000` chars, no `@import` or external `url()`
+  other than `data:image/...`).
+- `Variation.fields` (up to `32` custom schema items):
+  `{ key /* [a-z][a-z0-9_]{0,39}, unique, must not match KNOWN_VARS */, label /* 1–80 chars */, type: "text" | "number" | "color" | "toggle" | "select", default, min?, max?, options? }`
+  and `Variation.field_values` (`Record<string, string | number | boolean>`): every key must exist in
+  `fields` and match its declared type, range, colour format or options list.
+- Token name validation: every `{token}` referenced in `Variation.title`, `Variation.body` and
+  `Variation.html` must belong to `core::template::KNOWN_VARS` or `Variation.fields` keys; unknown
+  tokens return HTTP `400` naming the variation and bad token.
+- `RenderedAlert.anim?` carries the variation's animation and timing; `RenderedAlert.custom?` carries
+  `{ html, css, fields, vars }` only when `custom_enabled: true`.
+- **Custom alerts are HTML and CSS only, never code.** Saving a look with `custom_enabled` (or any
+  `html`) is refused with `400` (`variation 'x': custom HTML can't use <script>: …`) when the HTML has
+  `script`, `meta`, `base`, `form`, frames, `object`/`embed`, media, `on*` handlers, `srcdoc`,
+  `javascript:` or any URL that is not a `#anchor`, a small `data:image/` picture or one of the allowed
+  picture hosts. Every `<style>` block and `style` attribute goes through the same `check_css` rules as
+  `css`. `{token}`s fill only text and `alt`, `title`, `aria-label`, `aria-description`,
+  `aria-valuetext` and `data-*` attributes (not `class`, `style`, URLs or names). At most 20 looks per
+  rule. A paired phone (`Role::Owner` over the remote path) cannot add or change `custom_enabled`,
+  `html` or `fields` (403 `not_allowed_for_role`; custom code is PC-only like plugins); everything else
+  in a rule still saves from a phone.
+- Custom-enabled looks are drawn in `<iframe sandbox="allow-scripts">` (never `allow-same-origin`).
+  Only the frame's bootstrap runs (CSP `script-src 'nonce-…'`, no `unsafe-inline` for scripts, no
+  `media-src`, `connect-src 'none'`); it parses the markup in an inert document, strips what the save
+  check refuses (defence in depth), fills tokens as text, and answers only its parent's origin, once.
+  Legacy looks with `css` but no `custom_enabled` still apply that CSS in the standard alert's shadow
+  root (no iframe), checked by `check_css` at save time. `GET /alert-sandbox` is served by the desktop
+  app/engine for desktop and OBS origins.
+- `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
+  active alert design no longer dresses an alert whose look is custom-enabled.

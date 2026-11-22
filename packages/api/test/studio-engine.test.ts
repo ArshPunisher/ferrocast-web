@@ -20,6 +20,54 @@ describe('levels request', () => {
   })
 })
 
+describe('performance mode and the clipboard requests', () => {
+  it('send the shapes the engine takes', async () => {
+    const calls: { m: string; u: string; b: unknown }[] = []
+    const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({
+        m: String(init?.method),
+        u: new URL(url).pathname,
+        b: init?.body ? JSON.parse(String(init.body)) : undefined,
+      })
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    const api = studioEngineApi(
+      new FerroClient({ base: 'http://x', token: 't', fetch: fetchFn as unknown as typeof fetch }),
+    )
+    await api.previewPaused()
+    await api.setPreviewPaused(true)
+    await api.copySource('Main', 4)
+    await api.copyFilters('Mic')
+    await api.copyFilters('Mic', { scene: 'Main', id: 2 })
+    await api.pasteSource('Two')
+    await api.pasteFilterClip('Voice')
+    await api.pasteFilterClip('', { scene: 'Main', id: 2 })
+    await api.clipboard()
+    expect(calls.map((c) => `${c.m} ${c.u}`)).toEqual([
+      'GET /api/v1/studio/engine/preview/pause',
+      'PUT /api/v1/studio/engine/preview/pause',
+      'POST /api/v1/studio/engine/clipboard/source',
+      'POST /api/v1/studio/engine/clipboard/filters',
+      'POST /api/v1/studio/engine/clipboard/filters',
+      'POST /api/v1/studio/engine/clipboard/paste/source',
+      'POST /api/v1/studio/engine/clipboard/paste/filters',
+      'POST /api/v1/studio/engine/clipboard/paste/filters',
+      'GET /api/v1/studio/engine/clipboard',
+    ])
+    expect(calls.map((c) => c.b)).toEqual([
+      undefined,
+      { paused: true },
+      { scene: 'Main', id: 4 },
+      { name: 'Mic' },
+      { name: 'Mic', item: { scene: 'Main', id: 2 } },
+      { scene: 'Two' },
+      { name: 'Voice' },
+      { name: '', item: { scene: 'Main', id: 2 } },
+      undefined,
+    ])
+  })
+})
+
 describe('the Studio engine in the demo (no desktop app)', () => {
   let engine: DemoEngine
   let api: ReturnType<typeof studioEngineApi>
@@ -80,6 +128,14 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       () => api.editItem('Gameplay', 3, 'flip_h'),
       () => api.editItem('Gameplay', 3, 'blend_screen'),
       () => api.pasteFilters('Mic', 'Cam'),
+      () => api.previewPaused(),
+      () => api.setPreviewPaused(true),
+      () => api.clipboard(),
+      () => api.copySource('Gameplay', 3),
+      () => api.copyFilters('Mic'),
+      () => api.pasteSource('Gameplay'),
+      () => api.pasteFilterClip('Mic'),
+      () => api.clearClipboard(),
       () => api.web('Alerts', 'interact'),
       () => api.obsCollections(),
       () => api.importObs('Untitled'),
@@ -128,5 +184,147 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       'http://127.0.0.1:47820/api/v1/studio/engine/still?kind=av_capture_input_v2&key=device&value=usb%2Fcam%3A1&w=240',
     )
     expect(calls[1]?.signal).toBe(ac.signal)
+  })
+})
+
+describe('simulated Studio engine in demo mode (studioEngine option)', () => {
+  const mkApi = (opts: ConstructorParameters<typeof DemoEngine>[0] = {}) => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true, ...opts })
+    const api = studioEngineApi(
+      new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+    )
+    return { engine, api }
+  }
+
+  it('changing the mic device in place keeps its filters, volume and mute', async () => {
+    const { engine, api } = mkApi()
+    try {
+      await api.setChannel(3, {
+        kind: 'coreaudio_input_capture',
+        name: 'Mic',
+        settings: { device_id: 'default' },
+      })
+      await api.addFilter('Mic', { kind: 'noise_suppress_filter', name: 'Noise', settings: {} })
+      await api.setAudio('Mic', { volume_db: -6, muted: true })
+      await api.update('Mic', { device_id: 'usb-1' })
+      expect((await api.settings('Mic')).device_id).toBe('usb-1')
+      expect((await api.filters('Mic')).map((f) => f.name)).toEqual(['Noise'])
+      const scenes = await api.scenes()
+      const mic = (await api.audio(scenes.current)).find((a) => a.name === 'Mic')
+      expect([mic?.volume_db, mic?.muted]).toEqual([-6, true])
+      await expect(api.update('Nope', { device_id: 'x' })).rejects.toBeTruthy()
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('previews OBS and Streamlabs collections, imports with previous_id, and supports undo', async () => {
+    const { engine, api } = mkApi()
+    try {
+      const obsList = await api.obsCollections()
+      expect(obsList.length).toBeGreaterThanOrEqual(1)
+      const firstId = obsList[0]!.id
+      const obsPreview = await api.previewObs(firstId)
+      expect(obsPreview.source).toBe('obs')
+      expect(obsPreview.scenes).toBeGreaterThan(0)
+      expect(obsPreview.sources).toBeGreaterThan(0)
+      expect(obsPreview.skipped.length).toBeGreaterThan(0)
+      expect(obsPreview.skipped[0]?.reason).toBeTruthy()
+
+      const imported = await api.importObs(firstId)
+      expect(imported.id).toBeTruthy()
+      expect(imported.previous_id).toBe('untitled')
+      const shelf1 = await api.shelf('collections')
+      expect(shelf1.current).toBe(imported.id)
+
+      // Undo: switch back and remove imported collection.
+      await api.switchShelf('collections', imported.previous_id!)
+      await api.removeShelf('collections', imported.id!)
+      const shelf2 = await api.shelf('collections')
+      expect(shelf2.current).toBe('untitled')
+      expect(shelf2.list.some((x) => x.id === imported.id)).toBe(false)
+
+      // Streamlabs preview & import includes device resets and widgets.
+      const slList = await api.streamlabsCollections()
+      expect(slList.length).toBeGreaterThanOrEqual(1)
+      const slPreview = await api.previewStreamlabs(slList[0]!.id)
+      expect(slPreview.source).toBe('streamlabs')
+      expect(slPreview.device_resets.length).toBeGreaterThan(0)
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('handles empty, broken, and huge fixture presets', async () => {
+    const empty = mkApi({ studioEngine: { obsPreset: 'empty', streamlabsPreset: 'empty' } })
+    try {
+      expect(await empty.api.obsCollections()).toEqual([])
+      expect(await empty.api.streamlabsCollections()).toEqual([])
+    } finally {
+      empty.engine.dispose()
+    }
+
+    const broken = mkApi({ studioEngine: { obsPreset: 'broken', streamlabsPreset: 'broken' } })
+    try {
+      const obsList = await broken.api.obsCollections()
+      expect(obsList.length).toBeGreaterThan(0)
+      const e = (await broken.api.previewObs(obsList[0]!.id).catch((x: unknown) => x)) as ApiError
+      expect(e.status).toBe(422)
+      expect(e.code).toBe('studio_collection_broken')
+    } finally {
+      broken.engine.dispose()
+    }
+
+    const huge = mkApi({ studioEngine: { obsPreset: 'huge' } })
+    try {
+      const obsList = await huge.api.obsCollections()
+      const p = await huge.api.previewObs(obsList[0]!.id)
+      expect(p.scenes).toBeGreaterThanOrEqual(100)
+      expect(p.scene_names.length).toBe(12)
+      expect(p.truncated_scenes).toBe(p.scenes - 12)
+    } finally {
+      huge.engine.dispose()
+    }
+  })
+
+  it('simulates camera preview, live mic levels, and Clean up my mic filters', async () => {
+    const { engine, api } = mkApi({ studioEngine: { micPreset: 'quiet', hasCamera: true } })
+    try {
+      await api.start()
+      const opts = await api.options('av_capture_input_v2')
+      const deviceOpt = opts.find((o) => o.key === 'device')
+      expect(deviceOpt?.values?.length).toBeGreaterThan(0)
+      const still = await api.sourceStill(
+        'av_capture_input_v2',
+        'device',
+        String(deviceOpt!.values![0]),
+        320,
+      )
+      expect(still.image).toMatch(/^data:image\//)
+
+      const lv1 = await api.levels(['Mic'], 'fast')
+      expect(lv1.Mic!.peak[0]).toBeLessThan(-18)
+
+      await api.addFilter('Mic', { kind: 'gain_filter', name: 'Gain', settings: { db: 10 } })
+      await api.addFilter('Mic', { kind: 'noise_suppress_filter_v2', name: 'Noise' })
+      await api.editFilter('Mic', 'Gain', 'top')
+      const filters = await api.filters('Mic')
+      expect(filters[0]?.kind).toBe('gain_filter')
+
+      const lv2 = await api.levels(['Mic'], 'fast')
+      expect(lv2.Mic!.peak[0]).toBeGreaterThan(lv1.Mic!.peak[0])
+    } finally {
+      engine.dispose()
+    }
+
+    const noCam = mkApi({ studioEngine: { hasCamera: false } })
+    try {
+      await noCam.api.start()
+      const opts = await noCam.api.options('av_capture_input_v2')
+      const deviceOpt = opts.find((o) => o.key === 'device')
+      expect(deviceOpt?.choices).toEqual([])
+    } finally {
+      noCam.engine.dispose()
+    }
   })
 })

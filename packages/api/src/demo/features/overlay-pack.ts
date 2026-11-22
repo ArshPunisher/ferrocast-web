@@ -217,7 +217,11 @@ function cleanFontFamily(rawFace?: string | null, rawCustom?: string | null): st
   return chosen
 }
 
-type LiveOverlayKind = Exclude<WidgetKind, 'layer'>
+/** The kinds a Streamlabs or OWN3D pack can map to (not Ferrocast's own credits, emote wall, highlight or a layer). */
+type LiveOverlayKind = Exclude<
+  WidgetKind,
+  'layer' | 'end_credits' | 'emote_wall' | 'chat_highlight'
+>
 
 function mapWidgetKind(raw: unknown): { kind: LiveOverlayKind; label: string } | null {
   if (typeof raw === 'number') {

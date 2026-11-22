@@ -5,6 +5,7 @@ import {
   ChatLine,
   ChatScroller,
   Composer,
+  HighlightBanner,
   ViewerCardDialog,
   useChatActions,
   type ReplyTarget,
@@ -128,6 +129,7 @@ export function Chat() {
           Hide bots
         </label>
       </header>
+      {!cloud && <HighlightBanner />}
       <ChatScroller count={lines.length} className="flex-1" label="Merged chat">
         {lines.length === 0 ? (
           onlyHeld ? (

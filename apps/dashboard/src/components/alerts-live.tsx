@@ -96,6 +96,7 @@ export function QueuePanel({ className }: { className?: string }) {
     )
   const [confirmClear, setConfirmClear] = useState(false)
   const paused = queue?.paused ?? false
+  const muted = queue?.muted ?? false
   const playing = queue?.playing ?? null
   const waiting = queue?.waiting ?? []
   return (
@@ -166,6 +167,22 @@ export function QueuePanel({ className }: { className?: string }) {
             className="rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14px] text-warn"
           >
             Paused. Alerts keep arriving and wait here until you resume.
+          </p>
+        )}
+        {muted && (
+          <p
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-[14px] text-warn"
+          >
+            <span>Alert sounds are muted. Alerts still show, without sound or speech.</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              busy={busy === 'unmute'}
+              onClick={() => act('unmute', client.queueUnmute, 'Alert sounds on.')}
+            >
+              Unmute
+            </Button>
           </p>
         )}
         <AnimatePresence mode="popLayout" initial={false}>

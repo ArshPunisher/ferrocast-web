@@ -96,6 +96,7 @@ export const SYSTEM_FONTS: Record<string, string> = {
 /** A safe CSS font-family value for a design's family name. */
 export function fontStack(family: unknown): string {
   if (typeof family !== 'string' || !isFontFamily(family)) return DISPLAY
+  if (family === 'system') return "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
   if (BUNDLED[family]) return BUNDLED[family]
   const fallback = GOOGLE_FONTS[family] ?? SYSTEM_FONTS[family] ?? DISPLAY
   // The name itself first: installed on this computer, it wins.
