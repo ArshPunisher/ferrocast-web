@@ -480,6 +480,7 @@ for (const [name, size, touch] of [
       await dragBetween(page, touch, at(50, 50), at(750, 250))
       await expect(page.locator('[data-group-box]')).toBeVisible()
       await expect(page.locator('[data-group-handle]')).toHaveCount(8)
+      await page.screenshot({ path: `test-results/snap-group-${size.width}.png` })
       if (!touch) {
         // Shift adds Gamma; Ctrl takes Alpha off again (still two: Beta and Gamma).
         await dragBetween(page, touch, at(250, 350), at(450, 550), undefined, ['Shift'])
@@ -490,7 +491,6 @@ for (const [name, size, touch] of [
         await page.mouse.click(at(1500, 800).x, at(1500, 800).y)
         await expect(page.locator('[data-group-box]')).toHaveCount(0)
       }
-      await page.screenshot({ path: `test-results/snap-group-${size.width}.png` })
       expect(errors).toEqual([])
     })
 
@@ -501,9 +501,8 @@ for (const [name, size, touch] of [
       const { at } = await canvasBox(page)
       await dragBetween(page, touch, at(50, 50), at(750, 250))
       await dragBetween(page, touch, at(200, 150), at(240, 190))
-      await expect.poll(() => many.length).toBeGreaterThan(0)
+      await expect.poll(() => many.at(-1)?.save).toBe(true)
       const last = many.at(-1)!
-      expect(last.save).toBe(true)
       expect(last.items.map((b) => b.id).sort()).toEqual([1, 2])
       // Both went by the same 40 pixels (the snap may add a little).
       const [a, b] = [last.items.find((i) => i.id === 1)!, last.items.find((i) => i.id === 2)!]
@@ -559,6 +558,22 @@ for (const [name, size, touch] of [
       await expect.poll(() => many.length).toBeGreaterThan(before)
       last = many.at(-1)!
       expect(last.items.every((i) => i.id !== 0)).toBe(true)
+      expect(errors).toEqual([])
+    })
+
+    test('right-click on one of several picked offers Align and Space out', async ({ page }) => {
+      test.skip(touch, 'no right-click on a phone')
+      await page.setViewportSize(size)
+      const { errors, many } = await mountMockStudio(page)
+      await openPreview(page, touch)
+      const { at } = await canvasBox(page)
+      await dragBetween(page, touch, at(50, 50), at(800, 560))
+      await page.mouse.click(at(200, 150).x, at(200, 150).y, { button: 'right' })
+      await expect(page.getByRole('menuitem', { name: 'Group selected items' })).toBeVisible()
+      await page.getByRole('menuitem', { name: 'Align' }).click()
+      await page.getByRole('menuitem', { name: 'Align top edges' }).click()
+      await expect.poll(() => many.at(-1)?.save).toBe(true)
+      expect(many.at(-1)!.items.every((i) => i.y === 100 || i.id === 1)).toBe(true)
       expect(errors).toEqual([])
     })
 
