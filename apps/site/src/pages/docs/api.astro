@@ -1,0 +1,981 @@
+---
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import openapi from '../../data/openapi.json'
+import asyncapi from '../../data/asyncapi.json'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+
+const page = PAGES.api
+const url = new URL(page.path, SITE.url).href
+
+interface ParamDoc {
+  name: string
+  in: string
+  required?: boolean
+}
+
+interface OpDoc {
+  method: string
+  path: string
+  tag: string
+  summary: string
+  operationId: string
+  scopes: string[]
+  pcOnly: boolean
+  params: ParamDoc[]
+  reqSchema: string | null
+  responses: { status: string; description: string }[]
+}
+
+const METHOD_ORDER: Record<string, number> = {
+  GET: 0,
+  POST: 1,
+  PUT: 2,
+  PATCH: 3,
+  DELETE: 4,
+}
+
+const TAG_ORDER = [
+  'Core',
+  'API Keys',
+  'Chat & Moderation',
+  'Bot & Widgets',
+  'Alerts, Designs & Media',
+  'Go Live',
+  'OBS & Music',
+  'Studio Engine',
+  'Moments & Show',
+  'Settings & Imports',
+  'Accounts & Pro',
+  'Plugins & Diagnostics',
+]
+
+function extractRefName(node: unknown): string | null {
+  if (!node || typeof node !== 'object') return null
+  const ref = (node as Record<string, unknown>).$ref
+  if (typeof ref === 'string') {
+    const parts = ref.split('/')
+    return parts[parts.length - 1] ?? null
+  }
+  return null
+}
+
+const ops: OpDoc[] = []
+for (const [path, methods] of Object.entries(openapi.paths)) {
+  for (const [rawMethod, rawOp] of Object.entries(
+    methods as Record<string, Record<string, unknown>>,
+  )) {
+    const method = rawMethod.toUpperCase()
+    if (!(method in METHOD_ORDER)) continue
+    const tags = Array.isArray(rawOp.tags) ? (rawOp.tags as string[]) : ['Other']
+    const scopes = Array.isArray(rawOp['x-ferrocast-scopes'])
+      ? (rawOp['x-ferrocast-scopes'] as string[])
+      : []
+    const pcOnly = Boolean(rawOp['x-pc-only'])
+    const params = Array.isArray(rawOp.parameters) ? (rawOp.parameters as ParamDoc[]) : []
+    const reqContent = (rawOp.requestBody as Record<string, unknown> | undefined)?.content as
+      Record<string, { schema?: unknown }> | undefined
+    const reqSchema = extractRefName(reqContent?.['application/json']?.schema)
+    const rawResp = (rawOp.responses as Record<string, { description?: string }> | undefined) ?? {}
+    const responses = Object.entries(rawResp).map(([status, info]) => ({
+      status,
+      description: info?.description ?? 'Response',
+    }))
+    ops.push({
+      method,
+      path,
+      tag: tags[0] ?? 'Other',
+      summary: typeof rawOp.summary === 'string' ? rawOp.summary : '',
+      operationId: typeof rawOp.operationId === 'string' ? rawOp.operationId : '',
+      scopes,
+      pcOnly,
+      params,
+      reqSchema,
+      responses,
+    })
+  }
+}
+
+ops.sort((a, b) => {
+  const ta = TAG_ORDER.indexOf(a.tag)
+  const tb = TAG_ORDER.indexOf(b.tag)
+  if (ta !== tb) return (ta === -1 ? 99 : ta) - (tb === -1 ? 99 : tb)
+  if (a.path !== b.path) return a.path.localeCompare(b.path)
+  return (METHOD_ORDER[a.method] ?? 9) - (METHOD_ORDER[b.method] ?? 9)
+})
+
+const tagCounts = TAG_ORDER.map((tag) => ({
+  tag,
+  count: ops.filter((o) => o.tag === tag).length,
+})).filter((t) => t.count > 0)
+
+const schemaEntries = Object.entries(
+  (openapi.components?.schemas ?? {}) as Record<string, Record<string, unknown>>,
+)
+
+interface AsyncMsgDoc {
+  key: string
+  summary: string
+  scopes: string
+  fields: string[]
+}
+
+function readAsyncMessages(channelObj: Record<string, unknown>): AsyncMsgDoc[] {
+  const raw = (channelObj.messages ?? {}) as Record<string, Record<string, unknown>>
+  return Object.entries(raw).map(([key, msg]) => {
+    const payload = (msg.payload ?? {}) as Record<string, unknown>
+    const props = (payload.properties ?? {}) as Record<string, Record<string, unknown>>
+    const dataProps = (props.data?.properties ?? {}) as Record<string, unknown>
+    const fields = Object.keys(dataProps).length > 0 ? Object.keys(dataProps) : Object.keys(props)
+    return {
+      key,
+      summary: typeof msg.summary === 'string' ? msg.summary : '',
+      scopes: typeof msg['x-ferrocast-scopes'] === 'string' ? msg['x-ferrocast-scopes'] : '',
+      fields,
+    }
+  })
+}
+
+const liveChannel = asyncapi.channels.live as Record<string, unknown>
+const overlayChannel = asyncapi.channels.overlay as Record<string, unknown>
+const liveMessages = readAsyncMessages(liveChannel)
+const overlayMessages = readAsyncMessages(overlayChannel)
+
+const scopeCards = [
+  {
+    id: 'read_only',
+    title: 'read_only',
+    summary: 'Read status, chat history, overlays, events, scenes, and mixer state.',
+  },
+  {
+    id: 'chat',
+    title: 'chat',
+    summary: 'Send chat messages, run moderation actions, panic mode, polls, and counters.',
+  },
+  {
+    id: 'alerts',
+    title: 'alerts',
+    summary: 'Fire test alerts, pause/mute/skip alert queues, update overlay widgets and goals.',
+  },
+  {
+    id: 'studio_control',
+    title: 'studio_control',
+    summary: 'Switch scenes, toggle sources, mute/mix audio, trigger replay buffer and markers.',
+  },
+  {
+    id: 'go_live',
+    title: 'go_live',
+    summary: 'Start/stop multistream broadcasts, shows, and update safe title/category info.',
+  },
+  {
+    id: 'settings',
+    title: 'settings',
+    summary: 'Read and update local non-secret settings (LAN access changes always stay blocked).',
+  },
+]
+
+const tocItems = [
+  { id: 'auth', label: 'Auth & scopes' },
+  { id: 'endpoints', label: `REST endpoints (${ops.length})` },
+  { id: 'schemas', label: `Schemas (${schemaEntries.length})` },
+  { id: 'websocket', label: 'WebSocket frames' },
+  { id: 'examples', label: 'Example scripts' },
+  { id: 'obsws', label: 'obs-websocket v5' },
+]
+
+const techArticle = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: page.title,
+  description: page.description,
+  url,
+  author: { '@type': 'Organization', name: 'ClearCraft Labs' },
+}
+
+const nodeSnippet = `import { setTimeout as delay } from 'node:timers/promises'
+
+const key = process.env.FERROCAST_API_KEY // fc_key_...
+const ws = new WebSocket(\`ws://127.0.0.1:47820/api/v1/live?key=\${encodeURIComponent(key)}\`)
+
+ws.addEventListener('message', async (ev) => {
+  const frame = JSON.parse(String(ev.data))
+  if (frame.type === 'event' && frame.data?.kind?.type === 'follow') {
+    await fetch('http://127.0.0.1:47820/api/v1/studio/counters/follows', {
+      method: 'POST',
+      headers: {
+        Authorization: \`Bearer \${key}\`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ op: 'add', amount: 1 }),
+    })
+  }
+})`
+
+const pythonSnippet = `import json
+import os
+import urllib.request
+
+BASE = "http://127.0.0.1:47820/api/v1"
+KEY = os.environ["FERROCAST_API_KEY"]
+
+req = urllib.request.Request(
+    f"{BASE}/obs/scene",
+    data=json.dumps({"scene": "Gameplay"}).encode(),
+    headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(req, timeout=5) as res:
+    print(res.status)`
+---
+
+<Base page={page} schema={[techArticle]} ogType="article">
+  <section class="head">
+    <div class="container head-inner">
+      <Breadcrumbs page={page} />
+      <h1 class="display-2">Local REST &amp; WebSocket API</h1>
+      <p class="lede">
+        Automate Ferrocast locally from Stream Decks, Node scripts, Python bots, or Bitfocus
+        Companion. Generated straight from the engine router and live WebSocket frame schemas.
+      </p>
+      <div class="spec-bar">
+        <span class="spec-pill">OpenAPI {openapi.openapi}</span>
+        <span class="spec-pill">AsyncAPI {asyncapi.asyncapi}</span>
+        <span class="spec-pill">{ops.length} REST endpoints</span>
+        <span class="spec-pill">{liveMessages.length + overlayMessages.length} WS frames</span>
+        <a class="spec-dl" href="/specs/openapi.json" download>
+          <Icon name="download" size={16} />
+          openapi.json
+        </a>
+        <a class="spec-dl" href="/specs/asyncapi.json" download>
+          <Icon name="download" size={16} />
+          asyncapi.json
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <div class="container doc">
+    <nav aria-label="On this page" class="toc">
+      <p class="toc-title">On this page</p>
+      <ol>
+        {tocItems.map((item) => (
+          <li>
+            <a href={`#${item.id}`}>{item.label}</a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+
+    <div class="api-main">
+      <section id="auth" class="prose">
+        <h2>Authentication &amp; scoped local API keys</h2>
+        <p>
+          Every REST call runs against <code>http://127.0.0.1:47820</code> (or your configured local
+          port) with <code>Authorization: Bearer fc_key_&lt;64 hex&gt;</code>. Create, inspect, and
+          revoke keys on your PC in <strong>Settings -&gt; Advanced -&gt; Local API keys</strong>.
+        </p>
+        <ul>
+          <li>
+            <strong>Hashed at rest:</strong> the plain key is shown once on creation and stored only
+            as a SHA-256 digest.
+          </li>
+          <li>
+            <strong>Rate limited:</strong> 120 requests per minute per key in a sliding window,
+            returning HTTP <code>429</code> with <code>Retry-After</code>,{' '}
+            <code>X-RateLimit-Limit</code>, and <code>X-RateLimit-Remaining</code> headers.
+          </li>
+          <li>
+            <strong>Audited without secrets:</strong> every request is logged with key name, method,
+            path (without query strings), and HTTP status.
+          </li>
+          <li>
+            <strong>Hard boundary:</strong> even with all six scopes granted, keys can never reach{' '}
+            <code>/api-keys</code>, <code>/session/*</code>, <code>/accounts</code>,{' '}
+            <code>/pro</code>, <code>/plugins</code>, <code>/diagnostics</code>, <code>/tips</code>,
+            <code>/discord</code>, secrets, backups, imports/exports, or toggle{' '}
+            <code>lan_access</code>.
+          </li>
+        </ul>
+
+        <div class="scope-grid">
+          {scopeCards.map((s) => (
+            <div class="scope-card">
+              <p class="scope-name">
+                <code>{s.title}</code>
+              </p>
+              <p class="scope-desc">{s.summary}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="endpoints" class="section-block">
+        <div class="section-head">
+          <h2>REST endpoints</h2>
+          <p class="muted" data-filter-count>
+            Showing {ops.length} of {ops.length} operations
+          </p>
+        </div>
+
+        <div class="filters" role="search" aria-label="Filter API endpoints">
+          <div class="filter-row">
+            <label class="field-label">
+              <span>Search path or summary</span>
+              <input
+                type="search"
+                id="api-search"
+                placeholder="/obs/scene, alerts, POST..."
+                autocomplete="off"
+              />
+            </label>
+            <label class="field-label">
+              <span>Category</span>
+              <select id="api-tag">
+                <option value="">All categories ({ops.length})</option>
+                {tagCounts.map((t) => (
+                  <option value={t.tag}>
+                    {t.tag} ({t.count})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div class="scope-pills" role="group" aria-label="Filter by API key scope">
+            <button type="button" class="pill is-active" data-scope-filter="">
+              All scopes
+            </button>
+            {scopeCards.map((s) => (
+              <button type="button" class="pill" data-scope-filter={s.id}>
+                {s.title}
+              </button>
+            ))}
+            <button type="button" class="pill" data-scope-filter="pc_only">
+              PC only
+            </button>
+          </div>
+        </div>
+
+        <div class="ops-list" id="ops-list">
+          {ops.map((op) => (
+            <details
+              class="op-card"
+              data-op
+              data-tag={op.tag}
+              data-scopes={op.pcOnly ? 'pc_only' : op.scopes.join(',')}
+              data-hay={`${op.method} ${op.path} ${op.tag} ${op.summary} ${op.reqSchema ?? ''}`.toLowerCase()}
+            >
+              <summary class="op-summary">
+                <span class={`method m-${op.method.toLowerCase()}`}>{op.method}</span>
+                <code class="op-path">{op.path}</code>
+                <span class="op-desc">{op.summary}</span>
+                <span class="op-badges">
+                  {op.pcOnly ? (
+                    <span class="scope-tag is-locked">PC only</span>
+                  ) : (
+                    op.scopes.map((sc) => <span class="scope-tag">{sc}</span>)
+                  )}
+                </span>
+              </summary>
+              <div class="op-body">
+                <div class="op-meta">
+                  <span>
+                    <strong>Category:</strong> {op.tag}
+                  </span>
+                  <span>
+                    <strong>Operation:</strong> <code>{op.operationId}</code>
+                  </span>
+                  {op.reqSchema && (
+                    <span>
+                      <strong>Body schema:</strong>{' '}
+                      <a href={`#schema-${op.reqSchema}`}>
+                        <code>{op.reqSchema}</code>
+                      </a>
+                    </span>
+                  )}
+                </div>
+                {op.params.length > 0 && (
+                  <div class="op-sub">
+                    <p class="op-sub-title">Parameters</p>
+                    <div class="param-list">
+                      {op.params.map((prm) => (
+                        <span class="param-chip">
+                          <code>{prm.name}</code> ({prm.in}
+                          {prm.required ? ', required' : ''})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div class="op-sub">
+                  <p class="op-sub-title">Responses</p>
+                  <ul class="resp-list">
+                    {op.responses.map((r) => (
+                      <li>
+                        <code>{r.status}</code>: {r.description}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+        <p class="empty-msg" id="ops-empty" hidden>
+          No endpoints match your current search and scope filters.
+        </p>
+      </section>
+
+      <section id="schemas" class="section-block">
+        <h2>Component schemas</h2>
+        <div class="schemas-grid">
+          {schemaEntries.map(([name, schema]) => {
+            const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>
+            const req = Array.isArray(schema.required) ? (schema.required as string[]) : []
+            const enumVals = Array.isArray(schema.enum) ? (schema.enum as string[]) : null
+            return (
+              <div id={`schema-${name}`} class="schema-card">
+                <h3 class="schema-title">
+                  <code>{name}</code>
+                </h3>
+                {typeof schema.description === 'string' && (
+                  <p class="schema-desc">{schema.description}</p>
+                )}
+                {enumVals && (
+                  <p class="schema-enum">
+                    Enum:{' '}
+                    {enumVals.map((v, idx) => (
+                      <>
+                        {idx > 0 ? ', ' : ''}
+                        <code>{v}</code>
+                      </>
+                    ))}
+                  </p>
+                )}
+                {Object.keys(props).length > 0 && (
+                  <ul class="schema-props">
+                    {Object.entries(props).map(([propName, propDef]) => (
+                      <li>
+                        <code>{propName}</code>
+                        {req.includes(propName) && <span class="req-dot">required</span>}
+                        <span class="prop-type">
+                          {Array.isArray(propDef.type)
+                            ? (propDef.type as string[]).join(' | ')
+                            : typeof propDef.type === 'string'
+                              ? propDef.type
+                              : (extractRefName(propDef) ?? 'object')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section id="websocket" class="section-block">
+        <h2>WebSocket frames (AsyncAPI {asyncapi.asyncapi})</h2>
+        <div class="ws-block">
+          <h3>
+            Live control &amp; events socket: <code>{String(liveChannel.address)}</code>
+          </h3>
+          <p class="muted">{String(liveChannel.description ?? '')}</p>
+          <div class="ws-grid">
+            {liveMessages.map((msg) => (
+              <div class="ws-card">
+                <div class="ws-top">
+                  <code>type: "{msg.key}"</code>
+                  {msg.scopes && <span class="scope-tag">{msg.scopes}</span>}
+                </div>
+                <p class="ws-summary">{msg.summary}</p>
+                <p class="ws-fields">Fields: {msg.fields.map((f) => f).join(', ')}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div class="ws-block">
+          <h3>
+            Overlay browser-source socket: <code>{String(overlayChannel.address)}</code>
+          </h3>
+          <p class="muted">{String(overlayChannel.description ?? '')}</p>
+          <div class="ws-grid">
+            {overlayMessages.map((msg) => (
+              <div class="ws-card">
+                <div class="ws-top">
+                  <code>type: "{msg.key}"</code>
+                </div>
+                <p class="ws-summary">{msg.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="examples" class="prose section-block">
+        <h2>Example integrations</h2>
+        <p>
+          Complete runnable examples with tests live in the engine repository under{' '}
+          <code>examples/follow-reactor</code> (Node.js) and{' '}
+          <code>examples/streamdeck-controller</code> (Python).
+        </p>
+        <h3>Node.js follow counter reactor</h3>
+        <pre class="code-box"><code>{nodeSnippet}</code></pre>
+        <h3>Python Stream Deck controller</h3>
+        <pre class="code-box"><code>{pythonSnippet}</code></pre>
+      </section>
+
+      <section id="obsws" class="prose section-block">
+        <h2>obs-websocket v5 server</h2>
+        <p>
+          Ferrocast also exposes an opt-in <code>obs-websocket</code> v5 server (default port{' '}
+          <code>4455</code>, subprotocol <code>obswebsocket.json</code>) for Stream Deck, Touch
+          Portal, and Bitfocus Companion. Enable it in{' '}
+          <strong>Settings -&gt; Studio -&gt; Remote control</strong> to generate the one-time
+          24-character password.
+        </p>
+        <p>
+          Covers 91 requests across scenes, studio mode, transitions &amp; T-bar, collections &amp;
+          profiles, scene item transforms/locking/ordering/duplication, input
+          creation/settings/audio monitoring &amp; sync/balance/tracks, filters, media controls,
+          screenshots, recording splits &amp; chapters, replay buffer, and virtual camera, plus live
+          change events.
+        </p>
+      </section>
+    </div>
+  </div>
+  <div class="spacer"></div>
+</Base>
+
+<script>
+  const searchEl = document.getElementById('api-search') as HTMLInputElement | null
+  const tagEl = document.getElementById('api-tag') as HTMLSelectElement | null
+  const countEl = document.querySelector<HTMLElement>('[data-filter-count]')
+  const emptyEl = document.getElementById('ops-empty')
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-op]'))
+  const pillButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-scope-filter]'),
+  )
+
+  let activeScope = ''
+
+  function applyFilters() {
+    const q = (searchEl?.value ?? '').trim().toLowerCase()
+    const tag = tagEl?.value ?? ''
+    let shown = 0
+
+    for (const card of cards) {
+      const cardTag = card.dataset.tag ?? ''
+      const scopes = (card.dataset.scopes ?? '').split(',').filter(Boolean)
+      const hay = card.dataset.hay ?? ''
+
+      const matchTag = !tag || cardTag === tag
+      const matchScope = !activeScope || scopes.includes(activeScope)
+      const matchSearch = !q || hay.includes(q)
+      const visible = matchTag && matchScope && matchSearch
+      card.hidden = !visible
+      if (visible) shown += 1
+    }
+
+    if (countEl) countEl.textContent = `Showing ${shown} of ${cards.length} operations`
+    if (emptyEl) emptyEl.hidden = shown > 0
+  }
+
+  searchEl?.addEventListener('input', applyFilters)
+  tagEl?.addEventListener('change', applyFilters)
+  for (const btn of pillButtons) {
+    btn.addEventListener('click', () => {
+      activeScope = btn.dataset.scopeFilter ?? ''
+      for (const b of pillButtons) {
+        b.classList.toggle('is-active', b === btn)
+      }
+      applyFilters()
+    })
+  }
+</script>
+
+<style>
+  .head {
+    padding-block: 40px 24px;
+  }
+  .head-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  @media (min-width: 1024px) {
+    .head {
+      padding-block: 72px 36px;
+    }
+  }
+  .spec-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .spec-pill,
+  .spec-dl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  .spec-dl {
+    color: var(--fc-accent-text);
+    border-color: var(--fc-accent-line);
+    background: var(--fc-accent-soft);
+  }
+  .doc {
+    display: grid;
+    gap: 32px;
+  }
+  .toc-title {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--fc-text-3);
+    margin-bottom: 8px;
+  }
+  .toc ol {
+    margin: 0;
+    padding-left: 1.2em;
+    display: grid;
+    gap: 6px;
+    color: var(--fc-text-3);
+  }
+  .toc a {
+    color: var(--fc-text-2);
+    text-decoration: none;
+  }
+  @media (min-width: 960px) {
+    .doc {
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 48px;
+    }
+    .toc {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }
+  }
+  .api-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+  }
+  .section-block {
+    min-width: 0;
+  }
+  .section-block h2 {
+    margin: 0 0 12px;
+  }
+  .section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .section-head h2 {
+    margin: 0;
+  }
+  .muted {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--fc-text-3);
+  }
+  .scope-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .scope-card {
+    padding: 14px 16px;
+    border: 1px solid var(--fc-line);
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-surface-1);
+  }
+  .scope-name {
+    margin: 0 0 4px;
+    font-weight: 650;
+  }
+  .scope-desc {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--fc-text-2);
+  }
+  .filters {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--fc-line);
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-surface-1);
+  }
+  .filter-row {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .filter-row {
+      grid-template-columns: 1.4fr 1fr;
+    }
+  }
+  .field-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fc-text-2);
+    min-width: 0;
+  }
+  .field-label input,
+  .field-label select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--fc-line-strong);
+    background: var(--fc-surface-2);
+    color: var(--fc-text);
+    font: inherit;
+    font-weight: 500;
+  }
+  .scope-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pill {
+    cursor: pointer;
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    color: var(--fc-text-2);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .pill.is-active {
+    border-color: var(--fc-accent-line);
+    background: var(--fc-accent-soft);
+    color: var(--fc-accent-text);
+  }
+  .ops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .op-card {
+    border: 1px solid var(--fc-line);
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-surface-1);
+    overflow: hidden;
+  }
+  .op-summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .op-summary::-webkit-details-marker {
+    display: none;
+  }
+  .method {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: var(--fc-font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid var(--fc-line-strong);
+    background: var(--fc-surface-2);
+    color: var(--fc-text);
+  }
+  .m-post {
+    border-color: var(--fc-accent-line);
+    background: var(--fc-accent-soft);
+    color: var(--fc-accent-text);
+  }
+  .op-path {
+    font-family: var(--fc-font-mono);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fc-text);
+    overflow-wrap: anywhere;
+  }
+  .op-desc {
+    flex: 1 1 200px;
+    font-size: 0.9rem;
+    color: var(--fc-text-2);
+    min-width: 0;
+  }
+  .op-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .scope-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    font-family: var(--fc-font-mono);
+    font-size: 0.75rem;
+    color: var(--fc-text-2);
+  }
+  .scope-tag.is-locked {
+    color: var(--fc-text-3);
+  }
+  .op-body {
+    border-top: 1px solid var(--fc-line);
+    padding: 12px 14px;
+    background: var(--fc-surface-2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.9rem;
+  }
+  .op-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    color: var(--fc-text-2);
+  }
+  .op-sub-title {
+    margin: 0 0 4px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--fc-text-3);
+  }
+  .param-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .param-chip {
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    font-size: 0.8125rem;
+  }
+  .resp-list {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--fc-text-2);
+  }
+  .schemas-grid,
+  .ws-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .schema-card,
+  .ws-card {
+    padding: 14px;
+    border: 1px solid var(--fc-line);
+    border-radius: var(--fc-radius-control);
+    background: var(--fc-surface-1);
+    min-width: 0;
+  }
+  .schema-title {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+  }
+  .schema-desc,
+  .schema-enum,
+  .ws-summary,
+  .ws-fields {
+    margin: 4px 0 0;
+    font-size: 0.875rem;
+    color: var(--fc-text-2);
+    overflow-wrap: anywhere;
+  }
+  .schema-props {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+  .schema-props li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .req-dot {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--fc-accent-text);
+  }
+  .prop-type {
+    color: var(--fc-text-3);
+    font-family: var(--fc-font-mono);
+    font-size: 0.78rem;
+  }
+  .ws-block + .ws-block {
+    margin-top: 28px;
+  }
+  .ws-block h3 {
+    margin: 0 0 6px;
+    overflow-wrap: anywhere;
+  }
+  .ws-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px;
+    align-items: center;
+  }
+  .code-box {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 14px;
+    border-radius: var(--fc-radius-control);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    font-family: var(--fc-font-mono);
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+  .empty-msg {
+    padding: 18px;
+    border: 1px dashed var(--fc-line);
+    border-radius: var(--fc-radius-control);
+    color: var(--fc-text-2);
+  }
+  .spacer {
+    height: 96px;
+  }
+</style>
