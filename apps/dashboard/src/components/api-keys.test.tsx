@@ -287,4 +287,38 @@ describe('ApiKeysSection', () => {
     await act(async () => button('Cancel')!.click())
     expect(document.body.textContent).not.toContain('Create local API key')
   })
+
+  it('changes Copy key button label to Copied inline after copying the generated key', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    await mount()
+    const findBtn = (label: string) =>
+      Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === label)
+
+    await act(async () => findBtn('Create API key')!.click())
+    const nameInput = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Stream Deck XL"]',
+    )!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(nameInput, 'OBS Macro')
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => findBtn('Create key')!.click())
+    await act(async () => Promise.resolve())
+
+    const copyBtn = findBtn('Copy key')
+    expect(copyBtn).toBeDefined()
+    await act(async () => {
+      copyBtn!.click()
+      await Promise.resolve()
+    })
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(findBtn('Copied')).toBeDefined()
+    expect(findBtn('Copy key')).toBeUndefined()
+  })
 })

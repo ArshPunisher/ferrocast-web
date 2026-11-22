@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle, Copy, Key, Plus, ShieldWarning, Trash } from '@phosphor-icons/react'
+import { Check, CheckCircle, Copy, Key, Plus, ShieldWarning, Trash } from '@phosphor-icons/react'
 import {
   API_KEY_LIMITS,
   API_KEY_SCOPES,
@@ -409,8 +409,8 @@ function CreateApiKeyDialog({
               onFocus={(e) => e.currentTarget.select()}
             />
             <Button
-              variant="secondary"
-              icon={<Copy size={16} />}
+              variant={copied ? 'outline' : 'secondary'}
+              icon={copied ? <Check size={16} /> : <Copy size={16} />}
               className="w-full sm:w-auto"
               onClick={() =>
                 void copyText(created.token).then((ok) => {
@@ -426,7 +426,7 @@ function CreateApiKeyDialog({
                 })
               }
             >
-              Copy key
+              {copied ? 'Copied' : 'Copy key'}
             </Button>
           </div>
 
