@@ -317,8 +317,14 @@ export class EmoteWallWidget implements WidgetView {
   }
 
   private syncMotion(): void {
+    const wasLow = this.low
     this.low = this.ctx.lowMotion()
     this.el.classList.toggle('is-static', this.low)
+    // Hidden by OBS, or switched between moving and static: what is in flight would
+    // either freeze, run on timers nobody sees, or be stranded, so start clean.
+    if ((!this.visible || this.low !== wasLow) && this.particles.length > 0) {
+      while (this.particles.length > 0) this.removeAt(this.particles.length - 1)
+    }
     if (this.low || !this.visible || this.particles.length === 0) {
       this.stopLoop()
       return

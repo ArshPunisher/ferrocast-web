@@ -321,6 +321,19 @@ describe('emote_wall widget', () => {
   })
 })
 
+describe('emote_wall hidden', () => {
+  it('drops its flying emotes and timers while OBS has the source hidden', () => {
+    vi.useFakeTimers()
+    rt = createOverlay(root, { audio: false, lowMotion: true })
+    rt.apply(snapshot({}, overlay([emoteWidget({ lifetime_s: 30 })])))
+    rt.apply(frame('event', emoteMsg('https://files.kick.com/emotes/4148074/fullsize', 1, 3)))
+    expect(root.querySelectorAll('.fc-emote-particle').length).toBe(3)
+    rt.setVisible(false)
+    expect(root.querySelectorAll('.fc-emote-particle').length).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
 describe('chat_highlight widget', () => {
   it('shows pinned card safely as textContent, dismisses on clear and times out cleanly', () => {
     vi.useFakeTimers()
