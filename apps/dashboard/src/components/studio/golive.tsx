@@ -189,15 +189,7 @@ export function GoLiveTab() {
       onChange={setPictureSource}
     />
   )
-  if (picture === 'ferrocast')
-    return (
-      <>
-        <StudioDesk res={res} view={view} lead={pick} />
-        <div className="mt-5 max-w-3xl">
-          <SchedulePanel />
-        </div>
-      </>
-    )
+  if (picture === 'ferrocast') return <StudioDesk res={res} view={view} lead={pick} />
   return (
     <>
       <InBar className="mb-4 flex">{pick}</InBar>
