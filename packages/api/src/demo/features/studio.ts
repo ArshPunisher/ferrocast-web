@@ -1047,6 +1047,13 @@ export class DemoStudio {
         return
       case '!clip':
         if (!this.scenesCfg.clip_command || !isMod) return
+        if (this.isStudioRig() && this.studioEngine) {
+          // The Studio's own replay buffer (the show starts that one, not OBS's).
+          if (!this.studioEngine.saveReplayNow())
+            return this.say('Couldn’t clip: the Studio’s replay buffer isn’t running.')
+          this.addMarker('clip', `Clip by ${name}`, null, true)
+          return this.say('Clipped! It’s saved in the Studio’s recordings folder.')
+        }
         if (!this.obs.replay) return this.say('Couldn’t clip: OBS’s replay buffer isn’t running.')
         this.obs.saves += 1
         this.addMarker('clip', `Clip by ${name}`, null, true)

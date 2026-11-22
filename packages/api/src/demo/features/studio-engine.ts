@@ -663,6 +663,13 @@ export class DemoStudioEngine {
     return this.opts.running && this.replayActive
   }
 
+  /** Saves the replay buffer now → its file, or null when the buffer is off (or the engine). */
+  saveReplayNow(): string | null {
+    if (!this.opts.running || !this.replayActive) return null
+    this.replayLast = `${this.recordFolder()}/Replay-${Date.now()}.mp4`
+    return this.replayLast
+  }
+
   private recordFolder(): string {
     return String(
       this.studioSettingsData.record_folder ??
@@ -2520,11 +2527,9 @@ export class DemoStudioEngine {
       return { active: this.replayActive }
     }
     if (is('POST', 'studio/engine/replay/save')) {
-      if (!this.replayActive) {
-        throw new HttpError(422, 'studio_failed', 'The replay buffer is off.')
-      }
-      this.replayLast = `${this.recordFolder()}/Replay-${Date.now()}.mp4`
-      return { file: this.replayLast }
+      const saved = this.saveReplayNow()
+      if (!saved) throw new HttpError(422, 'studio_failed', 'The replay buffer is off.')
+      return { file: saved }
     }
     if (is('POST', 'studio/engine/record')) {
       const on = Boolean(requireObj(body).on)
