@@ -1,5 +1,5 @@
 // Community Theme Store in the demo engine (R37): serves a signed-style fixture catalog,
-// validates custom alert HTML/CSS through the p2e sandbox rules, tracks installed designs/rules/
+// validates custom alert HTML/CSS through the sandbox rules, tracks installed designs/rules/
 // plugins, supports update/uninstall/one-click undo, resolves ferrocast:// confirmation links,
 // and lets tests trigger fault/tamper modes cleanly.
 
@@ -28,6 +28,7 @@ export type StoreFault =
   | 'oversized'
   | 'invalid_schema'
   | 'unreachable'
+  | 'not_published'
   | 'tampered_asset'
   | 'stale'
   | null
@@ -388,7 +389,7 @@ const CREATORS: StoreCreator[] = [
     id: 'vela-forge',
     name: 'Vela Forge',
     handle: '@velaforge',
-    bio: 'Studio broadcast frames and hardware-friendly WGSL shaders tested at 60 fps.',
+    bio: 'Studio broadcast frames and hardware-friendly shader effects tested at 60 fps.',
     verified: false,
     links: {
       youtube: 'https://youtube.com/@ferrocast',
@@ -497,7 +498,7 @@ function seedCatalog(): InternalItem[] {
       id: 'arcade-ticker-alert',
       kind: 'alert',
       title: 'Arcade Ticker Alert',
-      summary: 'Custom HTML/CSS follower banner strictly sandboxed in Ferrocast’s p2e frame.',
+      summary: 'A custom follower banner that runs in Ferrocast’s sandboxed alert frame.',
       version: '1.0.0',
       creator_id: 'kaito-lab',
       tags: ['retro', 'custom-html', 'sandboxed'],
@@ -522,7 +523,7 @@ function seedCatalog(): InternalItem[] {
         style: 'retro',
         motion: 'lively',
         headline: '{name} joined the squad!',
-        subline: 'Sandboxed p2e HTML + 2 editable fields',
+        subline: 'Sandboxed alert + 2 editable fields',
         layers_hint: 3,
         custom_alert: {
           html: CUSTOM_ALERT_HTML,
@@ -642,10 +643,10 @@ function seedCatalog(): InternalItem[] {
       id: 'soft-dimmer-shader',
       kind: 'plugin',
       title: 'Soft Studio Dimmer',
-      summary: 'Safe WGSL vignette & dim filter validated by Ferrocast’s GPU shader checker.',
+      summary: 'A soft vignette and dimming effect, checked by Ferrocast before it runs.',
       version: '1.0.0',
       creator_id: 'vela-forge',
-      tags: ['shader', 'wgsl', 'effect'],
+      tags: ['shader', 'effect'],
       license: 'GPL-3.0-only',
       sandboxed: true,
       plugin_kind: 'effect',
@@ -666,7 +667,7 @@ function seedCatalog(): InternalItem[] {
         palette: ['#101216', '#ff5aa5', '#33d4ff'],
         style: 'minimal',
         motion: 'still',
-        headline: 'WGSL Shader Effect',
+        headline: 'Shader effect',
         subline: 'Sandboxed GPU effect · 0 external permissions',
         layers_hint: 1,
       },
@@ -783,6 +784,14 @@ export class DemoStore implements DemoFeature {
           'The Community Store catalog schema isn’t valid.',
           'Installed items still work cleanly.',
         )
+      case 'not_published':
+        // As the engine says it when the catalog address answers 404: nothing is published there.
+        throw new HttpError(
+          502,
+          'store_unreachable',
+          'The catalog server didn’t answer: it said 404 Not Found',
+          'Check the internet and try again.',
+        )
       case 'unreachable':
         throw new HttpError(
           502,
@@ -820,7 +829,7 @@ export class DemoStore implements DemoFeature {
       throw new HttpError(
         502,
         'store_asset_tampered',
-        'That package failed the SHA-256 fingerprint check, so nothing was installed.',
+        'That package failed the fingerprint check, so nothing was installed.',
         'The catalog file or asset changed after signing.',
       )
     }
@@ -1343,12 +1352,12 @@ export class DemoStore implements DemoFeature {
     // checked when the person installs it (as the engine says it).
     const safety_notes = [
       'The catalog’s signature was checked (minisign).',
-      `Package size ${Math.max(1, Math.round(item.package.size / 1024))} KB. Its SHA-256 is checked when you install.`,
+      `Package size ${Math.max(1, Math.round(item.package.size / 1024))} KB. It is checked when you install.`,
       item.package.format === 'ferrodesign'
         ? 'A .ferrodesign is pure data. It is opened and checked when you install; nothing runs from it.'
         : item.package.format === 'ferroalert'
-          ? 'When you install, the alert’s HTML and CSS are checked against the sandbox rules (an isolated frame, no scripts). Nothing is applied if a check fails.'
-          : 'When you install, the plugin is opened and its kind, id and permissions are compared with the catalog’s. It runs sandboxed (a WGSL shader, resource-capped WASM, or a panel with no network).',
+          ? 'When you install, the alert is checked against the sandbox rules (an isolated frame, no scripts). Nothing is applied if a check fails.'
+          : 'When you install, the plugin is opened and its kind, id and permissions are compared with the catalog’s. It runs sandboxed (a shader effect, a small program with capped resources, or a panel with no network).',
     ]
     return {
       uri,
@@ -1372,7 +1381,11 @@ export class DemoStore implements DemoFeature {
     }
     if (sub === 'assets' && is('GET', 4) && a && b) {
       if (this.fault === 'tampered_asset') {
-        throw new HttpError(502, 'store_asset_tampered', 'Asset SHA-256 check failed.')
+        throw new HttpError(
+          502,
+          'store_asset_tampered',
+          'That picture failed the fingerprint check.',
+        )
       }
       // A picture only for an item and a name the catalog lists.
       const it = this.items.find((i) => i.id === a)

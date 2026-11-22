@@ -4,6 +4,7 @@
 // Install counts and star ratings are read-only metadata; no telemetry is ever sent.
 
 import type { FerroClient } from './client'
+import { ApiError } from './errors'
 import type {
   AlertAnim,
   Condition,
@@ -400,4 +401,19 @@ export function storeApi(client: FerroClient) {
     resolveLink: (uri: string) =>
       client.request<StoreLinkPreview>('POST', '/api/v1/store/resolve-link', { uri }),
   }
+}
+
+/**
+ * The catalog address answered "not found" (404) or "gone" (410): nothing is published there
+ * yet, which is not the internet being down. The engine words it as `store_unreachable` ("The
+ * catalog server didn't answer: it said 404 Not Found"); a dedicated code would say it outright,
+ * so this reads the status out of that sentence until it has one. A timeout, a refusal or a 5xx
+ * is not this: those do mean "try again".
+ */
+export function catalogNotPublished(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.code === 'store_unreachable' &&
+    /\bit said (404|410)\b/.test(err.message)
+  )
 }

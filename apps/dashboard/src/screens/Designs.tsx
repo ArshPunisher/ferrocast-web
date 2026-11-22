@@ -5,8 +5,6 @@
 
 import { useMemo, useRef, useState } from 'react'
 import {
-  CaretDown,
-  Check,
   Copy,
   DotsThree,
   DownloadSimple,
@@ -18,7 +16,6 @@ import {
   Play,
   Plus,
   Trash,
-  Waveform,
 } from '@phosphor-icons/react'
 import {
   EVENT_KEYS,
@@ -33,7 +30,17 @@ import {
   type MotionTag,
   type StyleTag,
 } from '@ferrocast/api'
-import { Badge, Button, Dialog, EmptyState, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
+import {
+  Badge,
+  Button,
+  Dialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Segmented,
+  Skeleton,
+  cx,
+} from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
 import { Menu } from '../components/Menu'
 import { DesignStage, type StageHandle } from '../components/design/DesignStage'
@@ -58,6 +65,7 @@ import { useAction, useClient, useResource } from '../lib/hooks'
 import { go, href, type GalleryTab } from '../lib/router'
 import { isCloud } from '../lib/boot'
 import { useLive } from '../lib/store'
+import { useWidePage } from '../lib/wide'
 
 const inTab = (t: GalleryTab, d: Design) => t === 'mine' || galleryTab(d) === t
 const KIND_NAME: Record<DesignKind, string> = {
@@ -263,6 +271,8 @@ const IMPORTS = [
 ] as const
 
 export function Designs({ tab }: { tab: GalleryTab }) {
+  // A work screen: the rail and the gallery use the whole window, not the page's 1400 px.
+  useWidePage()
   const cloud = isCloud(useLive((s) => s.conn))
   const client = useClient()
   const { run } = useAction()
@@ -343,12 +353,38 @@ export function Designs({ tab }: { tab: GalleryTab }) {
         ? 'fc-picked border-transparent'
         : 'border-line text-text-2 hover:border-line-strong hover:text-text',
     )
+  /** One row of the rail's lists: its name, and how many designs it holds. */
+  const railRow = (on: boolean) =>
+    cx(
+      'fc-press flex h-9 w-full items-center justify-between gap-2 rounded-control px-2.5 text-left text-[14px] font-semibold',
+      on ? 'fc-picked' : 'text-text-2 hover:bg-surface-2 hover:text-text',
+    )
 
   return (
     <div>
       <PageHeader
         title="Designs"
         description="Themes, alerts and widgets that play the real thing. Use one as it is, or duplicate it to make it yours without Ferrocast branding."
+        beside={
+          <nav aria-label="Gallery" className="flex min-w-0 flex-wrap gap-1.5">
+            {TABS.map((t) => (
+              <a
+                key={t.id}
+                href={href({ name: 'designs', ...(t.id === 'themes' ? {} : { tab: t.id }) })}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={cx(
+                  'fc-press inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[14.5px] font-semibold',
+                  tab === t.id
+                    ? 'fc-picked border-transparent'
+                    : 'border-line text-text-2 hover:border-line-strong hover:text-text',
+                )}
+              >
+                {t.label}
+                <span className="font-mono text-[13px] font-medium opacity-80">{count(t.id)}</span>
+              </a>
+            ))}
+          </nav>
+        }
         actions={
           <>
             {!cloud && (
@@ -378,185 +414,189 @@ export function Designs({ tab }: { tab: GalleryTab }) {
           </>
         }
       />
-      <div className="mb-5 flex flex-wrap items-end gap-3 border-b border-line">
-        <nav
-          aria-label="Gallery"
-          className="-mb-px flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]"
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <aside
+          aria-label="Filters"
+          className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-3 lg:w-[190px] min-[1400px]:w-[214px]"
         >
-          {TABS.map((t) => (
-            <a
-              key={t.id}
-              href={href({ name: 'designs', ...(t.id === 'themes' ? {} : { tab: t.id }) })}
-              aria-current={tab === t.id ? 'page' : undefined}
-              className={cx(
-                'inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-[15px] font-semibold transition-colors',
-                tab === t.id
-                  ? 'border-accent text-text'
-                  : 'border-transparent text-text-3 hover:text-text',
-              )}
-            >
-              {t.label}
-              <span className="font-mono text-[13.5px] font-medium text-text-3">{count(t.id)}</span>
-            </a>
-          ))}
-        </nav>
-        <span className="flex-1" />
-        <label className="relative mb-2 w-full sm:w-64">
-          <span className="sr-only">{searchLabel}</span>
-          <MagnifyingGlass
-            size={16}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            data-keep-placeholder
-            placeholder={searchLabel}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="h-9 pl-9"
-          />
-        </label>
-      </div>
-      <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label="Style"
-          className="-mx-4 flex min-w-0 basis-full gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:basis-0 sm:flex-1 sm:px-0"
-        >
-          <button
-            type="button"
-            aria-pressed={style === ''}
-            onClick={() => setStyle('')}
-            className={chip(style === '')}
-          >
-            All styles
-          </button>
-          {stylesHere.map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={style === t}
-              onClick={() => setStyle(style === t ? '' : t)}
-              className={chip(style === t)}
-            >
-              {STYLE_LABEL[t]}
-            </button>
-          ))}
-        </div>
-        <Menu
-          label="Motion"
-          align="end"
-          trigger={(p) => (
-            <button {...p} type="button" className={chip(motion !== '')}>
-              <Waveform size={14} />
-              {MOTION_GROUPS.find((m) => m.value === motion)?.label}
-              <CaretDown size={12} />
-            </button>
-          )}
-          items={MOTION_GROUPS.map((m) => ({
-            key: m.value || 'any',
-            label: m.label,
-            icon:
-              motion === m.value ? <Check size={15} /> : <span className="inline-block w-[15px]" />,
-            onSelect: () => setMotion(m.value),
-          }))}
-        />
-      </div>
-      {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
-        <div className="mb-5 flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-[14px] text-text-3">Preview as</span>
-          <div
-            role="group"
-            aria-label="Preview as"
-            className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]"
-          >
-            {EVENT_KEYS.filter((k) => !['resub', 'member', 'kicks', 'redeem'].includes(k)).map(
-              (k) => {
-                const I = EVENT_ICON[k]
+          <label className="relative block">
+            <span className="sr-only">{searchLabel}</span>
+            <MagnifyingGlass
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              data-keep-placeholder
+              placeholder={searchLabel}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="h-9 pl-9"
+            />
+          </label>
+          <div role="group" aria-label="Style" className="flex flex-col gap-0.5">
+            <span className="px-2.5 pb-1 text-[13px] font-semibold tracking-wide text-text-3 uppercase">
+              Style
+            </span>
+            {/* A list down the side; on a phone the same choices wrap as chips. */}
+            <div className="flex flex-wrap gap-1.5 lg:flex-col lg:gap-0.5">
+              <button
+                type="button"
+                aria-pressed={style === ''}
+                onClick={() => setStyle('')}
+                className={cx(chip(style === ''), 'lg:hidden')}
+              >
+                All styles
+              </button>
+              <button
+                type="button"
+                aria-pressed={style === ''}
+                onClick={() => setStyle('')}
+                className={cx(railRow(style === ''), 'hidden lg:flex')}
+              >
+                <span>All styles</span>
+                <span className="font-mono text-[12.5px] font-medium opacity-80">
+                  {source.length}
+                </span>
+              </button>
+              {stylesHere.map((t) => {
+                const n = source.filter((d) => d.tags.style === t).length
                 return (
                   <button
-                    key={k}
+                    key={t}
                     type="button"
-                    aria-pressed={ev === k}
-                    onClick={() => setEv(k)}
-                    className={chip(ev === k)}
+                    aria-pressed={style === t}
+                    onClick={() => setStyle(style === t ? '' : t)}
+                    className={cx(
+                      railRow(style === t),
+                      'max-lg:h-8 max-lg:w-auto max-lg:rounded-full max-lg:border max-lg:px-3',
+                      style !== t && 'max-lg:border-line',
+                    )}
                   >
-                    <I size={14} />
-                    {EVENT_LABEL[k]}
+                    <span>{STYLE_LABEL[t]}</span>
+                    <span className="font-mono text-[12.5px] font-medium opacity-80">{n}</span>
                   </button>
                 )
-              },
-            )}
+              })}
+            </div>
           </div>
-        </div>
-      )}
-      {list.error ? (
-        <LoadError error={list.error} onRetry={list.reload} />
-      ) : list.loading && !list.data ? (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="aspect-[4/3]" />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        tab === 'mine' && mine.length === 0 ? (
-          <EmptyState title="No designs of your own yet">
-            Duplicate a built-in, start from scratch, or import a design file or an asset pack.
-          </EmptyState>
-        ) : (
-          <div className="flex flex-col items-center gap-3 rounded-panel border border-dashed border-line-strong px-4 py-10 text-center">
-            <b className="text-base text-text">Nothing matches these filters</b>
-            {filtered && (
-              <Button size="sm" variant="secondary" onClick={clear}>
-                Clear filters
-              </Button>
-            )}
-          </div>
-        )
-      ) : (
-        <>
-          {showShelves && (
-            <FeaturedThemes
-              themes={featured}
-              paused={!!sheet || !!using}
-              onOpen={setSheet}
-              onUse={setUsing}
+          <div className="flex flex-col gap-1.5">
+            <span className="px-2.5 text-[13px] font-semibold tracking-wide text-text-3 uppercase">
+              Motion
+            </span>
+            <Segmented
+              label="Motion"
+              size="sm"
+              value={motion}
+              onChange={setMotion}
+              className="w-full [&>label]:flex-1 [&>label]:text-center"
+              options={MOTION_GROUPS.map((m) => ({
+                value: m.value,
+                label: m.value === '' ? 'Any' : m.label,
+                title: m.label,
+              }))}
             />
-          )}
-          {tab === 'themes' && (
-            <h2 className="mb-3 font-display text-lg font-extrabold tracking-tight">
-              {filtered ? 'Matching themes' : 'All themes'}
-            </h2>
-          )}
-          <div
-            className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
-            aria-live="polite"
-          >
-            {items.map((d) =>
-              isTheme(d) ? (
-                <ThemeCard
-                  key={d.id}
-                  theme={d}
-                  isNew={d.built_in && newIds.has(d.id)}
-                  onOpen={() => setSheet(d)}
-                  onUse={() => setUsing(d)}
-                />
-              ) : (
-                <Tile
-                  key={d.id}
-                  design={d}
-                  ev={ev}
-                  active={active.data?.design_id === d.id}
-                  onUse={() => use(d)}
-                  onDuplicate={() => duplicate(d)}
-                  onDelete={() => setDeleting(d)}
-                />
-              ),
-            )}
           </div>
-        </>
-      )}
+          {(tab === 'alerts' || (tab === 'mine' && items.some((d) => d.kind === 'alert'))) && (
+            <div className="flex flex-col gap-1.5">
+              <span className="px-2.5 text-[13px] font-semibold tracking-wide text-text-3 uppercase">
+                Preview as
+              </span>
+              <div role="group" aria-label="Preview as" className="flex flex-wrap gap-1.5">
+                {EVENT_KEYS.filter((k) => !['resub', 'member', 'kicks', 'redeem'].includes(k)).map(
+                  (k) => {
+                    const I = EVENT_ICON[k]
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        aria-pressed={ev === k}
+                        onClick={() => setEv(k)}
+                        className={chip(ev === k)}
+                      >
+                        <I size={14} />
+                        {EVENT_LABEL[k]}
+                      </button>
+                    )
+                  },
+                )}
+              </div>
+            </div>
+          )}
+          <p className="hidden rounded-control border border-line bg-surface-2 p-2.5 text-[13.5px] text-text-2 lg:block">
+            Hover a card to play its live loop before you use it.
+          </p>
+        </aside>
+        <div className="min-w-0 flex-1">
+          {list.error ? (
+            <LoadError error={list.error} onRetry={list.reload} />
+          ) : list.loading && !list.data ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
+              {Array.from({ length: 8 }, (_, i) => (
+                <Skeleton key={i} className="aspect-[4/3]" />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            tab === 'mine' && mine.length === 0 ? (
+              <EmptyState title="No designs of your own yet">
+                Duplicate a built-in, start from scratch, or import a design file or an asset pack.
+              </EmptyState>
+            ) : (
+              <div className="flex flex-col items-center gap-3 rounded-panel border border-dashed border-line-strong px-4 py-10 text-center">
+                <b className="text-base text-text">Nothing matches these filters</b>
+                {filtered && (
+                  <Button size="sm" variant="secondary" onClick={clear}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            )
+          ) : (
+            <>
+              {showShelves && (
+                <FeaturedThemes
+                  themes={featured}
+                  paused={!!sheet || !!using}
+                  onOpen={setSheet}
+                  onUse={setUsing}
+                />
+              )}
+              {tab === 'themes' && (
+                <h2 className="mb-3 font-display text-lg font-extrabold tracking-tight">
+                  {filtered ? 'Matching themes' : 'All themes'}
+                </h2>
+              )}
+              <div
+                className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3"
+                aria-live="polite"
+              >
+                {items.map((d) =>
+                  isTheme(d) ? (
+                    <ThemeCard
+                      key={d.id}
+                      theme={d}
+                      isNew={d.built_in && newIds.has(d.id)}
+                      onOpen={() => setSheet(d)}
+                      onUse={() => setUsing(d)}
+                    />
+                  ) : (
+                    <Tile
+                      key={d.id}
+                      design={d}
+                      ev={ev}
+                      active={active.data?.design_id === d.id}
+                      onUse={() => use(d)}
+                      onDuplicate={() => duplicate(d)}
+                      onDelete={() => setDeleting(d)}
+                    />
+                  ),
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
       <ThemeSheet
         key={`sheet-${sheetTheme?.id ?? 'none'}`}
         theme={sheetTheme}

@@ -23,6 +23,7 @@ import {
   Warning,
 } from '@phosphor-icons/react'
 import {
+  catalogNotPublished,
   describeError,
   parseFerrocastStoreLink,
   safeCreatorLinkUrl,
@@ -41,6 +42,7 @@ import {
   Dialog,
   EmptyState,
   IconButton,
+  InfoTip,
   Input,
   Skeleton,
   cx,
@@ -51,6 +53,7 @@ import { StoreCardPreview, StoreDetailPreview } from '../components/store/StoreP
 import { canWords } from '../components/plugins-settings'
 import { externalLink } from '../lib/external'
 import { useClient } from '../lib/hooks'
+import { useWidePage } from '../lib/wide'
 import { go, href, type Route } from '../lib/router'
 import { filterInstalled, latestOnly, withInstalled } from '../lib/store-state'
 import { estimateItemPerf, measureItemLocally, type LocalPerfReport } from '../lib/store-perf'
@@ -116,16 +119,14 @@ function SafetyBadge({ item }: { item: StoreItem }) {
     return (
       <Badge tone="accent">
         <LockKey size={12} aria-hidden="true" />
-        <span>p2e Sandbox</span>
+        <span>Sandboxed</span>
       </Badge>
     )
   }
   return (
     <Badge tone="accent">
       <Cpu size={12} aria-hidden="true" />
-      <span>
-        {item.plugin_kind === 'effect' ? 'WGSL Sandbox' : `${item.plugin_kind ?? 'Plugin'} Sandbox`}
-      </span>
+      <span>{item.plugin_kind === 'effect' ? 'Shader (sandboxed)' : 'Plugin (sandboxed)'}</span>
     </Badge>
   )
 }
@@ -365,7 +366,43 @@ function StoreItemCard({
   )
 }
 
+/** The catalog address answers "not found": nothing is published yet. Said plainly, since the
+ * internet is fine, and what still works is named. */
+function CatalogNotPublished({ onCheck }: { onCheck: () => void }) {
+  return (
+    <div
+      role="status"
+      data-testid="store-not-published"
+      className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-accent-line bg-accent-soft px-4 py-4"
+    >
+      <div className="min-w-[240px] flex-1">
+        <p className="text-[15px] font-semibold text-text">
+          The Community Store catalog isn’t published yet
+        </p>
+        <p className="mt-1 text-[14px] text-text-2">
+          Your internet connection is fine: there is no catalog at the Store’s address yet. What you
+          installed keeps working.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={href({ name: 'designs' })}
+          className="fc-press inline-flex h-8 items-center rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold text-text hover:border-text-3"
+        >
+          Browse built-in designs
+        </a>
+        <Button size="sm" variant="secondary" onClick={onCheck}>
+          <ArrowClockwise size={15} aria-hidden="true" />
+          Check again
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
+  // A catalog and its rail use the whole window.
+  useWidePage()
   const client = useClient()
   const api = useMemo(() => storeApi(client), [client])
 
@@ -378,6 +415,8 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
   const [filter, setFilter] = useState<FilterKind>('all')
   const [search, setSearch] = useState('')
+  // Trust: pure data, and what runs in a sandbox (custom alerts, plugins). Both on shows everything.
+  const [trust, setTrust] = useState({ data: true, sandbox: true })
   const [busyId, setBusyId] = useState<string | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
 
@@ -595,6 +634,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
     const q = search.trim().toLowerCase()
     return list.filter((item) => {
       if (filter === 'installed' && !item.installed_version) return false
+      if (item.package.format === 'ferrodesign' ? !trust.data : !trust.sandbox) return false
       if (filter !== 'all' && filter !== 'installed' && item.kind !== filter) return false
       if (!q) return true
       const creatorName = creatorsById.get(item.creator_id)?.name.toLowerCase() ?? ''
@@ -605,12 +645,19 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         item.tags.some((t) => t.toLowerCase().includes(q))
       )
     })
-  }, [catalog, filter, search, creatorsById])
+  }, [catalog, filter, search, trust, creatorsById])
 
   const installedShown = useMemo(
     () => filterInstalled(installedFallback, search),
     [installedFallback, search],
   )
+
+  /** How many items each category holds (the rail's numbers), whatever the search says. */
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: catalog?.items.length ?? 0 }
+    for (const it of catalog?.items ?? []) c[it.kind] = (c[it.kind] ?? 0) + 1
+    return c
+  }, [catalog])
 
   const selectedItemPerf = selectedItem
     ? (perfCache.get(selectedItem.id) ?? estimateItemPerf(selectedItem))
@@ -623,6 +670,21 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         description="Signed themes, alerts, widgets, overlays, and sandboxed plugins. Zero telemetry sent."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <MagnifyingGlass
+                size={15}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
+                aria-hidden="true"
+              />
+              <Input
+                data-keep-placeholder
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search packages, creators…"
+                aria-label="Search Community Store"
+                className="h-9 pl-9"
+              />
+            </div>
             <Button
               size="sm"
               variant="secondary"
@@ -710,169 +772,215 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         />
       ) : (
         <>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div role="group" aria-label="Store categories" className="flex flex-wrap gap-1.5">
-              {CATEGORY_TABS.map((t) => {
-                const count = t.id === 'installed' ? installedFallback.length : undefined
-                const active = filter === t.id
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setFilter(t.id)}
-                    className={cx(
-                      'rounded-full border px-3 py-1 text-[13.5px] font-semibold transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                      active
-                        ? 'border-arc bg-accent-soft text-text'
-                        : 'border-line bg-surface-1 text-text-2 hover:border-line-strong hover:text-text',
-                    )}
-                  >
-                    {t.label}
-                    {count !== undefined ? ` (${count})` : ''}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="relative w-full lg:w-72">
-              <MagnifyingGlass
-                size={15}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
-                aria-hidden="true"
-              />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search themes, creators, tags…"
-                aria-label="Search Community Store"
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          {catalogError ? (
-            <LoadError error={catalogError} onRetry={() => void loadAll(true)} />
-          ) : null}
-
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((k) => (
-                <div
-                  key={k}
-                  className="rounded-panel border border-line bg-surface-1 p-4 space-y-3"
-                >
-                  <Skeleton className="aspect-video w-full" />
-                  <Skeleton className="h-5 w-2/3" />
-                  <Skeleton className="h-4 w-full" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            catalog &&
-            filter !== 'installed' && (
-              <>
-                {filteredItems.length === 0 ? (
-                  <EmptyState
-                    title="No store items match that search"
-                    action={
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setFilter('all')
-                          setSearch('')
-                        }}
-                      >
-                        Reset filters
-                      </Button>
-                    }
-                  >
-                    Try clearing the category filter or search box.
-                  </EmptyState>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredItems.map((item) => (
-                      <StoreItemCard
-                        key={item.id}
-                        item={item}
-                        creator={creatorsById.get(item.creator_id)}
-                        perf={perfCache.get(item.id) ?? estimateItemPerf(item)}
-                        busy={busyId === item.id}
-                        onOpen={() => go({ name: 'store', item: item.id })}
-                        onCreator={(cid) => go({ name: 'store', creator: cid })}
-                        onInstall={() => void doInstall(item.id)}
-                        onUpdate={() => void doUpdate(item.id)}
-                        onUninstall={() => void doUninstall(item.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )
-          )}
-
-          {/* Always shown when Installed tab active OR when catalog fails so installed packages keep working */}
-          {(filter === 'installed' || !!catalogError || installedFallback.length > 0) && (
-            <Panel
-              id="store-installed-panel"
-              title={`Installed from Store (${installedShown.length === installedFallback.length ? installedFallback.length : `${installedShown.length} of ${installedFallback.length}`})`}
-              description="Stored locally with SHA-256 verification. Keeps working even when the remote catalog is unavailable."
-              icon={<Package weight="fill" />}
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+            <aside
+              aria-label="Store filters"
+              className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-3 lg:w-[190px] min-[1400px]:w-[214px]"
             >
-              {installedFallback.length === 0 ? (
-                <p className="text-[14px] text-text-3">No Community Store items installed yet.</p>
-              ) : installedShown.length === 0 ? (
-                <p role="status" className="break-words text-[14px] text-text-3">
-                  No installed items match “{search.trim()}”. Clear the search to see them all.
-                </p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {installedShown.map((rec) => (
-                    <li
-                      key={rec.item_id}
-                      data-testid={`installed-row-${rec.item_id}`}
-                      className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              <div role="group" aria-label="Store categories" className="flex flex-col gap-0.5">
+                <span className="px-2.5 pb-1 text-[13px] font-semibold tracking-wide text-text-3 uppercase">
+                  Categories
+                </span>
+                <div className="flex flex-wrap gap-1.5 lg:flex-col lg:gap-0.5">
+                  {CATEGORY_TABS.map((t) => {
+                    const n = t.id === 'installed' ? installedFallback.length : counts[t.id]
+                    const active = filter === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setFilter(t.id)}
+                        className={cx(
+                          'fc-press flex h-9 items-center justify-between gap-2 rounded-control px-2.5 text-left text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                          'max-lg:rounded-full max-lg:border max-lg:px-3',
+                          active
+                            ? 'fc-picked max-lg:border-transparent'
+                            : 'text-text-2 hover:bg-surface-2 hover:text-text max-lg:border-line',
+                        )}
+                      >
+                        <span>{t.label}</span>
+                        {n !== undefined && (
+                          <span className="font-mono text-[12.5px] font-medium opacity-80">
+                            {n}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <fieldset className="flex flex-col gap-1">
+                <legend className="px-2.5 pb-1 text-[13px] font-semibold tracking-wide text-text-3 uppercase">
+                  Trust
+                </legend>
+                <label className="flex min-h-8 cursor-pointer items-center gap-2 px-2.5 text-[14px] text-text-2">
+                  <input
+                    type="checkbox"
+                    checked={trust.data}
+                    onChange={(e) => setTrust({ ...trust, data: e.target.checked })}
+                    className="size-4 accent-[var(--fc-accent)]"
+                  />
+                  Pure data
+                </label>
+                <label className="flex min-h-8 cursor-pointer items-center gap-2 px-2.5 text-[14px] text-text-2">
+                  <input
+                    type="checkbox"
+                    checked={trust.sandbox}
+                    onChange={(e) => setTrust({ ...trust, sandbox: e.target.checked })}
+                    className="size-4 accent-[var(--fc-accent)]"
+                  />
+                  Sandboxed
+                </label>
+              </fieldset>
+              <p className="hidden rounded-control border border-line bg-surface-2 p-2.5 text-[13.5px] text-text-2 lg:block">
+                <strong className="font-semibold text-text">
+                  {installedFallback.length} installed
+                </strong>
+                <br />
+                Verified on this PC. Works offline.{' '}
+                <InfoTip label="About verification">
+                  Every package has a fingerprint that is checked on this PC before it is used, so
+                  what you install is what the creator published.
+                </InfoTip>
+              </p>
+            </aside>
+            <div className="min-w-0 flex-1 space-y-5">
+              {catalogError ? (
+                catalogNotPublished(catalogError) ? (
+                  <CatalogNotPublished onCheck={() => void loadAll(true)} />
+                ) : (
+                  <LoadError error={catalogError} onRetry={() => void loadAll(true)} />
+                )
+              ) : null}
+
+              {loading ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 max-sm:grid-cols-1">
+                  {[1, 2, 3, 4].map((k) => (
+                    <div
+                      key={k}
+                      className="rounded-panel border border-line bg-surface-1 p-4 space-y-3"
                     >
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-text">{rec.title}</span>
-                          <Badge tone="neutral">v{rec.version}</Badge>
-                          <Badge tone="neutral">{rec.format}</Badge>
-                          {rec.update_available && rec.latest_version && (
-                            <Badge tone="accent">v{rec.latest_version} available</Badge>
-                          )}
-                        </div>
-                        <p className="text-[13px] text-text-3">
-                          By {rec.creator_name} · SHA-256 {rec.package_sha256.slice(0, 12)}…
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {rec.update_available && !catalogError && (
+                      <Skeleton className="aspect-video w-full" />
+                      <Skeleton className="h-5 w-2/3" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                catalog &&
+                filter !== 'installed' && (
+                  <>
+                    {filteredItems.length === 0 ? (
+                      <EmptyState
+                        title="No store items match that search"
+                        action={
                           <Button
                             size="sm"
-                            variant="primary"
-                            disabled={busyId === rec.item_id}
-                            onClick={() => void doUpdate(rec.item_id)}
+                            variant="secondary"
+                            onClick={() => {
+                              setFilter('all')
+                              setSearch('')
+                              setTrust({ data: true, sandbox: true })
+                            }}
                           >
-                            Update
+                            Reset filters
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={busyId === rec.item_id}
-                          onClick={() => void doUninstall(rec.item_id)}
-                        >
-                          <Trash size={14} aria-hidden="true" />
-                          Uninstall
-                        </Button>
+                        }
+                      >
+                        Try clearing the category filter or search box.
+                      </EmptyState>
+                    ) : (
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 max-sm:grid-cols-1">
+                        {filteredItems.map((item) => (
+                          <StoreItemCard
+                            key={item.id}
+                            item={item}
+                            creator={creatorsById.get(item.creator_id)}
+                            perf={perfCache.get(item.id) ?? estimateItemPerf(item)}
+                            busy={busyId === item.id}
+                            onOpen={() => go({ name: 'store', item: item.id })}
+                            onCreator={(cid) => go({ name: 'store', creator: cid })}
+                            onInstall={() => void doInstall(item.id)}
+                            onUpdate={() => void doUpdate(item.id)}
+                            onUninstall={() => void doUninstall(item.id)}
+                          />
+                        ))}
                       </div>
-                    </li>
-                  ))}
-                </ul>
+                    )}
+                  </>
+                )
               )}
-            </Panel>
-          )}
+
+              {/* Always shown when Installed tab active OR when catalog fails so installed packages keep working */}
+              {(filter === 'installed' || !!catalogError || installedFallback.length > 0) && (
+                <Panel
+                  id="store-installed-panel"
+                  title={`Installed from Store (${installedShown.length === installedFallback.length ? installedFallback.length : `${installedShown.length} of ${installedFallback.length}`})`}
+                  description="Verified on this PC. Keeps working even when the catalog is unavailable."
+                  icon={<Package weight="fill" />}
+                >
+                  {installedFallback.length === 0 ? (
+                    <p className="text-[14px] text-text-3">
+                      No Community Store items installed yet.
+                    </p>
+                  ) : installedShown.length === 0 ? (
+                    <p role="status" className="break-words text-[14px] text-text-3">
+                      No installed items match “{search.trim()}”. Clear the search to see them all.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-line">
+                      {installedShown.map((rec) => (
+                        <li
+                          key={rec.item_id}
+                          data-testid={`installed-row-${rec.item_id}`}
+                          className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-text">{rec.title}</span>
+                              <Badge tone="neutral">v{rec.version}</Badge>
+                              <Badge tone="neutral">{rec.format}</Badge>
+                              {rec.update_available && rec.latest_version && (
+                                <Badge tone="accent">v{rec.latest_version} available</Badge>
+                              )}
+                            </div>
+                            <p className="text-[13px] text-text-3">
+                              By {rec.creator_name} · Verified on this PC{' '}
+                              <InfoTip label={`About the fingerprint of ${rec.title}`}>
+                                Fingerprint {rec.package_sha256.slice(0, 12)}…
+                              </InfoTip>
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {rec.update_available && !catalogError && (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                disabled={busyId === rec.item_id}
+                                onClick={() => void doUpdate(rec.item_id)}
+                              >
+                                Update
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={busyId === rec.item_id}
+                              onClick={() => void doUninstall(rec.item_id)}
+                            >
+                              <Trash size={14} aria-hidden="true" />
+                              Uninstall
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              )}
+            </div>
+          </div>
         </>
       )}
 
@@ -922,9 +1030,10 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
             {/* Security & Verification Breakdown */}
             <div className="rounded-ctrl border border-line bg-surface-2 p-3.5 space-y-1.5 text-[13px] text-text-2">
-              <p className="font-semibold text-text">Verification & sandbox</p>
+              <p className="font-semibold text-text">Verified on this PC</p>
               <p className="font-mono text-[12px] text-text-3 break-all">
-                SHA-256: {selectedItem.package.sha256} · {formatBytes(selectedItem.package.size)}
+                Fingerprint: {selectedItem.package.sha256} ·{' '}
+                {formatBytes(selectedItem.package.size)}
               </p>
               {selectedItem.kind === 'plugin' && (
                 <p>

@@ -163,7 +163,7 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
             theme="molten"
             replay={replay}
             controls={false}
-            label={`${item.title} p2e sandboxed preview`}
+            label={`${item.title} sandboxed preview`}
           />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <Badge tone="accent">
