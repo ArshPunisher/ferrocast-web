@@ -1,6 +1,6 @@
 // Widget settings and helpers shared by the overlay editor and the scene designer.
 
-import { useState } from 'react'
+import { useState, type ComponentProps } from 'react'
 import {
   Bell,
   ChartBar,
@@ -524,6 +524,56 @@ export function WidgetSettings({
   )
 }
 
+function BoundedNumberInput({
+  value,
+  min,
+  max,
+  onCommit,
+  ...rest
+}: {
+  value: number
+  min: number
+  max: number
+  onCommit: (next: number) => void
+} & Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'onChange' | 'min' | 'max'>) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  return (
+    <Input
+      {...rest}
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      value={draft ?? String(value)}
+      onFocus={(e) => {
+        setDraft(String(value))
+        rest.onFocus?.(e)
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        setDraft(raw)
+        if (raw.trim() === '') return
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed)) return
+        const rounded = Math.round(parsed)
+        if (rounded >= min && rounded <= max && rounded !== value) {
+          onCommit(rounded)
+        }
+      }}
+      onBlur={(e) => {
+        const raw = (draft ?? String(value)).trim()
+        const parsed = raw === '' ? Number.NaN : Number(raw)
+        const base = Number.isFinite(parsed) ? Math.round(parsed) : value
+        const next = Math.max(min, Math.min(max, base))
+        setDraft(null)
+        if (next !== value) onCommit(next)
+        rest.onBlur?.(e)
+      }}
+    />
+  )
+}
+
 function LabelSettings({
   config,
   onChange,
@@ -617,14 +667,12 @@ function LabelSettings({
         <div className="grid grid-cols-2 gap-2.5 rounded-[12px] border border-line bg-inset p-3">
           <Field label="Window (s)">
             {(p) => (
-              <Input
+              <BoundedNumberInput
                 {...p}
-                type="number"
                 min={10}
                 max={3600}
                 value={config.train_window_s ?? 120}
-                onChange={(e) => {
-                  const v = Math.max(10, Math.min(3600, Math.round(Number(e.target.value) || 120)))
+                onCommit={(v) => {
                   const maxS = Math.max(v, config.train_max_s ?? 300)
                   onChange({ ...config, train_window_s: v, train_max_s: maxS })
                 }}
@@ -633,47 +681,34 @@ function LabelSettings({
           </Field>
           <Field label="Grow per event (s)">
             {(p) => (
-              <Input
+              <BoundedNumberInput
                 {...p}
-                type="number"
                 min={1}
                 max={600}
                 value={config.train_step_s ?? 15}
-                onChange={(e) => {
-                  const v = Math.max(1, Math.min(600, Math.round(Number(e.target.value) || 15)))
-                  onChange({ ...config, train_step_s: v })
-                }}
+                onCommit={(v) => onChange({ ...config, train_step_s: v })}
               />
             )}
           </Field>
           <Field label="Max timer (s)">
             {(p) => (
-              <Input
+              <BoundedNumberInput
                 {...p}
-                type="number"
                 min={config.train_window_s ?? 10}
                 max={7200}
                 value={config.train_max_s ?? 300}
-                onChange={(e) => {
-                  const win = config.train_window_s ?? 120
-                  const v = Math.max(win, Math.min(7200, Math.round(Number(e.target.value) || 300)))
-                  onChange({ ...config, train_max_s: v })
-                }}
+                onCommit={(v) => onChange({ ...config, train_max_s: v })}
               />
             )}
           </Field>
           <Field label="Events to start">
             {(p) => (
-              <Input
+              <BoundedNumberInput
                 {...p}
-                type="number"
                 min={1}
                 max={50}
                 value={config.train_threshold ?? 3}
-                onChange={(e) => {
-                  const v = Math.max(1, Math.min(50, Math.round(Number(e.target.value) || 3)))
-                  onChange({ ...config, train_threshold: v })
-                }}
+                onCommit={(v) => onChange({ ...config, train_threshold: v })}
               />
             )}
           </Field>

@@ -110,4 +110,72 @@ describe('LabelSettings (#8 review fixes)', () => {
     const lastCall = onSpyChange.mock.calls.at(-1)?.[0]
     expect(lastCall?.kind === 'label' && lastCall.config.timezone).toBe('Europe/London')
   })
+
+  it('allows typing multi-digit hype train numbers without premature mid-keystroke clamping', async () => {
+    const trainWidget: Widget & { kind: 'label' } = {
+      id: 'w-train',
+      kind: 'label',
+      x: 0,
+      y: 0,
+      w: 420,
+      h: 64,
+      config: {
+        source: 'hype_train',
+        template: 'Hype train · {value}',
+        theme: DEFAULT_THEME,
+        train_window_s: 120,
+        train_step_s: 15,
+        train_max_s: 300,
+        train_threshold: 3,
+      },
+    }
+
+    const { el, onSpyChange } = await mountSettings(trainWidget)
+    const inputFor = (labelText: string) => {
+      const label = Array.from(el.querySelectorAll('label')).find((l) =>
+        l.textContent?.includes(labelText),
+      )!
+      return el.querySelector<HTMLInputElement>(`#${label.getAttribute('for')!}`)!
+    }
+    const setVal = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    const typeValue = async (input: HTMLInputElement, next: string) => {
+      await act(async () => {
+        input.focus()
+        setVal.call(input, next)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+
+    const winInput = inputFor('Window (s)')
+    await typeValue(winInput, '')
+    expect(winInput.value).toBe('')
+    await typeValue(winInput, '6')
+    expect(winInput.value).toBe('6')
+    await typeValue(winInput, '60')
+    expect(winInput.value).toBe('60')
+    expect(onSpyChange.mock.calls.at(-1)?.[0]).toMatchObject({
+      config: { train_window_s: 60 },
+    })
+
+    // Below-min value waits until blur before clamping to min=10
+    await typeValue(winInput, '4')
+    expect(winInput.value).toBe('4')
+    await act(async () => {
+      winInput.blur()
+      winInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(winInput.value).toBe('10')
+    expect(onSpyChange.mock.calls.at(-1)?.[0]).toMatchObject({
+      config: { train_window_s: 10 },
+    })
+
+    // Also test clearing and typing '25' on Grow per event (s)
+    const stepInput = inputFor('Grow per event (s)')
+    await typeValue(stepInput, '')
+    expect(stepInput.value).toBe('')
+    await typeValue(stepInput, '25')
+    expect(onSpyChange.mock.calls.at(-1)?.[0]).toMatchObject({
+      config: { train_step_s: 25 },
+    })
+  })
 })
