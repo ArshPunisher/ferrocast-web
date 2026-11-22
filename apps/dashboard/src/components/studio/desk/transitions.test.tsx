@@ -137,6 +137,7 @@ function makeDesk(
     select: vi.fn(),
     also: [],
     pickMore: vi.fn(),
+    pickSet: vi.fn(),
     itemMenu: { current: null },
     editing: null,
     edit: vi.fn(),
@@ -460,12 +461,24 @@ describe('TransitionsDialog UI', () => {
   it('does not say every switch uses the default while a scene has an older override', async () => {
     const data = sampleScenes()
     data.transition_matrix = []
-    // BRB has its own (older) override; the default is Smooth Fade.
+    // BRB has its own (older) override, with no named rule behind it; the default is Smooth Fade.
+    data.scenes = data.scenes.map((x) =>
+      x.name === 'BRB' ? { ...x, transition_name: undefined } : x,
+    ) as never
     const desk = makeDesk({}, data)
     await mountDialog(desk, 'matrix')
     const notice = document.querySelector('[data-testid="matrix-empty-notice"]')!.textContent ?? ''
     expect(notice).not.toMatch(/Every switch/i)
     expect(notice).toMatch(/BRB/)
+  })
+
+  it("does not call a named rule's projected transition an older override", async () => {
+    const data = sampleScenes()
+    data.transition_matrix = [] // the rule is gone; BRB still shows Quick Cut's projection by name
+    const desk = makeDesk({}, data)
+    await mountDialog(desk, 'matrix')
+    const notice = document.querySelector('[data-testid="matrix-empty-notice"]')!.textContent ?? ''
+    expect(notice).not.toMatch(/BRB/)
   })
 
   it('names the same default in the order note and the default cell for an older payload', async () => {

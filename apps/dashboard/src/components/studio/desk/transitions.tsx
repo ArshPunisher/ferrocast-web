@@ -972,7 +972,9 @@ function TransitionMatrixTab({
   // sends no named list.
   const defaultName = defaultTr?.name ?? TRANSITIONS[scenes.transition.kind] ?? 'Fade'
   // Scenes with an older per-scene override (from before the matrix): they still play it.
-  const legacyScenes = scenes.scenes.filter((s) => s.transition).map((s) => s.name)
+  const legacyScenes = scenes.scenes
+    .filter((s) => legacySceneTransition(scenes, s.name))
+    .map((s) => s.name)
   const rules = useMemo(
     () => sortMatrixRules(scenes.transition_matrix ?? [], sceneNames),
     [scenes.transition_matrix, sceneNames],
