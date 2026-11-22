@@ -254,6 +254,8 @@ describe('.overlay theme pack preview, import, fonts, and undo in DemoEngine', (
       'Gameplay',
       'Chatting',
       'BRB',
+      'Starting Soon',
+      'Ending',
     ])
 
     const preview = await eng.previewOverlayPack(makeValidStreamlabsPack(), 'NeonPack.overlay')
@@ -293,6 +295,8 @@ describe('.overlay theme pack preview, import, fonts, and undo in DemoEngine', (
       'Gameplay',
       'Chatting',
       'BRB',
+      'Starting Soon',
+      'Ending',
     ])
   })
 })

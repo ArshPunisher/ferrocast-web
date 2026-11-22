@@ -518,7 +518,14 @@ export class DemoStudioEngine {
     current: 'default',
     list: [{ id: 'default', name: 'Default' }],
   }
-  private activeScenes: string[] = ['Main', 'Gameplay', 'Chatting', 'BRB']
+  private activeScenes: string[] = [
+    'Main',
+    'Gameplay',
+    'Chatting',
+    'BRB',
+    'Starting Soon',
+    'Ending',
+  ]
   private currentScene = 'Main'
   private previewScene: string | null = null
   /** The T-bar as it was last moved: active until it is released. */
@@ -1127,7 +1134,7 @@ export class DemoStudioEngine {
   }
 
   private seedDefaults(): void {
-    this.activeScenes = ['Main', 'Gameplay', 'Chatting', 'BRB']
+    this.activeScenes = ['Main', 'Gameplay', 'Chatting', 'BRB', 'Starting Soon', 'Ending']
     this.currentScene = 'Main'
     this.previewScene = null
     this.sceneItems.clear()
@@ -1177,6 +1184,9 @@ export class DemoStudioEngine {
     this.sceneItems.set('Gameplay', gameplayList)
     this.sceneItems.set('Chatting', chattingList)
     this.sceneItems.set('BRB', brbList)
+    // The default show opens on "Starting Soon" and closes on "Ending": a fresh Studio has both.
+    this.sceneItems.set('Starting Soon', [])
+    this.sceneItems.set('Ending', [])
   }
 
   private captureSnapshot(): CollectionSnapshot {

@@ -188,3 +188,22 @@ describe('the show and fade to black', () => {
     expect(after.black, 'still black though the show is on Gameplay').toBeFalsy()
   })
 })
+
+describe('the default show on a fresh Studio', () => {
+  it('passes preflight and starts without forcing', async () => {
+    const { studio, eng } = rig()
+    await eng.start()
+    const pf = await studio.preflight()
+    const failing = pf.checks.filter((c) => c.status === 'fail')
+    expect(failing.map((c) => `${c.id}: ${c.detail}`)).toEqual([])
+    const run = await studio.startShow()
+    expect(run.show.phase).toBe('countdown')
+  })
+
+  it('still fails for a scene the Studio really does not have', async () => {
+    const { studio, eng } = rig()
+    await eng.start()
+    await studio.saveShowConfig({ starting_scene: 'Nope' })
+    expect((await studio.preflight()).checks.some((c) => c.status === 'fail')).toBe(true)
+  })
+})
