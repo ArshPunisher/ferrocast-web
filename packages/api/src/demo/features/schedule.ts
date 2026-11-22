@@ -75,9 +75,13 @@ export class DemoSchedule implements DemoFeature {
       throw new HttpError(400, 'invalid', 'remind_minutes: 1 to 1440.')
     const info = requireObj(b.info ?? {})
     // As the engine: control characters become spaces, then it is trimmed.
-    // eslint-disable-next-line no-control-regex
     const title =
-      typeof info.title === 'string' ? info.title.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : ''
+      typeof info.title === 'string'
+        ? [...info.title]
+            .map((c) => ((c.codePointAt(0) ?? 0) < 0x20 || c === '\u007f' ? ' ' : c))
+            .join('')
+            .trim()
+        : ''
     if (!title) throw new HttpError(400, 'invalid', 'title: give the stream a title.')
     if ([...title].length > MAX_TITLE)
       throw new HttpError(
