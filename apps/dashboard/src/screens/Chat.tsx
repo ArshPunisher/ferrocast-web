@@ -1,6 +1,16 @@
-import { useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
+import { Pause, Play } from '@phosphor-icons/react'
 import { PLATFORM_LABEL, Roles, type Actor, type ChatPlatform } from '@ferrocast/api'
-import { EmptyState, InfoTip, PlatformMark, Segmented, cx } from '@ferrocast/ui'
+import { Button, EmptyState, IconButton, InfoTip, PlatformMark, Segmented, cx } from '@ferrocast/ui'
 import {
   ChatLine,
   ChatScroller,
@@ -14,21 +24,39 @@ import { EventRow } from '../components/EventRow'
 import { NeedsPc } from '../components/remote'
 import { isLimited, useLive } from '../lib/store'
 import { isCloud } from '../lib/boot'
-import { useMediaQuery, useNow } from '../lib/hooks'
+import { useAction, useClient, useMediaQuery, useNow } from '../lib/hooks'
 import { useHeldItems, useHeldSync } from '../lib/held'
+import { useFlushPage, useWidePage } from '../lib/wide'
+import { FEED_FILTERS, filterEvents, type FeedFilter } from '../lib/mini-feed'
+import {
+  clampEventsWidth,
+  defaultEventsWidth,
+  eventsWidthBounds,
+  loadSavedEventsWidth,
+  saveEventsWidth,
+  stepEventsWidth,
+} from '../lib/chat-split'
 
 type Filter = 'all' | ChatPlatform | 'facebook'
 
 export function Chat() {
+  useWidePage()
+  useFlushPage()
+
   const now = useNow(15_000)
+  const client = useClient()
+  const { busy, run } = useAction()
   const chat = useLive((s) => s.chat)
   const deleted = useLive((s) => s.deleted)
   const held = useLive((s) => s.held)
   const events = useLive((s) => s.events)
+  const queue = useLive((s) => s.queue)
+  const setQueue = useLive((s) => s.setQueue)
   const connectors = useLive((s) => s.connectors)
   const [filter, setFilter] = useState<Filter>('all')
   const [hideBots, setHideBots] = useState(true)
   const [onlyHeld, setOnlyHeld] = useState(false)
+  const [eventFilter, setEventFilter] = useState<FeedFilter>('all')
   useHeldSync()
   const heldItems = useHeldItems()
   const [tab, setTab] = useState<'chat' | 'events'>('chat')
@@ -44,6 +72,86 @@ export function Chat() {
   // Cloud mode (CLOUD.md): chat to read; sending and moderating need the app on a PC.
   const cloud = isCloud(useLive((s) => s.conn))
 
+  const splitRef = useRef<HTMLDivElement>(null)
+  const eventsPaneRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [savedWidth, setSavedWidth] = useState<number | null>(() => loadSavedEventsWidth())
+  const [dragging, setDragging] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = splitRef.current
+    if (!el) return
+    const measure = () => {
+      const w = Math.floor(el.clientWidth)
+      if (w > 0) setContainerWidth((prev) => (prev === w ? prev : w))
+    }
+    measure()
+    if (typeof ResizeObserver !== 'function') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [wide, mod, limited])
+
+  const bounds = useMemo(() => eventsWidthBounds(containerWidth), [containerWidth])
+  const eventsWidth = useMemo(
+    () =>
+      savedWidth !== null
+        ? clampEventsWidth(savedWidth, containerWidth)
+        : defaultEventsWidth(containerWidth),
+    [savedWidth, containerWidth],
+  )
+
+  const commitWidth = useCallback(
+    (next: number) => {
+      const clamped = clampEventsWidth(next, containerWidth)
+      setSavedWidth(clamped)
+      saveEventsWidth(clamped)
+    },
+    [containerWidth],
+  )
+
+  useEffect(() => {
+    return () => {
+      delete document.body.dataset.dockDrag
+    }
+  }, [])
+
+  const onSplitterPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const containerW = splitRef.current?.getBoundingClientRect().width ?? containerWidth
+    const startW = eventsPaneRef.current?.getBoundingClientRect().width ?? eventsWidth
+    if (containerW <= 0) return
+    e.preventDefault()
+    const el = e.currentTarget
+    el.setPointerCapture(e.pointerId)
+    setDragging(true)
+    document.body.dataset.dockDrag = '1'
+    const x0 = e.clientX
+    let latest = startW
+
+    const onMove = (m: PointerEvent) => {
+      latest = clampEventsWidth(startW - (m.clientX - x0), containerW)
+      setSavedWidth(latest)
+    }
+    const finish = () => {
+      setDragging(false)
+      delete document.body.dataset.dockDrag
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', finish)
+      el.removeEventListener('pointercancel', finish)
+      saveEventsWidth(latest)
+    }
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', finish)
+    el.addEventListener('pointercancel', finish)
+  }
+
+  const onSplitterKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const next = stepEventsWidth(eventsWidth, e.key, e.shiftKey, containerWidth)
+    if (next === null) return
+    e.preventDefault()
+    commitWidth(next)
+  }
+
   const lines = useMemo(() => {
     // "Held" lists every held message, also ones from before the chat on screen.
     const source = onlyHeld ? heldItems.map((h) => h.event) : chat
@@ -54,22 +162,49 @@ export function Chat() {
         !(hideBots && (e.kind.actor.roles & Roles.BOT) !== 0),
     )
   }, [chat, heldItems, onlyHeld, filter, hideBots])
-  const feed = useMemo(() => [...events].reverse().slice(0, 80), [events])
+
+  const recentEvents = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const feed = useMemo(() => filterEvents(recentEvents, eventFilter), [recentEvents, eventFilter])
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
-    for (const e of chat) c[e.platform] = (c[e.platform] ?? 0) + 1
-    return c
+    let total = 0
+    for (const e of chat) {
+      if (e.kind.type !== 'chat_message') continue
+      c[e.platform] = (c[e.platform] ?? 0) + 1
+      total++
+    }
+    return { byPlatform: c, total }
   }, [chat])
+
+  const paused = queue?.paused ?? false
+  const muted = queue?.muted ?? false
+  const waiting = queue?.waiting.length ?? 0
+  const queueDotTone = !queue ? 'bg-text-3/50' : paused || muted ? 'bg-warn' : 'bg-ok'
+  const queueFooterText = !queue
+    ? cloud
+      ? 'Alert queue unavailable in cloud'
+      : 'Alert queue offline'
+    : paused
+      ? 'Alert queue paused'
+      : muted
+        ? 'Alert sounds muted'
+        : queue.playing
+          ? 'Playing alert'
+          : 'Alert queue active'
 
   const chatPane = (
     <section
       aria-labelledby="chat-title"
-      className="flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
+      className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-surface-1 shadow-1"
     >
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5 sm:px-4">
+      <header
+        data-testid="chat-pane-header"
+        className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 @[520px]:h-11 @[520px]:flex-nowrap @[520px]:py-0"
+      >
         <h1
           id="chat-title"
-          className="mr-auto font-display text-[18px] font-extrabold tracking-tight"
+          className="mr-auto font-display text-[17px] font-extrabold tracking-tight text-text"
         >
           Chat
         </h1>
@@ -79,7 +214,17 @@ export function Chat() {
           value={filter}
           onChange={setFilter}
           options={[
-            { value: 'all', label: 'All' },
+            {
+              value: 'all',
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  <span>All</span>
+                  <span className="hidden font-mono text-[12px] tabular-nums opacity-85 @[580px]:inline">
+                    {counts.total}
+                  </span>
+                </span>
+              ),
+            },
             ...(['twitch', 'youtube', 'kick', 'facebook'] as const)
               .filter((p) => connectors?.[p].state !== 'off')
               .map((p) => ({
@@ -88,8 +233,8 @@ export function Chat() {
                 label: (
                   <span className="inline-flex items-center gap-1.5">
                     <PlatformMark platform={p} size={12} />
-                    <span className="hidden font-mono text-[13.5px] tabular-nums sm:inline">
-                      {counts[p] ?? 0}
+                    <span className="hidden font-mono text-[12.5px] tabular-nums @[420px]:inline">
+                      {counts.byPlatform[p] ?? 0}
                     </span>
                   </span>
                 ),
@@ -103,12 +248,12 @@ export function Chat() {
             onClick={() => setOnlyHeld((v) => !v)}
             title="Messages waiting for a mod"
             className={cx(
-              'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14.5px] font-semibold',
+              'fc-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold',
               'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
               onlyHeld
                 ? 'border-warn bg-warn-soft text-text'
                 : heldItems.length > 0
-                  ? 'border-warn/60 text-text-2 hover:bg-surface-2'
+                  ? 'border-warn/60 bg-warn-soft/50 text-text hover:bg-warn-soft'
                   : 'border-line text-text-3 hover:bg-surface-2',
             )}
           >
@@ -119,7 +264,7 @@ export function Chat() {
             </span>
           </button>
         )}
-        <label className="flex cursor-pointer items-center gap-2 text-[14.5px] font-medium text-text-2">
+        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[13.5px] font-semibold whitespace-nowrap text-text-2">
           <input
             type="checkbox"
             checked={hideBots}
@@ -142,7 +287,7 @@ export function Chat() {
             </EmptyState>
           )
         ) : (
-          <ul className="flex min-w-0 flex-col px-1 py-2 sm:px-2">
+          <ul className="flex min-w-0 flex-col px-1 py-1.5 sm:px-2">
             {lines.map((e) => (
               <ChatLine
                 key={e.id}
@@ -157,7 +302,7 @@ export function Chat() {
         )}
       </ChatScroller>
       {(limited && !mod) || cloud ? (
-        <div className="border-t border-line px-4 py-3">
+        <div className="border-t border-line px-3 py-2.5">
           <NeedsPc>
             {cloud
               ? 'Sending messages and moderating need the Ferrocast app on your PC.'
@@ -166,7 +311,7 @@ export function Chat() {
         </div>
       ) : (
         !mod && (
-          <div className="border-t border-line p-3 sm:p-4">
+          <div className="border-t border-line px-3 py-2.5">
             <Composer reply={reply} onClearReply={() => setReply(null)} />
           </div>
         )
@@ -177,19 +322,67 @@ export function Chat() {
   const feedPane = (
     <section
       aria-labelledby="events-title"
-      className="flex min-h-0 min-w-0 flex-col rounded-panel border border-line bg-surface-1 shadow-1"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-surface-1 shadow-1"
     >
-      <header className="flex items-center gap-1 border-b border-line px-4 py-3">
-        <h2 id="events-title" className="font-display text-[18px] font-extrabold tracking-tight">
-          Events
-        </h2>
-        <InfoTip label="About events">
-          Hover one to replay it, or to see why it didn’t alert.
-        </InfoTip>
+      <header
+        data-testid="events-pane-header"
+        className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-3"
+      >
+        <div className="flex min-w-0 items-center gap-1">
+          <h2
+            id="events-title"
+            className="truncate font-display text-[17px] font-extrabold tracking-tight text-text"
+          >
+            Events
+          </h2>
+          <InfoTip label="About events">
+            Hover one to replay it, or to see why it didn’t alert.
+          </InfoTip>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <select
+            aria-label="Filter events"
+            value={eventFilter}
+            onChange={(e) => setEventFilter(e.target.value as FeedFilter)}
+            className="fc-select h-8 cursor-pointer appearance-none rounded-control border border-line-strong bg-inset pr-8 pl-2.5 text-[13px] font-semibold text-text hover:border-text-3 focus:border-accent-text focus:shadow-[0_0_0_3px_var(--fc-accent-soft)] focus:outline-none"
+          >
+            {FEED_FILTERS.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <IconButton
+            size="sm"
+            variant={paused ? 'secondary' : 'outline'}
+            label={paused ? 'Resume queue' : 'Pause queue'}
+            aria-pressed={paused}
+            disabled={!queue || cloud || busy === 'q-pause'}
+            onClick={() =>
+              void run('q-pause', paused ? client.queueResume : client.queuePause, {
+                once: true,
+              }).then((q) => q && setQueue(q))
+            }
+          >
+            {paused ? <Play size={14} weight="fill" /> : <Pause size={14} weight="fill" />}
+          </IconButton>
+        </div>
       </header>
-      <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {feed.length === 0 ? (
-          <EmptyState compact title="No events yet" />
+      <div className="fc-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-2">
+        {recentEvents.length === 0 ? (
+          <EmptyState compact title="No events yet">
+            Follows, subs, tips and raids land here.
+          </EmptyState>
+        ) : feed.length === 0 ? (
+          <EmptyState
+            compact
+            title="Nothing of this type yet"
+            action={
+              <Button size="xs" variant="outline" onClick={() => setEventFilter('all')}>
+                Show all events
+              </Button>
+            }
+          />
         ) : (
           <ul className="flex min-w-0 flex-col">
             {feed.map((e) => (
@@ -198,20 +391,65 @@ export function Chat() {
           </ul>
         )}
       </div>
+      <footer
+        data-testid="events-queue-footer"
+        className="flex h-[34px] shrink-0 items-center justify-between gap-2 border-t border-line bg-surface-2 px-3 text-[12.5px] font-medium text-text-2"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span aria-hidden="true" className={cx('size-2 shrink-0 rounded-full', queueDotTone)} />
+          <span className="truncate">{queueFooterText}</span>
+        </span>
+        <span className="shrink-0 font-mono text-[12px] text-text-2 tabular-nums">
+          {waiting} waiting
+        </span>
+      </footer>
     </section>
   )
 
   return (
     <div
-      // `--fc-top`: the sticky header's measured height (Shell), the phone's strip included.
-      className="flex h-[calc(100dvh-var(--fc-top,56px)-20px-88px-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-3 sm:h-[calc(100dvh-var(--fc-top,56px)-28px-88px)] lg:h-[calc(100dvh-var(--fc-top,56px)-28px-48px-var(--fc-statusbar,0px))] lg:flex-row lg:gap-5"
+      ref={splitRef}
+      // `--fc-top`: the sticky header's measured height (Shell), matching main's edge-to-edge padding.
+      className="flex h-[calc(100dvh-var(--fc-top,56px)-86px-env(safe-area-inset-bottom))] min-h-[360px] flex-col gap-2.5 sm:h-[calc(100dvh-var(--fc-top,56px)-88px-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-var(--fc-top,56px)-24px-var(--fc-statusbar,0px))] lg:flex-row lg:gap-0"
     >
       {mod || limited ? (
         chatPane
       ) : wide ? (
         <>
           {chatPane}
-          <div className="flex w-[360px] shrink-0 flex-col xl:w-[400px]">{feedPane}</div>
+          <div
+            role="separator"
+            tabIndex={0}
+            data-testid="chat-events-splitter"
+            aria-label="Resize Chat and Events"
+            aria-orientation="vertical"
+            aria-valuemin={bounds.min}
+            aria-valuemax={bounds.max}
+            aria-valuenow={eventsWidth}
+            title="Drag or use left and right arrow keys to resize"
+            onPointerDown={onSplitterPointerDown}
+            onDoubleClick={() => commitWidth(defaultEventsWidth(containerWidth))}
+            onKeyDown={onSplitterKeyDown}
+            className="group relative flex w-3 shrink-0 cursor-col-resize touch-none items-center justify-center outline-none select-none focus-visible:outline-none"
+          >
+            <span
+              aria-hidden="true"
+              className={cx(
+                'h-10 w-1 rounded-full transition-colors',
+                dragging
+                  ? 'bg-arc'
+                  : 'bg-line-strong group-hover:bg-arc group-focus-visible:bg-arc group-focus-visible:shadow-[var(--fc-focus)]',
+              )}
+            />
+          </div>
+          <div
+            ref={eventsPaneRef}
+            data-testid="chat-events-pane"
+            style={{ width: eventsWidth }}
+            className="flex h-full min-h-0 shrink-0 flex-col"
+          >
+            {feedPane}
+          </div>
         </>
       ) : (
         <>
