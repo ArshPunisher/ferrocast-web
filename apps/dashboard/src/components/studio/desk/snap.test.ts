@@ -5,6 +5,8 @@ import {
   frameOfBox,
   hasSize,
   pickedBoxes,
+  queuedIds,
+  revertBoxes,
   gapsFor,
   guidesFor,
   marqueeHits,
@@ -403,5 +405,45 @@ describe('which picked sources can be placed', () => {
     expect(ids([10, 11, 20, 30])).toEqual([10, 30]) // the child rides on its group; no size, no place
     expect(ids([11, 12])).toEqual([11, 12]) // two sources of the group, without the group
     expect(ids([11, 30])).toEqual([11, 30])
+  })
+})
+
+describe('cancelling a drag', () => {
+  it('puts every source of it back where the drag found it', () => {
+    const a = box(10, 20, 100, 50)
+    const b = box(300, 40, 60, 60)
+    expect(revertBoxes({ id: 1, from: a, others: [] })).toEqual([
+      { id: 1, x: 10, y: 20, w: 100, h: 50 },
+    ])
+    expect(revertBoxes({ id: 1, from: a, others: [{ id: 2, from: b }] })).toEqual([
+      { id: 1, x: 10, y: 20, w: 100, h: 50 },
+      { id: 2, x: 300, y: 40, w: 60, h: 60 },
+    ])
+    expect(
+      revertBoxes({
+        id: 1,
+        from: a,
+        others: [],
+        group: {
+          items: [
+            { id: 1, frame: a },
+            { id: 2, frame: b },
+          ],
+        },
+      }),
+    ).toEqual([
+      { id: 1, x: 10, y: 20, w: 100, h: 50 },
+      { id: 2, x: 300, y: 40, w: 60, h: 60 },
+    ])
+  })
+})
+
+describe('what is still waiting to be sent', () => {
+  it('names every source in a waiting request, one or several', () => {
+    const next = new Map<string, { id?: number; boxes?: { id: number }[] }>([
+      ['s\u00015', { id: 5 }],
+      ['s\u00011,2', { boxes: [{ id: 1 }, { id: 2 }] }],
+    ])
+    expect([...queuedIds(next)].sort()).toEqual([1, 2, 5])
   })
 })

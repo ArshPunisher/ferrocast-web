@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrangeable, arranged } from './arrange'
+import { arrangeable, arranged, reasonOf } from './arrange'
 import type { Frame } from './stage-edit'
 
 const box = (x: number, y: number, w: number, h: number): Frame => [w, 0, 0, h, x, y]
@@ -69,5 +69,11 @@ describe('what the buttons and the menu send', () => {
     const group = item(10, box(0, 0, 100, 100), { group: true, children: [kid] })
     const list = [group, item(20, [0, 0, 0, 0, 0, 0]), item(30, box(300, 0, 10, 10))]
     expect(arrangeable(list, [10, 11, 20, 30]).map((a) => a.id)).toEqual([10, 30])
+  })
+  it('names the undo step for what was clicked', () => {
+    expect(reasonOf('left')).toBe('align')
+    expect(reasonOf('middle')).toBe('align')
+    expect(reasonOf('distribute-x')).toBe('distribute')
+    expect(reasonOf('distribute-y')).toBe('distribute')
   })
 })

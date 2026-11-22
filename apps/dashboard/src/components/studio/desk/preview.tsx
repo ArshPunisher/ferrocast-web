@@ -76,6 +76,8 @@ import {
   gapsFor,
   guidesFor,
   marqueeHits,
+  queuedIds,
+  revertBoxes,
   pickedBoxes,
   pickWith,
   rectOf,
@@ -1281,8 +1283,15 @@ interface Held {
 
 /** What the next request for a source does (the newest replaces an older one). Several at once
  * (`boxes`) are one request, one undo step. */
-type Job =
+type JobBody =
   { box: Box; save: boolean } | { crop: Crop; save: boolean } | { boxes: BoxFor[]; save: boolean }
+
+/** A request waiting its turn: for which scene (the picked one may change before it is sent),
+ * and for which source when it is a single one. */
+type Job = JobBody & { scene: string; id?: number }
+
+/** A queue key is per scene: a nudge in the new scene never replaces one for the old. */
+const queueKey = (scene: string, key: number | string) => `${scene}\u0001${key}`
 
 /**
  * Key of the one request for several sources: the set of them, so a final batch for A and B is
@@ -1344,7 +1353,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
   // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
   const [over, setOver] = useState(false)
-  const sending = useRef<{ busy: boolean; next: Map<number | string, Job> }>({
+  const sending = useRef<{ busy: boolean; next: Map<string, Job> }>({
     busy: false,
     next: new Map(),
   })
@@ -1416,6 +1425,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     )
 
   // One request on the way at a time; for each source the newest waits and replaces older ones.
+  const sceneNow = useRef(scene)
+  sceneNow.current = scene
   const pump = () => {
     const q = sending.current
     if (q.busy) return
@@ -1424,27 +1435,40 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     const [key, job] = first.value
     q.next.delete(key)
     q.busy = true
+    // To the scene it was asked for in, whichever is picked by now.
     const go: Promise<EngineItem | EngineItem[]> =
       'boxes' in job
-        ? api.setItemBoxes(scene, { items: job.boxes, save: job.save })
+        ? api.setItemBoxes(job.scene, { items: job.boxes, save: job.save })
         : 'box' in job
-          ? api.setItemBox(scene, Number(key), { ...job.box, save: job.save })
-          : api.setItemCrop(scene, Number(key), { ...job.crop, save: job.save })
+          ? api.setItemBox(job.scene, job.id ?? 0, { ...job.box, save: job.save })
+          : api.setItemCrop(job.scene, job.id ?? 0, { ...job.crop, save: job.save })
     const done = job.save ? run('move', () => go) : go.catch(() => undefined)
     void done
       .then((res) => {
-        for (const item of Array.isArray(res) ? res : res ? [res] : []) put(item)
+        // Not for another scene's list, and not over a source that has a newer move waiting (the
+        // screen already shows that one: this answer is older than what the user did since).
+        if (job.scene !== sceneNow.current) return
+        const waiting = queuedIds(sending.current.next)
+        for (const item of Array.isArray(res) ? res : res ? [res] : []) {
+          if (!waiting.has(item.id)) put(item)
+        }
       })
       .finally(() => {
         q.busy = false
         pump()
       })
   }
-  const queue = (id: number | string, job: Job) => {
+  const queue = (key: number | string, job: JobBody) => {
     const q = sending.current
+    const k = queueKey(scene, key)
     // A save never gets replaced by a later move without one.
-    const prev = q.next.get(id)
-    q.next.set(id, { ...job, save: job.save || !!prev?.save })
+    const prev = q.next.get(k)
+    q.next.set(k, {
+      ...job,
+      scene,
+      ...(typeof key === 'number' ? { id: key } : {}),
+      save: job.save || !!prev?.save,
+    })
     pump()
   }
   const send = (id: number, b: Box, save: boolean) => queue(id, { box: b, save })
@@ -1472,6 +1496,25 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     else if (h.group && h.lastBoxes) queue(manyKey(h.lastBoxes), { boxes: h.lastBoxes, save: true })
     else if (h.last) moveAll(h, h.last, true)
   }
+
+  // Cancel what is being dragged (Escape, a second finger starting a pinch): every source goes
+  // back to where the drag found it, and what was in the air (hints, the marquee) goes.
+  const abortDrag = () => {
+    clearHints()
+    marquee.current = null
+    const h = held.current
+    held.current = null
+    if (!h?.moved) return
+    // A crop is kept as it is (it has no start to go back to here).
+    if (h.crop || h.lastCrop) return finish(h)
+    const boxes = revertBoxes(h)
+    const only = boxes[0]
+    if (boxes.length === 1 && only) send(h.id, only, true)
+    else queue(manyKey(boxes), { boxes, save: true })
+  }
+  // The scene changed, or the editor went away, with a drag in the air: it is cancelled in the
+  // scene it was made in (the queue remembers it), so no frozen guides or half drag are left.
+  useEffect(() => abortDrag, [scene, on]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The picked sources that can be moved together, and the one box round them: where the
   // handles are, what the group moves and is sized by.
@@ -1527,11 +1570,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (e.pointerType === 'touch') {
         touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
         if (touches.current.size === 2) {
-          // A second finger: zoom and pan, not a drag of a source.
-          held.current = null
-          // ...nor a box being dragged round some (its points are the old view's).
-          marquee.current = null
-          clearHints()
+          // A second finger: zoom and pan, not a drag of a source (that goes back where it was
+          // picked up, saved, not left half moved), nor a box being dragged round some (its
+          // points are the old view's).
+          abortDrag()
           const [a, b] = [...touches.current.values()] as [
             { x: number; y: number },
             { x: number; y: number },
@@ -1822,6 +1864,16 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         e.currentTarget.releasePointerCapture(e.pointerId)
       finish(h)
     },
+    // The browser or system took the pointer away without a pointerup or cancel (a system
+    // dialog, Alt-Tab): a drag left hanging is saved as it is, not left on screen.
+    onLostPointerCapture: () => {
+      if (!held.current && !marquee.current) return
+      const h = held.current
+      held.current = null
+      marquee.current = null
+      clearHints()
+      finish(h)
+    },
     onPointerCancel: (e: PointerEvent<HTMLDivElement>) => {
       touches.current.delete(e.pointerId)
       pinch.current = null
@@ -1858,7 +1910,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         return
       }
       if (e.key === 'Escape') {
-        select(null)
+        // In a drag: cancel it. Otherwise: nothing picked.
+        if (held.current || marquee.current) abortDrag()
+        else select(null)
         return
       }
       // ⌘E (Ctrl+E): Edit Transform for the picked source, as in OBS.

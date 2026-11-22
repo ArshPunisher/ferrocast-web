@@ -277,7 +277,7 @@ Aligning, spacing out, and moving or resizing a group of picked sources in the p
 several items in one action. One `PUT …/items/{id}/box` per item made one undo step per item.
 
 Ask (done on the engine side, branch `feat/p2-snap-guides`): `PUT /api/v1/studio/engine/scenes/{scene}/items/boxes`
-`{ items: [{ id, x, y, w, h }], save? }` (canvas pixels, 1 to 500 items, each id once) → the items in
+`{ items: [{ id, x, y, w, h }], save?, reason? }` (`reason`: `align` or `distribute` for one click of those buttons: an undo step of its own, named for it, never joined to a drag) (canvas pixels, 1 to 500 items, each id once) → the items in
 the order given. Each box is applied as the single-item box is. All or none; one undo step (a
 drag of them, with `save: false` until the last, is one step, "Move 3 sources"). 400 for no items,
 an id twice, w or h under 1, or numbers past ±100000. The dashboard uses it for the group box, the

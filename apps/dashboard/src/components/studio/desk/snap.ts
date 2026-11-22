@@ -409,3 +409,34 @@ export function pickWith(
   if (how === 'add') return [...current, ...hits.filter((h) => !current.includes(h))]
   return [...current.filter((c) => !hits.includes(c)), ...hits.filter((h) => !current.includes(h))]
 }
+
+/**
+ * The boxes that put every source of a drag back where it was picked up: Escape, a second
+ * finger starting a pinch. A group handle drag restores the group's sources; a drag of several
+ * the held one and the others.
+ */
+export function revertBoxes(h: {
+  id: number
+  from: Frame
+  others: { id: number; from: Frame }[]
+  group?: { items: { id: number; frame: Frame }[] } | undefined
+}): BoxFor[] {
+  const boxFor = (id: number, f: Frame): BoxFor => ({ id, ...boxOf(f) })
+  if (h.group) return h.group.items.map((i) => boxFor(i.id, i.frame))
+  return [boxFor(h.id, h.from), ...h.others.map((o) => boxFor(o.id, o.from))]
+}
+
+/**
+ * The sources named in requests still waiting to be sent, single or batch: an answer to an
+ * earlier request must not overwrite where these are now (the screen already shows them moved).
+ */
+export function queuedIds(
+  next: Map<unknown, { id?: number | undefined; boxes?: { id: number }[] | undefined }>,
+): Set<number> {
+  const out = new Set<number>()
+  for (const j of next.values()) {
+    if (j.id !== undefined) out.add(j.id)
+    for (const b of j.boxes ?? []) out.add(b.id)
+  }
+  return out
+}

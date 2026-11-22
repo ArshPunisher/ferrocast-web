@@ -577,6 +577,27 @@ for (const [name, size, touch] of [
       expect(errors).toEqual([])
     })
 
+    test('Escape in the middle of a drag puts the source back, saved, and clears the guides', async ({
+      page,
+    }) => {
+      test.skip(touch, 'no keyboard on a phone')
+      await page.setViewportSize(size)
+      const { errors, frames, single } = await mountMockStudio(page)
+      await openPreview(page, touch)
+      const { at } = await canvasBox(page)
+      const from = at(200, 150)
+      await page.mouse.move(from.x, from.y)
+      await page.mouse.down()
+      for (let k = 1; k <= 6; k++) await page.mouse.move(from.x + k * 12, from.y)
+      await expect.poll(() => single.length).toBeGreaterThan(0)
+      await page.keyboard.press('Escape')
+      await page.mouse.up()
+      await expect.poll(() => single.at(-1)).toMatchObject({ id: 1, x: 100, save: true })
+      expect(frames[1]?.[4]).toBe(100)
+      await expect(page.locator('[data-snap-guide]')).toHaveCount(0)
+      expect(errors).toEqual([])
+    })
+
     test('arrow keys nudge 1 pixel, Shift 10; several picked go as one request', async ({
       page,
     }) => {

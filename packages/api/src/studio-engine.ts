@@ -1249,6 +1249,8 @@ export function studioEngineApi(c: FerroClient) {
       body: {
         items: { id: number; x: number; y: number; w: number; h: number }[]
         save?: boolean
+        /** One click of Align or Space out: its own undo step, named for it. */
+        reason?: 'align' | 'distribute'
       },
     ) =>
       c.request<EngineItem[]>(

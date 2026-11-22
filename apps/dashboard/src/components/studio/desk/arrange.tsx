@@ -39,6 +39,10 @@ export function arrangeable(items: EngineItem[], ids: number[]): Arrangeable[] {
   }))
 }
 
+/** What the engine names the undo step: Align or Space out, not "Move N sources". */
+export const reasonOf = (how: Arrange): 'align' | 'distribute' =>
+  how === 'distribute-x' || how === 'distribute-y' ? 'distribute' : 'align'
+
 /** The boxes after `how`, for the picked sources. Empty when nothing would move. */
 export function arranged(list: Arrangeable[], how: Arrange): BoxFor[] {
   const deltas =
@@ -79,9 +83,9 @@ export function useArrange() {
   const apply = (how: Arrange) => {
     const boxes = arranged(list, how)
     if (boxes.length === 0) return Promise.resolve()
-    return run('arrange', () => done(api.setItemBoxes(scene, { items: boxes, save: true }))).then(
-      (ok) => ok && refresh(),
-    )
+    return run('arrange', () =>
+      done(api.setItemBoxes(scene, { items: boxes, save: true, reason: reasonOf(how) })),
+    ).then((ok) => ok && refresh())
   }
   const menu = (): MenuItem[] => [
     {
