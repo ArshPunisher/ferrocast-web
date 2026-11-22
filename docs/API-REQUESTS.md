@@ -461,6 +461,24 @@ In-app Community Theme Store (`#/store`) backed by a minisign-verified catalog (
 - All `/api/v1/store` routes are PC-only (`OWNER_DENIED` rejects paired phones).
 - Demo engine (`packages/api/src/demo/features/store.ts`) serves a realistic signed-style fixture catalog across all categories (`theme`, `alert` incl. p2e custom HTML, `widget`, `overlay`, `plugin`), plus creator profiles, simulated update/install/uninstall/undo, `ferrocast://` resolution, and fault/tamper simulation hooks for tests.
 
+## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
+
+Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
+skipped/lagged frames, and CPU/GPU load across hardware encoders (`VideoToolbox`, `NVENC`,
+`QSV`, `AMF`) and software `x264` presets over a canvas-shaped load, combines results with
+`/golive/upload-check`, and provides snapshot + 30 s Keep/Undo + 1-minute drop-watch rollback.
+
+- `GET /api/v1/studio/engine/auto-config` → `AutoConfigState` (`idle | running | failed | done | applied | rolled_back`, progress `phase` & `progress_pct`, `candidates[]`, `upload_check`, `picked`, `applied`, `confirm_remaining_s`, `watch_remaining_s`, `first_minute_drops`, `first_minute_lags`, `rollback_trigger`, `rollback_reason`, `restored`).
+- `POST /api/v1/studio/engine/auto-config/benchmark` `{ mode?: "stream" | "record", fps_preference?: 30 | 60, include_upload?: boolean, max_seconds?: number }` → starts cancellable ~20-30 s benchmark. Refuses `409 studio_busy` while streaming/recording/replay is active, `409 conflict` while running, `400 invalid` for bad inputs.
+- `POST /api/v1/studio/engine/auto-config/cancel` → aborts immediately, removes temp scratch files, returns `idle`.
+- `POST /api/v1/studio/engine/auto-config/apply` `{ encoder?, video_encoder?, encoder_settings?, scale?, fps?, video_kbps?, label? }` → snapshots `StudioSettings`, applies changes, starts 30 s auto-rollback timeout and 1-minute dropped/lagged-frame watchdog → `applied`.
+- `POST /api/v1/studio/engine/auto-config/keep` → clears 30 s timeout while keeping 1-minute drop protection → `applied` (`confirmed: true`). `409` if nothing is applied.
+- The 30 s confirmation timeout has two outcomes, in both the engine (`studio/encoder_bench.rs`) and the demo engine: **idle** (not streaming or recording), the previous settings are restored automatically (`rolled_back`, `rollback_trigger: "timeout"`, notice `auto_config_rollback`); **live**, the new settings stay in place (a live encoder is never reshaped behind the streamer's back) and `rollback_offered: true` asks Keep or Undo once the live activity ends. The same live rule applies to the dropped-frame watchdog (`rollback_trigger: "dropped_frames"`), which counts only frames skipped or lagged while live.
+- `POST /api/v1/studio/engine/auto-config/benchmark` also answers `409 conflict` while new settings are still on trial (applied, Keep or Undo not chosen): a benchmark would replace the trial and leave Undo with nothing to restore.
+- Keep after a rollback offer: `keep` while the watch is still running answers `applied` with `confirmed: true`; Keep on an offer (`rollback_offered: true`) ends the trial for good: the snapshot is discarded and the answer is `idle` (nothing left to undo), not `applied`.
+- `POST /api/v1/studio/engine/auto-config/undo` → restores snapshot immediately → `rolled_back`. `409` if nothing is applied.
+- Live WebSocket frame: `auto_config AutoConfigState` (plus `notice` key `auto_config_rollback` on automatic rollback). PC-only (`/studio/engine/**` remains blocked to paired phones).
+
 ## R33. Add or remove destinations while live (Phase 2 #17, 22 Nov)
 
 Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses:

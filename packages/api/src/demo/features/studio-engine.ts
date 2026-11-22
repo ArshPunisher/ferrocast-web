@@ -1,6 +1,12 @@
 import {
   resolveTransitionFromScenes,
+  type AutoConfigAppliedSummary,
+  type AutoConfigCandidate,
+  type AutoConfigMode,
+  type AutoConfigRecommendation,
+  type AutoConfigState,
   type EncodeBudget,
+  type EncoderFamily,
   type EngineFilter,
   type EngineImportPreview,
   type EngineImportReport,
@@ -11,16 +17,21 @@ import {
   type EngineOption,
   type EngineSettings,
   type EngineShelf,
+  type EngineStats,
   type EngineStudioOptions,
   type EngineTransition,
   type EngineTransitionMatrixRule,
+  type LimitedBy,
   type NewEngineSource,
+  type RollbackTrigger,
 } from '../../studio-engine'
+import type { Service, UploadCheck } from '../../golive'
 import { HttpError } from '../http-error'
-import { clone, requireObj } from './host'
+import { clone, requireObj, type DemoHost } from './host'
 
 export type DemoCollectionPreset = 'normal' | 'empty' | 'broken' | 'huge'
 export type DemoMicPreset = 'quiet' | 'good' | 'loud' | 'silent'
+export type DemoBenchProfile = 'apple_vt' | 'nvidia_nvenc' | 'weak_cpu' | 'qsv_stepdown'
 
 export interface DemoStudioEngineOptions {
   obsPreset?: DemoCollectionPreset
@@ -31,6 +42,20 @@ export interface DemoStudioEngineOptions {
   hasMic?: boolean
   micPreset?: DemoMicPreset
   running?: boolean
+  /** Benchmark machine profile in demo mode. */
+  benchProfile?: DemoBenchProfile
+  /** Delay between demo benchmark steps (ms). Defaults to 180 ms in tests/demo (~1 s total). */
+  benchStepMs?: number
+  /** Rollback inaction timeout (ms). Defaults to 30_000. */
+  confirmTimeoutMs?: number
+  /** First-minute stability window (ms). Defaults to 60_000. */
+  watchWindowMs?: number
+}
+
+export interface DemoAutoConfigDeps {
+  runUploadCheck: () => UploadCheck
+  isLive: () => boolean
+  enabledPlatforms: () => { id: string; kind: Service; name: string; enhanced: boolean }[]
 }
 
 interface StoredCollection {
@@ -344,6 +369,8 @@ function streamlabsFixtures(preset: DemoCollectionPreset): StoredCollection[] {
 
 export class DemoStudioEngine {
   private opts: Required<DemoStudioEngineOptions>
+  private readonly host: DemoHost | null
+  private deps: DemoAutoConfigDeps | null = null
   private shelfCollections: EngineShelf = {
     current: 'untitled',
     list: [{ id: 'untitled', name: 'Untitled' }],
@@ -399,6 +426,27 @@ export class DemoStudioEngine {
   private filters = new Map<string, EngineFilter[]>()
   private audioVolumeDb = new Map<string, number>()
   private audioMuted = new Map<string, boolean>()
+  private streamActive = false
+  private recordActive = false
+  private replayActive = false
+  private virtualCamActive = false
+  private ndiActive = false
+  private showActive = false
+  private simDropped = 0
+  private simLagged = 0
+  private simSkipped = 0
+  private benchJobSeq = 0
+  private benchCancelToken = 0
+  private applyWatchToken = 0
+  private confirmDeadlineAt = 0
+  private watchDeadlineAt = 0
+  private wasLive = false
+  private watchStarted = false
+  private pendingOffer: { trigger: RollbackTrigger; reason: string } | null = null
+  private snapshot: Record<string, unknown> | null = null
+  private baselineLagged = 0
+  private baselineSkipped = 0
+  private autoConfigState: AutoConfigState = emptyAutoConfigState()
   private studioSettingsData: Record<string, unknown> = {
     encoder: 'hardware',
     video_kbps: 6000,
@@ -425,7 +473,8 @@ export class DemoStudioEngine {
     hotkeys: {},
   }
 
-  constructor(opts: DemoStudioEngineOptions = {}) {
+  constructor(opts: DemoStudioEngineOptions = {}, host: DemoHost | null = null) {
+    this.host = host
     this.opts = {
       obsPreset: opts.obsPreset ?? 'normal',
       streamlabsPreset: opts.streamlabsPreset ?? 'normal',
@@ -434,9 +483,54 @@ export class DemoStudioEngine {
       hasMic: opts.hasMic ?? true,
       micPreset: opts.micPreset ?? 'quiet',
       running: opts.running ?? false,
+      benchProfile: opts.benchProfile ?? 'apple_vt',
+      benchStepMs: opts.benchStepMs ?? 180,
+      confirmTimeoutMs: opts.confirmTimeoutMs ?? 30_000,
+      watchWindowMs: opts.watchWindowMs ?? 60_000,
     }
     this.filters.set('Mic', [])
     this.filters.set('Desktop Audio', [])
+  }
+
+  setAutoConfigDeps(deps: DemoAutoConfigDeps): void {
+    this.deps = deps
+  }
+
+  setStreamActive(on: boolean): void {
+    this.streamActive = on
+    this.evaluateWatchStep()
+  }
+
+  setRecordActive(on: boolean): void {
+    this.recordActive = on
+    this.evaluateWatchStep()
+  }
+
+  setReplayActive(on: boolean): void {
+    this.replayActive = on
+    this.evaluateWatchStep()
+  }
+
+  setVirtualCamActive(on: boolean): void {
+    this.virtualCamActive = on
+    this.evaluateWatchStep()
+  }
+
+  setNdiActive(on: boolean): void {
+    this.ndiActive = on
+    this.evaluateWatchStep()
+  }
+
+  setShowActive(on: boolean): void {
+    this.showActive = on
+    this.evaluateWatchStep()
+  }
+
+  injectDroppedFrames(dropped: number, lagged = 0, skipped = 0): void {
+    this.simDropped += dropped
+    this.simLagged += lagged
+    this.simSkipped += skipped
+    this.evaluateWatchStep()
   }
 
   configure(next: Partial<DemoStudioEngineOptions>): void {
@@ -707,7 +801,13 @@ export class DemoStudioEngine {
           { id: 'obs_stinger_transition', name: 'Stinger' },
           { id: 'ferrocast_move', name: 'Move' },
         ],
-        encoders: [{ id: 'obs_x264', name: 'x264' }],
+        encoders: [
+          {
+            id: 'com.apple.videotoolbox.videoencoder.ave.avc',
+            name: 'Apple VT H264 Hardware Encoder',
+          },
+          { id: 'obs_x264', name: 'x264' },
+        ],
         outputs: [],
       }
     }
@@ -1383,15 +1483,7 @@ export class DemoStudioEngine {
       this.black = !this.black
       return { black: this.black }
     }
-    if (is('GET', 'studio/engine/stats')) {
-      return {
-        engine: { cpu: 4.2, fps: 60, frame_ms: 4.1, lagged: 0, frames: 3600, memory_mb: 240 },
-        canvas: { width: 1920, height: 1080, fps: 60 },
-        stream: null,
-        record: null,
-        scene: this.currentScene,
-      }
-    }
+    if (is('GET', 'studio/engine/stats')) return this.engineStatsSnapshot()
     if (is('GET', 'studio/engine/history')) return { undo: [], redo: [] }
     if (is('GET', 'studio/engine/audio-care')) return { ducking: null, loudness_lufs: null }
     if (is('GET', 'studio/engine/privacy')) return { hide_notifications: true, hide_apps: [] }
@@ -1558,8 +1650,45 @@ export class DemoStudioEngine {
       return clone(this.studioSettingsData)
     }
     if (is('PUT', 'studio/engine/settings')) {
-      this.studioSettingsData = { ...this.studioSettingsData, ...requireObj(body) }
+      const patch = requireObj(body)
+      const prev = this.studioSettingsData
+      this.studioSettingsData = { ...this.studioSettingsData, ...patch }
+      if (this.autoConfigState.state === 'applied' && this.autoConfigState.applied) {
+        const keys = ['encoder', 'video_encoder', 'encoder_settings', 'scale', 'fps', 'video_kbps']
+        const outputChanged = keys.some(
+          (k) =>
+            k in patch &&
+            JSON.stringify(prev[k] ?? null) !== JSON.stringify(this.studioSettingsData[k] ?? null),
+        )
+        if (outputChanged) {
+          this.applyWatchToken++
+          this.snapshot = null
+          this.wasLive = false
+          this.watchStarted = false
+          this.pendingOffer = null
+          this.autoConfigState = emptyAutoConfigState()
+          this.broadcastAutoConfig()
+        }
+      }
       return { settings: clone(this.studioSettingsData), restart: null }
+    }
+    if (is('GET', 'studio/engine/auto-config')) {
+      return this.autoConfigView()
+    }
+    if (is('POST', 'studio/engine/auto-config/benchmark')) {
+      return this.startBenchmark(body)
+    }
+    if (is('POST', 'studio/engine/auto-config/cancel')) {
+      return this.cancelBenchmark()
+    }
+    if (is('POST', 'studio/engine/auto-config/apply')) {
+      return this.applyAutoConfig(body)
+    }
+    if (is('POST', 'studio/engine/auto-config/keep')) {
+      return this.keepAutoConfig()
+    }
+    if (is('POST', 'studio/engine/auto-config/undo')) {
+      return this.undoAutoConfig()
     }
 
     if (is('POST', 'studio/engine/levels')) {
@@ -1623,5 +1752,1009 @@ export class DemoStudioEngine {
           'The camera is turned off for Ferrocast. Open System Settings, Privacy & Security, Camera, turn Ferrocast on, then press Retry.',
       }
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
+  }
+
+  private engineStatsSnapshot(): EngineStats {
+    const fps = Number(this.studioSettingsData.fps ?? 60)
+    const width = Number(this.studioSettingsData.width ?? 1920)
+    const height = Number(this.studioSettingsData.height ?? 1080)
+    return {
+      engine: {
+        cpu: 14.2,
+        fps,
+        frame_ms: 3.1,
+        lagged: this.simLagged,
+        skipped: this.simSkipped,
+        frames: 3600,
+        memory_mb: 310,
+      },
+      canvas: { width, height, fps },
+      scene: this.currentScene,
+      stream: this.streamActive
+        ? {
+            active: true,
+            reconnecting: false,
+            bytes: 4_800_000,
+            frames: 3600,
+            dropped: this.simDropped,
+            error: null,
+          }
+        : null,
+      record: this.recordActive
+        ? {
+            active: true,
+            paused: false,
+            bytes: 2_400_000,
+            frames: 1800,
+            file: '/Users/demo/Movies/Ferrocast/demo.mp4',
+            seconds: 30,
+            error: null,
+          }
+        : null,
+    }
+  }
+
+  private isBusyLive(): boolean {
+    return (
+      this.streamActive ||
+      this.recordActive ||
+      this.replayActive ||
+      this.virtualCamActive ||
+      this.ndiActive ||
+      this.showActive ||
+      !!this.deps?.isLive()
+    )
+  }
+
+  private schedule(fn: () => void, ms: number): void {
+    if (this.host) this.host.later(fn, ms)
+    else setTimeout(fn, ms)
+  }
+
+  private broadcastAutoConfig(): void {
+    this.host?.broadcastLive({ v: 1, type: 'auto_config', data: this.autoConfigView() })
+  }
+
+  private autoConfigView(): AutoConfigState {
+    const out = clone(this.autoConfigState)
+    if (out.state === 'applied') {
+      const now = Date.now()
+      out.confirm_remaining_s =
+        out.confirmed || out.rollback_offered
+          ? 0
+          : Math.max(0, Math.ceil((this.confirmDeadlineAt - now) / 1000))
+      out.watch_remaining_s = this.watchStarted
+        ? Math.max(0, Math.ceil((this.watchDeadlineAt - now) / 1000))
+        : Math.ceil(this.opts.watchWindowMs / 1000)
+      out.first_minute_drops = Math.max(0, this.simSkipped - this.baselineSkipped)
+      out.first_minute_lags = Math.max(0, this.simLagged - this.baselineLagged)
+    }
+    return out
+  }
+
+  private startBenchmark(rawBody: unknown): AutoConfigState {
+    const b = rawBody === undefined || rawBody === null ? {} : requireObj(rawBody)
+    const mode = (b.mode ?? 'stream') as string
+    if (mode !== 'stream' && mode !== 'record') {
+      throw new HttpError(400, 'invalid', 'mode: stream or record.')
+    }
+    const fpsPref = b.fps_preference === undefined ? 60 : Number(b.fps_preference)
+    if (fpsPref !== 30 && fpsPref !== 60) {
+      throw new HttpError(400, 'invalid', 'fps_preference: 30 or 60.')
+    }
+    if (b.max_seconds !== undefined) {
+      const m = Number(b.max_seconds)
+      if (!Number.isFinite(m) || m < 2 || m > 35) {
+        throw new HttpError(400, 'invalid', 'max_seconds: 2 to 35.')
+      }
+    }
+    if (this.isBusyLive()) {
+      throw new HttpError(
+        409,
+        'studio_busy',
+        'Stop streaming and recording before testing the encoder.',
+        'End your active stream, recording, or replay buffer first so the benchmark never affects live viewers.',
+      )
+    }
+    if (this.autoConfigState.state === 'running') {
+      throw new HttpError(409, 'conflict', 'An encoder benchmark is already running.')
+    }
+    // New settings are still on trial (Keep or Undo not chosen): a benchmark would replace the
+    // trial and leave Undo with nothing to restore, as the engine refuses.
+    if (this.autoConfigState.state === 'applied') {
+      throw new HttpError(
+        409,
+        'conflict',
+        'Keep or undo the new settings before testing the encoder again.',
+      )
+    }
+
+    const includeUpload =
+      b.include_upload === undefined ? mode === 'stream' : Boolean(b.include_upload)
+    const jobId = `demo-bench-${++this.benchJobSeq}`
+    const token = ++this.benchCancelToken
+    const width = Number(this.studioSettingsData.width ?? 1920)
+    const height = Number(this.studioSettingsData.height ?? 1080)
+    const canvas: [number, number] = [width, height]
+    const startedAt = Date.now()
+    const stepMs = Math.max(20, this.opts.benchStepMs)
+    const plan = buildDemoCandidates(
+      this.opts.benchProfile,
+      canvas,
+      fpsPref as 30 | 60,
+      mode as AutoConfigMode,
+    )
+
+    this.autoConfigState = {
+      ...emptyAutoConfigState(),
+      state: 'running',
+      job_id: jobId,
+      mode: mode as AutoConfigMode,
+      phase: includeUpload && mode === 'stream' ? 'upload' : 'encoding',
+      progress_pct: 8,
+      current_label:
+        includeUpload && mode === 'stream'
+          ? 'Testing upload speed…'
+          : `Stress testing ${plan[0]?.label ?? 'encoder'}…`,
+      estimated_total_ms: (plan.length + (includeUpload ? 1 : 0)) * stepMs,
+    }
+    this.broadcastAutoConfig()
+
+    let uploadCheck: UploadCheck | null = null
+    let uploadTried = false
+    let stepIdx = 0
+    const fail = (message: string) => {
+      if (this.benchCancelToken !== token) return
+      this.autoConfigState = {
+        ...this.autoConfigState,
+        state: 'failed',
+        job_id: null,
+        phase: null,
+        current_label: null,
+        error: message,
+        elapsed_ms: Date.now() - startedAt,
+      }
+      this.broadcastAutoConfig()
+    }
+
+    const runStep = () => {
+      if (this.benchCancelToken !== token || this.autoConfigState.state !== 'running') return
+      if (includeUpload && mode === 'stream' && !uploadTried) {
+        // Once: with no checker, or one that throws, the run goes on without a measurement.
+        uploadTried = true
+        try {
+          uploadCheck = this.deps?.runUploadCheck() ?? null
+        } catch (e) {
+          uploadCheck = null
+          this.autoConfigState.upload_error =
+            e instanceof Error ? e.message : 'Upload check failed.'
+        }
+        this.autoConfigState.upload_check = uploadCheck
+        this.autoConfigState.phase = 'encoding'
+        this.autoConfigState.progress_pct = 24
+        this.autoConfigState.current_label = `Stress testing ${plan[0]?.label ?? 'encoder'}…`
+        this.autoConfigState.elapsed_ms = Date.now() - startedAt
+        this.broadcastAutoConfig()
+        this.schedule(runStep, stepMs)
+        return
+      }
+      if (stepIdx < plan.length) {
+        this.autoConfigState.candidates.push(plan[stepIdx]!)
+        stepIdx += 1
+        this.autoConfigState.elapsed_ms = Date.now() - startedAt
+        const pct = 25 + Math.round((stepIdx / Math.max(1, plan.length)) * 68)
+        this.autoConfigState.progress_pct = Math.min(95, pct)
+        const nextCand = plan[stepIdx]
+        if (nextCand) {
+          this.autoConfigState.phase = 'encoding'
+          this.autoConfigState.current_label = `Stress testing ${nextCand.label} (${nextCand.width}×${nextCand.height} @ ${nextCand.fps} fps)…`
+        } else {
+          this.autoConfigState.phase = 'picking'
+          this.autoConfigState.current_label = 'Picking the best configuration…'
+        }
+        this.broadcastAutoConfig()
+        this.schedule(runStep, stepMs)
+        return
+      }
+
+      let picked: AutoConfigRecommendation
+      try {
+        const platforms = this.deps?.enabledPlatforms() ?? []
+        picked = pickDemoRecommendation(
+          this.autoConfigState.candidates,
+          mode as AutoConfigMode,
+          fpsPref as 30 | 60,
+          canvas,
+          uploadCheck?.verdict.upload_kbps ?? null,
+          platforms,
+        )
+      } catch (e) {
+        fail(e instanceof Error ? e.message : 'The benchmark could not pick a configuration.')
+        return
+      }
+      this.autoConfigState = {
+        ...this.autoConfigState,
+        state: 'done',
+        job_id: null,
+        phase: null,
+        progress_pct: 100,
+        current_label: null,
+        elapsed_ms: Date.now() - startedAt,
+        duration_ms: Date.now() - startedAt,
+        upload_check: uploadCheck,
+        picked,
+      }
+      this.broadcastAutoConfig()
+    }
+
+    this.schedule(runStep, stepMs)
+    return this.autoConfigView()
+  }
+
+  private cancelBenchmark(): AutoConfigState {
+    this.benchCancelToken++
+    if (this.autoConfigState.state === 'running') {
+      this.autoConfigState = emptyAutoConfigState()
+      this.broadcastAutoConfig()
+    }
+    return this.autoConfigView()
+  }
+
+  private applyAutoConfig(rawBody: unknown): AutoConfigState {
+    if (this.autoConfigState.state === 'running') {
+      throw new HttpError(
+        409,
+        'conflict',
+        'Finish or cancel the benchmark before applying settings.',
+      )
+    }
+    const req = rawBody === undefined || rawBody === null ? {} : requireObj(rawBody)
+    if (req.fps !== undefined && ![24, 25, 30, 48, 50, 60, 120].includes(Number(req.fps))) {
+      throw new HttpError(400, 'invalid', 'fps: 24, 25, 30, 48, 50, 60 or 120.')
+    }
+    if (
+      req.video_kbps !== undefined &&
+      (!Number.isFinite(Number(req.video_kbps)) ||
+        Number(req.video_kbps) < 500 ||
+        Number(req.video_kbps) > 60_000)
+    ) {
+      throw new HttpError(400, 'invalid', 'video_kbps: 500 to 60000.')
+    }
+    const picked = this.autoConfigState.picked
+    const anySetting = [
+      req.fps,
+      req.video_kbps,
+      req.encoder,
+      req.video_encoder,
+      req.encoder_settings,
+      req.scale,
+    ].some((v) => v !== undefined)
+    if (!picked && !anySetting) {
+      throw new HttpError(400, 'invalid', 'Run the benchmark or provide settings to apply.')
+    }
+
+    if (this.autoConfigState.state !== 'applied' || this.snapshot === null) {
+      this.snapshot = clone(this.studioSettingsData)
+    }
+    const next: Record<string, unknown> = clone(this.studioSettingsData)
+    if (picked) {
+      next.encoder = picked.encoder
+      next.video_encoder = picked.video_encoder
+      next.encoder_settings = clone(picked.encoder_settings)
+      next.scale = picked.scale ? [...picked.scale] : null
+      next.fps = picked.fps
+      next.video_kbps = picked.video_kbps
+    }
+    if (req.encoder !== undefined) {
+      next.encoder = req.encoder
+      if (req.encoder === 'software' && req.video_encoder === undefined) {
+        next.video_encoder = null
+      }
+    }
+    if (req.video_encoder !== undefined) next.video_encoder = req.video_encoder
+    if (req.encoder_settings !== undefined) next.encoder_settings = clone(req.encoder_settings)
+    if (req.scale !== undefined) next.scale = req.scale ? [...(req.scale as number[])] : null
+    if (req.fps !== undefined) next.fps = Number(req.fps)
+    if (req.video_kbps !== undefined) next.video_kbps = Number(req.video_kbps)
+    this.studioSettingsData = next
+
+    const applied: AutoConfigAppliedSummary = {
+      encoder: (next.encoder === 'software' ? 'software' : 'hardware') as 'hardware' | 'software',
+      video_encoder: (next.video_encoder as string | null) ?? null,
+      encoder_settings: clone((next.encoder_settings as Record<string, unknown>) ?? {}),
+      scale: (next.scale as [number, number] | null) ?? null,
+      fps: Number(next.fps ?? 60),
+      video_kbps: Number(next.video_kbps ?? 6000),
+      label:
+        typeof req.label === 'string'
+          ? req.label
+          : (picked?.label ?? (next.encoder === 'software' ? 'x264' : 'Hardware encoder')),
+    }
+
+    const now = Date.now()
+    const liveNow = this.isBusyLive()
+    this.confirmDeadlineAt = now + this.opts.confirmTimeoutMs
+    this.watchDeadlineAt = now + this.opts.watchWindowMs
+    this.wasLive = liveNow
+    this.watchStarted = liveNow
+    this.pendingOffer = null
+    this.baselineLagged = this.simLagged
+    this.baselineSkipped = this.simSkipped
+    const watchToken = ++this.applyWatchToken
+
+    this.autoConfigState = {
+      ...this.autoConfigState,
+      state: 'applied',
+      applied,
+      confirmed: false,
+      confirm_remaining_s: Math.ceil(this.opts.confirmTimeoutMs / 1000),
+      watch_remaining_s: Math.ceil(this.opts.watchWindowMs / 1000),
+      first_minute_drops: 0,
+      first_minute_lags: 0,
+      rollback_offered: false,
+      rollback_trigger: null,
+      rollback_reason: null,
+      restored: null,
+    }
+    this.broadcastAutoConfig()
+
+    const tickMs = Math.min(500, Math.max(25, Math.floor(this.opts.confirmTimeoutMs / 4)))
+    const tick = () => {
+      if (this.applyWatchToken !== watchToken || this.autoConfigState.state !== 'applied') return
+      if (this.evaluateWatchStep()) return
+      this.schedule(tick, tickMs)
+    }
+    this.schedule(tick, tickMs)
+    return this.autoConfigView()
+  }
+
+  private keepAutoConfig(): AutoConfigState {
+    if (this.autoConfigState.state !== 'applied') {
+      throw new HttpError(
+        409,
+        'conflict',
+        'There are no newly applied settings waiting to be kept.',
+      )
+    }
+    const wasOffered = this.autoConfigState.rollback_offered
+    this.autoConfigState.confirmed = true
+    this.autoConfigState.confirm_remaining_s = 0
+    this.autoConfigState.rollback_offered = false
+    this.autoConfigState.rollback_trigger = null
+    this.autoConfigState.rollback_reason = null
+    this.pendingOffer = null
+    const doneWatch = this.watchStarted && Date.now() >= this.watchDeadlineAt
+    if (wasOffered || doneWatch) {
+      this.applyWatchToken++
+      this.snapshot = null
+      this.wasLive = false
+      this.watchStarted = false
+      this.autoConfigState = {
+        ...emptyAutoConfigState(),
+        mode: this.autoConfigState.mode,
+        candidates: this.autoConfigState.candidates,
+        upload_check: this.autoConfigState.upload_check,
+        picked: this.autoConfigState.picked,
+        duration_ms: this.autoConfigState.duration_ms,
+      }
+    }
+    this.broadcastAutoConfig()
+    return this.autoConfigView()
+  }
+
+  private undoAutoConfig(): AutoConfigState {
+    if (this.autoConfigState.state !== 'applied') {
+      throw new HttpError(409, 'conflict', 'There are no applied settings to undo.')
+    }
+    return this.performRollback('user_undo', 'Restored your previous settings.')
+  }
+
+  private evaluateWatchStep(): boolean {
+    if (this.autoConfigState.state !== 'applied') return true
+    const now = Date.now()
+    const live = this.isBusyLive()
+    // The baseline moves first, so frames that lagged while idle can't count against the stream.
+    if (live) {
+      if (!this.watchStarted) {
+        this.watchStarted = true
+        this.watchDeadlineAt = now + this.opts.watchWindowMs
+        this.baselineLagged = this.simLagged
+        this.baselineSkipped = this.simSkipped
+      } else if (!this.wasLive) {
+        this.baselineLagged = this.simLagged
+        this.baselineSkipped = this.simSkipped
+      }
+    }
+    const encoderSkips = Math.max(0, this.simSkipped - this.baselineSkipped)
+    const encoderLags = Math.max(0, this.simLagged - this.baselineLagged)
+    const encoderIssues = encoderSkips + encoderLags
+
+    if (live) {
+      this.wasLive = true
+      if (
+        now < this.watchDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered &&
+        encoderIssues >= 5
+      ) {
+        this.pendingOffer = {
+          trigger: 'dropped_frames',
+          reason: `First minute dropped ${encoderIssues} encoder-skipped frames. Undo to restore your previous settings, or Keep.`,
+        }
+      }
+      if (
+        !this.autoConfigState.confirmed &&
+        now >= this.confirmDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered
+      ) {
+        this.pendingOffer = {
+          trigger: 'timeout',
+          reason:
+            "Settings weren't confirmed within 30 s while live. Restore your previous settings or Keep.",
+        }
+      }
+      if (
+        this.autoConfigState.confirmed &&
+        now >= this.watchDeadlineAt &&
+        !this.pendingOffer &&
+        !this.autoConfigState.rollback_offered
+      ) {
+        this.snapshot = null
+        this.wasLive = false
+        this.watchStarted = false
+        this.autoConfigState = {
+          ...emptyAutoConfigState(),
+          mode: this.autoConfigState.mode,
+          candidates: this.autoConfigState.candidates,
+          upload_check: this.autoConfigState.upload_check,
+          picked: this.autoConfigState.picked,
+          duration_ms: this.autoConfigState.duration_ms,
+        }
+        this.broadcastAutoConfig()
+        return true
+      }
+      return false
+    }
+
+    if (this.wasLive) {
+      this.wasLive = false
+      if (this.pendingOffer) {
+        const offer = this.pendingOffer
+        this.pendingOffer = null
+        this.autoConfigState = {
+          ...this.autoConfigState,
+          rollback_offered: true,
+          rollback_trigger: offer.trigger,
+          rollback_reason: offer.reason,
+          confirm_remaining_s: 0,
+        }
+        this.broadcastAutoConfig()
+        this.host?.broadcastLive({
+          v: 1,
+          type: 'notice',
+          data: {
+            key: 'auto_config_rollback_offer',
+            level: 'warn',
+            message: 'Encoder dropped frames during your stream — rollback ready',
+            detail: offer.reason,
+          },
+        })
+        return true
+      }
+    }
+
+    if (
+      !this.autoConfigState.confirmed &&
+      !this.autoConfigState.rollback_offered &&
+      !this.pendingOffer &&
+      now >= this.confirmDeadlineAt
+    ) {
+      this.performRollback(
+        'timeout',
+        'Automatically rolled back after 30 s with no Keep confirmation.',
+      )
+      return true
+    }
+    if (
+      this.watchStarted &&
+      this.autoConfigState.confirmed &&
+      !this.autoConfigState.rollback_offered &&
+      now >= this.watchDeadlineAt
+    ) {
+      this.snapshot = null
+      this.watchStarted = false
+      this.autoConfigState = {
+        ...emptyAutoConfigState(),
+        mode: this.autoConfigState.mode,
+        candidates: this.autoConfigState.candidates,
+        upload_check: this.autoConfigState.upload_check,
+        picked: this.autoConfigState.picked,
+        duration_ms: this.autoConfigState.duration_ms,
+      }
+      this.broadcastAutoConfig()
+      return true
+    }
+    if (this.autoConfigState.rollback_offered) return true
+    return false
+  }
+
+  private performRollback(trigger: RollbackTrigger, reason: string): AutoConfigState {
+    this.applyWatchToken++
+    const prev = this.snapshot ?? clone(this.studioSettingsData)
+    this.snapshot = null
+    this.wasLive = false
+    this.watchStarted = false
+    this.pendingOffer = null
+    const merged: Record<string, unknown> = clone(this.studioSettingsData)
+    merged.encoder = prev.encoder
+    merged.video_encoder = prev.video_encoder ?? null
+    merged.encoder_settings = clone((prev.encoder_settings as Record<string, unknown>) ?? {})
+    merged.scale = prev.scale ? [...(prev.scale as number[])] : null
+    merged.fps = prev.fps
+    merged.video_kbps = prev.video_kbps
+    this.studioSettingsData = merged
+    const restored: AutoConfigAppliedSummary = {
+      encoder: (prev.encoder === 'software' ? 'software' : 'hardware') as 'hardware' | 'software',
+      video_encoder: (prev.video_encoder as string | null) ?? null,
+      encoder_settings: clone((prev.encoder_settings as Record<string, unknown>) ?? {}),
+      scale: (prev.scale as [number, number] | null) ?? null,
+      fps: Number(prev.fps ?? 60),
+      video_kbps: Number(prev.video_kbps ?? 6000),
+      label: prev.encoder === 'software' ? 'x264' : 'Hardware encoder',
+    }
+    this.autoConfigState = {
+      ...this.autoConfigState,
+      state: 'rolled_back',
+      applied: null,
+      confirmed: false,
+      confirm_remaining_s: 0,
+      watch_remaining_s: 0,
+      rollback_offered: false,
+      rollback_trigger: trigger,
+      rollback_reason: reason,
+      restored,
+    }
+    this.broadcastAutoConfig()
+    if (trigger !== 'user_undo') {
+      const msg =
+        trigger === 'timeout'
+          ? 'Encoder settings rolled back (no confirmation in 30 s)'
+          : 'Encoder settings rolled back after dropped frames'
+      this.host?.broadcastLive({
+        v: 1,
+        type: 'notice',
+        data: { key: 'auto_config_rollback', level: 'warn', message: msg, detail: reason },
+      })
+    }
+    return this.autoConfigView()
+  }
+}
+
+function emptyAutoConfigState(): AutoConfigState {
+  return {
+    state: 'idle',
+    job_id: null,
+    mode: 'stream',
+    phase: null,
+    progress_pct: 0,
+    current_label: null,
+    elapsed_ms: 0,
+    estimated_total_ms: 0,
+    candidates: [],
+    upload_check: null,
+    upload_error: null,
+    picked: null,
+    duration_ms: null,
+    error: null,
+    applied: null,
+    confirmed: false,
+    confirm_remaining_s: 0,
+    watch_remaining_s: 0,
+    first_minute_drops: 0,
+    first_minute_lags: 0,
+    rollback_offered: false,
+    rollback_trigger: null,
+    rollback_reason: null,
+    restored: null,
+  }
+}
+
+function demoCand(o: {
+  backend: string
+  studioId: string
+  label: string
+  family: EncoderFamily
+  preset?: string | null
+  w: number
+  h: number
+  fps: number
+  avg: number
+  p95: number
+  max: number
+  skip?: number
+  lag?: number
+  cpu: number | null
+  gpu: number | null
+}): AutoConfigCandidate {
+  const budget = 1000 / o.fps
+  const headroom = Math.max(-100, Math.min(100, (1 - o.avg / budget) * 100))
+  const skip = o.skip ?? 0
+  const lag = o.lag ?? 0
+  const passed =
+    skip === 0 &&
+    lag <= 1 &&
+    o.avg <= budget * 0.72 &&
+    o.p95 <= budget * 1.05 &&
+    (o.cpu === null || o.cpu <= 85) &&
+    (o.gpu === null || o.gpu <= 90)
+  return {
+    encoder_backend: o.backend,
+    studio_encoder_id: o.studioId,
+    label: o.label,
+    family: o.family,
+    hardware: o.family !== 'x264',
+    preset: o.preset ?? null,
+    width: o.w,
+    height: o.h,
+    fps: o.fps,
+    bitrate_kbps: 6000,
+    frames_tested: o.fps * 2,
+    encode_ms_avg: Math.round(o.avg * 100) / 100,
+    encode_ms_p95: Math.round(o.p95 * 100) / 100,
+    encode_ms_max: Math.round(o.max * 100) / 100,
+    budget_ms: Math.round(budget * 100) / 100,
+    fps_achieved: Math.round(Math.min(o.fps, 1000 / o.avg) * 10) / 10,
+    headroom_pct: Math.round(headroom * 10) / 10,
+    skipped_frames: skip,
+    lagged_frames: lag,
+    cpu_pct: o.cpu,
+    gpu_pct: o.gpu,
+    elapsed_ms: 1900,
+    passed,
+    reason: passed
+      ? `Held ${o.fps} fps at ${o.avg.toFixed(1)} ms/frame (${Math.round(headroom)}% headroom)`
+      : skip > 0
+        ? `Encoder skipped ${skip} frames because it fell behind.`
+        : `${o.avg.toFixed(1)} ms/frame exceeded the ${o.fps} fps headroom ceiling.`,
+  }
+}
+
+function scaleForShortEdge(canvas: [number, number], targetShort: number): [number, number] {
+  const cw = Math.max(128, canvas[0] & ~1)
+  const ch = Math.max(72, canvas[1] & ~1)
+  const short = Math.min(cw, ch)
+  if (targetShort >= short) return [cw, ch]
+  const s = Math.max(72, targetShort & ~1)
+  if (cw <= ch) {
+    const h = Math.max(72, Math.round((ch * s) / cw / 2) * 2)
+    return [s, h]
+  }
+  const w = Math.max(128, Math.round((cw * s) / ch / 2) * 2)
+  return [w, s]
+}
+
+function buildDemoCandidates(
+  profile: DemoBenchProfile,
+  canvas: [number, number],
+  fps: 30 | 60,
+  mode: AutoConfigMode = 'stream',
+): AutoConfigCandidate[] {
+  const shortEdge = Math.min(canvas[0], canvas[1])
+  const topShort = mode === 'record' ? Math.min(shortEdge, 2160) : Math.min(shortEdge, 1080)
+  const [wTop, hTop] = scaleForShortEdge(canvas, topShort)
+  const [w720, h720] = scaleForShortEdge(canvas, Math.min(shortEdge, 720))
+
+  if (profile === 'nvidia_nvenc') {
+    return [
+      demoCand({
+        backend: 'h264_nvenc',
+        studioId: 'ffmpeg_hardware',
+        label: 'NVIDIA NVENC',
+        family: 'nvenc',
+        w: wTop,
+        h: hTop,
+        fps,
+        avg: 2.9,
+        p95: 3.8,
+        max: 4.9,
+        cpu: 14,
+        gpu: 26,
+      }),
+      demoCand({
+        backend: 'libx264',
+        studioId: 'obs_x264',
+        label: 'x264 (veryfast)',
+        family: 'x264',
+        preset: 'veryfast',
+        w: wTop,
+        h: hTop,
+        fps,
+        avg: 7.4,
+        p95: 9.8,
+        max: 12.1,
+        cpu: 54,
+        gpu: 12,
+      }),
+      demoCand({
+        backend: 'libx264',
+        studioId: 'obs_x264',
+        label: 'x264 (superfast)',
+        family: 'x264',
+        preset: 'superfast',
+        w: wTop,
+        h: hTop,
+        fps,
+        avg: 5.2,
+        p95: 6.9,
+        max: 8.4,
+        cpu: 41,
+        gpu: 11,
+      }),
+    ]
+  }
+  if (profile === 'qsv_stepdown') {
+    return [
+      demoCand({
+        backend: 'h264_qsv',
+        studioId: 'ffmpeg_hardware',
+        label: 'Intel Quick Sync',
+        family: 'qsv',
+        w: wTop,
+        h: hTop,
+        fps: 60,
+        avg: 14.6,
+        p95: 19.2,
+        max: 24.0,
+        lag: 6,
+        cpu: 22,
+        gpu: 88,
+      }),
+      demoCand({
+        backend: 'h264_qsv',
+        studioId: 'ffmpeg_hardware',
+        label: 'Intel Quick Sync',
+        family: 'qsv',
+        w: w720,
+        h: h720,
+        fps: 60,
+        avg: 5.6,
+        p95: 7.2,
+        max: 8.9,
+        cpu: 19,
+        gpu: 51,
+      }),
+      demoCand({
+        backend: 'libx264',
+        studioId: 'obs_x264',
+        label: 'x264 (veryfast)',
+        family: 'x264',
+        preset: 'veryfast',
+        w: w720,
+        h: h720,
+        fps: 60,
+        avg: 13.8,
+        p95: 17.5,
+        max: 21.0,
+        lag: 4,
+        cpu: 89,
+        gpu: 15,
+      }),
+    ]
+  }
+  if (profile === 'weak_cpu') {
+    return [
+      demoCand({
+        backend: 'libx264',
+        studioId: 'obs_x264',
+        label: 'x264 (veryfast)',
+        family: 'x264',
+        preset: 'veryfast',
+        w: wTop,
+        h: hTop,
+        fps: 60,
+        avg: 24.5,
+        p95: 31.0,
+        max: 39.0,
+        skip: 9,
+        cpu: 94,
+        gpu: null,
+      }),
+      demoCand({
+        backend: 'libx264',
+        studioId: 'obs_x264',
+        label: 'x264 (superfast)',
+        family: 'x264',
+        preset: 'superfast',
+        w: w720,
+        h: h720,
+        fps: 30,
+        avg: 12.1,
+        p95: 15.8,
+        max: 18.5,
+        cpu: 58,
+        gpu: null,
+      }),
+    ]
+  }
+  return [
+    demoCand({
+      backend: 'videotoolbox',
+      studioId: 'com.apple.videotoolbox.videoencoder.ave.avc',
+      label: 'Apple VideoToolbox',
+      family: 'videotoolbox',
+      w: wTop,
+      h: hTop,
+      fps,
+      avg: 2.3,
+      p95: 3.1,
+      max: 4.2,
+      cpu: 16,
+      gpu: 22,
+    }),
+    demoCand({
+      backend: 'libx264',
+      studioId: 'obs_x264',
+      label: 'x264 (veryfast)',
+      family: 'x264',
+      preset: 'veryfast',
+      w: wTop,
+      h: hTop,
+      fps,
+      avg: 8.6,
+      p95: 11.4,
+      max: 14.0,
+      cpu: 57,
+      gpu: 10,
+    }),
+    demoCand({
+      backend: 'libx264',
+      studioId: 'obs_x264',
+      label: 'x264 (superfast)',
+      family: 'x264',
+      preset: 'superfast',
+      w: wTop,
+      h: hTop,
+      fps,
+      avg: 5.9,
+      p95: 7.7,
+      max: 9.8,
+      cpu: 42,
+      gpu: 10,
+    }),
+  ]
+}
+
+const PLATFORM_CAPS: Record<string, number> = { twitch: 6000, kick: 8000, youtube: 12000 }
+
+function recordKbpsFor(shortEdge: number, fps: number): number {
+  const highFps = fps >= 60
+  if (shortEdge >= 2160) return highFps ? 32000 : 22000
+  if (shortEdge >= 1440) return highFps ? 18000 : 12000
+  if (shortEdge >= 1080) return highFps ? 12000 : 8000
+  if (shortEdge >= 720) return highFps ? 6500 : 4500
+  return 2500
+}
+
+function streamTierCap(shortEdge: number, fps: number): number {
+  const highFps = fps >= 60
+  if (shortEdge >= 1080) return highFps ? 12000 : 8000
+  if (shortEdge >= 720) return highFps ? 6000 : 4500
+  return 3000
+}
+
+function pickDemoRecommendation(
+  candidates: AutoConfigCandidate[],
+  mode: AutoConfigMode,
+  fpsPref: 30 | 60,
+  canvas: [number, number],
+  uploadKbps: number | null,
+  platforms: { id: string; kind: Service; name: string; enhanced: boolean }[],
+): AutoConfigRecommendation {
+  const cw = Math.max(128, canvas[0] & ~1)
+  const ch = Math.max(72, canvas[1] & ~1)
+  const canvasShort = Math.min(cw, ch)
+  const caps = platforms
+    .filter((p) => !((p.kind === 'twitch' || p.kind === 'kick') && p.enhanced))
+    .map((p) => PLATFORM_CAPS[p.kind] ?? 12000)
+  const cap = Math.min(12000, ...(caps.length ? caps : [12000]))
+  const n = Math.max(1, platforms.length)
+
+  let capKbps = 12000
+  let [maxW, maxH] = scaleForShortEdge([cw, ch], Math.min(canvasShort, 2160))
+  let maxFps: number = fpsPref
+  let ceilLimited: LimitedBy = 'balanced'
+  if (mode === 'stream') {
+    const share = uploadKbps !== null ? (uploadKbps * 0.75) / n : 6000
+    capKbps = Math.max(500, Math.min(cap, Math.floor(share / 500) * 500))
+    ceilLimited =
+      share < 500
+        ? 'upload_too_slow'
+        : share < cap
+          ? 'upload'
+          : caps.some((c) => capKbps === c)
+            ? 'platform_cap'
+            : 'balanced'
+    let targetShort: number
+    if (fpsPref === 60) {
+      if (capKbps >= 6000) targetShort = 1080
+      else if (capKbps >= 3500) targetShort = 720
+      else {
+        maxFps = 30
+        targetShort = capKbps >= 2500 ? 720 : 480
+      }
+    } else targetShort = capKbps >= 4500 ? 1080 : capKbps >= 2500 ? 720 : 480
+    ;[maxW, maxH] = scaleForShortEdge([cw, ch], Math.min(canvasShort, targetShort))
+  }
+
+  const passing = candidates.filter((c) => c.passed)
+  const eff = (c: AutoConfigCandidate) => ({
+    w: Math.min(c.width, maxW) & ~1,
+    h: Math.min(c.height, maxH) & ~1,
+    fps: Math.min(c.fps, maxFps),
+  })
+  const best = (
+    passing.length
+      ? [...passing].sort((a, b) => {
+          const ea = eff(a)
+          const eb = eff(b)
+          if (ea.w * ea.h !== eb.w * eb.h) return eb.w * eb.h - ea.w * ea.h
+          if (ea.fps !== eb.fps) return eb.fps - ea.fps
+          if (a.hardware !== b.hardware) return b.hardware ? 1 : -1
+          return b.headroom_pct - a.headroom_pct
+        })
+      : [...candidates].sort((a, b) => {
+          const aRate = (a.skipped_frames + a.lagged_frames) / Math.max(1, a.frames_tested)
+          const bRate = (b.skipped_frames + b.lagged_frames) / Math.max(1, b.frames_tested)
+          if (aRate !== bRate) return aRate - bRate
+          const aRatio = a.encode_ms_avg / Math.max(1, a.budget_ms)
+          const bRatio = b.encode_ms_avg / Math.max(1, b.budget_ms)
+          if (aRatio !== bRatio) return aRatio - bRatio
+          return b.hardware === a.hardware ? 0 : b.hardware ? -1 : 1
+        })
+  )[0]!
+
+  const out = eff(best)
+  const outShort = Math.min(out.w, out.h)
+  const scale: [number, number] | null = out.w === cw && out.h === ch ? null : [out.w, out.h]
+  const encoderDowngraded = mode === 'stream' && (out.w * out.h < maxW * maxH || out.fps < maxFps)
+  const limited_by: LimitedBy =
+    mode === 'record'
+      ? best.passed && !scale
+        ? 'balanced'
+        : 'headroom'
+      : !best.passed || encoderDowngraded
+        ? 'headroom'
+        : ceilLimited
+  const video_kbps =
+    mode === 'record'
+      ? recordKbpsFor(outShort, out.fps)
+      : encoderDowngraded
+        ? Math.max(500, Math.min(capKbps, streamTierCap(outShort, out.fps)))
+        : capKbps
+  const split = n > 1 && uploadKbps !== null ? ` shared by ${n} platforms` : ''
+  const upText =
+    uploadKbps !== null && mode === 'stream'
+      ? ` ${(uploadKbps / 1000).toFixed(1)} Mbps upload${split}.${
+          limited_by === 'upload_too_slow'
+            ? " Your upload can't carry even the 500 kbps minimum for each platform: stream to fewer platforms or test a faster connection."
+            : ''
+        }`
+      : ''
+  return {
+    encoder: best.hardware ? 'hardware' : 'software',
+    video_encoder: null,
+    studio_encoder_id: best.studio_encoder_id,
+    encoder_settings: !best.hardware && best.preset ? { preset: best.preset } : {},
+    label: best.label,
+    preset: best.preset,
+    scale,
+    width: out.w,
+    height: out.h,
+    fps: out.fps,
+    video_kbps,
+    headroom_pct: best.headroom_pct,
+    limited_by,
+    why: `${best.label} held ${outShort}p${out.fps} at ${best.encode_ms_avg.toFixed(1)} ms/frame (${Math.round(best.headroom_pct)}% headroom).${upText}`,
   }
 }

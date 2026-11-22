@@ -46,10 +46,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "account",
@@ -60,15 +57,35 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ferrocast cloud account sign-in transition (PC session only, never sent to API keys).",
           "x-ferrocast-scopes": "session only (blocked for API keys)"
+        },
+        "auto_config": {
+          "payload": {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AutoConfigView"
+              },
+              "seq": {
+                "type": ["integer", "null"]
+              },
+              "type": {
+                "const": "auto_config",
+                "type": "string"
+              },
+              "v": {
+                "const": 1,
+                "type": "integer"
+              }
+            },
+            "required": ["v", "type", "data"],
+            "type": "object"
+          },
+          "summary": "Encoder auto-config progress and result: the same `AutoConfigView` the `/studio/engine/auto-config` routes return. Sent on connect only while a run is not idle.",
+          "x-ferrocast-scopes": "PC session and the owner's remote only; never sent to API keys"
         },
         "brb": {
           "payload": {
@@ -77,10 +94,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "brb",
@@ -91,11 +105,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS BRB scene state (`{ on, scene }`).",
@@ -108,10 +118,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "chat_highlight",
@@ -122,11 +129,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Pinned or cleared featured chat message.",
@@ -139,10 +142,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "chatter",
@@ -153,11 +153,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated tracked chatter metadata.",
@@ -170,10 +166,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "counter",
@@ -184,11 +177,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated bot counter (`{ name, value }`).",
@@ -212,10 +201,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "event",
@@ -226,11 +212,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Normalized stream event (follow, sub, gift_sub, tip, bits, raid, chat_message, etc.).",
@@ -243,10 +225,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "giveaway",
@@ -257,11 +236,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active giveaway state, entry count, or winner.",
@@ -274,10 +249,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "goals",
@@ -288,11 +260,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated stream goals array.",
@@ -305,10 +273,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "golive",
@@ -319,11 +284,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Multistream output state and live bitrate telemetry.",
@@ -336,10 +297,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "held",
@@ -350,11 +308,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Message/event held by safety filters (`{ event_id, reason }`).",
@@ -367,10 +321,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "held_resolved",
@@ -381,11 +332,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Held event released or dropped (`{ event_id, outcome }`).",
@@ -403,10 +350,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "hello",
@@ -417,11 +361,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Initial handshake with highest sequence number (`{ seq }`).",
@@ -434,10 +374,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "lane",
@@ -448,11 +385,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live Moments lane items.",
@@ -465,10 +398,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "live_alert",
@@ -479,11 +409,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live stream encoder/audio/network alert banner.",
@@ -496,10 +422,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "marker",
@@ -510,11 +433,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "New stream marker created.",
@@ -526,10 +445,7 @@
               "data": {
                 "properties": {
                   "key": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "level": {
                     "type": "string"
@@ -541,10 +457,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "notice",
@@ -555,11 +468,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Engine status notice or panic warning (`account:*` notices suppressed for API keys).",
@@ -572,10 +481,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "obs_health",
@@ -586,11 +492,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS FPS/dropped-frames health snapshot.",
@@ -603,10 +505,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "panic",
@@ -617,11 +516,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Panic lockdown toggled (`{ on, plan }`).",
@@ -634,10 +529,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "poll",
@@ -648,11 +540,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active poll progress or end state.",
@@ -665,10 +553,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "queue",
@@ -679,11 +564,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Alert queue snapshot (active/paused/muted/pending count).",
@@ -701,10 +582,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "resync",
@@ -715,11 +593,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ring buffer gap notice (`{ missed }`); clients should re-fetch state over REST.",
@@ -732,10 +606,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "show",
@@ -746,11 +617,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Show countdown and live rundown state (`{ show }`).",
@@ -763,10 +630,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "smart_mod",
@@ -777,11 +641,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Smart Moderation triage card.",
@@ -794,10 +654,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "snapshot",
@@ -808,11 +665,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Overlay reconnect full state snapshot.",
@@ -830,10 +683,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "status",
@@ -844,11 +694,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Connector and OBS health snapshots.",
@@ -861,10 +707,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "tts_pending",
@@ -875,11 +718,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "TTS queue items awaiting approval.",
@@ -892,10 +731,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "update",
@@ -906,11 +742,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Application update check/download state.",
@@ -940,12 +772,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Show alert visual & sound frame."
@@ -968,12 +795,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Dismiss active alert frame (`{ alert_id }`)."
@@ -996,12 +818,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Clear overlay chatbox history."
@@ -1024,12 +841,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Updated overlay config."
@@ -1052,12 +864,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Remove moderated chat message from overlay chatbox."
@@ -1080,12 +887,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Remove all messages from a timed-out/banned user."
@@ -1108,12 +910,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Public chat/event card frame."
@@ -1127,18 +924,11 @@
                     "type": "string"
                   },
                   "phase": {
-                    "enum": [
-                      "started",
-                      "finished",
-                      "failed"
-                    ],
+                    "enum": ["started", "finished", "failed"],
                     "type": "string"
                   }
                 },
-                "required": [
-                  "alert_id",
-                  "phase"
-                ],
+                "required": ["alert_id", "phase"],
                 "type": "object"
               },
               "type": {
@@ -1146,10 +936,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server alert playback acknowledgment: `{ type: 'ack', data: { alert_id, phase } }`."
@@ -1160,10 +947,7 @@
               "data": {
                 "properties": {
                   "since_seq": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ]
+                    "type": ["integer", "null"]
                   }
                 },
                 "type": "object"
@@ -1173,10 +957,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server on connect: where to resume from (`{ since_seq }`)."
@@ -1190,9 +971,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "visible"
-                ],
+                "required": ["visible"],
                 "type": "object"
               },
               "type": {
@@ -1200,10 +979,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server browser source visibility telemetry: `{ type: 'visibility', data: { visible } }`."
@@ -1226,12 +1002,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Visualizer spectrum levels & track info."
@@ -1254,12 +1025,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Overlay token was rotated or deleted; client should stop reconnecting."
@@ -1282,12 +1048,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Initial full overlay config + widget state on connect."
@@ -1310,12 +1071,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Updated widget/goal/poll/giveaway/credits state."
@@ -1338,12 +1094,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Play synthesized TTS audio in overlay."
@@ -1353,6 +1104,413 @@
         "token": {
           "description": "Opaque overlay URL token."
         }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AutoConfigAppliedSummary": {
+        "properties": {
+          "encoder": {
+            "type": "string"
+          },
+          "encoder_settings": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "fps": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "scale": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": ["array", "null"]
+          },
+          "video_encoder": {
+            "type": ["string", "null"]
+          },
+          "video_kbps": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "encoder",
+          "video_encoder",
+          "encoder_settings",
+          "scale",
+          "fps",
+          "video_kbps",
+          "label"
+        ],
+        "type": "object"
+      },
+      "AutoConfigCandidate": {
+        "description": "One encoder setting that was tested, with its verdict in plain words.",
+        "properties": {
+          "bitrate_kbps": {
+            "type": "integer"
+          },
+          "budget_ms": {
+            "type": "number"
+          },
+          "cpu_pct": {
+            "type": ["number", "null"]
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "encode_ms_avg": {
+            "type": "number"
+          },
+          "encode_ms_max": {
+            "type": "number"
+          },
+          "encode_ms_p95": {
+            "type": "number"
+          },
+          "encoder_backend": {
+            "type": "string"
+          },
+          "family": {
+            "enum": ["video_toolbox", "nvenc", "qsv", "amf", "media_foundation", "x264"],
+            "type": "string"
+          },
+          "fps": {
+            "type": "integer"
+          },
+          "fps_achieved": {
+            "type": "number"
+          },
+          "frames_tested": {
+            "type": "integer"
+          },
+          "gpu_pct": {
+            "type": ["number", "null"]
+          },
+          "hardware": {
+            "type": "boolean"
+          },
+          "headroom_pct": {
+            "type": "number"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "lagged_frames": {
+            "type": "integer"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "preset": {
+            "type": ["string", "null"]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "skipped_frames": {
+            "type": "integer"
+          },
+          "studio_encoder_id": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "family",
+          "hardware",
+          "width",
+          "height",
+          "fps",
+          "bitrate_kbps",
+          "passed",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AutoConfigRecommendation": {
+        "description": "The benchmark's pick.",
+        "properties": {
+          "encoder": {
+            "type": "string"
+          },
+          "encoder_settings": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "fps": {
+            "type": "integer"
+          },
+          "headroom_pct": {
+            "type": "number"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "limited_by": {
+            "enum": ["headroom", "upload", "platform_cap", "balanced"],
+            "type": "string"
+          },
+          "preset": {
+            "type": ["string", "null"]
+          },
+          "scale": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": ["array", "null"]
+          },
+          "studio_encoder_id": {
+            "type": "string"
+          },
+          "video_encoder": {
+            "type": ["string", "null"]
+          },
+          "video_kbps": {
+            "type": "integer"
+          },
+          "why": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "encoder",
+          "video_encoder",
+          "encoder_settings",
+          "label",
+          "fps",
+          "video_kbps",
+          "limited_by",
+          "why"
+        ],
+        "type": "object"
+      },
+      "AutoConfigUploadCheck": {
+        "description": "The upload speed check that went before the benchmark.",
+        "properties": {
+          "at": {
+            "description": "Unix milliseconds.",
+            "type": "integer"
+          },
+          "measured_by": {
+            "description": "`twitch` (bandwidth-test mode) or `estimate`.",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "properties": {
+                "delay_ms": {
+                  "type": ["integer", "null"]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "need_kbps": {
+                  "type": "integer"
+                },
+                "problem": {
+                  "description": "Present only when the platform could not be checked.",
+                  "type": "string"
+                },
+                "server": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["id", "name", "need_kbps"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "properties": {
+              "fit_count": {
+                "type": "integer"
+              },
+              "fits": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              },
+              "need_kbps": {
+                "type": "integer"
+              },
+              "upload_kbps": {
+                "type": "integer"
+              }
+            },
+            "required": ["upload_kbps", "need_kbps", "fits", "fit_count", "message"],
+            "type": "object"
+          }
+        },
+        "required": ["at", "measured_by", "rows", "verdict"],
+        "type": "object"
+      },
+      "AutoConfigView": {
+        "description": "The auto-config state machine, as the REST routes answer and as the `auto_config` live frame carries.",
+        "properties": {
+          "applied": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutoConfigAppliedSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/AutoConfigCandidate"
+            },
+            "type": "array"
+          },
+          "confirm_remaining_s": {
+            "description": "Seconds left to keep the applied settings before they roll back.",
+            "type": "integer"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "current_label": {
+            "type": ["string", "null"]
+          },
+          "duration_ms": {
+            "type": ["integer", "null"]
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "error": {
+            "type": ["string", "null"]
+          },
+          "estimated_total_ms": {
+            "type": "integer"
+          },
+          "first_minute_drops": {
+            "type": "integer"
+          },
+          "first_minute_lags": {
+            "type": "integer"
+          },
+          "job_id": {
+            "type": ["string", "null"]
+          },
+          "mode": {
+            "enum": ["stream", "record"],
+            "type": "string"
+          },
+          "phase": {
+            "enum": ["upload", "discovering", "encoding", "picking", null],
+            "type": ["string", "null"]
+          },
+          "picked": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutoConfigRecommendation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress_pct": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "restored": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutoConfigAppliedSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rollback_offered": {
+            "type": "boolean"
+          },
+          "rollback_reason": {
+            "type": ["string", "null"]
+          },
+          "rollback_trigger": {
+            "enum": ["user_undo", "timeout", "dropped_frames", null],
+            "type": ["string", "null"]
+          },
+          "state": {
+            "enum": ["idle", "running", "failed", "done", "applied", "rolled_back"],
+            "type": "string"
+          },
+          "upload_check": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutoConfigUploadCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upload_error": {
+            "type": ["string", "null"]
+          },
+          "watch_remaining_s": {
+            "description": "Seconds left of the first-minute dropped-frame watch.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "job_id",
+          "mode",
+          "phase",
+          "progress_pct",
+          "current_label",
+          "elapsed_ms",
+          "estimated_total_ms",
+          "candidates",
+          "upload_check",
+          "upload_error",
+          "picked",
+          "duration_ms",
+          "error",
+          "applied",
+          "confirmed",
+          "confirm_remaining_s",
+          "watch_remaining_s",
+          "first_minute_drops",
+          "first_minute_lags",
+          "rollback_offered",
+          "rollback_trigger",
+          "rollback_reason",
+          "restored"
+        ],
+        "type": "object"
       }
     }
   },
