@@ -287,6 +287,27 @@ describe('alerts', () => {
     expect(deepAll(root, '.al').length).toBe(0)
   })
 
+  it('an alert with timing counts its exit inside duration_ms', () => {
+    rt.apply(snapshot())
+    rt.apply(
+      frame(
+        'alert',
+        alert('t1', {
+          duration_ms: 2000,
+          anim: { in: 'fade', out: 'fade', text: 'none', in_ms: 300, out_ms: 400, text_delay_ms: 0 },
+        }),
+      ),
+    )
+    vi.advanceTimersByTime(1990)
+    expect(acks().map((a) => a.data.phase)).toEqual(['started'])
+    vi.advanceTimersByTime(20)
+    expect(acks().map((a) => a.data.phase)).toEqual(['started', 'finished'])
+    // Older alerts without timing keep hold plus the default exit.
+    rt.apply(frame('alert', alert('t2', { duration_ms: 2000 })))
+    vi.advanceTimersByTime(2000)
+    expect(acks().at(-1)?.data).toEqual({ alert_id: 't2', phase: 'started' })
+  })
+
   it('a duplicate alert_id plays once', () => {
     rt.apply(snapshot())
     rt.apply(frame('alert', alert('dup')))

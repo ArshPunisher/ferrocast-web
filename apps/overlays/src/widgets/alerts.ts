@@ -41,7 +41,10 @@ const safeAnimate: Animate = (node, kf, opts) => {
   if (typeof (node as Element & { animate?: Element['animate'] }).animate !== 'function')
     return null
   try {
-    return node.animate(kf, opts)
+    const a = node.animate(kf, opts)
+    // Cancelling (an alert skipped or replaced) rejects `finished`; nobody waits on it.
+    a.finished?.catch(() => {})
+    return a
   } catch {
     return null
   }
@@ -191,6 +194,16 @@ function spikes(): SVGSVGElement {
  * `failed`). `branded`: the built-in themes carry the small Spark flourish; pass false for an
  * unbranded alert (the streamer's own look).
  */
+/**
+ * How long the exit plays. With timing metadata a zero stays zero (also in low motion, which
+ * only shortens a positive time); without it, the fixed defaults.
+ */
+export function exitMsFor(a: RenderedAlert, low: boolean): number {
+  if (!a.anim) return low ? EXIT_LOW_MS : EXIT_MS
+  const out = Math.max(0, Math.min(3000, a.anim.out_ms ?? EXIT_MS))
+  return low ? Math.min(EXIT_LOW_MS, out) : out
+}
+
 export function buildAlert(
   a: RenderedAlert,
   theme: string,
@@ -331,9 +344,7 @@ export function buildAlert(
         }
       }
       if (!a.anim) return low ? EXIT_LOW_MS : EXIT_MS
-      const outMs = low
-        ? Math.min(EXIT_LOW_MS, a.anim.out_ms || EXIT_LOW_MS)
-        : Math.max(0, Math.min(3000, a.anim.out_ms ?? EXIT_MS))
+      const outMs = exitMsFor(a, low)
       if (outMs <= 0) return 0
       const kf = low ? OUT.fade : (OUT[a.anim.out as AnimOut] ?? OUT.fade)
       if (kf.length) {
@@ -506,6 +517,9 @@ export class AlertsWidget implements WidgetView {
     const ms = Number.isFinite(alert.duration_ms)
       ? Math.min(Math.max(alert.duration_ms, 1000), 60_000)
       : 7000
+    // A look with its own timing counts the exit inside the total; older alerts keep
+    // hold plus the fixed exit.
+    const hold = alert.anim && !design ? Math.max(0, ms - exitMsFor(alert, this.ctx.lowMotion())) : ms
     const p: Playing = {
       alert,
       primary,
@@ -515,13 +529,13 @@ export class AlertsWidget implements WidgetView {
       leaving: false,
       hold: null,
       holdEndsAt: 0,
-      remaining: ms,
+      remaining: hold,
       design,
     }
     this.playing = p
     if (primary) this.ctx.send(ackFrame(alert.alert_id, 'started'))
     this.playSound(p)
-    this.startHold(p, ms)
+    this.startHold(p, hold)
   }
 
   private playSound(p: Playing): void {
