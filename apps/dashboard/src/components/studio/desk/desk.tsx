@@ -175,10 +175,15 @@ export function StudioDesk({
       </>
     )
   return (
-    <>
-      <Running res={res} view={view} lead={lead} onStatus={status.set} />
-      {ready && <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} />}
-    </>
+    <Running
+      res={res}
+      view={view}
+      lead={lead}
+      onStatus={status.set}
+      readyBanner={
+        ready ? <ReadyCheck recovered={ready.recovered} onClose={() => setReady(null)} /> : null
+      }
+    />
   )
 }
 
@@ -305,11 +310,13 @@ function Running({
   view,
   lead,
   onStatus,
+  readyBanner,
 }: {
   res: Resource<GoLiveView>
   view: GoLiveView | null
   lead?: React.ReactNode
   onStatus: (s: StudioEngineStatus) => void
+  readyBanner?: React.ReactNode
 }) {
   const api = useEngine()
   const scenes = useResource(() => api.scenes(), [api])
@@ -656,6 +663,7 @@ function Running({
           <>
             <ControlBar view={view} lead={lead} onStatus={onStatus} />
             <MissingFiles />
+            {readyBanner}
           </>
         }
         stage={

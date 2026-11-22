@@ -72,34 +72,35 @@ export function ReadyCheck({
   const n = found?.checks.length ?? 0
   return (
     <section
-      data-over-preview
       aria-label="Ready check"
-      className="fixed right-4 bottom-[calc(var(--fc-statusbar,0px)+16px)] z-40 flex max-h-[60vh] w-[min(420px,calc(100vw-32px))] flex-col gap-2 overflow-auto rounded-panel border border-line-strong bg-surface-1 p-4 shadow-pop"
+      className="mb-2 flex max-h-56 flex-col gap-2 overflow-auto rounded-panel border border-line-strong bg-surface-1 px-4 py-2.5 shadow-1"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[16px] font-bold">Ready check</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="text-[15px] font-bold">Ready check</h2>
+          <div role="status" aria-live="polite" className="min-w-0">
+            {!found ? (
+              <p className="text-[14px] text-text-2">Checking your mic, cameras and scenes…</p>
+            ) : n === 0 ? (
+              <p className="text-[14px] font-semibold text-ok">All good. You’re ready.</p>
+            ) : (
+              <p className="text-[14px] font-semibold text-warn">
+                {n} {n === 1 ? 'thing' : 'things'} to fix
+              </p>
+            )}
+          </div>
+        </div>
         <IconButton label="Close the ready check" size="sm" onClick={onClose}>
           <X size={16} />
         </IconButton>
       </div>
       {recovered && (
-        <div className="flex flex-col gap-1 rounded-control bg-surface-2 p-3 text-[14.5px] text-text">
+        <div className="flex flex-col gap-1 rounded-control bg-surface-2 p-3 text-[14px] text-text">
           {recoveredWords(recovered).map((l) => (
             <p key={l}>{l}</p>
           ))}
         </div>
       )}
-      <div role="status" aria-live="polite">
-        {!found ? (
-          <p className="text-[14.5px] text-text-2">Checking your mic, cameras and scenes…</p>
-        ) : n === 0 ? (
-          <p className="text-[14.5px] font-semibold text-ok">All good. You’re ready.</p>
-        ) : (
-          <p className="text-[14.5px] font-semibold text-warn">
-            {n} {n === 1 ? 'thing' : 'things'} to fix
-          </p>
-        )}
-      </div>
       {found && n > 0 && (
         <PreflightList
           pf={found}
