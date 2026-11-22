@@ -74,11 +74,17 @@ export function OverflowRow({
   // The panel closes on Escape or a press outside it.
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    // Whether the last press was in the panel: a menu opened by it is drawn on the body, outside
-    // it, and a press in that menu is not a press outside the panel. A menu nothing in the panel
-    // opened is outside.
+    // Whether the last press or activation was in the panel: a menu opened by it is drawn on the
+    // body, outside it, and a press in that menu is not a press outside the panel. A menu
+    // nothing in the panel opened is outside.
     let pressedInPanel = false
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return setOpen(false)
+      // A menu opened with the keyboard (Enter or Space on a button in the panel).
+      if ((e.key === 'Enter' || e.key === ' ') && moreRef.current?.contains(e.target as Node)) {
+        pressedInPanel = true
+      }
+    }
     const onDown = (e: PointerEvent) => {
       const t = e.target as Element | null
       if (moreRef.current?.contains(t as Node)) {

@@ -130,4 +130,22 @@ describe('OverflowRow', () => {
     expect(more.getAttribute('aria-expanded')).toBe('false')
     menu.remove()
   })
+
+  it('stays open for a menu a button in the panel opened with the keyboard', async () => {
+    await mount(300)
+    const more = host.querySelector<HTMLElement>('button[aria-label="More tools"]')!
+    await act(async () => more.click())
+    const panelButton = host.querySelector<HTMLElement>('[data-ov-panel] button, [data-ov-panel]')!
+    await act(async () => {
+      panelButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    document.body.append(menu)
+    await act(async () => {
+      menu.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    menu.remove()
+  })
 })
