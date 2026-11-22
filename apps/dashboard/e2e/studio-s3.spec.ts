@@ -191,7 +191,11 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     let running = false
     let startAttempts = 0
-    let resolveDelayedStart: (() => void) | null = null
+    const startGate = { release: () => {} }
+    let signalStartGateReached!: () => void
+    const startGateReached = new Promise<void>((resolve) => {
+      signalStartGateReached = resolve
+    })
 
     await page.addInitScript(() => {
       ;(window as unknown as { __FERROCAST__: unknown }).__FERROCAST__ = Object.freeze({
@@ -247,7 +251,7 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
       if (pathName === '/api/v1/events') {
         return route.fulfill({ json: { events: [], next_before: null } })
       }
-      if (pathName === '/api/v1/schedule') return route.fulfill({ json: [] })
+      if (pathName === '/api/v1/schedule') return route.fulfill({ json: { streams: [] } })
       if (pathName === '/api/v1/clips') {
         return route.fulfill({
           json: {
@@ -369,10 +373,12 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
       if (pathName === '/api/v1/studio/engine/start') {
         startAttempts += 1
         if (startAttempts === 1) {
-          // Hold attempt 1 long enough to assert the `starting` state, then reject with audio error.
-          await new Promise<void>((resolve) => {
-            resolveDelayedStart = resolve
+          // Signal when the route reaches the gate, then hold until assertions finish.
+          const gate = new Promise<void>((resolve) => {
+            startGate.release = resolve
           })
+          signalStartGateReached()
+          await gate
           return route.fulfill({
             status: 500,
             json: {
@@ -491,15 +497,18 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await assertNoVerticalPageScroll(page)
     await assertNoHorizontalOverflow(page)
 
-    // 1. Trigger `starting` state
-    await startBtn.click()
-    await expect(page.getByTestId('standby-starting-banner')).toBeVisible()
-    await expect(startBtn).toBeDisabled()
-    await assertNoVerticalPageScroll(page)
+    // 1. Trigger `starting` state, await the mock route gate, and always release in cleanup.
+    try {
+      await startBtn.click()
+      await startGateReached
+      await expect(page.getByTestId('standby-starting-banner')).toBeVisible()
+      await expect(startBtn).toBeDisabled()
+      await assertNoVerticalPageScroll(page)
+    } finally {
+      startGate.release()
+    }
 
-    // 2. Release first attempt -> transitions to `failed` state with Mic check flagged danger
-    expect(resolveDelayedStart).not.toBeNull()
-    resolveDelayedStart!()
+    // 2. After releasing attempt 1 -> transitions to `failed` state with Mic check flagged danger
     const failedBanner = page.getByTestId('standby-failed-banner')
     await expect(failedBanner).toBeVisible()
     await expect(failedBanner).toContainText('Could not open microphone audio device.')
@@ -549,7 +558,7 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
       if (pathName === '/api/v1/tts/pending') return route.fulfill({ json: [] })
       if (pathName === '/api/v1/events')
         return route.fulfill({ json: { events: [], next_before: null } })
-      if (pathName === '/api/v1/schedule') return route.fulfill({ json: [] })
+      if (pathName === '/api/v1/schedule') return route.fulfill({ json: { streams: [] } })
       if (pathName === '/api/v1/clips') {
         return route.fulfill({
           json: { folder: '', ffmpeg_ready: false, youtube_connected: false, clips: [] },
@@ -635,24 +644,26 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await assertNoHorizontalOverflow(page)
   })
 
-  test('supports full keyboard navigation and passes axe-core in dark and light themes', async ({
-    page,
-  }) => {
-    for (const theme of ['slate', 'daylight'] as const) {
+  for (const theme of ['slate', 'daylight'] as const) {
+    test(`passes axe-core audit in ${theme} theme`, async ({ page }) => {
       await page.addInitScript((t) => {
         localStorage.setItem('fc-theme', t)
         localStorage.setItem('fc-golive-picture', 'ferrocast')
       }, theme)
       await page.setViewportSize({ width: 1280, height: 800 })
       await page.goto('./?autoplay=0&latency=0&studioEngine=1#/studio')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await expect(page.getByTestId('studio-standby')).toBeVisible({ timeout: 10_000 })
       await settled(page)
 
       const axe = await new AxeBuilder({ page }).include('[data-testid="studio-standby"]').analyze()
       expect(axe.violations).toEqual([])
-    }
+    })
+  }
 
-    // Keyboard: focus Manage -> open dialog with Enter -> close with Escape; focus Plan a stream -> Escape.
+  test('supports full keyboard navigation across standby actions and dialogs', async ({ page }) => {
+    await openPreStartDemo(page, { width: 1280, height: 800 })
+
     const startBtn = page.getByRole('button', { name: 'Start the Studio' })
     await startBtn.focus()
     await expect(startBtn).toBeFocused()
@@ -668,5 +679,188 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await expect(page.getByRole('dialog', { name: 'Plan a stream' })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Plan a stream' })).toBeHidden()
+  })
+
+  test('refreshes Upload protection state after saving in Manage dialog', async ({ page }) => {
+    await openPreStartDemo(page, { width: 1280, height: 800 })
+
+    await page.getByRole('button', { name: 'Manage' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Your platforms' })
+    const protectSwitch = dialog.getByRole('switch', { name: /Upload protection/i })
+    await expect(protectSwitch).toHaveAttribute('aria-checked', 'true')
+    await protectSwitch.click()
+    await expect(protectSwitch).toHaveAttribute('aria-checked', 'false')
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+
+    await page.getByRole('button', { name: 'Manage' }).click()
+    await expect(
+      page.getByRole('dialog', { name: 'Your platforms' }).getByRole('switch', {
+        name: /Upload protection/i,
+      }),
+    ).toHaveAttribute('aria-checked', 'false')
+  })
+
+  test('shows recordings error with Retry and keeps Planned streams when engine status fails', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    let failEngineStatus = false
+    let failClips = true
+
+    await page.addInitScript(() => {
+      ;(window as unknown as { __FERROCAST__: unknown }).__FERROCAST__ = Object.freeze({
+        api: window.location.origin,
+        token: 's3-e2e-token',
+        desktop: true,
+      })
+      localStorage.setItem('fc-golive-picture', 'ferrocast')
+    })
+    await page.routeWebSocket('**/api/v1/live**', (ws) => void ws)
+    await page.route('**/api/v1/**', async (route) => {
+      const pathName = new URL(route.request().url()).pathname
+      if (pathName === '/api/v1/status') {
+        const off = { state: 'disconnected', account: null, detail: null, last_event_at: null }
+        return route.fulfill({
+          json: {
+            version: '3.4.0',
+            port: 5355,
+            live: { twitch: false, youtube: false, kick: false },
+            connectors: {
+              twitch: off,
+              youtube: off,
+              kick: off,
+              facebook: off,
+              obs: off,
+              relay: off,
+            },
+            setup_done: true,
+          },
+        })
+      }
+      if (pathName === '/api/v1/session/ticket') return route.fulfill({ json: { ticket: 's3' } })
+      if (pathName === '/api/v1/queue')
+        return route.fulfill({ json: { paused: false, current: null, queued: [] } })
+      if (pathName === '/api/v1/session/stats') return route.fulfill({ json: { viewers: {} } })
+      if (pathName === '/api/v1/tts/pending') return route.fulfill({ json: [] })
+      if (pathName === '/api/v1/events')
+        return route.fulfill({ json: { events: [], next_before: null } })
+      if (pathName === '/api/v1/schedule') return route.fulfill({ json: { streams: [] } })
+      if (pathName === '/api/v1/clips') {
+        if (failClips) {
+          return route.fulfill({
+            status: 500,
+            json: { error: { code: 'clips_failed', message: 'Disk read error.' } },
+          })
+        }
+        return route.fulfill({
+          json: {
+            folder: '/Movies/Ferrocast',
+            ffmpeg_ready: true,
+            youtube_connected: false,
+            clips: [
+              {
+                id: 'demo.mp4',
+                name: 'Recovered recording',
+                kind: 'recording',
+                ext: 'mp4',
+                size: 2_097_152,
+                modified: Date.now() - 120_000,
+                has_captions: false,
+              },
+            ],
+          },
+        })
+      }
+      if (pathName === '/api/v1/golive') {
+        return route.fulfill({
+          json: {
+            ingest: 'rtmp://127.0.0.1:1935/live',
+            obs: {
+              connected: false,
+              points_here: false,
+              streaming: false,
+              before: null,
+              aitum: null,
+              vertical: null,
+            },
+            live: false,
+            stats: {
+              kbps: 0,
+              keyframe_interval_ms: null,
+              video_codec: null,
+              width: null,
+              height: null,
+              fps: null,
+            },
+            vertical_live: false,
+            vertical_stats: {
+              kbps: 0,
+              keyframe_interval_ms: null,
+              video_codec: null,
+              width: null,
+              height: null,
+              fps: null,
+            },
+            destinations: [],
+            upload: null,
+            protect: true,
+            aitum_ok: false,
+            auto_quality: true,
+            advanced: {
+              rules: {
+                slow_pct: 70,
+                trouble_s: 4,
+                calm_s: 10,
+                first_pause_s: 60,
+                max_pause_s: 600,
+                first_to_pause: null,
+              },
+              keep_free_pct: 20,
+              port: 1935,
+              per: {},
+              ignore_service_limits: false,
+            },
+            cut: { source: 'canvas', config: null, state: null, ffmpeg: { state: 'ready' } },
+          },
+        })
+      }
+      if (pathName === '/api/v1/studio/engine') {
+        if (failEngineStatus) {
+          return route.fulfill({
+            status: 500,
+            json: { error: { code: 'engine_down', message: 'Engine unreachable.' } },
+          })
+        }
+        return route.fulfill({
+          json: {
+            available: true,
+            running: false,
+            version: '3.4.0',
+            renderer: 'Metal',
+            detail: null,
+            safe_mode: null,
+          },
+        })
+      }
+      return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'none' } } })
+    })
+
+    // Part A: clips error distinguishes from empty and Retry recovers recordings.
+    await page.goto('./#/studio')
+    const clips = page.getByTestId('standby-recent-clips')
+    await expect(clips.getByRole('alert')).toContainText('Could not load recordings.')
+    await expect(clips).not.toContainText('No recordings yet')
+    failClips = false
+    await clips.getByRole('button', { name: 'Retry' }).click()
+    await expect(clips).toContainText('Recovered recording')
+
+    // Part B: engine status error preserves Planned streams alongside LoadError.
+    failEngineStatus = true
+    await page.reload()
+    await expect(page.getByText('Engine unreachable.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Planned streams' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Plan a stream' })).toBeEnabled()
   })
 })
