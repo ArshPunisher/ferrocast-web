@@ -671,7 +671,7 @@
             "type": "string"
           },
           "key": {
-            "description": "No spaces. Never returned.",
+            "description": "No spaces. Never returned. Needed for RTMP and RTMPS; optional for SRT (stream id), RIST (passphrase) and WebRTC (bearer token).",
             "maxLength": 512,
             "type": "string"
           },
@@ -685,7 +685,7 @@
             "type": "string"
           }
         },
-        "required": ["name", "url", "key"],
+        "required": ["name", "url"],
         "type": "object"
       },
       "ModBanRequest": {
@@ -823,7 +823,19 @@
             "description": "What the stream is about. `title` is required (at most 140 characters, no control characters).",
             "properties": {
               "category": {
-                "type": ["string", "null"]
+                "description": "`{ name, ids? }`: the category's name and, where known, each platform's id.",
+                "properties": {
+                  "ids": {
+                    "type": "object"
+                  },
+                  "name": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": ["name"],
+                "type": ["object", "null"]
               },
               "description": {
                 "type": ["string", "null"]
