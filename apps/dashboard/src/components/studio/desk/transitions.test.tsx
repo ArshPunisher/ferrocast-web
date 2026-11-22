@@ -377,6 +377,64 @@ describe('TransitionsDialog UI', () => {
       transition: 'Smooth Fade',
     })
   })
+
+  it('a scene named __any__ is its own scene, not the wildcard', async () => {
+    const data = sampleScenes()
+    data.scenes = [
+      ...data.scenes,
+      { name: '__any__', items: 1, current: false, preview: false, transition: null },
+    ]
+    const desk = makeDesk({}, data)
+    const apiMock = desk.api as unknown as { setTransitionMatrixRule: ReturnType<typeof vi.fn> }
+    await mountDialog(desk, 'matrix')
+    const fromSelect = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Rule From scene"]',
+    )!
+    const toSelect = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Rule To scene"]',
+    )!
+    // The scene called __any__ as From, BRB as To: that exact pair, not "Any to BRB".
+    const options = [...fromSelect.options].map((o) => o.text)
+    expect(options.filter((t) => t === '__any__').length).toBe(1)
+    const sceneOption = [...fromSelect.options].find((o) => o.text === '__any__')!
+    await act(async () => {
+      setSelectValue(fromSelect, sceneOption.value)
+      setSelectValue(toSelect, 'BRB')
+    })
+    await act(async () => findButton('Save matrix rule')!.click())
+    expect(apiMock.setTransitionMatrixRule).toHaveBeenCalledWith({
+      from: '__any__',
+      to: 'BRB',
+      transition: 'Smooth Fade',
+    })
+  })
+
+  it('an open cell editor stays on its pair when the scenes are reordered', async () => {
+    const desk = makeDesk()
+    const host = await mountDialog(desk, 'matrix')
+    expect(host).toBeTruthy()
+    // Open the editor for Main -> BRB.
+    await act(async () => findButtonMatching(/From Main to BRB:/i)!.click())
+    expect(
+      document.querySelector('select[aria-label^="Select transition for Main to BRB"]'),
+    ).toBeTruthy()
+    // The scenes come in another order (BRB first): the editor is still Main -> BRB.
+    const data = desk.scenes.data!
+    const reordered: EngineScenes = {
+      ...data,
+      scenes: [data.scenes[1]!, data.scenes[0]!, data.scenes[2]!],
+    }
+    const desk2 = { ...desk, scenes: { ...desk.scenes, data: reordered } } as Desk
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk2}>
+          <TransitionsDialog initial={{ tab: 'matrix' }} onClose={vi.fn()} />
+        </DeskProvider>,
+      )
+    })
+    const open = document.querySelector('select[aria-label^="Select transition for"]')
+    expect(open?.getAttribute('aria-label')).toContain('Main to BRB')
+  })
 })
 
 describe('parseNewDuration', () => {

@@ -51,6 +51,9 @@ export const TRANSITIONS: Record<string, string> = {
   ferrocast_move: 'Move',
 }
 
+/** "Any scene" in the rule form: not a string a scene can be called. */
+const ANY = '\u0000any'
+
 /** Transitions with settings of their own (a direction, a colour, an image, a video). */
 export const HAS_SETTINGS = new Set([
   'swipe_transition',
@@ -906,7 +909,9 @@ function TransitionMatrixTab({
 
   // Keyboard grid state: start active focus on (0, 1) if there are scenes, else (0, 0).
   const [focusCell, setFocusCell] = useState<[number, number]>([0, sceneNames.length > 0 ? 1 : 0])
-  const [editingCell, setEditingCell] = useState<[number, number] | null>(null)
+  // The pair being edited, by scene (null: Any), not by grid position: scenes reordering under an
+  // open editor must not hand it to another pair.
+  const [editingCell, setEditingCell] = useState<[string | null, string | null] | null>(null)
   const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   // A scene removed elsewhere can leave the focused cell outside the grid, and then no cell is
   // reachable by Tab; bring it back inside (and drop a stale edit).
@@ -918,12 +923,24 @@ function TransitionMatrixTab({
       if (nr > 0 && nr === nc) nc = nc > 1 ? nc - 1 : 0
       return nr === r && nc === c ? [r, c] : [nr, nc]
     })
-    setEditingCell((e) => (e && (e[0] > last || e[1] > last) ? null : e))
+    setEditingCell(null)
   }, [sceneNames.length])
 
-  // Mobile form state
-  const [addFrom, setAddFrom] = useState<string>('__any__')
-  const [addTo, setAddTo] = useState<string>(sceneNames[0] ?? '__any__')
+  // An editor whose scene is gone closes (a scene removed or renamed elsewhere).
+  useEffect(() => {
+    setEditingCell((e) =>
+      e &&
+      (e[0] === null || sceneNames.includes(e[0])) &&
+      (e[1] === null || sceneNames.includes(e[1]))
+        ? e
+        : null,
+    )
+  }, [sceneNames])
+
+  // Mobile form state. "Any scene" is a value no scene name can be (names have no control
+  // characters), so a scene called __any__ stays a scene.
+  const [addFrom, setAddFrom] = useState<string>(ANY)
+  const [addTo, setAddTo] = useState<string>(sceneNames[0] ?? ANY)
   const [addTr, setAddTr] = useState<string>(named[0]?.name ?? '')
 
   useEffect(() => {
@@ -932,8 +949,8 @@ function TransitionMatrixTab({
   // A scene deleted or renamed elsewhere: the form would show "Any scene" (the browser's
   // fallback) while still submitting the old name.
   useEffect(() => {
-    if (addFrom !== '__any__' && !sceneNames.includes(addFrom)) setAddFrom('__any__')
-    if (addTo !== '__any__' && !sceneNames.includes(addTo)) setAddTo(sceneNames[0] ?? '__any__')
+    if (addFrom !== ANY && !sceneNames.includes(addFrom)) setAddFrom(ANY)
+    if (addTo !== ANY && !sceneNames.includes(addTo)) setAddTo(sceneNames[0] ?? ANY)
   }, [sceneNames, addFrom, addTo])
 
   const defaultTr = useMemo(() => named.find((t) => t.default) ?? named[0] ?? null, [named])
@@ -961,7 +978,7 @@ function TransitionMatrixTab({
   const handleCellKeyDown = (e: KeyboardEvent<HTMLButtonElement>, r: number, c: number) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      setEditingCell([r, c])
+      setEditingCell([rowHeaders[r] ?? null, colHeaders[c] ?? null])
       return
     }
     const next = gridStepCoord(r, c, rowHeaders.length, colHeaders.length, e.key)
@@ -1001,8 +1018,8 @@ function TransitionMatrixTab({
     if (focusBack) returnCellFocus(focusBack[0], focusBack[1])
   }
 
-  const mobFrom = addFrom === '__any__' ? null : addFrom
-  const mobTo = addTo === '__any__' ? null : addTo
+  const mobFrom = addFrom === ANY ? null : addFrom
+  const mobTo = addTo === ANY ? null : addTo
   const mobInvalid = (mobFrom === null && mobTo === null) || (mobFrom !== null && mobFrom === mobTo)
 
   return (
@@ -1046,7 +1063,7 @@ function TransitionMatrixTab({
               </th>
               {colHeaders.map((col, c) => (
                 <th
-                  key={col ?? '__any__'}
+                  key={col === null ? ANY : `s:${col}`}
                   role="columnheader"
                   scope="col"
                   className={cx(
@@ -1061,7 +1078,7 @@ function TransitionMatrixTab({
           </thead>
           <tbody className="divide-y divide-line">
             {rowHeaders.map((row, r) => (
-              <tr key={row ?? '__any__'}>
+              <tr key={row === null ? ANY : `s:${row}`}>
                 <th
                   role="rowheader"
                   scope="row"
@@ -1089,7 +1106,7 @@ function TransitionMatrixTab({
                   const info = cellEffectiveInfo(scenes, row, col)
                   const isAnyAny = row === null && col === null
                   const isEditing =
-                    editingCell !== null && editingCell[0] === r && editingCell[1] === c
+                    editingCell !== null && editingCell[0] === row && editingCell[1] === col
                   const fromLabel = row ?? 'Any'
                   const toLabel = col ?? 'Any'
                   const subLabel = isAnyAny
@@ -1154,7 +1171,7 @@ function TransitionMatrixTab({
                           tabIndex={focusCell[0] === r && focusCell[1] === c ? 0 : -1}
                           disabled={busy !== null}
                           onFocus={() => setFocusCell([r, c])}
-                          onClick={() => setEditingCell([r, c])}
+                          onClick={() => setEditingCell([row, col])}
                           onKeyDown={(e) => handleCellKeyDown(e, r, c)}
                           className={cx(
                             'flex w-full flex-col rounded-[5px] px-2 py-1 text-left outline-none transition-colors hover:bg-surface-3 focus-visible:shadow-[var(--fc-focus)]',
@@ -1206,7 +1223,7 @@ function TransitionMatrixTab({
                 value={addFrom}
                 onChange={(e) => setAddFrom(e.target.value)}
               >
-                <option value="__any__">Any scene</option>
+                <option value={ANY}>Any scene</option>
                 {sceneNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -1221,7 +1238,7 @@ function TransitionMatrixTab({
                 value={addTo}
                 onChange={(e) => setAddTo(e.target.value)}
               >
-                <option value="__any__">Any scene</option>
+                <option value={ANY}>Any scene</option>
                 {sceneNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
