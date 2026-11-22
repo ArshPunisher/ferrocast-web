@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FerroClient } from '../src/client'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { ApiError } from '../src/errors'
-import { studioEngineApi } from '../src/studio-engine'
+import {
+  studioEngineApi,
+  resolveTransitionFromScenes,
+  type EngineScenes,
+} from '../src/studio-engine'
 
 describe('levels request', () => {
   it("sends window only when asked (default stays the engine's 300 ms window)", async () => {
@@ -326,5 +330,180 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     } finally {
       noCam.engine.dispose()
     }
+  })
+
+  it('resolves named transitions and matrix precedence, lifecycle cleanup, and switch paths', async () => {
+    const sample: EngineScenes = {
+      scenes: [
+        { name: 'Main', items: 1, current: true, transition: null },
+        { name: 'BRB', items: 1, current: false, transition: { kind: 'cut_transition', ms: 0 } },
+        { name: 'Outro', items: 1, current: false, transition: null },
+      ],
+      current: 'Main',
+      transition: { kind: 'fade_transition', ms: 300 },
+      named_transitions: [
+        { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+        {
+          name: 'PairSwipe',
+          kind: 'swipe_transition',
+          ms: 450,
+          settings: { direction: 'right' },
+          default: false,
+        },
+        {
+          name: 'MainOut',
+          kind: 'slide_transition',
+          ms: 500,
+          settings: { direction: 'up' },
+          default: false,
+        },
+      ],
+      transition_matrix: [
+        { from: 'Main', to: 'BRB', transition: 'PairSwipe' },
+        { from: 'Main', to: null, transition: 'MainOut' },
+      ],
+    }
+
+    expect(resolveTransitionFromScenes(sample, 'Main', 'BRB')).toMatchObject({
+      name: 'PairSwipe',
+      via: 'pair',
+      ms: 450,
+    })
+    expect(resolveTransitionFromScenes(sample, 'Outro', 'BRB')).toMatchObject({
+      kind: 'cut_transition',
+      via: 'to',
+      ms: 0,
+    })
+    expect(resolveTransitionFromScenes(sample, 'Main', 'Outro')).toMatchObject({
+      name: 'MainOut',
+      via: 'from',
+      ms: 500,
+    })
+    expect(resolveTransitionFromScenes(sample, 'BRB', 'Outro')).toMatchObject({
+      name: 'Fade',
+      via: 'default',
+      ms: 300,
+    })
+
+    const { engine, api } = mkApi({ studioEngine: { running: true } })
+    try {
+      const added = await api.addNamedTransition({
+        name: 'Stinger 1',
+        kind: 'obs_stinger_transition',
+        ms: 0,
+        settings: { path: '/a.mp4', transition_point: 350 },
+      })
+      expect(added.name).toBe('Stinger 1')
+
+      const dup = await api.duplicateNamedTransition('Stinger 1')
+      expect(dup.name).toBe('Stinger 1 2')
+      expect(dup.default).toBe(false)
+
+      await api.setTransitionMatrixRule({ from: 'Main', to: 'Chatting', transition: 'Stinger 1' })
+      await api.renameNamedTransition('Stinger 1', 'Intro Stinger')
+      await api.setCurrent('Chatting')
+      expect(engine.studioEngine?.lastResolvedTransition?.name).toBe('Intro Stinger')
+
+      await api.setDefaultNamedTransition('Intro Stinger')
+      await api.deleteNamedTransition('Intro Stinger')
+      const after = await api.scenes()
+      expect(after.named_transitions?.some((t) => t.default)).toBe(true)
+      expect(after.transition_matrix?.some((r) => r.transition === 'Intro Stinger')).toBe(false)
+
+      // Deleting last remaining transition fails cleanly.
+      for (const extra of after.named_transitions ?? []) {
+        if (!extra.default) await api.deleteNamedTransition(extra.name)
+      }
+      await expect(
+        api.deleteNamedTransition((await api.scenes()).named_transitions![0]!.name),
+      ).rejects.toMatchObject({ status: 409, code: 'studio_last_transition' })
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('resolves a repeated pair the way the engine does: the last rule wins', () => {
+    const scenes = {
+      scenes: [
+        { name: 'Main', items: 1, current: true, transition: null },
+        { name: 'BRB', items: 1, current: false, transition: null },
+      ],
+      current: 'Main',
+      transition: { kind: 'fade_transition', ms: 300 },
+      named_transitions: [
+        { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+        { name: 'First', kind: 'swipe_transition', ms: 400, settings: {}, default: false },
+        { name: 'Second', kind: 'slide_transition', ms: 500, settings: {}, default: false },
+      ],
+      transition_matrix: [
+        { from: 'Main', to: 'BRB', transition: 'First' },
+        { from: 'Main', to: 'BRB', transition: 'Second' },
+      ],
+    } as never
+    expect(resolveTransitionFromScenes(scenes, 'Main', 'BRB')).toMatchObject({ name: 'Second' })
+  })
+
+  describe('named transitions and Studio Mode as the engine has them (CodeRabbit)', () => {
+    it('a switch by the legacy route never gives two presets the same name or both the default', async () => {
+      const { api } = mkApi()
+      // A Fade preset that happens to be called slide_transition...
+      await api.addNamedTransition({ name: 'slide_transition', kind: 'fade_transition', ms: 300 })
+      // ...then Slide is picked by the old route: a preset of its own is made with another name.
+      await api.setTransition({ kind: 'slide_transition', ms: 400 })
+      const list = (await api.scenes()).named_transitions ?? []
+      const names = list.map((t) => t.name)
+      expect(new Set(names).size).toBe(names.length)
+      await api.setDefaultNamedTransition('slide_transition')
+      expect((await api.scenes()).named_transitions?.filter((t) => t.default).length).toBe(1)
+    })
+
+    it("a write to a kind's settings reaches the preset that plays", async () => {
+      const { api } = mkApi()
+      await api.addNamedTransition({
+        name: 'Wipe It',
+        kind: 'swipe_transition',
+        ms: 500,
+        settings: { direction: 'left' },
+        default: true,
+      })
+      await api.setTransitionSettings('swipe_transition', { direction: 'right' })
+      const list = (await api.scenes()).named_transitions ?? []
+      expect(list.find((t) => t.name === 'Wipe It')?.settings).toMatchObject({ direction: 'right' })
+      // Another preset of another kind is left alone.
+      expect(list.find((t) => t.kind === 'fade_transition')?.settings).not.toHaveProperty(
+        'direction',
+      )
+    })
+
+    it('the T-bar position is the one set until it is released', async () => {
+      const { api } = mkApi()
+      await api.studioMode(true)
+      await api.tbar(0.4)
+      expect((await api.scenes()).tbar).toEqual({ active: true, at: 0.4 })
+      await api.tbar(0.4, true)
+      expect((await api.scenes()).tbar).toEqual({ active: false, at: 0 })
+    })
+
+    it('swap off: the old scene does not go to the preview when a transition ends', async () => {
+      const { api } = mkApi()
+      const scenes = await api.scenes()
+      const other = scenes.scenes.find((s) => !s.current)!.name
+      await api.studioMode(true)
+      await api.setStudioOptions({ swap: false } as never)
+      const before = scenes.current
+      await api.setPreview(other)
+      await api.transitionNow()
+      const after = await api.scenes()
+      expect(after.current).toBe(other)
+      expect(after.scenes.find((s) => s.preview)?.name).toBe(other) // the preview stays where it was
+      expect(after.scenes.find((s) => s.name === before)?.preview).toBe(false)
+    })
+
+    it('the encode budget has every field the client needs', async () => {
+      const { api } = mkApi()
+      const b = await api.encodeBudget()
+      expect(b).toHaveProperty('budget_mpx')
+      expect(['ok', 'limit', 'over', 'unknown']).toContain(b.level)
+    })
   })
 })

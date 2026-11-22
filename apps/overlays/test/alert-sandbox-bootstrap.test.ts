@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import bootstrap from '../src/widgets/alert-sandbox-bootstrap.js?raw'
+
+// The engine serves a copy of this file (ferrocast `crates/server/assets/alert-sandbox-bootstrap.js`)
+// and pins the same hash in `crates/engine/tests/sandbox_bootstrap_pin.rs`. Change both copies
+// together, then update the hash in both tests.
+const BOOTSTRAP_SHA256 = 'ebf0db667de5a1f383f8a0e7ed51a5c722ef8abc82202bed2660b3859cea4806'
 
 /** Runs the frame's bootstrap in this document, standing in for the sandboxed page. */
 function boot(): { send: (payload: unknown, origin?: string) => void; root: HTMLElement } {
@@ -37,6 +43,10 @@ const payload = (html: string, over: Record<string, unknown> = {}) => ({
 })
 
 describe('custom alert sandbox bootstrap', () => {
+  it('is the same file the engine serves (pinned hash)', () => {
+    expect(createHash('sha256').update(bootstrap).digest('hex')).toBe(BOOTSTRAP_SHA256)
+  })
+
   beforeEach(() => {
     vi.spyOn(window.parent, 'postMessage').mockImplementation(() => {})
   })
