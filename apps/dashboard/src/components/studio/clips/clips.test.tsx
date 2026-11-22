@@ -258,6 +258,22 @@ describe('the Clips tab', () => {
     expect(document.querySelectorAll('li[data-clip]').length).toBeGreaterThanOrEqual(5) // nothing was made
   })
 
+  it('keeps clips picked for a compilation when a search hides them', async () => {
+    await mountDemo()
+    await settle()
+    // Pick two replays, then search for a clip that is neither.
+    await click(q('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]'))
+    await click(q('[data-clip^="Replay 2026-11-22 20"] input[type=checkbox]'))
+    expect(text()).toContain('2 picked')
+    await type(byLabel<HTMLInputElement>('Search clips by name'), 'boss')
+    await settle(400)
+    // Still two picked, and the compilation still holds both.
+    expect(text()).toContain('2 picked')
+    await click(buttonByText('Compile'))
+    await settle()
+    expect(document.querySelectorAll('ol[aria-label="Clips in order"] li').length).toBe(2)
+  })
+
   it('opens a clip: trim checks its times and starts a job, then the dialog closes', async () => {
     await mountDemo()
     await settle()

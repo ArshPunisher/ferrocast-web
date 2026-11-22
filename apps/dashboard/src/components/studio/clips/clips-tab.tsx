@@ -156,8 +156,26 @@ export function ClipsTab() {
   const [shown, setShown] = useState(PAGE)
   const clips = useMemo(() => overview.data?.clips ?? [], [overview.data])
   const ids = useMemo(() => new Set(clips.map((c) => c.id)), [clips])
-  // A clip that is gone (renamed, deleted) leaves the picks.
-  const live = picked.filter((id) => ids.has(id))
+  // Every clip seen in any list: a pick is resolved here, so a search that hides a picked clip
+  // (it only changes what is shown) doesn't drop it from the compilation.
+  const [known, setKnown] = useState<ReadonlyMap<string, Clip>>(new Map())
+  useEffect(() => {
+    if (clips.length === 0) return
+    setKnown((prev) => {
+      const next = new Map(prev)
+      for (const c of clips) next.set(c.id, c)
+      return next
+    })
+  }, [clips])
+  // A clip that is gone (renamed, deleted) leaves the picks, but only when the whole folder was
+  // read again: a search result that lacks it proves nothing.
+  const wholeFolder =
+    data.asked === '' && data.query.trim() === '' && !overview.loading && overview.data !== null
+  useEffect(() => {
+    if (!wholeFolder) return
+    setPicked((p) => (p.every((id) => ids.has(id)) ? p : p.filter((id) => ids.has(id))))
+  }, [wholeFolder, ids])
+  const live = picked
   const pick = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const searching = data.query.trim() !== ''
@@ -382,7 +400,9 @@ export function ClipsTab() {
       {compiling && (
         <CompileDialog
           api={api}
-          clips={live.map((id) => clips.find((c) => c.id === id)).filter((c): c is Clip => !!c)}
+          clips={live
+            .map((id) => known.get(id) ?? clips.find((c) => c.id === id))
+            .filter((c): c is Clip => !!c)}
           onClose={() => setCompiling(false)}
           onStarted={() => {
             setCompiling(false)

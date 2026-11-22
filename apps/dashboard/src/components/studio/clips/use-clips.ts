@@ -9,6 +9,8 @@ export interface ClipsData {
   api: ClipsApi
   /** What is typed in the search box. */
   query: string
+  /** What the library on screen was asked for (the debounced search): '' is the whole folder. */
+  asked: string
   setQuery: (q: string) => void
   overview: Resource<Awaited<ReturnType<ClipsApi['list']>>>
   jobs: ClipJob[]
@@ -62,5 +64,5 @@ export function useClips(): ClipsData {
     firstLook.current = false
     if (changed) reloadOverview()
   }, [jobs, jobsRes.data, reloadOverview])
-  return { api, query, setQuery, overview, jobs, jobsError: jobsRes.error, reloadJobs }
+  return { api, query, asked, setQuery, overview, jobs, jobsError: jobsRes.error, reloadJobs }
 }
