@@ -243,6 +243,15 @@ export class FerroClient {
     return `${this.base}/api/v1/media/${encodeURIComponent(id)}${query ? `?${query}` : ''}`
   }
 
+  /**
+   * URL for playing a clip in a `<video>` (`GET /clips/{id}/file`, with `Range`): the session in
+   * the query. Clips are PC only: a phone is never given one.
+   */
+  clipFileUrl(id: string): string {
+    if (this.ticket) return ''
+    return `${this.base}/api/v1/clips/${encodeURIComponent(id)}/file?${new URLSearchParams({ session: this.token ?? '' }).toString()}`
+  }
+
   async request<T>(
     method: string,
     path: string,

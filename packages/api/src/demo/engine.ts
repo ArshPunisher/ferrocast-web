@@ -160,6 +160,8 @@ export interface DemoOptions {
   setupDone?: boolean
   /** Fake network delay in ms (default 60–180 random; 0 in tests). */
   latencyMs?: number
+  /** How long a clips job takes per step (default 450 ms; a test that stops one makes it long). */
+  clipStepMs?: number
   /** Accept any pairing code except these special ones (see `pair`). */
   token?: string
   /** Whether this build has a relay (default true). Without one, saving tips is a 422. */
@@ -787,11 +789,14 @@ export class DemoEngine {
       },
       now: () => Date.now(),
     })
-    this.clips = new DemoClips({
-      now: () => Date.now(),
-      later: (fn, ms) => this.later(fn, ms),
-      connectedChat: () => this.connectedChat(),
-    })
+    this.clips = new DemoClips(
+      {
+        now: () => Date.now(),
+        later: (fn, ms) => this.later(fn, ms),
+        connectedChat: () => this.connectedChat(),
+      },
+      opts.clipStepMs,
+    )
     this.obsTheme = new DemoObsTheme({
       studio: this.studio,
       designs: this.designs,

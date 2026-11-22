@@ -3,6 +3,7 @@
 // engine (`crates/engine/src/clips`), so the form says what is wrong before a call is made.
 
 import type { FerroClient } from './client'
+import type { YoutubePrivacy } from './types'
 
 export type ClipKind = 'recording' | 'replay' | 'vertical' | 'edit'
 
@@ -80,8 +81,6 @@ export interface CompileInput {
   name?: string
 }
 
-export type YoutubePrivacy = 'private' | 'unlisted' | 'public'
-
 export interface UploadInput {
   title: string
   description?: string
@@ -97,8 +96,8 @@ export const MAX_FADE_S = 3
 export const MAX_NAME = 120
 export const MAX_CUES = 2000
 export const MAX_CUE_CHARS = 300
-export const MAX_TITLE = 100
-export const MAX_DESCRIPTION = 5000
+export const UPLOAD_MAX_TITLE = 100
+export const UPLOAD_MAX_DESCRIPTION = 5000
 export const MAX_TAGS = 30
 export const MAX_TAG_CHARS = 60
 /** A trim keeps at least this much (ms). */
@@ -152,10 +151,12 @@ export function compileProblem(input: CompileInput, lengths: (number | null)[]):
 export function uploadProblem(i: UploadInput): string | null {
   const title = i.title.trim()
   if (!title) return 'Give the video a title.'
-  if ([...title].length > MAX_TITLE) return `The title is up to ${MAX_TITLE} characters.`
-  if (/[<>]/.test(i.title) || /[<>]/.test(i.description ?? '')) return 'YouTube does not accept < or >.'
-  if ((i.description ?? '').length > MAX_DESCRIPTION)
-    return `The description is up to ${MAX_DESCRIPTION} characters.`
+  if ([...title].length > UPLOAD_MAX_TITLE)
+    return `The title is up to ${UPLOAD_MAX_TITLE} characters.`
+  if (/[<>]/.test(i.title) || /[<>]/.test(i.description ?? ''))
+    return 'YouTube does not accept < or >.'
+  if ((i.description ?? '').length > UPLOAD_MAX_DESCRIPTION)
+    return `The description is up to ${UPLOAD_MAX_DESCRIPTION} characters.`
   const tags = i.tags ?? []
   if (tags.length > MAX_TAGS) return `Up to ${MAX_TAGS} tags.`
   if (tags.some((t) => [...t].length > MAX_TAG_CHARS || /[,<>]/.test(t)))
@@ -178,11 +179,13 @@ export function cuesProblem(cues: Cue[]): string | null {
   if (cues.length > MAX_CUES) return `There can be up to ${MAX_CUES} captions.`
   for (const [i, c] of cues.entries()) {
     const n = i + 1
-    if (!Number.isFinite(c.start_ms) || !Number.isFinite(c.end_ms)) return `Caption ${n} needs a start and an end.`
+    if (!Number.isFinite(c.start_ms) || !Number.isFinite(c.end_ms))
+      return `Caption ${n} needs a start and an end.`
     if (c.end_ms <= c.start_ms) return `Caption ${n} ends before it starts.`
     if (c.end_ms > 24 * 3_600_000) return `Caption ${n} is past 24 hours.`
     const t = c.text.trim()
-    if (!t || [...t].length > MAX_CUE_CHARS) return `Caption ${n} needs 1 to ${MAX_CUE_CHARS} characters.`
+    if (!t || [...t].length > MAX_CUE_CHARS)
+      return `Caption ${n} needs 1 to ${MAX_CUE_CHARS} characters.`
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u0009\u000b-\u001f\u007f]/.test(t) || t.includes('\n\n'))
       return `Caption ${n} has a character that can't be in it.`
@@ -198,12 +201,14 @@ export function clipLength(ms: number | null | undefined): string {
   const s = Math.max(0, Math.round(ms / 1000))
   const p = (n: number) => String(n).padStart(2, '0')
   const h = Math.floor(s / 3600)
-  return h > 0 ? `${h}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}` : `${Math.floor(s / 60)}:${p(s % 60)}`
+  return h > 0
+    ? `${h}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`
+    : `${Math.floor(s / 60)}:${p(s % 60)}`
 }
 
-/** "12.3 MB". */
+/** "12.3 MB" (the space can't break the line). */
 export function clipSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024) return `${bytes}\u00a0B`
   const units = ['KB', 'MB', 'GB', 'TB']
   let v = bytes
   let i = -1
@@ -211,7 +216,7 @@ export function clipSize(bytes: number): string {
     v /= 1024
     i++
   } while (v >= 1024 && i < units.length - 1)
-  return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`
+  return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)}\u00a0${units[i]}`
 }
 
 /** A time as typed: "1:02.5", "62.5", "0:00:01.250" → ms, or null when it isn't a time. */

@@ -50,9 +50,19 @@ function refuse(status: number, code: string, message: string, hint: string): Ht
 }
 
 const noClip = () =>
-  refuse(404, 'clip_not_found', "That clip isn't in the folder any more.", 'Reload the list; it may have been moved or deleted.')
+  refuse(
+    404,
+    'clip_not_found',
+    "That clip isn't in the folder any more.",
+    'Reload the list; it may have been moved or deleted.',
+  )
 const noJob = () =>
-  refuse(404, 'job_not_found', "That job isn't on the list.", 'Reload the list; it may have been cleared.')
+  refuse(
+    404,
+    'job_not_found',
+    "That job isn't on the list.",
+    'Reload the list; it may have been cleared.',
+  )
 
 /** A picture for a clip: a gradient from its name, with a play mark. */
 export function demoThumb(name: string, vertical = false): string {
@@ -76,12 +86,14 @@ export class DemoClips {
   /** The job being worked on, if any. */
   private running: string | null = null
   private readonly payloads = new Map<string, () => void>()
+  private readonly stepMs: number
 
   constructor(
     private readonly host: ClipsHost,
     /** ms between a job's steps (tests make it small). */
-    private readonly stepMs = 450,
+    stepMs?: number,
   ) {
+    this.stepMs = stepMs ?? 450
     const t = host.now()
     const seed = (
       name: string,
@@ -94,19 +106,42 @@ export class DemoClips {
       cues: Cue[] = [],
     ) =>
       this.entries.push({
-        clip: { id: `${name}.${ext}`, name, kind, ext, size: mb * 1024 * 1024, modified: t - ago, has_captions: cues.length > 0 },
-        probe: { duration_ms: ms, width: size[0], height: size[1], has_audio: true, has_video: true },
+        clip: {
+          id: `${name}.${ext}`,
+          name,
+          kind,
+          ext,
+          size: mb * 1024 * 1024,
+          modified: t - ago,
+          has_captions: cues.length > 0,
+        },
+        probe: {
+          duration_ms: ms,
+          width: size[0],
+          height: size[1],
+          has_audio: true,
+          has_video: true,
+        },
         cues,
       })
     seed('Replay 2026-11-22 21-04-12', 'mp4', 'replay', 4 * MIN, 38_000, 24)
     seed('Replay 2026-11-22 20-31-55', 'mp4', 'replay', 37 * MIN, 29_000, 19)
     seed('Clutch round vertical', 'mp4', 'vertical', 52 * MIN, 41_000, 12, [1080, 1920])
     seed('Stream 2026-11-22 20-00', 'mkv', 'recording', 70 * MIN, 62 * MIN, 3100)
-    seed('Boss fight', 'mp4', 'recording', 26 * 60 * MIN, 4 * MIN + 12_000, 310, [1920, 1080], [
-      { start_ms: 800, end_ms: 3200, text: 'Okay, this is the one.' },
-      { start_ms: 3400, end_ms: 6100, text: 'Watch the left side!' },
-      { start_ms: 6400, end_ms: 9000, text: 'And that is how you do it.' },
-    ])
+    seed(
+      'Boss fight',
+      'mp4',
+      'recording',
+      26 * 60 * MIN,
+      4 * MIN + 12_000,
+      310,
+      [1920, 1080],
+      [
+        { start_ms: 800, end_ms: 3200, text: 'Okay, this is the one.' },
+        { start_ms: 3400, end_ms: 6100, text: 'Watch the left side!' },
+        { start_ms: 6400, end_ms: 9000, text: 'And that is how you do it.' },
+      ],
+    )
   }
 
   private find(id: string): Entry {
@@ -165,9 +200,19 @@ export class DemoClips {
   // ------------------------------------------------------------ jobs
 
   private start(kind: ClipJob['kind'], label: string, work: (job: ClipJob) => void): ClipJob {
-    const job: ClipJob = { id: `job-${++this.seq}`, kind, label, state: 'queued', progress: 0, started: this.host.now() }
+    const job: ClipJob = {
+      id: `job-${++this.seq}`,
+      kind,
+      label,
+      state: 'queued',
+      progress: 0,
+      started: this.host.now(),
+    }
     this.jobs.unshift(job)
-    if (this.jobs.length > 50) this.jobs = this.jobs.filter((j) => jobActive(j)).concat(this.jobs.filter((j) => !jobActive(j)).slice(0, 40))
+    if (this.jobs.length > 50)
+      this.jobs = this.jobs
+        .filter((j) => jobActive(j))
+        .concat(this.jobs.filter((j) => !jobActive(j)).slice(0, 40))
     this.payloads.set(job.id, () => work(job))
     this.next()
     return clone(job)
@@ -222,14 +267,28 @@ export class DemoClips {
 
   private rename(id: string, body: unknown): Clip {
     const e = this.find(id)
-    const name = typeof (body as { name?: unknown })?.name === 'string' ? (body as { name: string }).name : null
+    const name =
+      typeof (body as { name?: unknown })?.name === 'string'
+        ? (body as { name: string }).name
+        : null
     if (name === null) throw refuse(400, 'invalid', 'Send { name }.', 'Give the clip a name.')
     const bad = clipNameProblem(name)
-    if (bad) throw refuse(400, 'bad_clip_name', `That isn't a usable file name: ${bad}`, 'Use letters, numbers, spaces, - and _.')
+    if (bad)
+      throw refuse(
+        400,
+        'bad_clip_name',
+        `That isn't a usable file name: ${bad}`,
+        'Use letters, numbers, spaces, - and _.',
+      )
     const nextId = `${name}.${e.clip.ext}`
     if (nextId === e.clip.id) return clone(e.clip)
     if (this.entries.some((x) => x.clip.id === nextId))
-      throw refuse(409, 'clip_name_taken', 'A clip with that name is already there.', 'Pick another name.')
+      throw refuse(
+        409,
+        'clip_name_taken',
+        'A clip with that name is already there.',
+        'Pick another name.',
+      )
     e.clip = { ...e.clip, id: nextId, name }
     return clone(e.clip)
   }
@@ -242,9 +301,16 @@ export class DemoClips {
     if (bad) throw refuse(400, 'bad_trim', bad, 'Pick a part inside the clip.')
     const start = Number(b.start_ms)
     const end = Math.min(Number(b.end_ms), total ?? Number(b.end_ms))
-    const named = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : `${e.clip.name} trimmed`
+    const named =
+      typeof b.name === 'string' && b.name.trim() ? b.name.trim() : `${e.clip.name} trimmed`
     const nameBad = clipNameProblem(named)
-    if (nameBad) throw refuse(400, 'bad_clip_name', `That isn't a usable file name: ${nameBad}`, 'Pick another name.')
+    if (nameBad)
+      throw refuse(
+        400,
+        'bad_clip_name',
+        `That isn't a usable file name: ${nameBad}`,
+        'Pick another name.',
+      )
     return this.start('trim', `Trim ${e.clip.name}`, (job) => {
       job.output = this.add(named, 'edit', { ...e.probe, duration_ms: end - start })
     })
@@ -254,14 +320,27 @@ export class DemoClips {
     const b = body as Partial<CompileInput>
     const ids = Array.isArray(b.clips) ? b.clips.map(String) : []
     const entries = ids.map((i) => this.find(i))
-    const input: CompileInput = { clips: ids, crossfade_s: b.crossfade_s ?? 0, normalize: !!b.normalize, ...(b.name ? { name: b.name } : {}) }
-    const bad = compileProblem(input, entries.map((e) => e.probe.duration_ms))
+    const input: CompileInput = {
+      clips: ids,
+      crossfade_s: b.crossfade_s ?? 0,
+      normalize: !!b.normalize,
+      ...(b.name ? { name: b.name } : {}),
+    }
+    const bad = compileProblem(
+      input,
+      entries.map((e) => e.probe.duration_ms),
+    )
     if (bad) throw refuse(400, 'bad_compile', bad, 'Pick the clips to put together.')
     const fade = input.crossfade_s ?? 0
-    const total = entries.reduce((s, e) => s + (e.probe.duration_ms ?? 0), 0) - fade * 1000 * (entries.length - 1)
+    const total =
+      entries.reduce((s, e) => s + (e.probe.duration_ms ?? 0), 0) -
+      fade * 1000 * (entries.length - 1)
     const first = entries[0]?.probe
     return this.start('compile', `Compile ${entries.length} clips`, (job) => {
-      job.output = this.add(b.name?.trim() || 'Compilation', 'edit', { ...(first as ClipProbe), duration_ms: Math.round(total) })
+      job.output = this.add(b.name?.trim() || 'Compilation', 'edit', {
+        ...(first as ClipProbe),
+        duration_ms: Math.round(total),
+      })
     })
   }
 
@@ -272,7 +351,8 @@ export class DemoClips {
   private saveCaptions(id: string, body: unknown): { cues: Cue[] } {
     const e = this.find(id)
     const cues = (body as { cues?: unknown })?.cues
-    if (!Array.isArray(cues)) throw refuse(400, 'invalid', 'Send { cues }.', 'Send the captions to save.')
+    if (!Array.isArray(cues))
+      throw refuse(400, 'invalid', 'Send { cues }.', 'Send the captions to save.')
     const list = cues as Cue[]
     const bad = cuesProblem(list)
     if (bad) throw refuse(400, 'bad_captions', bad, 'Fix that caption and save again.')
@@ -283,12 +363,17 @@ export class DemoClips {
 
   private makeCaptions(id: string): ClipJob {
     const e = this.find(id)
-    if (e.cues.length) throw new HttpError(409, 'conflict', 'That clip has captions already: edit them instead.')
+    if (e.cues.length)
+      throw new HttpError(409, 'conflict', 'That clip has captions already: edit them instead.')
     return this.start('captions', `Captions for ${e.clip.name}`, () => {
       const len = e.probe.duration_ms ?? 9000
       e.cues = [
         { start_ms: 400, end_ms: Math.min(3000, len), text: 'This is what was said first.' },
-        { start_ms: Math.min(3200, len - 1), end_ms: Math.min(6200, len), text: 'And then a little more of it.' },
+        {
+          start_ms: Math.min(3200, len - 1),
+          end_ms: Math.min(6200, len),
+          text: 'And then a little more of it.',
+        },
       ].filter((c) => c.end_ms > c.start_ms)
       e.clip.has_captions = e.cues.length > 0
     })
@@ -296,10 +381,26 @@ export class DemoClips {
 
   private burn(id: string, body: unknown): ClipJob {
     const e = this.find(id)
-    if (!e.cues.length) throw refuse(422, 'no_captions', 'That clip has no captions yet.', 'Make them first, then burn them in.')
-    const named = typeof (body as { name?: unknown })?.name === 'string' && (body as { name: string }).name.trim() ? (body as { name: string }).name.trim() : `${e.clip.name} captioned`
+    if (!e.cues.length)
+      throw refuse(
+        422,
+        'no_captions',
+        'That clip has no captions yet.',
+        'Make them first, then burn them in.',
+      )
+    const named =
+      typeof (body as { name?: unknown })?.name === 'string' &&
+      (body as { name: string }).name.trim()
+        ? (body as { name: string }).name.trim()
+        : `${e.clip.name} captioned`
     const bad = clipNameProblem(named)
-    if (bad) throw refuse(400, 'bad_clip_name', `That isn't a usable file name: ${bad}`, 'Pick another name.')
+    if (bad)
+      throw refuse(
+        400,
+        'bad_clip_name',
+        `That isn't a usable file name: ${bad}`,
+        'Pick another name.',
+      )
     return this.start('burn', `Burn captions into ${e.clip.name}`, (job) => {
       job.output = this.add(named, 'edit', { ...e.probe })
     })
@@ -316,19 +417,40 @@ export class DemoClips {
     }
     const bad = uploadProblem(input)
     if (bad) throw refuse(400, 'bad_upload', bad, 'Fix the details and try again.')
-    if (!['private', 'unlisted', 'public'].includes(input.privacy ?? '')) throw refuse(400, 'bad_upload', 'Privacy is private, unlisted or public.', 'Pick one of the three.')
+    if (!['private', 'unlisted', 'public'].includes(input.privacy ?? ''))
+      throw refuse(
+        400,
+        'bad_upload',
+        'Privacy is private, unlisted or public.',
+        'Pick one of the three.',
+      )
     if (!this.host.connectedChat().includes('youtube'))
-      throw refuse(422, 'youtube_not_connected', "YouTube isn't connected.", 'Open Settings, Accounts, and connect YouTube.')
+      throw refuse(
+        422,
+        'youtube_not_connected',
+        "YouTube isn't connected.",
+        'Open Settings, Accounts, and connect YouTube.',
+      )
     if (b.shorts) {
-      if ((e.probe.height ?? 0) < (e.probe.width ?? 0)) throw refuse(400, 'bad_upload', 'A Short is square or tall.', 'Make a vertical copy first, then send that.')
-      if ((e.probe.duration_ms ?? 0) > 180_000) throw refuse(400, 'bad_upload', 'A Short is at most 3 minutes.', 'Trim the clip first.')
+      if ((e.probe.height ?? 0) < (e.probe.width ?? 0))
+        throw refuse(
+          400,
+          'bad_upload',
+          'A Short is square or tall.',
+          'Make a vertical copy first, then send that.',
+        )
+      if ((e.probe.duration_ms ?? 0) > 180_000)
+        throw refuse(400, 'bad_upload', 'A Short is at most 3 minutes.', 'Trim the clip first.')
     }
     const quota = /quota/i.test(input.title)
     return this.start('upload', `Upload ${e.clip.name}`, (job) => {
       if (quota) {
         job.state = 'failed'
         job.finished = this.host.now()
-        job.error = { message: "YouTube's daily limit for uploads is used up.", hint: 'It resets after midnight Pacific time (in about 7 hours). Try again then.' }
+        job.error = {
+          message: "YouTube's daily limit for uploads is used up.",
+          hint: 'It resets after midnight Pacific time (in about 7 hours). Try again then.',
+        }
         return
       }
       job.link = `https://www.youtube.com/${b.shorts ? 'shorts' : 'watch?v='}demo${job.id.replace('job-', '')}`
@@ -347,7 +469,8 @@ export class DemoClips {
       if (n === 4 && b && c === 'cancel' && method === 'POST') return this.cancel(b)
       if (n === 3 && b && method === 'DELETE') {
         const j = this.job(b)
-        if (jobActive(j)) throw new HttpError(409, 'conflict', 'That job is still running: cancel it first.')
+        if (jobActive(j))
+          throw new HttpError(409, 'conflict', 'That job is still running: cancel it first.')
         this.jobs = this.jobs.filter((x) => x.id !== j.id)
         return undefined
       }

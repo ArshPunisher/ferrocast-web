@@ -43,7 +43,9 @@ describe('the demo clips library', () => {
     const o = await api.list()
     expect(o.ffmpeg_ready).toBe(true)
     expect(o.clips.length).toBeGreaterThanOrEqual(5)
-    expect(o.clips.map((c) => c.modified)).toEqual([...o.clips.map((c) => c.modified)].sort((a, b) => b - a))
+    expect(o.clips.map((c) => c.modified)).toEqual(
+      [...o.clips.map((c) => c.modified)].sort((a, b) => b - a),
+    )
     expect((await api.list('boss')).clips.map((c) => c.name)).toEqual(['Boss fight'])
     expect((await api.list('zzz')).clips).toEqual([])
     const first = o.clips[0]!
@@ -121,7 +123,9 @@ describe('the demo jobs', () => {
     expect((await err(api.makeCaptions(id))).status).toBe(409)
     const edited = [{ ...cues[0]!, text: 'Fixed words' }]
     expect((await api.saveCaptions(id, edited)).cues[0]!.text).toBe('Fixed words')
-    expect((await err(api.saveCaptions(id, [{ start_ms: 5, end_ms: 1, text: 'x' }]))).code).toBe('bad_captions')
+    expect((await err(api.saveCaptions(id, [{ start_ms: 5, end_ms: 1, text: 'x' }]))).code).toBe(
+      'bad_captions',
+    )
     const burned = await finish((await api.burnCaptions(id, 'With words')).id)
     expect(burned.output).toBe('With words.mp4')
   })
@@ -139,7 +143,9 @@ describe('the demo jobs', () => {
     // A Short must be tall and short.
     expect((await err(api.upload(id, { title: 'x', shorts: true }))).code).toBe('bad_upload')
     const vertical = (await api.list('vertical')).clips[0]!.id
-    expect((await finish((await api.upload(vertical, { title: 'x', shorts: true })).id)).link).toContain('/shorts')
+    expect(
+      (await finish((await api.upload(vertical, { title: 'x', shorts: true })).id)).link,
+    ).toContain('/shorts')
     // Not connected: refused before a job starts.
     await client.disconnect('youtube')
     expect((await err(api.upload(id, { title: 'x' }))).code).toBe('youtube_not_connected')

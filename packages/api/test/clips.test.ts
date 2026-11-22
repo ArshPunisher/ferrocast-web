@@ -129,9 +129,9 @@ describe('times and sizes', () => {
     expect(clipLength(62_000)).toBe('1:02')
     expect(clipLength(3_661_000)).toBe('1:01:01')
     expect(clipLength(null)).toBe('–')
-    expect(clipSize(500)).toBe('500 B')
-    expect(clipSize(1536)).toBe('1.5 KB')
-    expect(clipSize(150 * 1024 * 1024)).toBe('150 MB')
+    expect(clipSize(500)).toBe('500\u00a0B')
+    expect(clipSize(1536)).toBe('1.5\u00a0KB')
+    expect(clipSize(150 * 1024 * 1024)).toBe('150\u00a0MB')
   })
   it('knows a job that is still going', () => {
     expect(jobActive({ state: 'queued' })).toBe(true)
