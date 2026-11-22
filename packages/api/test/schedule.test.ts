@@ -225,3 +225,42 @@ describe('connecting a platform again', () => {
     expect((await post()).status).toBe(200)
   })
 })
+
+describe('what review found in the demo schedule', () => {
+  it('answers a created plan with 201, as the engine does', async () => {
+    const { engine } = demo()
+    const res = await engine.fetch(`${engine.base}/api/v1/schedule`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${DEMO_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        info: { title: 'x' },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      }),
+    })
+    expect(res.status).toBe(201)
+  })
+
+  it('counts only plans that have not expired toward the limit of 50', async () => {
+    const { api } = demo()
+    for (let i = 0; i < 50; i++)
+      await api.create({
+        info: { title: `S${i}` },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      })
+    const realNow = Date.now
+    // A day and a bit later all 50 have expired: a new plan is not refused for their sake.
+    Date.now = () => realNow() + 26 * HOUR
+    try {
+      const made = await api.create({
+        info: { title: 'new' },
+        platforms: ['twitch'],
+        start_ms: Date.now() + HOUR,
+      })
+      expect(made.info.title).toBe('new')
+    } finally {
+      Date.now = realNow
+    }
+  })
+})

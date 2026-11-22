@@ -1275,7 +1275,12 @@ function AddDestination({
     setBrand(b)
     if (info && (!name.trim() || PASTE_BRANDS.some((x) => x.label === name))) setName(info.label)
     // The last brand's own server goes with it; one the person typed stays.
-    setUrl(urlAfterBrand(url, brand, b))
+    const nextUrl = urlAfterBrand(url, brand, b)
+    if (nextUrl !== url) {
+      setUrl(nextUrl)
+      // A connection test of the old address says nothing about the new one.
+      setReach(null)
+    }
     setErr((e) => (e?.field === 'brand' ? null : e))
   }
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)

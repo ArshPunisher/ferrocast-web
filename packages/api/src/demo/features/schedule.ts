@@ -42,7 +42,13 @@ export class DemoSchedule implements DemoFeature {
       this.plans = this.plans.filter((p) => Date.now() < p.start_ms + KEEP_AFTER_START_MS)
       return { streams: clone([...this.plans].sort((a, b) => a.start_ms - b.start_ms)) }
     }
-    if (seg.length === 1 && method === 'POST') return this.create(body)
+    if (seg.length === 1 && method === 'POST') {
+      // Created: 201, as the engine answers.
+      return new Response(JSON.stringify(this.create(body)), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (seg.length === 2 && method === 'DELETE') {
       const before = this.plans.length
       this.plans = this.plans.filter((p) => p.id !== seg[1])
@@ -54,6 +60,8 @@ export class DemoSchedule implements DemoFeature {
   }
 
   private create(body: unknown): ScheduledStream {
+    // Plans a day past their start are gone: they don't count toward the limit.
+    this.plans = this.plans.filter((p) => Date.now() < p.start_ms + KEEP_AFTER_START_MS)
     const b = requireObj(body) as Partial<NewScheduledStream> & Record<string, unknown>
     const start = typeof b.start_ms === 'number' ? b.start_ms : 0
     if (!Number.isFinite(start) || start <= Date.now())

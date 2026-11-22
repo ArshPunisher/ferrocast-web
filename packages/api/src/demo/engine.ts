@@ -2036,7 +2036,15 @@ export class DemoEngine {
     if (!['twitch', 'youtube', 'kick', 'facebook'].includes(platform))
       throw new HttpError(404, 'not_found', 'Ferrocast doesn’t support that platform.')
     const p = platform as AccountPlatform
-    // No refusal when it is connected already: the engine signs in again (to switch accounts).
+    // Facebook signs in again when it is connected already (through the relay, to switch Pages);
+    // the others refuse.
+    if (p !== 'facebook' && this.connectors[p].state === 'connected')
+      throw new HttpError(
+        409,
+        'already_connected',
+        `${label(p)} is already connected.`,
+        'Disconnect it first to switch accounts.',
+      )
     const name =
       p === 'twitch'
         ? 'NovaPlays'
