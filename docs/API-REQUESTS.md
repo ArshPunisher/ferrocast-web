@@ -385,7 +385,7 @@ with backward-compatible defaults (`#[serde(default)]`):
 - `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
   active alert design no longer dresses an alert whose look is custom-enabled.
 
-## R28. Support report & likely-cause analyzer (`#7`, 22 Nov)
+## R31. Support report & likely-cause analyzer (`#7`, 22 Nov)
 
 One-click redacted support archive (`.zip`) in Settings (`#/settings/advanced#support`), Studio Log dialog,
 and Desktop Help menu:
@@ -397,7 +397,7 @@ and Desktop Help menu:
 - `POST /api/v1/diagnostics/report.zip` → streams the redacted `.zip` download for browsers.
 All three stay PC-only (`remoteAllowed` denies paired phones).
 
-## R29. Local stream labels+ & hype/combo train (`#8`, 22 Nov)
+## R32. Local stream labels+ & hype/combo train (`#8`, 22 Nov)
 
 `LabelConfig.source` covers Latest-X (`latest_follower`, `latest_sub`, `latest_gifter`, `latest_tip`,
 `latest_bits`, `latest_raid`), Session (`session_follows`, `session_subs`, `session_bits`, `session_tips`,
