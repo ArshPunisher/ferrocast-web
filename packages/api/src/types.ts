@@ -1792,6 +1792,7 @@ export interface AudioSummary {
   studio_sample_rate_hz: number
   monitoring_device: string | null
   devices: AudioDeviceInfo[]
+  enumeration_supported?: boolean
 }
 
 export interface DestinationHealthSnapshot {

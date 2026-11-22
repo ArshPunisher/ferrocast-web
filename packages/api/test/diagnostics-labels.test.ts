@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { unzipSync, strFromU8 } from 'fflate'
 import {
   FerroClient,
+  formatSupportTimestamp,
   LABEL_SOURCES,
+  parseContentDispositionFilename,
   remoteAllowed,
   validateLabelConfig,
   validateLayout,
@@ -188,5 +190,17 @@ describe('Diagnostics preview & zip export (#7)', () => {
     expect(remoteAllowed('owner', 'GET', '/diagnostics/preview')).toBe(false)
     expect(remoteAllowed('owner', 'POST', '/diagnostics/report')).toBe(false)
     expect(remoteAllowed('mod', 'POST', '/diagnostics/report.zip')).toBe(false)
+
+    const downloadedFile = await client.downloadSupportReportFile()
+    expect(downloadedFile.filename).toBe('ferrocast-support-demo.zip')
+    expect(
+      parseContentDispositionFilename(
+        'attachment; filename="ferrocast-support-20261122-073145.zip"',
+      ),
+    ).toBe('ferrocast-support-20261122-073145.zip')
+    expect(parseContentDispositionFilename('attachment; filename=../evil.zip')).toBe('evil.zip')
+    expect(formatSupportTimestamp(new Date(Date.UTC(2026, 10, 22, 7, 31, 45)))).toBe(
+      '20261122-073145',
+    )
   })
 })

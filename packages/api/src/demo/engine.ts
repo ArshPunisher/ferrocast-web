@@ -3028,6 +3028,7 @@ export class DemoEngine {
       audio: {
         studio_sample_rate_hz: 48_000,
         monitoring_device: 'Studio Headphones',
+        enumeration_supported: true,
         devices: [
           {
             kind: 'input',

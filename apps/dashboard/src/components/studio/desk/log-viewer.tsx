@@ -15,6 +15,7 @@ import { Button, Dialog, Input, Segmented, Skeleton, copyText, cx, toast } from 
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { useClient, useResource } from '../../../lib/hooks'
+import { downloadSupportArchive } from '../../support-report'
 import { useDesk } from './common'
 
 export type LogLevel = 'error' | 'warn' | 'info'
@@ -97,15 +98,7 @@ function LogBody() {
         }
         return
       }
-      const blob = await client.downloadSupportReportZip()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `ferrocast-support-${new Date().toISOString().slice(0, 10)}.zip`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      await downloadSupportArchive(client)
       toast({ tone: 'ok', message: 'Support report downloaded.' })
     } catch (e) {
       const d = describeError(e)

@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import {
+  ArrowClockwise,
   CheckCircle,
   DownloadSimple,
   FileArchive,
@@ -14,7 +15,9 @@ import {
 } from '@phosphor-icons/react'
 import {
   describeError,
+  formatSupportTimestamp,
   type CauseSeverity,
+  type FerroClient,
   type SupportReport,
   type WrittenSupportReport,
 } from '@ferrocast/api'
@@ -56,19 +59,39 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+export async function downloadSupportArchive(client: FerroClient): Promise<string> {
+  const { blob, filename } =
+    typeof client.downloadSupportReportFile === 'function'
+      ? await client.downloadSupportReportFile()
+      : {
+          blob: await client.downloadSupportReportZip(),
+          filename: `ferrocast-support-${formatSupportTimestamp()}.zip`,
+        }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  return filename
+}
+
 export function SupportReportSection({ compact = false }: { compact?: boolean }) {
   const client = useClient()
-  const preview = useResource((c) => c.diagnosticsPreview())
-  const [creating, setCreating] = useState(false)
+  const preview = useResource((c) => c.diagnosticsPreview(), [], { enabled: !compact })
+  const [busyAction, setBusyAction] = useState<'save' | 'download' | null>(null)
   const [saved, setSaved] = useState<WrittenSupportReport | null>(null)
   const [downloaded, setDownloaded] = useState<string | null>(null)
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
 
   const createZip = async (forceDownload = false) => {
-    setCreating(true)
+    const mode = inDesktopApp() && !forceDownload ? 'save' : 'download'
+    setBusyAction(mode)
     setError(null)
     try {
-      if (inDesktopApp() && !forceDownload) {
+      if (mode === 'save') {
         const res = await client.createSupportReport(null)
         if (res.cancelled) {
           toast({ tone: 'info', message: 'Support report cancelled. No folder picked.' })
@@ -83,17 +106,7 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
         })
         return
       }
-      const blob = await client.downloadSupportReportZip()
-      const stamp = new Date().toISOString().replace(/[:T]/g, '').slice(0, 15)
-      const filename = `ferrocast-support-${stamp}.zip`
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      const filename = await downloadSupportArchive(client)
       setDownloaded(filename)
       setSaved(null)
       toast({
@@ -106,7 +119,7 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
       setError({ message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
       toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
     } finally {
-      setCreating(false)
+      setBusyAction(null)
     }
   }
 
@@ -130,7 +143,8 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
               <Button
                 variant="primary"
                 icon={inDesktopApp() ? <FolderOpen size={16} /> : <FileArchive size={16} />}
-                busy={creating}
+                busy={busyAction === 'save' || (!inDesktopApp() && busyAction === 'download')}
+                disabled={busyAction !== null}
                 onClick={() => void createZip(false)}
               >
                 {inDesktopApp() ? 'Create support report…' : 'Create support report'}
@@ -139,7 +153,8 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
                 <Button
                   variant="outline"
                   icon={<DownloadSimple size={16} />}
-                  busy={creating}
+                  busy={busyAction === 'download'}
+                  disabled={busyAction !== null}
                   onClick={() => void createZip(true)}
                 >
                   Download copy
@@ -189,7 +204,13 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
               {Boolean(preview.error) && !report && (
                 <LoadError error={preview.error} onRetry={preview.reload} />
               )}
-              {report && <ReportSummaryCard report={report} />}
+              {report && (
+                <ReportSummaryCard
+                  report={report}
+                  refreshing={preview.loading}
+                  onRefresh={preview.reload}
+                />
+              )}
               <p className="m-0 text-[13px] text-text-3">
                 Privacy check: stream keys, OAuth tokens, passwords, email addresses, IP addresses,
                 and OS usernames in file paths are removed automatically before the zip is written.
@@ -202,7 +223,15 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
   )
 }
 
-function ReportSummaryCard({ report }: { report: SupportReport }) {
+function ReportSummaryCard({
+  report,
+  refreshing = false,
+  onRefresh,
+}: {
+  report: SupportReport
+  refreshing?: boolean
+  onRefresh?: () => void
+}) {
   const hwEncoder = report.encoders.find((e) => e.selected) ?? report.encoders[0]
   return (
     <div
@@ -210,22 +239,35 @@ function ReportSummaryCard({ report }: { report: SupportReport }) {
       className="flex flex-col gap-3.5 rounded-card border border-line bg-inset p-4"
     >
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="m-0 font-display text-[15px] font-bold tracking-tight text-text">
             Likely causes
           </h4>
-          <span
-            className={cx(
-              CHIP_BASE,
-              report.likely_causes.length > 0
-                ? 'border-warn/45 bg-warn-soft text-text'
-                : 'border-ok/45 bg-ok-soft text-text',
+          <div className="flex items-center gap-2">
+            <span
+              className={cx(
+                CHIP_BASE,
+                report.likely_causes.length > 0
+                  ? 'border-warn/45 bg-warn-soft text-text'
+                  : 'border-ok/45 bg-ok-soft text-text',
+              )}
+            >
+              {report.likely_causes.length === 0
+                ? 'Healthy'
+                : `${report.likely_causes.length} ${report.likely_causes.length === 1 ? 'finding' : 'findings'}`}
+            </span>
+            {onRefresh && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<ArrowClockwise size={14} />}
+                busy={refreshing}
+                onClick={onRefresh}
+              >
+                Refresh
+              </Button>
             )}
-          >
-            {report.likely_causes.length === 0
-              ? 'Healthy'
-              : `${report.likely_causes.length} ${report.likely_causes.length === 1 ? 'finding' : 'findings'}`}
-          </span>
+          </div>
         </div>
 
         {report.likely_causes.length === 0 ? (
@@ -243,9 +285,15 @@ function ReportSummaryCard({ report }: { report: SupportReport }) {
                     'flex flex-col gap-1 rounded-control border border-line bg-surface-1 px-3 py-2.5',
                   )}
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CauseIcon severity={c.severity} />
-                    <span className="text-[14px] font-semibold text-text">{c.title}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      <span className="mt-0.5 shrink-0">
+                        <CauseIcon severity={c.severity} />
+                      </span>
+                      <span className="text-[14px] leading-snug font-semibold break-words text-text">
+                        {c.title}
+                      </span>
+                    </div>
                     <span className={cx(CHIP_BASE, tone.className)}>{tone.label}</span>
                   </div>
                   <p className="m-0 text-[13.5px] text-text-2">{c.detail}</p>
@@ -260,26 +308,29 @@ function ReportSummaryCard({ report }: { report: SupportReport }) {
       <div className="grid grid-cols-1 gap-2.5 border-t border-line pt-3 text-[13px] sm:grid-cols-2">
         <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
           <span className="font-semibold text-text-3">App & OS</span>
-          <span className="font-mono text-text">
+          <span className="font-mono break-words text-text">
             Ferrocast {report.app.version} · {report.os.name || report.app.os} {report.os.version}
           </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
           <span className="font-semibold text-text-3">GPU & Encoder</span>
-          <span className="truncate font-mono text-text">
+          <span className="font-mono break-words text-text">
             {report.gpu.name || 'Unavailable'} ({report.gpu.backend})
             {hwEncoder ? ` · ${hwEncoder.label}` : ''}
           </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
           <span className="font-semibold text-text-3">Audio & Sample Rate</span>
-          <span className="font-mono text-text">
-            {report.audio.studio_sample_rate_hz} Hz · {report.audio.devices.length} device(s)
+          <span className="font-mono break-words text-text">
+            {report.audio.studio_sample_rate_hz} Hz ·{' '}
+            {report.audio.enumeration_supported === false
+              ? 'Enumeration unsupported'
+              : `${report.audio.devices.length} device(s)`}
           </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
           <span className="font-semibold text-text-3">Stream History & Crashes</span>
-          <span className="font-mono text-text">
+          <span className="font-mono break-words text-text">
             {report.last_streams.length} recent stream(s) · {report.crashes.length} crash dump(s)
           </span>
         </div>

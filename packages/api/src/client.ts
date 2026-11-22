@@ -568,7 +568,7 @@ export class FerroClient {
   diagnosticsPreview = () => this.get<SupportReport>('/api/v1/diagnostics/preview')
   createSupportReport = (folder?: string | null) =>
     this.post<WrittenSupportReport>('/api/v1/diagnostics/report', { folder: folder ?? null })
-  downloadSupportReportZip = async (): Promise<Blob> => {
+  downloadSupportReportFile = async (): Promise<{ blob: Blob; filename: string }> => {
     this.check('POST', '/api/v1/diagnostics/report.zip')
     const headers: Record<string, string> = {}
     if (this.token) headers.Authorization = `Bearer ${this.token}`
@@ -582,7 +582,14 @@ export class FerroClient {
       throw offlineError()
     }
     if (!res.ok) throw await errorFromResponse(res)
-    return res.blob()
+    const filename =
+      parseContentDispositionFilename(res.headers.get('content-disposition')) ??
+      `ferrocast-support-${formatSupportTimestamp()}.zip`
+    return { blob: await res.blob(), filename }
+  }
+  downloadSupportReportZip = async (): Promise<Blob> => {
+    const file = await this.downloadSupportReportFile()
+    return file.blob
   }
   /** A GET that answers a file (Studio's marker export), as a Blob. */
   downloadFile = async (path: string): Promise<Blob> => {
@@ -646,6 +653,29 @@ export class FerroClient {
   installUpdate = () => this.post<{ installing: string }>('/api/v1/updates/install')
   /** "Restart to finish" after an install. 409 `not_ready`, 409 `live`. */
   restartForUpdate = () => this.post<{ restarting: string }>('/api/v1/updates/restart')
+}
+
+export function formatSupportTimestamp(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}-${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}`
+}
+
+export function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) return null
+  const extMatch = header.match(/filename\*\s*=\s*(?:UTF-8''|utf-8'')?([^;\s]+)/i)
+  const plainMatch = header.match(/filename\s*=\s*"([^"]+)"|filename\s*=\s*([^;\s]+)/i)
+  let raw = extMatch?.[1] ?? plainMatch?.[1] ?? plainMatch?.[2]
+  if (!raw) return null
+  if (extMatch?.[1]) {
+    try {
+      raw = decodeURIComponent(raw)
+    } catch {
+      // keep raw
+    }
+  }
+  const base = raw.replace(/[/\\]/g, '/').split('/').pop()?.trim() ?? ''
+  if (!base || base === '.' || base === '..') return null
+  return base
 }
 
 function enc(s: string): string {

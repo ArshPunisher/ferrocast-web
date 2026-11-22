@@ -69,8 +69,14 @@ const sampleReport: SupportReport = {
   unclean_exit: false,
 }
 
-async function mount(clientOverrides: Record<string, unknown> = {}) {
+async function mount(
+  clientOverrides: Record<string, unknown> = {},
+  props: { compact?: boolean } = {},
+) {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const downloadSupportReportZip = vi.fn(
+    async () => new Blob(['PK\x03\x04'], { type: 'application/zip' }),
+  )
   const client = {
     diagnosticsPreview: vi.fn(async () => sampleReport),
     createSupportReport: vi.fn(async (): Promise<WrittenSupportReport> => ({
@@ -80,9 +86,11 @@ async function mount(clientOverrides: Record<string, unknown> = {}) {
       size_bytes: 4096,
       report: sampleReport,
     })),
-    downloadSupportReportZip: vi.fn(
-      async () => new Blob(['PK\x03\x04'], { type: 'application/zip' }),
-    ),
+    downloadSupportReportZip,
+    downloadSupportReportFile: vi.fn(async () => ({
+      blob: await downloadSupportReportZip(),
+      filename: 'ferrocast-support-20261122-073145.zip',
+    })),
     ...clientOverrides,
   }
   await unmountRoot()
@@ -92,7 +100,7 @@ async function mount(clientOverrides: Record<string, unknown> = {}) {
   await act(async () => {
     root!.render(
       <>
-        <SupportReportSection />
+        <SupportReportSection compact={props.compact ?? false} />
         <Toaster />
       </>,
     )
@@ -128,10 +136,77 @@ describe('SupportReportSection (#7)', () => {
       await Promise.resolve()
     })
 
-    expect(client.downloadSupportReportZip).toHaveBeenCalledTimes(1)
+    expect(client.downloadSupportReportFile).toHaveBeenCalledTimes(1)
     expect(el.querySelector('[data-testid="support-report-downloaded"]')?.textContent).toContain(
-      'ferrocast-support-',
+      'ferrocast-support-20261122-073145.zip',
     )
+    const gpuValue = Array.from(el.querySelectorAll('span')).find((s) =>
+      s.textContent?.includes('Apple M3 Pro'),
+    )!
+    expect(gpuValue.className).not.toContain('truncate')
+    expect(gpuValue.className).toContain('break-words')
+
+    const refreshBtn = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Refresh'),
+    )
+    expect(refreshBtn).toBeDefined()
+    await act(async () => {
+      refreshBtn!.click()
+      await Promise.resolve()
+    })
+    expect(client.diagnosticsPreview).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips preview fetch when compact, separates button spinners, and pairs cause icon with title', async () => {
+    const compactMount = await mount({}, { compact: true })
+    expect(compactMount.client.diagnosticsPreview).not.toHaveBeenCalled()
+    expect(compactMount.el.querySelector('[data-testid="support-report-preview"]')).toBeNull()
+
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { desktop: true }
+    let resolveSave!: (v: WrittenSupportReport) => void
+    const pendingSave = new Promise<WrittenSupportReport>((res) => {
+      resolveSave = res
+    })
+    const { el } = await mount({
+      createSupportReport: vi.fn(() => pendingSave),
+    })
+
+    const causeTitle = Array.from(el.querySelectorAll('span')).find((s) =>
+      s.textContent?.includes('Audio device sample rate differs'),
+    )!
+    const iconWrapper = causeTitle.parentElement!
+    expect(iconWrapper.querySelector('svg')).not.toBeNull()
+    expect(iconWrapper.textContent).not.toContain('Warning')
+
+    const saveBtn = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Create support report'),
+    )!
+    const copyBtn = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Download copy'),
+    )!
+
+    await act(async () => {
+      saveBtn.click()
+      await Promise.resolve()
+    })
+    expect(saveBtn.getAttribute('aria-busy')).toBe('true')
+    expect(copyBtn.getAttribute('aria-busy')).toBeNull()
+    expect(copyBtn.disabled).toBe(true)
+
+    await act(async () => {
+      resolveSave({
+        cancelled: true,
+        path: null,
+        filename: null,
+        size_bytes: 0,
+        report: null,
+      })
+      await Promise.resolve()
+    })
+    expect(saveBtn.getAttribute('aria-busy')).toBeNull()
+    expect(copyBtn.disabled).toBe(false)
+    expect(el.querySelector('[data-testid="support-report-saved"]')).toBeNull()
+    expect(currentToasts().some((t) => t.message.includes('cancelled'))).toBe(true)
   })
 
   it('uses native folder picker flow in desktop mode and shows saved path or error', async () => {
