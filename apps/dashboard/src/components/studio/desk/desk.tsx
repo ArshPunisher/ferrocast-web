@@ -90,7 +90,10 @@ import {
 import { ChatDock, EventsDock } from './chat-dock'
 import { WebDockDialog, WebDockSlot } from './web-dock'
 import { AudioDock } from './mixer'
-import { PreviewBox, StageBar, StageOff } from './preview'
+import { PreviewBox, StageBar } from './preview'
+import { DeskStandby } from './desk-standby'
+import type { StartChoice, StartFailure } from './standby-model'
+import { SchedulePanel } from '../schedule'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { takePendingSettings } from '../../../lib/menu'
@@ -134,8 +137,15 @@ export function StudioDesk({
   }, [s])
   // After pressing Start (never on its own): the ready check, with what came back after a crash.
   const [ready, setReady] = useState<{ recovered: EngineRecovered | null } | null>(null)
+  const [starting, setStarting] = useState<StartChoice | null>(null)
+  const [startError, setStartError] = useState<StartFailure | null>(null)
+  const startingRef = useRef(false)
   const start = useCallback(
-    async (opts?: StudioStartOptions) => {
+    async (choice: StartChoice = 'default', opts?: StudioStartOptions) => {
+      if (startingRef.current) return
+      startingRef.current = true
+      setStarting(choice)
+      setStartError(null)
       try {
         const st = await api.start(opts)
         status.set(st)
@@ -144,12 +154,19 @@ export function StudioDesk({
         setReady({ recovered: st.recovered ?? null })
       } catch (e) {
         const d = describeError(e)
+        setStartError({ message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
         toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
         status.reload()
+      } finally {
+        startingRef.current = false
+        setStarting(null)
       }
     },
     [api, status],
   )
+  useEffect(() => {
+    if (s?.running) setStartError(null)
+  }, [s?.running])
   // Off: checked again every 3 s, so a start from elsewhere (a shortcut, another screen)
   // shows here too.
   const off = !!s && !s.running
@@ -173,20 +190,30 @@ export function StudioDesk({
     },
     [status],
   )
-  if (status.error && !s) return <LoadError error={status.error} onRetry={status.reload} />
+  if (status.error && !s)
+    return (
+      <>
+        {lead && <InBar className="mb-2 flex">{lead}</InBar>}
+        <LoadError error={status.error} onRetry={status.reload} />
+        <div className="mt-5 max-w-3xl">
+          <SchedulePanel />
+        </div>
+      </>
+    )
   if (!s) return <Skeleton className="h-[560px]" />
   if (!s.running)
     return (
       <>
-        {lead && <InBar className="mb-3 flex">{lead}</InBar>}
-        <div className="flex min-h-[420px] flex-col overflow-hidden rounded-panel border border-line">
-          <StageOff
-            available={s.available}
-            detail={s.detail}
-            safeMode={s.safe_mode ?? null}
-            onStart={start}
-          />
-        </div>
+        {lead && <InBar className="mb-2 flex">{lead}</InBar>}
+        <DeskStandby
+          status={s}
+          view={view}
+          res={res}
+          starting={starting}
+          startError={startError}
+          onStart={start}
+          onRetryStatus={status.reload}
+        />
       </>
     )
   return (
@@ -674,50 +701,55 @@ function Running({
     }[id]
   }
   return (
-    <DeskProvider value={desk} statsStore={statsStore}>
-      <DeskStatsSync
-        api={api}
-        shownOnAir={scenes.data?.current}
-        statsStore={statsStore}
-        onSceneMismatch={refresh}
-        onCanvasSize={handleCanvasSize}
-      />
-      <DockWorkspace
-        top={
-          <>
-            <ControlBar view={view} lead={lead} onStatus={onStatus} />
-            <AutoConfigRollbackBar onOpenWizard={() => setAutoConfigOpen(true)} />
-            <MissingFiles />
-          </>
-        }
-        stage={
-          <>
-            <PreviewBox running />
-            <StageBar />
-          </>
-        }
-        docks={docks}
-        corner={readyCorner}
-      />
-      <AddSourceDialog />
-      <FileDrop />
-      {prefs.data && (
-        <AutoConfigDialog
-          open={autoConfigOpen}
-          onClose={() => setAutoConfigOpen(false)}
-          s={prefs.data}
-          onApply={() => {}}
-          onSynced={(next) => prefs.set(next)}
+    <>
+      <DeskProvider value={desk} statsStore={statsStore}>
+        <DeskStatsSync
+          api={api}
+          shownOnAir={scenes.data?.current}
+          statsStore={statsStore}
+          onSceneMismatch={refresh}
+          onCanvasSize={handleCanvasSize}
         />
-      )}
-      <SettingsDialog
-        open={settingsAt !== null}
-        start={settingsAt ?? undefined}
-        onClose={() => setSettingsAt(null)}
-      />
-      <TransitionsDialog initial={transitionsAt} onClose={() => setTransitionsAt(null)} />
-      <SourcePanel />
-    </DeskProvider>
+        <DockWorkspace
+          top={
+            <>
+              <ControlBar view={view} lead={lead} onStatus={onStatus} />
+              <AutoConfigRollbackBar onOpenWizard={() => setAutoConfigOpen(true)} />
+              <MissingFiles />
+            </>
+          }
+          stage={
+            <>
+              <PreviewBox running />
+              <StageBar />
+            </>
+          }
+          docks={docks}
+          corner={readyCorner}
+        />
+        <AddSourceDialog />
+        <FileDrop />
+        {prefs.data && (
+          <AutoConfigDialog
+            open={autoConfigOpen}
+            onClose={() => setAutoConfigOpen(false)}
+            s={prefs.data}
+            onApply={() => {}}
+            onSynced={(next) => prefs.set(next)}
+          />
+        )}
+        <SettingsDialog
+          open={settingsAt !== null}
+          start={settingsAt ?? undefined}
+          onClose={() => setSettingsAt(null)}
+        />
+        <TransitionsDialog initial={transitionsAt} onClose={() => setTransitionsAt(null)} />
+        <SourcePanel />
+      </DeskProvider>
+      <div className="mt-5 max-w-3xl">
+        <SchedulePanel />
+      </div>
+    </>
   )
 }
 
