@@ -152,3 +152,17 @@ describe('the demo jobs', () => {
     expect((await api.list()).youtube_connected).toBe(false)
   })
 })
+
+describe('a Short in the demo is checked with the 9 bytes its tag needs', () => {
+  it('refuses a description that only fits without "#Shorts"', async () => {
+    const vertical = (await api.list('vertical')).clips[0]!.id
+    // 4,992 bytes plus the 9 added is over the 5,000 the shared check allows for a Short.
+    const e = await err(
+      api.upload(vertical, { title: 'x', description: 'a'.repeat(4992), shorts: true }),
+    )
+    expect(e.code).toBe('bad_upload')
+    // An ordinary upload of the same description is fine.
+    const ok = await api.upload(vertical, { title: 'x', description: 'a'.repeat(4992) })
+    expect(ok.kind).toBe('upload')
+  })
+})

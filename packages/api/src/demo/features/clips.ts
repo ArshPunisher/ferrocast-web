@@ -414,6 +414,7 @@ export class DemoClips {
       description: typeof b.description === 'string' ? b.description : '',
       tags: Array.isArray(b.tags) ? b.tags.map(String) : [],
       privacy: b.privacy ?? 'private',
+      shorts: b.shorts === true,
     }
     const bad = uploadProblem(input)
     if (bad) throw refuse(400, 'bad_upload', bad, 'Fix the details and try again.')
