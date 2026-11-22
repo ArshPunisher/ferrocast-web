@@ -710,11 +710,13 @@ export class DemoGoLive {
           'Stop and start the stream again with it ticked.',
         )
       const limit = d.kind === 'twitch' ? 6000 : d.kind === 'kick' ? 8000 : 0
-      if (d.canvas !== 'vertical' && limit > 0 && this.stats().kbps > limit)
+      // Only the video counts: the sound and the packaging add about 400 kbps to the measured rate.
+      const video = Math.max(0, this.stats().kbps - 400)
+      if (d.canvas !== 'vertical' && limit > 0 && video > limit)
         throw new HttpError(
           422,
           'golive_needs_new_encode',
-          `${d.kind === 'twitch' ? 'Twitch' : 'Kick'} takes at most ${limit.toLocaleString()} kbps and this stream is sending ${this.stats().kbps.toLocaleString()}. Changing the live encode would change every other output.`,
+          `${d.kind === 'twitch' ? 'Twitch' : 'Kick'} takes at most ${limit.toLocaleString()} kbps and this stream is sending ${video.toLocaleString()}. Changing the live encode would change every other output.`,
           'Stop and start the stream again with it ticked.',
         )
     }

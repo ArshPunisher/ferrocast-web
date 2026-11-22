@@ -519,6 +519,8 @@ function elapsed(ms: number): string {
  * is (starting, connecting, live with its rate, reconnecting, failed, paused, off); before, its rate.
  */
 export function liveStatus(d: DestinationView, streaming: boolean, plan: number): string {
+  // A backup waiting for its main one isn't sending: not "Starting" for the whole stream.
+  if (streaming && d.standby_for) return 'Standby'
   if (!d.enabled) return streaming ? 'Off' : ''
   if (!streaming) return d.health?.state === 'failed' ? 'Failed' : mbps(d.health?.kbps || plan)
   switch (d.health?.state) {
@@ -536,7 +538,8 @@ export function liveStatus(d: DestinationView, streaming: boolean, plan: number)
     case 'stopped':
       return 'Stopped'
     default:
-      return mbps(d.health?.kbps || plan)
+      // Live but nothing measured yet: said so, not the plan's number as if it were going out.
+      return d.health?.kbps ? mbps(d.health.kbps) : 'Live'
   }
 }
 
