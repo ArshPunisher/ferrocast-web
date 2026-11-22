@@ -13,11 +13,12 @@ import {
 import { Ferrofluid, mountFerrofluid } from '../ferro/ferrofluid'
 import { cx } from '../cx'
 
-type PlatformName = 'twitch' | 'youtube' | 'kick' | 'tips' | 'ferrocast'
+type PlatformName = 'twitch' | 'youtube' | 'kick' | 'facebook' | 'tips' | 'ferrocast'
 const LABEL: Record<PlatformName, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
   kick: 'Kick',
+  facebook: 'Facebook',
   tips: 'Tip',
   ferrocast: 'Ferrocast',
 }
@@ -25,6 +26,7 @@ const COLOR: Record<PlatformName, string> = {
   twitch: 'text-twitch',
   youtube: 'text-youtube',
   kick: 'text-kick',
+  facebook: 'text-facebook',
   tips: 'text-tips',
   ferrocast: 'text-accent-text',
 }
@@ -47,6 +49,23 @@ export function PlatformMark({
         className={cx('inline-flex shrink-0', COLOR[platform], className)}
       >
         <FerroGlyph size={size} />
+      </span>
+    )
+  }
+  if (platform === 'facebook') {
+    // No logo artwork is shipped for it: a plain "f" in a ring, in Facebook's blue.
+    return (
+      <span
+        role="img"
+        aria-label={LABEL[platform]}
+        style={{ width: size, height: size, fontSize: size * 0.72 }}
+        className={cx(
+          'inline-flex shrink-0 items-center justify-center rounded-full border border-current font-bold leading-none',
+          COLOR[platform],
+          className,
+        )}
+      >
+        f
       </span>
     )
   }

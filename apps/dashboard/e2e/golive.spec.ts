@@ -97,6 +97,49 @@ test.describe('go live everywhere', () => {
     await expect(p.getByText('backup.local · video only')).toHaveCount(0)
   })
 
+  test('switching the platform replaces the old one’s server, and the brand shows in the list', async ({
+    page,
+  }) => {
+    await open(page, 'studio/golive')
+    await page.getByRole('button', { name: 'Add a destination' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add a destination' })
+    const server = dialog.getByLabel('Server')
+    await dialog.getByRole('button', { name: 'Facebook', exact: true }).click()
+    await expect(server).toHaveValue('rtmps://live-api-s.facebook.com:443/rtmp/')
+    // Instagram has no preset: Facebook's server must not stay, or an Instagram key gets sent there.
+    await dialog.getByRole('button', { name: 'Instagram', exact: true }).click()
+    await expect(server).toHaveValue('')
+    await server.fill('rtmps://edge.instagram.example:443/rtmp/')
+    await dialog.getByRole('button', { name: 'Facebook', exact: true }).click()
+    await expect(server).toHaveValue('rtmps://edge.instagram.example:443/rtmp/')
+    await dialog.getByRole('button', { name: 'Instagram', exact: true }).click()
+    await dialog.getByLabel('Name').fill('IG live')
+    await dialog.getByLabel('Stream key', { exact: true }).fill('abc123')
+    await dialog.getByRole('button', { name: /^Add/ }).click()
+    await expect(page.getByText('IG live added.')).toBeVisible()
+    await expect(
+      panel(page, 'Your platforms').getByText(/Instagram.*edge\.instagram\.example/),
+    ).toBeVisible()
+  })
+
+  test('Enter in the empty add-a-destination form does nothing, and the platform buttons are big enough at 375px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await open(page, 'studio/golive')
+    await page.getByRole('button', { name: 'Add a destination' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add a destination' })
+    await dialog.getByLabel('Name').press('Enter')
+    // Nothing was sent: no server-side complaint appears, and the form is still open and empty.
+    await page.waitForTimeout(300)
+    await expect(dialog.getByText(/must start with|Name:|Key:/)).toHaveCount(0)
+    await expect(dialog.getByLabel('Name')).toHaveValue('')
+    const x = dialog.getByRole('button', { name: 'X', exact: true })
+    const box = await x.boundingBox()
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44)
+  })
+
   test('while live: a health line per platform, and one that reconnects can be stopped', async ({
     page,
   }) => {

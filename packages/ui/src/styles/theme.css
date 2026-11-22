@@ -40,6 +40,7 @@
   --color-twitch: var(--fc-twitch);
   --color-youtube: var(--fc-youtube);
   --color-kick: var(--fc-kick);
+  --color-facebook: var(--fc-facebook);
   --color-tips: var(--fc-tips);
 
   --font-display: var(--fc-font-display);

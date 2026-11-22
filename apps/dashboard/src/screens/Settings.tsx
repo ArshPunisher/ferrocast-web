@@ -22,7 +22,7 @@ import {
   PLATFORM_LABEL,
   describeError,
   type Backup,
-  type ChatPlatform,
+  type AccountPlatform,
   type ObsState,
   type PairLink,
   type PackImportReport,
@@ -177,7 +177,7 @@ function Accounts() {
   const client = useClient()
   const { connect, busy, dialog } = useConnect()
   const { run, busy: acting } = useAction()
-  const [leaving, setLeaving] = useState<ChatPlatform | null>(null)
+  const [leaving, setLeaving] = useState<AccountPlatform | null>(null)
   const name = leaving ? PLATFORM_LABEL[leaving] : ''
   return (
     <Section
@@ -187,7 +187,7 @@ function Accounts() {
     >
       <Group title="Platforms" plain>
         <ul className="flex flex-col gap-2">
-          {(['twitch', 'youtube', 'kick'] as const).map((p) => (
+          {(['twitch', 'youtube', 'kick', 'facebook'] as const).map((p) => (
             <AccountRow
               key={p}
               platform={p}

@@ -30,6 +30,7 @@ import type {
   Design,
   Backup,
   BanEntry,
+  AccountPlatform,
   ChatPlatform,
   Command,
   ConnectorName,
@@ -98,6 +99,7 @@ import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
 import { DemoStudioEngine, type DemoStudioEngineOptions } from './features/studio-engine'
 import { DemoGoLive, type DemoGoLiveSetup } from './features/golive'
+import { DemoSchedule } from './features/schedule'
 import { DemoHistory } from './features/history'
 import { DemoSmart } from './features/smart'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
@@ -500,6 +502,8 @@ export class DemoEngine {
   readonly studioEngine: DemoStudioEngine | null
   readonly golive: DemoGoLive
   readonly autoReplies: DemoAutoReplies
+  /** Planned streams: scheduled broadcasts, reminders, never a go-live. */
+  readonly schedule: DemoSchedule
   private readonly starter = new DemoStarter(() => this.commands)
   private readonly importers = new DemoImporters(
     () => this.commands,
@@ -574,6 +578,7 @@ export class DemoEngine {
       twitch: on ? connector('connected', 'NovaPlays') : connector('off', null),
       youtube: on ? connector('connected', 'Nova Plays') : connector('off', null),
       kick: on ? connector('connected', 'novaplays') : connector('off', null),
+      facebook: connector('off', null),
       obs: on
         ? connector('connected', 'OBS 31.1.2')
         : connector('disconnected', null, 'OBS isn’t running, or its WebSocket server is off.'),
@@ -750,6 +755,7 @@ export class DemoEngine {
       isLive: () => this.golive.isCutRunning(),
       enabledPlatforms: () => this.golive.enabledMainDestinations(),
     })
+    this.schedule = new DemoSchedule(this.host, (p) => this.connectors[p].state === 'connected')
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>
         (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
@@ -1938,6 +1944,7 @@ export class DemoEngine {
       this.storeCatalog,
       this.studio,
       this.golive,
+      this.schedule,
       this.tipBrand,
       this.autoReplies,
       this.ttsVoices,
@@ -2049,17 +2056,26 @@ export class DemoEngine {
   }
 
   private connect(platform: string) {
-    if (!['twitch', 'youtube', 'kick'].includes(platform))
+    if (!['twitch', 'youtube', 'kick', 'facebook'].includes(platform))
       throw new HttpError(404, 'not_found', 'Ferrocast doesn’t support that platform.')
-    const p = platform as ChatPlatform
-    if (this.connectors[p].state === 'connected')
+    const p = platform as AccountPlatform
+    // Facebook signs in again when it is connected already (through the relay, to switch Pages);
+    // the others refuse.
+    if (p !== 'facebook' && this.connectors[p].state === 'connected')
       throw new HttpError(
         409,
         'already_connected',
         `${label(p)} is already connected.`,
         'Disconnect it first to switch accounts.',
       )
-    const name = p === 'twitch' ? 'NovaPlays' : p === 'youtube' ? 'Nova Plays' : 'novaplays'
+    const name =
+      p === 'twitch'
+        ? 'NovaPlays'
+        : p === 'youtube'
+          ? 'Nova Plays'
+          : p === 'facebook'
+            ? 'Nova Plays Page'
+            : 'novaplays'
     this.later(
       () => {
         this.accounts = this.accounts.filter((x) => x.platform !== p)
@@ -2088,14 +2104,16 @@ export class DemoEngine {
       url:
         p === 'youtube'
           ? 'https://accounts.google.com/o/oauth2/v2/auth'
-          : 'https://id.kick.com/oauth/authorize',
+          : p === 'facebook'
+            ? 'https://www.facebook.com/dialog/oauth'
+            : 'https://id.kick.com/oauth/authorize',
     }
   }
 
   private disconnect(platform: string) {
-    if (!['twitch', 'youtube', 'kick'].includes(platform))
+    if (!['twitch', 'youtube', 'kick', 'facebook'].includes(platform))
       throw new HttpError(404, 'not_found', 'Ferrocast doesn’t support that platform.')
-    const p = platform as ChatPlatform
+    const p = platform as AccountPlatform
     this.accounts = this.accounts.filter((x) => x.platform !== p)
     this.setConnector(p, connector('off', null))
     return undefined
@@ -4008,9 +4026,14 @@ export class DemoEngine {
 
 function label(p: Platform): string {
   return (
-    { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', tips: 'Tips', ferrocast: 'Ferrocast' }[
-      p
-    ] ?? p
+    {
+      twitch: 'Twitch',
+      youtube: 'YouTube',
+      kick: 'Kick',
+      facebook: 'Facebook',
+      tips: 'Tips',
+      ferrocast: 'Ferrocast',
+    }[p] ?? p
   )
 }
 

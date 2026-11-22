@@ -107,6 +107,7 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
   kick: 'Kick',
+  facebook: 'Facebook',
   tips: 'Tips',
   ferrocast: 'Ferrocast',
 }

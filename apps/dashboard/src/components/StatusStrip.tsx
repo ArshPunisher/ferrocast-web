@@ -5,11 +5,12 @@ import { href } from '../lib/router'
 import { isCloud } from '../lib/boot'
 import { useUsesObs } from '../lib/picture'
 
-const ORDER = ['twitch', 'youtube', 'kick', 'obs'] as const
+const ORDER = ['twitch', 'youtube', 'kick', 'facebook', 'obs'] as const
 const NAMES: Record<ConnectorName, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
   kick: 'Kick',
+  facebook: 'Facebook',
   obs: 'OBS',
   relay: 'Relay',
 }
@@ -64,110 +65,112 @@ export function StatusStrip({ compact = false }: { compact?: boolean }) {
       // over the Panic button beside it (S19).
       className="flex min-w-0 items-center gap-1.5 overflow-x-auto"
     >
-      {ORDER.filter((name) => connectors[name] !== undefined && (name !== 'obs' || usesObs)).map(
-        (name) => {
-          const c = connectors[name]
-          const { label, tone } = stateCopy(c)
-          const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
-          // Kick's events come through the relay link: only warn while that link is down.
-          const late =
-            name === 'kick' &&
-            c.state === 'connected' &&
-            connectors.relay !== undefined &&
-            connectors.relay.state !== 'connected'
-          const dest = golive?.live
-            ? golive.destinations.find(
-                (d) => d.kind === name && d.enabled && (d.canvas ?? 'main') === 'main',
-              )
-            : undefined
-          const streamIssue = dest?.blocked
-            ? 'stream can’t start'
-            : dest?.health?.state === 'failed'
-              ? 'stream failed'
-              : dest?.health?.state === 'reconnecting'
-                ? 'stream reconnecting'
-                : dest?.health?.state === 'paused'
-                  ? 'stream paused to save upload'
-                  : null
-          const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
-          const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
-          const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
-          return (
-            <li key={name} className="shrink-0">
-              <a
-                href={
-                  cloud
-                    ? href({ name: 'cloud' })
-                    : href({ name: 'settings', section: name === 'obs' ? 'obs' : 'accounts' })
-                }
-                title={title}
-                className={cx(
-                  'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[14px] font-medium transition-colors',
-                  attention
-                    ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
-                    : 'border-line bg-surface-1 text-text-2 hover:border-line-strong',
-                  compact && 'px-2',
-                )}
-              >
-                <span className="sr-only">{title}</span>
-                {name === 'obs' ? (
-                  <BrandIcon name="obs" size={13} className="text-text-2" />
-                ) : (
-                  <PlatformMark platform={name} size={13} />
-                )}
-                {!compact && (
-                  <span aria-hidden="true" className="text-text">
-                    {NAMES[name]}
-                  </span>
-                )}
-                <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
-                {!compact && (tone !== 'ok' || name === 'obs') && (
-                  // "Connected" is plain from the green dot: on smaller screens only problems say so.
-                  <span
-                    className={cx(tone === 'ok' ? 'hidden text-text-2 xl:inline' : 'text-text-3')}
-                  >
-                    {label}
-                  </span>
-                )}
-                {!compact && late && (
-                  <span
-                    className="text-warn"
-                    title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
-                  >
-                    delayed
-                  </span>
-                )}
-                {streamIssue && (
+      {ORDER.filter(
+        (name) =>
+          connectors[name] !== undefined &&
+          (name !== 'obs' || usesObs) &&
+          // Facebook is optional: it shows once connected or needing attention, not as an empty pill.
+          (name !== 'facebook' || connectors.facebook.state !== 'off'),
+      ).map((name) => {
+        const c = connectors[name]
+        const { label, tone } = stateCopy(c)
+        const attention = tone === 'danger' || tone === 'warn' || tone === 'off'
+        // Kick's events come through the relay link: only warn while that link is down.
+        const late =
+          name === 'kick' &&
+          c.state === 'connected' &&
+          connectors.relay !== undefined &&
+          connectors.relay.state !== 'connected'
+        const dest = golive?.live
+          ? golive.destinations.find(
+              (d) => d.kind === name && d.enabled && (d.canvas ?? 'main') === 'main',
+            )
+          : undefined
+        const streamIssue = dest?.blocked
+          ? 'stream can’t start'
+          : dest?.health?.state === 'failed'
+            ? 'stream failed'
+            : dest?.health?.state === 'reconnecting'
+              ? 'stream reconnecting'
+              : dest?.health?.state === 'paused'
+                ? 'stream paused to save upload'
+                : null
+        const v = name === 'obs' || c.state !== 'connected' ? undefined : viewers[name]
+        const watching = v !== undefined ? `, ${plural(v, 'viewer', 'viewers')}` : ''
+        const title = `${NAMES[name]}: ${label}${c.account ? ` as ${c.account.name}` : ''}${watching}${c.detail ? `. ${c.detail}` : ''}${streamIssue ? `. Go live: ${streamIssue}` : ''}`
+        return (
+          <li key={name} className="shrink-0">
+            <a
+              href={
+                cloud
+                  ? href({ name: 'cloud' })
+                  : href({ name: 'settings', section: name === 'obs' ? 'obs' : 'accounts' })
+              }
+              title={title}
+              className={cx(
+                'fc-press flex h-8 items-center gap-2 rounded-full border px-2.5 text-[14px] font-medium transition-colors',
+                attention
+                  ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
+                  : 'border-line bg-surface-1 text-text-2 hover:border-line-strong',
+                compact && 'px-2',
+              )}
+            >
+              <span className="sr-only">{title}</span>
+              {name === 'obs' ? (
+                <BrandIcon name="obs" size={13} className="text-text-2" />
+              ) : (
+                <PlatformMark platform={name} size={13} />
+              )}
+              {!compact && (
+                <span aria-hidden="true" className="text-text">
+                  {NAMES[name]}
+                </span>
+              )}
+              <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOT[tone])} />
+              {!compact && (tone !== 'ok' || name === 'obs') && (
+                // "Connected" is plain from the green dot: on smaller screens only problems say so.
+                <span
+                  className={cx(tone === 'ok' ? 'hidden text-text-2 xl:inline' : 'text-text-3')}
+                >
+                  {label}
+                </span>
+              )}
+              {!compact && late && (
+                <span
+                  className="text-warn"
+                  title="Kick events come through the Ferrocast relay, which is reconnecting. They'll catch up."
+                >
+                  delayed
+                </span>
+              )}
+              {streamIssue && (
+                <span
+                  className={cx(
+                    'flex items-center gap-1.5',
+                    dest?.blocked || dest?.health?.state === 'failed' ? 'text-danger' : 'text-warn',
+                  )}
+                  aria-hidden="true"
+                >
                   <span
                     className={cx(
-                      'flex items-center gap-1.5',
-                      dest?.blocked || dest?.health?.state === 'failed'
-                        ? 'text-danger'
-                        : 'text-warn',
+                      'size-1.5 rounded-full',
+                      dest?.blocked || dest?.health?.state === 'failed' ? 'bg-danger' : 'bg-warn',
                     )}
-                    aria-hidden="true"
-                  >
-                    <span
-                      className={cx(
-                        'size-1.5 rounded-full',
-                        dest?.blocked || dest?.health?.state === 'failed' ? 'bg-danger' : 'bg-warn',
-                      )}
-                    />
-                    {!compact && streamIssue}
-                  </span>
-                )}
-                {!compact && v !== undefined && (
-                  <span aria-hidden="true" className="text-text-3">
-                    <span className="font-mono tabular-nums">{formatCount(v)}</span>
-                    {/* The word fits on wide screens; the count alone keeps the bar on one line. */}
-                    <span className="hidden xl:inline"> {v === 1 ? 'viewer' : 'viewers'}</span>
-                  </span>
-                )}
-              </a>
-            </li>
-          )
-        },
-      )}
+                  />
+                  {!compact && streamIssue}
+                </span>
+              )}
+              {!compact && v !== undefined && (
+                <span aria-hidden="true" className="text-text-3">
+                  <span className="font-mono tabular-nums">{formatCount(v)}</span>
+                  {/* The word fits on wide screens; the count alone keeps the bar on one line. */}
+                  <span className="hidden xl:inline"> {v === 1 ? 'viewer' : 'viewers'}</span>
+                </span>
+              )}
+            </a>
+          </li>
+        )
+      })}
       {socket !== 'open' && (
         <li className="shrink-0" role="status">
           <span className="flex h-8 items-center gap-2 rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[14px] font-medium text-warn">

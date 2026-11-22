@@ -32,6 +32,9 @@ import {
   describeError,
   directKind,
   goliveApi,
+  PASTE_BRANDS,
+  urlAfterBrand,
+  type PasteBrand,
   goingTo,
   healthText,
   mbps,
@@ -73,6 +76,7 @@ import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
+import { SchedulePanel } from './schedule'
 import { useSaveOrder } from './save-order'
 import { useStudio } from './common'
 import { useObsHealth } from './obs'
@@ -185,7 +189,15 @@ export function GoLiveTab() {
       onChange={setPictureSource}
     />
   )
-  if (picture === 'ferrocast') return <StudioDesk res={res} view={view} lead={pick} />
+  if (picture === 'ferrocast')
+    return (
+      <>
+        <StudioDesk res={res} view={view} lead={pick} />
+        <div className="mt-5 max-w-3xl">
+          <SchedulePanel />
+        </div>
+      </>
+    )
   return (
     <>
       <InBar className="mb-4 flex">{pick}</InBar>
@@ -221,6 +233,7 @@ export function GoLiveTab() {
           )}
           <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
           {view.upload && <Upload view={view} onUpload={(upload) => set({ upload })} />}
+          <SchedulePanel />
         </div>
       </div>
     </>
@@ -1113,7 +1126,10 @@ export function RowText({
                 {d.account ?? 'Your own server'} · {DIRECT_NAMES[d.direct]} from the Studio
               </>
             ) : (
-              <>{d.account ?? 'Your own server'} · video only</>
+              <>
+                {d.brand ? `${PASTE_BRANDS.find((x) => x.id === d.brand)?.label ?? ''} · ` : ''}
+                {d.account ?? 'Your own server'} · video only
+              </>
             )}
           </span>
         ) : d.connected ? (
@@ -1252,6 +1268,22 @@ function AddDestination({
   const [url, setUrl] = useState('')
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
+  // X, Instagram or Facebook: their keys are made in their own apps, so the server and key are
+  // pasted from there. Only names the server; nothing else about sending changes.
+  const [brand, setBrand] = useState<PasteBrand | null>(null)
+  const pickBrand = (b: PasteBrand | null) => {
+    const info = PASTE_BRANDS.find((x) => x.id === b)
+    setBrand(b)
+    if (info && (!name.trim() || PASTE_BRANDS.some((x) => x.label === name))) setName(info.label)
+    // The last brand's own server goes with it; one the person typed stays.
+    const nextUrl = urlAfterBrand(url, brand, b)
+    if (nextUrl !== url) {
+      setUrl(nextUrl)
+      // A connection test of the old address says nothing about the new one.
+      setReach(null)
+    }
+    setErr((e) => (e?.field === 'brand' ? null : e))
+  }
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
   // The last "Test connection": cleared when the address or key changes, and a slow answer
   // for an address since changed is dropped (each try and each change counts one).
@@ -1288,19 +1320,27 @@ function AddDestination({
       },
     )
   }
+  // What the Add button needs: Enter in a field reaches `submit` too, and must not get past it.
+  const canAdd =
+    !!name.trim() &&
+    !!url.trim() &&
+    (!!direct || !!key.trim()) &&
+    !(!!direct && canvas === 'vertical')
   const submit = () => {
+    if (!canAdd) return
     setErr(null)
     void run(
       'add',
       () =>
-        api.addCustom(name, url, key, canvas).catch((e: unknown) => {
+        api.addCustom(name, url, key, canvas, brand ?? undefined).catch((e: unknown) => {
           const m = describeError(e).message
-          const field = /^(name|url|key):/.exec(m)?.[1] ?? 'form'
-          setErr({ field, message: m.replace(/^(name|url|key):\s*/, '') })
+          const field = /^(name|url|key|brand):/.exec(m)?.[1] ?? 'form'
+          setErr({ field, message: m.replace(/^(name|url|key|brand):\s*/, '') })
           throw e
         }),
       {
         quiet: true,
+        once: true,
         success: (d) => `${d.name ?? 'Server'} added. It gets the stream next time you go live.`,
       },
     ).then((d) => {
@@ -1308,6 +1348,7 @@ function AddDestination({
       setName('')
       setUrl('')
       setKey('')
+      setBrand(null)
       setReach(null)
       onAdded()
       onClose()
@@ -1325,18 +1366,8 @@ function AddDestination({
           <Button busy={busy === 'test'} disabled={!url.trim()} onClick={tryIt}>
             Test
           </Button>
-          <Button
-            variant="primary"
-            busy={busy === 'add'}
-            disabled={
-              !name.trim() ||
-              !url.trim() ||
-              (!direct && !key.trim()) ||
-              (!!direct && canvas === 'vertical')
-            }
-            onClick={submit}
-          >
-            Add server
+          <Button variant="primary" busy={busy === 'add'} disabled={!canAdd} onClick={submit}>
+            {brand ? `Add ${PASTE_BRANDS.find((x) => x.id === brand)?.label ?? ''}` : 'Add server'}
           </Button>
         </>
       }
@@ -1348,6 +1379,40 @@ function AddDestination({
           submit()
         }}
       >
+        <div className="flex flex-col gap-2">
+          <span className="text-[14px] font-semibold text-text">Platform</span>
+          <div role="group" aria-label="Platform" className="flex flex-wrap gap-2">
+            {[{ id: null, label: 'Other server' }, ...PASTE_BRANDS].map((b) => (
+              <button
+                key={b.id ?? 'other'}
+                type="button"
+                aria-pressed={brand === b.id}
+                onClick={() => pickBrand(b.id)}
+                className={cx(
+                  // 44 px to press on a phone, the compact size from `sm` up.
+                  'fc-press inline-flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-[13.5px] font-semibold sm:h-9 sm:min-w-0',
+                  'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  brand === b.id
+                    ? 'border-accent-line bg-accent-soft text-text'
+                    : 'border-line-strong bg-surface-3 text-text-2 hover:text-text',
+                )}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+          {err?.field === 'brand' && (
+            <p role="alert" className="text-[13.5px] font-medium text-danger">
+              {err.message}
+            </p>
+          )}
+          {brand && (
+            <p className="text-[14px] text-text-2">
+              {PASTE_BRANDS.find((x) => x.id === brand)?.where}{' '}
+              {brand === 'facebook' ? '' : 'Ferrocast can’t make this key for you.'}
+            </p>
+          )}
+        </div>
         <Field label="Name" error={err?.field === 'name' ? err.message : null}>
           {(a) => (
             <Input

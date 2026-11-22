@@ -175,6 +175,9 @@
 .fc-ov .fc-glyph-kick {
   color: #53fc18;
 }
+.fc-ov .fc-glyph-facebook {
+  color: #4c8dff;
+}
 .fc-ov [data-theme='daylight'] .fc-glyph-twitch,
 .fc-ov [data-theme='sticker'] .fc-glyph-twitch {
   color: #7d3be3;
@@ -186,6 +189,10 @@
 .fc-ov [data-theme='daylight'] .fc-glyph-kick,
 .fc-ov [data-theme='sticker'] .fc-glyph-kick {
   color: #1f8f00;
+}
+.fc-ov [data-theme='daylight'] .fc-glyph-facebook,
+.fc-ov [data-theme='sticker'] .fc-glyph-facebook {
+  color: #1664d9;
 }
 
 /* ------------------------------------------------------------------ chat */

@@ -100,7 +100,13 @@ export class DemoLoyalty {
       .slice(0, limit)
       .flatMap(([k, points], i) => {
         const a = actors.find((x) => key(x.platform, x.id ?? '') === k)
-        if (!a?.id || a.platform === 'tips' || a.platform === 'ferrocast') return []
+        if (
+          !a?.id ||
+          a.platform === 'tips' ||
+          a.platform === 'ferrocast' ||
+          a.platform === 'facebook'
+        )
+          return []
         return [
           {
             rank: i + 1,

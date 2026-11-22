@@ -214,13 +214,16 @@ export function lineActions(
 } {
   const online = !actions.offline
   const mods = actions.moderates ? actions.moderates(event.platform) : true
+  // Facebook lets apps delete a comment but not time out or ban a person (the engine's
+  // capabilities say the same), so those two are not offered there.
+  const people = event.platform !== 'facebook'
   return {
     reply: online,
     highlight: online && !held && !!actions.highlight,
     card: online,
     remove: mods && !!event.source_id,
-    timeout: mods,
-    ban: mods,
+    timeout: mods && people,
+    ban: mods && people,
   }
 }
 
@@ -586,7 +589,7 @@ export function ChatScroller({
   )
 }
 
-type Target = 'all' | ChatPlatform
+type Target = 'all' | ChatPlatform | 'facebook'
 
 export interface ReplyTarget {
   event: FerroEvent
@@ -613,7 +616,7 @@ export function Composer({
   useEffect(() => {
     if (reply) input.current?.focus()
   }, [reply])
-  const connected = (p: ChatPlatform) => connectors?.[p].state === 'connected'
+  const connected = (p: ChatPlatform | 'facebook') => connectors?.[p].state === 'connected'
   const send = async () => {
     const t = text.trim()
     if (!t || sending) return
@@ -621,7 +624,8 @@ export function Composer({
     try {
       const r = await client.send(
         t,
-        target === 'all' ? 'all' : [target],
+        // A reply goes to the platform of the comment it answers, and only there.
+        reply ? [reply.event.platform] : target === 'all' ? 'all' : [target],
         reply
           ? { platform: reply.event.platform, message_id: reply.event.source_id ?? reply.event.id }
           : undefined,
@@ -644,7 +648,7 @@ export function Composer({
   }
   const options: { value: Target; label: ReactNode; title?: string }[] = [
     { value: 'all', label: 'All' },
-    ...(['twitch', 'youtube', 'kick'] as const).filter(connected).map((p) => ({
+    ...(['twitch', 'youtube', 'kick', 'facebook'] as const).filter(connected).map((p) => ({
       value: p as Target,
       label: <PlatformMark platform={p} size={18} />,
       title: `Only ${PLATFORM_LABEL[p]}`,

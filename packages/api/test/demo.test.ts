@@ -56,7 +56,14 @@ describe('demo engine: session', () => {
   })
   it('reports status with every connector', async () => {
     const s = await client.status()
-    expect(Object.keys(s.connectors).sort()).toEqual(['kick', 'obs', 'relay', 'twitch', 'youtube'])
+    expect(Object.keys(s.connectors).sort()).toEqual([
+      'facebook',
+      'kick',
+      'obs',
+      'relay',
+      'twitch',
+      'youtube',
+    ])
     expect(s.setup_done).toBe(true)
   })
 })

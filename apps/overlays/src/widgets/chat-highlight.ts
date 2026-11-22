@@ -13,7 +13,7 @@ function trustedImage(u: unknown): string | null {
   return isTrustedEmoteUrl(u) ? u : null
 }
 
-const PLATFORMS = new Set<string>(['twitch', 'youtube', 'kick'])
+const PLATFORMS = new Set<string>(['twitch', 'youtube', 'kick', 'facebook'])
 
 interface ParsedConfig {
   theme: string

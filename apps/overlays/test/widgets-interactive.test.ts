@@ -365,6 +365,20 @@ describe('chat_highlight widget', () => {
     expect(w.hidden).toBe(true)
   })
 
+  it('shows a pinned Facebook comment, with its platform glyph', () => {
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({}, overlay([highlightWidget()])))
+    const w = root.querySelector<HTMLElement>('.fc-w-chat-highlight')!
+    const h: ChatHighlight = {
+      ...makeHighlight('hl-fb', 'ev-fb', 'Hello from Facebook'),
+      platform: 'facebook',
+    }
+    rt.apply(frame('state', { chat_highlight: h }))
+    expect(w.hidden).toBe(false)
+    expect(w.textContent).toContain('Hello from Facebook')
+    expect(w.querySelector('.fc-glyph-facebook')).not.toBeNull()
+  })
+
   it('only loads emotes and badges from the trusted CDNs, never any https host', () => {
     rt = createOverlay(root, { audio: false })
     rt.apply(snapshot({}, overlay([highlightWidget()])))
