@@ -37,6 +37,7 @@ import {
   renderOnto,
   ruleBuiltinSound,
   sample,
+  validateCustomVariation,
   validateRule,
   MAX_WEIGHT,
   type AlertRule,
@@ -710,8 +711,12 @@ function RuleEditor({
     return design_id ? c.design(design_id) : null
   })
   const design: Design | null = activeDesign.data?.kind === 'alert' ? activeDesign.data : null
+  const customPreviewError = useMemo(
+    () => (v?.custom_enabled ? validateCustomVariation(v) : null),
+    [v],
+  )
   const preview = useMemo(() => {
-    if (!v || !event) return null
+    if (!v || !event || customPreviewError) return null
     let a = renderAlert(`preview-${fireTick}`, draft, v, event)
     const look = design && !v.custom_enabled ? pickLook(design, event) : null
     if (design && look && !v.custom_enabled)
@@ -722,7 +727,7 @@ function RuleEditor({
       return id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
     }
     return { ...a, sound: url(a.sound), image: url(a.image) }
-  }, [draft, v, event, media, client, design, fireTick])
+  }, [draft, v, event, media, client, design, fireTick, customPreviewError])
   if (!v) return null
   const setV = (nv: Variation) => {
     setSaveError(null)
@@ -952,6 +957,11 @@ function RuleEditor({
           sound={sound}
           replay={replay}
           className="shadow-1"
+          {...(customPreviewError
+            ? {
+                emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
+              }
+            : {})}
         />
         <div className="flex flex-wrap items-center gap-2">
           <Button

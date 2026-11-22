@@ -9,6 +9,7 @@ import {
   newVariation,
   renderAlert,
   sample,
+  validateCustomVariation,
   validateRule,
 } from '../src/index'
 import type { AlertRule, CustomField } from '../src/types'
@@ -238,5 +239,19 @@ describe('Alert Editor v2 validation and rendering (R25)', () => {
       run('\u{1F600}'.repeat(5) + '<style>.a{background:url(https://evil.example/x)}</style>'),
     ).not.toBeNull()
     expect(run('<p>x</p>', 42)).toMatch(/css must be text/)
+  })
+
+  it('validateCustomVariation blocks invalid custom HTML/CSS/fields matching Save', () => {
+    const v = newVariation('v1', '{name}')
+    v.custom_enabled = true
+    v.html = '<img src="x" onerror="alert(2)">'
+    expect(validateCustomVariation(v)).toMatch(/onerror|src/)
+
+    v.html = '<p>{name}</p>'
+    v.css = '@import url(https://evil.example/a.css);'
+    expect(validateCustomVariation(v)).toMatch(/@import/)
+
+    v.css = '.custom-card { color: #fff; }'
+    expect(validateCustomVariation(v)).toBeNull()
   })
 })

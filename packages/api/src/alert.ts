@@ -649,6 +649,51 @@ export function checkCustomHtml(
   return flush()
 }
 
+function validateCustomShape(rawV: Variation): string | null {
+  const loose = rawV as unknown as Record<string, unknown>
+  if (loose.custom_enabled !== undefined && typeof loose.custom_enabled !== 'boolean')
+    return `Variation '${rawV.name}': custom_enabled must be true or false.`
+  if (loose.html !== undefined && typeof loose.html !== 'string')
+    return `Variation '${rawV.name}': html must be text.`
+  if (loose.fields !== undefined && !Array.isArray(loose.fields))
+    return `Variation '${rawV.name}': fields must be a list.`
+  const fv = loose.field_values
+  if (fv !== undefined && (typeof fv !== 'object' || fv === null || Array.isArray(fv)))
+    return `Variation '${rawV.name}': field_values must be an object keyed by field.`
+  return null
+}
+
+function validateCustomCodeBody(v: ReturnType<typeof normalizeVariation>): {
+  keys?: Set<string>
+  err?: string
+} {
+  const html = v.html ?? ''
+  if (
+    new TextEncoder().encode(html).length > MAX_CUSTOM_HTML_BYTES ||
+    Array.from(html).length > MAX_CUSTOM_HTML
+  )
+    return { err: `Variation '${v.name}': custom HTML can be up to ${MAX_CUSTOM_HTML} characters.` }
+  if (typeof (v.css ?? '') !== 'string') return { err: `Variation '${v.name}': css must be text.` }
+  const cssErr = checkCss(`variation '${v.name}'.css`, v.css ?? '')
+  if (cssErr) return { err: cssErr }
+  const { keys: customKeys, err: schemaErr } = validateCustomFields(
+    v.name,
+    v.fields ?? [],
+    v.field_values ?? {},
+  )
+  if (schemaErr || !customKeys) return { err: schemaErr ?? 'Invalid custom fields.' }
+  const htmlErr = checkCustomHtml(v.name, html, customKeys)
+  if (htmlErr) return { err: htmlErr }
+  return { keys: customKeys }
+}
+
+/** Validates custom HTML, CSS, and schema fields for one variation before previewing or saving. */
+export function validateCustomVariation(rawV: Variation): string | null {
+  const shapeErr = validateCustomShape(rawV)
+  if (shapeErr) return shapeErr
+  return validateCustomCodeBody(normalizeVariation(rawV)).err ?? null
+}
+
 /** The editor's save check (core::AlertRule::validate). Returns the message or null. */
 export function validateRule(r: AlertRule): string | null {
   if (r.kinds.length === 0) return 'The rule needs at least one event type.'
@@ -658,16 +703,8 @@ export function validateRule(r: AlertRule): string | null {
   if (!r.variations.some((v) => v.condition === null))
     return 'The rule needs a default look (a variation without a condition).'
   for (const rawV of r.variations) {
-    const loose = rawV as unknown as Record<string, unknown>
-    if (loose.custom_enabled !== undefined && typeof loose.custom_enabled !== 'boolean')
-      return `Variation '${rawV.name}': custom_enabled must be true or false.`
-    if (loose.html !== undefined && typeof loose.html !== 'string')
-      return `Variation '${rawV.name}': html must be text.`
-    if (loose.fields !== undefined && !Array.isArray(loose.fields))
-      return `Variation '${rawV.name}': fields must be a list.`
-    const fv = loose.field_values
-    if (fv !== undefined && (typeof fv !== 'object' || fv === null || Array.isArray(fv)))
-      return `Variation '${rawV.name}': field_values must be an object keyed by field.`
+    const shapeErr = validateCustomShape(rawV)
+    if (shapeErr) return shapeErr
     const v = normalizeVariation(rawV)
     for (const [label, n] of [
       ['volume', v.volume],
@@ -697,21 +734,8 @@ export function validateRule(r: AlertRule): string | null {
       return `Variation '${v.name}': entrance plus exit must be shorter than total alert duration.`
     if (anim.text_delay_ms >= v.duration_ms)
       return `Variation '${v.name}': text effect delay must start before the alert ends.`
-    const html = v.html ?? ''
-    if (
-      new TextEncoder().encode(html).length > MAX_CUSTOM_HTML_BYTES ||
-      Array.from(html).length > MAX_CUSTOM_HTML
-    )
-      return `Variation '${v.name}': custom HTML can be up to ${MAX_CUSTOM_HTML} characters.`
-    if (typeof (v.css ?? '') !== 'string') return `Variation '${v.name}': css must be text.`
-    const cssErr = checkCss(`variation '${v.name}'.css`, v.css ?? '')
-    if (cssErr) return cssErr
-    const { keys: customKeys, err: schemaErr } = validateCustomFields(
-      v.name,
-      v.fields ?? [],
-      v.field_values ?? {},
-    )
-    if (schemaErr || !customKeys) return schemaErr ?? 'Invalid custom fields.'
+    const { keys: customKeys, err: codeErr } = validateCustomCodeBody(v)
+    if (codeErr || !customKeys) return codeErr ?? 'Invalid custom code.'
     for (const src of [v.title, v.body]) {
       try {
         const parsed = Template.parse(src)
@@ -724,8 +748,6 @@ export function validateRule(r: AlertRule): string | null {
         return `Variation '${v.name}': ${e instanceof Error ? e.message : String(e)}`
       }
     }
-    const htmlErr = checkCustomHtml(v.name, html, customKeys)
-    if (htmlErr) return htmlErr
   }
   return null
 }
