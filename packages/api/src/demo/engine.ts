@@ -88,6 +88,7 @@ import { DemoImporters } from './features/importers'
 import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
+import { DemoStudioEngine, type DemoStudioEngineOptions } from './features/studio-engine'
 import { DemoGoLive, type DemoGoLiveSetup } from './features/golive'
 import { DemoHistory } from './features/history'
 import { DemoSmart } from './features/smart'
@@ -170,6 +171,8 @@ export interface DemoOptions {
   cloudBackups?: DemoCloudMode
   /** Cloud mode (`?web=cloud`): the web dashboard of an account with no PC (CLOUD.md). */
   cloudMode?: DemoCloudSetup
+  /** Simulate Ferrocast's built-in Studio engine routes (`/studio/engine/*`) in demo mode. */
+  studioEngine?: boolean | DemoStudioEngineOptions
   /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
   remote?: {
     role: RemoteRole
@@ -458,6 +461,7 @@ export class DemoEngine {
   private remote: DemoRemoteSession | null = null
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
+  readonly studioEngine: DemoStudioEngine | null
   readonly golive: DemoGoLive
   readonly autoReplies: DemoAutoReplies
   private readonly starter = new DemoStarter(() => this.commands)
@@ -627,7 +631,10 @@ export class DemoEngine {
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
     this.welcome = new DemoWelcome(this.host)
-    this.studio = new DemoStudio(this.host, () => this.commands)
+    this.studioEngine = opts.studioEngine
+      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {})
+      : null
+    this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine)
     this.golive = new DemoGoLive(
       this.host,
       () => this.accounts,
@@ -831,6 +838,11 @@ export class DemoEngine {
     this.broadcastLive(this.remoteFrame())
     if (this.remote && !this.remote.pcOnline && this.remote.cloud === 'on')
       this.broadcastLive({ v: 1, type: 'resync', data: { missed: 0 } })
+  }
+
+  /** Adjust simulated Studio engine fixtures at runtime (tests & interactive demo). */
+  setStudioOnboardingState(next: Partial<DemoStudioEngineOptions>): void {
+    this.studioEngine?.configure(next)
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */

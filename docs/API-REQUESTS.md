@@ -17,8 +17,16 @@ Status: R1–R19 are **done** in the engine (17 Oct 2026); `docs/API.md` there i
 `GET /api/v1/mod/bans` → `BanEntry[]`
 
 ```ts
-type BanEntry = { platform: "twitch" | "youtube" | "kick"; user_id: string; login: string; display_name: string;
-                  reason: string | null; banned_at: number; everywhere: boolean; by: string | null }
+type BanEntry = {
+  platform: 'twitch' | 'youtube' | 'kick'
+  user_id: string
+  login: string
+  display_name: string
+  reason: string | null
+  banned_at: number
+  everywhere: boolean
+  by: string | null
+}
 ```
 
 Newest first. `POST /api/v1/mod/unban` returns 404 when the person isn't on the list.
@@ -28,16 +36,21 @@ Newest first. `POST /api/v1/mod/unban` returns 404 when the person isn't on the 
 `GET / PUT /api/v1/mod/filters`
 
 ```ts
-type FilterAction = "delete" | "timeout" | "ban" | "hold"
+type FilterAction = 'delete' | 'timeout' | 'ban' | 'hold'
 type Filters = {
   words: { enabled: boolean; list: string[]; lookalikes: boolean; action: FilterAction }
-  links: { enabled: boolean; allow_roles: number /* Roles bits */; allow_domains: string[]; action: FilterAction }
+  links: {
+    enabled: boolean
+    allow_roles: number /* Roles bits */
+    allow_domains: string[]
+    action: FilterAction
+  }
   caps: { enabled: boolean; min_length: number; max_percent: number; action: FilterAction }
   emotes: { enabled: boolean; max: number; action: FilterAction }
   symbols: { enabled: boolean; max_percent: number; action: FilterAction }
-  solicitation: { enabled: boolean; action: FilterAction }   // "I do commissions / buy followers" (Reddit #2 pain)
-  timeout_seconds: number                                      // 1 … 1 209 600
-  exempt_roles: number                                         // Roles bits never filtered
+  solicitation: { enabled: boolean; action: FilterAction } // "I do commissions / buy followers" (Reddit #2 pain)
+  timeout_seconds: number // 1 … 1 209 600
+  exempt_roles: number // Roles bits never filtered
 }
 ```
 
@@ -48,9 +61,16 @@ type Filters = {
 `GET / PUT /api/v1/mod/panic/config`
 
 ```ts
-type PanicConfig = { followers_only: boolean; followers_only_minutes: number; emote_only: boolean;
-                     slow_mode_seconds: number; hold_new_accounts: boolean; pause_alerts: boolean;
-                     pause_tts: boolean; hotkey: string /* "Ctrl+Shift+P" */ }
+type PanicConfig = {
+  followers_only: boolean
+  followers_only_minutes: number
+  emote_only: boolean
+  slow_mode_seconds: number
+  hold_new_accounts: boolean
+  pause_alerts: boolean
+  pause_tts: boolean
+  hotkey: string /* "Ctrl+Shift+P" */
+}
 ```
 
 `POST /api/v1/mod/panic` also sends a live `notice` (`warn` when on, `info` when off) so every open dashboard shows the state.
@@ -60,8 +80,15 @@ type PanicConfig = { followers_only: boolean; followers_only_minutes: number; em
 `GET /api/v1/tts/pending` and the live `tts_pending` frame carry:
 
 ```ts
-type TtsPending = { id: string; event_id: string; platform: Platform; name: string; text: string;
-                    amount: string | null /* display string, "₹500" */; received_at: number }
+type TtsPending = {
+  id: string
+  event_id: string
+  platform: Platform
+  name: string
+  text: string
+  amount: string | null /* display string, "₹500" */
+  received_at: number
+}
 ```
 
 A mod deleting the source message removes the item (R-48).
@@ -71,20 +98,38 @@ A mod deleting the source message removes the item (R-48).
 `GET / PUT /api/v1/settings`
 
 ```ts
-type Settings = { theme: "system" | "dark" | "light"; reduced_motion: "system" | "on" | "off";
-                  low_motion_overlays: boolean /* R-40 Linux preset */; lan_access: boolean;
-                  never_update_while_live: boolean;
-                  launch_at_login: boolean; close_to_tray: boolean; language: string }
+type Settings = {
+  theme: 'system' | 'dark' | 'light'
+  reduced_motion: 'system' | 'on' | 'off'
+  low_motion_overlays: boolean /* R-40 Linux preset */
+  lan_access: boolean
+  never_update_while_live: boolean
+  launch_at_login: boolean
+  close_to_tray: boolean
+  language: string
+}
 ```
 
 ## R6. Viewer card
 
-`GET /api/v1/viewers/{platform}/{user_id}` → 
+`GET /api/v1/viewers/{platform}/{user_id}` →
 
 ```ts
-type ViewerCard = { platform; user_id; login; display_name; avatar_url: string | null; roles: number;
-                    first_seen: number | null; messages: number; follows_since: number | null; note: string;
-                    banned: boolean; timeouts: number; other_identities: { platform; login }[] }
+type ViewerCard = {
+  platform
+  user_id
+  login
+  display_name
+  avatar_url: string | null
+  roles: number
+  first_seen: number | null
+  messages: number
+  follows_since: number | null
+  note: string
+  banned: boolean
+  timeouts: number
+  other_identities: { platform; login }[]
+}
 ```
 
 404 `viewer_not_found` when we have never seen them.
@@ -94,8 +139,16 @@ type ViewerCard = { platform; user_id; login; display_name; avatar_url: string |
 `GET /api/v1/stats/session` →
 
 ```ts
-type SessionStats = { started_at: number | null; follows: number; subs: number; tips: Money[] /* one per currency */;
-                      bits: number; messages: number; peak_viewers: number; viewers: { twitch?: number; youtube?: number; kick?: number } }
+type SessionStats = {
+  started_at: number | null
+  follows: number
+  subs: number
+  tips: Money[] /* one per currency */
+  bits: number
+  messages: number
+  peak_viewers: number
+  viewers: { twitch?: number; youtube?: number; kick?: number }
+}
 ```
 
 ## R8. Themes ("pick a look")
@@ -151,7 +204,6 @@ Until then the dashboard shows held messages with Delete, Time out and Ban only.
 
 When `/o/<token>/ws` is opened with a token the engine doesn't know (the URL was regenerated or the overlay deleted while the page was offline, so it never got the `revoked` frame), close the WebSocket with code **4404** (or 4401 for "not allowed"). The overlay page treats either code like `revoked`: it clears itself and stops reconnecting, instead of knocking forever.
 
-
 ## R19. Tips: take the page down, and API.md's tips section
 
 The engine and relay already save tip pages (`PUT /api/v1/tips` → relay `PUT /v1/tips/config`), and the relay has `DELETE /v1/tips/config`, but the engine has no route for it. Proposed:
@@ -184,7 +236,6 @@ nothing breaks today; please add the same checks the web side makes
   `countdown_done` up to 80 characters.
 
 The overlay ignores any value it doesn't know, and never passes one to CSS.
-
 
 ## Level meters: raw peaks, pushed (requested 21 Nov)
 
@@ -254,6 +305,35 @@ The demo engine has no Studio desk (the Studio engine needs the desktop app), so
 to simulate there; the page's behaviour is covered by `e2e/studio-selective-recording.spec.ts`
 against mocked Studio endpoints.
 
+
+## R23. Performance mode, hold-to-show/hide hotkeys and copy/paste across collections (22 Nov)
+
+All done on the engine side (branch `feat/p1-perf-hotkeys-copy`, `docs/API.md` Studio). The dashboard uses:
+
+- `GET` / `PUT /api/v1/studio/engine/preview/pause` `{ paused }` -> `{ paused }`: stops drawing the preview, Studio Mode's second picture and the vertical picture; never touches a stream, recording, replay buffer or virtual camera. The page reads it every ~2.5 s and when it is looked at again, because the hotkey actions `performance_mode`, `performance_mode_on` and `performance_mode_off` change it too.
+- Hotkey actions `push_show:<scene>\n<source>`, `push_hide:`, `push_filter_on:<source>\n<filter>`, `push_filter_off:` (held keys; back as they were on release; never saved). The Shortcuts page lists them in "Hold to show or hide", "Hold a filter on or off" and "Performance".
+- `GET` / `DELETE /studio/engine/clipboard`, `POST /studio/engine/clipboard/source` and `/filters`, `POST /studio/engine/clipboard/paste/source` and `/filters` (see the engine's API.md). An empty clipboard is a 404 `clipboard_empty`.
+
+The demo engine answers all `/studio/engine/*` with 422 `studio_unavailable` like the engine without the desktop app, so these need no demo behaviour (a test lists them with the other Studio calls). Not done: bind fields for these keys in the item and filter settings (they are set on the Shortcuts page only).
+
+## R24. Scene collection import preview and undo id (22 Nov)
+
+Onboarding shows a read-only preview of an OBS Studio or Streamlabs Desktop collection before
+importing (counts, conversions, devices that arrive empty to re-pick, and unsupported items with
+reasons), plus one-click Undo / Start over back to the previous collection.
+
+Done on the engine side (`feat/p1-onboarding-import`):
+
+- `POST /api/v1/studio/engine/obs-collections/preview` `{ id }` → `ImportPreview` (`source`, `id`,
+  `name`, `scenes`, `sources`, `web_pages`, `scene_names`, `truncated_scenes`, `device_resets`,
+  `skipped`, `skipped_total`, `missing`). 400 invalid id, 404 `studio_no_obs_collection`, 413
+  `studio_collection_too_large`, 422 `studio_collection_broken`.
+- `POST /api/v1/studio/engine/streamlabs-collections/preview` `{ id }` → `ImportPreview`
+  (`source: "streamlabs"`), same errors and read-only behaviour.
+- `POST /api/v1/studio/engine/obs-collections/import` and `streamlabs-collections/import` now
+  also return `previous_id` alongside `id`, so switching back to `previous_id` and removing `id`
+  via `/studio/engine/library/collections` undoes an onboarding import cleanly.
+
 ## R25. Alert box editor v2: timing, text effects and sandboxed custom HTML/CSS with field schema
 
 Roadmap Phase 2 #11 (`feat/p2-alert-editor`). Additive fields on `Variation` and `RenderedAlert`
@@ -279,5 +359,3 @@ with backward-compatible defaults (`#[serde(default)]`):
   with a strict CSP (allowing only explicit static asset CDN hosts for `img-src`/`font-src`,
   `connect-src 'none'`) and receives only origin-checked, schema-validated `postMessage` payloads.
   The Rust server serves `GET /alert-sandbox` with its own sandbox CSP header for desktop/OBS origins.
-
-

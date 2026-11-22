@@ -1986,6 +1986,19 @@ export function shortcutGroups(
       ]),
     },
     {
+      title: 'Hold to show or hide',
+      actions: items.flatMap((x) => [
+        {
+          id: `push_show:${x.scene}\n${x.source}`,
+          label: `Hold to show ${x.source} in ${x.scene}`,
+        },
+        {
+          id: `push_hide:${x.scene}\n${x.source}`,
+          label: `Hold to hide ${x.source} in ${x.scene}`,
+        },
+      ]),
+    },
+    {
       title: 'Sound',
       actions: sounds.flatMap((n) => [
         { id: `mute:${n}`, label: `Mute or unmute ${n}` },
@@ -2001,6 +2014,19 @@ export function shortcutGroups(
       })),
     },
     {
+      title: 'Hold a filter on or off',
+      actions: filters.flatMap((f) => [
+        {
+          id: `push_filter_on:${f.source}\n${f.filter}`,
+          label: `Hold to turn on ${f.filter} on ${f.source}`,
+        },
+        {
+          id: `push_filter_off:${f.source}\n${f.filter}`,
+          label: `Hold to turn off ${f.filter} on ${f.source}`,
+        },
+      ]),
+    },
+    {
       title: 'Media',
       actions: media.flatMap((n) => [
         { id: `media_play_pause:${n}`, label: `Play or pause ${n}` },
@@ -2009,6 +2035,14 @@ export function shortcutGroups(
         { id: `media_next:${n}`, label: `Next in ${n}` },
         { id: `media_previous:${n}`, label: `Previous in ${n}` },
       ]),
+    },
+    {
+      title: 'Performance',
+      actions: [
+        { id: 'performance_mode', label: 'Pause or resume the preview' },
+        { id: 'performance_mode_on', label: 'Pause the preview' },
+        { id: 'performance_mode_off', label: 'Resume the preview' },
+      ],
     },
     {
       title: 'Editing',
@@ -2083,7 +2117,7 @@ export function KeysPage({ s, set }: PageProps) {
   return (
     <>
       <Heading
-        info={`They work while a game has the keyboard. An action can have up to ${MAX_KEYS} keys, and one key can run several actions. Push to talk mutes the sound until held; push to mute is the other way round.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
+        info={`They work while a game has the keyboard. An action can have up to ${MAX_KEYS} keys, and one key can run several actions. Push to talk mutes the sound until held; push to mute is the other way round. Hold to show or hide puts a source (or a filter) back as it was when you let go; nothing is saved.${isMac ? ' On a Mac keyboard, hold fn with F1 to F12.' : ''}`}
       >
         How they work
       </Heading>
