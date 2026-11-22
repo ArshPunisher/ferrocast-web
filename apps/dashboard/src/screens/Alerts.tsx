@@ -1,14 +1,15 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowCounterClockwise,
+  ArrowLeft,
   Bell,
-  CaretDown,
   ChatCircleText,
   Diamond,
   Gift,
   HandCoins,
   Heart,
+  Lightning,
   PaintBrushBroad,
   Play,
   RocketLaunch,
@@ -68,6 +69,7 @@ import { AlertStage, alertHasSound } from '../components/AlertStage'
 import { AlertTimeline } from '../components/alerts/AlertTimeline'
 import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
 import { PlatformTestBar } from '../components/alerts/PlatformTestBar'
+import { PropertyGroup } from '../components/alerts/PropertyGroup'
 import { TokenChipField, tokensForAlert } from '../components/alerts/TokenChipField'
 import { VariationCards } from '../components/alerts/VariationCards'
 import { useAction, useClient, useResource } from '../lib/hooks'
@@ -416,29 +418,6 @@ function ConditionEditor({
 }
 
 /** A short settings group with its own heading, divided from the one above by a hairline. */
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string
-  action?: ReactNode
-  children: ReactNode
-}) {
-  const id = useId()
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-4 border-t border-line pt-5">
-      <div className="-my-1 flex min-h-8 items-center justify-between gap-3">
-        <h2 id={id} className="font-display text-[18px] font-extrabold tracking-tight text-text">
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
-}
-
 function VariationEditor({
   v,
   isDefault,
@@ -465,9 +444,9 @@ function VariationEditor({
   const allowedTokens = useMemo(() => new Set<string>([...KNOWN_VARS, ...customKeys]), [customKeys])
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2.5">
       {!isDefault && (
-        <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-2 p-3">
+        <PropertyGroup title="This look" summary={v.name || 'Untitled look'} defaultOpen>
           <div className="flex items-end gap-2">
             <Field label="Look name" className="flex-1">
               {(p) => (
@@ -487,10 +466,10 @@ function VariationEditor({
             value={v.condition}
             onChange={(condition) => onChange({ ...v, condition })}
           />
-        </div>
+        </PropertyGroup>
       )}
 
-      <Section title="Message">
+      <PropertyGroup title="Message and tokens" summary={v.title} defaultOpen>
         <TokenChipField
           label="Headline"
           value={v.title}
@@ -509,37 +488,25 @@ function VariationEditor({
           allowedSet={allowedTokens}
           onChange={(body) => onChange({ ...v, body })}
         />
-      </Section>
+      </PropertyGroup>
 
-      <Section title="Look and timeline">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="fc-label">Layout</span>
-              <Segmented
-                label="Layout"
-                value={
-                  (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
-                    'stack' | 'side' | 'banner'
-                }
-                onChange={(layout) => onChange({ ...v, layout })}
-                options={[
-                  { value: 'stack', label: 'Stacked' },
-                  { value: 'side', label: 'Side' },
-                  { value: 'banner', label: 'Banner' },
-                ]}
-              />
-            </div>
-          </div>
-          <AlertTimeline
-            durationMs={v.duration_ms}
-            anim={v.anim ?? defaultAlertAnim()}
-            onChange={(duration_ms, anim) => onChange({ ...v, duration_ms, anim })}
+      <PropertyGroup title="Layout and media" summary="Layout, sound, picture" defaultOpen>
+        <div className="flex flex-col gap-1.5">
+          <span className="fc-label">Layout</span>
+          <Segmented
+            label="Layout"
+            value={
+              (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
+                'stack' | 'side' | 'banner'
+            }
+            onChange={(layout) => onChange({ ...v, layout })}
+            options={[
+              { value: 'stack', label: 'Stacked' },
+              { value: 'side', label: 'Side' },
+              { value: 'banner', label: 'Banner' },
+            ]}
           />
         </div>
-      </Section>
-
-      <Section title="Sound and media">
         <MediaPicker
           kind="sound"
           value={v.sound}
@@ -569,76 +536,69 @@ function VariationEditor({
             />
           )}
         </Field>
-      </Section>
+      </PropertyGroup>
 
-      <Section title="Custom HTML, CSS and field schema">
+      <PropertyGroup
+        title="Custom HTML, CSS and schema"
+        summary={v.custom_enabled ? 'On' : 'Off'}
+        defaultOpen={v.custom_enabled}
+      >
         <CustomCodePanel v={v} onChange={onChange} />
-      </Section>
+      </PropertyGroup>
 
-      <details className="group border-t border-line pt-4">
-        <summary className="-mx-1 flex cursor-pointer list-none items-center gap-2 rounded-control px-1 py-1 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
-          <span className="font-display text-base font-bold tracking-tight text-text">More</span>
-          <CaretDown
-            size={14}
-            weight="bold"
-            aria-hidden="true"
-            className="text-text-3 transition-transform duration-200 group-open:rotate-180"
-          />
-          <span className="ml-auto truncate text-[14px] font-medium text-text-3">
-            {isDefault ? 'Read aloud (TTS)' : 'Read aloud, priority, chance'}
-          </span>
-        </summary>
-        <div className="flex flex-col gap-4 pt-4">
-          <Switch
-            checked={v.tts}
-            onChange={(tts) => onChange({ ...v, tts })}
-            label="Read the message aloud"
-            description="Follows your TTS rules. Turn TTS on in Settings first."
-          />
-          {!isDefault && (
-            <>
-              <Field label="Priority" hint="When several looks match, the highest wins.">
-                {(p) => (
-                  <Input
-                    {...p}
-                    type="number"
-                    min={-100}
-                    max={100}
-                    value={v.priority}
-                    onChange={(e) =>
-                      onChange({ ...v, priority: Math.round(Number(e.target.value) || 0) })
-                    }
-                  />
-                )}
-              </Field>
-              <Field
-                label="Chance"
-                hint="Looks with the same priority share the alerts by this weight. 0 means never while another one has a weight."
-              >
-                {(p) => (
-                  <Input
-                    {...p}
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={MAX_WEIGHT}
-                    value={v.weight}
-                    onChange={(e) =>
-                      onChange({
-                        ...v,
-                        weight: Math.min(
-                          MAX_WEIGHT,
-                          Math.max(0, Math.round(Number(e.target.value) || 0)),
-                        ),
-                      })
-                    }
-                  />
-                )}
-              </Field>
-            </>
-          )}
-        </div>
-      </details>
+      <PropertyGroup
+        title={isDefault ? 'Read aloud (TTS)' : 'Read aloud, priority, chance'}
+        summary={v.tts ? 'Reads aloud' : undefined}
+      >
+        <Switch
+          checked={v.tts}
+          onChange={(tts) => onChange({ ...v, tts })}
+          label="Read the message aloud"
+          description="Follows your TTS rules. Turn TTS on in Settings first."
+        />
+        {!isDefault && (
+          <>
+            <Field label="Priority" hint="When several looks match, the highest wins.">
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  min={-100}
+                  max={100}
+                  value={v.priority}
+                  onChange={(e) =>
+                    onChange({ ...v, priority: Math.round(Number(e.target.value) || 0) })
+                  }
+                />
+              )}
+            </Field>
+            <Field
+              label="Chance"
+              hint="Looks with the same priority share the alerts by this weight. 0 means never while another one has a weight."
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={MAX_WEIGHT}
+                  value={v.weight}
+                  onChange={(e) =>
+                    onChange({
+                      ...v,
+                      weight: Math.min(
+                        MAX_WEIGHT,
+                        Math.max(0, Math.round(Number(e.target.value) || 0)),
+                      ),
+                    })
+                  }
+                />
+              )}
+            </Field>
+          </>
+        )}
+      </PropertyGroup>
     </div>
   )
 }
@@ -649,12 +609,18 @@ function VariationEditor({
  */
 function RuleEditor({
   rule,
+  rules,
   media,
   onSaved,
   onUploaded,
   onToggle,
+  notice,
 }: {
   rule: AlertRule
+  /** A line under the top bar (a partial restore of the starter rules, with its retry). */
+  notice?: ReactNode
+  /** Every rule, for the left dock's list. */
+  rules: AlertRule[]
   media: Media[]
   onSaved: (r: AlertRule) => void
   onUploaded: (m: Media) => void
@@ -783,71 +749,251 @@ function RuleEditor({
     setPreviewStatus(`Previewing ${PLATFORM_LABEL[p]} test alert (${actorName}).`)
   }
 
+  const kindPlatformsShown = (
+    kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms
+  ) as Platform[]
+  const back = () => {
+    if (window.history.length > 1) window.history.back()
+    else window.location.hash = '#/home'
+  }
+  const banner = saveError ?? (dirty && error ? { message: error } : null)
+
   return (
-    <>
-      <div className="order-3 flex min-w-0 flex-col gap-4 xl:order-2">
-        <div className="fc-editor @container rounded-panel border border-line bg-surface-1 p-4 shadow-1 sm:p-5">
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="rule-name" className="sr-only">
-                Rule name
-              </label>
-              <input
-                id="rule-name"
-                value={draft.name}
-                maxLength={40}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                className="-ml-1.5 w-full rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-xl font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none"
-              />
-            </div>
-            <div className="order-3 flex w-full flex-wrap items-center gap-1.5 @lg:order-none @lg:w-auto">
-              {kindPlatforms.length > 1 ? (
-                <div role="group" aria-label="Platforms" className="flex flex-wrap gap-1.5">
-                  {kindPlatforms.map((p) => {
-                    const on = draft.platforms.length === 0 || draft.platforms.includes(p)
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        aria-pressed={on}
-                        title={
-                          on ? `Plays for ${PLATFORM_LABEL[p]}` : `Off for ${PLATFORM_LABEL[p]}`
-                        }
-                        onClick={() => togglePlatform(p)}
-                        className={cx(
-                          'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                          on
-                            ? 'border-accent-line bg-accent-soft text-text'
-                            : 'border-line text-text-3 line-through decoration-text-3/60 hover:text-text-2',
-                        )}
-                      >
-                        <PlatformMark platform={p} size={12} />
-                        {PLATFORM_LABEL[p]}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                (kind === 'tip' ? (['tips'] as Platform[]) : kindPlatforms).map((p) => (
-                  <span
+    <div
+      data-testid="alert-editor"
+      className="fc-editor flex min-h-0 flex-col bg-bg lg:fixed lg:inset-0 lg:z-40"
+    >
+      {/* Top bar: where I am, what is unsaved, and the ways out. */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">
+        <h1 className="sr-only">Alerts</h1>
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={16} />} onClick={back}>
+          Back
+        </Button>
+        <label htmlFor="rule-name" className="sr-only">
+          Rule name
+        </label>
+        <input
+          id="rule-name"
+          value={draft.name}
+          maxLength={40}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          className="min-w-[8rem] flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-lg font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none lg:w-40 lg:flex-none xl:w-52"
+        />
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {kindPlatforms.length > 1 ? (
+            <div role="group" aria-label="Platforms" className="flex flex-wrap gap-1.5">
+              {kindPlatforms.map((p) => {
+                const on = draft.platforms.length === 0 || draft.platforms.includes(p)
+                return (
+                  <button
                     key={p}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[13.5px] font-semibold text-text-2"
+                    type="button"
+                    aria-pressed={on}
+                    title={on ? `Plays for ${PLATFORM_LABEL[p]}` : `Off for ${PLATFORM_LABEL[p]}`}
+                    onClick={() => togglePlatform(p)}
+                    className={cx(
+                      'fc-press inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13.5px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                      on
+                        ? 'border-accent-line bg-accent-soft text-text'
+                        : 'border-line text-text-3 line-through decoration-text-3/60 hover:text-text-2',
+                    )}
                   >
                     <PlatformMark platform={p} size={12} />
-                    {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
-                  </span>
-                ))
-              )}
+                    {PLATFORM_LABEL[p]}
+                  </button>
+                )
+              })}
             </div>
-            <Switch
-              checked={rule.enabled}
-              onChange={onToggle}
-              label={`${rule.name} alert`}
-              hideLabel
+          ) : (
+            kindPlatformsShown.map((p) => (
+              <span
+                key={p}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-3 px-2.5 text-[13.5px] font-semibold text-text-2"
+              >
+                <PlatformMark platform={p} size={12} />
+                {p === 'tips' ? 'Tip page' : PLATFORM_LABEL[p]}
+              </span>
+            ))
+          )}
+          <Switch
+            checked={rule.enabled}
+            onChange={onToggle}
+            label={`${rule.name} alert`}
+            hideLabel
+          />
+        </div>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {dirty && (
+            <span
+              role="status"
+              className="inline-flex h-7 items-center rounded-full border border-warn/40 bg-warn-soft px-2.5 text-[13.5px] font-semibold text-warn"
+            >
+              Unsaved edits
+            </span>
+          )}
+          <AlertDesignButton />
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!dirty}
+            onClick={() => {
+              setSaveError(null)
+              setDraft(rule)
+              // The added look is gone: the first look is the one shown.
+              setVi(0)
+            }}
+          >
+            Discard
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!dirty || !!error}
+            busy={busy === 'save'}
+            onClick={() => void save()}
+          >
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Lightning size={14} weight="fill" />}
+            busy={busy === 'test'}
+            onClick={() =>
+              void run(
+                'test',
+                () => client.test(kind, supportedStreamTestPlatform(draft, previewPlatform)),
+                {
+                  success: dirty
+                    ? 'Test sent. It uses the saved version; save to test your changes.'
+                    : 'Test sent to your overlays.',
+                },
+              )
+            }
+          >
+            Test on stream
+          </Button>
+        </div>
+      </header>
+
+      {notice}
+
+      {banner && (
+        <div
+          role="alert"
+          className="border-b border-danger/40 bg-danger/10 px-4 py-2 text-[14px] text-danger"
+        >
+          <span className="font-semibold">{banner.message}</span>
+          {'hint' in banner && banner.hint && (
+            <span className="ml-2 text-text-2">{banner.hint}</span>
+          )}
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Left dock: the alert rules, and this rule's looks. */}
+        <aside
+          aria-label="Alert rules and looks"
+          className="fc-scroll order-2 flex min-w-0 flex-col gap-3 border-b border-line bg-surface-1 p-3 lg:order-none lg:w-[222px] lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0 xl:w-[248px]"
+        >
+          <RuleList list={rules} selectedId={rule.id} />
+          <div className="border-t border-line pt-3">
+            <VariationCards
+              compact
+              variations={draft.variations}
+              selectedIndex={vi}
+              onSelect={setVi}
+              onAdd={addVariation}
+              onDelete={(idx) => {
+                if (draft.variations[idx]?.condition === null) return
+                setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== idx) })
+                setVi((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur))
+              }}
             />
           </div>
+        </aside>
 
-          <div className="mb-5">
+        {/* Centre: the live stage and, right under it, the timeline. */}
+        <section
+          aria-label="Live preview"
+          className="fc-scroll order-1 flex min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <PlatformTestBar
+              compact
+              selected={previewPlatform}
+              platforms={kindPlatformsShown}
+              statusText={previewStatus}
+              onTestPlatform={firePlatformTest}
+              onTestOnStream={() => undefined}
+            />
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                icon={<ArrowCounterClockwise size={15} />}
+                onClick={() => setReplay((n) => n + 1)}
+              >
+                Replay
+              </Button>
+              {alertHasSound(preview) ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-pressed={!sound}
+                  title={sound ? 'Mute the preview' : 'Play the preview with sound'}
+                  icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
+                  onClick={() => {
+                    unlockAudio()
+                    setSound((s) => !s)
+                  }}
+                >
+                  Mute
+                </Button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-[14px] text-text-3">
+                  <SpeakerSlash size={15} aria-hidden="true" /> No sound
+                </span>
+              )}
+            </div>
+          </div>
+          <AlertStage
+            alert={preview}
+            theme="molten"
+            controls={false}
+            sound={sound}
+            replay={replay}
+            className="shadow-1"
+            {...(customPreviewError
+              ? {
+                  emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
+                }
+              : {})}
+          />
+          <AlertTimeline
+            durationMs={v.duration_ms}
+            anim={v.anim ?? defaultAlertAnim()}
+            onChange={(duration_ms, anim) => setV({ ...v, duration_ms, anim })}
+          />
+          {design && !v.custom_enabled && (
+            <p className="text-[14px] leading-snug text-text-2">
+              Alerts play with your alert design,{' '}
+              <a
+                href={href({ name: 'designer', id: design.id })}
+                className="font-semibold text-accent-text hover:underline"
+              >
+                {design.name}
+              </a>
+              . Its look, words and sound replace the ones set here.
+            </p>
+          )}
+        </section>
+
+        {/* Right dock: collapsible property groups for the look picked on the left. */}
+        <aside
+          aria-label="Look properties"
+          className="fc-scroll order-3 flex min-w-0 flex-col gap-2.5 border-t border-line bg-surface-1 p-3 lg:order-none lg:w-[312px] lg:shrink-0 lg:overflow-y-auto lg:border-t-0 lg:border-l xl:w-[356px]"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-line pb-2.5">
             <Switch
               checked={draft.interrupt}
               onChange={(interrupt) => setDraft({ ...draft, interrupt })}
@@ -855,19 +1001,6 @@ function RuleEditor({
               description="A new one replaces the alert playing now instead of waiting. While alerts are paused it waits."
             />
           </div>
-
-          <VariationCards
-            variations={draft.variations}
-            selectedIndex={vi}
-            onSelect={setVi}
-            onAdd={addVariation}
-            onDelete={(idx) => {
-              if (draft.variations[idx]?.condition === null) return
-              setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== idx) })
-              setVi((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur))
-            }}
-          />
-
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={v.id}
@@ -892,137 +1025,9 @@ function RuleEditor({
               />
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        {saveError && (
-          <div
-            role="alert"
-            className="rounded-panel border border-danger/50 bg-danger/10 px-4 py-3 text-[13.5px] text-danger"
-          >
-            <p className="font-semibold">{saveError.message}</p>
-            {saveError.hint && <p className="mt-0.5 text-text-2">{saveError.hint}</p>}
-          </div>
-        )}
-
-        <AnimatePresence>
-          {dirty && (
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-4"
-            >
-              <p
-                className={cx(
-                  'min-w-0 flex-1 text-[14.5px]',
-                  error ? 'font-semibold text-danger' : 'font-medium text-text-2',
-                )}
-                role={error ? 'alert' : undefined}
-              >
-                {error ?? 'Unsaved changes'}
-              </p>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setSaveError(null)
-                  setDraft(rule)
-                }}
-              >
-                Discard
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={!!error}
-                busy={busy === 'save'}
-                onClick={() => void save()}
-              >
-                Save
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </aside>
       </div>
-
-      <aside
-        aria-label="Live preview"
-        className="order-2 flex min-w-0 flex-col gap-3 xl:sticky xl:top-[calc(env(safe-area-inset-top)+76px)] xl:order-3 xl:self-start"
-      >
-        <AlertStage
-          alert={preview}
-          theme="molten"
-          controls={false}
-          sound={sound}
-          replay={replay}
-          className="shadow-1"
-          {...(customPreviewError
-            ? {
-                emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
-              }
-            : {})}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            icon={<ArrowCounterClockwise size={15} />}
-            onClick={() => setReplay((n) => n + 1)}
-          >
-            Replay
-          </Button>
-          {alertHasSound(preview) ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-pressed={!sound}
-              title={sound ? 'Mute the preview' : 'Play the preview with sound'}
-              icon={sound ? <SpeakerHigh size={15} /> : <SpeakerSlash size={15} />}
-              onClick={() => {
-                unlockAudio()
-                setSound((s) => !s)
-              }}
-            >
-              Mute
-            </Button>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-[14px] text-text-3">
-              <SpeakerSlash size={15} aria-hidden="true" /> No sound
-            </span>
-          )}
-        </div>
-        <PlatformTestBar
-          selected={previewPlatform}
-          platforms={kind === 'tip' ? ['tips'] : kindPlatforms}
-          statusText={previewStatus}
-          busy={busy === 'test'}
-          onTestPlatform={firePlatformTest}
-          onTestOnStream={() =>
-            void run(
-              'test',
-              () => client.test(kind, supportedStreamTestPlatform(draft, previewPlatform)),
-              {
-                success: dirty
-                  ? 'Test sent. It uses the saved version; save to test your changes.'
-                  : 'Test sent to your overlays.',
-              },
-            )
-          }
-        />
-        {design && !v.custom_enabled && (
-          <p className="text-[14.5px] leading-snug text-text-2">
-            Alerts play with your alert design,{' '}
-            <a
-              href={href({ name: 'designer', id: design.id })}
-              className="font-semibold text-accent-text hover:underline"
-            >
-              {design.name}
-            </a>
-            . Its look, words and sound replace the ones set here.
-          </p>
-        )}
-      </aside>
-    </>
+    </div>
   )
 }
 
@@ -1033,7 +1038,7 @@ function AlertDesignButton() {
   return (
     <a
       href={id ? href({ name: 'designer', id }) : href({ name: 'designs' })}
-      className="fc-press inline-flex h-10 items-center gap-2 rounded-control border border-line-strong bg-surface-3 px-4 text-sm font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      className="fc-press inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface-3 px-3 text-[14.5px] font-semibold whitespace-nowrap text-text hover:border-text-3 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
     >
       <PaintBrushBroad size={16} aria-hidden="true" />
       {id ? 'Alert designer' : 'Alert designs'}
@@ -1041,62 +1046,54 @@ function AlertDesignButton() {
   )
 }
 
-/** The event list: a column on wide screens, a row of pills that scrolls sideways below. */
+/** The alert rules: a tight column in the left dock, wrapping pills where there is no dock. */
 function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string | undefined }) {
-  const row = useRef<HTMLElement>(null)
-  // Keep the chosen pill in view in the sideways row (no effect on the column layout).
-  useEffect(() => {
-    const nav = row.current
-    const el = nav?.querySelector<HTMLElement>('[aria-current="page"]')
-    if (!nav || !el || nav.scrollWidth <= nav.clientWidth) return
-    const left = el.offsetLeft - nav.offsetLeft
-    if (left < nav.scrollLeft || left + el.offsetWidth > nav.scrollLeft + nav.clientWidth)
-      nav.scrollLeft = left - 16
-  }, [selectedId])
   return (
-    <nav
-      ref={row}
-      aria-label="Alert rules"
-      className="fc-scroll order-1 -mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 xl:mx-0 xl:flex-col xl:gap-1 xl:overflow-visible xl:px-0 xl:pb-0"
-    >
-      {list.map((r) => {
-        const active = selectedId === r.id
-        const Glyph = KIND_ICON[r.kinds[0] ?? ''] ?? Bell
-        const status = ruleStatus(r)
-        return (
-          <a
-            key={r.id}
-            href={href({ name: 'alerts', rule: r.id })}
-            aria-current={active ? 'page' : undefined}
-            className={cx(
-              'fc-press relative flex h-11 shrink-0 items-center gap-2.5 rounded-full border pr-4 pl-3.5 text-[16px] font-semibold whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150',
-              'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none xl:w-full xl:pr-3.5',
-              active
-                ? 'fc-picked border-transparent'
-                : 'border-line text-text-2 hover:bg-surface-2 hover:text-text xl:border-transparent',
-            )}
-          >
-            <Glyph
-              size={19}
-              weight={active ? 'fill' : 'regular'}
-              aria-hidden="true"
-              className={cx('shrink-0', active || r.enabled ? 'text-accent-text' : 'text-text-3')}
-            />
-            <span className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}>
-              {r.name}
-            </span>
-            <span
+    <nav aria-label="Alert rules" className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-center justify-between px-1">
+        <span className="fc-label">Alert rules</span>
+        <span className="font-mono text-[12.5px] text-text-3 tabular-nums">{list.length}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 lg:flex-col lg:flex-nowrap lg:gap-0.5">
+        {list.map((r) => {
+          const active = selectedId === r.id
+          const Glyph = KIND_ICON[r.kinds[0] ?? ''] ?? Bell
+          const status = ruleStatus(r)
+          return (
+            <a
+              key={r.id}
+              href={href({ name: 'alerts', rule: r.id })}
+              aria-current={active ? 'page' : undefined}
               className={cx(
-                'ml-auto pl-1 text-[13px] font-bold',
-                r.enabled ? 'text-ok' : 'text-text-3',
+                'fc-press relative flex h-9 shrink-0 items-center gap-2 rounded-full border pr-3 pl-3 text-[14.5px] font-semibold whitespace-nowrap transition-[background-color,border-color,color] duration-150 lg:w-full lg:rounded-[10px]',
+                'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                active
+                  ? 'fc-picked border-transparent'
+                  : 'border-line text-text-2 hover:bg-surface-2 hover:text-text lg:border-transparent',
               )}
             >
-              <span className="sr-only">, </span>
-              {status}
-            </span>
-          </a>
-        )
-      })}
+              <Glyph
+                size={17}
+                weight={active ? 'fill' : 'regular'}
+                aria-hidden="true"
+                className={cx('shrink-0', active || r.enabled ? 'text-accent-text' : 'text-text-3')}
+              />
+              <span className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}>
+                {r.name}
+              </span>
+              <span
+                className={cx(
+                  'ml-auto pl-1 text-[12.5px] font-bold',
+                  r.enabled ? 'text-ok' : 'text-text-3',
+                )}
+              >
+                <span className="sr-only">, </span>
+                {status}
+              </span>
+            </a>
+          )
+        })}
+      </div>
     </nav>
   )
 }
@@ -1141,6 +1138,40 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
     )
   }
 
+  const inEditor = !rules.error && !(rules.loading && !rules.data) && list.length > 0 && !!selected
+  if (inEditor && selected)
+    return (
+      <>
+        {queue?.paused && (
+          <p
+            role="status"
+            className="fixed top-14 right-4 z-[45] rounded-control border border-warn/30 bg-warn-soft px-3 py-1.5 text-[14px] font-medium text-warn max-lg:static max-lg:m-3"
+          >
+            Alerts are paused. Resume them from Home.
+          </p>
+        )}
+        <RuleEditor
+          rule={selected}
+          rules={list}
+          media={media.data ?? []}
+          onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
+          onSaved={(r) => rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))}
+          onToggle={(on) => toggle(selected, on)}
+          notice={
+            restoreLeft > 0 ? (
+              <p className="flex flex-wrap items-center gap-3 border-b border-warn/30 bg-warn-soft px-4 py-2 text-[14.5px] font-medium text-warn">
+                {restoreLeft} starter {restoreLeft === 1 ? 'rule' : 'rules'} couldn&apos;t be
+                restored.
+                <Button size="sm" busy={busy === 'restore'} onClick={restoreDefaults}>
+                  Restore the rest
+                </Button>
+              </p>
+            ) : null
+          }
+        />
+      </>
+    )
+
   return (
     <div>
       <PageHeader
@@ -1172,7 +1203,7 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           data-testid="alerts-loading"
           className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5"
         >
-          <div className="flex gap-2 overflow-hidden xl:flex-col xl:gap-1">
+          <div className="flex flex-wrap gap-2 overflow-hidden xl:flex-col xl:gap-1">
             {Array.from({ length: 8 }, (_, i) => (
               <Skeleton key={i} className="h-11 w-32 shrink-0 rounded-full xl:w-full" />
             ))}
@@ -1180,7 +1211,7 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           <Skeleton className="h-[520px] rounded-panel" />
           <Skeleton className="hidden aspect-video rounded-panel xl:block" />
         </div>
-      ) : list.length === 0 || !selected ? (
+      ) : (
         <EmptyState
           title="No alert rules"
           action={
@@ -1192,17 +1223,6 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           Restore starter rules here, or import alerts from StreamElements or Streamlabs in
           Settings.
         </EmptyState>
-      ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:items-start xl:gap-5">
-          <RuleList list={list} selectedId={selected.id} />
-          <RuleEditor
-            rule={selected}
-            media={media.data ?? []}
-            onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
-            onSaved={(r) => rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))}
-            onToggle={(on) => toggle(selected, on)}
-          />
-        </div>
       )}
     </div>
   )

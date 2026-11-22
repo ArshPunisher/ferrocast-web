@@ -117,7 +117,7 @@ test.describe('alerts', () => {
     await open(page, 'alerts/follow')
     const headline = page.getByLabel('Headline', { exact: true })
     await headline.fill('{name} joined the crew!')
-    await expect(page.getByText('Unsaved changes')).toBeVisible()
+    await expect(page.getByText('Unsaved edits')).toBeVisible()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText(/“Follows” saved/)).toBeVisible()
   })

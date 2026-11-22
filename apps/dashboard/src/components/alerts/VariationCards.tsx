@@ -44,17 +44,18 @@ export function VariationCards({
   onSelect,
   onAdd,
   onDelete,
+  compact = false,
 }: {
   variations: Variation[]
   selectedIndex: number
   onSelect: (index: number) => void
   onAdd: () => void
   onDelete: (index: number) => void
+  /** The editor's left dock: one column, tighter. */
+  compact?: boolean
 }) {
-  const hasConditionals = variations.some((v) => v.condition !== null)
-
   return (
-    <div className="mb-5 flex flex-col gap-2.5">
+    <div className={cx(compact ? 'flex flex-col gap-2' : 'mb-5 flex flex-col gap-2.5')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="fc-label">Variations ({variations.length})</span>
         <button
@@ -70,7 +71,7 @@ export function VariationCards({
       <div
         role="group"
         aria-label="Alert variations"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        className={cx('grid grid-cols-1 gap-2', !compact && 'sm:grid-cols-2')}
       >
         {variations.map((v, i) => {
           const isDefault = v.condition === null
@@ -85,7 +86,8 @@ export function VariationCards({
               data-variation-card={v.id}
               data-active={active ? 'true' : undefined}
               className={cx(
-                'relative flex items-start gap-2 rounded-control border p-3 transition-colors',
+                'relative flex items-start gap-2 rounded-control border transition-colors',
+                compact ? 'p-2.5' : 'p-3',
                 active
                   ? 'border-arc bg-arc-soft/35 shadow-1'
                   : 'border-line bg-surface-2/70 hover:border-line-strong',
@@ -99,11 +101,6 @@ export function VariationCards({
               >
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-[14px] font-bold text-text">{label}</span>
-                  {isDefault && (
-                    <span className="rounded-full border border-line bg-surface-1 px-2 py-0.5 text-[11px] font-semibold text-text-2">
-                      Default
-                    </span>
-                  )}
                   {!isDefault && v.priority !== 0 && (
                     <span className="rounded-full border border-line bg-surface-1 px-2 py-0.5 font-mono text-[11px] font-semibold text-text-2 tabular-nums">
                       P{v.priority}
@@ -116,24 +113,26 @@ export function VariationCards({
                   )}
                 </div>
 
-                <p className="line-clamp-1 text-[12.5px] font-medium text-text-2">
-                  {describeCondition(v.condition)}
-                </p>
+                {!isDefault && (
+                  <p className="line-clamp-1 text-[12.5px] font-medium text-text-2">
+                    {describeCondition(v.condition)}
+                  </p>
+                )}
 
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11.5px] text-text-3 tabular-nums">
-                  {!isDefault || hasConditionals ? (
+                {isDefault ? (
+                  <p className="text-[12.5px] font-medium text-text-2">
+                    Used when no other look matches · {(v.duration_ms / 1000).toFixed(1)} s
+                  </p>
+                ) : (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11.5px] text-text-3 tabular-nums">
                     <span data-variation-weight={w}>
-                      {isDefault
-                        ? 'Weight: fallback'
-                        : w === 0 && pct === 0
-                          ? 'Weight: 0 (paused)'
-                          : `Weight: ${w}${pct !== null && pct < 100 ? ` (${pct}%)` : ''}`}
+                      {w === 0 && pct === 0
+                        ? 'Weight: 0 (paused)'
+                        : `Weight: ${w}${pct !== null && pct < 100 ? ` (${pct}%)` : ''}`}
                     </span>
-                  ) : (
-                    <span>Weight: fallback</span>
-                  )}
-                  <span>{(v.duration_ms / 1000).toFixed(1)}s</span>
-                </div>
+                    <span>{(v.duration_ms / 1000).toFixed(1)} s</span>
+                  </div>
+                )}
               </button>
 
               {!isDefault && (

@@ -50,6 +50,10 @@ for (const width of [1280, 375] as const) {
       await headline.fill('Welcome ')
 
       // Keyboard-only token chip insertion
+      // The Tokens button opens a small palette; Enter on a token inserts it.
+      const tokens = page.getByRole('button', { name: 'Tokens for Headline' })
+      await tokens.focus()
+      await page.keyboard.press('Enter')
       const amountInsert = page.locator('[data-insert-token="amount"]').first()
       await amountInsert.focus()
       await page.keyboard.press('Enter')
@@ -66,8 +70,10 @@ for (const width of [1280, 375] as const) {
       await expect(page.locator('[data-token-chip="amount"]')).toHaveCount(0)
 
       // Keyboard arrow-key navigation across insert chip palette
+      await tokens.focus()
+      await page.keyboard.press('Enter')
       await page.locator('[data-insert-token="name"]').first().focus()
-      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('ArrowDown')
       await page.keyboard.press('Enter')
       await expect(headline).toHaveValue(/Welcome \{[a-z_]+\}/)
 
@@ -104,13 +110,13 @@ for (const width of [1280, 375] as const) {
       await open(page, 'alerts/sub')
 
       const cards = page.getByRole('group', { name: 'Alert variations' })
-      await expect(cards).toContainText('Default fallback')
+      await expect(cards).toContainText('Used when no other look matches')
       await expect(cards).toContainText('12+ months')
       await expect(cards).toContainText('Weight: 1')
 
       await page.getByRole('button', { name: 'Add a look' }).click()
       await page.getByLabel('Look name').fill('Weekend Special')
-      await page.locator('summary', { hasText: 'More' }).click()
+      await page.getByRole('button', { name: /^Read aloud/ }).click()
       await page.getByLabel('Chance').fill('4')
       await expect(cards).toContainText('Weekend Special')
       await expect(cards).toContainText('Weight: 4')
@@ -203,6 +209,7 @@ test.describe('Custom HTML/CSS sandbox security isolation', () => {
       }
     })
 
+    await page.getByRole('button', { name: /^Custom HTML, CSS and schema/ }).click()
     await page.getByRole('switch', { name: 'Use custom HTML & CSS' }).click()
 
     // Field schema renders and interpolates into the sandboxed preview frame

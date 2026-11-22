@@ -19,6 +19,7 @@ test.describe('Problem 10: Custom HTML preview must not emit CSP console errors'
       await page.setViewportSize(vp)
       await open(page, 'alerts/follow')
 
+      await page.getByRole('button', { name: /^Custom HTML, CSS and schema/ }).click()
       await page.getByRole('switch', { name: 'Use custom HTML & CSS' }).click()
       const htmlBox = page.getByLabel('Custom HTML', { exact: true })
       await expect(htmlBox).toBeVisible()
