@@ -202,11 +202,11 @@ export const DEMO_TAKEN_HANDLES: readonly string[] = ['asha', 'rohanlive', 'megh
 export const DEMO_TOKEN = 'demo-session'
 
 /** The version the demo engine says it is. */
-const DEMO_VERSION = '0.4.0'
+const DEMO_VERSION = '3.4.0'
 const DEMO_UPDATE_BYTES = 18_400_000
 const DEMO_UPDATE = () => ({
   current: DEMO_VERSION,
-  latest: '0.4.1' as string | null,
+  latest: '3.4.1' as string | null,
   checking: false,
   checked_at: (Date.now() - 42 * 60_000) as number | null,
   installed: false,
@@ -333,7 +333,7 @@ export class DemoEngine {
   private faults: (Fault & { left: number })[] = []
   private offline = false
   private timers = new Set<ReturnType<typeof setTimeout>>()
-  /** The pretend update: 0.4.1 is out, nothing downloaded yet. */
+  /** The pretend update: 3.4.1 is out, nothing downloaded yet. */
   private upd = DEMO_UPDATE()
   private autoplayOn = false
 
