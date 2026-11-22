@@ -558,6 +558,8 @@ export async function pair(base: string, code: string): Promise<Connection> {
   const { token } = await client.pair(code)
   client.setToken(token)
   saveSession(base, token)
+  // The same as a returning session: custom alerts need the engine's sandbox page.
+  document.documentElement.dataset.fcSandbox = '/alert-sandbox'
   history.replaceState(null, '', location.pathname + location.search + '#/home')
   return { mode: 'browser', client, socket: wsFactory }
 }
