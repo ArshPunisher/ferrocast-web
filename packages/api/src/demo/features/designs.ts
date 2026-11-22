@@ -153,6 +153,22 @@ export class DemoDesigns {
     return this.active
   }
 
+  /** Store integration: inserts a verified design directly into user's designs. */
+  addStored(d: Design): void {
+    this.mine = [...this.mine.filter((x) => x.id !== d.id), clone(d)]
+  }
+
+  /** Store integration: removes a store-installed design cleanly. */
+  deleteStored(id: string): void {
+    if (this.active === id) this.active = null
+    this.mine = this.mine.filter((d) => d.id !== id)
+  }
+
+  /** Store integration: updates active alert design id cleanly. */
+  setActiveStored(id: string | null): void {
+    this.active = id
+  }
+
   activeDesign(): Design | null {
     if (!this.active) return null
     try {
