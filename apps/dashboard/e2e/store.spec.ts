@@ -16,11 +16,13 @@ test.describe('Community Theme Store (R37)', () => {
     await expect(aurora.getByText(/installs/)).toBeVisible()
 
     // Category filter & search.
-    await page.getByRole('button', { name: 'Alerts', exact: true }).click()
+    // The rail's rows carry their counts ("Alerts 1").
+    const cats = page.getByRole('group', { name: 'Store categories' })
+    await cats.getByRole('button', { name: /^Alerts\b/ }).click()
     await expect(page.getByTestId('store-card-arcade-ticker-alert')).toBeVisible()
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'All', exact: true }).click()
+    await cats.getByRole('button', { name: /^All\b/ }).click()
     await page.getByLabel('Search Community Store').fill('WGSL')
     await expect(page.getByTestId('store-card-soft-dimmer-shader')).toBeVisible()
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
