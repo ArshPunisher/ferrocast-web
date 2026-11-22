@@ -53,3 +53,35 @@ describe('replay buffer', () => {
     expect(marks.some((m) => m.clip && m.label.includes('ModMira'))).toBe(true)
   })
 })
+
+describe('device identity and renames', () => {
+  it('undoing a rename of the microphone brings its sound back', async () => {
+    const { eng } = rig()
+    await eng.start()
+    const before = (await eng.levels(['Mic']))['Mic']!
+    expect(before.peak[0]).toBeGreaterThan(-100)
+    await eng.rename('Mic', 'Headset')
+    await eng.undo()
+    const after = (await eng.levels(['Mic']))['Mic']
+    expect(after?.peak[0], 'the mic is silent after the undo').toBeGreaterThan(-100)
+  })
+
+  it('renaming the microphone through its channel keeps the scene items working', async () => {
+    const { eng } = rig()
+    await eng.start()
+    await eng.setChannel(3, { kind: 'coreaudio_input_capture', name: 'Headset' })
+    // The Main scene's mic item follows the new name: its filters still open.
+    const items = await eng.items('Main')
+    const mic = items.find((i) => i.name === 'Headset')
+    expect(mic, 'the item was renamed with the source').toBeDefined()
+    await expect(eng.filters('Headset')).resolves.toBeDefined()
+  })
+
+  it('a channel rename to a name that is taken is refused, not overwriting the camera', async () => {
+    const { eng } = rig()
+    await eng.start()
+    const e = await fail(eng.setChannel(3, { kind: 'coreaudio_input_capture', name: 'Webcam' }))
+    expect(e?.status).toBe(409)
+    expect((await eng.filters('Webcam')).length).toBeGreaterThanOrEqual(0)
+  })
+})

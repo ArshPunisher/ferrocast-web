@@ -112,6 +112,10 @@ interface CollectionSnapshot {
   namedTransitions: EngineNamedTransition[]
   transitionMatrix: EngineTransitionMatrixRule[]
   legacySceneTransitions: Record<string, EngineTransition>
+  /** Which sources are the microphone and the camera, and the mic's device: part of the collection. */
+  micSourceName: string
+  micDeviceId: string
+  cameraSourceName: string
 }
 
 interface CopiedSourceBundle {
@@ -1192,6 +1196,9 @@ export class DemoStudioEngine {
       namedTransitions: clone(this.namedTransitions),
       transitionMatrix: clone(this.transitionMatrix),
       legacySceneTransitions,
+      micSourceName: this.micSourceName,
+      micDeviceId: this.micDeviceId,
+      cameraSourceName: this.cameraSourceName,
     }
   }
 
@@ -1211,6 +1218,31 @@ export class DemoStudioEngine {
     this.namedTransitions = clone(snap.namedTransitions)
     this.transitionMatrix = clone(snap.transitionMatrix)
     this.legacySceneTransitions = new Map(Object.entries(clone(snap.legacySceneTransitions)))
+    this.micSourceName = snap.micSourceName
+    this.micDeviceId = snap.micDeviceId
+    this.cameraSourceName = snap.cameraSourceName
+  }
+
+  /** A source's new name, in the source map, the scene items, the mic and camera roles and its recording. */
+  private renameSourceEverywhere(src: StoredSource, to: string): void {
+    const from = src.name
+    this.sources.delete(from)
+    src.name = to
+    this.sources.set(to, src)
+    if (this.micSourceName === from) this.micSourceName = to
+    if (this.cameraSourceName === from) this.cameraSourceName = to
+    const renameItems = (list: EngineItem[]) => {
+      for (const it of list) {
+        if (!it.group && it.name === from) it.name = to
+        renameItems(it.children)
+      }
+    }
+    for (const list of this.sceneItems.values()) renameItems(list)
+    if (this.sourceRecords.has(from)) {
+      const rec = this.sourceRecords.get(from)!
+      this.sourceRecords.delete(from)
+      this.sourceRecords.set(to, rec)
+    }
   }
 
   private pushUndo(label: string): void {
@@ -2068,23 +2100,7 @@ export class DemoStudioEngine {
       }
       this.pushUndo(`Rename ${from}`)
       if (from !== to) {
-        this.sources.delete(from)
-        src.name = to
-        this.sources.set(to, src)
-        if (this.micSourceName === from) this.micSourceName = to
-        if (this.cameraSourceName === from) this.cameraSourceName = to
-        const renameItems = (list: EngineItem[]) => {
-          for (const it of list) {
-            if (!it.group && it.name === from) it.name = to
-            renameItems(it.children)
-          }
-        }
-        for (const list of this.sceneItems.values()) renameItems(list)
-        if (this.sourceRecords.has(from)) {
-          const rec = this.sourceRecords.get(from)!
-          this.sourceRecords.delete(from)
-          this.sourceRecords.set(to, rec)
-        }
+        this.renameSourceEverywhere(src, to)
       }
       return undefined
     }
@@ -2627,9 +2643,15 @@ export class DemoStudioEngine {
       if (ch === 3) {
         const prev = this.sources.get(this.micSourceName)
         if (prev && prev.name !== nextName) {
-          this.sources.delete(prev.name)
-          prev.name = nextName
-          this.sources.set(nextName, prev)
+          // The same checks and the same follow-through as renaming a source.
+          if (this.sources.has(nextName) || this.activeScenes.includes(nextName))
+            throw new HttpError(
+              409,
+              'studio_name_taken',
+              `"${nextName}" is taken: pick another name.`,
+            )
+          this.pushUndo(`Rename ${prev.name}`)
+          this.renameSourceEverywhere(prev, nextName)
         } else if (!prev) {
           this.sources.set(
             nextName,
