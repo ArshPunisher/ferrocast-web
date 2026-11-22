@@ -8,6 +8,7 @@ import { checkCss } from '../../css-check'
 import { checkCustomHtml, defaultAlertAnim } from '../../alert'
 import {
   parseFerrocastStoreLink,
+  storeVersionNewer,
   type StoreCatalogResponse,
   type StoreCreator,
   type StoreInstalledItem,
@@ -61,10 +62,21 @@ interface UndoSnapshot {
   prev_install: StoreInstalledItem | null
   created_design_ids: string[]
   prev_designs: Design[]
-  prev_active_alert: string | null
-  prev_rules: AlertRule[]
+  /** The design that was the active alert when this action removed it. */
+  cleared_active_alert: string | null
+  /** What the action did to each alert rule: undo applies the inverse to the rule as it is now. */
+  rule_changes: RuleChange[]
   created_plugin_id: string | null
   prev_plugin: Plugin | null
+  /** The install's private records as they were (what it displaced, which design is which). */
+  prev_displaced: [string, Variation][] | null
+  prev_design_map: [string, string][] | null
+}
+
+interface RuleChange {
+  rule_id: string
+  removed: Variation[]
+  added: string[]
 }
 
 // 1x1 PNG sample bytes for asset verification simulation.
@@ -76,14 +88,7 @@ const SAMPLE_PNG = new Uint8Array([
   0x42, 0x60, 0x82,
 ])
 
-function newer(a: string, b: string): boolean {
-  const n = (v: string) => v.split(/[.-]/).map((x) => Number(x) || 0)
-  const [x, y] = [n(a), n(b)]
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0)
-  }
-  return false
-}
+const newer = storeVersionNewer
 
 function makeAuroraDesigns(): { theme: Design; alert: Design } {
   const baseAlert = newAlertDesign('Aurora Pulse Alerts')
@@ -682,6 +687,10 @@ export class DemoStore implements DemoFeature {
   private items: InternalItem[] = seedCatalog()
   private installs = new Map<string, StoreInstalledItem>()
   private undos: UndoSnapshot[] = []
+  /** The user's own default look an alert pack took the place of, by item, kept across updates. */
+  private displaced = new Map<string, Map<string, Variation>>()
+  /** Which installed design is which of a package's designs, by item, so an update keeps ids. */
+  private designMap = new Map<string, Map<string, string>>()
   fault: StoreFault = null
 
   constructor(host: DemoStoreHost) {
@@ -840,24 +849,36 @@ export class DemoStore implements DemoFeature {
           .filter((d) => existing.design_ids.includes(d.id))
           .map(clone)
       : []
-    const prev_active_alert = this.host.activeAlert()
-    const prev_rules = existing
-      ? this.host
-          .rules()
-          .filter((r) => existing.rule_ids.includes(r.id))
-          .map(clone)
-      : []
     const prev_plugin = existing?.plugin_id
       ? clone(this.host.plugins().find((p) => p.id === existing.plugin_id) ?? null)
+      : null
+    const prev_displaced = this.displaced.has(item.id)
+      ? [...(this.displaced.get(item.id) ?? new Map<string, Variation>()).entries()].map(
+          ([k, v]) => [k, clone(v)] as [string, Variation],
+        )
+      : null
+    const prev_design_map = this.designMap.has(item.id)
+      ? [...(this.designMap.get(item.id) ?? new Map<string, string>()).entries()]
       : null
 
     const createdDesigns: Design[] = []
     const ruleIds: string[] = []
+    const ruleChanges: RuleChange[] = []
+    const newDesignIds: string[] = []
+    let cleared: string | null = null
     let pluginId: string | null = null
+    const nextMap = new Map<string, string>()
 
     if (item.package.format === 'ferrodesign' && item.bundle_designs) {
+      // An update keeps the id each design already has (an overlay that follows the theme, the
+      // alert in use), and only a design the update adds gets a new one.
+      const kept = this.designMap.get(item.id) ?? new Map<string, string>()
       const idMap = new Map<string, string>()
-      for (const src of item.bundle_designs) idMap.set(src.id, this.host.newId())
+      for (const src of item.bundle_designs) {
+        const had = mode === 'update' ? kept.get(src.id) : undefined
+        idMap.set(src.id, had ?? this.host.newId())
+        if (!had) newDesignIds.push(idMap.get(src.id) as string)
+      }
       for (const src of item.bundle_designs) {
         const next: Design = clone(src)
         next.id = idMap.get(src.id) ?? this.host.newId()
@@ -876,10 +897,16 @@ export class DemoStore implements DemoFeature {
         if (err) throw new HttpError(422, 'store_unsafe_package', err)
         this.host.addDesign(next)
         createdDesigns.push(clone(next))
+        nextMap.set(src.id, next.id)
       }
       if (mode === 'update' && existing) {
+        const keep = new Set(createdDesigns.map((d) => d.id))
         for (const oldId of existing.design_ids) {
-          if (this.host.activeAlert() === oldId) this.host.setActiveAlert(null)
+          if (keep.has(oldId)) continue
+          if (this.host.activeAlert() === oldId) {
+            this.host.setActiveAlert(null)
+            cleared = oldId
+          }
           this.host.deleteDesign(oldId)
         }
       }
@@ -895,24 +922,65 @@ export class DemoStore implements DemoFeature {
       }
       const prefix = `store:${item.id}:`
       const eventMap: Record<'follow' | 'sub', string> = { follow: 'follow', sub: 'subscription' }
+      // Plan every rule before changing one, as the engine does: nothing is touched when no rule
+      // takes the pack's events.
+      const plan: { rule: AlertRule; change: RuleChange }[] = []
+      const carried = this.displaced.get(item.id) ?? new Map<string, Variation>()
+      const nextDisplaced = new Map<string, Variation>(
+        [...carried.entries()].map(([k, x]) => [k, clone(x)]),
+      )
       for (const ev of item.bundle_alert.events) {
-        const kind = eventMap[ev]
-        const rule = this.host.rules().find((r) => r.kinds.includes(kind))
-        if (!rule) continue
-        if (!prev_rules.some((p) => p.id === rule.id)) prev_rules.push(clone(rule))
-        const nextRule = clone(rule)
-        nextRule.variations = nextRule.variations.filter(
-          (x) => !x.id.startsWith(prefix) && x.condition !== null,
-        )
-        nextRule.variations.push({ ...v, id: `${prefix}${v.id}` })
-        this.host.saveRule(nextRule)
-        ruleIds.push(nextRule.id)
+        const rule = this.host.rules().find((r) => r.kinds.includes(eventMap[ev]))
+        if (!rule || plan.some((p) => p.rule.id === rule.id)) continue
+        const oldStore = rule.variations.filter((x) => x.id.startsWith(prefix))
+        let rest = rule.variations.filter((x) => !x.id.startsWith(prefix))
+        const removed = [...oldStore]
+        if (v.condition === null) {
+          // The pack's default takes the rule's default place: the user's own look goes, and is kept.
+          const mine = rest.find((x) => x.condition === null)
+          rest = rest.filter((x) => x.condition !== null)
+          if (mine) {
+            removed.push(clone(mine))
+            if (!carried.has(rule.id)) nextDisplaced.set(rule.id, clone(mine))
+          }
+        }
+        const next = clone(rule)
+        next.variations = [...rest, { ...clone(v), id: `${prefix}${v.id}` }]
+        plan.push({
+          rule: next,
+          change: { rule_id: rule.id, removed, added: [`${prefix}${v.id}`] },
+        })
       }
+      if (plan.length === 0) {
+        throw new HttpError(
+          422,
+          'store_alert_no_target',
+          `You have no alert for ${item.bundle_alert.events.map((e) => eventMap[e]).join(', ')} for this pack to go into.`,
+          'Add that alert in Alerts first, then install the pack. Nothing was changed.',
+        )
+      }
+      for (const { rule, change } of plan) {
+        this.host.saveRule(rule)
+        ruleIds.push(rule.id)
+        ruleChanges.push(change)
+      }
+      this.displaced.set(item.id, nextDisplaced)
     } else if (item.package.format === 'ferroplugin' && item.bundle_plugin) {
+      // The Store never overwrites a plugin it didn't install: the user's own copy stays as it is.
+      const owned = existing?.plugin_id === item.bundle_plugin.id
+      if (!owned && this.host.plugins().some((x) => x.id === item.bundle_plugin?.id)) {
+        throw new HttpError(
+          409,
+          'store_plugin_exists',
+          `A plugin with the id ${item.bundle_plugin.id} is already installed.`,
+          'Remove it first in Plugins if you want the Store’s copy. Nothing was changed.',
+        )
+      }
       const p: Plugin = { ...clone(item.bundle_plugin), on: true, problem: null }
       this.host.upsertPlugin(p)
       pluginId = p.id
     }
+    if (item.package.format === 'ferrodesign') this.designMap.set(item.id, nextMap)
 
     const creator = CREATORS.find((c) => c.id === item.creator_id)
     const now = this.host.now()
@@ -945,12 +1013,14 @@ export class DemoStore implements DemoFeature {
       item_title: item.title,
       created_at: now,
       prev_install: existing ? clone(existing) : null,
-      created_design_ids: createdDesigns.map((d) => d.id),
+      created_design_ids: newDesignIds,
       prev_designs,
-      prev_active_alert,
-      prev_rules,
+      cleared_active_alert: cleared,
+      rule_changes: ruleChanges,
       created_plugin_id: pluginId,
       prev_plugin,
+      prev_displaced,
+      prev_design_map,
     }
     this.undos.unshift(snap)
     if (this.undos.length > 20) this.undos.length = 20
@@ -980,55 +1050,51 @@ export class DemoStore implements DemoFeature {
         'Reload Installed items.',
       )
     }
-    const prev_active_alert = this.host.activeAlert()
     const prev_designs = this.host
       .allDesigns()
       .filter((d) => existing.design_ids.includes(d.id))
       .map(clone)
+    let cleared: string | null = null
     for (const did of existing.design_ids) {
-      if (this.host.activeAlert() === did) this.host.setActiveAlert(null)
+      if (this.host.activeAlert() === did) {
+        this.host.setActiveAlert(null)
+        cleared = did
+      }
       this.host.deleteDesign(did)
     }
-    const prev_rules: AlertRule[] = []
-    if (existing.rule_ids.length > 0) {
-      const prefix = `store:${existing.item_id}:`
-      for (const r of this.host.rules()) {
-        if (!existing.rule_ids.includes(r.id)) continue
-        prev_rules.push(clone(r))
-        const next = clone(r)
-        next.variations = next.variations.filter((v) => !v.id.startsWith(prefix))
-        if (!next.variations.some((v) => v.condition === null)) {
-          next.variations.unshift({
-            id: `def_${this.host.newId()}`,
-            name: 'Default',
-            condition: null,
-            priority: 0,
-            weight: 1,
-            title: '{name} followed',
-            body: '{message}',
-            image: null,
-            sound: null,
-            volume: 70,
-            duration_ms: 5000,
-            tts: false,
-            layout: 'stack',
-            css: '',
-            anim: defaultAlertAnim(),
-            custom_enabled: false,
-            html: '',
-            fields: [],
-            field_values: {},
-          })
-        }
-        this.host.saveRule(next)
+    const ruleChanges: RuleChange[] = []
+    const displaced = this.displaced.get(existing.item_id) ?? new Map<string, Variation>()
+    const prefix = `store:${existing.item_id}:`
+    for (const rule of this.host.rules()) {
+      if (!existing.rule_ids.includes(rule.id)) continue
+      const taken = rule.variations.filter((v) => v.id.startsWith(prefix)).map(clone)
+      if (taken.length === 0) continue
+      const next = clone(rule)
+      next.variations = next.variations.filter((v) => !v.id.startsWith(prefix))
+      const change: RuleChange = { rule_id: rule.id, removed: taken, added: [] }
+      if (!next.variations.some((v) => v.condition === null)) {
+        // The look the pack took the place of goes back; with none kept, a plain default.
+        const back: Variation = clone(displaced.get(rule.id) ?? this.plainDefault())
+        change.added.push(back.id)
+        next.variations.unshift(back)
       }
+      this.host.saveRule(next)
+      ruleChanges.push(change)
     }
     const prev_plugin = existing.plugin_id
       ? clone(this.host.plugins().find((p) => p.id === existing.plugin_id) ?? null)
       : null
     if (existing.plugin_id) this.host.removePlugin(existing.plugin_id)
 
+    const prev_displaced = this.displaced.has(id)
+      ? [...displaced.entries()].map(([k, v]) => [k, clone(v)] as [string, Variation])
+      : null
+    const prev_design_map = this.designMap.has(id)
+      ? [...(this.designMap.get(id) ?? new Map<string, string>()).entries()]
+      : null
     this.installs.delete(id)
+    this.displaced.delete(id)
+    this.designMap.delete(id)
     const now = this.host.now()
     const token = `su_${this.host.newId()}`
     const snap: UndoSnapshot = {
@@ -1040,10 +1106,12 @@ export class DemoStore implements DemoFeature {
       prev_install: clone(existing),
       created_design_ids: [],
       prev_designs,
-      prev_active_alert,
-      prev_rules,
+      cleared_active_alert: cleared,
+      rule_changes: ruleChanges,
       created_plugin_id: null,
       prev_plugin,
+      prev_displaced,
+      prev_design_map,
     }
     this.undos.unshift(snap)
     if (this.undos.length > 20) this.undos.length = 20
@@ -1062,13 +1130,71 @@ export class DemoStore implements DemoFeature {
     }
   }
 
-  private undo(token?: string): StoreUndoResult {
-    const idx = token ? this.undos.findIndex((u) => u.token === token) : 0
-    const snap = idx >= 0 ? this.undos[idx] : undefined
-    if (!snap) {
-      throw new HttpError(404, 'not_found', 'That undo action is no longer available.')
+  /** A plain default alert look, for a rule that ends up with none. */
+  private plainDefault(): Variation {
+    return {
+      id: `def_${this.host.newId()}`,
+      name: 'Default',
+      condition: null,
+      priority: 0,
+      weight: 1,
+      title: '{name} followed',
+      body: '{message}',
+      image: null,
+      sound: null,
+      volume: 70,
+      duration_ms: 5000,
+      tts: false,
+      layout: 'stack',
+      css: '',
+      anim: defaultAlertAnim(),
+      custom_enabled: false,
+      html: '',
+      fields: [],
+      field_values: {},
     }
-    this.undos.splice(idx, 1)
+  }
+
+  /**
+   * One-click undo of the latest action. A missing token is the latest; a token that is there is
+   * checked (empty, unknown, or not the latest is refused). Undo applies the inverse of what the
+   * action did to each alert rule as it is now, so edits made since stay.
+   */
+  private undo(token: unknown, given: boolean): StoreUndoResult {
+    if (given && (typeof token !== 'string' || !token.trim())) {
+      throw new HttpError(
+        400,
+        'store_undo_bad_token',
+        'The undo token must be the text the action gave.',
+        'Leave the token out to undo the latest action.',
+      )
+    }
+    const snap = this.undos[0]
+    if (!snap) {
+      throw new HttpError(
+        404,
+        'store_nothing_to_undo',
+        'There is nothing to undo.',
+        'Undo is kept for the last few Store actions.',
+      )
+    }
+    if (given && token !== snap.token) {
+      if (this.undos.some((u) => u.token === token)) {
+        throw new HttpError(
+          409,
+          'store_undo_out_of_order',
+          'That isn’t the latest Store action, so it can’t be undone first.',
+          'Undo the latest one, then this one.',
+        )
+      }
+      throw new HttpError(
+        404,
+        'store_undo_unknown',
+        'That undo isn’t there any more.',
+        'Undo is kept for the last few Store actions.',
+      )
+    }
+    this.undos.shift()
     for (const did of snap.created_design_ids) {
       if (this.host.activeAlert() === did) this.host.setActiveAlert(null)
       try {
@@ -1080,11 +1206,31 @@ export class DemoStore implements DemoFeature {
     for (const d of snap.prev_designs) {
       this.host.addDesign(clone(d))
     }
-    if (snap.prev_active_alert !== null) {
-      this.host.setActiveAlert(snap.prev_active_alert)
+    if (
+      snap.cleared_active_alert !== null &&
+      this.host.activeAlert() === null &&
+      this.host.allDesigns().some((d) => d.id === snap.cleared_active_alert)
+    ) {
+      this.host.setActiveAlert(snap.cleared_active_alert)
     }
-    for (const r of snap.prev_rules) {
-      this.host.saveRule(clone(r))
+    for (const c of snap.rule_changes) {
+      const rule = this.host.rules().find((r) => r.id === c.rule_id)
+      if (!rule) continue // deleted since: nothing of ours is left in it
+      const next = clone(rule)
+      next.variations = next.variations.filter((v) => !c.added.includes(v.id))
+      for (const v of c.removed) {
+        if (next.variations.some((x) => x.id === v.id)) continue
+        // A rule keeps one default: a taken-out default comes back only if none took its place.
+        if (v.condition === null) {
+          if (next.variations.some((x) => x.condition === null)) continue
+          next.variations.unshift(clone(v))
+        } else {
+          next.variations.push(clone(v))
+        }
+      }
+      if (JSON.stringify(next.variations) !== JSON.stringify(rule.variations)) {
+        this.host.saveRule(next)
+      }
     }
     if (snap.created_plugin_id && snap.prev_plugin?.id !== snap.created_plugin_id) {
       this.host.removePlugin(snap.created_plugin_id)
@@ -1097,6 +1243,10 @@ export class DemoStore implements DemoFeature {
     } else {
       this.installs.delete(snap.item_id)
     }
+    if (snap.prev_displaced) this.displaced.set(snap.item_id, new Map(snap.prev_displaced))
+    else this.displaced.delete(snap.item_id)
+    if (snap.prev_design_map) this.designMap.set(snap.item_id, new Map(snap.prev_design_map))
+    else this.designMap.delete(snap.item_id)
     return {
       reverted_action: snap.action,
       item_id: snap.item_id,
@@ -1128,14 +1278,16 @@ export class DemoStore implements DemoFeature {
       throw new HttpError(404, 'not_found', 'Creator not found.')
     }
     const installed = cat.installed.find((r) => r.item_id === item.id) ?? null
+    // Only what is true before anything is downloaded is said as done; the rest is what will be
+    // checked when the person installs it (as the engine says it).
     const safety_notes = [
-      'Catalog signature verified (minisign).',
-      `Package size ${Math.max(1, Math.round(item.package.size / 1024))} KB · SHA-256 checked on install.`,
+      'The catalog’s signature was checked (minisign).',
+      `Package size ${Math.max(1, Math.round(item.package.size / 1024))} KB. Its SHA-256 is checked when you install.`,
       item.package.format === 'ferrodesign'
-        ? 'Pure data (.ferrodesign): contains no executable scripts or remote code.'
+        ? 'A .ferrodesign is pure data. It is opened and checked when you install; nothing runs from it.'
         : item.package.format === 'ferroalert'
-          ? 'Custom alert HTML/CSS verified by p2e sandbox rules (isolated iframe, no scripts).'
-          : 'Sandboxed plugin verified (WGSL shader / bounded WASM / CSP no-network panel).',
+          ? 'When you install, the alert’s HTML and CSS are checked against the sandbox rules (an isolated frame, no scripts). Nothing is applied if a check fails.'
+          : 'When you install, the plugin is opened and its kind, id and permissions are compared with the catalog’s. It runs sandboxed (a WGSL shader, resource-capped WASM, or a panel with no network).',
     ]
     return {
       uri,
@@ -1161,6 +1313,11 @@ export class DemoStore implements DemoFeature {
       if (this.fault === 'tampered_asset') {
         throw new HttpError(502, 'store_asset_tampered', 'Asset SHA-256 check failed.')
       }
+      // A picture only for an item and a name the catalog lists.
+      const it = this.items.find((i) => i.id === a)
+      if (!it || !it.assets.some((x) => x.name === b)) {
+        throw new HttpError(404, 'store_asset_not_found', 'That item has no such picture.')
+      }
       return new Blob([SAMPLE_PNG], { type: 'image/png' })
     }
     if (sub === 'install' && is('POST', 2)) {
@@ -1183,7 +1340,8 @@ export class DemoStore implements DemoFeature {
     }
     if (sub === 'undo' && is('POST', 2)) {
       const o = body && typeof body === 'object' ? (body as { token?: unknown }) : {}
-      return this.undo(typeof o.token === 'string' ? o.token : undefined)
+      // A token that is there is a token, even null or empty: only a missing one means the latest.
+      return this.undo(o.token, 'token' in o)
     }
     if (sub === 'resolve-link' && is('POST', 2)) {
       const o = requireObj(body)
