@@ -16,6 +16,40 @@ export interface MenuItem {
   onSelect: () => void
 }
 
+function visibleChromeRect(selector: string): DOMRect | null {
+  const node = document.querySelector(selector)
+  if (!node) return null
+  const cs = getComputedStyle(node)
+  if (cs.display === 'none' || cs.visibility === 'hidden') return null
+  if (cs.position !== 'fixed' && cs.position !== 'sticky') return null
+  const rect = node.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0 ? rect : null
+}
+
+function safeViewportBounds(vh: number, gap: number): { top: number; bottom: number } {
+  const headerRect = visibleChromeRect('header')
+  const top =
+    headerRect && headerRect.top <= 1 && headerRect.bottom > 0
+      ? Math.max(gap, headerRect.bottom + gap)
+      : gap
+  const footerRect = visibleChromeRect('footer[aria-label="Studio status"]')
+  const navRect = visibleChromeRect('nav[data-tab-bar]')
+  const statusCss = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--fc-statusbar') || '0',
+  )
+  const statusLimit = vh - (Number.isFinite(statusCss) ? Math.max(0, statusCss) : 0) - gap
+  const bottom = Math.max(
+    top + 60,
+    Math.min(
+      vh - gap,
+      statusLimit,
+      footerRect ? footerRect.top - gap : vh - gap,
+      navRect ? navRect.top - gap : vh - gap,
+    ),
+  )
+  return { top, bottom }
+}
+
 /**
  * A small dropdown menu: opens from its trigger (origin-aware), arrow keys move, Escape
  * closes and returns focus, clicking outside closes. It renders in a portal with fixed
@@ -73,14 +107,19 @@ export function Menu({
     const vh = document.documentElement.clientHeight
     const want = align === 'end' ? b.right - width : b.left
     const left = Math.max(gap, Math.min(want, vw - gap - width))
-    const below = vh - b.bottom - gap - 6
-    const above = b.top - gap - 6
+    const safe = safeViewportBounds(vh, gap)
+    const below = Math.max(0, safe.bottom - (b.bottom + 6))
+    const above = Math.max(0, b.top - 6 - safe.top)
     const up = el.scrollHeight > below && above > below
-    // A list taller than the room it gets scrolls inside itself.
-    const maxHeight = Math.max(120, up ? above : below)
+    // A list taller than the room it gets scrolls inside itself without overlapping chrome.
+    const available = up ? above : below
+    const maxHeight = Math.min(safe.bottom - safe.top, Math.max(0, available))
     const height = Math.min(el.scrollHeight, maxHeight)
-    setPos({ top: up ? Math.max(gap, b.top - 6 - height) : b.bottom + 6, left, up, maxHeight })
-  }, [open, align, inDialog])
+    const top = up
+      ? Math.max(safe.top, b.top - 6 - height)
+      : Math.min(b.bottom + 6, Math.max(safe.top, safe.bottom - height))
+    setPos({ top, left, up, maxHeight })
+  }, [open, align, inDialog, items.length])
 
   useEffect(() => {
     if (!open || inDialog) return
@@ -195,7 +234,9 @@ export function Menu({
                   inDialog
                     ? cx('absolute top-full z-40 mt-1.5', align === 'end' ? 'right-0' : 'left-0')
                     : 'fixed z-[70]',
-                  items.some((it) => it.description) ? 'w-80 max-w-[calc(100vw-2rem)]' : 'min-w-52',
+                  items.some((it) => it.description)
+                    ? 'w-80 max-w-[calc(100vw-2rem)]'
+                    : 'min-w-52 max-w-[calc(100vw-16px)]',
                 )}
               >
                 {items.map((it) => (
