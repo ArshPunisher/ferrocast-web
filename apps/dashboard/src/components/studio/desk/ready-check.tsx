@@ -1,18 +1,82 @@
-// The ready check after Start (owner, 30 Oct): a small card that looks over the mic, cameras,
-// captures, scenes and disk a few seconds after the Studio starts, and shows only what needs
-// fixing. Also says what came back when Ferrocast closed unexpectedly last time.
+// The ready check after Start (owner, 30 Oct; Option 1 slim pill + upward card, 22 Nov):
+// checks mics, cameras, captures, scenes and disk a few seconds after the Studio starts,
+// sits as a slim 36 px pill bottom-right inside the right column (or above mobile bottom nav),
+// expands upward on click, and restores from a quiet status-bar button when dismissed.
 
-import { useEffect, useRef, useState } from 'react'
-import { X } from '@phosphor-icons/react'
-import type { EngineRecovered, Preflight } from '@ferrocast/api'
-import { IconButton } from '@ferrocast/ui'
+import { createContext, useContext, useEffect, useId, useRef } from 'react'
+import {
+  CaretDown,
+  CaretUp,
+  CheckCircle,
+  CircleNotch,
+  ShieldCheck,
+  WarningCircle,
+  WarningOctagon,
+  X,
+} from '@phosphor-icons/react'
+import type { EngineRecovered, Preflight, PreflightCheck } from '@ferrocast/api'
+import { cx } from '@ferrocast/ui'
+import { useAction } from '../../../lib/hooks'
 import { useStudio } from '../common'
-import { PreflightList } from '../show'
 import { useEngine } from './common'
 import { captureChecks, recoveredWords, silentMics, studioProblems } from './ready'
+import {
+  clearReadyCheckPendingFocus,
+  dismissReadyCheck,
+  getReadyCheckState,
+  resetReadyCheckState,
+  restoreReadyCheck,
+  setReadyCheckExpanded,
+  setReadyCheckFound,
+  startReadyCheckScanIfNeeded,
+  useReadyCheckState,
+} from './ready-check-state'
 
 /** How long to listen to the mics: 6 looks, half a second apart. */
 const LOOKS = 6
+
+export type ReadyPlacement = 'right' | 'desk' | 'mobile' | 'inline'
+
+export const ReadyPlacementContext = createContext<ReadyPlacement>('inline')
+
+function SeverityIcon({
+  tone,
+  size = 15,
+}: {
+  tone: 'checking' | 'ok' | 'warn' | 'danger'
+  size?: number
+}) {
+  if (tone === 'checking') {
+    return (
+      <CircleNotch
+        size={size}
+        weight="bold"
+        className="shrink-0 text-accent-text motion-safe:animate-spin"
+        aria-hidden
+      />
+    )
+  }
+  if (tone === 'ok') {
+    return <CheckCircle size={size} weight="duotone" className="shrink-0 text-ok" aria-hidden />
+  }
+  if (tone === 'danger') {
+    return (
+      <WarningOctagon size={size} weight="duotone" className="shrink-0 text-danger" aria-hidden />
+    )
+  }
+  return <WarningCircle size={size} weight="duotone" className="shrink-0 text-warn" aria-hidden />
+}
+
+function safeFixHref(raw: string): string | null {
+  if (raw.startsWith('#/')) return raw
+  return null
+}
+
+function formatSummary(n: number, blocking: number, checking: boolean): string {
+  if (checking) return 'Checking…'
+  if (n === 0) return 'All good'
+  return blocking > 0 ? `${n} to fix (${blocking} blocking)` : `${n} to fix`
+}
 
 export function ReadyCheck({
   recovered,
@@ -23,99 +87,418 @@ export function ReadyCheck({
 }) {
   const api = useEngine()
   const studio = useStudio()
-  const [found, setFound] = useState<Preflight | null>(null)
+  const placement = useContext(ReadyPlacementContext)
+  const { run, busy } = useAction()
+  const barState = useReadyCheckState()
+  const found = barState?.found ?? null
+  const expanded = barState?.expanded ?? Boolean(recovered)
+  const dismissed = barState?.dismissed ?? false
+
+  const rootRef = useRef<HTMLElement>(null)
+  const pillRef = useRef<HTMLButtonElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(true)
+  const cardId = useId()
+  const headingId = useId()
 
   useEffect(() => {
-    let live = true
-    void (async () => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    startReadyCheckScanIfNeeded(Boolean(recovered), async (isAlive, sleep) => {
       const cfg = await studio.showConfig().catch(() => null)
       const mics = cfg?.mic_sources ?? []
       const samples: Record<string, number[]> = Object.fromEntries(mics.map((m) => [m, []]))
-      for (let i = 0; i < LOOKS && live && mics.length; i++) {
-        await new Promise((r) => setTimeout(r, 500))
+      for (let i = 0; i < LOOKS && isAlive() && mics.length; i++) {
+        await sleep(500)
+        if (!isAlive()) return null
         const levels = await api.levels(mics).catch(() => ({}) as Record<string, never>)
         for (const m of mics) {
           const l = levels[m]
           if (l) samples[m]?.push(Math.max(l.peak[0], l.peak[1]))
         }
       }
-      if (!mics.length) await new Promise((r) => setTimeout(r, 3000))
+      if (!mics.length) await sleep(3000)
+      if (!isAlive()) return null
       const [pf, stats] = await Promise.all([
         studio.preflight().catch(() => ({ checks: [], ready: true }) as Preflight),
         api.stats().catch(() => null),
       ])
-      if (!live) return
+      if (!isAlive()) return null
       const problems = studioProblems(pf.checks)
       const checks = [
         ...problems,
         ...silentMics(samples, problems),
         ...captureChecks(stats?.captures),
       ]
-      setFound({ checks, ready: checks.length === 0 })
-    })()
-    return () => {
-      live = false
-    }
-  }, [api, studio])
+      return { checks, ready: checks.length === 0 }
+    })
+  }, [api, studio, recovered, barState?.sessionId])
 
-  // All good and nothing to say about a crash: it goes by itself (the parent redrawing doesn't
-  // restart the wait: its onClose is read when the time comes).
   const close = useRef(onClose)
   close.current = onClose
-  const clean = found?.ready && !recovered
+
+  // All good and nothing to say about a crash: shows briefly (5s) then hides cleanly.
+  const clean = Boolean(found?.ready && !recovered)
   useEffect(() => {
     if (!clean) return
-    const t = window.setTimeout(() => close.current(), 5000)
+    const t = window.setTimeout(() => {
+      resetReadyCheckState()
+      close.current()
+    }, 5000)
     return () => window.clearTimeout(t)
   }, [clean])
 
-  const n = found?.checks.length ?? 0
+  const checks = found?.checks ?? []
+  const n = checks.length
+  const blocking = checks.filter((c) => c.status === 'fail').length
+
+  // Restore focus to the pill trigger when reopened from the status-bar control.
+  useEffect(() => {
+    if (!dismissed && barState?.pendingFocus === 'pill') {
+      pillRef.current?.focus({ preventScroll: true })
+      clearReadyCheckPendingFocus()
+    }
+  }, [dismissed, barState?.pendingFocus])
+
+  // Escape closes the expanded card and returns focus to the pill trigger.
+  useEffect(() => {
+    if (!expanded || dismissed) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      // Let any open modal dialog or menu above Ready check handle Escape first.
+      if (document.querySelector('dialog[open], [role="menu"]')) return
+      const active = document.activeElement
+      if (
+        active instanceof HTMLElement &&
+        active.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return
+      }
+      const inside =
+        rootRef.current && active instanceof Node ? rootRef.current.contains(active) : false
+      if (!inside && active !== document.body) return
+      e.preventDefault()
+      setReadyCheckExpanded(false)
+      pillRef.current?.focus({ preventScroll: true })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [expanded, dismissed])
+
+  const handleCollapse = () => {
+    setReadyCheckExpanded(false)
+    pillRef.current?.focus({ preventScroll: true })
+  }
+
+  const handleDismiss = () => {
+    if (clean) {
+      resetReadyCheckState()
+      onClose()
+      return
+    }
+    dismissReadyCheck()
+  }
+
+  const handleFix = async (c: PreflightCheck) => {
+    if (!c.fix || !c.fix.href.startsWith('action:')) return
+    const sessionId = barState?.sessionId
+    if (sessionId === undefined) return
+    const wasFocusInside =
+      cardRef.current && document.activeElement instanceof Node
+        ? cardRef.current.contains(document.activeElement)
+        : false
+    const updated = await run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' })
+    const latest = getReadyCheckState()
+    if (!updated || !latest || latest.sessionId !== sessionId) return
+    const ours = (latest.found?.checks ?? []).filter((x) => /^(silent|capture):/.test(x.id))
+    const nextChecks = [...studioProblems(updated.checks), ...ours]
+    setReadyCheckFound(sessionId, { checks: nextChecks, ready: nextChecks.length === 0 })
+    if (nextChecks.length === 0) {
+      setReadyCheckExpanded(false)
+      if (wasFocusInside && mountedRef.current) {
+        requestAnimationFrame(() => pillRef.current?.focus({ preventScroll: true }))
+      }
+      return
+    }
+    if (wasFocusInside && mountedRef.current) {
+      requestAnimationFrame(() => {
+        const nextBtn = cardRef.current?.querySelector<HTMLElement>(
+          '[data-rc-fix], [data-rc-collapse]',
+        )
+        nextBtn?.focus({ preventScroll: true })
+      })
+    }
+  }
+
+  if (dismissed) return null
+
+  const tone: 'checking' | 'ok' | 'warn' | 'danger' = !found
+    ? 'checking'
+    : n === 0
+      ? 'ok'
+      : blocking > 0
+        ? 'danger'
+        : 'warn'
+
+  const summaryText = formatSummary(n, blocking, !found)
+  const liveAnnouncement = !found
+    ? 'Checking your mic, cameras and scenes…'
+    : n === 0
+      ? 'All good. You’re ready.'
+      : `${n} ${n === 1 ? 'thing' : 'things'} to fix${blocking > 0 ? `, ${blocking} blocking` : ''}`
+
+  const anchorClass =
+    placement === 'right'
+      ? 'pointer-events-none absolute right-2 bottom-2 z-20 max-w-[calc(100%-16px)]'
+      : placement === 'desk'
+        ? 'pointer-events-none absolute right-3 bottom-2 z-20 max-w-[calc(100%-24px)]'
+        : placement === 'mobile'
+          ? 'pointer-events-none fixed right-2.5 bottom-[calc(64px+env(safe-area-inset-bottom)+8px)] z-[35] max-w-[calc(100vw-20px)]'
+          : 'inline-flex max-w-full'
+
+  const pillToneClass =
+    tone === 'danger'
+      ? 'border-danger/45'
+      : tone === 'warn'
+        ? 'border-warn/45'
+        : tone === 'ok'
+          ? 'border-ok/40'
+          : 'border-line-strong'
+
+  const pillSubClass =
+    tone === 'danger'
+      ? 'text-danger'
+      : tone === 'warn'
+        ? 'text-warn'
+        : tone === 'ok'
+          ? 'text-ok'
+          : 'text-text-2'
+
+  const badgeClass =
+    tone === 'ok'
+      ? 'border-ok/40 bg-surface-1 text-ok'
+      : tone === 'danger'
+        ? 'border-danger/45 bg-surface-1 text-danger'
+        : tone === 'warn'
+          ? 'border-warn/45 bg-surface-1 text-warn'
+          : 'border-line bg-surface-1 text-text-2'
+
+  const cardWidthClass =
+    placement === 'mobile' ? 'w-[min(355px,calc(100vw-20px))]' : 'w-[304px] max-w-full'
+
   return (
     <section
+      ref={rootRef}
       aria-label="Ready check"
-      className="mb-2 flex max-h-56 flex-col gap-2 overflow-auto rounded-panel border border-line-strong bg-surface-1 px-4 py-2.5 shadow-1"
+      className={cx(anchorClass, 'flex flex-col-reverse items-end gap-2')}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="text-[15px] font-bold">Ready check</h2>
-          <div role="status" aria-live="polite" className="min-w-0">
+      {/* Trigger pill comes first in DOM so Tab lands on it, then moves upward into the opened card. */}
+      <button
+        ref={pillRef}
+        type="button"
+        data-over-preview
+        aria-expanded={expanded}
+        aria-controls={expanded ? cardId : undefined}
+        onClick={() => setReadyCheckExpanded((e) => !e)}
+        className={cx(
+          'fc-press pointer-events-auto inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border bg-surface-1 pr-3 pl-2.5 text-[12.5px] font-bold whitespace-nowrap text-text shadow-2 transition-[background-color,border-color,transform] duration-150 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+          pillToneClass,
+        )}
+      >
+        <SeverityIcon tone={tone} size={15} />
+        <span className="min-w-0 truncate">
+          <span>Ready check</span>
+          <span className="text-text-3">{' · '}</span>
+          <span className={cx('font-semibold', pillSubClass)}>{summaryText}</span>
+        </span>
+        <span className="ml-0.5 inline-grid shrink-0 place-items-center text-text-3" aria-hidden>
+          {expanded ? <CaretDown size={13} weight="bold" /> : <CaretUp size={13} weight="bold" />}
+        </span>
+      </button>
+
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveAnnouncement}
+      </div>
+
+      {expanded && (
+        <div
+          ref={cardRef}
+          id={cardId}
+          data-over-preview
+          aria-labelledby={headingId}
+          className={cx(
+            'pointer-events-auto flex flex-col overflow-hidden rounded-panel border bg-surface-1 text-text shadow-pop motion-safe:animate-[fc-fade_150ms_var(--fc-ease-out)]',
+            cardWidthClass,
+            tone === 'danger' ? 'border-danger/45' : 'border-line-strong',
+          )}
+        >
+          <div className="flex items-center gap-1.5 border-b border-line bg-dock-head px-2.5 py-1.5">
+            <SeverityIcon tone={tone} size={15} />
+            <h2
+              id={headingId}
+              className="font-display text-[12.5px] font-bold whitespace-nowrap text-text"
+            >
+              Ready check
+            </h2>
+            <span
+              className={cx(
+                'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-bold whitespace-nowrap',
+                badgeClass,
+              )}
+            >
+              {summaryText}
+            </span>
+            <span className="flex-1" />
+            <button
+              type="button"
+              data-rc-collapse
+              onClick={handleCollapse}
+              aria-label="Collapse ready check"
+              title="Collapse"
+              className="fc-press grid size-6 shrink-0 place-items-center rounded-[6px] text-text-3 transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <CaretDown size={14} weight="bold" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              aria-label="Dismiss ready check"
+              title="Dismiss"
+              className="fc-press grid size-6 shrink-0 place-items-center rounded-[6px] text-text-3 transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <X size={14} weight="bold" aria-hidden />
+            </button>
+          </div>
+
+          <div className="fc-scroll flex max-h-[min(200px,45dvh)] flex-col gap-1.5 overflow-y-auto p-2">
+            {recovered && (
+              <div className="flex flex-col gap-1 rounded-[8px] bg-surface-2 p-2.5 text-[12px] leading-snug text-text">
+                {recoveredWords(recovered).map((l) => (
+                  <p key={l} className="m-0">
+                    {l}
+                  </p>
+                ))}
+              </div>
+            )}
+
             {!found ? (
-              <p className="text-[14px] text-text-2">Checking your mic, cameras and scenes…</p>
-            ) : n === 0 ? (
-              <p className="text-[14px] font-semibold text-ok">All good. You’re ready.</p>
-            ) : (
-              <p className="text-[14px] font-semibold text-warn">
-                {n} {n === 1 ? 'thing' : 'things'} to fix
+              <p className="m-0 px-1 py-0.5 text-[12.5px] text-text-2">
+                Checking your mic, cameras and scenes…
               </p>
+            ) : n === 0 ? (
+              <div className="flex items-center gap-2 px-1 py-0.5 text-[12.5px] font-semibold text-ok">
+                <CheckCircle size={16} weight="duotone" aria-hidden />
+                <span>All good. You’re ready.</span>
+              </div>
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label="Ready check issues">
+                {checks.map((c) => {
+                  const fixAction = c.fix?.href.startsWith('action:') ?? false
+                  const fixLink = c.fix && !fixAction ? safeFixHref(c.fix.href) : null
+                  return (
+                    <li
+                      key={c.id}
+                      className={cx(
+                        'flex min-w-0 items-center gap-1.5 rounded-[8px] border px-2 py-1.5',
+                        c.status === 'fail'
+                          ? 'border-danger/40 bg-danger-soft'
+                          : 'border-line bg-surface-2',
+                      )}
+                    >
+                      <SeverityIcon tone={c.status === 'fail' ? 'danger' : 'warn'} size={15} />
+                      <span
+                        className="min-w-0 flex-1 truncate text-[12px] leading-tight"
+                        title={`${c.label}: ${c.detail}`}
+                      >
+                        <b className="font-bold text-text">{c.label}</b>{' '}
+                        <span className="text-text-2">{c.detail}</span>
+                      </span>
+                      {c.fix && fixAction && (
+                        <button
+                          type="button"
+                          data-rc-fix
+                          disabled={busy === c.id}
+                          aria-label={`Fix ${c.label}: ${c.fix.label}`}
+                          title={c.fix.label}
+                          onClick={() => void handleFix(c)}
+                          className="fc-press inline-flex h-6 shrink-0 items-center rounded-[7px] bg-accent-soft px-2 text-[12px] font-bold whitespace-nowrap text-accent-text transition-colors hover:bg-[color-mix(in_srgb,var(--fc-arc)_20%,transparent)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
+                        >
+                          {busy === c.id ? 'Fixing…' : 'Fix'}
+                        </button>
+                      )}
+                      {c.fix && fixLink && (
+                        <a
+                          data-rc-fix
+                          href={fixLink}
+                          aria-label={`Fix ${c.label}: ${c.fix.label}`}
+                          title={c.fix.label}
+                          className="fc-press inline-flex h-6 shrink-0 items-center rounded-[7px] bg-accent-soft px-2 text-[12px] font-bold whitespace-nowrap text-accent-text no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--fc-arc)_20%,transparent)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                        >
+                          Fix
+                        </a>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </div>
         </div>
-        <IconButton label="Close the ready check" size="sm" onClick={onClose}>
-          <X size={16} />
-        </IconButton>
-      </div>
-      {recovered && (
-        <div className="flex flex-col gap-1 rounded-control bg-surface-2 p-3 text-[14px] text-text">
-          {recoveredWords(recovered).map((l) => (
-            <p key={l}>{l}</p>
-          ))}
-        </div>
-      )}
-      {found && n > 0 && (
-        <PreflightList
-          pf={found}
-          onFixed={(p) =>
-            // A fix answers with a new pre-flight: its problems replace the old ones; the
-            // silent-mic and capture lines stay until checked again.
-            setFound((f) => {
-              if (!f) return f
-              const ours = f.checks.filter((c) => /^(silent|capture):/.test(c.id))
-              const checks = [...studioProblems(p.checks), ...ours]
-              return { checks, ready: checks.length === 0 }
-            })
-          }
-        />
       )}
     </section>
+  )
+}
+
+/** Quiet recall chip shown in the status bar (desktop) or tools bar (mobile) when dismissed. */
+export function ReadyCheckRecallChip({
+  variant = 'status-bar',
+}: {
+  variant?: 'status-bar' | 'mobile-bar'
+}) {
+  const bar = useReadyCheckState()
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (bar?.active && bar.dismissed && bar.pendingFocus === 'recall') {
+      btnRef.current?.focus({ preventScroll: true })
+      clearReadyCheckPendingFocus()
+    }
+  }, [bar?.active, bar?.dismissed, bar?.pendingFocus])
+
+  if (!bar?.active || !bar.dismissed) return null
+
+  const dotClass =
+    bar.blocking > 0
+      ? 'bg-danger'
+      : bar.count > 0
+        ? 'bg-warn'
+        : bar.checking
+          ? 'bg-accent-text'
+          : 'bg-ok'
+
+  const label = bar.count > 0 ? `Ready check (${bar.count})` : 'Ready check'
+  const ariaLabel = bar.count > 0 ? `Show ready check (${bar.count} to fix)` : 'Show ready check'
+
+  return (
+    <button
+      ref={btnRef}
+      type="button"
+      onClick={restoreReadyCheck}
+      aria-label={ariaLabel}
+      title="Show ready check"
+      className={cx(
+        'fc-press inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-strong bg-surface-2 font-semibold whitespace-nowrap text-text-2 transition-colors hover:border-accent-line hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+        variant === 'status-bar' ? 'my-auto ml-2 h-5 px-2 text-[11.5px]' : 'h-7 px-2.5 text-[12px]',
+      )}
+    >
+      <ShieldCheck size={12} weight="bold" aria-hidden />
+      <span>{label}</span>
+      <span aria-hidden className={cx('size-1.5 rounded-full', dotClass)} />
+    </button>
   )
 }

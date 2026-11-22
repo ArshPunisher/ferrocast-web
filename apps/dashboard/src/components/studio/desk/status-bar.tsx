@@ -20,6 +20,7 @@ import { captureWords, doctorFix, lastingProblem, type Strain } from './doctor'
 import { useClient } from '../../../lib/hooks'
 import { useEngineReading } from '../../../lib/engine-stats'
 import { useLive } from '../../../lib/store'
+import { ReadyCheckRecallChip } from './ready-check'
 import { StatsDialog, clock, droppedText, streamTime } from './stats-panel'
 
 /** Its height (px): the sidebar, the page and the Studio's layout leave room for it. */
@@ -473,6 +474,7 @@ export function StudioStatusBar() {
       className="fixed right-0 bottom-0 left-[var(--fc-nav-w,15rem)] z-40 hidden items-stretch border-t border-line bg-surface-1 text-[12.5px] lg:flex"
       style={{ height: STATUS_BAR_PX }}
     >
+      <ReadyCheckRecallChip variant="status-bar" />
       <span
         aria-live="polite"
         title={note && 'detail' in note && note.detail ? `${note.text} ${note.detail}` : note?.text}
