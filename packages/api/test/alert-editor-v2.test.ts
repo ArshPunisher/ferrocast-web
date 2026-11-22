@@ -1,0 +1,151 @@
+import { describe, expect, it } from 'vitest'
+import { DemoEngine, DEMO_TOKEN } from '../src/demo'
+import {
+  FerroClient,
+  MAX_CUSTOM_FIELDS,
+  MAX_CUSTOM_HTML,
+  MAX_IN_MS,
+  defaultAlertAnim,
+  newVariation,
+  renderAlert,
+  sample,
+  validateRule,
+} from '../src/index'
+import type { AlertRule, CustomField } from '../src/types'
+
+function baseRule(): AlertRule {
+  return {
+    id: 'sub',
+    name: 'Subscriptions',
+    enabled: true,
+    kinds: ['subscription'],
+    platforms: [],
+    interrupt: false,
+    variations: [newVariation('default', '{name} subscribed!')],
+  }
+}
+
+describe('Alert Editor v2 validation and rendering (R25)', () => {
+  it('populates default animation timing and omits custom render payload when disabled', () => {
+    const r = baseRule()
+    const v = r.variations[0]!
+    expect(v.anim).toEqual(defaultAlertAnim())
+    expect(validateRule(r)).toBeNull()
+    const rendered = renderAlert('a1', r, v, sample('subscription', 'twitch', 0)!)
+    expect(rendered.anim).toEqual(defaultAlertAnim())
+    expect(rendered.custom).toBeUndefined()
+  })
+
+  it('rejects unknown tokens in title, body and custom html', () => {
+    const tBad = baseRule()
+    tBad.variations[0]!.title = 'Hi {unknown_var}!'
+    expect(validateRule(tBad)).toMatch(/unknown_var/)
+
+    const bBad = baseRule()
+    bBad.variations[0]!.body = '{ghost_token}'
+    expect(validateRule(bBad)).toMatch(/ghost_token/)
+
+    const hBad = baseRule()
+    hBad.variations[0]!.html = '<div>{no_such_token}</div>'
+    expect(validateRule(hBad)).toMatch(/no_such_token/)
+  })
+
+  it('allows style/script braces in html and validates timing constraints', () => {
+    const r = baseRule()
+    r.variations[0]!.html = '<div>{name}<style>.a{color:#fff}</style></div>'
+    expect(validateRule(r)).toBeNull()
+
+    const tooSlow = baseRule()
+    tooSlow.variations[0]!.anim = { ...defaultAlertAnim(), in_ms: MAX_IN_MS + 1 }
+    expect(validateRule(tooSlow)).toMatch(/entrance timing/)
+
+    const overlap = baseRule()
+    overlap.variations[0]!.duration_ms = 1000
+    overlap.variations[0]!.anim = { ...defaultAlertAnim(), in_ms: 600, out_ms: 500 }
+    expect(validateRule(overlap)).toMatch(/shorter than total alert duration/)
+  })
+
+  it('validates custom HTML size, CSS safety and field schema', () => {
+    const bigHtml = baseRule()
+    bigHtml.variations[0]!.html = 'a'.repeat(MAX_CUSTOM_HTML + 1)
+    expect(validateRule(bigHtml)).toMatch(/20000/)
+
+    const badCss = baseRule()
+    badCss.variations[0]!.css = '@import url("https://evil.invalid/x.css");'
+    expect(validateRule(badCss)).toMatch(/@import/)
+
+    const shadowVar = baseRule()
+    shadowVar.variations[0]!.fields = [{ key: 'name', label: 'Shadow', type: 'text', default: 'x' }]
+    expect(validateRule(shadowVar)).toMatch(/built-in tokens|field key/i)
+
+    const badColor = baseRule()
+    badColor.variations[0]!.fields = [
+      { key: 'accent_hex', label: 'Accent', type: 'color', default: 'red' },
+    ]
+    expect(validateRule(badColor)).toMatch(/#rrggbb/)
+
+    const tooMany = baseRule()
+    tooMany.variations[0]!.fields = Array.from(
+      { length: MAX_CUSTOM_FIELDS + 1 },
+      (_, i): CustomField => ({
+        key: `field_${i}`,
+        label: `Field ${i}`,
+        type: 'text',
+        default: 'ok',
+      }),
+    )
+    expect(validateRule(tooMany)).toMatch(/32/)
+
+    const badOverride = baseRule()
+    badOverride.variations[0]!.fields = [
+      { key: 'glow_px', label: 'Glow', type: 'number', default: 8, min: 0, max: 20 },
+    ]
+    badOverride.variations[0]!.field_values = { glow_px: 50 }
+    expect(validateRule(badOverride)).toMatch(/at most 20/)
+  })
+
+  it('renders resolved custom fields and vars when custom_enabled is true', () => {
+    const r = baseRule()
+    const v = r.variations[0]!
+    v.custom_enabled = true
+    v.html = '<div class="wrap">{badge_text}: {name}</div>'
+    v.css = '.wrap { color: var(--field-badge_color); }'
+    v.fields = [
+      { key: 'badge_text', label: 'Badge', type: 'text', default: 'VIP' },
+      { key: 'badge_color', label: 'Color', type: 'color', default: '#ffa424' },
+    ]
+    v.field_values = { badge_text: 'Founder' }
+    expect(validateRule(r)).toBeNull()
+
+    const rendered = renderAlert('a2', r, v, sample('subscription', 'twitch', 0)!)
+    expect(rendered.custom).toEqual({
+      html: v.html,
+      css: v.css,
+      fields: { badge_text: 'Founder', badge_color: '#ffa424' },
+      vars: expect.objectContaining({ name: 'PixelPanda', months: '6' }),
+    })
+  })
+
+  it('enforces R25 validation in DemoEngine and stays backwards compatible with old rules', async () => {
+    const e = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const c = new FerroClient({
+      base: e.base,
+      token: DEMO_TOKEN,
+      fetch: e.fetch,
+      sleep: async () => {},
+    })
+    const rule = (await c.alertRules())[0]!
+    const bad = structuredClone(rule)
+    bad.variations[0]!.title = 'Hi {bad_token}'
+    await expect(c.saveAlertRule(bad)).rejects.toMatchObject({ status: 400 })
+
+    const custom = structuredClone(rule)
+    custom.variations[0]!.custom_enabled = true
+    custom.variations[0]!.html = '<span>{badge}</span>'
+    custom.variations[0]!.fields = [{ key: 'badge', label: 'Badge', type: 'text', default: 'Live' }]
+    custom.variations[0]!.field_values = { badge: 'Hero' }
+    const saved = await c.saveAlertRule(custom)
+    expect(saved.variations[0]!.field_values).toEqual({ badge: 'Hero' })
+    e.dispose()
+  })
+})
