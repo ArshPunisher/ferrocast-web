@@ -50,3 +50,26 @@ test('API reference renders OpenAPI 3.1 + AsyncAPI 3.0 specs, filters cleanly, a
   )
   expect(overflow).toBe(false)
 })
+
+test('the category filter lists every tag in the spec and the Node quickstart calls a real route', async ({
+  page,
+  request,
+}) => {
+  const spec = (await (await request.get('/specs/openapi.json')).json()) as {
+    paths: Record<string, Record<string, { tags?: string[] }>>
+  }
+  const tags = new Set<string>()
+  for (const ops of Object.values(spec.paths))
+    for (const op of Object.values(ops)) if (op.tags?.[0]) tags.add(op.tags[0])
+  await page.goto('/docs/api/')
+  const options = await page.locator('#api-tag option').allTextContents()
+  for (const tag of tags) {
+    expect(
+      options.some((o) => o.trim().startsWith(tag)),
+      `the category filter is missing ${tag}`,
+    ).toBe(true)
+  }
+  // The quickstart's route is in the spec (it used to point at a route that returns 404).
+  expect(spec.paths['/api/v1/counters/{name}/change']).toBeTruthy()
+  await expect(page.locator('body')).toContainText('/api/v1/counters/follows/change')
+})

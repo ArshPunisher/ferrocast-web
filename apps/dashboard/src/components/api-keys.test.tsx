@@ -148,4 +148,54 @@ describe('ApiKeysSection', () => {
     await act(async () => Promise.resolve())
     expect(client.revokeApiKey).toHaveBeenCalledWith('k_existing')
   })
+
+  it('does not count expired keys as active', async () => {
+    const view: ApiKeysView = {
+      ...sampleView,
+      keys: [
+        ...sampleView.keys,
+        {
+          ...sampleView.keys[0]!,
+          id: 'k_old',
+          name: 'Old script',
+          expires_at: 1_700_000_100_000,
+        },
+      ],
+    }
+    const { host } = await mount({ apiKeys: vi.fn(async () => view) })
+    expect(host.textContent).toContain('1 of ')
+    expect(host.textContent).toContain('Expired')
+  })
+
+  it('asks before closing the show-once secret by Escape or a click outside, unless it was copied', async () => {
+    const { host } = await mount()
+    const click = async (label: string) =>
+      act(async () => {
+        const b = Array.from(document.querySelectorAll('button')).find(
+          (x) => x.textContent?.trim() === label,
+        )
+        expect(b, label).toBeTruthy()
+        b!.click()
+      })
+    await click('Create API key')
+    const nameInput = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Stream Deck XL"]',
+    )!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(nameInput, 'Node Reactor')
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await click('Create key')
+    await act(async () => Promise.resolve())
+    expect(host.ownerDocument.body.textContent).toContain('This secret is shown once.')
+    // Escape (the dialog's cancel event) asks instead of closing.
+    await act(async () => {
+      document.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }))
+    })
+    expect(document.body.textContent).toContain('You haven’t copied it')
+    await click('Keep it open')
+    expect(document.body.textContent).not.toContain('You haven’t copied it')
+    expect(document.querySelector('input[aria-label="Generated API key secret"]')).toBeTruthy()
+  })
 })

@@ -42,14 +42,18 @@ const TAG_ORDER = [
   'API Keys',
   'Chat & Moderation',
   'Bot & Widgets',
-  'Alerts, Designs & Media',
+  'Alerts & Overlays',
+  'Designs & Media',
+  'Automations',
   'Go Live',
-  'OBS & Music',
+  'OBS',
   'Studio Engine',
   'Moments & Show',
-  'Settings & Imports',
+  'Settings & Backups',
+  'Imports & Exports',
   'Accounts & Pro',
-  'Plugins & Diagnostics',
+  'Plugins',
+  'Diagnostics',
 ]
 
 function extractRefName(node: unknown): string | null {
@@ -106,10 +110,16 @@ ops.sort((a, b) => {
   return (METHOD_ORDER[a.method] ?? 9) - (METHOD_ORDER[b.method] ?? 9)
 })
 
-const tagCounts = TAG_ORDER.map((tag) => ({
-  tag,
-  count: ops.filter((o) => o.tag === tag).length,
-})).filter((t) => t.count > 0)
+// Every tag the spec really has: the known ones in their order, any other after, alphabetically
+// (a tag renamed in the spec must not silently drop its routes from the filter).
+const presentTags = [...new Set(ops.map((o) => o.tag))]
+const orderOf = (t: string) => {
+  const i = TAG_ORDER.indexOf(t)
+  return i === -1 ? TAG_ORDER.length : i
+}
+const tagCounts = presentTags
+  .sort((a, b) => orderOf(a) - orderOf(b) || a.localeCompare(b))
+  .map((tag) => ({ tag, count: ops.filter((o) => o.tag === tag).length }))
 
 const schemaEntries = Object.entries(
   (openapi.components?.schemas ?? {}) as Record<string, Record<string, unknown>>,
@@ -202,7 +212,7 @@ const ws = new WebSocket(\`ws://127.0.0.1:47820/api/v1/live?key=\${encodeURIComp
 ws.addEventListener('message', async (ev) => {
   const frame = JSON.parse(String(ev.data))
   if (frame.type === 'event' && frame.data?.kind?.type === 'follow') {
-    await fetch('http://127.0.0.1:47820/api/v1/studio/counters/follows', {
+    await fetch('http://127.0.0.1:47820/api/v1/counters/follows/change', {
       method: 'POST',
       headers: {
         Authorization: \`Bearer \${key}\`,

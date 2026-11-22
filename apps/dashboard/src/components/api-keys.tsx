@@ -63,10 +63,13 @@ export function ApiKeysSection() {
   const { run, busy } = useAction()
   const [creating, setCreating] = useState(false)
   const [revoking, setRevoking] = useState<ApiKeySummary | null>(null)
-  const [showAllAudit, setShowAllAudit] = useState(false)
+  const [auditShown, setAuditShown] = useState(5)
 
   const v = res.data
-  const activeCount = v?.keys.filter((k) => k.revoked_at === null).length ?? 0
+  // Revoked and expired keys don't count toward the limit (the engine doesn't count them).
+  const activeCount =
+    v?.keys.filter((k) => k.revoked_at === null && (k.expires_at === null || k.expires_at > now))
+      .length ?? 0
 
   const handleRevoke = async () => {
     if (!revoking) return
@@ -192,14 +195,20 @@ export function ApiKeysSection() {
                   <Button
                     variant="ghost"
                     size="xs"
-                    onClick={() => setShowAllAudit((prev) => !prev)}
+                    onClick={() =>
+                      setAuditShown((n) =>
+                        n >= v.audit.length ? 5 : Math.min(n + 20, v.audit.length),
+                      )
+                    }
                   >
-                    {showAllAudit ? 'Show less' : `Show all (${v.audit.length})`}
+                    {auditShown >= v.audit.length
+                      ? 'Show less'
+                      : `Show more (${auditShown} of ${v.audit.length})`}
                   </Button>
                 )}
               </div>
               <ul className="flex flex-col gap-1.5" aria-label="Recent API key activity">
-                {(showAllAudit ? v.audit.slice(0, 20) : v.audit.slice(0, 5)).map((entry) => (
+                {v.audit.slice(0, auditShown).map((entry) => (
                   <li
                     key={entry.id}
                     className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[8px] border border-line/70 bg-surface-1 px-3 py-2 text-[14px]"
@@ -272,6 +281,10 @@ function CreateApiKeyDialog({
   const [apiErr, setApiErr] = useState<{ message: string; hint: string | null } | null>(null)
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState<ApiKeyCreated | null>(null)
+  // The secret is shown once: closing it by a click outside or Escape asks first, unless it was
+  // copied (the Done button always closes).
+  const [copied, setCopied] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
 
   const toggleScope = (scope: ApiKeyScope) => {
     setScopeErr(null)
@@ -325,7 +338,7 @@ function CreateApiKeyDialog({
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={created && !copied ? () => setConfirmClose(true) : onClose}
       size="md"
       title={created ? 'Save your new API key' : 'Create local API key'}
       description={
@@ -335,9 +348,20 @@ function CreateApiKeyDialog({
       }
       footer={
         created ? (
-          <Button variant="primary" onClick={onClose}>
-            Done
-          </Button>
+          confirmClose ? (
+            <>
+              <Button variant="secondary" onClick={() => setConfirmClose(false)}>
+                Keep it open
+              </Button>
+              <Button variant="danger" onClick={onClose}>
+                Close without copying
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" onClick={onClose}>
+              Done
+            </Button>
+          )
         ) : (
           <>
             <Button variant="ghost" onClick={onClose}>
@@ -361,6 +385,11 @@ function CreateApiKeyDialog({
             />
             <div>
               <p className="font-semibold">This secret is shown once.</p>
+              {confirmClose && (
+                <p role="alert" className="mt-0.5 font-semibold text-danger">
+                  You haven’t copied it. Close now and it is gone for good.
+                </p>
+              )}
               <p className="mt-0.5 text-text-2">
                 Pass it as <code className="font-mono">Authorization: Bearer ...</code> against{' '}
                 <code className="font-mono">127.0.0.1</code>.
@@ -382,7 +411,8 @@ function CreateApiKeyDialog({
               icon={<Copy size={16} />}
               className="w-full sm:w-auto"
               onClick={() =>
-                void copyText(created.token).then((ok) =>
+                void copyText(created.token).then((ok) => {
+                  if (ok) setCopied(true)
                   toast(
                     ok
                       ? { tone: 'ok', message: 'API key copied.' }
@@ -390,8 +420,8 @@ function CreateApiKeyDialog({
                           tone: 'error',
                           message: 'Couldn’t copy. Select the key text and copy it.',
                         },
-                  ),
-                )
+                  )
+                })
               }
             >
               Copy key
