@@ -106,6 +106,7 @@ import { DemoTtsVoices } from './features/tts-voices'
 import { DemoTipDomain, type DemoTipDomainState } from './features/tip-domain'
 import { DemoWeeklyEmail, type DemoWeeklyEmailState } from './features/weekly-email'
 import { DemoAutoReplies } from './features/autoreplies'
+import { DemoApiKeys } from './features/api-keys'
 import { DemoRemote } from './features/remote'
 import {
   pcOfflineError,
@@ -486,6 +487,8 @@ export class DemoEngine {
   readonly remoteDevices = new DemoRemote(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
   )
+  /** Scoped local API keys & audit log (Settings › Advanced). */
+  readonly apiKeys = new DemoApiKeys()
   /** Acting as a phone: the role and whether the PC is on. */
   private remote: DemoRemoteSession | null = null
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
@@ -1908,6 +1911,7 @@ export class DemoEngine {
       this.autoReplies,
       this.ttsVoices,
       this.remoteDevices,
+      this.apiKeys,
       this.weeklyEmail,
       this.tipDomain,
     ]

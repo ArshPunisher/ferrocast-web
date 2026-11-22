@@ -159,6 +159,16 @@ export const PAGES = {
     ogKicker: 'Creator guide',
     crumb: 'Submit to store',
   }),
+  api: p({
+    path: '/docs/api/',
+    title: 'Ferrocast local API & WebSocket reference',
+    description:
+      'Reference for the Ferrocast local REST API (OpenAPI 3.1), live WebSocket frames (AsyncAPI 3.0), scoped API keys, rate limits, and obs-websocket v5.',
+    ogTitle: 'Local REST & WebSocket API',
+    ogKicker: 'Developer docs',
+    crumb: 'API reference',
+    parent: '/docs/getting-started/',
+  }),
   terms: p({
     path: '/terms/',
     title: 'Terms of service | Ferrocast',

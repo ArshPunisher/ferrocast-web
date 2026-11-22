@@ -664,6 +664,13 @@ export class FerroClient {
   installUpdate = () => this.post<{ installing: string }>('/api/v1/updates/install')
   /** "Restart to finish" after an install. 409 `not_ready`, 409 `live`. */
   restartForUpdate = () => this.post<{ restarting: string }>('/api/v1/updates/restart')
+  /** Local scoped API keys & redacted usage audit (PC-only). */
+  apiKeys = () => this.get<import('./api-keys').ApiKeysView>('/api/v1/api-keys')
+  /** Creates a local API key and returns its secret token once. */
+  createApiKey = (body: import('./api-keys').ApiKeyCreate) =>
+    this.post<import('./api-keys').ApiKeyCreated>('/api/v1/api-keys', body)
+  /** Revokes a local API key immediately. */
+  revokeApiKey = (id: string) => this.del(`/api/v1/api-keys/${enc(id)}`)
 }
 
 export function formatSupportTimestamp(date = new Date()): string {
