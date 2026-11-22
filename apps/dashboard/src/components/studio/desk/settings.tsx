@@ -2336,10 +2336,15 @@ export function GeneralPage({ s, set }: PageProps) {
           (v) => set({ snap_screen: v }),
           !snapping,
         )}
-        {toggle('To other sources', !!s.snap_sources, (v) => set({ snap_sources: v }), !snapping)}
+        {toggle(
+          'To other sources',
+          s.snap_sources ?? true,
+          (v) => set({ snap_sources: v }),
+          !snapping,
+        )}
         {toggle(
           'To the middle of the screen',
-          !!s.snap_center,
+          s.snap_center ?? true,
           (v) => set({ snap_center: v }),
           !snapping,
         )}

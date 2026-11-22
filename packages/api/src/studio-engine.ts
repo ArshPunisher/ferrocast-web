@@ -3,12 +3,114 @@
 
 import type { FerroClient } from './client'
 import type { UploadCheck } from './golive'
-import type { SafeModeStatus } from './types'
+import type { Overlay, SafeModeStatus, WidgetKind } from './types'
 
 /**
  * Sound that looks after itself: music quieter while you talk (ducking), and every track at
  * the loudness platforms want.
  */
+export type OverlayPackFormat = 'streamlabs' | 'own3d' | 'obs_bundle'
+
+export type FontStatus =
+  'installed' | 'bundled' | 'cached' | 'downloaded' | 'missing' | 'not_found' | 'offline_fallback'
+
+export interface OverlayPackPreviewScene {
+  name: string
+  items: number
+  mapped: number
+  widgets: number
+  unknown: number
+}
+
+export interface OverlayPackPreviewWidget {
+  scene: string
+  name: string
+  source_kind: string
+  mapped_to?: WidgetKind | null
+  overlay_widget_name: string
+  supported: boolean
+}
+
+export interface OverlayPackUnknownSource {
+  scene: string
+  name: string
+  kind: string
+  reason: string
+}
+
+export interface OverlayPackFontPreview {
+  family: string
+  style: string
+  status: FontStatus
+  cached_file?: string
+}
+
+export interface OverlayPackPreview {
+  preview_id: string
+  suggested_name: string
+  format: OverlayPackFormat
+  canvas: { width: number; height: number }
+  scene_count: number
+  source_count: number
+  scenes: OverlayPackPreviewScene[]
+  widgets: OverlayPackPreviewWidget[]
+  media_files: number
+  media_bytes: number
+  missing_assets: string[]
+  unknown_sources: OverlayPackUnknownSource[]
+  fonts: OverlayPackFontPreview[]
+  notes: string[]
+  expires_at: number
+}
+
+export interface OverlayPackFontResult {
+  family: string
+  style: string
+  status: FontStatus
+  license?: string
+  file?: string
+  message?: string
+}
+
+export interface CreatedOverlaySummary {
+  id: string
+  name: string
+  scene: string
+  url: string
+  widget_kinds: WidgetKind[]
+}
+
+export interface OverlayPackImportReport {
+  id: string
+  name: string
+  format: OverlayPackFormat
+  previous_id?: string
+  undo_token: string
+  scenes: number
+  sources: number
+  web_pages: number
+  widgets_mapped: number
+  overlays_created: CreatedOverlaySummary[]
+  media_copied: number
+  media_bytes: number
+  missing_assets: string[]
+  unknown_sources: OverlayPackUnknownSource[]
+  missing: string[]
+  fonts: OverlayPackFontResult[]
+  offline_font_fallback: boolean
+  notes: string[]
+}
+
+export interface OverlayPackUndoReport {
+  removed_collection_id: string
+  removed_collection_name: string
+  restored_collection_id?: string
+  removed_overlays: number
+  deleted_files: number
+}
+
+export type _OverlayRefKeepAlive = Overlay
+
 export interface AudioCare {
   ducking: { voices: string[]; music: string[]; depth_db: number } | null
   /** -14 for most platforms; null: off. */
@@ -137,6 +239,8 @@ export interface EngineScene {
   preview?: boolean
   /** Its own transition (OBS's Transition Override), or null for the Studio's. */
   transition: EngineTransition | null
+  /** Named transition override applied to this scene (`Any -> scene`), if set by name. */
+  transition_name?: string | null
 }
 
 export interface EngineTransition {
@@ -145,12 +249,128 @@ export interface EngineTransition {
   ms: number
 }
 
+export interface EngineNamedTransition {
+  name: string
+  kind: string
+  ms: number
+  settings: EngineSettings
+  default: boolean
+}
+
+export interface EngineTransitionMatrixRule {
+  /** Source scene name, or null for `Any`. */
+  from: string | null
+  /** Target scene name, or null for `Any`. */
+  to: string | null
+  /** Name of the named transition to use. */
+  transition: string
+}
+
+/**
+ * Resolves which transition plays when switching from `from` to `to` using the matrix rules
+ * (precedence: exact pair -> Any to destination -> source to Any -> default transition).
+ */
+/**
+ * A scene's older per-scene override (from before the matrix), if it has one. The `transition` a
+ * scene shows is also the projection of a named rule that points at it: when `transition_name`
+ * names one of the named transitions, that is the rule, not a legacy override (clearing the rule
+ * must not leave its own projection to fall back to).
+ */
+export function legacySceneTransition(data: EngineScenes, scene: string) {
+  const s = data.scenes.find((x) => x.name === scene)
+  if (!s?.transition) return undefined
+  const named = data.named_transitions ?? []
+  if (s.transition_name && named.some((t) => t.name === s.transition_name)) return undefined
+  return s.transition
+}
+
+export function resolveTransitionFromScenes(
+  data: EngineScenes,
+  from: string,
+  to: string,
+): {
+  name: string
+  kind: string
+  ms: number
+  settings: EngineSettings
+  via: 'pair' | 'to' | 'from' | 'default'
+} {
+  const list = data.named_transitions ?? []
+  // Last rule wins, as the engine resolves a hand-edited collection with a repeated pair.
+  const rules = [...(data.transition_matrix ?? [])].reverse()
+  const byName = (name: string) => list.find((t) => t.name === name)
+  const pair = rules.find((r) => r.from === from && r.to === to)
+  const pairT = pair ? byName(pair.transition) : undefined
+  if (pairT) {
+    return {
+      name: pairT.name,
+      kind: pairT.kind,
+      ms: pairT.kind === 'cut_transition' ? 0 : pairT.ms,
+      settings: pairT.settings,
+      via: 'pair',
+    }
+  }
+  const toRule = rules.find((r) => r.from === null && r.to === to)
+  const toT = toRule ? byName(toRule.transition) : undefined
+  if (toT) {
+    return {
+      name: toT.name,
+      kind: toT.kind,
+      ms: toT.kind === 'cut_transition' ? 0 : toT.ms,
+      settings: toT.settings,
+      via: 'to',
+    }
+  }
+  const sceneLegacy = legacySceneTransition(data, to)
+  if (sceneLegacy) {
+    return {
+      name: '',
+      kind: sceneLegacy.kind,
+      ms: sceneLegacy.kind === 'cut_transition' ? 0 : sceneLegacy.ms,
+      settings: {},
+      via: 'to',
+    }
+  }
+  const fromRule = rules.find((r) => r.from === from && r.to === null)
+  const fromT = fromRule ? byName(fromRule.transition) : undefined
+  if (fromT) {
+    return {
+      name: fromT.name,
+      kind: fromT.kind,
+      ms: fromT.kind === 'cut_transition' ? 0 : fromT.ms,
+      settings: fromT.settings,
+      via: 'from',
+    }
+  }
+  const defT = list.find((t) => t.default) ?? list[0]
+  if (defT) {
+    return {
+      name: defT.name,
+      kind: defT.kind,
+      ms: defT.kind === 'cut_transition' ? 0 : defT.ms,
+      settings: defT.settings,
+      via: 'default',
+    }
+  }
+  return {
+    name: '',
+    kind: data.transition.kind,
+    ms: data.transition.kind === 'cut_transition' ? 0 : data.transition.ms,
+    settings: {},
+    via: 'default',
+  }
+}
+
 export interface EngineScenes {
   scenes: EngineScene[]
   current: string
   /** The Studio is off: the scenes are from its saved file (nothing is on air). */
   saved?: boolean
   transition: EngineTransition
+  /** Saved named transitions with their own kinds, durations, settings and default flag. */
+  named_transitions?: EngineNamedTransition[]
+  /** From-scene / to-scene matrix rules (`null` acts as `Any`). */
+  transition_matrix?: EngineTransitionMatrixRule[]
   /** Studio Mode's preview scene (what goes on air next), or null when Studio Mode is off. */
   preview?: string | null
   /** OBS's quick transitions: one-click ways to send the preview on air. */
@@ -1132,6 +1352,50 @@ export function studioEngineApi(c: FerroClient) {
       c.request<void>('PUT', `/api/v1/studio/engine/scenes/${enc(scene)}/transition`, {
         transition,
       }),
+    /** Adds a saved named transition. */
+    addNamedTransition: (transition: {
+      name: string
+      kind: string
+      ms: number
+      settings?: EngineSettings
+      default?: boolean
+    }) => c.request<EngineNamedTransition>('POST', '/api/v1/studio/engine/transitions', transition),
+    /** Updates a named transition's kind, length, settings, or default flag. */
+    updateNamedTransition: (
+      name: string,
+      patch: { kind?: string; ms?: number; settings?: EngineSettings; default?: boolean },
+    ) =>
+      c.request<EngineNamedTransition>(
+        'PUT',
+        `/api/v1/studio/engine/transitions/${enc(name)}`,
+        patch,
+      ),
+    /** Renames a named transition while keeping default and matrix references. */
+    renameNamedTransition: (name: string, to: string) =>
+      c.request<EngineNamedTransition>(
+        'POST',
+        `/api/v1/studio/engine/transitions/${enc(name)}/rename`,
+        { name: to },
+      ),
+    /** Duplicates a named transition (`default: false`). */
+    duplicateNamedTransition: (name: string, to?: string) =>
+      c.request<EngineNamedTransition>(
+        'POST',
+        `/api/v1/studio/engine/transitions/${enc(name)}/duplicate`,
+        to ? { name: to } : {},
+      ),
+    /** Marks a named transition as the collection's default. */
+    setDefaultNamedTransition: (name: string) =>
+      c.request<void>('PUT', `/api/v1/studio/engine/transitions/${enc(name)}/default`, {}),
+    /** Deletes a named transition and clears matrix rules pointing to it. */
+    deleteNamedTransition: (name: string) =>
+      c.request<void>('DELETE', `/api/v1/studio/engine/transitions/${enc(name)}`),
+    /** Sets or clears a rule in the from-scene / to-scene transition matrix. */
+    setTransitionMatrixRule: (rule: {
+      from: string | null
+      to: string | null
+      transition: string | null
+    }) => c.request<void>('PUT', '/api/v1/studio/engine/transition-matrix', rule),
     /** A source's own picture now, before its filters (or with them: `filters`), `w` pixels
      * wide (64 to 640), with the source's real size: what the crop editor and the filter
      * previews draw on. `image` is null until the source has a picture. */
@@ -1240,6 +1504,26 @@ export function studioEngineApi(c: FerroClient) {
         box,
       ),
     /**
+     * Moves and sizes several items at once, each as `setItemBox` does: aligning, spacing out, or
+     * moving and sizing a group of picked sources, as ONE undo step however many (a drag of them
+     * is one step too). All of them or none. 1 to 500 boxes, each id once. `save` at the end of a
+     * drag → the items, in the order given.
+     */
+    setItemBoxes: (
+      scene: string,
+      body: {
+        items: { id: number; x: number; y: number; w: number; h: number }[]
+        save?: boolean
+        /** One click of Align or Space out: its own undo step, named for it. */
+        reason?: 'align' | 'distribute'
+      },
+    ) =>
+      c.request<EngineItem[]>(
+        'PUT',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/boxes`,
+        body,
+      ),
+    /**
      * Crops an item from the preview (OBS's Alt-drag on a handle): left, top, right, bottom in
      * the source's own pixels; what's left stays where it is on screen → the item.
      */
@@ -1297,6 +1581,36 @@ export function studioEngineApi(c: FerroClient) {
         'POST',
         '/api/v1/studio/engine/library/collections/import',
         { name, doc },
+      ),
+    /** Previews a Streamlabs or OWN3D `.overlay` zip without modifying files or fonts. */
+    previewOverlayPack: (file: Blob, name = 'pack.overlay') => {
+      const form = new FormData()
+      form.append('file', file, name)
+      return c.request<OverlayPackPreview>(
+        'POST',
+        '/api/v1/studio/engine/library/collections/overlay/preview',
+        undefined,
+        form,
+      )
+    },
+    /** Imports a previewed `.overlay` theme pack (copies media, downloads Google Fonts, creates overlays, switches collection). */
+    importOverlayPack: (req: {
+      preview_id: string
+      name?: string
+      create_overlays?: boolean
+      fetch_fonts?: boolean
+    }) =>
+      c.request<OverlayPackImportReport>(
+        'POST',
+        '/api/v1/studio/engine/library/collections/overlay/import',
+        req,
+      ),
+    /** Undoes a previous `.overlay` pack import (restores previous collection, deletes overlays and copied pack media). */
+    undoOverlayPack: (undo_token: string) =>
+      c.request<OverlayPackUndoReport>(
+        'POST',
+        '/api/v1/studio/engine/library/collections/overlay/undo',
+        { undo_token },
       ),
     /** Undoes the newest change to sources → what it was, and what's next each way. */
     undo: () =>
@@ -1676,7 +1990,7 @@ export function studioEngineApi(c: FerroClient) {
         mode,
         top_field_first: topFieldFirst,
       }),
-    /** Current encoder stress benchmark and rollback state (R30). */
+    /** Current encoder stress benchmark and rollback state (R35). */
     autoConfig: () => c.request<AutoConfigState>('GET', '/api/v1/studio/engine/auto-config'),
     /** Starts the hardware-first encoder stress benchmark (and upload test in stream mode). */
     startAutoConfigBenchmark: (req?: BenchmarkRequest) =>

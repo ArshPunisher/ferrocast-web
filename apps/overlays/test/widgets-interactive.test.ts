@@ -453,6 +453,35 @@ describe('chat_highlight timing', () => {
   })
 })
 
+describe('timing and state follow-ups', () => {
+  it('does not count the time OBS had the source hidden against duration_s', () => {
+    vi.useFakeTimers()
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({}, overlay([highlightWidget({ duration_s: 30 })])))
+    const w = root.querySelector<HTMLElement>('.fc-w-chat-highlight')!
+    rt.apply(frame('state', { chat_highlight: makeHighlight('hl-h', 'ev-h', 'x') }))
+    vi.advanceTimersByTime(5000)
+    rt.setVisible(false)
+    vi.advanceTimersByTime(40_000)
+    rt.setVisible(true)
+    vi.advanceTimersByTime(20_000)
+    expect(w.hidden, '25 s visible of 30').toBe(false)
+    vi.advanceTimersByTime(6000)
+    expect(w.hidden, '31 s visible').toBe(true)
+  })
+
+  it('rebuilds the roster when a section with no data is switched back', () => {
+    const credits = { ...makeCredits(), mods: [] }
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({ credits }, overlay([creditsWidget({ sections: ['followers'] })])))
+    expect(root.textContent).toContain('LunaLagoon')
+    rt.apply(frame('config', overlay([creditsWidget({ sections: ['mods'] })])))
+    expect(root.textContent).not.toContain('LunaLagoon')
+    rt.apply(frame('config', overlay([creditsWidget({ sections: ['followers'] })])))
+    expect(root.textContent).toContain('LunaLagoon')
+  })
+})
+
 describe('removing a widget', () => {
   it('takes its element off the page for all three new widgets', () => {
     rt = createOverlay(root, { audio: false })

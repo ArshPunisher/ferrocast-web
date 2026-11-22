@@ -609,7 +609,7 @@ export function DockWorkspace({
         {top}
         <div
           ref={ws}
-          className="fc-desk flex flex-col overflow-hidden border border-line-strong bg-surface-1"
+          className="fc-desk flex flex-col overflow-x-clip border border-line-strong bg-surface-1"
         >
           {/* The picture keeps its 16:9 shape here (on wide screens it fits the space). */}
           <div

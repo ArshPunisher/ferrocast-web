@@ -2,6 +2,7 @@
 // dashboard can drive the same renderer for its previews.
 
 import type {
+  LabelTrainView,
   ChatHighlight,
   Credits,
   Overlay,
@@ -256,6 +257,9 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       state = {
         goals: Array.isArray(s?.goals) ? s.goals : [],
         labels: obj(s?.labels) ? (s.labels as Record<string, string>) : {},
+        ...(obj(s?.label_trains)
+          ? { label_trains: s.label_trains as Record<string, LabelTrainView | null> }
+          : {}),
         viewers: obj(s?.viewers) ? (s.viewers as OverlayState['viewers']) : {},
         events: Array.isArray(s?.events) ? s.events : [],
         chat: Array.isArray(s?.chat) ? s.chat : [],
@@ -301,6 +305,11 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         if (Array.isArray(d.goals)) state.goals = d.goals
         if (obj(d.labels))
           state.labels = { ...state.labels, ...(d.labels as Record<string, string>) }
+        if (obj(d.label_trains))
+          state.label_trains = {
+            ...state.label_trains,
+            ...(d.label_trains as OverlayState['label_trains']),
+          }
         if (obj(d.viewers))
           state.viewers = { ...state.viewers, ...(d.viewers as OverlayState['viewers']) }
         if ('poll' in d) state.poll = obj(d.poll) ? (d.poll as PollView) : null

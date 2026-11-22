@@ -271,6 +271,31 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+## R29. `.overlay` theme-pack import, Google Fonts & Undo (Phase 2 #13, 22 Nov)
+
+Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat/p2-overlay-import`):
+- `POST /api/v1/studio/engine/library/collections/overlay/preview` (multipart `file` upload)
+- `POST /api/v1/studio/engine/library/collections/overlay/import` (`{ preview_id, name?, create_overlays?, fetch_fonts? }`)
+- `POST /api/v1/studio/engine/library/collections/overlay/undo` (`{ undo_token }`)
+
+Also adds file-backed `GET/POST/PUT/DELETE` `/api/v1/studio/engine/library/*` fallback in `ferrocast-headless` when no desktop `StudioHost` is registered, and auto-loads `<FERROCAST_HOME>/fonts/` in `ferrocore::TextRenderer`.
+
+
+## R28. Moving several items at once: `PUT …/items/boxes` (22 Nov)
+
+Aligning, spacing out, and moving or resizing a group of picked sources in the preview change
+several items in one action. One `PUT …/items/{id}/box` per item made one undo step per item.
+
+Ask (done on the engine side, branch `feat/p2-snap-guides`): `PUT /api/v1/studio/engine/scenes/{scene}/items/boxes`
+`{ items: [{ id, x, y, w, h }], save?, reason? }` (`reason`: `align` or `distribute` for one click of those buttons: an undo step of its own, named for it, never joined to a drag) (canvas pixels, 1 to 500 items, each id once) → the items in
+the order given. Each box is applied as the single-item box is. All or none; one undo step (a
+drag of them, with `save: false` until the last, is one step, "Move 3 sources"). 400 for no items,
+more than 500, an id twice, a group together with one of its own sources, w or h under 1, or numbers
+past ±100000; 404 (`studio_no_source`) for an id not in the scene. Locked items are moved as asked
+(the dashboard doesn't send them). The preview's `holes` take up to 64 (it was 16). The dashboard uses it for the group box, the
+align and distribute buttons and the arrow keys with several sources picked; one source still uses
+`…/items/{id}/box`.
+
 
 ## R21. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
 
@@ -375,7 +400,51 @@ with backward-compatible defaults (`#[serde(default)]`):
 - `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
   active alert design no longer dresses an alert whose look is custom-enabled.
 
-## R30. Encoder stress benchmark in auto-config with rollback (22 Nov)
+## R27. Named transitions and from-scene / to-scene transition matrix (22 Nov)
+
+Named transition presets (each with its own name, kind, duration, OBS settings, and default flag)
+and a directed from-scene / to-scene override matrix with deterministic precedence (Phase 2 #14):
+
+- `GET /api/v1/studio/engine/scenes` adds:
+  - `named_transitions?: NamedTransition[]` (`{ name, kind, ms, settings, default }`, at least one, one `default: true`)
+  - `transition_matrix?: TransitionMatrixRule[]` (`{ from: string | null, to: string | null, transition: string }`)
+  - `scenes[i].transition_name?: string` (when an `Any → scene` named rule is set) and accurate `scenes[i].preview`
+- Named transition CRUD (all undoable in Studio History on the desktop engine; the in-browser demo keeps no history and has no Undo):
+  - `POST /api/v1/studio/engine/transitions` `{ name, kind, ms, settings?, default? }` → `201 Created` `NamedTransition` (`409 studio_name_taken`)
+  - `PUT /api/v1/studio/engine/transitions/{name}` `{ kind?, ms?, settings?, default? }` → `200 OK` updated `NamedTransition` (`404 studio_no_transition`)
+  - `POST /api/v1/studio/engine/transitions/{name}/rename` `{ name }` → `200 OK` updated `NamedTransition` (preserves default + matrix references; `409 studio_name_taken`)
+  - `POST /api/v1/studio/engine/transitions/{name}/duplicate` `{ name? }` → `201 Created` copy with `default: false` (`409 studio_name_taken`)
+  - `PUT /api/v1/studio/engine/transitions/{name}/default` `{}` → `204 No Content`
+  - `DELETE /api/v1/studio/engine/transitions/{name}` → `204 No Content` (removes matrix rules pointing to it, promotes default if needed; `409 studio_last_transition` on last remaining transition)
+- Transition matrix rule updates:
+  - `PUT /api/v1/studio/engine/transition-matrix` `{ from: string | null, to: string | null, transition: string | null }` → `204 No Content`.
+  - `from: null` means `Any → to`; `to: null` means `from → Any`; both null returns `400`. Passing `transition: null` clears the rule.
+  - Precedence on switch (direct, Studio Mode, T-bar, hotkeys, API/obs-websocket, automations): exact `(from, to)` → `Any → to` (or legacy scene override) → `from → Any` → default.
+- Demo engine (`packages/api/src/demo/features/studio-engine.ts`) simulates all named transition & matrix routes plus Studio Mode and scene switching so the live dashboard & browser walkthrough work end to end without desktop hardware.
+
+## R31. Support report & likely-cause analyzer (`#7`, 22 Nov)
+
+One-click redacted support archive (`.zip`) in Settings (`#/settings/advanced#support`), Studio Log dialog,
+and Desktop Help menu:
+- `GET /api/v1/diagnostics/preview` → redacted `SupportReport` (`likely_causes` ranked first, app/OS
+  versions, GPU & encoders, audio devices & sample rates, up to 5 recent streams' health, crash dumps,
+  safe mode / disk status).
+- `POST /api/v1/diagnostics/report` `{ folder? }` → picks folder on Desktop (`{ cancelled: true }` if
+  dismissed) or writes into explicit `folder` (`400` if missing/not a directory), saving a redacted `.zip`.
+- `POST /api/v1/diagnostics/report.zip` → streams the redacted `.zip` download for browsers.
+All three stay PC-only (`remoteAllowed` denies paired phones).
+
+## R32. Local stream labels+ & hype/combo train (`#8`, 22 Nov)
+
+`LabelConfig.source` covers Latest-X (`latest_follower`, `latest_sub`, `latest_gifter`, `latest_tip`,
+`latest_bits`, `latest_raid`), Session (`session_follows`, `session_subs`, `session_bits`, `session_tips`,
+`session_raids`, `top_tip_session`, `top_supporter_session`), Monthly (`monthly_*`, `top_tip_monthly`,
+`top_supporter_monthly` with optional DST-aware IANA `timezone` or fallback `timezone_offset_min`
+`-720..840`), All-time (`alltime_*`,
+`top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
+`train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
+
+## R35. Encoder stress benchmark in auto-config with rollback (22 Nov)
 
 Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
 skipped/lagged frames, and CPU/GPU load across hardware encoders (`VideoToolbox`, `NVENC`,

@@ -411,14 +411,55 @@ export interface GoalConfig {
 export type LabelSource =
   | 'latest_follower'
   | 'latest_sub'
+  | 'latest_gifter'
   | 'latest_tip'
-  | 'top_tip_session'
+  | 'latest_bits'
+  | 'latest_raid'
   | 'session_follows'
   | 'session_subs'
+  | 'session_bits'
+  | 'session_tips'
+  | 'session_raids'
+  | 'top_tip_session'
+  | 'top_supporter_session'
+  | 'monthly_follows'
+  | 'monthly_subs'
+  | 'monthly_bits'
+  | 'monthly_tips'
+  | 'monthly_raids'
+  | 'top_tip_monthly'
+  | 'top_supporter_monthly'
+  | 'alltime_follows'
+  | 'alltime_subs'
+  | 'alltime_bits'
+  | 'alltime_tips'
+  | 'alltime_raids'
+  | 'top_tip_alltime'
+  | 'top_supporter_alltime'
+  | 'hype_train'
+
 export interface LabelConfig {
   source: LabelSource
   template: string
   theme: string
+  timezone?: string
+  timezone_offset_min?: number
+  train_window_s?: number
+  train_step_s?: number
+  train_max_s?: number
+  train_threshold?: number
+}
+
+export interface LabelTrainView {
+  active: boolean
+  level: number
+  events: number
+  contributors: number
+  latest_actor: string | null
+  remaining_ms: number
+  ends_at: number | null
+  warmup_count: number
+  threshold: number
 }
 export interface ViewersConfig {
   platforms: Platform[]
@@ -1656,6 +1697,7 @@ export type LiveFrame =
 export interface OverlayState {
   goals: Goal[]
   labels: Record<string, string>
+  label_trains?: Record<string, LabelTrainView | null>
   viewers: Partial<Record<Platform, number>>
   events: FerroEvent[]
   chat: FerroEvent[]
@@ -1810,6 +1852,7 @@ export type OverlayServerFrame =
           OverlayState,
           | 'goals'
           | 'labels'
+          | 'label_trains'
           | 'viewers'
           | 'poll'
           | 'giveaway'
@@ -1837,4 +1880,141 @@ export type OverlayClientFrame =
 /** The error body every route returns (API.md §1). */
 export interface ApiErrorBody {
   error: { code: string; message: string; hint?: string }
+}
+
+// ---------------------------------------------------------------------- diagnostics (#7)
+
+export type CauseSeverity = 'critical' | 'warning' | 'info'
+
+export interface LikelyCause {
+  severity: CauseSeverity
+  code: string
+  title: string
+  detail: string
+  recommendation: string
+}
+
+export interface AppVersionInfo {
+  version: string
+  os: string
+  arch: string
+  build_mode: string
+}
+
+export interface OsVersionInfo {
+  name: string
+  version: string
+  long_version: string
+  kernel_version: string
+}
+
+export interface GpuInfo {
+  name: string
+  backend: string
+  device_type: string
+  driver: string
+  driver_info: string
+  is_software: boolean
+  active_renderer: string | null
+}
+
+export interface EncoderInfo {
+  id: string
+  label: string
+  hardware: boolean
+  codec: string
+  selected: boolean
+}
+
+export interface AudioDeviceInfo {
+  kind: 'input' | 'output' | string
+  name: string
+  is_default: boolean
+  sample_rate_hz: number | null
+  supported_sample_rates_hz: number[]
+  channels: number | null
+}
+
+export interface AudioSummary {
+  studio_sample_rate_hz: number
+  monitoring_device: string | null
+  devices: AudioDeviceInfo[]
+  enumeration_supported?: boolean
+}
+
+export interface DestinationHealthSnapshot {
+  platform: string
+  target: string
+  state: string
+  kbps: number
+  dropped_frames: number
+  total_frames: number
+  rtt_ms: number | null
+  lost_pct: number | null
+  reconnects: number
+  last_error: string | null
+}
+
+export interface StreamHealthRecord {
+  id: string
+  started_at: Millis
+  ended_at: Millis | null
+  duration_s: number
+  platforms: Platform[]
+  live: boolean
+  unclean_end: boolean
+  fps_target: number
+  canvas: string
+  encoder_id: string | null
+  sample_rate_hz: number
+  dropped_frames: number
+  skipped_frames: number
+  lagged_frames: number
+  rendered_frames: number
+  avg_fps: number
+  cpu_pct: number
+  memory_mb: number
+  frame_ms: number
+  destinations: DestinationHealthSnapshot[]
+  issues: string[]
+}
+
+export interface CrashDumpSummary {
+  filename: string
+  modified_ms: number | null
+  size_bytes: number
+  kind: string
+  included_in_zip: boolean
+  summary: string | null
+}
+
+export interface ConnectorDiagnostic {
+  platform: Platform
+  state: string
+  detail: string | null
+}
+
+export interface SupportReport {
+  generated_at: Millis
+  likely_causes: LikelyCause[]
+  app: AppVersionInfo
+  os: OsVersionInfo
+  gpu: GpuInfo
+  encoders: EncoderInfo[]
+  audio: AudioSummary
+  last_streams: StreamHealthRecord[]
+  crashes: CrashDumpSummary[]
+  connectors: ConnectorDiagnostic[]
+  logs_included: string[]
+  disk_free_mb: number | null
+  safe_mode: boolean
+  unclean_exit: boolean
+}
+
+export interface WrittenSupportReport {
+  cancelled: boolean
+  path: string | null
+  filename: string | null
+  size_bytes: number
+  report: SupportReport | null
 }

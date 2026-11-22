@@ -10,6 +10,7 @@ import {
   Check,
   Copy,
   DownloadSimple,
+  Package,
   PencilSimple,
   Plus,
   Trash,
@@ -21,6 +22,7 @@ import { Field, Button, Dialog, Input, cx, toast } from '@ferrocast/ui'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { saveBlob } from '../common'
 import { useDesk } from './common'
+import { ImportOverlayPackDialog } from './import-overlay-pack'
 import { useContextMenu, type MenuItem } from './menu'
 
 /** Biggest collection file to read (OBS's are well under this). */
@@ -65,6 +67,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
   const { run, busy } = useAction()
   const { open, menu } = useContextMenu()
   const [naming, setNaming] = useState<Naming | null>(null)
+  const [packImportOpen, setPackImportOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const runShelf = async <T,>(
@@ -141,6 +144,11 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
               label: 'Import a file',
               icon: UploadSimple,
               onSelect: () => fileInput.current?.click(),
+            },
+            {
+              label: 'Import a theme pack',
+              icon: Package,
+              onSelect: () => setPackImportOpen(true),
             },
           ]
         : []),
@@ -277,6 +285,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
           </button>
         )
       })}
+      <ImportOverlayPackDialog open={packImportOpen} onClose={() => setPackImportOpen(false)} />
       <input
         ref={fileInput}
         type="file"

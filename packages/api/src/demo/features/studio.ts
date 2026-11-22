@@ -37,6 +37,7 @@ import {
 import type { ChatPlatform, Command, FerroEvent, Platform } from '../../types'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, isWhole, requireObj, type DemoHost, type Routed } from './host'
+import { DemoStudioLibrary, type DemoOverlayHost } from './overlay-pack'
 import type { DemoStudioEngine } from './studio-engine'
 
 /** The demo's Twitch and Kick categories: what its search offers and its preview finds. */
@@ -222,6 +223,7 @@ export class DemoStudio {
     streaming: true,
   }
   health: ObsHealth | null = null
+  readonly library: DemoStudioLibrary
   private brbFrom: string | null = null
   private nextMarker = 1
   private nextQuote = 4
@@ -235,7 +237,27 @@ export class DemoStudio {
     /** Kick's demo sign-in predates the editor: it shows the reconnect flow. */
     private readonly kickNeedsReconnect = true,
     private readonly studioEngine: DemoStudioEngine | null = null,
+    overlayHost?: DemoOverlayHost,
   ) {
+    this.library = new DemoStudioLibrary(
+      overlayHost ?? {
+        baseUrl: () => 'http://127.0.0.1:47820',
+        isLive: () => this.host.isLive(),
+        isOffline: () => false,
+        createOverlay: (i) => ({
+          id: `ov-demo-${Date.now()}`,
+          name: i.name,
+          url: 'http://127.0.0.1:47820/o/demo/',
+          width: i.width,
+          height: i.height,
+          widgets: i.widgets,
+          updated_at: Date.now(),
+          design: null,
+        }),
+        deleteOverlay: () => undefined,
+        now: () => Date.now(),
+      },
+    )
     const now = Date.now()
     this.startedAt = now - 2 * 3_600_000 - 14 * 60_000
     this.quotes = [
@@ -1508,6 +1530,86 @@ export class DemoStudio {
 
     // The Studio's engine runs locally when simulated (onboarding/tests); otherwise needs desktop.
     if (a === 'studio' && b === 'engine') {
+      // A simulated Studio engine answers everything but the theme-pack routes (it has none).
+      const packRoute = c === 'library' && seg[3] === 'collections' && seg[4] === 'overlay'
+      if (this.studioEngine && !packRoute) {
+        return this.studioEngine.route(method, seg, body, url)
+      }
+      if (c === 'library') {
+        const [, , , kind, sub1, sub2] = seg
+        if (
+          kind === 'collections' &&
+          sub1 === 'overlay' &&
+          sub2 === 'preview' &&
+          method === 'POST' &&
+          seg.length === 6
+        ) {
+          return this.library.previewOverlayPack(body)
+        }
+        if (
+          kind === 'collections' &&
+          sub1 === 'overlay' &&
+          sub2 === 'import' &&
+          method === 'POST' &&
+          seg.length === 6
+        ) {
+          return this.library.importOverlayPack(body)
+        }
+        if (
+          kind === 'collections' &&
+          sub1 === 'overlay' &&
+          sub2 === 'undo' &&
+          method === 'POST' &&
+          seg.length === 6
+        ) {
+          return this.library.undoOverlayPack(body)
+        }
+        if (kind === 'collections' && sub1 === 'import' && method === 'POST' && seg.length === 5) {
+          const o = requireObj(body)
+          return this.library.importObsDoc(String(o.name ?? ''), requireObj(o.doc))
+        }
+        if ((kind === 'collections' || kind === 'profiles') && seg.length === 4) {
+          if (method === 'GET') return this.library.shelf(kind)
+          if (method === 'POST') {
+            const o = requireObj(body)
+            return this.library.newEntry(kind, String(o.name ?? ''), Boolean(o.copy))
+          }
+        }
+        if (
+          (kind === 'collections' || kind === 'profiles') &&
+          sub1 === 'current' &&
+          method === 'PUT' &&
+          seg.length === 5
+        ) {
+          return this.library.switchEntry(kind, String(requireObj(body).id ?? ''))
+        }
+        if (
+          (kind === 'collections' || kind === 'profiles') &&
+          sub1 &&
+          seg.length === 5 &&
+          method === 'DELETE'
+        ) {
+          return this.library.removeEntry(kind, sub1)
+        }
+        if (
+          (kind === 'collections' || kind === 'profiles') &&
+          sub1 &&
+          sub2 === 'rename' &&
+          seg.length === 6 &&
+          method === 'POST'
+        ) {
+          return this.library.renameEntry(kind, sub1, String(requireObj(body).name ?? ''))
+        }
+        if (
+          (kind === 'collections' || kind === 'profiles') &&
+          sub1 &&
+          sub2 === 'export' &&
+          seg.length === 6 &&
+          method === 'GET'
+        ) {
+          return this.library.exportEntry(kind, sub1)
+        }
+      }
       if (this.studioEngine) {
         return this.studioEngine.route(method, seg, body, url)
       }

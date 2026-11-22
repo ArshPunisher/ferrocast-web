@@ -4,6 +4,7 @@
 // built, screenshotted and tested with no engine. Faults can be injected per route.
 
 import { normalizeVariation, render, select, validateRule } from '../alert'
+import { zipSync, strToU8 } from 'fflate'
 import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
@@ -12,11 +13,15 @@ import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
+import { renderSafeTemplate } from '../template'
 import type { FetchLike } from '../client'
 import type { SocketFactory, SocketLike } from '../socket'
 import type {
   UpdateInfo,
   UpdateInstall,
+  LabelTrainView,
+  SupportReport,
+  WrittenSupportReport,
   Account,
   Actor,
   AlertRule,
@@ -350,6 +355,8 @@ export class DemoEngine {
   private filters: Filters = clone(FILTERS)
   /** Messages the chat filter held for a mod, oldest first: event id → reason. */
   private heldMsgs = new Map<string, string>()
+  /** The supporter events of this session, kept apart from the chat log so trimming the log never drops them. */
+  private creditLog: FerroEvent[] = []
   private panicCfg: PanicConfig = clone(PANIC)
   private panicOn = false
   private commands: Command[] = seedCommands()
@@ -390,6 +397,24 @@ export class DemoEngine {
   private notes = new Map<string, string>()
   private stats: SessionStats
   private labels = new Map<string, string>()
+  private labelExtras = {
+    raids: 1,
+    sessionTipsInr: 50_000,
+    monthlyFollows: 280,
+    monthlySubs: 52,
+    monthlyBits: 19_400,
+    monthlyTipsInr: 1_240_000,
+    monthlyRaids: 7,
+    alltimeFollows: 2_410,
+    alltimeSubs: 390,
+    alltimeBits: 118_500,
+    alltimeTipsInr: 7_850_000,
+    alltimeRaids: 48,
+    trainEvents: 5,
+    trainContributors: 4,
+    trainEndsAt: Date.now() + 95_000,
+    trainLatestActor: 'NeelaMoth',
+  }
   private viewers: Partial<Record<Platform, number>> = { twitch: 412, youtube: 188, kick: 57 }
   private liveSubs = new Set<LiveSub>()
   private overlaySubs = new Set<OverlaySub>()
@@ -622,7 +647,10 @@ export class DemoEngine {
     }
     this.labels.set('latest_follower', 'LunaLagoon')
     this.labels.set('latest_sub', 'DesertFoxx')
-    this.labels.set('latest_tip', 'Asha (₹500)')
+    this.labels.set('latest_gifter', 'Devika (5)')
+    this.labels.set('latest_tip', 'Asha ₹500')
+    this.labels.set('latest_bits', 'Ananya 1,200 bits')
+    this.labels.set('latest_raid', 'VikramGG (48)')
     this.host = this.makeHost()
     this.account = new DemoAccount(
       this.host,
@@ -637,6 +665,17 @@ export class DemoEngine {
       visibleChatById: (id) => {
         const e = this.events.find((x) => x.id === id)
         if (!e || e.kind.type !== 'chat_message' || this.heldMsgs.has(id)) return null
+        // Deleted by a moderator (or the platform): never shown on stream again.
+        if (
+          e.source_id &&
+          this.events.some(
+            (x) =>
+              x.platform === e.platform &&
+              x.kind.type === 'message_deleted' &&
+              x.kind.message_id === e.source_id,
+          )
+        )
+          return null
         return clone(e)
       },
       pushHighlightState: (highlight) =>
@@ -649,7 +688,38 @@ export class DemoEngine {
           this.host,
         )
       : null
-    this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine)
+    this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
+      baseUrl: () => this.base,
+      isLive: () => this.studio.library.busy,
+      isOffline: () => this.offline,
+      createOverlay: (input) => {
+        const id = `ov-${randomToken().slice(0, 10)}`
+        let unique = input.name.trim() || 'Overlay'
+        for (
+          let n = 2;
+          this.overlays.some((x) => x.name.toLowerCase() === unique.toLowerCase());
+          n++
+        ) {
+          unique = `${input.name.slice(0, 56)} ${n}`
+        }
+        const ov: Overlay = {
+          id,
+          name: unique,
+          url: `${this.base}/o/${this.tokenFor(id)}/`,
+          width: input.width,
+          height: input.height,
+          widgets: clone(input.widgets),
+          updated_at: Date.now(),
+          design: null,
+        }
+        this.overlays.push(ov)
+        return clone(ov)
+      },
+      deleteOverlay: (id) => {
+        this.overlays = this.overlays.filter((o) => o.id !== id)
+      },
+      now: () => Date.now(),
+    })
     this.golive = new DemoGoLive(
       this.host,
       () => this.accounts,
@@ -733,6 +803,7 @@ export class DemoEngine {
     })
     this.recap = new DemoRecap(() => ({
       events: this.events,
+      creditEvents: this.creditLog,
       stats: this.stats,
       live: this.isLive(),
     }))
@@ -1632,6 +1703,40 @@ export class DemoEngine {
       this.settings = { ...this.settings, ...patch }
       return clone(this.settings)
     }
+    if (is('GET', 'diagnostics', 'preview')) return this.demoDiagnosticsPreview()
+    if (is('POST', 'diagnostics', 'report')) {
+      const b = (body ?? {}) as { folder?: string | null }
+      if (b.folder === '__cancel__') {
+        return {
+          cancelled: true,
+          path: null,
+          filename: null,
+          size_bytes: 0,
+          report: null,
+        } satisfies WrittenSupportReport
+      }
+      const report = this.demoDiagnosticsPreview()
+      const zip = this.buildDemoDiagnosticsZip(report)
+      const filename = 'ferrocast-support-demo.zip'
+      return {
+        cancelled: false,
+        path: `${b.folder ?? '/Users/[REDACTED_USER]/Downloads'}/${filename}`,
+        filename,
+        size_bytes: zip.byteLength,
+        report,
+      } satisfies WrittenSupportReport
+    }
+    if (is('POST', 'diagnostics', 'report.zip')) {
+      const report = this.demoDiagnosticsPreview()
+      const zip = this.buildDemoDiagnosticsZip(report)
+      return new Response(zip as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename="ferrocast-support-demo.zip"',
+        },
+      })
+    }
     if (is('POST', 'export')) {
       const pack = {
         format: 'ferropack',
@@ -2036,7 +2141,7 @@ export class DemoEngine {
     this.overlays = this.overlays.map((x) => (x.id === saved.id ? saved : x))
     const patch: Record<string, unknown> = {}
     if (saved.widgets.some((w) => w.kind === 'end_credits')) {
-      patch.credits = buildCredits(this.events, this.stats)
+      patch.credits = buildCredits(this.creditLog, this.stats)
     }
     if (saved.widgets.some((w) => w.kind === 'chat_highlight')) {
       patch.chat_highlight = this.highlight.view()
@@ -2683,6 +2788,10 @@ export class DemoEngine {
     if (opts.design) this.designs.testWith(e.id, opts.design.id)
     this.events.push(e)
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000)
+    if (isCreditEvent(e)) {
+      this.creditLog.push(e)
+      if (this.creditLog.length > 5000) this.creditLog.splice(0, this.creditLog.length - 5000)
+    }
     this.broadcastLive({ v: 1, type: 'event', data: e })
     this.updateState(e)
     if (kind.type === 'chat_message' && !opts.held) for (const f of this.features()) f.onChat?.(e)
@@ -2809,7 +2918,8 @@ export class DemoEngine {
       if (e.kind.type === 'chat_message')
         return (
           (w.kind === 'chat' || w.kind === 'emote_wall') &&
-          (w.config.platforms.length === 0 || w.config.platforms.includes(e.platform))
+          ((w.config.platforms ?? []).length === 0 ||
+            (w.config.platforms ?? []).includes(e.platform))
         )
       return (
         w.kind === 'events' && (w.config.kinds.length === 0 || w.config.kinds.includes(e.kind.type))
@@ -2837,6 +2947,7 @@ export class DemoEngine {
     const state: OverlayState = {
       goals: clone(this.goals),
       labels: this.labelsFor(o),
+      label_trains: this.labelTrainsFor(o),
       viewers: clone(this.viewers),
       events: clone(this.events.filter((e) => isAlertable(e)).slice(-25)),
       chat: has('chat')
@@ -2844,7 +2955,7 @@ export class DemoEngine {
         : [],
       poll: this.polls.view(),
       giveaway: this.giveaways.card(),
-      credits: has('end_credits') ? buildCredits(this.events, this.stats) : null,
+      credits: has('end_credits') ? buildCredits(this.creditLog, this.stats) : null,
       chat_highlight: has('chat_highlight') ? this.highlight.view() : null,
       music: this.music.now(),
     }
@@ -2852,21 +2963,338 @@ export class DemoEngine {
     s.sock.deliver({ v: 1, seq: s.seq, type: 'snapshot', data: { overlay: clone(o), state } })
   }
 
-  private labelsFor(o: Overlay): Record<string, string> {
-    const out: Record<string, string> = {}
+  private demoTrainView(threshold = 3): LabelTrainView {
+    const remMs = Math.max(0, this.labelExtras.trainEndsAt - Date.now())
+    if (remMs <= 0) {
+      return {
+        active: false,
+        level: 0,
+        events: 0,
+        contributors: 0,
+        latest_actor: null,
+        remaining_ms: 0,
+        ends_at: null,
+        warmup_count: 0,
+        threshold,
+      }
+    }
+    const level = 1 + Math.floor(Math.max(0, this.labelExtras.trainEvents - threshold) / 5)
+    return {
+      active: true,
+      level,
+      events: this.labelExtras.trainEvents,
+      contributors: this.labelExtras.trainContributors,
+      latest_actor: this.labelExtras.trainLatestActor,
+      remaining_ms: remMs,
+      ends_at: this.labelExtras.trainEndsAt,
+      warmup_count: this.labelExtras.trainEvents,
+      threshold,
+    }
+  }
+
+  private labelTrainsFor(o: Overlay): Record<string, LabelTrainView | null> {
+    const out: Record<string, LabelTrainView | null> = {}
     for (const w of o.widgets) {
-      if (w.kind !== 'label') continue
-      const value =
-        w.config.source === 'session_follows'
-          ? String(this.stats.follows)
-          : w.config.source === 'session_subs'
-            ? String(this.stats.subs)
-            : w.config.source === 'top_tip_session'
-              ? 'Asha (₹500)'
-              : (this.labels.get(w.config.source) ?? '')
-      out[w.id] = w.config.template.replace(/\{name\}/g, value).replace(/\{value\}/g, value)
+      if (w.kind !== 'label' || w.config.source !== 'hype_train') continue
+      const v = this.demoTrainView(w.config.train_threshold ?? 3)
+      out[w.id] = v.active ? v : null
     }
     return out
+  }
+
+  private labelsFor(o: Overlay): Record<string, string> {
+    const out: Record<string, string> = {}
+    const ex = this.labelExtras
+    for (const w of o.widgets) {
+      if (w.kind !== 'label') continue
+      let value: string
+      switch (w.config.source) {
+        case 'session_follows':
+          value = String(this.stats.follows)
+          break
+        case 'session_subs':
+          value = String(this.stats.subs)
+          break
+        case 'session_bits':
+          value = this.stats.bits.toLocaleString('en-US')
+          break
+        case 'session_tips':
+          value =
+            this.stats.tips.length === 0
+              ? '0'
+              : this.stats.tips.map((m) => formatMoney(m)).join(' · ')
+          break
+        case 'session_raids':
+          value = String(ex.raids)
+          break
+        case 'top_tip_session':
+          value = 'Asha ₹500'
+          break
+        case 'top_supporter_session':
+          value = 'Asha (₹500, 2 subs)'
+          break
+        case 'monthly_follows':
+          value = String(ex.monthlyFollows + this.stats.follows)
+          break
+        case 'monthly_subs':
+          value = String(ex.monthlySubs + this.stats.subs)
+          break
+        case 'monthly_bits':
+          value = (ex.monthlyBits + this.stats.bits).toLocaleString('en-US')
+          break
+        case 'monthly_tips':
+          value = formatMoney({ currency: 'INR', minor: ex.monthlyTipsInr + ex.sessionTipsInr })
+          break
+        case 'monthly_raids':
+          value = String(ex.monthlyRaids + ex.raids)
+          break
+        case 'top_tip_monthly':
+          value = 'MeeraDraws ₹5,000'
+          break
+        case 'top_supporter_monthly':
+          value = 'Devika (15 subs, ₹3,500)'
+          break
+        case 'alltime_follows':
+          value = String(ex.alltimeFollows + this.stats.follows)
+          break
+        case 'alltime_subs':
+          value = String(ex.alltimeSubs + this.stats.subs)
+          break
+        case 'alltime_bits':
+          value = (ex.alltimeBits + this.stats.bits).toLocaleString('en-US')
+          break
+        case 'alltime_tips':
+          value = formatMoney({ currency: 'INR', minor: ex.alltimeTipsInr + ex.sessionTipsInr })
+          break
+        case 'alltime_raids':
+          value = String(ex.alltimeRaids + ex.raids)
+          break
+        case 'top_tip_alltime':
+          value = 'AriaLive ₹12,000'
+          break
+        case 'top_supporter_alltime':
+          value = 'Devika (45 subs, ₹8,000)'
+          break
+        case 'hype_train': {
+          const tv = this.demoTrainView(w.config.train_threshold ?? 3)
+          if (!tv.active) {
+            out[w.id] = ''
+            continue
+          }
+          const secs = Math.max(1, Math.ceil(tv.remaining_ms / 1000))
+          const mm = String(Math.floor(secs / 60)).padStart(2, '0')
+          const ss = String(secs % 60).padStart(2, '0')
+          const timer = `${mm}:${ss}`
+          const sum = `Lv.${tv.level} · ${tv.events} events · ${timer}`
+          out[w.id] = renderSafeTemplate(w.config.template, {
+            value: sum,
+            name: sum,
+            level: String(tv.level),
+            count: String(tv.events),
+            events: String(tv.events),
+            contributors: String(tv.contributors),
+            timer,
+            latest: tv.latest_actor ?? '',
+          })
+          continue
+        }
+        default:
+          value = this.labels.get(w.config.source) ?? ''
+          break
+      }
+      out[w.id] = renderSafeTemplate(w.config.template, { value, name: value })
+    }
+    return out
+  }
+
+  /** The first hype-train label's timing (seconds), else the defaults the engine uses. */
+  private demoTrainTimings(): { window: number; step: number; max: number; threshold: number } {
+    for (const o of this.overlays)
+      for (const w of o.widgets)
+        if (w.kind === 'label' && w.config.source === 'hype_train') {
+          const c = w.config
+          const window = c.train_window_s ?? 120
+          return {
+            window,
+            step: c.train_step_s ?? 15,
+            max: Math.max(c.train_max_s ?? 300, window),
+            threshold: c.train_threshold ?? 3,
+          }
+        }
+    return { window: 120, step: 15, max: 300, threshold: 3 }
+  }
+
+  private bumpDemoTrain(actorName: string): void {
+    const now = Date.now()
+    const t = this.demoTrainTimings()
+    if (this.labelExtras.trainEndsAt <= now) {
+      this.labelExtras.trainEndsAt = now + t.window * 1000
+      this.labelExtras.trainEvents = t.threshold
+      this.labelExtras.trainContributors = 1
+    } else {
+      this.labelExtras.trainEndsAt = Math.min(
+        now + t.max * 1000,
+        this.labelExtras.trainEndsAt + t.step * 1000,
+      )
+      this.labelExtras.trainEvents++
+    }
+    this.labelExtras.trainLatestActor = actorName
+  }
+
+  private demoDiagnosticsPreview(): SupportReport {
+    return {
+      generated_at: Date.now(),
+      likely_causes: [
+        {
+          severity: 'warning',
+          code: 'audio_sample_rate_mismatch',
+          title: "Audio device sample rate differs from Ferrocast's 48000 Hz mix",
+          detail: 'Mismatched devices: Fifine USB Mic (input at 44100 Hz)',
+          recommendation:
+            'Set OS audio devices and Studio Settings > Audio to the same sample rate (usually 48000 Hz) to avoid clock drift.',
+        },
+        {
+          severity: 'info',
+          code: 'software_encoder_selected',
+          title: 'Demo hardware telemetry ready for archive export',
+          detail:
+            'Redacted logs, last 5 streams health, GPU, and sample rates are bundled cleanly.',
+          recommendation: 'Share the exported .zip when reporting an issue.',
+        },
+      ],
+      app: { version: '3.4.0', os: 'macos', arch: 'aarch64', build_mode: 'release' },
+      os: {
+        name: 'macOS',
+        version: '15.2',
+        long_version: 'macOS 15.2 Sequoia',
+        kernel_version: '24.2.0',
+      },
+      gpu: {
+        name: 'Apple M3 Pro',
+        backend: 'Metal',
+        device_type: 'IntegratedGpu',
+        driver: '',
+        driver_info: '',
+        is_software: false,
+        active_renderer: 'ferrocore',
+      },
+      encoders: [
+        {
+          id: 'com.apple.videotoolbox.videoencoder.ave.avc',
+          label: 'Apple VT H264 Hardware Encoder',
+          hardware: true,
+          codec: 'H.264',
+          selected: true,
+        },
+        {
+          id: 'obs_x264',
+          label: 'x264',
+          hardware: false,
+          codec: 'H.264',
+          selected: false,
+        },
+      ],
+      audio: {
+        studio_sample_rate_hz: 48_000,
+        monitoring_device: 'Studio Headphones',
+        enumeration_supported: true,
+        devices: [
+          {
+            kind: 'input',
+            name: 'Fifine USB Mic',
+            is_default: true,
+            sample_rate_hz: 44_100,
+            supported_sample_rates_hz: [44_100, 48_000],
+            channels: 2,
+          },
+          {
+            kind: 'output',
+            name: 'Studio Headphones',
+            is_default: true,
+            sample_rate_hz: 48_000,
+            supported_sample_rates_hz: [48_000],
+            channels: 2,
+          },
+        ],
+      },
+      last_streams: [
+        {
+          id: 'stream-demo-1',
+          started_at: Date.now() - 86_400_000,
+          ended_at: Date.now() - 82_800_000,
+          duration_s: 3600,
+          platforms: ['twitch', 'youtube'],
+          live: false,
+          unclean_end: false,
+          fps_target: 60,
+          canvas: '1920x1080',
+          encoder_id: 'com.apple.videotoolbox.videoencoder.ave.avc',
+          sample_rate_hz: 48_000,
+          dropped_frames: 4,
+          skipped_frames: 0,
+          lagged_frames: 2,
+          rendered_frames: 216_000,
+          avg_fps: 59.9,
+          cpu_pct: 18.4,
+          memory_mb: 890,
+          frame_ms: 4.1,
+          destinations: [
+            {
+              platform: 'Twitch',
+              target: 'ferrocast_demo',
+              state: 'stopped',
+              kbps: 6000,
+              dropped_frames: 4,
+              total_frames: 216_000,
+              rtt_ms: 28,
+              lost_pct: 0.0,
+              reconnects: 0,
+              last_error: null,
+            },
+          ],
+          issues: [],
+        },
+      ],
+      crashes: [],
+      connectors: [{ platform: 'twitch', state: 'connected', detail: null }],
+      logs_included: ['logs/ferrocast.log'],
+      disk_free_mb: 142_000,
+      safe_mode: false,
+      unclean_exit: false,
+    }
+  }
+
+  private buildDemoDiagnosticsZip(report: SupportReport): Uint8Array {
+    const summary = [
+      'FERROCAST SUPPORT REPORT',
+      `Generated (unix ms): ${report.generated_at}`,
+      '',
+      '=== LIKELY CAUSES ===',
+      ...report.likely_causes.map(
+        (c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.title} (${c.code})\n   ${c.detail}`,
+      ),
+      '',
+      '=== APP & OS VERSIONS ===',
+      `App: Ferrocast ${report.app.version} | OS: ${report.os.long_version}`,
+      '',
+      '=== GPU & ENCODERS ===',
+      `GPU: ${report.gpu.name} (${report.gpu.backend})`,
+      '',
+      '=== AUDIO DEVICES & SAMPLE RATES ===',
+      ...report.audio.devices.map((d) => `- [${d.kind}] ${d.name}: ${d.sample_rate_hz ?? '?'} Hz`),
+      '',
+      '=== LAST 5 STREAMS HEALTH ===',
+      ...report.last_streams.map(
+        (s) => `- Stream ${s.id}: ${s.canvas}@${s.fps_target}fps dropped=${s.dropped_frames}`,
+      ),
+    ].join('\n')
+    const sampleLog =
+      '2026-11-22T03:00:00Z INFO starting in /Users/[REDACTED_USER]/Ferrocast stream_key=[REDACTED]\n'
+    return zipSync({
+      'SUMMARY.txt': strToU8(summary),
+      'report.json': strToU8(JSON.stringify(report, null, 2)),
+      'logs/ferrocast.log': strToU8(sampleLog),
+    })
   }
 
   private overlayClientFrame(s: OverlaySub, data: string): void {
@@ -2930,24 +3358,47 @@ export class DemoEngine {
     if (k.type === 'follow' && a) {
       this.stats.follows++
       this.labels.set('latest_follower', a.display_name)
+      this.bumpDemoTrain(a.display_name)
       labelChanged = true
     }
     if (k.type === 'subscription' && a) {
       this.stats.subs++
       this.labels.set('latest_sub', a.display_name)
+      this.bumpDemoTrain(a.display_name)
       labelChanged = true
       this.bumpGoal('subs', 1)
     }
     if (k.type === 'gift_batch') {
       this.stats.subs += k.count
+      this.labels.set('latest_gifter', `${k.gifter.display_name} (${k.count})`)
+      this.bumpDemoTrain(k.gifter.display_name)
+      labelChanged = true
       this.bumpGoal('subs', k.count)
     }
-    if (k.type === 'platform_gift' && k.value.unit === 'bits') this.stats.bits += k.value.amount
+    if (k.type === 'platform_gift' && k.value.unit === 'bits') {
+      this.stats.bits += k.value.amount
+      if (a) {
+        this.labels.set(
+          'latest_bits',
+          `${a.display_name} ${k.value.amount.toLocaleString('en-US')} bits`,
+        )
+        this.bumpDemoTrain(a.display_name)
+      }
+      labelChanged = true
+    }
+    if (k.type === 'raid') {
+      this.labelExtras.raids++
+      this.labels.set('latest_raid', `${k.from.display_name} (${k.viewers})`)
+      this.bumpDemoTrain(k.from.display_name)
+      labelChanged = true
+    }
     if (k.type === 'tip' && k.status === 'captured' && a) {
       const t = this.stats.tips.find((m) => m.currency === k.money.currency)
       if (t) t.minor += k.money.minor
       else this.stats.tips.push({ ...k.money })
-      this.labels.set('latest_tip', `${a.display_name} (${formatMoney(k.money)})`)
+      if (k.money.currency === 'INR') this.labelExtras.sessionTipsInr += k.money.minor
+      this.labels.set('latest_tip', `${a.display_name} ${formatMoney(k.money)}`)
+      this.bumpDemoTrain(a.display_name)
       labelChanged = true
       if (k.money.currency === 'INR') this.bumpGoal('tips', majorUnits(k.money))
     }
@@ -2963,7 +3414,11 @@ export class DemoEngine {
     if (labelChanged)
       for (const s of this.overlaySubs) {
         const o = this.overlays.find((x) => x.id === s.overlayId)
-        if (o) this.sendOverlay(s, 'state', { labels: this.labelsFor(o) })
+        if (o)
+          this.sendOverlay(s, 'state', {
+            labels: this.labelsFor(o),
+            label_trains: this.labelTrainsFor(o),
+          })
       }
     if (
       k.type === 'follow' ||
@@ -2975,7 +3430,7 @@ export class DemoEngine {
       k.type === 'raid' ||
       (k.type === 'chat_message' && a && (a.roles & 2) !== 0 && (a.roles & 256) === 0)
     ) {
-      this.pushWidgetState('end_credits', { credits: buildCredits(this.events, this.stats) })
+      this.pushWidgetState('end_credits', { credits: buildCredits(this.creditLog, this.stats) })
     }
   }
 
@@ -3287,6 +3742,7 @@ export class DemoEngine {
         kind,
       }
       this.events.push(e)
+      if (isCreditEvent(e)) this.creditLog.push(e)
       if (why) this.why.set(e.id, why)
     }
     if (!this.setupDone) return
@@ -3653,4 +4109,21 @@ function cloudFrame(remote: DemoRemoteSession, f: { type?: unknown; data?: unkno
   if (f.type === 'resync') return true
   const k = (f.data as { kind?: { type?: unknown } } | undefined)?.kind?.type
   return f.type === 'event' && (k === 'chat_message' || k === 'message_deleted')
+}
+
+/** Events that make a session's credits: supporters, and human moderators who chat. */
+function isCreditEvent(e: FerroEvent): boolean {
+  const k = e.kind
+  if (e.origin !== 'live') return false
+  if (k.type === 'chat_message') return (k.actor.roles & 2) !== 0 && (k.actor.roles & 256) === 0
+  return (
+    k.type === 'follow' ||
+    k.type === 'subscription' ||
+    k.type === 'gift_batch' ||
+    k.type === 'tip' ||
+    k.type === 'paid_message' ||
+    k.type === 'platform_gift' ||
+    k.type === 'raid' ||
+    k.type === 'reversal'
+  )
 }

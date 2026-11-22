@@ -98,4 +98,25 @@ describe('OverflowRow', () => {
     expect(onRow()).toContain('a')
     expect(host.querySelector('[data-ov-panel]')).toBeNull()
   })
+
+  it('stays open when a menu its own button opened (drawn elsewhere on the page) is pressed', async () => {
+    await mount(300)
+    const more = host.querySelector<HTMLElement>('button[aria-label="More tools"]')!
+    await act(async () => more.click())
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    // A menu portalled to the body, outside the panel: a press in it isn't "outside".
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    document.body.append(menu)
+    await act(async () => {
+      menu.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    // A press on the page itself still closes it.
+    await act(async () => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    menu.remove()
+  })
 })
