@@ -710,6 +710,17 @@ export class DemoGoLive {
           'Stop and start the stream again with it ticked.',
         )
       const limit = d.kind === 'twitch' ? 6000 : d.kind === 'kick' ? 8000 : 0
+      // H.264 only for Twitch and Kick (YouTube also takes HEVC and AV1): the engine refuses a
+      // destination the running encode's codec can't serve.
+      const codec =
+        d.canvas === 'vertical' ? this.verticalStats().video_codec : this.stats().video_codec
+      if (limit > 0 && codec && codec !== 'h264')
+        throw new HttpError(
+          422,
+          'golive_needs_new_encode',
+          `${d.kind === 'twitch' ? 'Twitch' : 'Kick'} takes H.264 only and this stream is ${codec.toUpperCase()}. Changing the live encode would change every other output.`,
+          'Stop and start the stream again with it ticked.',
+        )
       // Only the video counts: the sound and the packaging add about 400 kbps to the measured rate.
       const video = Math.max(0, this.stats().kbps - 400)
       if (d.canvas !== 'vertical' && limit > 0 && video > limit)
@@ -728,7 +739,15 @@ export class DemoGoLive {
         'The stream and the recording keep going. Confirm to stop sending.',
       )
     if (b.confirm_upload !== true && added.length > 0 && this.upload) {
-      const need = next.filter((d) => d.enabled).length * (this.stats().kbps || 6100)
+      // Each destination takes what its own picture sends (the main one, or the vertical one).
+      const need = next
+        .filter((d) => d.enabled)
+        .reduce(
+          (sum, d) =>
+            sum +
+            ((d.canvas === 'vertical' ? this.verticalStats().kbps : this.stats().kbps) || 6100),
+          0,
+        )
       if (need > Math.floor(this.upload.verdict.upload_kbps * 0.8))
         throw new HttpError(
           409,

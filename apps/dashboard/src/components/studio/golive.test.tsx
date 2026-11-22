@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
-import { AllFailedBanner, LiveCard, RowText } from './golive'
+import { AllFailedBanner, LiveCard, RowText, liveStatus } from './golive'
 import { LiveLine } from './desk/golive-dock'
 
 let root: Root | null = null
@@ -480,5 +480,26 @@ describe('RowText: a blocked row says it once', () => {
       />,
     )
     expect(el.textContent).not.toContain('Can’t start')
+  })
+})
+
+describe('liveStatus', () => {
+  const dest = (o: Partial<DestinationView>): DestinationView =>
+    ({
+      id: 'k',
+      kind: 'kick',
+      canvas: 'main',
+      name: 'Kick',
+      enabled: true,
+      connected: true,
+      health: { state: 'live', kbps: 6000, dropped: 0, since_ms: 0 },
+      blocked: null,
+      rules: [],
+      ...o,
+    }) as DestinationView
+  it('shows an active backup by its health, an idle one as Standby, an off one as Off', () => {
+    expect(liveStatus(dest({ enabled: false, backup_for: 'Twitch' }), true, 6000)).toBe('6.0 Mbps')
+    expect(liveStatus(dest({ enabled: false }), true, 6000)).toBe('Off')
+    expect(liveStatus(dest({ enabled: false, standby_for: 'Twitch' }), true, 6000)).toBe('Standby')
   })
 })

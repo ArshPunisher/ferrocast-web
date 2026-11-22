@@ -40,25 +40,40 @@ export function useSaveOrder(
       },
     )
   const last = ask?.code === 'golive_last_destination'
+  const [failed, setFailed] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  // The answer is sent here, so a failure (offline, a 500) is said in the dialog and can be tried
+  // again; the dialog closes and `onSaved` runs only when it went through.
   const confirmAsk = () => {
-    if (!ask) return
+    if (!ask || busy) return
     const { all, code } = ask
-    setAsk(null)
-    void request(all, code === 'golive_upload_exceeded' ? { upload: true } : { last: true }).then(
-      (r) => r && onSaved(),
-    )
+    setBusy(true)
+    setFailed(null)
+    api
+      .saveOrder(all, code === 'golive_upload_exceeded' ? { upload: true } : { last: true })
+      .then(() => {
+        setAsk(null)
+        onSaved()
+      })
+      .catch((e: unknown) =>
+        setFailed(e instanceof Error ? e.message : 'That didn’t go through. Try again.'),
+      )
+      .finally(() => setBusy(false))
   }
   const dialog = (
     <Dialog
       open={ask !== null}
-      onClose={() => setAsk(null)}
+      onClose={() => {
+        setAsk(null)
+        setFailed(null)
+      }}
       title={last ? 'Stop sending to your last platform?' : 'Your upload may not carry this'}
-      description={ask ? `${ask.message} ${ask.hint}`.trim() : ''}
+      description={ask ? `${ask.message} ${ask.hint}${failed ? ` ${failed}` : ''}`.trim() : ''}
       size="sm"
       footer={
         <>
           <Button onClick={() => setAsk(null)}>{last ? 'Keep it on' : 'Not now'}</Button>
-          <Button variant={last ? 'danger' : 'primary'} onClick={confirmAsk}>
+          <Button variant={last ? 'danger' : 'primary'} busy={busy} onClick={confirmAsk}>
             {last ? 'Stop sending' : 'Add it anyway'}
           </Button>
         </>

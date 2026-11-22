@@ -787,6 +787,16 @@ describe('destinations while live (the demo answers like the engine)', () => {
     ).resolves.toBeTruthy()
   })
 
+  it('refuses a codec the platform cannot take, mid-stream', async () => {
+    const { engine, api } = demo()
+    setLive(engine, { kbps: 5000, codec: 'hevc' })
+    await api.saveOrder(await list(api, ['youtube']))
+    await expect(api.saveOrder(await list(api, ['youtube', 'kick']))).rejects.toMatchObject({
+      status: 422,
+      code: 'golive_needs_new_encode',
+    })
+  })
+
   it('does not ask while nothing is live', async () => {
     const { api } = demo()
     await expect(api.saveOrder(await list(api, []))).resolves.toBeTruthy()

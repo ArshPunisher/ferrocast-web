@@ -567,7 +567,8 @@ function elapsed(ms: number): string {
 export function liveStatus(d: DestinationView, streaming: boolean, plan: number): string {
   // A backup waiting for its main one isn't sending: not "Starting" for the whole stream.
   if (streaming && d.standby_for) return 'Standby'
-  if (!d.enabled) return streaming ? 'Off' : ''
+  // An active backup isn't ticked but is sending: it shows its health, not Off.
+  if (!d.enabled && !(streaming && d.backup_for)) return streaming ? 'Off' : ''
   if (!streaming) return d.health?.state === 'failed' ? 'Failed' : mbps(d.health?.kbps || plan)
   switch (d.health?.state) {
     case undefined:

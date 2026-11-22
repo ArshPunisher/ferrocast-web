@@ -195,7 +195,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         ) : (
           <>
             {!onAir && <AllFailedBanner view={view} compact />}
-            {live && mine.length > 0 && !mine.some((d) => d.enabled) && (
+            {live && mine.length > 0 && !view.destinations.some((d) => d.enabled) && (
               <p
                 role="status"
                 className="m-0 border-b border-line px-3 py-2 text-[13.5px] text-text-2"

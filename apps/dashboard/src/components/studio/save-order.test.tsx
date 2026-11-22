@@ -108,4 +108,20 @@ describe('useSaveOrder', () => {
     process.off('unhandledRejection', unhandled)
     expect(document.body.textContent).not.toContain('last platform')
   })
+
+  it('keeps the dialog open and says so when the confirmed save fails, and a retry can succeed', async () => {
+    const saveOrder = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(409, 'golive_last_destination', 'Last one.', null))
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValue(undefined)
+    const { onSaved } = await mount(saveOrder)
+    await click('untick')
+    await click('Stop sending')
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Offline')
+    expect(document.body.textContent).toContain('Stop sending to your last platform?')
+    await click('Stop sending')
+    expect(onSaved).toHaveBeenCalledTimes(1)
+  })
 })
