@@ -308,8 +308,12 @@ export function storeApi(client: FerroClient) {
         `/api/v1/store/catalog${fresh ? '?fresh=true' : ''}`,
       ),
     installed: () => client.request<StoreInstalledResponse>('GET', '/api/v1/store/installed'),
-    assetUrl: (itemId: string, name: string) =>
-      `${client.baseUrl}/api/v1/store/assets/${encodeURIComponent(itemId)}/${encodeURIComponent(name)}`,
+    // For an <img> or <audio>: it can't send a header, so the session goes in the query like the
+    // PC's other media (the store routes are the PC's own).
+    assetUrl: (itemId: string, name: string) => {
+      const q = new URLSearchParams({ session: client.sessionToken ?? '' })
+      return `${client.baseUrl}/api/v1/store/assets/${encodeURIComponent(itemId)}/${encodeURIComponent(name)}?${q.toString()}`
+    },
     install: (id: string) =>
       client.request<StoreMutationResult>('POST', '/api/v1/store/install', { id }),
     update: (id: string) =>

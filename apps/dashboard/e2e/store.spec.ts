@@ -16,11 +16,11 @@ test.describe('Community Theme Store (R37)', () => {
     await expect(aurora.getByText(/installs/)).toBeVisible()
 
     // Category filter & search.
-    await page.getByRole('tab', { name: 'Alerts', exact: true }).click()
+    await page.getByRole('button', { name: 'Alerts', exact: true }).click()
     await expect(page.getByTestId('store-card-arcade-ticker-alert')).toBeVisible()
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
 
-    await page.getByRole('tab', { name: 'All', exact: true }).click()
+    await page.getByRole('button', { name: 'All', exact: true }).click()
     await page.getByLabel('Search Community Store').fill('WGSL')
     await expect(page.getByTestId('store-card-soft-dimmer-shader')).toBeVisible()
     await expect(page.getByTestId('store-card-aurora-pulse')).toHaveCount(0)
@@ -148,5 +148,14 @@ test.describe('Community Theme Store (R37)', () => {
     expect(
       mobileAxe.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical'),
     ).toEqual([])
+  })
+
+  test('an unknown creator or item says so, with a way back', async ({ page }) => {
+    await open(page, 'store/creator/nobody', 'autoplay=0&latency=0')
+    await expect(page.getByText('That creator isn’t in the Store.')).toBeVisible()
+    await page.getByRole('link', { name: 'Back to the Store' }).click()
+    await expect(page.getByTestId('store-card-aurora-pulse')).toBeVisible()
+    await open(page, 'store/item/nothing', 'autoplay=0&latency=0')
+    await expect(page.getByText(/That item isn’t in the Store/)).toBeVisible()
   })
 })

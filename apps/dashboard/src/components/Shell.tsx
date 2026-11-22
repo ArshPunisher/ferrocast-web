@@ -723,6 +723,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
                   'overlay',
                   'bot',
                   'community',
+                  'store',
                   'tips',
                   'history',
                   'settings',

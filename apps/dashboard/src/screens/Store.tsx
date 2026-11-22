@@ -51,8 +51,8 @@ import { StoreCardPreview, StoreDetailPreview } from '../components/store/StoreP
 import { canWords } from '../components/plugins-settings'
 import { externalLink } from '../lib/external'
 import { useClient } from '../lib/hooks'
-import { go, type Route } from '../lib/router'
-import { measureItemLocally, type LocalPerfReport } from '../lib/store-perf'
+import { go, href, type Route } from '../lib/router'
+import { estimateItemPerf, measureItemLocally, type LocalPerfReport } from '../lib/store-perf'
 
 type FilterKind = 'all' | StoreCategory | 'installed'
 
@@ -231,10 +231,9 @@ function CreatorPage({
             key={item.id}
             item={item}
             creator={creator}
-            perf={perfMap.get(item.id) ?? measureItemLocally(item)}
+            perf={perfMap.get(item.id) ?? estimateItemPerf(item)}
             busy={busyId === item.id}
             onOpen={() => onSelectItem(item.id)}
-            onCreator={() => {}}
             onInstall={() => onInstall(item.id)}
             onUpdate={() => onUpdate(item.id)}
             onUninstall={() => onUninstall(item.id)}
@@ -261,7 +260,7 @@ function StoreItemCard({
   perf: LocalPerfReport
   busy: boolean
   onOpen: () => void
-  onCreator: (id: string) => void
+  onCreator?: ((id: string) => void) | undefined
   onInstall: () => void
   onUpdate: () => void
   onUninstall: () => void
@@ -305,7 +304,7 @@ function StoreItemCard({
 
       <div className="space-y-2.5 border-t border-line pt-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-text-3">
-          {creator ? (
+          {creator && onCreator ? (
             <button
               type="button"
               onClick={() => onCreator(creator.id)}
@@ -315,7 +314,7 @@ function StoreItemCard({
               {creator.verified && <ShieldCheck size={13} aria-hidden="true" />}
             </button>
           ) : (
-            <span>{item.creator_id}</span>
+            <span>{creator ? creator.name : item.creator_id}</span>
           )}
           <span className="inline-flex items-center gap-2 tabular-nums">
             <span className="inline-flex items-center gap-0.5">
@@ -417,14 +416,26 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
     void loadAll(false)
   }, [loadAll])
 
-  // Compute local performance measurements per catalog item on this machine.
+  // Measure each catalog item on this machine, a few at a time so a long catalog can't freeze
+  // the page (cards show the quick estimate until their turn).
   useEffect(() => {
     if (!catalog) return
+    let cancelled = false
     const next = new Map<string, LocalPerfReport>()
-    for (const item of catalog.items) {
-      next.set(item.id, measureItemLocally(item))
+    const items = catalog.items
+    let i = 0
+    const step = () => {
+      if (cancelled) return
+      for (const end = Math.min(items.length, i + 8); i < end; i++) {
+        next.set(items[i]!.id, measureItemLocally(items[i]!))
+      }
+      setPerfCache(new Map(next))
+      if (i < items.length) window.setTimeout(step, 0)
     }
-    setPerfCache(next)
+    step()
+    return () => {
+      cancelled = true
+    }
   }, [catalog])
 
   const resolveAndAsk = useCallback(
@@ -567,7 +578,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
   }, [catalog, filter, search, creatorsById])
 
   const selectedItemPerf = selectedItem
-    ? (perfCache.get(selectedItem.id) ?? measureItemLocally(selectedItem))
+    ? (perfCache.get(selectedItem.id) ?? estimateItemPerf(selectedItem))
     : null
 
   return (
@@ -635,6 +646,20 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         </div>
       )}
 
+      {catalog && ((route.creator && !selectedCreator) || (route.item && !selectedItem)) && (
+        <p role="status" className="mb-3 text-[14.5px] text-text-2">
+          {route.creator && !selectedCreator
+            ? 'That creator isn’t in the Store.'
+            : 'That item isn’t in the Store (it may have been removed).'}{' '}
+          <a
+            className="font-semibold text-accent-text hover:underline"
+            href={href({ name: 'store' })}
+          >
+            Back to the Store
+          </a>
+        </p>
+      )}
+
       {selectedCreator && catalog ? (
         <CreatorPage
           creator={selectedCreator}
@@ -649,7 +674,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
       ) : (
         <>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div role="tablist" aria-label="Store categories" className="flex flex-wrap gap-1.5">
+            <div role="group" aria-label="Store categories" className="flex flex-wrap gap-1.5">
               {CATEGORY_TABS.map((t) => {
                 const count = t.id === 'installed' ? installedFallback.length : undefined
                 const active = filter === t.id
@@ -657,8 +682,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                   <button
                     key={t.id}
                     type="button"
-                    role="tab"
-                    aria-selected={active}
+                    aria-pressed={active}
                     onClick={() => setFilter(t.id)}
                     className={cx(
                       'rounded-full border px-3 py-1 text-[13.5px] font-semibold transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
@@ -735,7 +759,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                         key={item.id}
                         item={item}
                         creator={creatorsById.get(item.creator_id)}
-                        perf={perfCache.get(item.id) ?? measureItemLocally(item)}
+                        perf={perfCache.get(item.id) ?? estimateItemPerf(item)}
                         busy={busyId === item.id}
                         onOpen={() => go({ name: 'store', item: item.id })}
                         onCreator={(cid) => go({ name: 'store', creator: cid })}
@@ -815,7 +839,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
       {selectedItem && (
         <Dialog open onClose={() => go({ name: 'store' })} title={selectedItem.title} size="lg">
           <div className="space-y-4" data-testid="store-item-detail">
-            <StoreDetailPreview item={selectedItem} />
+            <StoreDetailPreview key={selectedItem.id} item={selectedItem} />
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-[13.5px]">
               <div className="flex flex-wrap items-center gap-2">
@@ -963,8 +987,8 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
             {linkPreview && (
               <div className="rounded-ctrl border border-accent-line bg-surface-2 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <h3 className="font-display text-[17px] font-extrabold text-text">
                       Install “{linkPreview.item.title}”?
                     </h3>
@@ -973,7 +997,9 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
                       {linkPreview.item.version}
                     </p>
                   </div>
-                  <PerfPill perf={measureItemLocally(linkPreview.item)} />
+                  <span className="shrink-0">
+                    <PerfPill perf={estimateItemPerf(linkPreview.item)} />
+                  </span>
                 </div>
                 <ul className="space-y-1 text-[13px] text-text-2">
                   {linkPreview.safety_notes.map((n, i) => (

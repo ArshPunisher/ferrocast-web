@@ -133,6 +133,21 @@ function scoreFromMetrics(
 }
 
 /**
+ * A first score from the catalog's own numbers (no DOM, no measuring): what a card shows while
+ * the real measurement waits its turn, and what render may call.
+ */
+export function estimateItemPerf(item: StoreItem): LocalPerfReport {
+  const layers = item.preview.layers_hint ?? 2
+  return scoreFromMetrics(
+    1.2,
+    Math.max(4, layers * 4),
+    layers,
+    item.package.size,
+    item.kind === 'plugin',
+  )
+}
+
+/**
  * Benchmarks an item's real overlay/alert DOM & runtime cost in an offscreen hidden test host
  * on this computer. Returns cached result unless `force` is true.
  */
@@ -155,6 +170,10 @@ export function measureItemLocally(item: StoreItem, force = false): LocalPerfRep
     hidden.style.cssText =
       'position:fixed;left:-99999px;top:-99999px;width:640px;height:360px;overflow:hidden;visibility:hidden;pointer-events:none;'
     document.body.appendChild(hidden)
+    // The overlay is built inside a closed shadow root: its styles and nodes stay out of the
+    // dashboard's.
+    const inner = document.createElement('div')
+    hidden.attachShadow({ mode: 'closed' }).appendChild(inner)
 
     let rt: OverlayRuntime | null = null
     let designAlertCleanup: (() => void) | null = null
@@ -167,7 +186,7 @@ export function measureItemLocally(item: StoreItem, force = false): LocalPerfRep
         hasBlurOrFx = complexity.hasBlurOrFx
         const ov = buildBenchOverlay(design)
         if (ov) {
-          rt = createOverlay(hidden, { audio: false, fit: 'contain', lowMotion: true })
+          rt = createOverlay(inner, { audio: false, fit: 'contain', lowMotion: true })
           rt.apply({
             v: 1,
             seq: 1,
@@ -178,7 +197,7 @@ export function measureItemLocally(item: StoreItem, force = false): LocalPerfRep
             },
           })
           hidden.getBoundingClientRect()
-          nodeCount = Math.max(nodeCount, hidden.querySelectorAll('*').length)
+          nodeCount = Math.max(nodeCount, inner.querySelectorAll('*').length)
         } else if (design.kind === 'alert') {
           const v = design.content.events.follow?.variations[0]
           if (v) {
@@ -213,7 +232,7 @@ export function measureItemLocally(item: StoreItem, force = false): LocalPerfRep
               },
               { lowMotion: true },
             )
-            hidden.appendChild(built.host)
+            inner.appendChild(built.host)
             built.start()
             designAlertCleanup = built.destroy
             hidden.getBoundingClientRect()

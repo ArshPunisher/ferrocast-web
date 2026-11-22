@@ -160,4 +160,12 @@ describe('Community Store client & demo engine (R37)', () => {
       expect(safeCreatorLinkUrl(good), good).not.toBeNull()
     }
   })
+
+  it('puts the session in an asset URL so an image can load it', () => {
+    const client = { baseUrl: 'http://127.0.0.1:47820', sessionToken: 'tok123' } as never
+    const url = storeApi(client).assetUrl('aurora-pulse', 'preview 1.png')
+    expect(url).toBe(
+      'http://127.0.0.1:47820/api/v1/store/assets/aurora-pulse/preview%201.png?session=tok123',
+    )
+  })
 })
