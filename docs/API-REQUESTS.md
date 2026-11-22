@@ -254,3 +254,30 @@ The demo engine has no Studio desk (the Studio engine needs the desktop app), so
 to simulate there; the page's behaviour is covered by `e2e/studio-selective-recording.spec.ts`
 against mocked Studio endpoints.
 
+## R25. Alert box editor v2: timing, text effects and sandboxed custom HTML/CSS with field schema
+
+Roadmap Phase 2 #11 (`feat/p2-alert-editor`). Additive fields on `Variation` and `RenderedAlert`
+with backward-compatible defaults (`#[serde(default)]`):
+
+- `Variation.anim` (`{ in, out, text, in_ms, out_ms, text_delay_ms }`, defaults
+  `{ in: "fade", out: "fade", text: "none", in_ms: 400, out_ms: 350, text_delay_ms: 150 }`):
+  - `in_ms` and `out_ms` `0` to `3000`, `text_delay_ms` `0` to `10000`,
+    `in_ms + out_ms < duration_ms` and `text_delay_ms < duration_ms`.
+- `Variation.custom_enabled` (bool, default `false`), `Variation.html` (string, up to `20000` chars),
+  existing `Variation.css` (`check_css`, up to `20000` chars, no `@import` or external `url()`
+  other than `data:image/...`).
+- `Variation.fields` (up to `32` custom schema items):
+  `{ key /* [a-z][a-z0-9_]{0,39}, unique, must not match KNOWN_VARS */, label /* 1–80 chars */, type: "text" | "number" | "color" | "toggle" | "select", default, min?, max?, options? }`
+  and `Variation.field_values` (`Record<string, string | number | boolean>`): every key must exist in
+  `fields` and match its declared type, range, colour format or options list.
+- Token name validation: every `{token}` referenced in `Variation.title`, `Variation.body` and
+  `Variation.html` must belong to `core::template::KNOWN_VARS` or `Variation.fields` keys; unknown
+  tokens return HTTP `400` naming the variation and bad token.
+- `RenderedAlert.anim?` carries the variation's animation and timing; `RenderedAlert.custom?` carries
+  `{ html, css, fields, vars }` only when `custom_enabled: true`.
+- Custom HTML/CSS runs ONLY inside `<iframe sandbox="allow-scripts">` (never `allow-same-origin`)
+  with a strict CSP (allowing only explicit static asset CDN hosts for `img-src`/`font-src`,
+  `connect-src 'none'`) and receives only origin-checked, schema-validated `postMessage` payloads.
+  The Rust server serves `GET /alert-sandbox` with its own sandbox CSP header for desktop/OBS origins.
+
+
