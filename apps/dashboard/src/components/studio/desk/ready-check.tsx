@@ -78,6 +78,14 @@ function formatSummary(n: number, blocking: number, checking: boolean): string {
   return blocking > 0 ? `${n} to fix (${blocking} blocking)` : `${n} to fix`
 }
 
+function firstCardControl(card: HTMLDivElement | null): HTMLElement | null {
+  return (
+    card?.querySelector<HTMLElement>('[data-rc-fix]') ??
+    card?.querySelector<HTMLElement>('[data-rc-collapse]') ??
+    null
+  )
+}
+
 export function ReadyCheck({
   recovered,
   onClose,
@@ -97,16 +105,10 @@ export function ReadyCheck({
   const rootRef = useRef<HTMLElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
-  const mountedRef = useRef(true)
+  const pendingCardFocusRef = useRef(false)
+  const pendingNextControlFocusRef = useRef(false)
   const cardId = useId()
   const headingId = useId()
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
 
   useEffect(() => {
     startReadyCheckScanIfNeeded(Boolean(recovered), async (isAlive, sleep) => {
@@ -157,13 +159,38 @@ export function ReadyCheck({
   const n = checks.length
   const blocking = checks.filter((c) => c.status === 'fail').length
 
-  // Restore focus to the pill trigger when reopened from the status-bar control.
+  // Restore focus to the pill trigger when collapsed or reopened from the status-bar control.
   useEffect(() => {
-    if (!dismissed && barState?.pendingFocus === 'pill') {
+    if (!expanded && !dismissed && barState?.pendingFocus === 'pill') {
       pillRef.current?.focus({ preventScroll: true })
       clearReadyCheckPendingFocus()
     }
-  }, [dismissed, barState?.pendingFocus])
+  }, [expanded, dismissed, barState?.pendingFocus])
+
+  // Move focus into the card when opened from the pill, or advance after a focused Fix row disappears.
+  useEffect(() => {
+    if (!expanded || dismissed) {
+      pendingCardFocusRef.current = false
+      pendingNextControlFocusRef.current = false
+      return
+    }
+    if (pendingCardFocusRef.current) {
+      pendingCardFocusRef.current = false
+      firstCardControl(cardRef.current)?.focus({ preventScroll: true })
+      return
+    }
+    if (pendingNextControlFocusRef.current) {
+      pendingNextControlFocusRef.current = false
+      if (
+        cardRef.current &&
+        document.activeElement instanceof Node &&
+        cardRef.current.contains(document.activeElement)
+      ) {
+        return
+      }
+      firstCardControl(cardRef.current)?.focus({ preventScroll: true })
+    }
+  }, [found, expanded, dismissed])
 
   // Escape closes the expanded card and returns focus to the pill trigger.
   useEffect(() => {
@@ -183,16 +210,19 @@ export function ReadyCheck({
         rootRef.current && active instanceof Node ? rootRef.current.contains(active) : false
       if (!inside && active !== document.body) return
       e.preventDefault()
-      setReadyCheckExpanded(false)
-      pillRef.current?.focus({ preventScroll: true })
+      setReadyCheckExpanded(false, true)
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [expanded, dismissed])
 
+  const handleExpand = () => {
+    pendingCardFocusRef.current = true
+    setReadyCheckExpanded(true)
+  }
+
   const handleCollapse = () => {
-    setReadyCheckExpanded(false)
-    pillRef.current?.focus({ preventScroll: true })
+    setReadyCheckExpanded(false, true)
   }
 
   const handleDismiss = () => {
@@ -205,34 +235,28 @@ export function ReadyCheck({
   }
 
   const handleFix = async (c: PreflightCheck) => {
-    if (!c.fix || !c.fix.href.startsWith('action:')) return
+    if (!c.fix || !c.fix.href.startsWith('action:') || busy === c.id) return
     const sessionId = barState?.sessionId
     if (sessionId === undefined) return
-    const wasFocusInside =
-      cardRef.current && document.activeElement instanceof Node
-        ? cardRef.current.contains(document.activeElement)
-        : false
     const updated = await run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' })
     const latest = getReadyCheckState()
     if (!updated || !latest || latest.sessionId !== sessionId) return
+    // Check live focus ownership immediately before applying the result, while a focused Fix
+    // button is still in the DOM (before removing its row drops focus).
+    const active = document.activeElement
+    const ownsFocusNow = Boolean(
+      cardRef.current && active instanceof Node && cardRef.current.contains(active),
+    )
     const ours = (latest.found?.checks ?? []).filter((x) => /^(silent|capture):/.test(x.id))
     const nextChecks = [...studioProblems(updated.checks), ...ours]
-    setReadyCheckFound(sessionId, { checks: nextChecks, ready: nextChecks.length === 0 })
     if (nextChecks.length === 0) {
-      setReadyCheckExpanded(false)
-      if (wasFocusInside && mountedRef.current) {
-        requestAnimationFrame(() => pillRef.current?.focus({ preventScroll: true }))
-      }
+      pendingNextControlFocusRef.current = false
+      setReadyCheckFound(sessionId, { checks: nextChecks, ready: true })
+      setReadyCheckExpanded(false, ownsFocusNow)
       return
     }
-    if (wasFocusInside && mountedRef.current) {
-      requestAnimationFrame(() => {
-        const nextBtn = cardRef.current?.querySelector<HTMLElement>(
-          '[data-rc-fix], [data-rc-collapse]',
-        )
-        nextBtn?.focus({ preventScroll: true })
-      })
-    }
+    pendingNextControlFocusRef.current = ownsFocusNow
+    setReadyCheckFound(sessionId, { checks: nextChecks, ready: false })
   }
 
   if (dismissed) return null
@@ -297,29 +321,30 @@ export function ReadyCheck({
       aria-label="Ready check"
       className={cx(anchorClass, 'flex flex-col-reverse items-end gap-2')}
     >
-      {/* Trigger pill comes first in DOM so Tab lands on it, then moves upward into the opened card. */}
-      <button
-        ref={pillRef}
-        type="button"
-        data-over-preview
-        aria-expanded={expanded}
-        aria-controls={expanded ? cardId : undefined}
-        onClick={() => setReadyCheckExpanded((e) => !e)}
-        className={cx(
-          'fc-press pointer-events-auto inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border bg-surface-1 pr-3 pl-2.5 text-[12.5px] font-bold whitespace-nowrap text-text shadow-2 transition-[background-color,border-color,transform] duration-150 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-          pillToneClass,
-        )}
-      >
-        <SeverityIcon tone={tone} size={15} />
-        <span className="min-w-0 truncate">
-          <span>Ready check</span>
-          <span className="text-text-3">{' · '}</span>
-          <span className={cx('font-semibold', pillSubClass)}>{summaryText}</span>
-        </span>
-        <span className="ml-0.5 inline-grid shrink-0 place-items-center text-text-3" aria-hidden>
-          {expanded ? <CaretDown size={13} weight="bold" /> : <CaretUp size={13} weight="bold" />}
-        </span>
-      </button>
+      {/* Collapsed trigger pill (hidden while the card is expanded so the header summary is shown once). */}
+      {!expanded && (
+        <button
+          ref={pillRef}
+          type="button"
+          data-over-preview
+          aria-expanded={false}
+          onClick={handleExpand}
+          className={cx(
+            'fc-press pointer-events-auto inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border bg-surface-1 pr-3 pl-2.5 text-[12.5px] font-bold whitespace-nowrap text-text shadow-2 transition-[background-color,border-color,transform] duration-150 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+            pillToneClass,
+          )}
+        >
+          <SeverityIcon tone={tone} size={15} />
+          <span className="min-w-0 truncate">
+            <span>Ready check</span>
+            <span className="text-text-3">{' · '}</span>
+            <span className={cx('font-semibold', pillSubClass)}>{summaryText}</span>
+          </span>
+          <span className="ml-0.5 inline-grid shrink-0 place-items-center text-text-3" aria-hidden>
+            <CaretUp size={13} weight="bold" />
+          </span>
+        </button>
+      )}
 
       <div role="status" aria-live="polite" className="sr-only">
         {liveAnnouncement}
@@ -422,11 +447,11 @@ export function ReadyCheck({
                         <button
                           type="button"
                           data-rc-fix
-                          disabled={busy === c.id}
+                          aria-disabled={busy === c.id || undefined}
                           aria-label={`Fix ${c.label}: ${c.fix.label}`}
                           title={c.fix.label}
                           onClick={() => void handleFix(c)}
-                          className="fc-press inline-flex h-6 shrink-0 items-center rounded-[7px] bg-accent-soft px-2 text-[12px] font-bold whitespace-nowrap text-accent-text transition-colors hover:bg-[color-mix(in_srgb,var(--fc-arc)_20%,transparent)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
+                          className="fc-press inline-flex h-6 shrink-0 items-center rounded-[7px] bg-accent-soft px-2 text-[12px] font-bold whitespace-nowrap text-accent-text transition-colors hover:bg-[color-mix(in_srgb,var(--fc-arc)_20%,transparent)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                         >
                           {busy === c.id ? 'Fixing…' : 'Fix'}
                         </button>

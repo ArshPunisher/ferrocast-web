@@ -78,19 +78,18 @@ test.describe('Problem 7: Ready check Option 1 slim pill + upward card', () => {
         expect(intersects(pillBox, navBox)).toBe(false)
       }
 
-      // Expand upward on click.
+      // Expand upward on click: pill hides so summary text appears once in card header.
       await pill.click()
-      await expect(pill).toHaveAttribute('aria-expanded', 'true')
-      const cardId = await pill.getAttribute('aria-controls')
-      expect(cardId).toBeTruthy()
-      const card = page.locator(`[id="${cardId}"]`)
+      await expect(pill).toHaveCount(0)
+      const card = region.locator('div[aria-labelledby]')
       await expect(card).toBeVisible()
+      await expect(region.getByText('2 to fix (1 blocking)')).toHaveCount(1)
+      await expect(region.getByText('Ready check')).toHaveCount(1)
       await settled(page)
 
       const cardBox = await boxOf(card)
-      const expandedPillBox = await boxOf(pill)
-      // Expands upward above the pill.
-      expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(expandedPillBox.y + 1)
+      // Stays anchored at the bottom-right slot (aligned with collapsed pill bottom, within viewport).
+      expect(cardBox.y + cardBox.height).toBeCloseTo(pillBox.y + pillBox.height, 2)
 
       if (vp.width >= 1024) {
         const goLiveBox = await boxOf(page.getByRole('region', { name: 'Go live to' }))
@@ -105,6 +104,7 @@ test.describe('Problem 7: Ready check Option 1 slim pill + upward card', () => {
         expect(intersects(cardBox, footerBox)).toBe(false)
       } else {
         const navBox = await boxOf(page.locator('nav[data-tab-bar]'))
+        expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(navBox.y)
         expect(intersects(cardBox, navBox)).toBe(false)
       }
 
@@ -119,20 +119,23 @@ test.describe('Problem 7: Ready check Option 1 slim pill + upward card', () => {
         .analyze()
       expect(axe.violations).toEqual([])
 
-      // Keyboard Escape from inside the card closes it and returns focus to the pill.
+      // Keyboard Escape from inside the card closes it and returns focus to the restored pill.
       const firstFix = card.getByRole('button', { name: /^Fix / }).first()
       await firstFix.focus()
       await expect(firstFix).toBeFocused()
       await page.keyboard.press('Escape')
+      await expect(card).toHaveCount(0)
+      await expect(pill).toBeVisible()
       await expect(pill).toHaveAttribute('aria-expanded', 'false')
-      await expect(card).toBeHidden()
       await expect(pill).toBeFocused()
 
-      // Re-open and collapse via chevron button -> collapses and returns focus to pill.
+      // Re-open and collapse via chevron button -> restores pill and returns focus to pill.
       await pill.click()
+      await expect(pill).toHaveCount(0)
       await expect(card).toBeVisible()
       await card.getByRole('button', { name: 'Collapse ready check' }).click()
-      await expect(card).toBeHidden()
+      await expect(card).toHaveCount(0)
+      await expect(pill).toBeVisible()
       await expect(pill).toBeFocused()
 
       // Re-open and dismiss with X -> status-bar (or mobile tools bar) recall control appears and brings it back.
@@ -151,16 +154,24 @@ test.describe('Problem 7: Ready check Option 1 slim pill + upward card', () => {
 
       await recallBtn.click()
       await expect(region).toBeVisible()
+      await expect(pill).toBeVisible()
       await expect(pill).toBeFocused()
 
-      // Fix both issues in the card -> transitions to All good.
+      // Fix both issues in the card -> partial Fix moves focus to next Fix; final Fix transitions to All good pill.
       await pill.click()
-      await card.getByRole('button', { name: /^Fix Mic:/ }).click()
-      await expect(pill).toContainText('Ready check · 1 to fix')
-      await expect(pill).not.toContainText('blocking')
+      const micFix = card.getByRole('button', { name: /^Fix Mic:/ })
+      await micFix.focus()
+      await micFix.click()
+      await expect(card.getByText('1 to fix')).toBeVisible()
+      await expect(region.getByText('1 to fix')).toHaveCount(1)
+      await expect(card).not.toContainText('blocking')
 
-      await card.getByRole('button', { name: /^Fix Webcam:/ }).click()
+      const webcamFix = card.getByRole('button', { name: /^Fix Webcam:/ })
+      await expect(webcamFix).toBeFocused()
+      await webcamFix.click()
+      await expect(card).toHaveCount(0)
       await expect(pill).toContainText('Ready check · All good')
+      await expect(pill).toBeFocused()
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -194,25 +205,24 @@ test.describe('Problem 7: Ready check Option 1 slim pill + upward card', () => {
     await expect(pill).toContainText('Ready check · 2 to fix (1 blocking)', { timeout: 10_000 })
 
     await pill.click()
-    await expect(pill).toHaveAttribute('aria-expanded', 'true')
-    const cardId = await pill.getAttribute('aria-controls')
-    await expect(page.locator(`[id="${cardId}"]`)).toBeVisible()
+    await expect(pill).toHaveCount(0)
+    const desktopCard = region.locator('div[aria-labelledby]')
+    await expect(desktopCard).toBeVisible()
+    await expect(region.getByText('2 to fix (1 blocking)')).toHaveCount(1)
 
     // Resize across the 900px DockWorkspace breakpoint into mobile layout.
     await page.setViewportSize({ width: 375, height: 812 })
     await settled(page)
 
-    const mobilePill = region.getByRole('button', { name: /^Ready check ·/ })
-    await expect(mobilePill).toContainText('Ready check · 2 to fix (1 blocking)')
-    await expect(mobilePill).toHaveAttribute('aria-expanded', 'true')
-    const mobileCardId = await mobilePill.getAttribute('aria-controls')
-    const mobileCard = page.locator(`[id="${mobileCardId}"]`)
+    await expect(pill).toHaveCount(0)
+    const mobileCard = region.locator('div[aria-labelledby]')
     await expect(mobileCard).toBeVisible()
+    await expect(region.getByText('2 to fix (1 blocking)')).toHaveCount(1)
     await expect(mobileCard.getByRole('listitem')).toHaveCount(2)
 
     const navBox = await boxOf(page.locator('nav[data-tab-bar]'))
-    const mobilePillBox = await boxOf(mobilePill)
-    expect(mobilePillBox.y + mobilePillBox.height).toBeLessThanOrEqual(navBox.y)
-    expect(intersects(mobilePillBox, navBox)).toBe(false)
+    const mobileCardBox = await boxOf(mobileCard)
+    expect(mobileCardBox.y + mobileCardBox.height).toBeLessThanOrEqual(navBox.y)
+    expect(intersects(mobileCardBox, navBox)).toBe(false)
   })
 })

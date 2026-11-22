@@ -122,11 +122,15 @@ export function setReadyCheckFound(sessionId: number, found: Preflight): void {
   emit()
 }
 
-export function setReadyCheckExpanded(next: boolean | ((prev: boolean) => boolean)): void {
+export function setReadyCheckExpanded(
+  next: boolean | ((prev: boolean) => boolean),
+  focusPill = false,
+): void {
   if (!state) return
   const expanded = typeof next === 'function' ? next(state.expanded) : next
-  if (state.expanded === expanded) return
-  state = { ...state, expanded }
+  const pendingFocus = expanded ? null : focusPill ? ('pill' as const) : state.pendingFocus
+  if (state.expanded === expanded && state.pendingFocus === pendingFocus) return
+  state = { ...state, expanded, pendingFocus }
   emit()
 }
 

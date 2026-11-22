@@ -13,7 +13,7 @@ function setupApi({
   onFix,
 }: {
   preflight?: Preflight
-  onFix?: (action: string) => Preflight
+  onFix?: (action: string) => Preflight | Promise<Preflight>
 } = {}) {
   const request = vi.fn(async (_m: string, path: string, body?: unknown) => {
     if (path.endsWith('/show/config')) return { mic_sources: [] }
@@ -131,14 +131,16 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     expect(pill.textContent).toContain('Ready check')
     expect(pill.textContent).toContain('2 to fix (1 blocking)')
 
-    // Expand upward card on click.
+    // Expand upward card on click: pill hides so summary text appears once in card header.
     await act(async () => pill.click())
-    expect(pill.getAttribute('aria-expanded')).toBe('true')
-    const card = document.getElementById(pill.getAttribute('aria-controls')!)
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
+    const card = host.querySelector('div[aria-labelledby]')
     expect(card).toBeTruthy()
     expect(card!.querySelectorAll('li')).toHaveLength(2)
+    expect(host.textContent!.match(/2 to fix \(1 blocking\)/g)).toHaveLength(1)
+    expect(host.textContent!.match(/Ready check/g)).toHaveLength(1)
 
-    // Escape closes card and returns focus to pill trigger.
+    // Escape closes card and returns focus to the restored pill trigger.
     const fixBtn = card!.querySelector('button[data-rc-fix]') as HTMLButtonElement
     fixBtn.focus()
     expect(document.activeElement).toBe(fixBtn)
@@ -146,27 +148,36 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
-    expect(pill.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(pill)
+    const afterEscapePill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(afterEscapePill).toBeTruthy()
+    expect(afterEscapePill.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(afterEscapePill)
 
-    // Re-expand and collapse via chevron button -> returns focus to pill.
-    await act(async () => pill.click())
+    // Re-expand and collapse via chevron button -> restores pill and returns focus to it.
+    await act(async () => afterEscapePill.click())
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
     const collapseBtn = host.querySelector(
       'button[aria-label="Collapse ready check"]',
     ) as HTMLButtonElement
     await act(async () => collapseBtn.click())
-    expect(pill.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(pill)
+    const afterCollapsePill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(afterCollapsePill).toBeTruthy()
+    expect(afterCollapsePill.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(afterCollapsePill)
 
-    // Re-expand and click Fix on Mic -> updates count to 1 to fix.
-    await act(async () => pill.click())
+    // Re-expand and click Fix on Mic -> updates card header badge to 1 to fix (appears once) and moves focus to Webcam Fix.
+    await act(async () => afterCollapsePill.click())
     const micFix = host.querySelector('button[aria-label^="Fix Mic:"]') as HTMLButtonElement
+    micFix.focus()
     await act(async () => micFix.click())
     expect(request).toHaveBeenCalledWith('POST', '/api/v1/show/preflight/fix', {
       action: 'action:unmute:Mic',
     })
-    expect(pill.textContent).toContain('1 to fix')
-    expect(pill.textContent).not.toContain('blocking')
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
+    expect(host.textContent).toContain('1 to fix')
+    expect(host.textContent).not.toContain('blocking')
+    expect(host.textContent!.match(/1 to fix/g)).toHaveLength(1)
+    expect(document.activeElement).toBe(host.querySelector('button[aria-label^="Fix Webcam:"]'))
 
     // Click X to dismiss -> hides Ready check and focuses recall chip in status bar.
     const dismissBtn = host.querySelector(
@@ -182,7 +193,7 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     expect(recallBtn.textContent).toContain('Ready check (1)')
     expect(document.activeElement).toBe(recallBtn)
 
-    // Click recall chip -> restores pill and moves focus back to pill.
+    // Click recall chip -> restores collapsed pill and moves focus back to pill.
     await act(async () => recallBtn.click())
     const restoredPill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
     expect(restoredPill).toBeTruthy()
@@ -217,8 +228,9 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     expect(section!.className).toContain('fixed')
     expect(section!.className).toContain('bottom-[calc(64px+env(safe-area-inset-bottom)+8px)]')
 
-    const pill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
-    expect(pill.getAttribute('aria-expanded')).toBe('true')
+    // Card starts expanded (pill hidden) and shows crash recovery note without duplicate header.
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
+    expect(host.querySelector('div[aria-labelledby]')).toBeTruthy()
     expect(host.textContent).toContain('Ferrocast closed unexpectedly last time.')
   })
 
@@ -255,7 +267,8 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     const desktopPill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
     expect(desktopPill.textContent).toContain('1 to fix (1 blocking)')
     await act(async () => desktopPill.click())
-    expect(desktopPill.getAttribute('aria-expanded')).toBe('true')
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
+    expect(host.querySelector('div[aria-labelledby]')).toBeTruthy()
 
     const callsBeforeResize = request.mock.calls.length
 
@@ -270,17 +283,129 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
       ),
     )
 
-    const mobilePill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
-    expect(mobilePill.textContent).toContain('1 to fix (1 blocking)')
-    expect(mobilePill.textContent).not.toContain('Checking…')
-    expect(mobilePill.getAttribute('aria-expanded')).toBe('true')
+    expect(host.querySelector('button[aria-expanded]')).toBeNull()
+    const mobileCard = host.querySelector('div[aria-labelledby]')
+    expect(mobileCard).toBeTruthy()
+    expect(mobileCard!.textContent).toContain('1 to fix (1 blocking)')
+    expect(host.textContent).not.toContain('Checking…')
     expect(request.mock.calls.length).toBe(callsBeforeResize)
 
-    // Starting a new session resets prior results cleanly.
+    // Starting a new session resets prior results and shows collapsed pill cleanly.
     await act(async () => {
       beginReadyCheckSession(false)
     })
-    expect(mobilePill.textContent).toContain('Checking…')
-    expect(mobilePill.getAttribute('aria-expanded')).toBe('false')
+    const resetPill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(resetPill).toBeTruthy()
+    expect(resetPill.textContent).toContain('Checking…')
+    expect(resetPill.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('restores focus after Fix only when Ready check still owns focus', async () => {
+    const initial: Preflight = {
+      ready: false,
+      checks: [
+        {
+          id: 'mic:Mic',
+          label: 'Mic',
+          status: 'fail',
+          detail: 'Muted in Ferrocast.',
+          fix: { label: 'Unmute', href: 'action:unmute:Mic' },
+        },
+        {
+          id: 'cam:Webcam',
+          label: 'Webcam',
+          status: 'warn',
+          detail: 'Hidden in "Gameplay".',
+          fix: { label: 'Show it', href: 'action:show:Gameplay/Webcam' },
+        },
+      ],
+    }
+    let resolveFix: ((v: Preflight) => void) | null = null
+    setupApi({
+      preflight: initial,
+      onFix: () =>
+        new Promise<Preflight>((resolve) => {
+          resolveFix = resolve
+        }),
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <ReadyPlacementContext.Provider value="right">
+          <button type="button" id="outside-control">
+            Outside
+          </button>
+          <ReadyCheck recovered={null} onClose={vi.fn()} />
+        </ReadyPlacementContext.Provider>,
+      ),
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3100)
+    })
+
+    await act(async () =>
+      (host.querySelector('button[aria-expanded]') as HTMLButtonElement).click(),
+    )
+
+    // 1. User moves focus outside Ready check while Fix #1 is in flight -> focus is NOT stolen.
+    const outsideBtn = host.querySelector('#outside-control') as HTMLButtonElement
+    const micFix = host.querySelector('button[aria-label^="Fix Mic:"]') as HTMLButtonElement
+    micFix.focus()
+    expect(document.activeElement).toBe(micFix)
+
+    await act(async () => {
+      micFix.click()
+    })
+    expect(micFix.getAttribute('aria-disabled')).toBe('true')
+    outsideBtn.focus()
+    expect(document.activeElement).toBe(outsideBtn)
+
+    await act(async () => {
+      resolveFix!({ ready: false, checks: [initial.checks[1]!] })
+    })
+    expect(document.activeElement).toBe(outsideBtn)
+
+    // 2. Focus stays on Ready check during final Fix -> collapses and restores focus to pill.
+    const camFix = host.querySelector('button[aria-label^="Fix Webcam:"]') as HTMLButtonElement
+    camFix.focus()
+    await act(async () => {
+      camFix.click()
+    })
+    expect(document.activeElement).toBe(camFix)
+
+    await act(async () => {
+      resolveFix!({ ready: true, checks: [] })
+    })
+    const pill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(pill).toBeTruthy()
+    expect(pill.textContent).toContain('All good')
+    expect(document.activeElement).toBe(pill)
+
+    // 3. Re-seed a single issue; moving focus outside during the final Fix leaves external focus intact.
+    await act(async () => {
+      beginReadyCheckSession(false)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3100)
+    })
+    await act(async () =>
+      (host.querySelector('button[aria-expanded]') as HTMLButtonElement).click(),
+    )
+    const onlyFix = host.querySelector('button[aria-label^="Fix Mic:"]') as HTMLButtonElement
+    onlyFix.focus()
+    await act(async () => {
+      onlyFix.click()
+    })
+    outsideBtn.focus()
+    expect(document.activeElement).toBe(outsideBtn)
+
+    await act(async () => {
+      resolveFix!({ ready: true, checks: [] })
+    })
+    expect(host.querySelector('button[aria-expanded]')?.textContent).toContain('All good')
+    expect(document.activeElement).toBe(outsideBtn)
   })
 })
