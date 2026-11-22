@@ -333,3 +333,25 @@ Done on the engine side (`feat/p1-onboarding-import`):
 - `POST /api/v1/studio/engine/obs-collections/import` and `streamlabs-collections/import` now
   also return `previous_id` alongside `id`, so switching back to `previous_id` and removing `id`
   via `/studio/engine/library/collections` undoes an onboarding import cleanly.
+
+## R27. Named transitions and from-scene / to-scene transition matrix (22 Nov)
+
+Named transition presets (each with its own name, kind, duration, OBS settings, and default flag)
+and a directed from-scene / to-scene override matrix with deterministic precedence (Phase 2 #14):
+
+- `GET /api/v1/studio/engine/scenes` adds:
+  - `named_transitions?: NamedTransition[]` (`{ name, kind, ms, settings, default }`, at least one, one `default: true`)
+  - `transition_matrix?: TransitionMatrixRule[]` (`{ from: string | null, to: string | null, transition: string }`)
+  - `scenes[i].transition_name?: string` (when an `Any → scene` named rule is set) and accurate `scenes[i].preview`
+- Named transition CRUD (all undoable in Studio History):
+  - `POST /api/v1/studio/engine/transitions` `{ name, kind, ms, settings?, default? }` → `201 Created` `NamedTransition` (`409 studio_name_taken`)
+  - `PUT /api/v1/studio/engine/transitions/{name}` `{ kind?, ms?, settings?, default? }` → `200 OK` updated `NamedTransition` (`404 studio_no_transition`)
+  - `POST /api/v1/studio/engine/transitions/{name}/rename` `{ name }` → `200 OK` updated `NamedTransition` (preserves default + matrix references; `409 studio_name_taken`)
+  - `POST /api/v1/studio/engine/transitions/{name}/duplicate` `{ name? }` → `201 Created` copy with `default: false` (`409 studio_name_taken`)
+  - `PUT /api/v1/studio/engine/transitions/{name}/default` `{}` → `204 No Content`
+  - `DELETE /api/v1/studio/engine/transitions/{name}` → `204 No Content` (removes matrix rules pointing to it, promotes default if needed; `409 studio_last_transition` on last remaining transition)
+- Transition matrix rule updates:
+  - `PUT /api/v1/studio/engine/transition-matrix` `{ from: string | null, to: string | null, transition: string | null }` → `204 No Content`.
+  - `from: null` means `Any → to`; `to: null` means `from → Any`; both null returns `400`. Passing `transition: null` clears the rule.
+  - Precedence on switch (direct, Studio Mode, T-bar, hotkeys, API/obs-websocket, automations): exact `(from, to)` → `Any → to` (or legacy scene override) → `from → Any` → default.
+- Demo engine (`packages/api/src/demo/features/studio-engine.ts`) simulates all named transition & matrix routes plus Studio Mode and scene switching so the live dashboard & browser walkthrough work end to end without desktop hardware.
