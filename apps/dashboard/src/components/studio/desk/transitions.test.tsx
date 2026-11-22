@@ -435,6 +435,51 @@ describe('TransitionsDialog UI', () => {
     const open = document.querySelector('select[aria-label^="Select transition for"]')
     expect(open?.getAttribute('aria-label')).toContain('Main to BRB')
   })
+
+  it('clearing the duration field and leaving it keeps the saved length', async () => {
+    const desk = makeDesk()
+    const apiMock = desk.api as unknown as { updateNamedTransition: ReturnType<typeof vi.fn> }
+    await mountDialog(desk, 'list')
+    await act(async () => findButtonMatching(/Smooth Fade/)!.click())
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Duration for Smooth Fade"]',
+    )!
+    await act(async () => setInputValue(input, ''))
+    await act(async () => input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
+    await act(async () => input.blur())
+    expect(apiMock.updateNamedTransition).not.toHaveBeenCalled()
+    expect(input.value).toBe('300')
+    // A typed 0 is a real 0.
+    await act(async () => setInputValue(input, '0'))
+    await act(async () =>
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+    )
+    expect(apiMock.updateNamedTransition).toHaveBeenCalledWith('Smooth Fade', { ms: 0 })
+  })
+
+  it('does not say every switch uses the default while a scene has an older override', async () => {
+    const data = sampleScenes()
+    data.transition_matrix = []
+    // BRB has its own (older) override; the default is Smooth Fade.
+    const desk = makeDesk({}, data)
+    await mountDialog(desk, 'matrix')
+    const notice = document.querySelector('[data-testid="matrix-empty-notice"]')!.textContent ?? ''
+    expect(notice).not.toMatch(/Every switch/i)
+    expect(notice).toMatch(/BRB/)
+  })
+
+  it('names the same default in the order note and the default cell for an older payload', async () => {
+    const data = sampleScenes()
+    delete (data as { named_transitions?: unknown }).named_transitions
+    data.transition = { kind: 'cut_transition', ms: 0 }
+    data.transition_matrix = []
+    data.scenes = data.scenes.map((s) => ({ ...s, transition: null }))
+    const desk = makeDesk({}, data)
+    await mountDialog(desk, 'matrix')
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Default (Cut)')
+    expect(text).not.toContain('Default (Fade)')
+  })
 })
 
 describe('parseNewDuration', () => {
@@ -446,6 +491,16 @@ describe('parseNewDuration', () => {
     expect(parseNewDuration('')).toBe(300)
     expect(parseNewDuration('  ')).toBe(300)
     expect(parseNewDuration('abc')).toBe(300)
+  })
+})
+
+describe('cellEffectiveInfo and the older per-scene override', () => {
+  it('a scene whose projected transition comes from a named rule is not a legacy override', () => {
+    const data = sampleScenes() // BRB: transition Cut and transition_name Quick Cut, with an Any -> BRB rule
+    const info = cellEffectiveInfo(data, null, 'BRB')
+    expect(info.directRule).toBe('Quick Cut')
+    // Clearing the rule falls back to the default, not to the cut the rule itself projected.
+    expect(info.inheritedName).toBe('Smooth Fade')
   })
 })
 

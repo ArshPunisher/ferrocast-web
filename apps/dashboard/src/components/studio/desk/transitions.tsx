@@ -15,6 +15,7 @@ import {
 } from '@phosphor-icons/react'
 import {
   describeError,
+  legacySceneTransition,
   resolveTransitionFromScenes,
   type EngineNamedTransition,
   type EngineScenes,
@@ -137,7 +138,7 @@ function cellEffectiveInfoOnce(
   }
   if (from === null && to !== null) {
     if (direct) return { directRule: direct, effectiveName: direct, via: 'to' }
-    const legacy = scenes.scenes.find((s) => s.name === to)?.transition
+    const legacy = legacySceneTransition(scenes, to)
     if (legacy) {
       return {
         directRule: null,
@@ -467,6 +468,11 @@ function NamedTransitionsTab({
 
   const commitDuration = async () => {
     if (!selected || selected.kind === 'cut_transition') return
+    // Nothing typed is no change (Number('') is 0, which would save a Cut-length fade).
+    if (msDraft.trim() === '') {
+      setMsDraft(String(selected.ms))
+      return
+    }
     const parsed = Math.round(Number(msDraft))
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 20000 || parsed === selected.ms) {
       setMsDraft(String(selected.ms))
@@ -954,6 +960,11 @@ function TransitionMatrixTab({
   }, [sceneNames, addFrom, addTo])
 
   const defaultTr = useMemo(() => named.find((t) => t.default) ?? named[0] ?? null, [named])
+  // What the default is called: the same words the Any to Any cell uses, also for an engine that
+  // sends no named list.
+  const defaultName = defaultTr?.name ?? TRANSITIONS[scenes.transition.kind] ?? 'Fade'
+  // Scenes with an older per-scene override (from before the matrix): they still play it.
+  const legacyScenes = scenes.scenes.filter((s) => s.transition).map((s) => s.name)
   const rules = useMemo(
     () => sortMatrixRules(scenes.transition_matrix ?? [], sceneNames),
     [scenes.transition_matrix, sceneNames],
@@ -1026,7 +1037,7 @@ function TransitionMatrixTab({
     <div className="flex flex-col gap-3">
       <div className="rounded-control border border-line bg-surface-2 px-3 py-2 text-xs text-text-2">
         <strong className="text-text">Resolution order:</strong> 1. Exact pair (From to To), 2. Any
-        to scene, 3. Scene to Any, 4. Default ({defaultTr?.name ?? 'Fade'}).
+        to scene, 3. Scene to Any, 4. Default ({defaultName}).
       </div>
 
       {sceneNames.length < 2 && (
@@ -1041,8 +1052,12 @@ function TransitionMatrixTab({
           data-testid="matrix-empty-notice"
           className="rounded-control border border-dashed border-line-strong bg-surface-1 px-3 py-2 text-xs text-text-2"
         >
-          No matrix rules set yet. Every switch currently uses the default transition (
-          <span className="font-semibold text-text">{defaultTr?.name ?? 'Fade'}</span>).
+          No matrix rules set yet. Switches use the default transition (
+          <span className="font-semibold text-text">{defaultName}</span>)
+          {legacyScenes.length > 0
+            ? `, except into ${legacyScenes.join(', ')}, which keep their own older override`
+            : ''}
+          .
         </div>
       )}
 

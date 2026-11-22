@@ -269,6 +269,20 @@ export interface EngineTransitionMatrixRule {
  * Resolves which transition plays when switching from `from` to `to` using the matrix rules
  * (precedence: exact pair -> Any to destination -> source to Any -> default transition).
  */
+/**
+ * A scene's older per-scene override (from before the matrix), if it has one. The `transition` a
+ * scene shows is also the projection of a named rule that points at it: when `transition_name`
+ * names one of the named transitions, that is the rule, not a legacy override (clearing the rule
+ * must not leave its own projection to fall back to).
+ */
+export function legacySceneTransition(data: EngineScenes, scene: string) {
+  const s = data.scenes.find((x) => x.name === scene)
+  if (!s?.transition) return undefined
+  const named = data.named_transitions ?? []
+  if (s.transition_name && named.some((t) => t.name === s.transition_name)) return undefined
+  return s.transition
+}
+
 export function resolveTransitionFromScenes(
   data: EngineScenes,
   from: string,
@@ -306,7 +320,7 @@ export function resolveTransitionFromScenes(
       via: 'to',
     }
   }
-  const sceneLegacy = data.scenes.find((s) => s.name === to)?.transition
+  const sceneLegacy = legacySceneTransition(data, to)
   if (sceneLegacy) {
     return {
       name: '',
