@@ -6,6 +6,7 @@ import { DeskProvider, type Desk } from './common'
 import {
   cellEffectiveInfo,
   gridStepCoord,
+  parseNewDuration,
   sortMatrixRules,
   transitionSummary,
   TransitionsDialog,
@@ -375,5 +376,17 @@ describe('TransitionsDialog UI', () => {
       to: 'Main',
       transition: 'Smooth Fade',
     })
+  })
+})
+
+describe('parseNewDuration', () => {
+  it('keeps a real 0, rounds decimals, clamps, and falls back only for nothing or text', () => {
+    expect(parseNewDuration('0')).toBe(0)
+    expect(parseNewDuration('350.6')).toBe(351)
+    expect(parseNewDuration('99999')).toBe(20000)
+    expect(parseNewDuration('-5')).toBe(0)
+    expect(parseNewDuration('')).toBe(300)
+    expect(parseNewDuration('  ')).toBe(300)
+    expect(parseNewDuration('abc')).toBe(300)
   })
 })

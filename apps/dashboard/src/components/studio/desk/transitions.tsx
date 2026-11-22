@@ -69,6 +69,14 @@ export interface TransitionsDialogState {
 }
 
 /** Formats a transition summary without em dashes. */
+/** A length typed in the create form: a real 0 stays 0, decimals round, and only nothing or text falls back. */
+export function parseNewDuration(raw: string, fallback = 300): number {
+  if (raw.trim() === '') return fallback
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(0, Math.min(20000, Math.round(n)))
+}
+
 export function transitionSummary(t: Pick<EngineNamedTransition, 'kind' | 'ms'>): string {
   const label = TRANSITIONS[t.kind] ?? t.kind
   if (t.kind === 'cut_transition') return label
@@ -375,7 +383,9 @@ function NamedTransitionsTab({
 
   useEffect(() => {
     setMsDraft(selected ? String(selected.ms) : '')
-  }, [selected?.name, selected?.ms, selected])
+    // The name and length are what matter: a poll that gives the same transition a new object
+    // must not wipe what is being typed.
+  }, [selected?.name, selected?.ms])
 
   const availableKinds = useMemo(() => {
     const byId = new Map(Object.entries(TRANSITIONS))
@@ -388,8 +398,7 @@ function NamedTransitionsTab({
   const submitCreate = async () => {
     const trimmed = newName.trim()
     if (!trimmed) return
-    const msNum =
-      newKind === 'cut_transition' ? 0 : Math.max(0, Math.min(20000, Number(newMs) || 300))
+    const msNum = newKind === 'cut_transition' ? 0 : parseNewDuration(newMs)
     const ok = await run('create-tr', () =>
       mutate(
         'create-tr',
