@@ -17,7 +17,7 @@ import { isCloud } from '../lib/boot'
 import { useMediaQuery, useNow } from '../lib/hooks'
 import { useHeldItems, useHeldSync } from '../lib/held'
 
-type Filter = 'all' | ChatPlatform
+type Filter = 'all' | ChatPlatform | 'facebook'
 
 export function Chat() {
   const now = useNow(15_000)
@@ -80,7 +80,7 @@ export function Chat() {
           onChange={setFilter}
           options={[
             { value: 'all', label: 'All' },
-            ...(['twitch', 'youtube', 'kick'] as const)
+            ...(['twitch', 'youtube', 'kick', 'facebook'] as const)
               .filter((p) => connectors?.[p].state !== 'off')
               .map((p) => ({
                 value: p as Filter,
