@@ -6,6 +6,7 @@ import { FilmStrip } from '@phosphor-icons/react'
 import type { Clip, ClipsApi } from '@ferrocast/api'
 import { cx } from '@ferrocast/ui'
 
+const CACHE_MAX = 300
 const cache = new Map<string, string | null>()
 const waiting: (() => void)[] = []
 let running = 0
@@ -75,6 +76,8 @@ export function useThumb(
       .then((r) => {
         if (!r) return
         cache.set(key, r.image)
+        // The oldest go: a long folder's pictures don't all stay in memory.
+        if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value as string)
         if (alive) setState({ status: 'ready', src: r.image })
       })
       .catch(() => {

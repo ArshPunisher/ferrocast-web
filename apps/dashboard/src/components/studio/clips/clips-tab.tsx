@@ -92,6 +92,7 @@ function ClipCard({
       <label
         className={cx(
           'absolute top-3.5 left-3.5 flex size-9 cursor-pointer items-center justify-center rounded-control border backdrop-blur-sm transition-colors duration-150',
+          'has-[:focus-visible]:shadow-[var(--fc-focus)]',
           selected
             ? 'border-accent-line bg-accent text-on-accent'
             : 'border-white/25 bg-black/45 text-white opacity-90 hover:bg-black/60',
