@@ -385,7 +385,9 @@ export function ClipsTab() {
           onJobStarted={() => data.reloadJobs()}
           onChanged={() => overview.reload()}
           onRenamed={(id) => {
-            // The list is read again first, so the renamed clip is there when the dialog looks.
+            // The new name may not match what is searched: cleared (as `show` does), so the
+            // renamed clip is in the list when the dialog looks.
+            data.setQuery('')
             overview.reload()
             setWant(id)
           }}

@@ -491,6 +491,26 @@ describe('the open clip', () => {
     clipFileUrl: () => '',
   })
 
+  it('renaming a clip while a search shows it opens it under its new name', async () => {
+    await mountDemo()
+    await settle()
+    await type(byLabel<HTMLInputElement>('Search clips by name'), 'Boss')
+    await settle(400)
+    await click(openBtn('Boss fight'))
+    await settle()
+    await choose('Details')
+    const name = [...document.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.labels?.[0]?.textContent === 'Name',
+    )!
+    await type(name, 'Finale')
+    await click(buttonByText('Rename'))
+    await settle(400)
+    // The search no longer matches the new name, but the clip is opened, not reported missing.
+    expect(text()).not.toContain("isn't in the folder")
+    expect(byLabel<HTMLInputElement>('Search clips by name')?.value).toBe('')
+    expect(text()).toContain('Finale')
+  })
+
   it('keeps a caption edit when another section is looked at and comes back', async () => {
     await mountWith(
       stub(async (m, p) =>
