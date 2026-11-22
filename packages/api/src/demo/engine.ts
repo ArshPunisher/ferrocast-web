@@ -3,7 +3,7 @@
 // believable stream (chat flowing, alerts firing) so the dashboard and overlays can be
 // built, screenshotted and tested with no engine. Faults can be injected per route.
 
-import { render, select } from '../alert'
+import { normalizeVariation, render, select, validateRule } from '../alert'
 import { zipSync, strToU8 } from 'fflate'
 import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
@@ -83,7 +83,8 @@ import { DemoLoyalty } from './features/loyalty'
 import { DemoPolls } from './features/polls'
 import { DemoGiveaways } from './features/giveaways'
 import { DemoWelcome } from './features/welcome'
-import { DemoRecap, buildRecap } from './features/recap'
+import { DemoRecap, buildCredits, buildRecap } from './features/recap'
+import { DemoHighlight } from './features/highlight'
 import { DemoDiscord } from './features/discord'
 import { DemoDiscordPro } from './features/discord-pro'
 import { DemoCloudBot, type DemoCloudBotState } from './features/cloud-bot'
@@ -93,6 +94,7 @@ import { DemoImporters } from './features/importers'
 import { DemoPro, type DemoProSetup } from './features/pro'
 import { DemoAccount, type DemoAccountSetup } from './features/account'
 import { DemoStudio } from './features/studio'
+import { DemoStudioEngine, type DemoStudioEngineOptions } from './features/studio-engine'
 import { DemoGoLive, type DemoGoLiveSetup } from './features/golive'
 import { DemoHistory } from './features/history'
 import { DemoSmart } from './features/smart'
@@ -148,6 +150,8 @@ export interface Fault {
 
 export interface DemoOptions {
   base?: string
+  /** Keep the alert queue's pause and mute in localStorage, so a reload keeps them (the dashboard's demo). */
+  persistQueue?: boolean
   /** Generate chat and alerts on timers (default true). */
   autoplay?: boolean
   seed?: number
@@ -173,6 +177,8 @@ export interface DemoOptions {
   cloudBackups?: DemoCloudMode
   /** Cloud mode (`?web=cloud`): the web dashboard of an account with no PC (CLOUD.md). */
   cloudMode?: DemoCloudSetup
+  /** Simulate Ferrocast's built-in Studio engine routes (`/studio/engine/*`) in demo mode. */
+  studioEngine?: boolean | DemoStudioEngineOptions
   /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
   remote?: {
     role: RemoteRole
@@ -340,6 +346,7 @@ export class DemoEngine {
   private overlayTokens = new Map<string, string>()
   private rules: AlertRule[]
   private queue = new AlertQueue()
+  private persistQueue = false
   private queueTimer: ReturnType<typeof setTimeout> | null = null
   private events: FerroEvent[] = []
   private why = new Map<string, string[]>()
@@ -420,6 +427,7 @@ export class DemoEngine {
   /** First-time chatter marks and the welcome setting. */
   readonly welcome: DemoWelcome
   private readonly recap: DemoRecap
+  readonly highlight: DemoHighlight
   private readonly pro: DemoPro
   private account!: DemoAccount
   /** The Ferrocast bot in Discord (Pro): go-live posts and roles. */
@@ -478,6 +486,7 @@ export class DemoEngine {
   private remote: DemoRemoteSession | null = null
   /** Studio: counters, quotes, modules, stream info, show, OBS helpers, moments. */
   readonly studio: DemoStudio
+  readonly studioEngine: DemoStudioEngine | null
   readonly golive: DemoGoLive
   readonly autoReplies: DemoAutoReplies
   private readonly starter = new DemoStarter(() => this.commands)
@@ -515,6 +524,8 @@ export class DemoEngine {
 
   constructor(opts: DemoOptions = {}) {
     this.base = opts.base ?? 'http://127.0.0.1:47820'
+    this.persistQueue = opts.persistQueue === true
+    this.loadQueueFlags()
     this.rand = mulberry32(opts.seed ?? 20261017)
     this.latency = opts.latencyMs ?? null
     this.setupDone = opts.setupDone ?? true
@@ -647,8 +658,21 @@ export class DemoEngine {
     this.loyalty = new DemoLoyalty(this.host)
     this.polls = new DemoPolls(this.host)
     this.giveaways = new DemoGiveaways(this.host, this.loyalty)
+    this.highlight = new DemoHighlight({
+      ...this.host,
+      visibleChatById: (id) => {
+        const e = this.events.find((x) => x.id === id)
+        if (!e || e.kind.type !== 'chat_message' || this.heldMsgs.has(id)) return null
+        return clone(e)
+      },
+      pushHighlightState: (highlight) =>
+        this.pushWidgetState('chat_highlight', { chat_highlight: highlight }),
+    })
     this.welcome = new DemoWelcome(this.host)
-    this.studio = new DemoStudio(this.host, () => this.commands)
+    this.studioEngine = opts.studioEngine
+      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {})
+      : null
+    this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine)
     this.golive = new DemoGoLive(
       this.host,
       () => this.accounts,
@@ -852,6 +876,11 @@ export class DemoEngine {
     this.broadcastLive(this.remoteFrame())
     if (this.remote && !this.remote.pcOnline && this.remote.cloud === 'on')
       this.broadcastLive({ v: 1, type: 'resync', data: { missed: 0 } })
+  }
+
+  /** Adjust simulated Studio engine fixtures at runtime (tests & interactive demo). */
+  setStudioOnboardingState(next: Partial<DemoStudioEngineOptions>): void {
+    this.studioEngine?.configure(next)
   }
 
   /** Back to "no tip page ever saved" (tests of the first-time setup). */
@@ -1785,6 +1814,7 @@ export class DemoEngine {
       this.loyalty,
       this.polls,
       this.giveaways,
+      this.highlight,
       this.welcome,
       this.recap,
       this.discord,
@@ -2056,8 +2086,18 @@ export class DemoEngine {
   private putOverlay(next: Overlay): Overlay {
     const saved = { ...clone(next), updated_at: Date.now() }
     this.overlays = this.overlays.map((x) => (x.id === saved.id ? saved : x))
-    for (const s of this.overlaySubs)
-      if (s.overlayId === saved.id) this.sendOverlay(s, 'config', clone(saved))
+    const patch: Record<string, unknown> = {}
+    if (saved.widgets.some((w) => w.kind === 'end_credits')) {
+      patch.credits = buildCredits(this.events, this.stats)
+    }
+    if (saved.widgets.some((w) => w.kind === 'chat_highlight')) {
+      patch.chat_highlight = this.highlight.view()
+    }
+    for (const s of this.overlaySubs) {
+      if (s.overlayId !== saved.id) continue
+      this.sendOverlay(s, 'config', clone(saved))
+      if (Object.keys(patch).length > 0) this.sendOverlay(s, 'state', clone(patch))
+    }
     return clone(saved)
   }
 
@@ -2082,24 +2122,28 @@ export class DemoEngine {
 
   private saveRule(id: string | null, body: unknown) {
     const r = requireObj(body) as AlertRule
-    if (!Array.isArray(r.kinds) || r.kinds.length === 0)
-      throw new HttpError(400, 'invalid', 'kinds: the rule needs at least one event type.')
-    if (!Array.isArray(r.variations) || !r.variations.some((v) => v.condition === null))
+    if (r.interrupt !== undefined && typeof r.interrupt !== 'boolean')
+      throw new HttpError(400, 'invalid', 'interrupt: true or false.')
+    r.interrupt = r.interrupt === true
+    if (!Array.isArray(r.variations))
       throw new HttpError(
         400,
         'invalid',
         'variations: the rule needs a default look (a variation without a condition).',
       )
-    for (const v of r.variations) {
-      if (v.duration_ms < 1000 || v.duration_ms > 60_000)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” must last 1 to 60 seconds.`)
-      if (v.volume < 0 || v.volume > 100)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” volume must be 0 to 100.`)
-      if ((v.title.match(/{/g) ?? []).length !== (v.title.match(/}/g) ?? []).length)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” has a { that is never closed.`)
+    r.variations = r.variations.map((v) => ({
+      ...v,
+      weight: v?.weight === undefined ? 1 : v.weight,
+      css: v?.css === undefined ? '' : v.css,
+    }))
+    const err = validateRule(r)
+    if (err) throw new HttpError(400, 'invalid', err)
+    const normalized: AlertRule = {
+      ...clone(r),
+      variations: r.variations.map((v) => normalizeVariation(clone(v))),
     }
     if (id === null) {
-      const rule = { ...clone(r), id: r.id || `r-${randomToken().slice(0, 8)}` }
+      const rule = { ...normalized, id: normalized.id || `r-${randomToken().slice(0, 8)}` }
       if (this.rules.some((x) => x.id === rule.id))
         throw new HttpError(409, 'rule_exists', 'A rule with that id already exists.')
       this.rules.push(rule)
@@ -2113,7 +2157,7 @@ export class DemoEngine {
         'That alert rule doesn’t exist anymore.',
         'Reload the alerts list.',
       )
-    this.rules[i] = { ...clone(r), id }
+    this.rules[i] = { ...normalized, id }
     return clone(this.rules[i])
   }
 
@@ -2179,11 +2223,44 @@ export class DemoEngine {
       case 'clear':
         this.queue.clearWaiting()
         break
+      case 'mute':
+        this.queue.setMuted(true)
+        break
+      case 'unmute':
+        this.queue.setMuted(false)
+        break
       default:
         throw new HttpError(404, 'not_found', 'That queue action doesn’t exist.')
     }
+    this.saveQueueFlags()
     this.applyQueue(actions)
     return this.queue.snapshot()
+  }
+
+  private loadQueueFlags(): void {
+    if (!this.persistQueue) return
+    try {
+      const v = JSON.parse(localStorage.getItem('fc-demo-queue') ?? '{}') as {
+        paused?: unknown
+        muted?: unknown
+      }
+      if (v.paused === true) this.queue.pause()
+      if (v.muted === true) this.queue.setMuted(true)
+    } catch {
+      // Storage can be blocked or hold junk: start with the defaults.
+    }
+  }
+
+  private saveQueueFlags(): void {
+    if (!this.persistQueue) return
+    try {
+      localStorage.setItem(
+        'fc-demo-queue',
+        JSON.stringify({ paused: this.queue.isPaused, muted: this.queue.isMuted }),
+      )
+    } catch {
+      // Not saved; the flags still work for this page.
+    }
   }
 
   private replayEvent(id: string) {
@@ -2415,6 +2492,7 @@ export class DemoEngine {
       }))
     if (on && this.panicCfg.pause_alerts) this.queue.pause()
     if (!on && this.panicCfg.pause_alerts) this.applyQueue(this.queue.resume(Date.now()))
+    this.saveQueueFlags()
     this.broadcastQueue()
     for (const a of applied) {
       if (a.modes.includes('followers_only'))
@@ -2667,7 +2745,7 @@ export class DemoEngine {
       for (const s of this.overlaySubs) if (this.overlayWants(s, e)) this.sendOverlay(s, 'event', e)
 
     if (isAlertable(e) && (origin === 'live' || origin === 'replay' || origin === 'test')) {
-      const sel = select(this.rules, e)
+      const sel = select(this.rules, e, this.rand)
       if (sel) {
         const alert = this.designs.dress(
           render(`al-${++this.alertSeq}`, sel.rule, sel.variation, e),
@@ -2690,7 +2768,7 @@ export class DemoEngine {
           })
           this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
         }
-        this.applyQueue(this.queue.enqueue(alert, priority, now))
+        this.applyQueue(this.queue.enqueue(alert, priority, now, sel.rule.interrupt === true))
       } else if (origin === 'live') {
         this.why.set(e.id, this.whyFor(e).reasons)
       }
@@ -2782,13 +2860,20 @@ export class DemoEngine {
     return o.widgets.some((w) => {
       if (e.kind.type === 'chat_message')
         return (
-          w.kind === 'chat' &&
+          (w.kind === 'chat' || w.kind === 'emote_wall') &&
           (w.config.platforms.length === 0 || w.config.platforms.includes(e.platform))
         )
       return (
         w.kind === 'events' && (w.config.kinds.length === 0 || w.config.kinds.includes(e.kind.type))
       )
     })
+  }
+
+  private pushWidgetState(kind: Widget['kind'], partial: Record<string, unknown>): void {
+    for (const s of this.overlaySubs) {
+      const o = this.overlays.find((x) => x.id === s.overlayId)
+      if (o?.widgets.some((w) => w.kind === kind)) this.sendOverlay(s, 'state', clone(partial))
+    }
   }
 
   private sendOverlay(s: OverlaySub, type: string, data: unknown): void {
@@ -2800,15 +2885,20 @@ export class DemoEngine {
   private sendSnapshot(s: OverlaySub): void {
     const o = this.overlays.find((x) => x.id === s.overlayId)
     if (!o) return
+    const has = (k: Widget['kind']) => o.widgets.some((w) => w.kind === k)
     const state: OverlayState = {
       goals: clone(this.goals),
       labels: this.labelsFor(o),
       label_trains: this.labelTrainsFor(o),
       viewers: clone(this.viewers),
       events: clone(this.events.filter((e) => isAlertable(e)).slice(-25)),
-      chat: clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50)),
+      chat: has('chat')
+        ? clone(this.events.filter((e) => e.kind.type === 'chat_message').slice(-50))
+        : [],
       poll: this.polls.view(),
       giveaway: this.giveaways.card(),
+      credits: has('end_credits') ? buildCredits(this.events, this.stats) : null,
+      chat_highlight: has('chat_highlight') ? this.highlight.view() : null,
       music: this.music.now(),
     }
     s.seq += 1
@@ -3251,6 +3341,18 @@ export class DemoEngine {
             label_trains: this.labelTrainsFor(o),
           })
       }
+    if (
+      k.type === 'follow' ||
+      k.type === 'subscription' ||
+      k.type === 'gift_batch' ||
+      (k.type === 'tip' && k.status === 'captured') ||
+      k.type === 'paid_message' ||
+      k.type === 'platform_gift' ||
+      k.type === 'raid' ||
+      (k.type === 'chat_message' && a && (a.roles & 2) !== 0 && (a.roles & 256) === 0)
+    ) {
+      this.pushWidgetState('end_credits', { credits: buildCredits(this.events, this.stats) })
+    }
   }
 
   private bumpGoal(kind: Goal['kind'], by: number): void {
@@ -3314,22 +3416,51 @@ export class DemoEngine {
     }
     const actor = this.chatter(p)
     const text = this.pickOf(MESSAGES)
-    const fragments:
-      | { type: 'text'; text: string }[]
-      | ({ type: 'text'; text: string } | { type: 'mention'; login: string })[] = text.startsWith(
-      'yo chat',
-    )
+    const demoEmote =
+      this.rand() < 0.3
+        ? p === 'kick'
+          ? {
+              type: 'emote' as const,
+              provider: 'native' as const,
+              id: '4148074',
+              name: 'HYPERCLAP',
+              url: 'https://files.kick.com/emotes/4148074/fullsize',
+              zero_width: false,
+            }
+          : p === 'youtube'
+            ? {
+                type: 'emote' as const,
+                provider: 'seven_tv' as const,
+                id: '01F6N',
+                name: 'catJAM',
+                url: 'https://cdn.7tv.app/emote/01F6N8W4M0000083K2R1V9H8Z3/1x.webp',
+                zero_width: false,
+              }
+            : {
+                type: 'emote' as const,
+                provider: 'native' as const,
+                id: '25',
+                name: 'Kappa',
+                url: 'https://static-cdn.jtvnw.net/emoticons/v2/25/static/dark/2.0',
+                zero_width: false,
+              }
+        : null
+    const baseFragments: import('../types').Fragment[] = text.startsWith('yo chat')
       ? [
           { type: 'text', text: 'yo ' },
           { type: 'mention', login: 'chat' },
           { type: 'text', text: text.slice(7) },
         ]
       : [{ type: 'text', text }]
+    const fragments = demoEmote
+      ? [...baseFragments, { type: 'text' as const, text: ' ' }, demoEmote]
+      : baseFragments
+    const fullText = demoEmote ? `${text} ${demoEmote.name}` : text
     this.ingest(
       {
         type: 'chat_message',
         actor,
-        content: { text, fragments },
+        content: { text: fullText, fragments },
         reply_to: null,
         is_action: false,
       },
@@ -3622,6 +3753,30 @@ export class DemoEngine {
       },
       'youtube',
       2 * 60_000,
+    )
+    add(
+      {
+        type: 'gift_batch',
+        gifter: t('GiftGoblin'),
+        tier: { type: 'tier1' },
+        count: 5,
+      },
+      'twitch',
+      3 * 60_000,
+    )
+    add(
+      {
+        type: 'chat_message',
+        actor: t('mira_exe', { color: '#9be15d', roles: 2 }),
+        content: {
+          text: 'Welcome in everyone! PogChamp',
+          fragments: [{ type: 'text', text: 'Welcome in everyone! PogChamp' }],
+        },
+        reply_to: null,
+        is_action: false,
+      },
+      'twitch',
+      90_000,
     )
     for (let i = 0; i < 24; i++) {
       const p: ChatPlatform = i % 4 === 0 ? 'youtube' : i % 5 === 0 ? 'kick' : 'twitch'

@@ -181,6 +181,36 @@ export const ALERT_KINDS = [
 ] as const
 export type AlertKind = (typeof ALERT_KINDS)[number]
 
+export type CustomFieldKind = 'text' | 'number' | 'color' | 'toggle' | 'select'
+
+export type CustomFieldValue = string | number | boolean
+
+export interface CustomField {
+  key: string
+  label: string
+  type: CustomFieldKind
+  default: CustomFieldValue
+  min?: number
+  max?: number
+  options?: string[]
+}
+
+export interface AlertAnim {
+  in: AlertIn
+  out: AlertOut
+  text: TextAnim
+  in_ms: number
+  out_ms: number
+  text_delay_ms: number
+}
+
+export interface CustomAlertRender {
+  html: string
+  css: string
+  fields: Record<string, CustomFieldValue>
+  vars: Record<string, string>
+}
+
 export interface RenderedAlert {
   alert_id: string
   event_id: string
@@ -199,6 +229,10 @@ export interface RenderedAlert {
   tts_text: string | null
   tts_audio: string | null
   test: boolean
+  /** Animation timing and text effect (R25). */
+  anim?: AlertAnim
+  /** Present when variation has custom HTML/CSS enabled; rendered strictly in sandbox iframe (R25). */
+  custom?: CustomAlertRender
   /** Present when an alert design dressed it (API.md §4 Designs); `layout` is then "design". */
   design?: AlertDesignView
 }
@@ -220,6 +254,8 @@ export interface Variation {
   name: string
   condition: Condition | null
   priority: number
+  /** Chance share among matching looks of the same top priority (0 to 1000, default 1). */
+  weight: number
   title: string
   body: string
   image: string | null
@@ -229,6 +265,16 @@ export interface Variation {
   tts: boolean
   layout: string
   css: string
+  /** Timing and text effect (R25). Missing on legacy variations -> defaults apply. */
+  anim?: AlertAnim
+  /** When true, overlays render `html` + `css` inside a sandboxed iframe (R25). */
+  custom_enabled?: boolean
+  /** Custom HTML template with safe token substitution (R25). */
+  html?: string
+  /** Typed field schema exposed to custom HTML/CSS (R25). */
+  fields?: CustomField[]
+  /** Override values keyed by `CustomField.key` (R25). */
+  field_values?: Record<string, CustomFieldValue>
 }
 
 export interface AlertRule {
@@ -238,10 +284,14 @@ export interface AlertRule {
   kinds: string[]
   platforms: Platform[]
   variations: Variation[]
+  /** A new alert from this rule ends the one playing instead of queueing. */
+  interrupt: boolean
 }
 
 export interface Queue {
   paused: boolean
+  /** Alerts play without sound or speech. */
+  muted: boolean
   playing: { alert: RenderedAlert; started_at: Millis } | null
   waiting: { alert: RenderedAlert; priority: number; enqueued_at: Millis }[]
 }
@@ -303,7 +353,18 @@ export type ConnectFlow =
   | { flow: 'browser'; url: string }
 
 export type WidgetKind =
-  'alerts' | 'chat' | 'events' | 'goal' | 'label' | 'viewers' | 'poll' | 'giveaway' | 'layer'
+  | 'alerts'
+  | 'chat'
+  | 'events'
+  | 'goal'
+  | 'label'
+  | 'viewers'
+  | 'poll'
+  | 'giveaway'
+  | 'end_credits'
+  | 'emote_wall'
+  | 'chat_highlight'
+  | 'layer'
 /** Default overlay theme id (the engine's presets use it too). */
 export const DEFAULT_THEME = 'molten'
 
@@ -316,6 +377,9 @@ export const WIDGET_KINDS: readonly WidgetKind[] = [
   'viewers',
   'poll',
   'giveaway',
+  'end_credits',
+  'emote_wall',
+  'chat_highlight',
 ]
 /** Live widgets (everything but static `layer`s), for "Add widget" menus. */
 export const LIVE_WIDGET_KINDS = WIDGET_KINDS
@@ -406,6 +470,34 @@ export interface PollConfig {
 }
 export interface GiveawayConfig {
   theme: string
+}
+export type CreditsSection = 'followers' | 'subs' | 'gifters' | 'tippers' | 'raiders' | 'mods'
+export interface EndCreditsConfig {
+  theme: string
+  title?: string
+  sections: CreditsSection[]
+  speed: number
+  font: string
+  text_color: string | null
+  accent_color: string | null
+  background: string | null
+  loop: boolean
+}
+export type EmotePhysics = 'bounce' | 'rain' | 'fountain'
+export interface EmoteWallConfig {
+  theme: string
+  platforms: Platform[]
+  max_emotes: number
+  size: number
+  lifetime_s: number
+  physics: EmotePhysics
+}
+export interface ChatHighlightConfig {
+  theme: string
+  duration_s: number | null
+  font_size: number
+  show_badges: boolean
+  show_platform: boolean
 }
 
 /** How a widget design styles a live widget (`config.style`, API.md §4 Overlays). */
@@ -690,6 +782,9 @@ export type Widget =
   | (WidgetBase & { kind: 'viewers'; config: ViewersConfig & StyledConfig })
   | (WidgetBase & { kind: 'poll'; config: PollConfig & StyledConfig })
   | (WidgetBase & { kind: 'giveaway'; config: GiveawayConfig & StyledConfig })
+  | (WidgetBase & { kind: 'end_credits'; config: EndCreditsConfig & StyledConfig })
+  | (WidgetBase & { kind: 'emote_wall'; config: EmoteWallConfig & StyledConfig })
+  | (WidgetBase & { kind: 'chat_highlight'; config: ChatHighlightConfig & StyledConfig })
   | (WidgetBase & { kind: 'layer'; config: LayerConfig })
 
 /** The gallery design an overlay was made from. */
@@ -1575,6 +1670,7 @@ export type LiveFrame =
   | { v: 1; type: 'poll'; data: { poll: PollView | null } }
   | { v: 1; type: 'chatter'; data: ChatterMark & { event_id: string } }
   | { v: 1; type: 'giveaway'; data: { giveaway: GiveawayView | null } }
+  | { v: 1; type: 'chat_highlight'; data: { highlight: ChatHighlight | null } }
   /** App updates: on every change (a check, download progress, installing, ready, failed). */
   | { v: 1; type: 'update'; data: UpdateInfo }
   /** Dashboard anywhere (sent by the relay, not the PC): whether the streaming PC is reachable. */
@@ -1609,6 +1705,10 @@ export interface OverlayState {
   poll?: PollView | null
   /** The running (or last) giveaway, small; overlays with a giveaway widget get updates. */
   giveaway?: GiveawayCard | null
+  /** Session end-credits participants (`end_credits` widgets). */
+  credits?: Credits | null
+  /** Currently pinned chat message (`chat_highlight` widgets). */
+  chat_highlight?: ChatHighlight | null
   /** Start show: when its countdown ends (ms), so timers on screen reach zero with it. */
   show?: { countdown_ends_at: number | null }
   /** The music OBS hears (overlays with a music, motion or sound layer). */
@@ -1621,6 +1721,45 @@ export interface MusicNow {
   level: number
   title: string | null
   artist: string | null
+}
+
+export interface CreditGifter {
+  platform: Platform
+  name: string
+  gifts: number
+}
+
+export interface CreditTipper {
+  platform: Platform
+  name: string
+  amounts: Money[]
+  bits: number
+  kicks?: number
+  jewels?: number
+}
+
+/** Session end-credits roster (`GET /api/v1/credits` and `state.credits`). */
+export interface Credits {
+  started_at: Millis | null
+  followers: { platform: Platform; name: string }[]
+  subs: { platform: Platform; name: string; months: number; gifts: number }[]
+  gifters: CreditGifter[]
+  tippers: CreditTipper[]
+  raiders: { platform: Platform; name: string; viewers: number }[]
+  mods: { platform: Platform; name: string }[]
+}
+
+/** One pinned chat message for Chat Highlight widgets (`GET/POST /api/v1/chat/highlight`). */
+export interface ChatHighlight {
+  id: string
+  event_id: string
+  source_id: string | null
+  platform: Platform
+  actor: Actor
+  content: Content
+  is_action: boolean
+  pinned_at: Millis
+  expires_at: Millis | null
 }
 
 export interface GiveawayEntrant {
@@ -1711,7 +1850,15 @@ export type OverlayServerFrame =
       data: Partial<
         Pick<
           OverlayState,
-          'goals' | 'labels' | 'label_trains' | 'viewers' | 'poll' | 'giveaway' | 'show'
+          | 'goals'
+          | 'labels'
+          | 'label_trains'
+          | 'viewers'
+          | 'poll'
+          | 'giveaway'
+          | 'credits'
+          | 'chat_highlight'
+          | 'show'
         >
       >
     }

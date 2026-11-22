@@ -16,6 +16,14 @@ export const MAX_MIC_GAIN_DB = 15
 
 export const MIC_LEVEL_FILTER = 'Raise a quiet mic'
 
+/** Microphones: the kinds "Clean up my mic" and Onboarding audio check look for. */
+export const MIC_KINDS = new Set([
+  'coreaudio_input_capture',
+  'wasapi_input_capture',
+  'pulse_input_capture',
+  'alsa_input_capture',
+])
+
 /**
  * The chain, each with the kinds that already count as it (OBS's older noise filter too).
  * The numbers are measured (S31/S32, 20 Nov, a voice captured from a mic through each chain): at a

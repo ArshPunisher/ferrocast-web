@@ -14,18 +14,27 @@ import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useLive } from '../lib/store'
 import { useLeaveGuard } from '../lib/unsaved'
-import { SAMPLE_GIVEAWAY, SAMPLE_POLL, giveawayCard } from '../components/community/preview'
+import {
+  SAMPLE_CREDITS,
+  SAMPLE_GIVEAWAY,
+  SAMPLE_HIGHLIGHT,
+  SAMPLE_POLL,
+  giveawayCard,
+} from '../components/community/preview'
 
 export function OverlayEditor({ id }: { id: string }) {
   const client = useClient()
   const ov = useResource((c) => c.overlay(id), [id])
   const themes = useResource((c) => c.themes())
   const goals = useResource((c) => c.goals())
+  const credits = useResource((c) => c.credits())
+  const initialHighlight = useResource((c) => c.chatHighlight())
   const chat = useLive((s) => s.chat)
   const events = useLive((s) => s.events)
   const viewers = useLive((s) => s.viewers)
   const livePoll = useLive((s) => s.poll)
   const liveGiveaway = useLive((s) => s.giveaway)
+  const liveHighlight = useLive((s) => s.chatHighlight)
   const { run, busy } = useAction()
   const { add, busy: adding, guide } = useAddToObs()
   const usesObs = useUsesObs()
@@ -85,6 +94,19 @@ export function OverlayEditor({ id }: { id: string }) {
     top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
     hype_train: 'Lv.2 · 8 events · 01:45',
   }
+  const resolvedCredits =
+    credits.data &&
+    (credits.data.followers.length > 0 ||
+      credits.data.subs.length > 0 ||
+      credits.data.gifters.length > 0 ||
+      credits.data.tippers.length > 0 ||
+      credits.data.raiders.length > 0 ||
+      credits.data.mods.length > 0)
+      ? credits.data
+      : SAMPLE_CREDITS
+  const resolvedHighlight =
+    (liveHighlight !== undefined ? liveHighlight : initialHighlight.data) ?? SAMPLE_HIGHLIGHT
+
   const state: OverlayState = useMemo(
     () => ({
       goals: goals.data ?? [],
@@ -136,13 +158,25 @@ export function OverlayEditor({ id }: { id: string }) {
       viewers,
       events: events.slice(-25),
       chat: chat.slice(-30),
-      // The real poll and giveaway when there are some, else samples to place them by.
+      // The real poll, giveaway, credits and highlight when present, else samples to place them by.
       poll: livePoll ?? SAMPLE_POLL,
       giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
+      credits: resolvedCredits,
+      chat_highlight: resolvedHighlight,
     }),
     // Keyed on the newest item: both lists are capped, so their lengths stop changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goals.data, labelKey, hasTrain, lastChat, lastEvent, livePoll, liveGiveaway],
+    [
+      goals.data,
+      labelKey,
+      hasTrain,
+      lastChat,
+      lastEvent,
+      livePoll,
+      liveGiveaway,
+      resolvedCredits,
+      resolvedHighlight,
+    ],
   )
 
   if (ov.error) return <LoadError error={ov.error} onRetry={ov.reload} />

@@ -23,6 +23,7 @@ const LIVE_TYPES = new Set([
   'resync',
   'poll',
   'giveaway',
+  'chat_highlight',
   'chatter',
   // App updates (the sidebar's "Update available" and its progress).
   'update',
@@ -81,6 +82,22 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
         typeof g.id === 'string' &&
         Array.isArray(g.entrants) &&
         Array.isArray(g.winners)
+      )
+    )
+      return null
+  }
+  if (f.type === 'chat_highlight') {
+    const h = d.highlight as Record<string, unknown> | null | undefined
+    if (
+      h !== null &&
+      !(
+        typeof h === 'object' &&
+        typeof h.id === 'string' &&
+        typeof h.event_id === 'string' &&
+        typeof h.actor === 'object' &&
+        h.actor !== null &&
+        typeof h.content === 'object' &&
+        h.content !== null
       )
     )
       return null

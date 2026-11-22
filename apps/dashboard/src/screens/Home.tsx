@@ -21,6 +21,7 @@ import {
   ChatLine,
   ChatScroller,
   Composer,
+  HighlightBanner,
   ViewerCardDialog,
   useChatActions,
   type ReplyTarget,
@@ -247,6 +248,7 @@ export function Home() {
           }
         >
           <div {...hold} className="flex min-h-0 flex-1 flex-col">
+            <HighlightBanner />
             <ChatScroller
               count={peek.length}
               className="h-72 lg:h-auto lg:flex-1"

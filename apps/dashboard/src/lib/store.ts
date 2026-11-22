@@ -7,6 +7,7 @@ import {
   REMOTE_CLOSE,
   isAlertable,
   type CloudModeration,
+  type ChatHighlight,
   type ConnectionState,
   type Connectors,
   type FerroEvent,
@@ -100,6 +101,9 @@ interface LiveStore {
   chatters: Map<string, ChatterMark>
   /** The latest `giveaway` frame; `undefined` until one arrives. */
   giveaway: GiveawayView | null | undefined
+  /** The currently pinned `chat_highlight` frame; `undefined` until loaded or pushed. */
+  chatHighlight: ChatHighlight | null | undefined
+  setChatHighlight: (h: ChatHighlight | null) => void
   /** App updates (`GET /updates` and the live `update` frame); `null` until loaded. */
   update: UpdateInfo | null
   /** `update` frames so far: a GET that started before the latest frame is older than it. */
@@ -215,6 +219,8 @@ export const useLive = create<LiveStore>((set, get) => ({
   resyncs: 0,
   poll: undefined,
   giveaway: undefined,
+  chatHighlight: undefined,
+  setChatHighlight: (chatHighlight) => set({ chatHighlight }),
   update: null,
   updateFrames: 0,
   updateLoadError: null,
@@ -289,6 +295,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let resyncs = s.resyncs
     let poll = s.poll
     let giveaway = s.giveaway
+    let chatHighlight = s.chatHighlight
     let update = s.update
     let updateFrames = s.updateFrames
     let chatters = s.chatters
@@ -389,6 +396,9 @@ export const useLive = create<LiveStore>((set, get) => ({
         case 'giveaway':
           giveaway = f.data.giveaway
           break
+        case 'chat_highlight':
+          chatHighlight = f.data.highlight
+          break
         case 'update':
           update = f.data
           updateFrames += 1
@@ -446,6 +456,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       resyncs,
       poll,
       giveaway,
+      chatHighlight,
       update,
       updateFrames,
       chatters,

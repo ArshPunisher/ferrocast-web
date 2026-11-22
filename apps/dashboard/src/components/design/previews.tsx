@@ -13,6 +13,7 @@ import {
   type Widget,
 } from '@ferrocast/api'
 import { OverlayPreview } from '../AlertStage'
+import { SAMPLE_CREDITS, SAMPLE_HIGHLIGHT } from '../community/preview'
 
 const GOAL: Goal = {
   id: 'sample-goal',
@@ -114,6 +115,8 @@ export function useSampleState(widgets: Widget[]): OverlayState {
       viewers: { twitch: 412, youtube: 188 },
       events: sampleEvents(),
       chat: sampleChat(),
+      credits: SAMPLE_CREDITS,
+      chat_highlight: SAMPLE_HIGHLIGHT,
     }
   }, [labelKey])
 }

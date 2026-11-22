@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DemoEngine, DEMO_TOKEN, DEMO_PAIR } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
@@ -284,6 +284,66 @@ describe('demo engine: alerts and events', () => {
     await expect(client.test('follow', 'youtube')).rejects.toMatchObject({ status: 400 })
     await expect(client.test('chat_message')).rejects.toMatchObject({ status: 400 })
   })
+  it('queue controls: mute strips sound and speech from alerts that start after it', async () => {
+    let q = await client.queueMute()
+    expect(q.muted).toBe(true)
+    await client.test('follow')
+    q = await client.queue()
+    expect(q.playing?.alert.sound).toBeNull()
+    expect(q.playing?.alert.tts_text).toBeNull()
+    q = await client.queueUnmute()
+    expect(q.muted).toBe(false)
+  })
+  it('queue controls: an interrupting rule ends the playing alert', async () => {
+    const rules = await client.alertRules()
+    const follow = rules.find((r) => r.kinds.includes('follow'))!
+    await client.saveAlertRule({ ...follow, interrupt: true })
+    await client.test('follow')
+    const first = (await client.queue()).playing!.alert.alert_id
+    await client.test('follow')
+    const q = await client.queue()
+    expect(q.playing!.alert.alert_id).not.toBe(first)
+    expect(q.waiting).toHaveLength(0)
+  })
+  it('queue controls: pause and mute are remembered across a reload when persisting', async () => {
+    const store = new Map<string, string>()
+    const ls = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    }
+    vi.stubGlobal('localStorage', ls)
+    const a = new DemoEngine({ autoplay: false, latencyMs: 0, persistQueue: true })
+    const ca = new FerroClient({
+      base: a.base,
+      token: DEMO_TOKEN,
+      fetch: a.fetch,
+      sleep: async () => {},
+    })
+    await ca.queuePause()
+    await ca.queueMute()
+    a.dispose()
+    const b = new DemoEngine({ autoplay: false, latencyMs: 0, persistQueue: true })
+    const cb = new FerroClient({
+      base: b.base,
+      token: DEMO_TOKEN,
+      fetch: b.fetch,
+      sleep: async () => {},
+    })
+    const q = await cb.queue()
+    expect([q.paused, q.muted]).toEqual([true, true])
+    b.dispose()
+    store.set('fc-demo-queue', '{not json')
+    const c = new DemoEngine({ autoplay: false, latencyMs: 0, persistQueue: true })
+    const cc = new FerroClient({
+      base: c.base,
+      token: DEMO_TOKEN,
+      fetch: c.fetch,
+      sleep: async () => {},
+    })
+    expect((await cc.queue()).paused).toBe(false)
+    c.dispose()
+    vi.unstubAllGlobals()
+  })
   it('queue controls: pause, skip, clear', async () => {
     await client.queuePause()
     await client.test('follow')
@@ -546,5 +606,48 @@ describe('demo engine: frames added in API.md §5–6', () => {
   })
   it('media preview URLs carry the session', () => {
     expect(client.mediaUrl('m 1')).toBe(`${engine.base}/api/v1/media/m%201?session=${DEMO_TOKEN}`)
+  })
+})
+
+describe('the demo saves rules like the engine', () => {
+  it('fills in weight and interrupt and refuses a non-boolean interrupt', async () => {
+    const e = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const c = new FerroClient({
+      base: e.base,
+      token: DEMO_TOKEN,
+      fetch: e.fetch,
+      sleep: async () => {},
+    })
+    const rule = (await c.alertRules())[0]!
+    const bare = JSON.parse(JSON.stringify(rule)) as Record<string, unknown>
+    delete bare.interrupt
+    for (const v of bare.variations as Record<string, unknown>[]) delete v.weight
+    const saved = await c.saveAlertRule(bare as never)
+    expect(saved.interrupt).toBe(false)
+    expect(saved.variations.every((v) => v.weight === 1)).toBe(true)
+    await expect(c.saveAlertRule({ ...rule, interrupt: 'yes' } as never)).rejects.toMatchObject({
+      status: 400,
+    })
+    e.dispose()
+  })
+})
+
+describe('the demo with storage that throws', () => {
+  it('still works when localStorage refuses reads and writes', async () => {
+    const boom = () => {
+      throw new DOMException('blocked', 'SecurityError')
+    }
+    vi.stubGlobal('localStorage', { getItem: boom, setItem: boom })
+    const e = new DemoEngine({ autoplay: false, latencyMs: 0, persistQueue: true })
+    const c = new FerroClient({
+      base: e.base,
+      token: DEMO_TOKEN,
+      fetch: e.fetch,
+      sleep: async () => {},
+    })
+    expect((await c.queuePause()).paused).toBe(true)
+    expect((await c.queueMute()).muted).toBe(true)
+    e.dispose()
+    vi.unstubAllGlobals()
   })
 })
