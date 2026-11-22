@@ -18,6 +18,7 @@ import {
 } from './motion'
 import { anySample, sample } from './samples'
 import { Template, eventVars, withPlurals } from './template'
+import { MAX_CSS, checkCss, isColor, normalizeCss } from './css-check'
 import type {
   AlertContent,
   AlertDesignView,
@@ -52,6 +53,7 @@ import type {
   TextEffect,
   TextPart,
   Widget,
+  WidgetKind,
 } from './types'
 
 export const DESIGN_SCHEMA = 1
@@ -61,7 +63,8 @@ export const MAX_VARIATIONS = 10
 export const MAX_SCENES = 8
 export const MAX_TITLE = 300
 export const MAX_BODY = 500
-export const MAX_CSS = 20_000
+export const MAX_CSS_LEN = MAX_CSS
+export { MAX_CSS }
 export const MAX_LAYER_TEXT = 500
 export const MAX_OVERLAY_WIDGETS = 40
 /** The alert canvas the designer and the overlay share. */
@@ -907,11 +910,7 @@ export function remapMedia<T extends Design>(d: T, map: Record<string, string>):
 
 // ---------------------------------------------------------------------- value checks
 
-export function isColor(s: unknown): boolean {
-  if (typeof s !== 'string') return false
-  if (s === 'transparent') return true
-  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s)
-}
+export { checkCss, isColor, normalizeCss }
 
 export function isMediaRef(s: unknown): boolean {
   if (typeof s !== 'string') return false
@@ -936,81 +935,6 @@ export function isFontFamily(s: unknown): boolean {
 }
 
 const clip = (s: string) => Array.from(s).slice(0, 40).join('')
-
-/** core::layer::normalize_css: comments removed, escapes decoded, lowercase. */
-export function normalizeCss(css: string): string {
-  // Comments are removed the way a browser reads them: a `/*` inside a quoted string is
-  // text, not a comment, so `content:"/*"` can't hide a later `url(...)` from the check.
-  let noComments = ''
-  let quote: string | null = null
-  for (let i = 0; i < css.length; i++) {
-    const c = css[i] as string
-    if (quote) {
-      noComments += c
-      if (c === '\\') noComments += css[++i] ?? ''
-      else if (c === quote || c === '\n') quote = null
-    } else if (c === '"' || c === "'") {
-      quote = c
-      noComments += c
-    } else if (c === '/' && css[i + 1] === '*') {
-      const end = css.indexOf('*/', i + 2)
-      i = end === -1 ? css.length : end + 1
-    } else noComments += c
-  }
-  let out = ''
-  for (let i = 0; i < noComments.length; i++) {
-    const c = noComments[i] as string
-    if (c !== '\\') {
-      out += c
-      continue
-    }
-    let hex = ''
-    while (
-      hex.length < 6 &&
-      i + 1 < noComments.length &&
-      /[0-9a-fA-F]/.test(noComments[i + 1] as string)
-    )
-      hex += noComments[++i]
-    if (!hex) {
-      const n = noComments[++i]
-      if (n !== undefined && n !== '\n') out += n
-      continue
-    }
-    if (/\s/.test(noComments[i + 1] ?? '')) i += 1
-    const cp = parseInt(hex, 16)
-    out += cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '\ufffd'
-  }
-  return out.toLowerCase()
-}
-
-export function checkCss(path: string, css: string): string | null {
-  if (Array.from(css).length > MAX_CSS)
-    return `${path}: custom CSS can be up to ${MAX_CSS} characters.`
-  const lower = normalizeCss(css)
-  if (lower.includes('@import')) return `${path}: @import isn't allowed; paste the CSS itself.`
-  for (const bad of [
-    'expression(',
-    'javascript:',
-    '-moz-binding',
-    'behavior:',
-    'image-set(',
-    'src(',
-  ])
-    if (lower.includes(bad)) return `${path}: "${bad}" isn't allowed in custom CSS.`
-  let rest = lower
-  let at = rest.indexOf('url(')
-  while (at >= 0) {
-    const inner = rest
-      .slice(at + 4)
-      .trimStart()
-      .replace(/^["']+/, '')
-    if (!inner.startsWith('data:image/'))
-      return `${path}: url() can only use data:image/… pictures; files from the internet aren't allowed.`
-    rest = rest.slice(at + 4)
-    at = rest.indexOf('url(')
-  }
-  return null
-}
 
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -1283,9 +1207,190 @@ export function validateLayout(
     if (w.kind === 'layer') {
       const e = validateLayer(w.config)
       if (e) return `layer '${w.id}': ${e}`
-    } else if (isObj(w.config) && 'style' in w.config && w.config.style !== undefined) {
-      const e = validateWidgetStyle(w.config.style)
-      if (e) return `widget '${w.id}': ${e}`
+    } else {
+      const ce = validateWidgetConfig(w.kind, w.config)
+      if (ce) return `widget '${w.id}': ${ce}`
+      if (isObj(w.config) && 'style' in w.config && w.config.style !== undefined) {
+        const e = validateWidgetStyle(w.config.style)
+        if (e) return `widget '${w.id}': ${e}`
+      }
+    }
+  }
+  return null
+}
+
+/** Hostnames Ferrocast already uses for Twitch, Kick, YouTube, 7TV, BTTV, and FFZ emotes. */
+export const EMOTE_CDN_HOSTS = [
+  'static-cdn.jtvnw.net',
+  'files.kick.com',
+  'images.kick.com',
+  'cdn.7tv.app',
+  'cdn.betterttv.net',
+  'cdn.frankerfacez.com',
+  'yt3.ggpht.com',
+] as const
+
+const EMOTE_CDN_SET = new Set<string>(EMOTE_CDN_HOSTS)
+export const CREDITS_SECTIONS = [
+  'followers',
+  'subs',
+  'gifters',
+  'tippers',
+  'raiders',
+  'mods',
+] as const
+export const EMOTE_WALL_PHYSICS = ['bounce', 'rain', 'fountain'] as const
+export const EMOTE_WALL_MAX_CAP = 120
+const WIDGET_THEMES = new Set(['molten', 'daylight', 'arcade', 'minimal', 'sticker'])
+const CHAT_PLATFORMS = new Set(['twitch', 'youtube', 'kick'])
+
+/** Accepts only HTTPS URLs without userinfo/port/control chars whose host is an allowlisted emote CDN. */
+export function isTrustedEmoteUrl(raw: unknown): raw is string {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 512) return false
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i)
+    if (code <= 32 || code === 127) return false
+  }
+  if (!raw.startsWith('https://')) return false
+  const rest = raw.slice(8)
+  const sep = rest.search(/[/?#\\]/)
+  const authority = sep === -1 ? rest : rest.slice(0, sep)
+  if (
+    !authority ||
+    authority.includes('@') ||
+    authority.includes(':') ||
+    !/^[A-Za-z0-9.-]+$/.test(authority) ||
+    rest[authority.length] !== '/' ||
+    rest.length <= authority.length + 1
+  )
+    return false
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'https:' || u.username || u.password || u.port) return false
+    return EMOTE_CDN_SET.has(u.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+export function validateWidgetConfig(kind: WidgetKind, config: unknown): string | null {
+  if (kind !== 'end_credits' && kind !== 'emote_wall' && kind !== 'chat_highlight') return null
+  if (!isObj(config)) return 'config: must be an object.'
+  if (config.theme !== undefined && config.theme !== null) {
+    if (typeof config.theme !== 'string' || !WIDGET_THEMES.has(config.theme))
+      return 'config.theme: choose molten, daylight, arcade, minimal or sticker.'
+  }
+  if (kind === 'end_credits') {
+    if (config.title !== undefined && config.title !== null) {
+      if (typeof config.title !== 'string') return 'config.title: must be text.'
+      // eslint-disable-next-line no-control-regex
+      if ([...config.title].length > 80 || /[\x00-\x1f\x7f]/.test(config.title))
+        return 'config.title: keep the heading on one line up to 80 characters.'
+    }
+    if (config.sections !== undefined) {
+      if (
+        !Array.isArray(config.sections) ||
+        config.sections.length === 0 ||
+        config.sections.length > 6
+      )
+        return 'config.sections: choose 1 to 6 credits sections.'
+      const seen = new Set<string>()
+      for (const item of config.sections) {
+        if (typeof item !== 'string' || !(CREDITS_SECTIONS as readonly string[]).includes(item))
+          return `config.sections: unknown section '${String(item)}'.`
+        if (seen.has(item)) return `config.sections: '${item}' is listed twice.`
+        seen.add(item)
+      }
+    }
+    if (config.speed !== undefined) {
+      if (
+        typeof config.speed !== 'number' ||
+        !Number.isFinite(config.speed) ||
+        config.speed < 20 ||
+        config.speed > 300
+      )
+        return 'config.speed: scroll speed must be between 20 and 300.'
+    }
+    if (config.font !== undefined && config.font !== null && !isFontFamily(config.font))
+      return 'config.font: choose one of the built-in fonts or "system".'
+    for (const k of ['text_color', 'accent_color', 'background'] as const) {
+      const v = config[k]
+      if (v !== undefined && v !== null) {
+        if (typeof v !== 'string') return `config.${k}: must be a hex colour like #eef0f5.`
+        if (v !== '' && !isColor(v))
+          return `config.${k}: use a hex colour like #eef0f5 or clear it for the theme default.`
+      }
+    }
+    if (config.loop !== undefined && config.loop !== null && typeof config.loop !== 'boolean')
+      return 'config.loop: must be true or false.'
+  } else if (kind === 'emote_wall') {
+    if (config.platforms !== undefined) {
+      if (!Array.isArray(config.platforms) || config.platforms.length > 3)
+        return 'config.platforms: choose from twitch, youtube and kick.'
+      const seen = new Set<string>()
+      for (const item of config.platforms) {
+        if (typeof item !== 'string' || !CHAT_PLATFORMS.has(item))
+          return 'config.platforms: choose from twitch, youtube and kick.'
+        if (seen.has(item)) return `config.platforms: '${item}' is listed twice.`
+        seen.add(item)
+      }
+    }
+    if (config.max_emotes !== undefined) {
+      if (
+        typeof config.max_emotes !== 'number' ||
+        !Number.isInteger(config.max_emotes) ||
+        config.max_emotes < 5 ||
+        config.max_emotes > EMOTE_WALL_MAX_CAP
+      )
+        return 'config.max_emotes: must be a whole number from 5 to 120.'
+    }
+    if (config.size !== undefined) {
+      if (
+        typeof config.size !== 'number' ||
+        !Number.isInteger(config.size) ||
+        config.size < 24 ||
+        config.size > 128
+      )
+        return 'config.size: must be between 24 and 128 px.'
+    }
+    if (config.lifetime_s !== undefined) {
+      if (
+        typeof config.lifetime_s !== 'number' ||
+        !Number.isFinite(config.lifetime_s) ||
+        config.lifetime_s < 1 ||
+        config.lifetime_s > 20
+      )
+        return 'config.lifetime_s: must be between 1 and 20 seconds.'
+    }
+    if (config.physics !== undefined) {
+      if (
+        typeof config.physics !== 'string' ||
+        !(EMOTE_WALL_PHYSICS as readonly string[]).includes(config.physics)
+      )
+        return 'config.physics: choose bounce, rain or fountain.'
+    }
+  } else if (kind === 'chat_highlight') {
+    if (config.duration_s !== undefined && config.duration_s !== null) {
+      if (
+        typeof config.duration_s !== 'number' ||
+        !Number.isInteger(config.duration_s) ||
+        config.duration_s < 5 ||
+        config.duration_s > 3600
+      )
+        return 'config.duration_s: leave empty to stay until dismissed, or pick 5 to 3600 seconds.'
+    }
+    if (config.font_size !== undefined) {
+      if (
+        typeof config.font_size !== 'number' ||
+        !Number.isInteger(config.font_size) ||
+        config.font_size < 14 ||
+        config.font_size > 48
+      )
+        return 'config.font_size: must be between 14 and 48 px.'
+    }
+    for (const k of ['show_badges', 'show_platform'] as const) {
+      if (config[k] !== undefined && config[k] !== null && typeof config[k] !== 'boolean')
+        return `config.${k}: must be true or false.`
     }
   }
   return null
@@ -1508,6 +1613,7 @@ export function validateDesign(d: Design): string | null {
         !isObj(w.config) || 'style' in w.config
           ? "content.config: must be the widget's settings, without its style."
           : null,
+        validateWidgetConfig(w.widget, w.config)?.replace(/^config\./, 'content.config.') ?? null,
         validateWidgetStyle(w.style, 'content.style'),
       )
     }

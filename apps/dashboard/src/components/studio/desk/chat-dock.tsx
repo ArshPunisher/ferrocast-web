@@ -8,6 +8,7 @@ import {
   ChatLine,
   ChatScroller,
   Composer,
+  HighlightBanner,
   ViewerCardDialog,
   useChatActions,
   type ReplyTarget,
@@ -68,6 +69,7 @@ export function ChatDock() {
           </button>
         }
       />
+      <HighlightBanner />
       <ChatScroller count={lines.length} className="flex-1" label="Chat">
         {lines.length === 0 ? (
           <EmptyState compact title="Chat is quiet" />

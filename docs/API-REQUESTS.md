@@ -334,6 +334,47 @@ Done on the engine side (`feat/p1-onboarding-import`):
   also return `previous_id` alongside `id`, so switching back to `previous_id` and removing `id`
   via `/studio/engine/library/collections` undoes an onboarding import cleanly.
 
+## R25. Alert box editor v2: timing, text effects and sandboxed custom HTML/CSS with field schema
+
+Roadmap Phase 2 #11 (`feat/p2-alert-editor`). Additive fields on `Variation` and `RenderedAlert`
+with backward-compatible defaults (`#[serde(default)]`):
+
+- `Variation.anim` (`{ in, out, text, in_ms, out_ms, text_delay_ms }`, defaults
+  `{ in: "fade", out: "fade", text: "none", in_ms: 400, out_ms: 350, text_delay_ms: 150 }`):
+  - `in_ms` and `out_ms` `0` to `3000`, `text_delay_ms` `0` to `10000`,
+    `in_ms + out_ms < duration_ms` and `text_delay_ms < duration_ms`.
+- `Variation.custom_enabled` (bool, default `false`), `Variation.html` (string, up to `20000` chars),
+  existing `Variation.css` (`check_css`, up to `20000` chars, no `@import` or external `url()`
+  other than `data:image/...`).
+- `Variation.fields` (up to `32` custom schema items):
+  `{ key /* [a-z][a-z0-9_]{0,39}, unique, must not match KNOWN_VARS */, label /* 1–80 chars */, type: "text" | "number" | "color" | "toggle" | "select", default, min?, max?, options? }`
+  and `Variation.field_values` (`Record<string, string | number | boolean>`): every key must exist in
+  `fields` and match its declared type, range, colour format or options list.
+- Token name validation: every `{token}` referenced in `Variation.title`, `Variation.body` and
+  `Variation.html` must belong to `core::template::KNOWN_VARS` or `Variation.fields` keys; unknown
+  tokens return HTTP `400` naming the variation and bad token.
+- `RenderedAlert.anim?` carries the variation's animation and timing; `RenderedAlert.custom?` carries
+  `{ html, css, fields, vars }` only when `custom_enabled: true`.
+- **Custom alerts are HTML and CSS only, never code.** Saving a look with `custom_enabled` (or any
+  `html`) is refused with `400` (`variation 'x': custom HTML can't use <script>: …`) when the HTML has
+  `script`, `meta`, `base`, `form`, frames, `object`/`embed`, media, `on*` handlers, `srcdoc`,
+  `javascript:` or any URL that is not a `#anchor`, a small `data:image/` picture or one of the allowed
+  picture hosts. Every `<style>` block and `style` attribute goes through the same `check_css` rules as
+  `css`. `{token}`s fill only text and `alt`, `title`, `aria-label`, `aria-description`,
+  `aria-valuetext` and `data-*` attributes (not `class`, `style`, URLs or names). At most 20 looks per
+  rule. A paired phone (`Role::Owner` over the remote path) cannot add or change `custom_enabled`,
+  `html` or `fields` (403 `not_allowed_for_role`; custom code is PC-only like plugins); everything else
+  in a rule still saves from a phone.
+- Custom-enabled looks are drawn in `<iframe sandbox="allow-scripts">` (never `allow-same-origin`).
+  Only the frame's bootstrap runs (CSP `script-src 'nonce-…'`, no `unsafe-inline` for scripts, no
+  `media-src`, `connect-src 'none'`); it parses the markup in an inert document, strips what the save
+  check refuses (defence in depth), fills tokens as text, and answers only its parent's origin, once.
+  Legacy looks with `css` but no `custom_enabled` still apply that CSS in the standard alert's shadow
+  root (no iframe), checked by `check_css` at save time. `GET /alert-sandbox` is served by the desktop
+  app/engine for desktop and OBS origins.
+- `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
+  active alert design no longer dresses an alert whose look is custom-enabled.
+
 ## R27. Named transitions and from-scene / to-scene transition matrix (22 Nov)
 
 Named transition presets (each with its own name, kind, duration, OBS settings, and default flag)
