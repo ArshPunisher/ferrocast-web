@@ -442,4 +442,68 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     } as never
     expect(resolveTransitionFromScenes(scenes, 'Main', 'BRB')).toMatchObject({ name: 'Second' })
   })
+
+  describe('named transitions and Studio Mode as the engine has them (CodeRabbit)', () => {
+    it('a switch by the legacy route never gives two presets the same name or both the default', async () => {
+      const { api } = mkApi()
+      // A Fade preset that happens to be called slide_transition...
+      await api.addNamedTransition({ name: 'slide_transition', kind: 'fade_transition', ms: 300 })
+      // ...then Slide is picked by the old route: a preset of its own is made with another name.
+      await api.setTransition({ kind: 'slide_transition', ms: 400 })
+      const list = (await api.scenes()).named_transitions ?? []
+      const names = list.map((t) => t.name)
+      expect(new Set(names).size).toBe(names.length)
+      await api.setDefaultNamedTransition('slide_transition')
+      expect((await api.scenes()).named_transitions?.filter((t) => t.default).length).toBe(1)
+    })
+
+    it("a write to a kind's settings reaches the preset that plays", async () => {
+      const { api } = mkApi()
+      await api.addNamedTransition({
+        name: 'Wipe It',
+        kind: 'swipe_transition',
+        ms: 500,
+        settings: { direction: 'left' },
+        default: true,
+      })
+      await api.setTransitionSettings('swipe_transition', { direction: 'right' })
+      const list = (await api.scenes()).named_transitions ?? []
+      expect(list.find((t) => t.name === 'Wipe It')?.settings).toMatchObject({ direction: 'right' })
+      // Another preset of another kind is left alone.
+      expect(list.find((t) => t.kind === 'fade_transition')?.settings).not.toHaveProperty(
+        'direction',
+      )
+    })
+
+    it('the T-bar position is the one set until it is released', async () => {
+      const { api } = mkApi()
+      await api.studioMode(true)
+      await api.tbar(0.4)
+      expect((await api.scenes()).tbar).toEqual({ active: true, at: 0.4 })
+      await api.tbar(0.4, true)
+      expect((await api.scenes()).tbar).toEqual({ active: false, at: 0 })
+    })
+
+    it('swap off: the old scene does not go to the preview when a transition ends', async () => {
+      const { api } = mkApi()
+      const scenes = await api.scenes()
+      const other = scenes.scenes.find((s) => !s.current)!.name
+      await api.studioMode(true)
+      await api.setStudioOptions({ swap: false } as never)
+      const before = scenes.current
+      await api.setPreview(other)
+      await api.transitionNow()
+      const after = await api.scenes()
+      expect(after.current).toBe(other)
+      expect(after.scenes.find((s) => s.preview)?.name).toBe(other) // the preview stays where it was
+      expect(after.scenes.find((s) => s.name === before)?.preview).toBe(false)
+    })
+
+    it('the encode budget has every field the client needs', async () => {
+      const { api } = mkApi()
+      const b = await api.encodeBudget()
+      expect(b).toHaveProperty('budget_mpx')
+      expect(['ok', 'limit', 'over', 'unknown']).toContain(b.level)
+    })
+  })
 })

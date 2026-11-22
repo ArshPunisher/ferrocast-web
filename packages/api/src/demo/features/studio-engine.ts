@@ -1,5 +1,6 @@
 import {
   resolveTransitionFromScenes,
+  type EncodeBudget,
   type EngineFilter,
   type EngineImportPreview,
   type EngineImportReport,
@@ -354,6 +355,8 @@ export class DemoStudioEngine {
   private activeScenes: string[] = ['Main', 'Gameplay', 'Chatting', 'BRB']
   private currentScene = 'Main'
   private previewScene: string | null = null
+  /** The T-bar as it was last moved: active until it is released. */
+  private tbarState: { active: boolean; at: number } = { active: false, at: 0 }
   private black = false
   private previewPaused = false
   private namedTransitions: EngineNamedTransition[] = [
@@ -1067,8 +1070,13 @@ export class DemoStudioEngine {
           for (const t of this.namedTransitions) t.default = t.name === match.name
         } else {
           for (const t of this.namedTransitions) t.default = false
+          // A name no preset has (one may already be called after this kind).
+          let name = kind
+          for (let n = 2; this.namedTransitions.some((t) => t.name === name); n++) {
+            name = `${kind} ${n}`
+          }
           this.namedTransitions.push({
-            name: kind,
+            name,
             kind,
             ms: kind === 'cut_transition' ? 0 : ms,
             settings: clone(this.kindSettings.get(kind) ?? {}),
@@ -1106,6 +1114,11 @@ export class DemoStudioEngine {
       const kind = decodeURIComponent(rest[3]!)
       const settings = requireObj(requireObj(body).settings)
       this.kindSettings.set(kind, { ...(this.kindSettings.get(kind) ?? {}), ...clone(settings) })
+      // The preset that plays is the default one of the kind, else the first of it; others stay.
+      const target =
+        this.namedTransitions.find((t) => t.default && t.kind === kind) ??
+        this.namedTransitions.find((t) => t.kind === kind)
+      if (target) target.settings = { ...target.settings, ...clone(settings) }
       return undefined
     }
     if (is('POST', 'studio/engine/transitions')) {
@@ -1287,6 +1300,7 @@ export class DemoStudioEngine {
     if (is('PUT', 'studio/engine/studio-mode')) {
       const on = Boolean(requireObj(body).on)
       this.previewScene = on ? this.currentScene : null
+      if (!on) this.tbarState = { active: false, at: 0 }
       return undefined
     }
     if (is('PUT', 'studio/engine/studio-mode/preview')) {
@@ -1317,7 +1331,8 @@ export class DemoStudioEngine {
         this.lastResolvedTransition = resolveTransitionFromScenes(this.scenesPayload(), old, pre)
       }
       this.currentScene = pre
-      this.previewScene = old
+      // Swap on (the default): what was on air goes to the preview; off: the preview stays.
+      if (this.studioModeOptions.swap) this.previewScene = old
       this.black = false
       return undefined
     }
@@ -1345,9 +1360,10 @@ export class DemoStudioEngine {
         const old = this.currentScene
         this.lastResolvedTransition = resolveTransitionFromScenes(this.scenesPayload(), old, pre)
         this.currentScene = pre
-        this.previewScene = old
+        if (this.studioModeOptions.swap) this.previewScene = old
       }
-      return { active: !release, at: release ? 0 : at }
+      this.tbarState = { active: !release, at: release ? 0 : at }
+      return clone(this.tbarState)
     }
     if (is('PUT', 'studio/engine/quick-transitions')) {
       const list = requireObj(body).list
@@ -1396,12 +1412,13 @@ export class DemoStudioEngine {
       return undefined
     }
     if (is('GET', 'studio/engine/encode-budget') || is('POST', 'studio/engine/encode-budget')) {
-      return {
-        can_share: true,
+      const budget: EncodeBudget = {
+        budget_mpx: null,
+        shared: true,
         why_not_shared: null,
-        max_kbps: 6000,
-        video_kbps: 6000,
+        level: 'unknown',
       }
+      return budget
     }
 
     if (is('GET', 'studio/engine/sources')) {
@@ -1588,7 +1605,7 @@ export class DemoStudioEngine {
       preview: this.previewScene,
       quick: clone(this.quickTransitions),
       studio_options: clone(this.studioModeOptions),
-      tbar: { active: false, at: 0 },
+      tbar: clone(this.tbarState),
       black: this.black,
       vertical: null,
       top_layer: null,

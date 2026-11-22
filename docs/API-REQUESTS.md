@@ -394,7 +394,7 @@ and a directed from-scene / to-scene override matrix with deterministic preceden
   - `named_transitions?: NamedTransition[]` (`{ name, kind, ms, settings, default }`, at least one, one `default: true`)
   - `transition_matrix?: TransitionMatrixRule[]` (`{ from: string | null, to: string | null, transition: string }`)
   - `scenes[i].transition_name?: string` (when an `Any → scene` named rule is set) and accurate `scenes[i].preview`
-- Named transition CRUD (all undoable in Studio History):
+- Named transition CRUD (all undoable in Studio History on the desktop engine; the in-browser demo keeps no history and has no Undo):
   - `POST /api/v1/studio/engine/transitions` `{ name, kind, ms, settings?, default? }` → `201 Created` `NamedTransition` (`409 studio_name_taken`)
   - `PUT /api/v1/studio/engine/transitions/{name}` `{ kind?, ms?, settings?, default? }` → `200 OK` updated `NamedTransition` (`404 studio_no_transition`)
   - `POST /api/v1/studio/engine/transitions/{name}/rename` `{ name }` → `200 OK` updated `NamedTransition` (preserves default + matrix references; `409 studio_name_taken`)
