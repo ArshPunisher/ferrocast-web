@@ -58,7 +58,7 @@ import { UpdateDialogHost, UpdateNavItem } from './update'
 import { AccountAvatar, SidebarAccount } from './account/parts'
 import { useAccount } from '../lib/account-status'
 import { useUpdateWatch } from '../lib/update'
-import { useIsWide } from '../lib/wide'
+import { useIsFlush, useIsWide } from '../lib/wide'
 import { StudioStatusBar } from './studio/desk/status-bar'
 
 type NavItem = {
@@ -398,6 +398,7 @@ function useHeaderHeight() {
 export function Shell({ children, demo }: { children: ReactNode; demo: boolean }) {
   const route = useRoute()
   const wide = useIsWide()
+  const flush = useIsFlush()
   const { theme, pref: themePref, setPref: setThemePref, toggle: toggleTheme } = useTheme()
   const [more, setMore] = useState(false)
   const [folded, flipNav] = useNavFold()
@@ -615,7 +616,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           )}
         >
           {remote && <RemoteStrip remote={remote} />}
-          <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+          <div
+            data-testid="topbar"
+            className="flex h-14 min-w-0 items-center gap-2 overflow-hidden px-3 sm:gap-3 sm:px-6"
+          >
             <a href="#/home" className="shrink-0 lg:hidden" aria-label="Ferrocast home">
               <Wordmark
                 size="sm"
@@ -628,12 +632,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <div className="hidden sm:block">
-                <StatusStrip />
-              </div>
-              <div className="sm:hidden">
-                <StatusStrip compact />
-              </div>
+              <StatusStrip />
             </div>
             <button
               type="button"
@@ -664,14 +663,18 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           id="main"
           tabIndex={-1}
           className={cx(
-            'mx-auto w-full px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-7',
-            // Full-width screens (the Studio's desk fills the window) keep a small gap below.
-            // The Studio's desk sits close to the window's edges, as a work screen.
+            'mx-auto w-full outline-none',
+            flush
+              ? 'px-2.5 pt-2.5 pb-[calc(76px+env(safe-area-inset-bottom))] sm:px-3.5 sm:pt-3'
+              : 'px-4 pt-5 pb-[calc(88px+env(safe-area-inset-bottom))] sm:px-6 sm:pt-7',
+            // Full-width screens (the Studio's desk and Chat+Events fill the window).
             studio && wide
               ? 'max-w-none lg:px-3 lg:pt-2 lg:pb-[calc(0.5rem+var(--fc-statusbar,0px))]'
-              : wide
-                ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
-                : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
+              : flush && wide
+                ? 'max-w-none lg:px-3.5 lg:pt-3 lg:pb-[calc(0.75rem+var(--fc-statusbar,0px))]'
+                : wide
+                  ? 'max-w-none lg:pb-[calc(1.25rem+var(--fc-statusbar,0px))]'
+                  : 'max-w-[1400px] lg:pb-[calc(3rem+var(--fc-statusbar,0px))]',
           )}
         >
           {children}
