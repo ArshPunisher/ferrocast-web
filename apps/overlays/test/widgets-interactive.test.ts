@@ -346,6 +346,39 @@ describe('chat_highlight widget', () => {
   })
 })
 
+describe('chat_highlight timing', () => {
+  it('counts the duration from when it was shown, not from the latest state frame', () => {
+    vi.useFakeTimers()
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({}, overlay([highlightWidget({ duration_s: 10 })])))
+    const w = root.querySelector<HTMLElement>('.fc-w-chat-highlight')!
+    const h = makeHighlight('hl-t', 'ev-t', 'stays ten seconds')
+    rt.apply(frame('state', { chat_highlight: h }))
+    const bodyBefore = w.querySelector('.fc-hl-body')?.firstChild
+    vi.advanceTimersByTime(6000)
+    rt.apply(frame('state', { viewers: { twitch: 12 } }))
+    expect(w.hidden).toBe(false)
+    expect(w.querySelector('.fc-hl-body')?.firstChild, 'no rebuild for other state').toBe(
+      bodyBefore,
+    )
+    vi.advanceTimersByTime(5000)
+    expect(w.hidden, '11s after it was shown').toBe(true)
+  })
+
+  it('keeps the remaining time across an OBS hide and show', () => {
+    vi.useFakeTimers()
+    rt = createOverlay(root, { audio: false })
+    rt.apply(snapshot({}, overlay([highlightWidget({ duration_s: 10 })])))
+    const w = root.querySelector<HTMLElement>('.fc-w-chat-highlight')!
+    rt.apply(frame('state', { chat_highlight: makeHighlight('hl-v', 'ev-v', 'x') }))
+    vi.advanceTimersByTime(8000)
+    rt.setVisible(false)
+    rt.setVisible(true)
+    vi.advanceTimersByTime(3000)
+    expect(w.hidden).toBe(true)
+  })
+})
+
 describe('removing a widget', () => {
   it('takes its element off the page for all three new widgets', () => {
     rt = createOverlay(root, { audio: false })

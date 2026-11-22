@@ -61,6 +61,10 @@ export class ChatHighlightWidget implements WidgetView {
   private lastShownId: string | null = null
   private timedOutId: string | null = null
   private lastSpokenId: string | null = null
+  /** When the current highlight first showed: the auto-hide counts from here. */
+  private shownAt = 0
+  /** What the card was last built from, so unrelated state frames don't rebuild it. */
+  private builtSig = ''
   private timer: ReturnType<typeof setTimeout> | null = null
   private visible = true
 
@@ -167,6 +171,13 @@ export class ChatHighlightWidget implements WidgetView {
     this.current = h
     const isNew = h.id !== this.lastShownId
     this.lastShownId = h.id
+    if (isNew) this.shownAt = Date.now()
+    const sig = `${h.id}|${this.cfg.theme}|${this.cfg.showBadges}|${this.cfg.showPlatform}`
+    if (!isNew && sig === this.builtSig && !this.el.hidden) {
+      this.armTimeout(h)
+      return
+    }
+    this.builtSig = sig
 
     const dark = DARK_THEMES.has(this.cfg.theme)
     const metaNodes: Node[] = []
@@ -222,7 +233,7 @@ export class ChatHighlightWidget implements WidgetView {
       candidates.push(Math.max(0, h.expires_at - Date.now()))
     }
     if (this.cfg.durationS !== null) {
-      candidates.push(this.cfg.durationS * 1000)
+      candidates.push(Math.max(0, this.shownAt + this.cfg.durationS * 1000 - Date.now()))
     }
     if (candidates.length === 0) return
     const ms = Math.min(...candidates)
