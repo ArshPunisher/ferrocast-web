@@ -1,7 +1,7 @@
 // `.overlay` theme-pack importer & Studio scene collections library in the demo engine, matching
 // `crates/engine/src/import/{overlay_parse.rs,overlay.rs}` and `crates/engine/src/fonts.rs`.
 
-import { unzipSync } from 'fflate'
+import { Unzip, UnzipInflate, UnzipPassThrough } from 'fflate'
 import type { Overlay, Widget, WidgetKind } from '../../types'
 import type {
   EngineImportReport,
@@ -24,6 +24,8 @@ import { clone, requireObj } from './host'
 const MAX_OVERLAY_ZIP = 150 * 1024 * 1024
 const MAX_OVERLAY_FILES = 500
 const MAX_OVERLAY_UNPACKED = 300 * 1024 * 1024
+/** The most any one file may unpack to (the engine's video cap). */
+const MAX_OVERLAY_ENTRY = 60 * 1024 * 1024
 
 const MEDIA_EXTS = new Set([
   'png',
@@ -98,7 +100,10 @@ function sanitizeArchivePath(raw: string): string {
     !raw ||
     raw.includes('\\') ||
     raw.startsWith('/') ||
-    [...raw].some((ch) => (ch.codePointAt(0) ?? 32) < 32)
+    [...raw].some((ch) => {
+      const c = ch.codePointAt(0) ?? 32
+      return c < 32 || (c >= 0x7f && c <= 0x9f)
+    })
   ) {
     throw new HttpError(
       415,
@@ -116,7 +121,20 @@ function sanitizeArchivePath(raw: string): string {
     )
   }
   const parts = raw.replace(/\/+$/, '').split('/')
-  if (parts.some((s) => !s || s === '.' || s === '..')) {
+  // `:` is a drive or an alternate data stream; Windows drops a trailing dot or space and keeps
+  // device names (CON, NUL, COM1..9 and LPT1..9, also with superscript digits) for the device.
+  const device = (seg: string) => {
+    const stem = (seg.split('.')[0] ?? '').toUpperCase()
+    return (
+      ['CON', 'PRN', 'AUX', 'NUL'].includes(stem) || /^(COM|LPT)[1-9\u00b9\u00b2\u00b3]$/.test(stem)
+    )
+  }
+  if (
+    raw.includes(':') ||
+    parts.some(
+      (s) => !s || s === '.' || s === '..' || /[. ]$/.test(s) || s.startsWith(' ') || device(s),
+    )
+  ) {
     throw new HttpError(
       415,
       'unsafe_overlay_file',
@@ -728,36 +746,91 @@ export class DemoStudioLibrary {
     }
   }
 
-  private parseOverlayBytes(zipBytes: Uint8Array, filename: string): ParsedDemoPack {
-    let entries: Record<string, Uint8Array>
+  /**
+   * Unpacks a zip as it is read, counting what really comes out: the sizes in a zip's headers
+   * can say anything, so they are never trusted to bound memory. Stops at the first file past
+   * the per-file or total limit (or the file count), as the engine does.
+   */
+  private unzipCapped(zipBytes: Uint8Array): Record<string, Uint8Array> {
+    const tooLarge = (message: string) =>
+      new HttpError(
+        413,
+        'too_large',
+        message,
+        'Trim large media files in the theme pack and try again.',
+      )
+    const out: Record<string, Uint8Array> = {}
+    let failure: HttpError | null = null
+    let count = 0
+    let total = 0
     try {
-      let count = 0
-      let total = 0
-      entries = unzipSync(zipBytes, {
-        filter: (file) => {
-          count += 1
-          if (count > MAX_OVERLAY_FILES) {
-            throw new HttpError(
-              413,
-              'too_large',
-              'This theme pack has more than 500 files inside.',
-              'Split the theme pack or remove unused assets so it stays under 500 entries.',
+      const unzipper = new Unzip((file) => {
+        if (failure) return
+        count += 1
+        if (count > MAX_OVERLAY_FILES) {
+          failure = tooLarge('This theme pack has more than 500 files inside.')
+          return
+        }
+        if (file.name.endsWith('/')) {
+          out[file.name] = new Uint8Array(0)
+          return
+        }
+        const chunks: Uint8Array[] = []
+        let size = 0
+        file.ondata = (err, chunk, final) => {
+          if (failure) return
+          if (err) {
+            failure = new HttpError(
+              415,
+              'bad_overlay_file',
+              'That .overlay archive is damaged.',
+              'Download or export the .overlay file again.',
             )
+            return
           }
-          total += file.originalSize
+          size += chunk.length
+          total += chunk.length
+          if (size > MAX_OVERLAY_ENTRY) {
+            failure = tooLarge(
+              `"${file.name}" unpacks past the ${MAX_OVERLAY_ENTRY / 1024 / 1024} MB per-file limit.`,
+            )
+            file.terminate()
+            return
+          }
           if (total > MAX_OVERLAY_UNPACKED) {
-            throw new HttpError(
-              413,
-              'too_large',
-              'This theme pack unpacks past the 300 MB size limit.',
-              'Re-encode or trim large media files inside the archive and try again.',
-            )
+            failure = tooLarge('This theme pack unpacks past the 300 MB size limit.')
+            file.terminate()
+            return
           }
-          return true
-        },
+          chunks.push(chunk)
+          if (final) {
+            const whole = new Uint8Array(size)
+            let at = 0
+            for (const c of chunks) {
+              whole.set(c, at)
+              at += c.length
+            }
+            out[file.name] = whole
+          }
+        }
+        file.start()
       })
-    } catch (e) {
-      if (e instanceof HttpError) throw e
+      unzipper.register(UnzipInflate)
+      unzipper.register(UnzipPassThrough)
+      unzipper.push(zipBytes, true)
+    } catch {
+      if (!failure) {
+        throw new HttpError(
+          415,
+          'bad_overlay_file',
+          "That doesn't look like a valid .overlay zip archive.",
+          'Download or export the .overlay file again.',
+        )
+      }
+    }
+    if (failure) throw failure
+    // Bytes that aren't a zip give no entries (the streaming reader doesn't complain).
+    if (count === 0) {
       throw new HttpError(
         415,
         'bad_overlay_file',
@@ -765,6 +838,11 @@ export class DemoStudioLibrary {
         'Download or export the .overlay file again.',
       )
     }
+    return out
+  }
+
+  private parseOverlayBytes(zipBytes: Uint8Array, filename: string): ParsedDemoPack {
+    const entries = this.unzipCapped(zipBytes)
 
     const jsonFiles: [string, Record<string, unknown>][] = []
     const mediaMap = new Map<string, number>()

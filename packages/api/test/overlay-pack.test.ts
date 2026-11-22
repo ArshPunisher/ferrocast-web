@@ -186,4 +186,58 @@ describe('.overlay theme pack preview, import, fonts, and undo in DemoEngine', (
     })
     expect(ApiError).toBeDefined()
   })
+  it('refuses a zip bomb in the demo as the engine does, even with a forged size in the header', async () => {
+    const { client } = setup()
+    const eng = studioEngineApi(client)
+    // 70 MB of zeros packs to a few dozen KB: past the 60 MB a single file may unpack to.
+    const bomb = zipSync({
+      'config.json': strToU8('{}'),
+      'assets/loop.webm': new Uint8Array(70 * 1024 * 1024),
+    })
+    expect(bomb.length).toBeLessThan(200 * 1024)
+    await expect(
+      eng.previewOverlayPack(
+        new File([bomb as Uint8Array<ArrayBuffer>], 'bomb.overlay'),
+        'bomb.overlay',
+      ),
+    ).rejects.toMatchObject({ status: 413 })
+
+    // The same, with the size in the central directory changed to 1 (what a hostile file does).
+    const forged = new Uint8Array(bomb)
+    const view = new DataView(forged.buffer)
+    for (let at = 0; at + 46 <= forged.length; at++) {
+      if (view.getUint32(at, true) === 0x02014b50) view.setUint32(at + 24, 1, true)
+    }
+    await expect(
+      eng.previewOverlayPack(
+        new File([forged as Uint8Array<ArrayBuffer>], 'forged.overlay'),
+        'forged.overlay',
+      ),
+    ).rejects.toMatchObject({ status: 413 })
+  })
+  it('refuses the same odd paths in the demo as the engine does', async () => {
+    const { client } = setup()
+    const eng = studioEngineApi(client)
+    const bad = [
+      'assets/bg.png:evil',
+      'assets/CON.png',
+      'assets/nul',
+      'assets/COM1.ttf',
+      'assets/COM\u00b9.png',
+      'assets/bg.png.',
+      'assets/bg.png ',
+      'assets/del\u007f.png',
+      'assets/c1\u0085.png',
+    ]
+    for (const name of bad) {
+      const zip = zipSync({ 'config.json': strToU8('{}'), [name]: PNG_1X1 })
+      await expect(
+        eng.previewOverlayPack(
+          new File([zip as Uint8Array<ArrayBuffer>], 'x.overlay'),
+          'x.overlay',
+        ),
+        name,
+      ).rejects.toMatchObject({ status: 415, code: 'unsafe_overlay_file' })
+    }
+  })
 })
