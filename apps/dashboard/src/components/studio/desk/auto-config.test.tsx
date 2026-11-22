@@ -415,4 +415,69 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
       expect(document.body.textContent).toContain('Not saved yet')
     }
   })
+
+  it('covers M6 & L2: clean heading level h3, aria-labelledby radiogroups, token colors, no ticking live-region spam, canvas size summary, and non-redundant kbps label', async () => {
+    const { api, desk, settings } = mkDesk()
+    await api.start()
+
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk}>
+          <AutoConfigRollbackBar />
+          <AutoConfigDialog open onClose={() => {}} s={settings} onApply={() => {}} />
+        </DeskProvider>,
+      )
+    })
+    await flush(30)
+
+    // M6.3: radiogroups match visible prompts via aria-labelledby
+    const radiogroups = Array.from(document.querySelectorAll('[role="radiogroup"]'))
+    expect(radiogroups.length).toBe(2)
+    expect(radiogroups[0]?.hasAttribute('aria-labelledby')).toBe(true)
+    expect(radiogroups[1]?.hasAttribute('aria-labelledby')).toBe(true)
+
+    // M6.4: no hardcoded hex inline styles (#ef4444 / #64748b)
+    expect(host.innerHTML).not.toMatch(/#ef4444|#64748b|rgb\(239,\s*68,\s*68\)|rgb\(100,\s*116,\s*139\)/i)
+
+    // Run to Done
+    const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Run benchmark'),
+    )!
+    await act(async () => {
+      runBtn.click()
+    })
+    for (let i = 0; i < 40; i++) {
+      await flush(30)
+      if (document.body.textContent?.includes('Recommended:')) break
+    }
+
+    // M6.2: CandidateList uses h3 (never skips h3 -> h4)
+    expect(document.querySelector('h4')).toBeNull()
+    expect(document.querySelector('h3')?.textContent).toContain('What was tested')
+
+    // L2.2: #auto-config-kbps relies on <label for="auto-config-kbps">, no duplicate aria-label
+    const kbps = document.querySelector<HTMLInputElement>('#auto-config-kbps')!
+    expect(kbps.hasAttribute('aria-label')).toBe(false)
+
+    const applyBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Apply settings'),
+    )!
+    await act(async () => {
+      applyBtn.click()
+    })
+    await flush(30)
+
+    // L2.1: native canvas shows actual dimensions (1920×1080) instead of "Canvas size"
+    expect(document.body.textContent).not.toContain('Canvas size')
+    expect(document.body.textContent).toContain('1920×1080')
+
+    // M6.1: role="status" never wraps ticking seconds ("Auto-undo in", "Keep within", "guard active")
+    const statusRegions = Array.from(document.querySelectorAll('[role="status"]'))
+    for (const el of statusRegions) {
+      expect(el.textContent).not.toMatch(/\d+\s*s\s*(left|or automatic|1st-min)|Auto-undo in \d+/i)
+    }
+  })
 })

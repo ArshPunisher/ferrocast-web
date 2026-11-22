@@ -188,8 +188,11 @@ function Big({
   )
 }
 
-function formatSummaryLine(a: AutoConfigAppliedSummary): string {
-  const res = a.scale ? `${a.scale[0]}×${a.scale[1]}` : 'Canvas size'
+function formatSummaryLine(
+  a: AutoConfigAppliedSummary,
+  canvas?: [number, number] | null,
+): string {
+  const res = a.scale ? `${a.scale[0]}×${a.scale[1]}` : canvas ? `${canvas[0]}×${canvas[1]}` : 'Canvas size'
   return `${a.label} · ${res} · ${a.fps} fps · ${(a.video_kbps / 1000).toFixed(1)} Mbps`
 }
 
@@ -226,9 +229,9 @@ function CandidateList({ candidates }: { candidates: AutoConfigCandidate[] }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h4 className="m-0 text-[13px] font-bold tracking-wide text-text-2 uppercase">
+        <h3 className="m-0 text-[13px] font-bold tracking-wide text-text-2 uppercase">
           What was tested ({candidates.length})
-        </h4>
+        </h3>
         <span className="text-[12px] text-text-3">Hardware encoders tested before x264</span>
       </div>
 
@@ -760,7 +763,7 @@ function Wizard({
               <Badge tone="warn">Stream ended</Badge>
             </div>
             <p className="m-0 font-mono text-[13px] font-semibold text-text tabular-nums">
-              {formatSummaryLine(viewState.applied)}
+              {formatSummaryLine(viewState.applied, [s.width, s.height])}
             </p>
             <p className="m-0 text-[13px] text-text-2">
               {viewState.rollback_reason ??
@@ -797,8 +800,12 @@ function Wizard({
 
     return (
       <div className="flex flex-col gap-4 pt-1">
+        <span role="status" className="sr-only">
+          {viewState.confirmed
+            ? 'New encoder settings kept. First-minute drop protection stays active.'
+            : 'Encoder settings applied. Choose Keep or Undo.'}
+        </span>
         <div
-          role="status"
           className={cx(
             'flex flex-col gap-2.5 rounded-panel border px-4 py-3.5',
             viewState.confirmed ? 'border-ok/50 bg-surface-2' : 'border-accent-line bg-surface-2',
@@ -825,7 +832,7 @@ function Wizard({
           </div>
 
           <p className="m-0 font-mono text-[13px] font-semibold text-text tabular-nums">
-            {formatSummaryLine(viewState.applied)}
+            {formatSummaryLine(viewState.applied, [s.width, s.height])}
           </p>
 
           <p className="m-0 text-[13px] text-text-2">
@@ -895,7 +902,7 @@ function Wizard({
             </p>
             {viewState.restored && (
               <p className="m-0 mt-1 font-mono text-[12.5px] text-text tabular-nums">
-                Active now: {formatSummaryLine(viewState.restored)}
+                Active now: {formatSummaryLine(viewState.restored, [s.width, s.height])}
               </p>
             )}
           </div>
@@ -970,7 +977,6 @@ function Wizard({
               </label>
               <Input
                 id="auto-config-kbps"
-                aria-label="Bitrate (Kbps)"
                 aria-invalid={Boolean(kbpsError)}
                 aria-describedby={kbpsError ? 'auto-config-kbps-error' : undefined}
                 type="number"
@@ -1033,10 +1039,14 @@ function Wizard({
   return (
     <div className="flex flex-col gap-5 pt-1">
       <div className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold text-text-2">
+        <span id="auto-config-use-label" className="text-[13px] font-semibold text-text-2">
           What will you use Ferrocast for?
         </span>
-        <div role="radiogroup" aria-label="Use" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div
+          role="radiogroup"
+          aria-labelledby="auto-config-use-label"
+          className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+        >
           <Big
             on={use === 'stream'}
             icon={Broadcast}
@@ -1050,17 +1060,19 @@ function Wizard({
             icon={Record}
             title="Recording"
             note="Stresses available encoders at canvas load to pick the highest quality without dropped frames."
-            tone="#ef4444"
+            tone="var(--fc-danger)"
             onPick={() => setUse('record')}
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <span className="text-[13px] font-semibold text-text-2">Frame rate target</span>
+        <span id="auto-config-fps-label" className="text-[13px] font-semibold text-text-2">
+          Frame rate target
+        </span>
         <div
           role="radiogroup"
-          aria-label="Smoothness"
+          aria-labelledby="auto-config-fps-label"
           className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
         >
           <Big
@@ -1076,7 +1088,7 @@ function Wizard({
             icon={Timer}
             title="Sharp detail (30 fps)"
             note="Leaves extra headroom for slower systems or lower upload."
-            tone="#64748b"
+            tone="var(--fc-text-3)"
             onPick={() => setFps(30)}
           />
         </div>
@@ -1231,12 +1243,18 @@ export function AutoConfigRollbackBar({
   }
 
   if (state.state === 'applied' && state.applied && state.rollback_offered) {
+    const canvasSize: [number, number] | null = desk.prefs.data
+      ? [desk.prefs.data.width, desk.prefs.data.height]
+      : null
     return (
       <div
-        role="status"
+        role="region"
         aria-label="Auto-config rollback offer"
         className="flex flex-wrap items-center justify-between gap-2 border-b border-warn/40 bg-warn-soft px-3 py-2 text-[13px] text-text"
       >
+        <span role="status" className="sr-only">
+          Rollback ready after encoder frame drops. Restore your previous settings or Keep.
+        </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <WarningCircle size={16} weight="fill" className="shrink-0 text-warn" aria-hidden />
           <span className="font-semibold">
@@ -1244,7 +1262,7 @@ export function AutoConfigRollbackBar({
               'Encoder dropped frames while live. Restore your previous settings or Keep.'}
           </span>
           <span className="font-mono text-[12px] text-text-2 tabular-nums">
-            {formatSummaryLine(state.applied)}
+            {formatSummaryLine(state.applied, canvasSize)}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -1296,9 +1314,12 @@ export function AutoConfigRollbackBar({
   }
 
   if (state.state === 'applied' && state.applied) {
+    const canvasSize: [number, number] | null = desk.prefs.data
+      ? [desk.prefs.data.width, desk.prefs.data.height]
+      : null
     return (
       <div
-        role="status"
+        role="region"
         aria-label="Auto-config confirmation"
         className={cx(
           'flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[13px]',
@@ -1307,6 +1328,11 @@ export function AutoConfigRollbackBar({
             : 'border-accent-line bg-accent-soft text-text',
         )}
       >
+        <span role="status" className="sr-only">
+          {state.confirmed
+            ? 'New encoder settings kept. First-minute drop protection active.'
+            : 'Testing new encoder settings. Choose Keep or Undo.'}
+        </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <Timer size={16} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
           <span className="font-semibold">
@@ -1315,7 +1341,7 @@ export function AutoConfigRollbackBar({
               : `Testing new encoder settings: Keep within ${state.confirm_remaining_s} s or automatic undo`}
           </span>
           <span className="font-mono text-[12px] text-text-2 tabular-nums">
-            {formatSummaryLine(state.applied)}
+            {formatSummaryLine(state.applied, canvasSize)}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
