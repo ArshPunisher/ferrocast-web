@@ -280,7 +280,9 @@ Ask (done on the engine side, branch `feat/p2-snap-guides`): `PUT /api/v1/studio
 `{ items: [{ id, x, y, w, h }], save?, reason? }` (`reason`: `align` or `distribute` for one click of those buttons: an undo step of its own, named for it, never joined to a drag) (canvas pixels, 1 to 500 items, each id once) → the items in
 the order given. Each box is applied as the single-item box is. All or none; one undo step (a
 drag of them, with `save: false` until the last, is one step, "Move 3 sources"). 400 for no items,
-an id twice, w or h under 1, or numbers past ±100000. The dashboard uses it for the group box, the
+more than 500, an id twice, a group together with one of its own sources, w or h under 1, or numbers
+past ±100000; 404 (`studio_no_source`) for an id not in the scene. Locked items are moved as asked
+(the dashboard doesn't send them). The preview's `holes` take up to 64 (it was 16). The dashboard uses it for the group box, the
 align and distribute buttons and the arrow keys with several sources picked; one source still uses
 `…/items/{id}/box`.
 
