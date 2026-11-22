@@ -2,7 +2,7 @@
 // recording, shortcuts and reconnecting, as plain choices first and the details under "More
 // options". Saved together; what can't change now (live, or until a restart) says so.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowCounterClockwise,
   CheckCircle,
@@ -97,15 +97,79 @@ export function SettingsDialog({
 /** A Mac (the only place the drawing choice applies). */
 const isMac = os === 'mac'
 
+function mergeAutoConfigOutput(target: StudioSettings, source: StudioSettings): StudioSettings {
+  return {
+    ...target,
+    encoder: source.encoder,
+    video_encoder: source.video_encoder ?? null,
+    encoder_settings: { ...(source.encoder_settings ?? {}) },
+    scale: source.scale ? [...source.scale] : null,
+    fps: source.fps,
+    video_kbps: source.video_kbps,
+  }
+}
+
+function outputSignature(s: StudioSettings): string {
+  return JSON.stringify([
+    s.encoder,
+    s.video_encoder ?? null,
+    s.encoder_settings ?? {},
+    s.scale ?? null,
+    s.fps,
+    s.video_kbps,
+  ])
+}
+
+/**
+ * Whether the preferences changed since they were last looked at: the first look only records
+ * what they are (cached preferences are not a newer update than the fresh read), and a later
+ * different signature is a real change (an auto-config applied elsewhere).
+ */
+export function prefsChanged(
+  seen: string | null,
+  next: string,
+): { changed: boolean; seen: string } {
+  if (seen === null) return { changed: false, seen: next }
+  return { changed: next !== seen, seen: next }
+}
+
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
   const [page, setPage] = useState<Page>(start)
   const [draft, setDraft] = useState<StudioSettings | null>(null)
   const [saving, setSaving] = useState(false)
+  const lastOutputSigRef = useRef<string | null>(null)
+  // The preferences as last looked at, apart from the settings read: a stale cached copy that
+  // differs from the fresh read is not a newer update.
+  const seenPrefsSigRef = useRef<string | null>(null)
   useEffect(() => {
-    if (loaded.data && !draft) setDraft(loaded.data)
+    if (loaded.data && !draft) {
+      setDraft(loaded.data)
+      lastOutputSigRef.current = outputSignature(loaded.data)
+    }
   }, [loaded.data, draft])
+  const prefsData = prefs?.data ?? null
+  useEffect(() => {
+    if (!prefsData || !draft) return
+    const look = prefsChanged(seenPrefsSigRef.current, outputSignature(prefsData))
+    seenPrefsSigRef.current = look.seen
+    if (look.changed) {
+      lastOutputSigRef.current = look.seen
+      loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, prefsData) : prefsData))
+      setDraft((d) => (d ? mergeAutoConfigOutput(d, prefsData) : d))
+    }
+  }, [prefsData, draft, loaded])
+  const syncFromAutoConfig = useCallback(
+    (next: StudioSettings) => {
+      lastOutputSigRef.current = outputSignature(next)
+      seenPrefsSigRef.current = outputSignature(next)
+      loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, next) : next))
+      prefs.set(next)
+      setDraft((d) => (d ? mergeAutoConfigOutput(d, next) : d))
+    },
+    [loaded, prefs],
+  )
   if (loaded.error && !loaded.data)
     return (
       <div className="p-6">
@@ -119,6 +183,8 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     setSaving(true)
     try {
       const r = await api.setStudioSettings(draft)
+      lastOutputSigRef.current = outputSignature(r.settings)
+      seenPrefsSigRef.current = outputSignature(r.settings)
       loaded.set(r.settings)
       prefs.set(r.settings)
       setDraft(r.settings)
@@ -197,7 +263,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
               {here.label}
             </h3>
           )}
-          {page === 'stream' && <StreamPage s={draft} set={set} />}
+          {page === 'stream' && <StreamPage s={draft} set={set} onSynced={syncFromAutoConfig} />}
           {page === 'audio' && <AudioPage s={draft} set={set} />}
           {page === 'picture' && <PicturePage s={draft} set={set} />}
           {page === 'record' && <RecordPage s={draft} set={set} />}
@@ -536,7 +602,11 @@ export function EncoderOptions({
   )
 }
 
-export function StreamPage({ s, set }: PageProps) {
+export function StreamPage({
+  s,
+  set,
+  onSynced,
+}: PageProps & { onSynced?: (next: StudioSettings) => void }) {
   const [wizard, setWizard] = useState(false)
   const [more, setMore] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
@@ -551,10 +621,18 @@ export function StreamPage({ s, set }: PageProps) {
         <Sparkle size={22} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
         <span className="flex flex-col">
           <b className="font-display text-[14px] text-text">Set up for me</b>
-          <span className="text-[13.5px] text-text-2">Tests your upload and picks for you.</span>
+          <span className="text-[13.5px] text-text-2">
+            Benchmarks your encoder and upload, with automatic rollback protection.
+          </span>
         </span>
       </button>
-      <AutoConfigDialog open={wizard} onClose={() => setWizard(false)} s={s} onApply={set} />
+      <AutoConfigDialog
+        open={wizard}
+        onClose={() => setWizard(false)}
+        s={s}
+        onApply={set}
+        {...(onSynced ? { onSynced } : {})}
+      />
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>

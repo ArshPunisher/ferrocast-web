@@ -171,6 +171,7 @@ describe('U5: StudioStatusBar DOM', () => {
         counters: {},
         golive: undefined,
         alert: null,
+        autoConfig: null,
       },
     })
   })

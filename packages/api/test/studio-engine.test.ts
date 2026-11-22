@@ -332,6 +332,52 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     }
   })
 
+  it('runs encoder stress benchmark, combines upload speed, and refuses when live (409)', async () => {
+    const { engine, api } = mkApi({
+      studioEngine: { benchProfile: 'qsv_stepdown', benchStepMs: 25 },
+    })
+    engine.golive.setup({ upload_kbps: 20_000 })
+    try {
+      await api.start()
+      expect((await api.autoConfig()).state).toBe('idle')
+
+      // Refuses 409 when recording or streaming.
+      engine.studioEngine!.setRecordActive(true)
+      const busyErr = await api
+        .startAutoConfigBenchmark({ mode: 'stream' })
+        .catch((e: unknown) => e)
+      expect((busyErr as ApiError).status).toBe(409)
+      expect((busyErr as ApiError).code).toBe('studio_busy')
+      engine.studioEngine!.setRecordActive(false)
+
+      // Mid-run cancel cleans up immediately.
+      const started = await api.startAutoConfigBenchmark({ mode: 'stream', fps_preference: 60 })
+      expect(started.state).toBe('running')
+      const cancelled = await api.cancelAutoConfigBenchmark()
+      expect(cancelled.state).toBe('idle')
+
+      // Full run on qsv_stepdown steps down to 720p60 Intel Quick Sync because 1080p60 lagged.
+      await api.startAutoConfigBenchmark({ mode: 'stream', fps_preference: 60 })
+      let st = await api.autoConfig()
+      for (let i = 0; i < 40 && st.state === 'running'; i++) {
+        await new Promise((r) => setTimeout(r, 25))
+        st = await api.autoConfig()
+      }
+      expect(st.state).toBe('done')
+      expect(st.candidates.length).toBeGreaterThanOrEqual(2)
+      expect(st.candidates[0]?.family).toBe('qsv')
+      expect(st.candidates[0]?.passed).toBe(false)
+      expect(st.picked).toMatchObject({
+        encoder: 'hardware',
+        scale: [1280, 720],
+        fps: 60,
+        limited_by: 'headroom',
+      })
+    } finally {
+      engine.dispose()
+    }
+  })
+
   it('resolves named transitions and matrix precedence, lifecycle cleanup, and switch paths', async () => {
     const sample: EngineScenes = {
       scenes: [
@@ -419,6 +465,144 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       ).rejects.toMatchObject({ status: 409, code: 'studio_last_transition' })
     } finally {
       engine.dispose()
+    }
+  })
+
+  it('snapshots settings and handles Keep, Undo, 30s timeout, and first-minute dropped frames rollback', async () => {
+    // 1. Keep clears timeout, Undo restores exact snapshot
+    const a = mkApi({
+      studioEngine: { confirmTimeoutMs: 120, watchWindowMs: 320, benchStepMs: 20 },
+    })
+    try {
+      await a.api.start()
+      const orig = await a.api.studioSettings()
+      expect(orig.video_kbps).toBe(6000)
+
+      const applied = await a.api.applyAutoConfig({
+        encoder: 'software',
+        fps: 30,
+        scale: [1280, 720],
+        video_kbps: 4500,
+        label: 'x264 (veryfast)',
+      })
+      expect(applied.state).toBe('applied')
+      expect((await a.api.studioSettings()).video_kbps).toBe(4500)
+
+      const kept = await a.api.keepAutoConfig()
+      expect(kept.confirmed).toBe(true)
+      await new Promise((r) => setTimeout(r, 150))
+      expect((await a.api.studioSettings()).video_kbps).toBe(4500)
+
+      const undone = await a.api.undoAutoConfig()
+      expect(undone.state).toBe('rolled_back')
+      expect(undone.rollback_trigger).toBe('user_undo')
+      const afterUndo = await a.api.studioSettings()
+      expect(afterUndo.video_kbps).toBe(6000)
+      expect(afterUndo.fps).toBe(60)
+      expect(afterUndo.scale).toBeNull()
+    } finally {
+      a.engine.dispose()
+    }
+
+    // 2. Auto rollback on 30 s inaction timeout
+    const b = mkApi({
+      studioEngine: { confirmTimeoutMs: 80, watchWindowMs: 240, benchStepMs: 20 },
+    })
+    try {
+      await b.api.applyAutoConfig({ encoder: 'hardware', fps: 30, video_kbps: 3500 })
+      expect((await b.api.studioSettings()).video_kbps).toBe(3500)
+      await new Promise((r) => setTimeout(r, 130))
+      const timedOut = await b.api.autoConfig()
+      expect(timedOut.state).toBe('rolled_back')
+      expect(timedOut.rollback_trigger).toBe('timeout')
+      expect((await b.api.studioSettings()).video_kbps).toBe(6000)
+    } finally {
+      b.engine.dispose()
+    }
+
+    // 3. C5: network drops ignored; encoder skips while live never mutate live settings and offer rollback after stream
+    const c = mkApi({
+      studioEngine: { confirmTimeoutMs: 200, watchWindowMs: 500, benchStepMs: 20 },
+    })
+    try {
+      await c.api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 8000 })
+      await c.api.keepAutoConfig()
+      c.engine.studioEngine!.setStreamActive(true)
+      c.engine.studioEngine!.injectDroppedFrames(10, 0)
+      expect((await c.api.autoConfig()).rollback_offered).toBe(false)
+      expect((await c.api.studioSettings()).video_kbps).toBe(8000)
+
+      c.engine.studioEngine!.injectDroppedFrames(0, 6)
+      const whileLive = await c.api.autoConfig()
+      expect(whileLive.state).toBe('applied')
+      expect(whileLive.rollback_offered).toBe(false)
+      expect((await c.api.studioSettings()).video_kbps).toBe(8000)
+
+      c.engine.studioEngine!.setStreamActive(false)
+      const offered = await c.api.autoConfig()
+      expect(offered.state).toBe('applied')
+      expect(offered.rollback_offered).toBe(true)
+      expect(offered.rollback_trigger).toBe('dropped_frames')
+      expect(offered.rollback_reason).toContain('dropped')
+      expect((await c.api.studioSettings()).video_kbps).toBe(8000)
+
+      const rb = await c.api.undoAutoConfig()
+      expect(rb.state).toBe('rolled_back')
+      expect((await c.api.studioSettings()).video_kbps).toBe(6000)
+    } finally {
+      c.engine.dispose()
+    }
+
+    // 4. H4/M1/M2/H6/H7 DemoEngine parity: vertical canvas, 1440p record, 500 kbps floor, double apply, manual disarm
+    const d = mkApi({
+      studioEngine: { confirmTimeoutMs: 400, watchWindowMs: 800, benchStepMs: 15 },
+    })
+    try {
+      await d.api.setStudioSettings({ width: 1080, height: 1920, fps: 60 } as never)
+      d.engine.golive.setup({ upload_kbps: 24_000 })
+      await d.api.startAutoConfigBenchmark({
+        mode: 'stream',
+        fps_preference: 60,
+        include_upload: true,
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      const portraitDone = await d.api.autoConfig()
+      expect(portraitDone.state).toBe('done')
+      expect(portraitDone.picked?.width).toBe(1080)
+      expect(portraitDone.picked?.height).toBe(1920)
+      expect(portraitDone.picked?.scale).toBeNull()
+
+      d.engine.golive.setup({ upload_kbps: 900 })
+      await d.api.startAutoConfigBenchmark({
+        mode: 'stream',
+        fps_preference: 60,
+        include_upload: true,
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      const lowUpload = await d.api.autoConfig()
+      expect(lowUpload.picked!.video_kbps).toBeGreaterThanOrEqual(500)
+      expect(lowUpload.picked!.video_kbps).toBeLessThan(1500)
+
+      await d.api.setStudioSettings({ width: 2560, height: 1440, fps: 60 } as never)
+      await d.api.startAutoConfigBenchmark({
+        mode: 'record',
+        fps_preference: 60,
+        include_upload: false,
+      })
+      await new Promise((r) => setTimeout(r, 150))
+      const rec1440 = await d.api.autoConfig()
+      expect(rec1440.picked?.height).toBe(1440)
+
+      await d.api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 7000 })
+      await d.api.applyAutoConfig({ encoder: 'hardware', fps: 30, video_kbps: 5000 })
+      await d.api.undoAutoConfig()
+      expect((await d.api.studioSettings()).video_kbps).toBe(6000)
+
+      await d.api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 7500 })
+      await d.api.setStudioSettings({ video_kbps: 4200 } as never)
+      expect((await d.api.autoConfig()).state).toBe('idle')
+    } finally {
+      d.engine.dispose()
     }
   })
 

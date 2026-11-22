@@ -533,6 +533,7 @@ export type StudioFrame =
   | { v: 1; type: 'brb'; data: { on: boolean; scene: string } }
   | { v: 1; type: 'golive'; data: import('./golive').GoLiveFrame }
   | { v: 1; type: 'live_alert'; data: LiveAlert }
+  | { v: 1; type: 'auto_config'; data: import('./studio-engine').AutoConfigState }
 
 export const STUDIO_FRAME_TYPES = [
   'lane',
@@ -543,6 +544,7 @@ export const STUDIO_FRAME_TYPES = [
   'brb',
   'golive',
   'live_alert',
+  'auto_config',
 ] as const
 
 /**

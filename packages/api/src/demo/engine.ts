@@ -686,7 +686,10 @@ export class DemoEngine {
     })
     this.welcome = new DemoWelcome(this.host)
     this.studioEngine = opts.studioEngine
-      ? new DemoStudioEngine(typeof opts.studioEngine === 'object' ? opts.studioEngine : {})
+      ? new DemoStudioEngine(
+          typeof opts.studioEngine === 'object' ? opts.studioEngine : {},
+          this.host,
+        )
       : null
     this.studio = new DemoStudio(this.host, () => this.commands, true, this.studioEngine, {
       baseUrl: () => this.base,
@@ -726,6 +729,11 @@ export class DemoEngine {
       () => this.studio.obs.streaming,
       () => this.obs.state === 'connected',
     )
+    this.studioEngine?.setAutoConfigDeps({
+      runUploadCheck: () => this.golive.runUploadCheck(),
+      isLive: () => this.golive.isCutRunning(),
+      enabledPlatforms: () => this.golive.enabledMainDestinations(),
+    })
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>
         (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,

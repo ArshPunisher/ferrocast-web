@@ -2,6 +2,7 @@
 // by the desktop app. Every kind of source and filter OBS has, with every option, read live.
 
 import type { FerroClient } from './client'
+import type { UploadCheck } from './golive'
 import type { Overlay, SafeModeStatus, WidgetKind } from './types'
 
 /**
@@ -1989,5 +1990,127 @@ export function studioEngineApi(c: FerroClient) {
         mode,
         top_field_first: topFieldFirst,
       }),
+    /** Current encoder stress benchmark and rollback state (R35). */
+    autoConfig: () => c.request<AutoConfigState>('GET', '/api/v1/studio/engine/auto-config'),
+    /** Starts the hardware-first encoder stress benchmark (and upload test in stream mode). */
+    startAutoConfigBenchmark: (req?: BenchmarkRequest) =>
+      c.request<AutoConfigState>('POST', '/api/v1/studio/engine/auto-config/benchmark', req ?? {}),
+    /** Cancels a running benchmark immediately and cleans temporary files. */
+    cancelAutoConfigBenchmark: () =>
+      c.request<AutoConfigState>('POST', '/api/v1/studio/engine/auto-config/cancel', {}),
+    /** Snapshots current settings, applies the recommendation, and starts Keep/Undo rollback protection. */
+    applyAutoConfig: (req?: AutoConfigApplyRequest) =>
+      c.request<AutoConfigState>('POST', '/api/v1/studio/engine/auto-config/apply', req ?? {}),
+    /** Confirms applied settings, clearing the 30 s auto-rollback timeout while keeping 1-min drop watch. */
+    keepAutoConfig: () =>
+      c.request<AutoConfigState>('POST', '/api/v1/studio/engine/auto-config/keep', {}),
+    /** Restores the pre-apply Studio settings snapshot immediately. */
+    undoAutoConfig: () =>
+      c.request<AutoConfigState>('POST', '/api/v1/studio/engine/auto-config/undo', {}),
   }
+}
+
+export type AutoConfigMode = 'stream' | 'record'
+export type AutoConfigStateKind = 'idle' | 'running' | 'failed' | 'done' | 'applied' | 'rolled_back'
+export type AutoConfigPhase = 'upload' | 'discovering' | 'encoding' | 'picking'
+export type RollbackTrigger = 'user_undo' | 'timeout' | 'dropped_frames'
+export type EncoderFamily = 'videotoolbox' | 'nvenc' | 'qsv' | 'amf' | 'media_foundation' | 'x264'
+export type LimitedBy = 'headroom' | 'upload' | 'platform_cap' | 'balanced'
+
+export interface AutoConfigCandidate {
+  encoder_backend: string
+  studio_encoder_id: string
+  label: string
+  family: EncoderFamily
+  hardware: boolean
+  preset: string | null
+  width: number
+  height: number
+  fps: number
+  bitrate_kbps: number
+  frames_tested: number
+  encode_ms_avg: number
+  encode_ms_p95: number
+  encode_ms_max: number
+  budget_ms: number
+  fps_achieved: number
+  headroom_pct: number
+  skipped_frames: number
+  lagged_frames: number
+  cpu_pct: number | null
+  gpu_pct: number | null
+  elapsed_ms: number
+  passed: boolean
+  reason: string
+}
+
+export interface AutoConfigRecommendation {
+  encoder: 'hardware' | 'software'
+  video_encoder: string | null
+  studio_encoder_id: string
+  encoder_settings: Record<string, unknown>
+  label: string
+  preset: string | null
+  scale: [number, number] | null
+  width: number
+  height: number
+  fps: number
+  video_kbps: number
+  headroom_pct: number
+  limited_by: LimitedBy
+  why: string
+}
+
+export interface AutoConfigAppliedSummary {
+  encoder: 'hardware' | 'software'
+  video_encoder: string | null
+  encoder_settings: Record<string, unknown>
+  scale: [number, number] | null
+  fps: number
+  video_kbps: number
+  label: string
+}
+
+export interface AutoConfigState {
+  state: AutoConfigStateKind
+  job_id: string | null
+  mode: AutoConfigMode
+  phase: AutoConfigPhase | null
+  progress_pct: number
+  current_label: string | null
+  elapsed_ms: number
+  estimated_total_ms: number
+  candidates: AutoConfigCandidate[]
+  upload_check: UploadCheck | null
+  upload_error: string | null
+  picked: AutoConfigRecommendation | null
+  duration_ms: number | null
+  error: string | null
+  applied: AutoConfigAppliedSummary | null
+  confirmed: boolean
+  confirm_remaining_s: number
+  watch_remaining_s: number
+  first_minute_drops: number
+  first_minute_lags: number
+  rollback_offered: boolean
+  rollback_trigger: RollbackTrigger | null
+  rollback_reason: string | null
+  restored: AutoConfigAppliedSummary | null
+}
+
+export interface BenchmarkRequest {
+  mode?: AutoConfigMode
+  fps_preference?: 30 | 60
+  include_upload?: boolean
+  max_seconds?: number
+}
+
+export interface AutoConfigApplyRequest {
+  encoder?: 'hardware' | 'software'
+  video_encoder?: string | null
+  encoder_settings?: Record<string, unknown>
+  scale?: [number, number] | null
+  fps?: number
+  video_kbps?: number
+  label?: string
 }
