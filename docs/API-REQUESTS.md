@@ -355,7 +355,22 @@ with backward-compatible defaults (`#[serde(default)]`):
   tokens return HTTP `400` naming the variation and bad token.
 - `RenderedAlert.anim?` carries the variation's animation and timing; `RenderedAlert.custom?` carries
   `{ html, css, fields, vars }` only when `custom_enabled: true`.
-- Custom HTML/CSS runs ONLY inside `<iframe sandbox="allow-scripts">` (never `allow-same-origin`)
-  with a strict CSP (allowing only explicit static asset CDN hosts for `img-src`/`font-src`,
-  `connect-src 'none'`) and receives only origin-checked, schema-validated `postMessage` payloads.
-  The Rust server serves `GET /alert-sandbox` with its own sandbox CSP header for desktop/OBS origins.
+- **Custom alerts are HTML and CSS only, never code.** Saving a look with `custom_enabled` (or any
+  `html`) is refused with `400` (`variation 'x': custom HTML can't use <script>: …`) when the HTML has
+  `script`, `meta`, `base`, `form`, frames, `object`/`embed`, media, `on*` handlers, `srcdoc`,
+  `javascript:` or any URL that is not a `#anchor`, a small `data:image/` picture or one of the allowed
+  picture hosts. Every `<style>` block and `style` attribute goes through the same `check_css` rules as
+  `css`. `{token}`s fill only text and `alt`, `title`, `aria-label`, `aria-description`,
+  `aria-valuetext` and `data-*` attributes (not `class`, `style`, URLs or names). At most 20 looks per
+  rule. A paired phone (`Role::Owner` over the remote path) cannot add or change `custom_enabled`,
+  `html` or `fields` (403 `not_allowed_for_role`; custom code is PC-only like plugins); everything else
+  in a rule still saves from a phone.
+- Custom-enabled looks are drawn in `<iframe sandbox="allow-scripts">` (never `allow-same-origin`).
+  Only the frame's bootstrap runs (CSP `script-src 'nonce-…'`, no `unsafe-inline` for scripts, no
+  `media-src`, `connect-src 'none'`); it parses the markup in an inert document, strips what the save
+  check refuses (defence in depth), fills tokens as text, and answers only its parent's origin, once.
+  Legacy looks with `css` but no `custom_enabled` still apply that CSS in the standard alert's shadow
+  root (no iframe), checked by `check_css` at save time. `GET /alert-sandbox` is served by the desktop
+  app/engine for desktop and OBS origins.
+- `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
+  active alert design no longer dresses an alert whose look is custom-enabled.
