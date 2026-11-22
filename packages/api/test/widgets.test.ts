@@ -233,4 +233,69 @@ describe('interactive widgets API contract', () => {
       vi.useRealTimers()
     }
   })
+
+  describe('demo engine follow-ups', () => {
+    const make = () => {
+      const demo = new DemoEngine({ autoplay: false, latencyMs: 0 })
+      const client = new FerroClient({ base: demo.base, token: DEMO_TOKEN, fetch: demo.fetch })
+      const ingest = (kind: unknown, platform: string, origin = 'live') =>
+        (demo as unknown as { ingest: (k: unknown, p: string, o: string) => unknown }).ingest(
+          kind,
+          platform,
+          origin,
+        )
+      return { demo, client, ingest }
+    }
+    const chatKind = (n: number) => ({
+      type: 'chat_message',
+      actor: {
+        platform: 'twitch',
+        id: `u${n}`,
+        login: `u${n}`,
+        display_name: `User${n}`,
+        avatar_url: null,
+        color: null,
+        roles: 0,
+        badges: [],
+        anonymous: false,
+      },
+      content: { text: `hello ${n}`, fragments: [{ type: 'text', text: `hello ${n}` }] },
+      reply_to: null,
+      is_action: false,
+    })
+
+    it('an emote wall saved without platforms does not break chat delivery', async () => {
+      const { demo, client, ingest } = make()
+      const o = (await client.overlays())[0]!
+      const saved = await client.saveOverlay({
+        ...o,
+        widgets: [
+          { id: 'ew', kind: 'emote_wall', x: 0, y: 0, w: 800, h: 600, config: {} } as never,
+        ],
+      })
+      const token = new URL(saved.url).pathname.split('/').filter(Boolean)[1]!
+      const sock = demo.socket(`ws://127.0.0.1:47820/o/${token}/ws`)
+      sock.onmessage = () => {}
+      await new Promise((r) => setTimeout(r, 20))
+      expect(() => ingest(chatKind(1), 'twitch')).not.toThrow()
+    })
+
+    it('credits keep supporters after the event log evicts old events', async () => {
+      const { client, ingest } = make()
+      const before = (await client.credits()).followers.length
+      expect(before).toBeGreaterThan(0)
+      for (let i = 0; i < 2100; i++) ingest(chatKind(i), 'twitch')
+      expect((await client.credits()).followers.length).toBe(before)
+    })
+
+    it('a deleted message cannot be pinned any more', async () => {
+      const { client } = make()
+      const chat = await client.chat(50)
+      const m = chat.find((e) => e.kind.type === 'chat_message' && e.source_id)!
+      await client.deleteMessage(m.platform, m.source_id!)
+      await expect(client.pinChatHighlight(m.id, null)).rejects.toMatchObject({
+        code: 'highlight_not_found',
+      })
+    })
+  })
 })

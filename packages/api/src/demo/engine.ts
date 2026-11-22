@@ -350,6 +350,8 @@ export class DemoEngine {
   private filters: Filters = clone(FILTERS)
   /** Messages the chat filter held for a mod, oldest first: event id → reason. */
   private heldMsgs = new Map<string, string>()
+  /** The supporter events of this session, kept apart from the chat log so trimming the log never drops them. */
+  private creditLog: FerroEvent[] = []
   private panicCfg: PanicConfig = clone(PANIC)
   private panicOn = false
   private commands: Command[] = seedCommands()
@@ -637,6 +639,17 @@ export class DemoEngine {
       visibleChatById: (id) => {
         const e = this.events.find((x) => x.id === id)
         if (!e || e.kind.type !== 'chat_message' || this.heldMsgs.has(id)) return null
+        // Deleted by a moderator (or the platform): never shown on stream again.
+        if (
+          e.source_id &&
+          this.events.some(
+            (x) =>
+              x.platform === e.platform &&
+              x.kind.type === 'message_deleted' &&
+              x.kind.message_id === e.source_id,
+          )
+        )
+          return null
         return clone(e)
       },
       pushHighlightState: (highlight) =>
@@ -725,6 +738,7 @@ export class DemoEngine {
     })
     this.recap = new DemoRecap(() => ({
       events: this.events,
+      creditEvents: this.creditLog,
       stats: this.stats,
       live: this.isLive(),
     }))
@@ -2028,7 +2042,7 @@ export class DemoEngine {
     this.overlays = this.overlays.map((x) => (x.id === saved.id ? saved : x))
     const patch: Record<string, unknown> = {}
     if (saved.widgets.some((w) => w.kind === 'end_credits')) {
-      patch.credits = buildCredits(this.events, this.stats)
+      patch.credits = buildCredits(this.creditLog, this.stats)
     }
     if (saved.widgets.some((w) => w.kind === 'chat_highlight')) {
       patch.chat_highlight = this.highlight.view()
@@ -2675,6 +2689,10 @@ export class DemoEngine {
     if (opts.design) this.designs.testWith(e.id, opts.design.id)
     this.events.push(e)
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000)
+    if (isCreditEvent(e)) {
+      this.creditLog.push(e)
+      if (this.creditLog.length > 5000) this.creditLog.splice(0, this.creditLog.length - 5000)
+    }
     this.broadcastLive({ v: 1, type: 'event', data: e })
     this.updateState(e)
     if (kind.type === 'chat_message' && !opts.held) for (const f of this.features()) f.onChat?.(e)
@@ -2801,7 +2819,8 @@ export class DemoEngine {
       if (e.kind.type === 'chat_message')
         return (
           (w.kind === 'chat' || w.kind === 'emote_wall') &&
-          (w.config.platforms.length === 0 || w.config.platforms.includes(e.platform))
+          ((w.config.platforms ?? []).length === 0 ||
+            (w.config.platforms ?? []).includes(e.platform))
         )
       return (
         w.kind === 'events' && (w.config.kinds.length === 0 || w.config.kinds.includes(e.kind.type))
@@ -2836,7 +2855,7 @@ export class DemoEngine {
         : [],
       poll: this.polls.view(),
       giveaway: this.giveaways.card(),
-      credits: has('end_credits') ? buildCredits(this.events, this.stats) : null,
+      credits: has('end_credits') ? buildCredits(this.creditLog, this.stats) : null,
       chat_highlight: has('chat_highlight') ? this.highlight.view() : null,
       music: this.music.now(),
     }
@@ -2967,7 +2986,7 @@ export class DemoEngine {
       k.type === 'raid' ||
       (k.type === 'chat_message' && a && (a.roles & 2) !== 0 && (a.roles & 256) === 0)
     ) {
-      this.pushWidgetState('end_credits', { credits: buildCredits(this.events, this.stats) })
+      this.pushWidgetState('end_credits', { credits: buildCredits(this.creditLog, this.stats) })
     }
   }
 
@@ -3279,6 +3298,7 @@ export class DemoEngine {
         kind,
       }
       this.events.push(e)
+      if (isCreditEvent(e)) this.creditLog.push(e)
       if (why) this.why.set(e.id, why)
     }
     if (!this.setupDone) return
@@ -3645,4 +3665,21 @@ function cloudFrame(remote: DemoRemoteSession, f: { type?: unknown; data?: unkno
   if (f.type === 'resync') return true
   const k = (f.data as { kind?: { type?: unknown } } | undefined)?.kind?.type
   return f.type === 'event' && (k === 'chat_message' || k === 'message_deleted')
+}
+
+/** Events that make a session's credits: supporters, and human moderators who chat. */
+function isCreditEvent(e: FerroEvent): boolean {
+  const k = e.kind
+  if (e.origin !== 'live') return false
+  if (k.type === 'chat_message') return (k.actor.roles & 2) !== 0 && (k.actor.roles & 256) === 0
+  return (
+    k.type === 'follow' ||
+    k.type === 'subscription' ||
+    k.type === 'gift_batch' ||
+    k.type === 'tip' ||
+    k.type === 'paid_message' ||
+    k.type === 'platform_gift' ||
+    k.type === 'raid' ||
+    k.type === 'reversal'
+  )
 }
