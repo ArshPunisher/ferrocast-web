@@ -7,19 +7,155 @@
 
 import { ruleBuiltinSound } from '@ferrocast/api/alert'
 import { ackFrame } from '@ferrocast/api/overlay-protocol'
-import type { AlertsConfig, RenderedAlert, Widget } from '@ferrocast/api/types'
+import type {
+  AlertsConfig,
+  AnimIn,
+  AnimOut,
+  RenderedAlert,
+  TextAnim,
+  Widget,
+} from '@ferrocast/api/types'
 import alertCss from '../styles/alert.css?inline'
 import { buildDesignAlert, type DesignAlert } from '../design/alert'
+import { EASE_IN, EASE_OUT, IN, OUT, textAnimation, type Animate } from '../design/motion'
 import { builtinSoundUrl } from '../design/sounds'
 import { sparkSvg } from '../design/spark'
 import { el, mediaRef, safeText, speakText, themeOf, warnOnce } from '../dom'
 import { place, type WidgetContext, type WidgetView } from '../widget'
+import { mountSandboxedAlert } from './alert-sandbox'
 
 const EXIT_MS = 300
 const EXIT_LOW_MS = 200
 const GAP_MS = 250
 const MAX_LOCAL_QUEUE = 50
 const LAYOUTS = new Set(['stack', 'side', 'banner'])
+
+interface HostLifecycle {
+  cleanup: () => void
+  exit: (lowMotion: boolean) => number
+}
+
+const HOST_LIFECYCLE = new WeakMap<HTMLElement, HostLifecycle>()
+
+const safeAnimate: Animate = (node, kf, opts) => {
+  if (typeof (node as Element & { animate?: Element['animate'] }).animate !== 'function')
+    return null
+  try {
+    return node.animate(kf, opts)
+  } catch {
+    return null
+  }
+}
+
+function runExtendedTextEffect(
+  kind: TextAnim,
+  chars: Element[],
+  titleEl: HTMLElement,
+  t0: number,
+  tracks: Animation[],
+): void {
+  const push = (a: Animation | null) => {
+    if (a) tracks.push(a)
+  }
+  const trackAnimate: Animate = (node, kf, opts) => {
+    const a = safeAnimate(node, kf, opts)
+    push(a)
+    return a
+  }
+  if (kind === 'cascade') {
+    chars.forEach((c, i) =>
+      trackAnimate(
+        c,
+        [
+          { opacity: 0, transform: 'translateY(18px) scale(0.88)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 420, delay: t0 + i * 34, fill: 'backwards', easing: EASE_IN },
+      ),
+    )
+    return
+  }
+  if (kind === 'pop_wave') {
+    chars.forEach((c, i) =>
+      trackAnimate(
+        c,
+        [
+          { transform: 'none' },
+          { transform: 'translateY(-10px) scale(1.16)', offset: 0.35 },
+          { transform: 'none', offset: 0.7 },
+          { transform: 'none' },
+        ],
+        { duration: 1200, delay: t0 + i * 50, iterations: 3, easing: 'ease-in-out' },
+      ),
+    )
+    return
+  }
+  if (kind === 'stretch') {
+    chars.forEach((c, i) =>
+      trackAnimate(
+        c,
+        [
+          { transform: 'scaleX(0.4) scaleY(1.4)', opacity: 0 },
+          { transform: 'scaleX(1.12) scaleY(0.92)', opacity: 1, offset: 0.65 },
+          { transform: 'none', opacity: 1 },
+        ],
+        { duration: 480, delay: t0 + i * 24, fill: 'backwards', easing: EASE_IN },
+      ),
+    )
+    return
+  }
+  if (kind === 'spin') {
+    chars.forEach((c, i) =>
+      trackAnimate(
+        c,
+        [
+          { opacity: 0, transform: 'rotate(-180deg) scale(0.5)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 500, delay: t0 + i * 30, fill: 'backwards', easing: EASE_IN },
+      ),
+    )
+    return
+  }
+  if (kind === 'shine' || kind === 'neon' || kind === 'rgb' || kind === 'decode') {
+    trackAnimate(
+      titleEl,
+      kind === 'rgb'
+        ? [{ filter: 'hue-rotate(0deg)' }, { filter: 'hue-rotate(360deg)' }]
+        : [
+            { textShadow: '0 0 0 transparent' },
+            { textShadow: '0 0 20px currentColor, 0 0 6px currentColor' },
+            { textShadow: '0 0 0 transparent' },
+          ],
+      { duration: 1400, delay: t0, iterations: 3, easing: 'ease-in-out' },
+    )
+    return
+  }
+  textAnimation(kind, chars, [titleEl], t0, trackAnimate)
+}
+
+function appendTitleChars(titleEl: HTMLElement, text: string): Element[] {
+  const chars: Element[] = []
+  // Group non-space runs inside `.al-word` so line wrapping happens only between words.
+  for (const part of text.split(/(\s+)/)) {
+    if (!part) continue
+    if (/^\s+$/.test(part)) {
+      titleEl.appendChild(document.createTextNode(part))
+      continue
+    }
+    const word = document.createElement('span')
+    word.className = 'al-word'
+    for (const ch of Array.from(part)) {
+      const s = document.createElement('span')
+      s.className = 'al-char'
+      s.textContent = ch
+      word.appendChild(s)
+      chars.push(s)
+    }
+    titleEl.appendChild(word)
+  }
+  return chars
+}
 
 interface Playing {
   alert: RenderedAlert
@@ -75,53 +211,143 @@ export function buildAlert(
   card.dataset.theme = themeOf(theme)
   card.dataset.motion = lowMotion ? 'low' : 'full'
   card.dataset.kind = typeof a.kind === 'string' ? a.kind.replace(/[^a-z_]/g, '') : ''
+  if (a.anim) {
+    card.dataset.animIn = String(a.anim.in)
+    card.dataset.animOut = String(a.anim.out)
+    card.dataset.textAnim = String(a.anim.text)
+    card.dataset.customAnim = '1'
+  }
   card.setAttribute('role', 'status')
-  const inner = el('div', 'al-inner')
-  if (branded) inner.appendChild(spikes())
 
-  const img = mediaRef(a.image)
-  if (a.image && img) {
-    const media = el('div', 'al-media')
-    if (isVideo(img)) {
-      const v = el('video')
-      v.muted = true
-      v.loop = true
-      v.autoplay = true
-      v.playsInline = true
-      v.setAttribute('playsinline', '')
-      v.src = img
-      v.addEventListener('error', () => media.remove())
-      media.appendChild(v)
-    } else {
-      const i = el('img')
-      i.alt = ''
-      i.decoding = 'async'
-      i.src = img
-      i.addEventListener('error', () => media.remove())
-      media.appendChild(i)
+  const anims: Animation[] = []
+  let customCleanup = () => {}
+  let animTarget: HTMLElement
+
+  if (a.custom && typeof a.custom === 'object') {
+    const stageWrap = el('div', 'al-inner')
+    stageWrap.style.cssText =
+      'padding:0;background:transparent;border:0;box-shadow:none;width:100%;height:100%;max-width:100%;max-height:100%'
+    customCleanup = mountSandboxedAlert(stageWrap, a.alert_id, a.custom)
+    card.appendChild(stageWrap)
+    root.appendChild(card)
+    animTarget = stageWrap
+  } else {
+    const inner = el('div', 'al-inner')
+    if (branded) inner.appendChild(spikes())
+
+    const img = mediaRef(a.image)
+    if (a.image && img) {
+      const media = el('div', 'al-media')
+      if (isVideo(img)) {
+        const v = el('video')
+        v.muted = true
+        v.loop = true
+        v.autoplay = true
+        v.playsInline = true
+        v.setAttribute('playsinline', '')
+        v.src = img
+        v.addEventListener('error', () => media.remove())
+        media.appendChild(v)
+      } else {
+        const i = el('img')
+        i.alt = ''
+        i.decoding = 'async'
+        i.src = img
+        i.addEventListener('error', () => media.remove())
+        media.appendChild(i)
+      }
+      inner.appendChild(media)
     }
-    inner.appendChild(media)
-  }
-  const text = el('div', 'al-text')
-  const title = el('div', 'al-title', safeText(a.title, 300))
-  title.dir = 'auto'
-  text.appendChild(title)
-  const body = safeText(a.body, 500)
-  if (body.trim() !== '') {
-    const b = el('div', 'al-body', body)
-    b.dir = 'auto'
-    text.appendChild(b)
-  }
-  inner.appendChild(text)
-  card.appendChild(inner)
-  root.appendChild(card)
+    const text = el('div', 'al-text')
+    const rawTitle = safeText(a.title, 300)
+    const textEffect = !lowMotion && a.anim?.text && a.anim.text !== 'none' ? a.anim.text : 'none'
+    const title = el('div', 'al-title')
+    title.dir = 'auto'
+    const chars = textEffect !== 'none' ? appendTitleChars(title, rawTitle) : []
+    if (chars.length === 0) title.textContent = rawTitle
+    text.appendChild(title)
+    const body = safeText(a.body, 500)
+    if (body.trim() !== '') {
+      const b = el('div', 'al-body', body)
+      b.dir = 'auto'
+      text.appendChild(b)
+    }
+    inner.appendChild(text)
+    card.appendChild(inner)
+    root.appendChild(card)
+    animTarget = inner
 
-  if (typeof a.css === 'string' && a.css.trim() !== '' && root !== host) {
-    // Inside the shadow root the streamer's CSS can only style this alert (R-39).
-    const custom = document.createElement('style')
-    custom.textContent = a.css.slice(0, 20_000)
-    root.appendChild(custom)
+    if (typeof a.css === 'string' && a.css.trim() !== '' && root !== host) {
+      // Inside the shadow root the streamer's CSS can only style this alert (R-39).
+      const custom = document.createElement('style')
+      custom.textContent = a.css.slice(0, 20_000)
+      root.appendChild(custom)
+    }
+
+    if (textEffect !== 'none') {
+      runExtendedTextEffect(textEffect, chars, title, a.anim?.text_delay_ms ?? 150, anims)
+    }
   }
+
+  if (a.anim) {
+    const inMs = Math.max(0, Math.min(3000, a.anim.in_ms ?? 400))
+    if (lowMotion) {
+      const aIn = safeAnimate(animTarget, IN.fade.kf, {
+        duration: Math.min(200, inMs || 200),
+        easing: 'ease-out',
+        fill: 'both',
+      })
+      if (aIn) anims.push(aIn)
+    } else if (inMs > 0) {
+      const spec = IN[a.anim.in as AnimIn] ?? IN.fade
+      if (spec.kf.length) {
+        const aIn = safeAnimate(animTarget, spec.kf, {
+          duration: inMs,
+          easing: spec.ease ?? EASE_IN,
+          fill: 'both',
+        })
+        if (aIn) anims.push(aIn)
+      }
+    }
+  }
+
+  HOST_LIFECYCLE.set(host, {
+    cleanup: () => {
+      for (const anim of anims) {
+        try {
+          anim.cancel()
+        } catch {
+          // ignore
+        }
+      }
+      customCleanup()
+    },
+    exit: (low) => {
+      for (const anim of anims) {
+        try {
+          anim.cancel()
+        } catch {
+          // ignore
+        }
+      }
+      if (!a.anim) return low ? EXIT_LOW_MS : EXIT_MS
+      const outMs = low
+        ? Math.min(EXIT_LOW_MS, a.anim.out_ms || EXIT_LOW_MS)
+        : Math.max(0, Math.min(3000, a.anim.out_ms ?? EXIT_MS))
+      if (outMs <= 0) return 0
+      const kf = low ? OUT.fade : (OUT[a.anim.out as AnimOut] ?? OUT.fade)
+      if (kf.length) {
+        const aOut = safeAnimate(animTarget, kf, {
+          duration: outMs,
+          easing: EASE_OUT,
+          fill: 'both',
+        })
+        if (aOut) anims.push(aOut)
+      }
+      return outMs
+    },
+  })
+
   return host
 }
 
@@ -376,10 +602,18 @@ export class AlertsWidget implements WidgetView {
     p.host.classList.add('is-out')
     const card = p.host.shadowRoot?.querySelector('.al') ?? p.host.querySelector('.al')
     card?.classList.add('is-out')
-    const ms = p.design ? p.design.exit() : this.ctx.lowMotion() ? EXIT_LOW_MS : EXIT_MS
+    const lifecycle = HOST_LIFECYCLE.get(p.host)
+    const ms = p.design
+      ? p.design.exit()
+      : lifecycle
+        ? lifecycle.exit(this.ctx.lowMotion())
+        : this.ctx.lowMotion()
+          ? EXIT_LOW_MS
+          : EXIT_MS
     p.timers.push(
       setTimeout(() => {
         if (p.design) p.design.destroy()
+        HOST_LIFECYCLE.get(p.host)?.cleanup()
         p.host.remove()
         if (this.playing === p) this.playing = null
         if (p.primary) this.ctx.send(ackFrame(p.alert.alert_id, 'finished'))
@@ -399,6 +633,7 @@ export class AlertsWidget implements WidgetView {
       if (p.hold) clearTimeout(p.hold)
       for (const a of p.audio) a.pause()
       p.design?.destroy()
+      HOST_LIFECYCLE.get(p.host)?.cleanup()
       // Let the engine move on instead of waiting for its deadlines.
       if (p.primary && !silent) this.ctx.send(ackFrame(p.alert.alert_id, 'finished'))
     }
