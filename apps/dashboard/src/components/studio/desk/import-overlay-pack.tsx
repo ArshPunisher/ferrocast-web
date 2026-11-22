@@ -16,7 +16,6 @@ import {
 } from '@ferrocast/api'
 import { Button, Dialog, Field, Input, Switch, cx, toast } from '@ferrocast/ui'
 import { useDesk } from './common'
-import { showShelfError } from './library'
 
 const MAX_PACK_BYTES = 150 * 1024 * 1024
 
@@ -32,7 +31,11 @@ function formatLabel(format: OverlayPackFormat): string {
   return 'OBS pack'
 }
 
-function fontStatusBadge(status: FontStatus): { label: string; tone: string } {
+/**
+ * `skipped`: the Google Fonts fetch is off, or the import is done: a font still 'missing' then
+ * was not fetched, and the picture will use a fallback (it won't be fetched "later").
+ */
+function fontStatusBadge(status: FontStatus, skipped = false): { label: string; tone: string } {
   switch (status) {
     case 'installed':
       return { label: 'Installed on PC', tone: 'bg-surface-3 text-text-2' }
@@ -43,7 +46,9 @@ function fontStatusBadge(status: FontStatus): { label: string; tone: string } {
     case 'downloaded':
       return { label: 'Downloaded (Google Fonts)', tone: 'bg-arc/15 text-arc-text' }
     case 'missing':
-      return { label: 'Will fetch from Google Fonts', tone: 'bg-molten/15 text-molten-text' }
+      return skipped
+        ? { label: 'Skipped (fallback font)', tone: 'bg-warn/15 text-warn-text' }
+        : { label: 'Will fetch from Google Fonts', tone: 'bg-molten/15 text-molten-text' }
     case 'not_found':
       return { label: 'Not on Google Fonts (fallback)', tone: 'bg-warn/15 text-warn-text' }
     case 'offline_fallback':
@@ -78,6 +83,8 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
   }, [open])
 
   const handleFile = async (file: File) => {
+    // One at a time: a second file dropped while one is being read would race it.
+    if (busy !== null) return
     setError(null)
     if (file.size === 0) {
       setError({ message: 'That file is empty.', hint: 'Pick a valid .overlay theme pack zip.' })
@@ -124,7 +131,6 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
       bumpLibrary()
       setStep({ kind: 'result', report, undone: false })
     } catch (e) {
-      showShelfError(e)
       const d = describeError(e)
       setError({ message: d.message, hint: d.hint })
     } finally {
@@ -146,7 +152,6 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
         message: `Undid "${undone.removed_collection_name}" import and restored your previous scenes.`,
       })
     } catch (e) {
-      showShelfError(e)
       const d = describeError(e)
       setError({ message: d.message, hint: d.hint })
     } finally {
@@ -209,7 +214,18 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
     )
 
   return (
-    <Dialog open={open} onClose={onClose} title={title} size="md" compact footer={footer}>
+    <Dialog
+      open={open}
+      // Not while a request is on its way: closing then reopening would let its answer land on a
+      // fresh dialog.
+      onClose={() => {
+        if (busy === null) onClose()
+      }}
+      title={title}
+      size="md"
+      compact
+      footer={footer}
+    >
       <div className="flex flex-col gap-3">
         {error && (
           <div
@@ -399,7 +415,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
                 </h3>
                 <ul className="flex max-h-32 flex-col gap-1 overflow-y-auto text-[12.5px]">
                   {step.preview.fonts.map((f) => {
-                    const badge = fontStatusBadge(f.status)
+                    const badge = fontStatusBadge(f.status, !fetchFonts)
                     return (
                       <li
                         key={`${f.family}-${f.style}`}
@@ -533,7 +549,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
                 </h3>
                 <ul className="flex flex-col gap-1 text-[12.5px]">
                   {step.report.fonts.map((f) => {
-                    const badge = fontStatusBadge(f.status)
+                    const badge = fontStatusBadge(f.status, true)
                     return (
                       <li
                         key={`${f.family}-${f.style}`}
