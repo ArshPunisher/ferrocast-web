@@ -2,7 +2,7 @@
 // recording, shortcuts and reconnecting, as plain choices first and the details under "More
 // options". Saved together; what can't change now (live, or until a restart) says so.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowCounterClockwise,
   CheckCircle,
@@ -97,15 +97,61 @@ export function SettingsDialog({
 /** A Mac (the only place the drawing choice applies). */
 const isMac = os === 'mac'
 
+function mergeAutoConfigOutput(target: StudioSettings, source: StudioSettings): StudioSettings {
+  return {
+    ...target,
+    encoder: source.encoder,
+    video_encoder: source.video_encoder ?? null,
+    encoder_settings: { ...(source.encoder_settings ?? {}) },
+    scale: source.scale ? [...source.scale] : null,
+    fps: source.fps,
+    video_kbps: source.video_kbps,
+  }
+}
+
+function outputSignature(s: StudioSettings): string {
+  return JSON.stringify([
+    s.encoder,
+    s.video_encoder ?? null,
+    s.encoder_settings ?? {},
+    s.scale ?? null,
+    s.fps,
+    s.video_kbps,
+  ])
+}
+
 function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
   const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
   const [page, setPage] = useState<Page>(start)
   const [draft, setDraft] = useState<StudioSettings | null>(null)
   const [saving, setSaving] = useState(false)
+  const lastOutputSigRef = useRef<string | null>(null)
   useEffect(() => {
-    if (loaded.data && !draft) setDraft(loaded.data)
+    if (loaded.data && !draft) {
+      setDraft(loaded.data)
+      lastOutputSigRef.current = outputSignature(loaded.data)
+    }
   }, [loaded.data, draft])
+  const prefsData = prefs?.data ?? null
+  useEffect(() => {
+    if (!prefsData || !draft) return
+    const nextSig = outputSignature(prefsData)
+    if (lastOutputSigRef.current && nextSig !== lastOutputSigRef.current) {
+      lastOutputSigRef.current = nextSig
+      loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, prefsData) : prefsData))
+      setDraft((d) => (d ? mergeAutoConfigOutput(d, prefsData) : d))
+    }
+  }, [prefsData, draft, loaded])
+  const syncFromAutoConfig = useCallback(
+    (next: StudioSettings) => {
+      lastOutputSigRef.current = outputSignature(next)
+      loaded.set((prev) => (prev ? mergeAutoConfigOutput(prev, next) : next))
+      prefs.set(next)
+      setDraft((d) => (d ? mergeAutoConfigOutput(d, next) : d))
+    },
+    [loaded, prefs],
+  )
   if (loaded.error && !loaded.data)
     return (
       <div className="p-6">
@@ -114,16 +160,12 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     )
   if (!draft || !loaded.data) return <Skeleton className="m-6 h-96" />
   const set = (patch: Partial<StudioSettings>) => setDraft((d) => (d ? { ...d, ...patch } : d))
-  const syncFromAutoConfig = (next: StudioSettings) => {
-    loaded.set(next)
-    prefs.set(next)
-    setDraft(next)
-  }
   const changed = JSON.stringify(draft) !== JSON.stringify(loaded.data)
   const save = async () => {
     setSaving(true)
     try {
       const r = await api.setStudioSettings(draft)
+      lastOutputSigRef.current = outputSignature(r.settings)
       loaded.set(r.settings)
       prefs.set(r.settings)
       setDraft(r.settings)

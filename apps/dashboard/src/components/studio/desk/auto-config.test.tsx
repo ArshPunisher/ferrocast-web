@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { FerroClient, studioEngineApi, type StudioSettings } from '@ferrocast/api'
 import { DemoEngine, DEMO_TOKEN } from '@ferrocast/api/demo'
 import { AutoConfigDialog, AutoConfigRollbackBar } from './auto-config'
+import { SettingsDialog } from './settings'
 import { DeskProvider, type Desk } from './common'
 import { useLive } from '../../../lib/store'
 
@@ -54,7 +55,12 @@ afterEach(async () => {
   root = null
   host = null
   demo = null
-  useLive.setState((s) => ({ ...s, studio: { ...s.studio, autoConfig: null } }))
+  useLive.setState((s) => ({
+    ...s,
+    conn: null,
+    resyncs: 0,
+    studio: { ...s.studio, autoConfig: null },
+  }))
 })
 
 function mkDesk(opts?: ConstructorParameters<typeof DemoEngine>[0]) {
@@ -162,9 +168,9 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
     await act(async () => {
       runBtn2.click()
     })
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       await flush(30)
-      if (document.body.textContent?.includes('What was tested')) break
+      if (document.body.textContent?.includes('Recommended:')) break
     }
     expect(document.body.textContent).toContain('Recommended: Apple VideoToolbox')
     expect(document.body.textContent).toContain('x264 (veryfast)')
@@ -243,10 +249,16 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
     await act(async () => {
       retryBtn.click()
     })
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       await flush(30)
-      if (document.body.textContent?.includes('What was tested')) break
+      if (document.body.textContent?.includes('Recommended:')) break
     }
+    const kbpsInput = document.querySelector<HTMLInputElement>('#auto-config-kbps')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(kbpsInput, '7500')
+      kbpsInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
     const applyBtn = Array.from(document.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Apply settings'),
     )!
@@ -261,10 +273,146 @@ describe('AutoConfigDialog & AutoConfigRollbackBar', () => {
       keepBtn.click()
     })
     await flush(30)
+
+    // C5: go live -> network drops alone ignored; encoder drops deferred until stream ends.
+    d.studioEngine!.setStreamActive(true)
     await act(async () => {
-      d.studioEngine!.injectDroppedFrames(7, 2)
+      d.studioEngine!.injectDroppedFrames(12, 0)
+    })
+    await flush(60)
+    expect((await api.autoConfig()).rollback_offered).toBe(false)
+
+    await act(async () => {
+      d.studioEngine!.injectDroppedFrames(0, 7)
+    })
+    await flush(60)
+    // Never mutates or shows dropped-rollback mid-stream.
+    expect((await api.studioSettings()).video_kbps).toBe(7500)
+
+    await act(async () => {
+      d.studioEngine!.setStreamActive(false)
     })
     await flush(600)
-    expect(document.body.textContent).toContain('dropped frames')
+    expect(document.body.textContent).toContain('dropped')
+    expect(document.body.textContent).toContain('Undo')
+  })
+
+  it('covers M5 & L1: no refetch on radio click, running bar + resync refetch, inline bitrate validation, and Settings draft preservation', async () => {
+    const { demo: d, api, desk, settings, prefs } = mkDesk()
+    await api.start()
+    useLive.setState({ conn: { client: { request: vi.fn() } } as never })
+    const deskFull = {
+      ...desk,
+      kinds: { data: { encoders: [], inputs: [] } },
+      prefs,
+    } as unknown as Desk
+    const autoConfigSpy = vi.spyOn(desk.api, 'autoConfig')
+
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={deskFull}>
+          <AutoConfigRollbackBar />
+          <SettingsDialog open onClose={() => {}} start="audio" />
+          <AutoConfigDialog open onClose={() => {}} s={settings} onApply={() => {}} />
+        </DeskProvider>,
+      )
+    })
+    await flush(40)
+    const callsAfterMount = autoConfigSpy.mock.calls.length
+
+    // M5.1: clicking radio choices must not refetch GET /auto-config
+    const recordRadio = Array.from(document.querySelectorAll<HTMLElement>('[role="radio"]')).find(
+      (el) => el.textContent?.includes('Recording'),
+    )!
+    await act(async () => {
+      recordRadio.click()
+    })
+    await flush(20)
+    expect(autoConfigSpy).toHaveBeenCalledTimes(callsAfterMount)
+
+    // L1: resyncs increment triggers AutoConfigRollbackBar refetch
+    await act(async () => {
+      useLive.setState((s) => ({ ...s, resyncs: s.resyncs + 1 }))
+    })
+    await flush(30)
+    expect(autoConfigSpy.mock.calls.length).toBeGreaterThan(callsAfterMount)
+
+    // Make an unrelated dirty edit on Audio page (switch sample rate) inside SettingsDialog
+    const rate44 = Array.from(document.querySelectorAll<HTMLElement>('[role="radio"]')).find(
+      (el) => el.textContent?.includes('44.1'),
+    )
+    if (rate44) {
+      await act(async () => {
+        rate44.click()
+      })
+      await flush(20)
+      expect(document.body.textContent).toContain('Not saved yet')
+    }
+
+    // M5.2: running benchmark renders compact progress bar on AutoConfigRollbackBar even if dialog closes
+    d.studioEngine!.configure({ benchStepMs: 120 })
+    const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Run benchmark'),
+    )!
+    await act(async () => {
+      runBtn.click()
+    })
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={deskFull}>
+          <AutoConfigRollbackBar />
+          <SettingsDialog open onClose={() => {}} start="audio" />
+        </DeskProvider>,
+      )
+    })
+    await flush(20)
+    expect(document.body.textContent).toMatch(/Benchmark|Step 1|Step 2|Probing|Upload|Testing/i)
+    d.studioEngine!.configure({ benchStepMs: 20 })
+
+    // Re-open dialog & finish benchmark
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={deskFull}>
+          <AutoConfigRollbackBar />
+          <SettingsDialog open onClose={() => {}} start="audio" />
+          <AutoConfigDialog open onClose={() => {}} s={settings} onApply={() => {}} />
+        </DeskProvider>,
+      )
+    })
+    for (let i = 0; i < 40; i++) {
+      await flush(30)
+      if (document.body.textContent?.includes('Recommended:')) break
+    }
+
+    // M5.3: invalid bitrate shows inline validation error & blocks Apply
+    const kbpsInput = document.querySelector<HTMLInputElement>('#auto-config-kbps')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(kbpsInput, '200')
+      kbpsInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flush(20)
+    expect(document.body.textContent).toMatch(/500.*60,?000|between 500/i)
+    const applyBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Apply settings'),
+    ) as HTMLButtonElement
+    expect(applyBtn.disabled).toBe(true)
+
+    // Fix bitrate and Apply -> dirty Audio edit ("Not saved yet") must still survive Settings rollback!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(kbpsInput, '5500')
+      kbpsInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      applyBtn.click()
+    })
+    await flush(40)
+    if (rate44) {
+      expect(document.body.textContent).toContain('Not saved yet')
+    }
   })
 })

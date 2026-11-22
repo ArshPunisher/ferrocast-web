@@ -62,21 +62,28 @@ export function recommend(o: {
   // A quarter kept free: uploads vary, and chat, alerts and the rest share it.
   const share = (o.upload_kbps * 0.75) / n
   const cap = Math.min(12000, ...o.platforms.map((p) => CAPS[p] ?? 12000))
-  const kbps = Math.max(1500, Math.min(cap, Math.floor(share / 500) * 500))
+  const kbps = Math.max(500, Math.min(cap, Math.floor(share / 500) * 500))
   let fps: number = o.fps
-  let height: number
+  let targetShort: number
   if (fps === 60) {
-    if (kbps >= 6000) height = 1080
-    else if (kbps >= 3500) height = 720
+    if (kbps >= 6000) targetShort = 1080
+    else if (kbps >= 3500) targetShort = 720
     else {
       // Too little for 60: smoother at 30 than blocky at 60.
       fps = 30
-      height = kbps >= 2500 ? 720 : 480
+      targetShort = kbps >= 2500 ? 720 : 480
     }
-  } else height = kbps >= 4500 ? 1080 : kbps >= 2500 ? 720 : 480
+  } else targetShort = kbps >= 4500 ? 1080 : kbps >= 2500 ? 720 : 480
   const [cw, ch] = o.canvas
-  const scale: [number, number] | null =
-    height < ch ? [Math.round((cw * height) / ch / 2) * 2, height] : null
+  const shortEdge = Math.min(cw, ch)
+  let scale: [number, number] | null = null
+  if (targetShort < shortEdge) {
+    const s = targetShort & ~1
+    scale =
+      cw <= ch
+        ? [s, Math.max(72, Math.round((ch * s) / cw / 2) * 2)]
+        : [Math.max(128, Math.round((cw * s) / ch / 2) * 2), s]
+  }
   const split = n > 1 ? ` shared by ${n} platforms` : ''
   // When the upload forced a step down, say what would help.
   const tight = fps < o.fps || kbps < 2500 ? ' Your upload is tight: a wired connection helps.' : ''
@@ -355,10 +362,18 @@ function emptyIdleState(mode: AutoConfigMode = 'stream'): AutoConfigState {
     watch_remaining_s: 0,
     first_minute_drops: 0,
     first_minute_lags: 0,
+    rollback_offered: false,
     rollback_trigger: null,
     rollback_reason: null,
     restored: null,
   }
+}
+
+function publishAutoConfig(next: AutoConfigState) {
+  useLive.setState((prev) => ({
+    ...prev,
+    studio: { ...prev.studio, autoConfig: next },
+  }))
 }
 
 function Wizard({
@@ -375,6 +390,7 @@ function Wizard({
   const desk = useDeskOptional()
   const golive = useGoLive()
   const liveAutoConfig = useLive((l) => l.studio.autoConfig)
+  const resyncs = useLive((l) => l.resyncs)
 
   const [use, setUse] = useState<AutoConfigMode>('stream')
   const [fps, setFps] = useState<30 | 60>(s.fps >= 50 ? 60 : 30)
@@ -401,24 +417,29 @@ function Wizard({
     }
   }, [desk, onSynced])
 
+  const syncBench = useCallback((next: AutoConfigState) => {
+    setBench(next)
+    publishAutoConfig(next)
+  }, [])
+
   const loadState = useCallback(async () => {
     if (!hasAutoConfigApi || !desk) {
-      setBench(emptyIdleState(use))
+      setBench(null)
       return
     }
     try {
       const st = await desk.api.autoConfig()
-      setBench(st)
+      syncBench(st)
       if (st.state === 'running' || st.state === 'applied') setForceSetup(false)
     } catch (e) {
       const d = describeError(e)
       setRequestError(d)
     }
-  }, [hasAutoConfigApi, desk, use])
+  }, [hasAutoConfigApi, desk, syncBench])
 
   useEffect(() => {
     void loadState()
-  }, [loadState])
+  }, [loadState, resyncs])
 
   useEffect(() => {
     if (!liveAutoConfig) return
@@ -444,13 +465,13 @@ function Wizard({
       void desk.api
         .autoConfig()
         .then((next) => {
-          setBench(next)
+          syncBench(next)
           if (next.state === 'rolled_back') void syncSettingsFromEngine()
         })
         .catch(() => undefined)
     }, ms)
     return () => clearInterval(id)
-  }, [hasAutoConfigApi, desk, activeState, syncSettingsFromEngine])
+  }, [hasAutoConfigApi, desk, activeState, syncSettingsFromEngine, syncBench])
 
   useEffect(() => {
     const prev = prevStateRef.current
@@ -524,11 +545,11 @@ function Wizard({
         fps_preference: fps,
         include_upload: use === 'stream',
       })
-      setBench(next)
+      syncBench(next)
     } catch (e) {
       const d = describeError(e)
       setRequestError(d)
-      setBench({ ...emptyIdleState(use), state: 'failed', mode: use, error: d.message })
+      syncBench({ ...emptyIdleState(use), state: 'failed', mode: use, error: d.message })
     } finally {
       setBusyAction(null)
     }
@@ -539,7 +560,7 @@ function Wizard({
     setBusyAction('cancel')
     try {
       const next = await desk.api.cancelAutoConfigBenchmark()
-      setBench(next)
+      syncBench(next)
       setForceSetup(true)
     } catch (e) {
       setRequestError(describeError(e))
@@ -548,13 +569,21 @@ function Wizard({
     }
   }
 
+  const parsedKbps = Number(kbpsOverride.trim())
+  const kbpsValid =
+    /^\d+$/.test(kbpsOverride.trim()) &&
+    Number.isFinite(parsedKbps) &&
+    parsedKbps >= 500 &&
+    parsedKbps <= 60000
+  const kbpsError =
+    viewState.state === 'done' && viewState.picked && !kbpsValid
+      ? 'Bitrate must be a whole number between 500 and 60000 Kbps.'
+      : null
+
   const applyRecommended = async () => {
     if (!desk?.api.applyAutoConfig || !viewState.picked) return
-    const parsedKbps = Number(kbpsOverride)
-    const videoKbps =
-      Number.isFinite(parsedKbps) && parsedKbps >= 500 && parsedKbps <= 60000
-        ? Math.round(parsedKbps)
-        : viewState.picked.video_kbps
+    if (!kbpsValid) return
+    const videoKbps = Math.round(parsedKbps)
     setBusyAction('apply')
     setRequestError(null)
     try {
@@ -567,7 +596,7 @@ function Wizard({
         video_kbps: videoKbps,
         label: viewState.picked.label,
       })
-      setBench(next)
+      syncBench(next)
       await syncSettingsFromEngine()
       if (!onSynced) {
         onApply({
@@ -591,8 +620,14 @@ function Wizard({
     setBusyAction('keep')
     try {
       const next = await desk.api.keepAutoConfig()
-      setBench(next)
-      toast({ tone: 'ok', message: 'Settings kept. First-minute protection stays on.' })
+      syncBench(next)
+      toast({
+        tone: 'ok',
+        message:
+          next.state === 'idle'
+            ? 'Settings kept.'
+            : 'Settings kept. First-minute protection stays on.',
+      })
     } catch (e) {
       setRequestError(describeError(e))
     } finally {
@@ -605,7 +640,7 @@ function Wizard({
     setBusyAction('undo')
     try {
       const next = await desk.api.undoAutoConfig()
-      setBench(next)
+      syncBench(next)
       await syncSettingsFromEngine()
     } catch (e) {
       setRequestError(describeError(e))
@@ -711,8 +746,55 @@ function Wizard({
     )
   }
 
-  // 3. APPLIED STATE (Keep / Undo + 30s countdown + 1st-min drop protection)
+  // 3. APPLIED STATE (Keep / Undo + 30s countdown + 1st-min drop protection + post-stream offer)
   if (viewState.state === 'applied' && viewState.applied) {
+    if (viewState.rollback_offered) {
+      return (
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="flex flex-col gap-2.5 rounded-panel border border-warn/50 bg-warn-soft px-4 py-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 font-display text-[15px] font-bold text-text">
+                <WarningCircle size={20} weight="fill" className="text-warn" aria-hidden />
+                Rollback ready: restore your previous settings?
+              </span>
+              <Badge tone="warn">Stream ended</Badge>
+            </div>
+            <p className="m-0 font-mono text-[13px] font-semibold text-text tabular-nums">
+              {formatSummaryLine(viewState.applied)}
+            </p>
+            <p className="m-0 text-[13px] text-text-2">
+              {viewState.rollback_reason ??
+                'Encoder dropped frames while live. Restore your previous settings or Keep.'}
+            </p>
+          </div>
+
+          {requestError && (
+            <p role="alert" className="m-0 text-[13px] text-danger">
+              {requestError.message}
+            </p>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="danger-ghost"
+              icon={<ArrowCounterClockwise size={16} aria-hidden />}
+              busy={busyAction === 'undo'}
+              onClick={() => void undoApplied()}
+            >
+              Undo
+            </Button>
+            <Button
+              variant="primary"
+              busy={busyAction === 'keep'}
+              onClick={() => void keepApplied()}
+            >
+              Keep
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex flex-col gap-4 pt-1">
         <div
@@ -889,6 +971,8 @@ function Wizard({
               <Input
                 id="auto-config-kbps"
                 aria-label="Bitrate (Kbps)"
+                aria-invalid={Boolean(kbpsError)}
+                aria-describedby={kbpsError ? 'auto-config-kbps-error' : undefined}
                 type="number"
                 min={500}
                 max={60000}
@@ -897,6 +981,11 @@ function Wizard({
                 onChange={(e) => setKbpsOverride(e.target.value)}
                 className="mt-0.5 h-8 font-mono text-[13.5px] tabular-nums"
               />
+              {kbpsError && (
+                <p id="auto-config-kbps-error" role="alert" className="m-0 mt-1 text-[12px] text-danger">
+                  {kbpsError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -928,6 +1017,7 @@ function Wizard({
             </Button>
             <Button
               variant="primary"
+              disabled={Boolean(kbpsError)}
               busy={busyAction === 'apply'}
               onClick={() => void applyRecommended()}
             >
@@ -1038,6 +1128,7 @@ export function AutoConfigRollbackBar({
 }) {
   const desk = useDeskOptional()
   const liveAutoConfig = useLive((l) => l.studio.autoConfig)
+  const resyncs = useLive((l) => l.resyncs)
   const [state, setState] = useState<AutoConfigState | null>(null)
   const [busy, setBusy] = useState<'keep' | 'undo' | null>(null)
   const [dismissedRollback, setDismissedRollback] = useState(false)
@@ -1054,13 +1145,18 @@ export function AutoConfigRollbackBar({
     }
   }, [desk, onSynced])
 
+  const syncBar = useCallback((next: AutoConfigState) => {
+    setState(next)
+    publishAutoConfig(next)
+  }, [])
+
   useEffect(() => {
     if (!desk?.api.autoConfig) return
     void desk.api
       .autoConfig()
-      .then((s) => setState(s))
+      .then((s) => syncBar(s))
       .catch(() => undefined)
-  }, [desk])
+  }, [desk, resyncs, syncBar])
 
   useEffect(() => {
     if (!liveAutoConfig) return
@@ -1070,15 +1166,16 @@ export function AutoConfigRollbackBar({
 
   const stKind = state?.state
   useEffect(() => {
-    if (!desk?.api.autoConfig || stKind !== 'applied') return
+    if (!desk?.api.autoConfig || (stKind !== 'applied' && stKind !== 'running')) return
+    const ms = stKind === 'running' ? 350 : 500
     const t = setInterval(() => {
       void desk.api
         .autoConfig()
-        .then((next) => setState(next))
+        .then((next) => syncBar(next))
         .catch(() => undefined)
-    }, 500)
+    }, ms)
     return () => clearInterval(t)
-  }, [desk, stKind])
+  }, [desk, stKind, syncBar])
 
   useEffect(() => {
     const prev = prevStateRef.current
@@ -1090,6 +1187,114 @@ export function AutoConfigRollbackBar({
   }, [stKind, refreshPrefs])
 
   if (!desk || !state) return null
+  if (state.state === 'running') {
+    const pct = Math.max(2, Math.min(100, state.progress_pct))
+    return (
+      <div
+        role="region"
+        aria-label="Auto-config benchmark progress"
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-accent-line bg-surface-2 px-3 py-2 text-[13px] text-text"
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="fc-busy text-accent" aria-hidden />
+          <span className="font-semibold">{phaseText(state.phase)}</span>
+          <span className="font-mono text-[12px] text-text-2 tabular-nums">{pct}%</span>
+          {state.current_label && (
+            <span className="truncate text-[12.5px] text-text-2">{state.current_label}</span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onOpenWizard && (
+            <Button size="xs" variant="outline" onClick={onOpenWizard}>
+              Details
+            </Button>
+          )}
+          <Button
+            size="xs"
+            variant="ghost"
+            aria-label="Cancel benchmark"
+            onClick={async () => {
+              try {
+                const next = await desk.api.cancelAutoConfigBenchmark()
+                setState(next)
+                publishAutoConfig(next)
+              } catch (e) {
+                toast({ tone: 'error', message: describeError(e).message })
+              }
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (state.state === 'applied' && state.applied && state.rollback_offered) {
+    return (
+      <div
+        role="status"
+        aria-label="Auto-config rollback offer"
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-warn/40 bg-warn-soft px-3 py-2 text-[13px] text-text"
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <WarningCircle size={16} weight="fill" className="shrink-0 text-warn" aria-hidden />
+          <span className="font-semibold">
+            {state.rollback_reason ??
+              'Encoder dropped frames while live. Restore your previous settings or Keep.'}
+          </span>
+          <span className="font-mono text-[12px] text-text-2 tabular-nums">
+            {formatSummaryLine(state.applied)}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onOpenWizard && (
+            <Button size="xs" variant="ghost" onClick={onOpenWizard}>
+              Details
+            </Button>
+          )}
+          <Button
+            size="xs"
+            variant="outline"
+            busy={busy === 'undo'}
+            onClick={async () => {
+              setBusy('undo')
+              try {
+                const next = await desk.api.undoAutoConfig()
+                syncBar(next)
+                await refreshPrefs()
+              } catch (e) {
+                toast({ tone: 'error', message: describeError(e).message })
+              } finally {
+                setBusy(null)
+              }
+            }}
+          >
+            Undo
+          </Button>
+          <Button
+            size="xs"
+            variant="primary"
+            busy={busy === 'keep'}
+            onClick={async () => {
+              setBusy('keep')
+              try {
+                const next = await desk.api.keepAutoConfig()
+                syncBar(next)
+              } catch (e) {
+                toast({ tone: 'error', message: describeError(e).message })
+              } finally {
+                setBusy(null)
+              }
+            }}
+          >
+            Keep
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (state.state === 'applied' && state.applied) {
     return (
       <div
@@ -1127,7 +1332,7 @@ export function AutoConfigRollbackBar({
               setBusy('undo')
               try {
                 const next = await desk.api.undoAutoConfig()
-                setState(next)
+                syncBar(next)
                 await refreshPrefs()
               } catch (e) {
                 toast({ tone: 'error', message: describeError(e).message })
@@ -1147,7 +1352,7 @@ export function AutoConfigRollbackBar({
                 setBusy('keep')
                 try {
                   const next = await desk.api.keepAutoConfig()
-                  setState(next)
+                  syncBar(next)
                 } catch (e) {
                   toast({ tone: 'error', message: describeError(e).message })
                 } finally {
