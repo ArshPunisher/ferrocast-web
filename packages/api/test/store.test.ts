@@ -129,4 +129,35 @@ describe('Community Store client & demo engine (R37)', () => {
       (await store.installed()).installed.some((i) => i.item_id === 'foundry-goal-widget'),
     ).toBe(true)
   })
+
+  it('refuses every private or loopback spelling of a creator link', () => {
+    for (const bad of [
+      'https://[::1]/',
+      'https://[::ffff:127.0.0.1]/',
+      'https://[::ffff:10.0.0.5]/',
+      'https://[fc00::1]/',
+      'https://[fd12:3456::1]/',
+      'https://[fe80::1]/',
+      'https://[::]/',
+      'https://0.0.0.0/',
+      'https://127.0.0.2/',
+      'https://169.254.169.254/',
+      'https://10.1.2.3/',
+      'https://192.168.1.1/',
+      'https://172.16.0.1/',
+      'https://100.64.0.1/',
+      'https://localhost/',
+      'https://printer.local/',
+      'https://LOCALHOST./',
+    ]) {
+      expect(safeCreatorLinkUrl(bad), bad).toBeNull()
+    }
+    for (const good of [
+      'https://example.com/me',
+      'https://github.com/user',
+      'https://[2606:4700::1111]/',
+    ]) {
+      expect(safeCreatorLinkUrl(good), good).not.toBeNull()
+    }
+  })
 })

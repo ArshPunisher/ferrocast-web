@@ -246,24 +246,54 @@ export function parseFerrocastStoreLink(
   return { action, id, version }
 }
 
+/** Whether a host name or address is this machine, a local name or a private network. */
+function isPrivateHost(host: string): boolean {
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      a >= 224
+    )
+  }
+  if (host.includes(':')) {
+    // The URL parser writes an IPv4-mapped address as hex groups (::ffff:7f00:1).
+    const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host)
+    if (mapped) {
+      const hi = parseInt(mapped[1]!, 16)
+      const lo = parseInt(mapped[2]!, 16)
+      return isPrivateHost(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`)
+    }
+    const first = parseInt(host.split(':')[0] || '0', 16)
+    return (
+      host === '::' ||
+      host === '::1' ||
+      (first & 0xfe00) === 0xfc00 || // unique local
+      (first & 0xffc0) === 0xfe80 // link-local
+    )
+  }
+  return false
+}
+
 /** Validated safe https:// creator link (blocks javascript:, data:, http:, private hosts). */
 export function safeCreatorLinkUrl(raw: string | null | undefined): string | null {
   if (!raw || raw.length > 240 || /[\s<>]/.test(raw) || hasUnsafeControlChars(raw)) return null
   try {
     const u = new URL(raw)
     if (u.protocol !== 'https:' || u.username || u.password) return null
-    const host = u.hostname.toLowerCase()
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '::1' ||
-      host.endsWith('.local') ||
-      /^10\./.test(host) ||
-      /^192\.168\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-    ) {
-      return null
-    }
+    // An IPv6 literal comes back in brackets: look at the address inside.
+    const host = u.hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+      .replace(/\.$/, '')
+    if (isPrivateHost(host)) return null
     return u.toString()
   } catch {
     return null
