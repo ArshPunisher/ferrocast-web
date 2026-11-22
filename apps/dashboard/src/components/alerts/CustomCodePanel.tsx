@@ -412,7 +412,7 @@ export function CustomCodePanel({
                       )}
 
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <div className="flex min-w-0 basis-full flex-wrap items-center gap-2 sm:flex-1 sm:basis-auto">
                           <label
                             htmlFor={`fv-${idx}`}
                             className="text-[12px] font-semibold text-text-2"
