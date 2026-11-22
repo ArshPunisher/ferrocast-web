@@ -66,6 +66,7 @@ import { inDesktopApp } from '../../../lib/external'
 import { os, shortcut } from '../../../lib/os'
 import { done, useAction } from '../../../lib/hooks'
 import { KindGlyph, useDesk, useDeskStats } from './common'
+import { useArrange } from './arrange'
 import { ShownBadge, SHOWN_LONG, canChooseWhere, editForShow, showOf } from './shown-in'
 import { DockHeader } from './layout'
 import { filterItems, projectorItem, useContextMenu, type MenuItem } from './menu'
@@ -133,6 +134,8 @@ const quiet = 'fc-quiet'
 
 export function SourcesDock() {
   const desk = useDesk()
+  // Align and Space out, for the sources picked together.
+  const arrange = useArrange()
   const { recordsKey, virtualcam } = useDeskStats(
     (s) => ({
       recordsKey: (s?.source_records ?? []).map((r) => r.name).join('\n'),
@@ -753,6 +756,9 @@ export function SourcesDock() {
             select(g.id)
           }, `${picked.length} sources grouped.`),
       },
+      { sep: true },
+      // Line them up or space them out (the same as the preview bar's button).
+      ...arrange.menu(),
       { sep: true },
       {
         label: allHidden ? 'Show all' : 'Hide all',

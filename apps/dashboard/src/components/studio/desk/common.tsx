@@ -119,6 +119,8 @@ export interface Desk {
   /** ⌘-click: picks or unpicks `id` beside the others. Shift-click: picks every source in
    * `order` from the picked one to `id`. */
   pickMore: (id: number, how: 'toggle' | 'range', order?: number[]) => void
+  /** Picks exactly these sources, the first as the main pick (a box dragged round them). */
+  pickSet: (ids: number[]) => void
   /** The Sources panel's right-click menu for a source (or the empty list, null), so a
    * right-click on the preview opens the same one, as in OBS. */
   itemMenu: { current: ((e: React.MouseEvent, id: number | null) => void) | null }

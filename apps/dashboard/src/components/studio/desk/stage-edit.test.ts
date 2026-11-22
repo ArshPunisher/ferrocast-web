@@ -71,6 +71,19 @@ describe('dragging', () => {
     expect(drag(plain, MOVE, { x: 0, y: 355 }, near).y).toBe(400)
   })
 
+  it("catches another source's middle too, across and down", () => {
+    const none = { screen: false, center: false, others: [] as Frame[] }
+    // Another source at x 800-1000, y 400-600: its middle is at (900, 500).
+    const other: Frame = [200, 0, 0, 200, 800, 400]
+    const near = { canvas, snap: 10, to: { ...none, others: [other] } }
+    // This one's middle (200 in from its left) lands near 900: its left goes to 700.
+    expect(drag(plain, MOVE, { x: 603, y: 0 }, near).x).toBe(700)
+    // And this one's middle (150 down) near 500: its top goes to 350.
+    expect(drag(plain, MOVE, { x: 0, y: 297 }, near).y).toBe(350)
+    // Not when it is too far.
+    expect(drag(plain, MOVE, { x: 620, y: 0 }, near).x).toBe(720)
+  })
+
   it('resizes from the far corner keeping the shape, or freely with Shift', () => {
     expect(drag(plain, { u: 1, v: 1 }, { x: 400, y: 300 }, opts)).toEqual({
       x: 100,

@@ -1341,6 +1341,26 @@ export function studioEngineApi(c: FerroClient) {
         box,
       ),
     /**
+     * Moves and sizes several items at once, each as `setItemBox` does: aligning, spacing out, or
+     * moving and sizing a group of picked sources, as ONE undo step however many (a drag of them
+     * is one step too). All of them or none. 1 to 500 boxes, each id once. `save` at the end of a
+     * drag → the items, in the order given.
+     */
+    setItemBoxes: (
+      scene: string,
+      body: {
+        items: { id: number; x: number; y: number; w: number; h: number }[]
+        save?: boolean
+        /** One click of Align or Space out: its own undo step, named for it. */
+        reason?: 'align' | 'distribute'
+      },
+    ) =>
+      c.request<EngineItem[]>(
+        'PUT',
+        `/api/v1/studio/engine/scenes/${enc(scene)}/items/boxes`,
+        body,
+      ),
+    /**
      * Crops an item from the preview (OBS's Alt-drag on a handle): left, top, right, bottom in
      * the source's own pixels; what's left stays where it is on screen → the item.
      */
