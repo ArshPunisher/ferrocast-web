@@ -1,21 +1,24 @@
 // A screen can ask for the whole width of the window (the Studio's desk follows the window
-// instead of the page's usual 1400 px).
+// instead of the page's usual 1400 px), and optionally flush edge-to-edge workspace padding.
 
 import { useEffect, useSyncExternalStore } from 'react'
 
 let wide = 0
-const subs = new Set<() => void>()
-const tell = () => subs.forEach((f) => f())
+let flush = 0
+const wideSubs = new Set<() => void>()
+const flushSubs = new Set<() => void>()
+const tellWide = () => wideSubs.forEach((f) => f())
+const tellFlush = () => flushSubs.forEach((f) => f())
 
 /** While mounted, the page's main area uses the window's full width. */
 export function useWidePage(on = true): void {
   useEffect(() => {
     if (!on) return
     wide++
-    tell()
+    tellWide()
     return () => {
       wide--
-      tell()
+      tellWide()
     }
   }, [on])
 }
@@ -24,9 +27,33 @@ export function useWidePage(on = true): void {
 export function useIsWide(): boolean {
   return useSyncExternalStore(
     (f) => {
-      subs.add(f)
-      return () => subs.delete(f)
+      wideSubs.add(f)
+      return () => wideSubs.delete(f)
     },
     () => wide > 0,
+  )
+}
+
+/** While mounted, the page's main area uses tight edge-to-edge workspace gutters. */
+export function useFlushPage(on = true): void {
+  useEffect(() => {
+    if (!on) return
+    flush++
+    tellFlush()
+    return () => {
+      flush--
+      tellFlush()
+    }
+  }, [on])
+}
+
+/** Whether a screen asked for edge-to-edge workspace gutters. */
+export function useIsFlush(): boolean {
+  return useSyncExternalStore(
+    (f) => {
+      flushSubs.add(f)
+      return () => flushSubs.delete(f)
+    },
+    () => flush > 0,
   )
 }
