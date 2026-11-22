@@ -8,6 +8,7 @@ import {
   formatMoney,
   isAlertable,
 } from '@ferrocast/api/format'
+import { renderSafeTemplate } from '@ferrocast/api/template'
 import type {
   EventsConfig,
   FerroEvent,
@@ -216,8 +217,10 @@ export class LabelWidget implements WidgetView {
         this.setText('')
         return
       }
-      this.train = tr
-      this.trainDeadlineMs = Date.now() + Math.max(0, tr.remaining_ms)
+      if (tr !== this.train) {
+        this.train = tr
+        this.trainDeadlineMs = Date.now() + Math.max(0, tr.remaining_ms)
+      }
       this.ensureClock()
       this.renderTrain()
       return
@@ -264,15 +267,16 @@ export class LabelWidget implements WidgetView {
     const timer = formatCountdown(remMs)
     const summary = `Lv.${tr.level} · ${tr.events} events · ${timer}`
     const latest = tr.latest_actor ?? ''
-    const rendered = this.template
-      .replace(/\{value\}/g, summary)
-      .replace(/\{name\}/g, summary)
-      .replace(/\{level\}/g, String(tr.level))
-      .replace(/\{count\}/g, String(tr.events))
-      .replace(/\{events\}/g, String(tr.events))
-      .replace(/\{contributors\}/g, String(tr.contributors))
-      .replace(/\{timer\}/g, timer)
-      .replace(/\{latest\}/g, latest)
+    const rendered = renderSafeTemplate(this.template, {
+      value: summary,
+      name: summary,
+      level: String(tr.level),
+      count: String(tr.events),
+      events: String(tr.events),
+      contributors: String(tr.contributors),
+      timer,
+      latest,
+    })
     this.el.dataset.train = 'active'
     this.setText(rendered)
   }

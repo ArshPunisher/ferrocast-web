@@ -913,4 +913,60 @@ describe('review fixes', () => {
       vi.useRealTimers()
     }
   })
+
+  it('preserves hype train countdown across unrelated state frames and supports template filters & $& names', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = {
+        source: 'hype_train',
+        template: 'Hype {latest|upper} {timer} ({latest})',
+        theme: 'molten',
+      }
+      rt.apply(
+        snapshot(
+          {
+            labels: { wl: 'Hype ALICE$&$$ 01:00 (Alice$&$$)' },
+            label_trains: {
+              wl: {
+                active: true,
+                level: 1,
+                events: 3,
+                contributors: 2,
+                latest_actor: 'Alice$&$$',
+                remaining_ms: 60_000,
+                ends_at: Date.now() + 60_000,
+                warmup_count: 3,
+                threshold: 3,
+              },
+            },
+          },
+          overlay(ws),
+        ),
+      )
+
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 01:00 (Alice$&$$)')
+
+      // Advance 20s -> 00:40 remaining
+      vi.advanceTimersByTime(20_000)
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 00:40 (Alice$&$$)')
+
+      // Unrelated state frame (viewers + other label) must NOT reset countdown back to 01:00
+      rt.apply(
+        frame('state', {
+          viewers: { twitch: 250 },
+          labels: { other_widget: 'ignored' },
+        }),
+      )
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 00:40 (Alice$&$$)')
+
+      // Reaches 0 on schedule (~40s later, not 60s later)
+      vi.advanceTimersByTime(40_500)
+      expect(textEl.textContent).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

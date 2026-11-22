@@ -281,3 +281,15 @@ export function checkTemplate(
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
+
+/**
+ * Renders a label template via `Template.parse` so filters (`|upper`, `|truncate:N`, etc.)
+ * match the engine and special `$&` / `$$` sequences in viewer names never get expanded.
+ */
+export function renderSafeTemplate(src: string, vars: Vars): string {
+  try {
+    return Template.parse(src).render(vars)
+  } catch {
+    return src.replace(/\{(\w+)(?:\|[^}]*)?\}/g, (_, k: string) => vars[k] ?? '')
+  }
+}

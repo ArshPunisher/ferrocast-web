@@ -13,6 +13,7 @@ import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
 import { anySample, namedActor, sample } from '../samples'
+import { renderSafeTemplate } from '../template'
 import type { FetchLike } from '../client'
 import type { SocketFactory, SocketLike } from '../socket'
 import type {
@@ -2937,22 +2938,23 @@ export class DemoEngine {
           const ss = String(secs % 60).padStart(2, '0')
           const timer = `${mm}:${ss}`
           const sum = `Lv.${tv.level} · ${tv.events} events · ${timer}`
-          out[w.id] = w.config.template
-            .replace(/\{value\}/g, sum)
-            .replace(/\{name\}/g, sum)
-            .replace(/\{level\}/g, String(tv.level))
-            .replace(/\{count\}/g, String(tv.events))
-            .replace(/\{events\}/g, String(tv.events))
-            .replace(/\{contributors\}/g, String(tv.contributors))
-            .replace(/\{timer\}/g, timer)
-            .replace(/\{latest\}/g, tv.latest_actor ?? '')
+          out[w.id] = renderSafeTemplate(w.config.template, {
+            value: sum,
+            name: sum,
+            level: String(tv.level),
+            count: String(tv.events),
+            events: String(tv.events),
+            contributors: String(tv.contributors),
+            timer,
+            latest: tv.latest_actor ?? '',
+          })
           continue
         }
         default:
           value = this.labels.get(w.config.source) ?? ''
           break
       }
-      out[w.id] = w.config.template.replace(/\{name\}/g, value).replace(/\{value\}/g, value)
+      out[w.id] = renderSafeTemplate(w.config.template, { value, name: value })
     }
     return out
   }

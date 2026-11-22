@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowArcLeft, ArrowArcRight, CaretLeft, Eye, EyeSlash } from '@phosphor-icons/react'
-import { DEFAULT_THEME, type Overlay, type OverlayState } from '@ferrocast/api'
+import { DEFAULT_THEME, renderSafeTemplate, type Overlay, type OverlayState } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Skeleton } from '@ferrocast/ui'
 import { LoadError } from '../components/Panel'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
@@ -89,10 +89,27 @@ export function OverlayEditor({ id }: { id: string }) {
     () => ({
       goals: goals.data ?? [],
       labels: Object.fromEntries(
-        (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, t]) => [
-          id,
-          t.replace(/\{(value|name)\}/g, sampleLabels[source] ?? 'LunaLagoon'),
-        ]),
+        (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, t]) => {
+          const val = sampleLabels[source] ?? 'LunaLagoon'
+          return [
+            id,
+            renderSafeTemplate(
+              t,
+              source === 'hype_train'
+                ? {
+                    value: val,
+                    name: val,
+                    level: '2',
+                    count: '8',
+                    events: '8',
+                    contributors: '5',
+                    timer: '01:45',
+                    latest: 'NeelaMoth',
+                  }
+                : { value: val, name: val },
+            ),
+          ]
+        }),
       ),
       ...(hasTrain
         ? {
