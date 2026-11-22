@@ -11,6 +11,7 @@ test.describe('Problem 11.2: Field schema Type select does not truncate Colour/D
     }) => {
       await page.setViewportSize(vp)
       await open(page, 'alerts/follow')
+      await page.getByRole('button', { name: /^Custom HTML, CSS and schema/ }).click()
       await page.getByRole('switch', { name: 'Use custom HTML & CSS' }).click()
 
       const colorFieldRow = page.locator('[data-schema-field="accent_color"]')

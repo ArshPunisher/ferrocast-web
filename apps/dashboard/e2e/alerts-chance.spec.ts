@@ -10,7 +10,7 @@ const saveButton = (page: Page) => page.getByRole('button', { name: 'Save', exac
 async function addLookWithMore(page: Page) {
   await open(page, 'alerts/tip')
   await page.getByRole('button', { name: 'Add a look' }).click()
-  await page.locator('summary', { hasText: 'More' }).click()
+  await page.getByRole('button', { name: /^Read aloud/ }).click()
 }
 
 function suite() {
@@ -29,10 +29,10 @@ function suite() {
 
   test('a look has a chance that saves; the default look has none', async ({ page }) => {
     await open(page, 'alerts/tip')
-    await page.locator('summary', { hasText: 'More' }).click()
+    await page.getByRole('button', { name: /^Read aloud/ }).click()
     await expect(page.getByLabel('Chance')).toHaveCount(0)
     await page.getByRole('button', { name: 'Add a look' }).click()
-    await page.locator('summary', { hasText: 'More' }).click()
+    await page.getByRole('button', { name: /^Read aloud/ }).click()
     const chance = page.getByLabel('Chance')
     await expect(chance).toHaveValue('1')
     await chance.fill('7')
