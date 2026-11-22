@@ -99,20 +99,31 @@ describe('OverflowRow', () => {
     expect(host.querySelector('[data-ov-panel]')).toBeNull()
   })
 
-  it('stays open when a menu its own button opened (drawn elsewhere on the page) is pressed', async () => {
+  it('stays open for a menu a button in the panel opened, not for any other menu', async () => {
     await mount(300)
     const more = host.querySelector<HTMLElement>('button[aria-label="More tools"]')!
     await act(async () => more.click())
     expect(more.getAttribute('aria-expanded')).toBe('true')
-    // A menu portalled to the body, outside the panel: a press in it isn't "outside".
     const menu = document.createElement('div')
     menu.setAttribute('role', 'menu')
     document.body.append(menu)
+    // A menu nothing in the panel opened (no press in the panel before it): a press in it is
+    // outside the panel, and the panel closes.
+    await act(async () => {
+      menu.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    // Opened again; a press on a button in the panel, then a press in the menu it opens: stays.
+    await act(async () => more.click())
+    const panelButton = host.querySelector<HTMLElement>('[data-ov-panel] button, [data-ov-panel]')!
+    await act(async () => {
+      panelButton.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    })
     await act(async () => {
       menu.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     })
     expect(more.getAttribute('aria-expanded')).toBe('true')
-    // A press on the page itself still closes it.
+    // A press on the page itself closes it.
     await act(async () => {
       document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     })
