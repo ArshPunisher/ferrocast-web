@@ -217,4 +217,26 @@ describe('Alert Editor v2 validation and rendering (R25)', () => {
     expect(t((v) => ((v.anim as Record<string, unknown>).in_ms = 400.5))).toMatch(/whole number/)
     expect(t(() => {})).toBeNull()
   })
+
+  it('accepts signed picture links, reads past emoji correctly and refuses non-text css', () => {
+    const run = (html: string, css?: unknown) => {
+      const r = baseRule()
+      r.variations[0]!.custom_enabled = true
+      r.variations[0]!.html = html
+      if (css !== undefined) (r.variations[0] as unknown as { css: unknown }).css = css
+      return validateRule(r)
+    }
+    expect(
+      run('<img src="https://cdn.discordapp.com/a/b.png?ex=65&is=64&hm=abc" alt="">'),
+    ).toBeNull()
+    expect(run('<a href="&#106;avascript:1">x</a>')).not.toBeNull()
+    // Astral characters before a <style> block must not shift where its text is read.
+    expect(run('\u{1F600}'.repeat(5) + '<style>.a{color:#fff}</style><script>1</script>')).toMatch(
+      /script/,
+    )
+    expect(
+      run('\u{1F600}'.repeat(5) + '<style>.a{background:url(https://evil.example/x)}</style>'),
+    ).not.toBeNull()
+    expect(run('<p>x</p>', 42)).toMatch(/css must be text/)
+  })
 })

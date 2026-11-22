@@ -499,7 +499,10 @@ function tokensIn(text: string): string[] {
 function urlAttrOk(value: string): boolean {
   const v = value.trim().toLowerCase()
   // eslint-disable-next-line no-control-regex
-  if (/[\s\u0000-\u001f\u007f&\\]/.test(v)) return false
+  if (/[\s\u0000-\u001f\u007f\\]/.test(v)) return false
+  // Entities (&#106;avascript:) only matter where a scheme could hide; a picture host's
+  // signed links legitimately carry & in their query.
+  if (v.includes('&') && !v.startsWith('https://')) return false
   if (v.startsWith('#')) return true
   if (/^data:image\/(png|jpeg|gif|webp|avif);/.test(v)) return true
   if (v.startsWith('https://')) {
@@ -525,8 +528,9 @@ export function checkCustomHtml(
     !KNOWN_VAR_SET.has(tok) && !keys.has(tok)
       ? `Variation '${varName}': unknown token '{${tok}}'.`
       : null
-  const chars = Array.from(html)
-  const lower = chars.map((c) => c.toLowerCase())
+  // UTF-16 units, so indexes into `html` and into these arrays are the same numbers.
+  const chars = html.split('')
+  const lower = chars.map((c) => (c >= 'A' && c <= 'Z' ? c.toLowerCase() : c))
   const lowerStr = lower.join('')
   let text = ''
   const flush = (): string | null => {
@@ -699,6 +703,7 @@ export function validateRule(r: AlertRule): string | null {
       Array.from(html).length > MAX_CUSTOM_HTML
     )
       return `Variation '${v.name}': custom HTML can be up to ${MAX_CUSTOM_HTML} characters.`
+    if (typeof (v.css ?? '') !== 'string') return `Variation '${v.name}': css must be text.`
     const cssErr = checkCss(`variation '${v.name}'.css`, v.css ?? '')
     if (cssErr) return cssErr
     const { keys: customKeys, err: schemaErr } = validateCustomFields(

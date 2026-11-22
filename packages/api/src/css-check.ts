@@ -45,7 +45,7 @@ export function normalizeCss(css: string): string {
       if (n !== undefined && n !== '\n') out += n
       continue
     }
-    if (/\s/.test(noComments[i + 1] ?? '')) i += 1
+    if (/[ \t\n\r\f]/.test(noComments[i + 1] ?? '')) i += 1
     const cp = parseInt(hex, 16)
     out += cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '\ufffd'
   }

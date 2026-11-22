@@ -53,7 +53,7 @@ describe('custom alert sandbox bootstrap', () => {
           '<script>window.__x=1</script><meta http-equiv="refresh" content="0;url=https://evil.example">' +
           '<base href="https://evil.example/"><form action="https://evil.example"><input></form>' +
           '<a href="javascript:alert(1)" id="a1">x</a><a href="&#106;avascript:1" id="a2">x</a>' +
-          '<img src="https://evil.example/p.gif" id="i1"><img src="https://cdn.discordapp.com/a.png" id="i2">' +
+          '<img src="https://evil.example/p.gif" id="i1"><img src="https://cdn.discordapp.com/a.png" id="i2"><img src="https://cdn.discordapp.com/a.png?ex=1&amp;hm=2" id="i3">' +
           '<div id="d1" style="background:url(https://evil.example/a.png)">x</div>' +
           '<style>@import url(https://evil.example/a.css)</style>' +
           '<svg><script>1</script><animate attributeName="href" values="javascript:1"/></svg>' +
@@ -68,6 +68,9 @@ describe('custom alert sandbox bootstrap', () => {
     expect(root.querySelector('#a2')?.hasAttribute('href')).toBe(false)
     expect(root.querySelector('#i1')?.hasAttribute('src')).toBe(false)
     expect(root.querySelector('#i2')?.getAttribute('src')).toBe('https://cdn.discordapp.com/a.png')
+    expect(root.querySelector('#i3')?.getAttribute('src')).toBe(
+      'https://cdn.discordapp.com/a.png?ex=1&hm=2',
+    )
     expect(root.querySelector('#d1')?.hasAttribute('style')).toBe(false)
     expect((window as unknown as { __x?: number }).__x).toBeUndefined()
   })
