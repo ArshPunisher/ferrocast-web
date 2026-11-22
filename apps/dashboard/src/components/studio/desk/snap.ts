@@ -5,7 +5,7 @@
 // A box is a `Frame`: first corner and the two sides as vectors, so a turned box is no special
 // case. What snaps and lines up is a box's bounds on the canvas (`rectOf`), as OBS does.
 
-import { at, boxOf, type Box, type Frame, type Pt } from './stage-edit'
+import { at, boxOf, type Box, type Crop, type Frame, type Pt } from './stage-edit'
 
 /** A box's bounds on the canvas. */
 export interface Rect {
@@ -104,11 +104,12 @@ export function snapTargets(items: ItemLike[], moving: number[]): Frame[] {
   for (const it of items) {
     // A moving source's own group is no target (its edges go with it); its other sources are.
     const holdsMoving = it.children.some((c) => skip.has(c.id))
-    if (it.visible && it.frame && !skip.has(it.id) && !holdsMoving) out.push(it.frame)
+    if (it.visible && hasSize(it.frame) && !skip.has(it.id) && !holdsMoving) out.push(it.frame)
     // A moving group takes its sources along: none of them is a target. A hidden group hides
     // what is in it, so there is nothing to line up to.
     if (skip.has(it.id) || !it.visible) continue
-    for (const c of it.children) if (c.visible && c.frame && !skip.has(c.id)) out.push(c.frame)
+    for (const c of it.children)
+      if (c.visible && hasSize(c.frame) && !skip.has(c.id)) out.push(c.frame)
   }
   return out
 }
@@ -400,6 +401,33 @@ export function scaleGroup(items: Arrangeable[], from: Rect, to: Rect): BoxFor[]
   return out
 }
 
+/** Whether the rectangle `r` touches the (possibly turned) frame `f`, edges included. */
+function touchesFrame(r: Rect, f: Frame): boolean {
+  const upright = Math.abs(f[1]) < 1e-9 && Math.abs(f[2]) < 1e-9
+  if (upright) return true // its bounds are the source
+  const pts = [at(f, 0, 0), at(f, 1, 0), at(f, 1, 1), at(f, 0, 1)]
+  // Separating axis test: the rectangle's two axes, and the frame's two.
+  const rp = [
+    { x: r.left, y: r.top },
+    { x: r.right, y: r.top },
+    { x: r.right, y: r.bottom },
+    { x: r.left, y: r.bottom },
+  ]
+  const axes = [
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: f[0], y: f[1] },
+    { x: f[2], y: f[3] },
+  ]
+  for (const a of axes) {
+    const proj = (ps: Pt[]) => ps.map((p) => p.x * a.x + p.y * a.y)
+    const [pa, ra] = [proj(pts), proj(rp)]
+    if (Math.max(...pa) < Math.min(...ra) - 1e-9 || Math.max(...ra) < Math.min(...pa) - 1e-9)
+      return false
+  }
+  return true
+}
+
 /** The ids of the sources a dragged box touches: visible ones only, a group as one. */
 export function marqueeHits(items: ItemLike[], rect: Rect): number[] {
   const r: Rect = {
@@ -412,8 +440,11 @@ export function marqueeHits(items: ItemLike[], rect: Rect): number[] {
   for (const it of items) {
     if (!it.visible || !it.frame) continue
     const b = rectOf(it.frame)
-    if (b.left <= r.right && b.right >= r.left && b.top <= r.bottom && b.bottom >= r.top)
-      hits.push(it.id)
+    // The bounds first (cheap, and all of it for an upright source); then, for a turned one,
+    // the source itself: a marquee in the corner of a diamond's bounds doesn't touch it.
+    if (!(b.left <= r.right && b.right >= r.left && b.top <= r.bottom && b.bottom >= r.top))
+      continue
+    if (touchesFrame(r, it.frame)) hits.push(it.id)
   }
   return hits
 }
@@ -458,4 +489,54 @@ export function queuedIds(
     for (const b of j.boxes ?? []) out.add(b.id)
   }
   return out
+}
+
+/**
+ * The picked sources the box round them is made of, and that box: those that are shown, have a
+ * size, can move and aren't inside a picked group; two or more make a group. Drawing the box and
+ * grabbing its handles both use this, so they never differ.
+ */
+export function pickedGroup<T extends ItemLike>(
+  items: T[],
+  ids: number[],
+): { members: T[]; rect: Rect | null } {
+  const members = pickedBoxes(items, ids).filter((i) => i.visible && !i.locked && hasSize(i.frame))
+  const rect = members.length >= 2 ? union(members.map((i) => rectOf(i.frame as Frame))) : null
+  return { members, rect }
+}
+
+/** The crop an Alt-drag started with, to put back when it is cancelled (null: none read yet). */
+export function revertCrop(
+  crop: { from: Crop; size: { width: number; height: number } } | null | 'reading',
+): Crop | null {
+  return crop && crop !== 'reading' ? crop.from : null
+}
+
+/**
+ * Puts a request in the queue. A newer request for the same key replaces the older and keeps its
+ * save; but it goes to the end when a request made after the older one is for some of the same
+ * sources, so those go out in the order they were made (A+B, A, A+B must end with A+B's newest).
+ */
+export function enqueueJob<
+  J extends { save: boolean; id?: number | undefined; boxes?: { id: number }[] | undefined },
+>(next: Map<string, J>, key: string, job: J): void {
+  const prev = next.get(key)
+  const merged = { ...job, save: job.save || !!prev?.save }
+  if (prev) {
+    const mine = new Set<number>(
+      job.boxes ? job.boxes.map((b) => b.id) : job.id !== undefined ? [job.id] : [],
+    )
+    let later = false
+    let overlaps = false
+    for (const [k, j] of next) {
+      if (k === key) {
+        later = true
+        continue
+      }
+      const ids = j.boxes ? j.boxes.map((b) => b.id) : j.id !== undefined ? [j.id] : []
+      if (later && ids.some((id) => mine.has(id))) overlaps = true
+    }
+    if (overlaps) next.delete(key)
+  }
+  next.set(key, merged)
 }
