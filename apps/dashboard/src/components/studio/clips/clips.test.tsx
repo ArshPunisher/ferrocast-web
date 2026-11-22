@@ -586,6 +586,39 @@ describe('jobs', () => {
     expect(onCancel).toHaveBeenCalledWith('job-1')
   })
 
+  it('says what a cancelled upload warns about (it may already be on YouTube)', async () => {
+    host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <ul>
+          <JobRow
+            job={job({
+              kind: 'upload',
+              label: 'Send A',
+              state: 'cancelled',
+              error: {
+                message: 'Stopped near the end.',
+                hint: 'YouTube may already have the video. Check YouTube Studio before sending it again.',
+              },
+            })}
+          />
+        </ul>,
+      ),
+    )
+    expect(text()).toContain('Stopped near the end.')
+    expect(text()).toContain('Check YouTube Studio before sending it again.')
+    // A plain cancel (no note) shows no warning.
+    await act(async () =>
+      root!.render(
+        <ul>
+          <JobRow job={job({ state: 'cancelled' })} />
+        </ul>,
+      ),
+    )
+    expect(document.body.querySelector('[role="alert"]')).toBeNull()
+  })
+
   it('reads a failure in words with its next step, and a success with what it made', async () => {
     host = document.body.appendChild(document.createElement('div'))
     root = createRoot(host)

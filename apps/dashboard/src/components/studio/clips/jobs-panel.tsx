@@ -103,9 +103,13 @@ export function JobRow({
           />
         </div>
       )}
-      {job.state === 'failed' && job.error && (
+      {(job.state === 'failed' || job.state === 'cancelled') && job.error && (
         <p role="alert" className="flex items-start gap-2 text-[14.5px] leading-snug text-text">
-          <WarningCircle size={18} className="mt-px shrink-0 text-danger" aria-hidden="true" />
+          <WarningCircle
+            size={18}
+            className={`mt-px shrink-0 ${job.state === 'cancelled' ? 'text-warn' : 'text-danger'}`}
+            aria-hidden="true"
+          />
           <span>
             <span className="font-semibold">{job.error.message}</span>{' '}
             <span className="text-text-2">{job.error.hint}</span>
