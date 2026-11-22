@@ -817,7 +817,14 @@ export class DemoStudioLibrary {
       })
       unzipper.register(UnzipInflate)
       unzipper.register(UnzipPassThrough)
-      unzipper.push(zipBytes, true)
+      // Fed in small pieces: deflate can grow a thousandfold, and a whole push is decoded before
+      // `ondata` can count it. A piece of 16 KB gives at most a few MB at a time. Stops at the
+      // first limit passed (reading on would still spend time and memory on the rest).
+      const PIECE = 16 * 1024
+      for (let at = 0; at < zipBytes.length && !failure; at += PIECE) {
+        unzipper.push(zipBytes.subarray(at, at + PIECE), at + PIECE >= zipBytes.length)
+      }
+      if (zipBytes.length === 0) unzipper.push(zipBytes, true)
     } catch {
       if (!failure) {
         throw new HttpError(
