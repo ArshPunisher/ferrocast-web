@@ -115,15 +115,52 @@ export function mayAlert(e: FerroEvent): boolean {
   return (ALERT_KINDS as readonly string[]).includes(k.type)
 }
 
-export function pick(rule: AlertRule, e: FerroEvent): Variation | null {
-  let best: Variation | null = null
-  for (const v of rule.variations) {
-    if (v.condition && matches(v.condition, e)) {
-      // max_by_key keeps the LAST of equal maxima, like Rust's Iterator::max_by_key.
-      if (best === null || v.priority >= best.priority) best = v
-    }
+/** A repeatable random source in [0, 1) (mulberry32), so weighted picks can be tested. */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
-  return best ?? rule.variations.find((v) => v.condition === null) ?? null
+}
+
+/**
+ * One of `tied` by weight. A zero weight is never chosen while another has weight; when all
+ * are zero they are equally likely (an alert is never dropped over a weight of 0).
+ */
+/** Largest weight the editor accepts (core::alert::MAX_WEIGHT). */
+export const MAX_WEIGHT = 1000
+
+export function pickWeighted(tied: Variation[], rand: () => number): Variation | null {
+  if (tied.length === 0) return null
+  if (tied.length === 1) return tied[0] ?? null
+  const total = tied.reduce((n, v) => n + Math.max(0, Math.trunc(v.weight ?? 1)), 0)
+  if (total === 0) return tied[Math.min(tied.length - 1, Math.floor(rand() * tied.length))] ?? null
+  let roll = Math.floor(rand() * total)
+  for (const v of tied) {
+    const w = Math.max(0, Math.trunc(v.weight ?? 1))
+    if (roll < w) return v
+    roll -= w
+  }
+  return tied[tied.length - 1] ?? null
+}
+
+/** Among matching conditional looks the highest priority, ties by weight; else the default. */
+export function pick(
+  rule: AlertRule,
+  e: FerroEvent,
+  rand: () => number = Math.random,
+): Variation | null {
+  const matching = rule.variations.filter((v) => v.condition && matches(v.condition, e))
+  const top = Math.max(...matching.map((v) => v.priority))
+  const chosen = pickWeighted(
+    matching.filter((v) => v.priority === top),
+    rand,
+  )
+  return chosen ?? rule.variations.find((v) => v.condition === null) ?? null
 }
 
 export function appliesTo(rule: AlertRule, e: FerroEvent): boolean {
@@ -137,11 +174,12 @@ export function appliesTo(rule: AlertRule, e: FerroEvent): boolean {
 export function select(
   rules: AlertRule[],
   e: FerroEvent,
+  rand: () => number = Math.random,
 ): { rule: AlertRule; variation: Variation } | null {
   if (!mayAlert(e)) return null
   for (const r of rules) {
     if (!appliesTo(r, e)) continue
-    const v = pick(r, e)
+    const v = pick(r, e, rand)
     if (v) return { rule: r, variation: v }
   }
   return null
@@ -201,6 +239,8 @@ export function validateRule(r: AlertRule): string | null {
     if (v.volume < 0 || v.volume > 100) return `Variation '${v.name}': volume must be 0 to 100.`
     if (v.duration_ms < MIN_DURATION_MS || v.duration_ms > MAX_DURATION_MS)
       return `Variation '${v.name}': duration must be 1 to 60 seconds.`
+    if (!Number.isInteger(v.weight ?? 1) || (v.weight ?? 1) < 0 || (v.weight ?? 1) > MAX_WEIGHT)
+      return `Variation '${v.name}': weight must be 0 to 1000.`
   }
   return null
 }
@@ -211,6 +251,7 @@ export function newVariation(id: string, title: string): Variation {
     name: 'Default',
     condition: null,
     priority: 0,
+    weight: 1,
     title,
     body: '{message}',
     image: null,
@@ -257,6 +298,7 @@ export function defaultRules(): AlertRule[] {
     enabled: true,
     kinds: [kind],
     platforms: [],
+    interrupt: false,
     variations: [
       {
         ...newVariation(`${id}-default`, title),

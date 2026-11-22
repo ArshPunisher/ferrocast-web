@@ -308,6 +308,7 @@ export function Segmented<T extends string>({
             className={cx(
               'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
+              'has-[:disabled]:cursor-not-allowed',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',
               // The picked one is plain to see: the solid pick colour, bold.
               on

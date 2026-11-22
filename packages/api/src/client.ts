@@ -392,6 +392,8 @@ export class FerroClient {
   queuePause = () => this.post<Queue>('/api/v1/queue/pause')
   queueResume = () => this.post<Queue>('/api/v1/queue/resume')
   queueSkip = () => this.post<Queue>('/api/v1/queue/skip')
+  queueMute = () => this.post<Queue>('/api/v1/queue/mute')
+  queueUnmute = () => this.post<Queue>('/api/v1/queue/unmute')
   queueClear = () => this.post<Queue>('/api/v1/queue/clear')
   queueRemove = (alertId: string) => this.post<Queue>(`/api/v1/queue/${enc(alertId)}/remove`)
   replay = (eventId: string) =>

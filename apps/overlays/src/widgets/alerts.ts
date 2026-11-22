@@ -360,13 +360,19 @@ export class AlertsWidget implements WidgetView {
   /** `stop` = the streamer skipped it: cut the sound too. A normal end lets it ring out. */
   private leave(stop = false): void {
     const p = this.playing
-    if (!p || p.leaving) return
+    if (!p) return
+    // Skipped or replaced: the sound and the browser's voice stop now, even if the alert's own
+    // end had already begun (its voice would otherwise talk over the next alert).
+    if (stop) {
+      for (const a of p.audio) a.pause()
+      globalThis.speechSynthesis?.cancel()
+    }
+    if (p.leaving) return
     p.leaving = true
     for (const t of p.timers) clearTimeout(t)
     p.timers = []
     if (p.hold) clearTimeout(p.hold)
     p.hold = null
-    if (stop) for (const a of p.audio) a.pause()
     p.host.classList.add('is-out')
     const card = p.host.shadowRoot?.querySelector('.al') ?? p.host.querySelector('.al')
     card?.classList.add('is-out')

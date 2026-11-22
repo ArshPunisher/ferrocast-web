@@ -306,6 +306,20 @@ describe('alerts', () => {
     expect(acks().at(-1)?.data).toEqual({ alert_id: 'h1', phase: 'finished' })
   })
 
+  it('alert_hide cuts the browser voice too, even when the alert was already leaving', () => {
+    const cancel = vi.fn()
+    vi.stubGlobal('speechSynthesis', { cancel, speak: vi.fn(), getVoices: () => [] })
+    rt.apply(snapshot())
+    rt.apply(frame('alert', alert('s1', { duration_ms: 1000 })))
+    // Its own end has begun (a normal exit takes a moment), then the streamer skips it.
+    vi.advanceTimersByTime(1100)
+    expect(deepAll(root, '.al.is-out').length).toBe(1)
+    cancel.mockClear()
+    rt.apply(frame('alert_hide', { alert_id: 's1' }))
+    expect(cancel).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
   it('alert_hide for a waiting alert removes it without playing', () => {
     rt.apply(snapshot())
     rt.apply(frame('alert', alert('p1')))
