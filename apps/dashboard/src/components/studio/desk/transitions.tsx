@@ -91,6 +91,28 @@ export function cellEffectiveInfo(
 ): {
   directRule: string | null
   effectiveName: string
+  /** What the cell would play if its own rule were cleared. */
+  inheritedName: string
+  via: 'pair' | 'to' | 'from' | 'default'
+} {
+  const own = cellEffectiveInfoOnce(scenes, from, to)
+  const without = {
+    ...scenes,
+    transition_matrix: (scenes.transition_matrix ?? []).filter(
+      (r) => !(r.from === from && r.to === to),
+    ),
+  }
+  const fallback = own.directRule ? cellEffectiveInfoOnce(without, from, to) : own
+  return { ...own, inheritedName: fallback.effectiveName }
+}
+
+function cellEffectiveInfoOnce(
+  scenes: EngineScenes,
+  from: string | null,
+  to: string | null,
+): {
+  directRule: string | null
+  effectiveName: string
   via: 'pair' | 'to' | 'from' | 'default'
 } {
   // Last rule wins (the engine's order for a repeated pair).
@@ -892,6 +914,12 @@ function TransitionMatrixTab({
   useEffect(() => {
     if (!named.some((t) => t.name === addTr) && named[0]) setAddTr(named[0].name)
   }, [named, addTr])
+  // A scene deleted or renamed elsewhere: the form would show "Any scene" (the browser's
+  // fallback) while still submitting the old name.
+  useEffect(() => {
+    if (addFrom !== '__any__' && !sceneNames.includes(addFrom)) setAddFrom('__any__')
+    if (addTo !== '__any__' && !sceneNames.includes(addTo)) setAddTo(sceneNames[0] ?? '__any__')
+  }, [sceneNames, addFrom, addTo])
 
   const defaultTr = useMemo(() => named.find((t) => t.default) ?? named[0] ?? null, [named])
   const rules = useMemo(
@@ -1096,7 +1124,7 @@ function TransitionMatrixTab({
                           }}
                         >
                           {!isAnyAny && (
-                            <option value="">Use inherited ({info.effectiveName})</option>
+                            <option value="">Use inherited ({info.inheritedName})</option>
                           )}
                           {named.map((t) => (
                             <option key={t.name} value={t.name}>
@@ -1219,58 +1247,60 @@ function TransitionMatrixTab({
           </Button>
         </form>
 
-        <ul
-          aria-label="Matrix rules list"
-          className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
-        >
-          {rules.map((r) => {
-            const label = `${r.from ?? 'Any'} to ${r.to ?? 'Any'}`
-            const scope =
-              r.from !== null && r.to !== null
-                ? 'Exact pair'
-                : r.from === null
-                  ? 'Any to scene'
-                  : 'Scene to Any'
-            return (
-              <li
-                key={`${r.from ?? '*'}->${r.to ?? '*'}`}
-                className="flex items-center justify-between gap-2 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-text">
-                    <span className="truncate">{r.from ?? 'Any'}</span>
-                    <ArrowsLeftRight size={12} className="shrink-0 text-text-3" aria-hidden />
-                    <span className="truncate">{r.to ?? 'Any'}</span>
+        {rules.length > 0 && (
+          <ul
+            aria-label="Matrix rules list"
+            className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
+          >
+            {rules.map((r) => {
+              const label = `${r.from ?? 'Any'} to ${r.to ?? 'Any'}`
+              const scope =
+                r.from !== null && r.to !== null
+                  ? 'Exact pair'
+                  : r.from === null
+                    ? 'Any to scene'
+                    : 'Scene to Any'
+              return (
+                <li
+                  key={`${r.from ?? '*'}->${r.to ?? '*'}`}
+                  className="flex items-center justify-between gap-2 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-text">
+                      <span className="truncate">{r.from ?? 'Any'}</span>
+                      <ArrowsLeftRight size={12} className="shrink-0 text-text-3" aria-hidden />
+                      <span className="truncate">{r.to ?? 'Any'}</span>
+                    </div>
+                    <div className="text-[11px] text-text-3">{scope}</div>
                   </div>
-                  <div className="text-[11px] text-text-3">{scope}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Select
-                    aria-label={`Transition for ${label}`}
-                    className="h-8! w-32! text-xs!"
-                    disabled={busy !== null}
-                    value={r.transition}
-                    onChange={(e) => void commitRule(r.from, r.to, e.target.value)}
-                  >
-                    {named.map((t) => (
-                      <option key={t.name} value={t.name}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <IconButton
-                    size="xs"
-                    label={`Remove rule ${label}`}
-                    disabled={busy !== null}
-                    onClick={() => void commitRule(r.from, r.to, null)}
-                  >
-                    <Trash size={14} weight="bold" />
-                  </IconButton>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Select
+                      aria-label={`Transition for ${label}`}
+                      className="h-8! w-32! text-xs!"
+                      disabled={busy !== null}
+                      value={r.transition}
+                      onChange={(e) => void commitRule(r.from, r.to, e.target.value)}
+                    >
+                      {named.map((t) => (
+                        <option key={t.name} value={t.name}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <IconButton
+                      size="xs"
+                      label={`Remove rule ${label}`}
+                      disabled={busy !== null}
+                      onClick={() => void commitRule(r.from, r.to, null)}
+                    >
+                      <Trash size={14} weight="bold" />
+                    </IconButton>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
     </div>
   )

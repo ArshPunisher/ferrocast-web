@@ -250,17 +250,17 @@ describe('transition helpers and matrix grid math', () => {
     expect(transitionSummary({ kind: 'fade_transition', ms: 300 })).toBe('Fade, 300 ms')
 
     const s = sampleScenes()
-    expect(cellEffectiveInfo(s, 'Main', 'Outro')).toEqual({
+    expect(cellEffectiveInfo(s, 'Main', 'Outro')).toMatchObject({
       directRule: 'Fast Swipe',
       effectiveName: 'Fast Swipe',
       via: 'pair',
     })
-    expect(cellEffectiveInfo(s, 'Outro', 'BRB')).toEqual({
+    expect(cellEffectiveInfo(s, 'Outro', 'BRB')).toMatchObject({
       directRule: null,
       effectiveName: 'Quick Cut',
       via: 'to',
     })
-    expect(cellEffectiveInfo(s, 'Outro', 'Main')).toEqual({
+    expect(cellEffectiveInfo(s, 'Outro', 'Main')).toMatchObject({
       directRule: null,
       effectiveName: 'Smooth Fade',
       via: 'default',
@@ -388,5 +388,31 @@ describe('parseNewDuration', () => {
     expect(parseNewDuration('')).toBe(300)
     expect(parseNewDuration('  ')).toBe(300)
     expect(parseNewDuration('abc')).toBe(300)
+  })
+})
+
+describe('cellEffectiveInfo inherited name', () => {
+  it("names what clearing the cell would play, not the cell's own rule", () => {
+    const scenes = {
+      scenes: [
+        { name: 'Intro', items: 1, current: true, preview: false, transition: null },
+        { name: 'Main', items: 1, current: false, preview: false, transition: null },
+      ],
+      current: 'Intro',
+      transition: { kind: 'fade_transition', ms: 300 },
+      named_transitions: [
+        { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+        { name: 'Stinger', kind: 'obs_stinger_transition', ms: 0, settings: {}, default: false },
+        { name: 'Swipe', kind: 'swipe_transition', ms: 400, settings: {}, default: false },
+      ],
+      transition_matrix: [
+        { from: 'Intro', to: 'Main', transition: 'Stinger' },
+        { from: null, to: 'Main', transition: 'Swipe' },
+      ],
+    } as unknown as EngineScenes
+    const info = cellEffectiveInfo(scenes, 'Intro', 'Main')
+    expect(info.directRule).toBe('Stinger')
+    expect(info.effectiveName).toBe('Stinger')
+    expect(info.inheritedName).toBe('Swipe')
   })
 })
