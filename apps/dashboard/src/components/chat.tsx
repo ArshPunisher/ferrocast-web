@@ -49,6 +49,7 @@ import {
 } from '@ferrocast/ui'
 import { done, useAction, useClient } from '../lib/hooks'
 import { PointsAdjuster, pointsLabel } from './community/points'
+import { isCloud } from '../lib/boot'
 import { cloudModerationKey, isLimited, useLive } from '../lib/store'
 import { useHeldActions } from '../lib/held'
 
@@ -392,7 +393,12 @@ export function HighlightBanner() {
   const chatHighlight = useLive((s) => s.chatHighlight)
   const setChatHighlight = useLive((s) => s.setChatHighlight)
   const remote = useLive((s) => s.remote)
-  if (!chatHighlight || isLimited(remote) || remote?.role === 'mod') return null
+  const cloud = isCloud(useLive((s) => s.conn))
+  if (
+    !chatHighlight ||
+    !canHighlight({ offline: isLimited(remote), isMod: remote?.role === 'mod', cloud })
+  )
+    return null
 
   const who = tameText(chatHighlight.actor.display_name)
   const msg = tameText(chatHighlight.content.text)
@@ -400,7 +406,9 @@ export function HighlightBanner() {
   return (
     <div
       data-testid="highlight-banner"
-      className="flex items-center gap-2.5 rounded-control border border-line-strong bg-surface-2 px-3 py-2 text-[14px]"
+      role="region"
+      aria-label="Pinned on stream"
+      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-control border border-line-strong bg-surface-2 px-3 py-2 text-[14px]"
     >
       <PushPin size={15} weight="fill" className="shrink-0 text-accent" aria-hidden="true" />
       <PlatformMark platform={chatHighlight.platform} size={13} />
@@ -412,6 +420,7 @@ export function HighlightBanner() {
         busy={busy === 'hl-banner'}
         icon={<X size={14} />}
         title="Remove highlighted message from stream"
+        aria-label={`Remove ${who}'s message from stream`}
         onClick={() =>
           void run(
             'hl-banner',
@@ -748,6 +757,14 @@ function SendTo({
   )
 }
 
+/**
+ * Whether this dashboard may show a chat message on stream: the owner's own PC only. A phone
+ * mod can't, and neither can the cloud dashboard or an offline PC (they have no such route).
+ */
+export function canHighlight(o: { offline: boolean; isMod: boolean; cloud: boolean }): boolean {
+  return !o.offline && !o.isMod && !o.cloud
+}
+
 /** Chat moderation actions with confirmation only where a mistake would hurt. */
 export function useChatActions(
   setReply: (r: ReplyTarget | null) => void,
@@ -764,9 +781,11 @@ export function useChatActions(
   const setChatHighlight = useLive((s) => s.setChatHighlight)
   const offline = isLimited(remote)
   const isMod = remote?.role === 'mod'
+  const cloud = isCloud(useLive((s) => s.conn))
+  const mayHighlight = canHighlight({ offline, isMod, cloud })
   const highlightedId = chatHighlight?.event_id ?? null
   useEffect(() => {
-    if (chatHighlight !== undefined || offline || isMod) return
+    if (chatHighlight !== undefined || !mayHighlight) return
     let alive = true
     void client
       .chatHighlight()
@@ -777,7 +796,7 @@ export function useChatActions(
     return () => {
       alive = false
     }
-  }, [chatHighlight, client, isMod, offline, setChatHighlight])
+  }, [chatHighlight, client, mayHighlight, setChatHighlight])
   // While the PC is off: where the cloud bot can moderate (a string keeps the memo stable).
   const modKey = offline ? cloudModerationKey(remote?.cloudModeration) : 'all'
   const actions = useMemo<ChatActions>(
@@ -814,32 +833,31 @@ export function useChatActions(
         )
       },
       ban: (e) => setBanning(e),
-      highlight:
-        offline || isMod
-          ? undefined
-          : (e) => {
-              if (e.kind.type !== 'chat_message') return
-              if (highlightedId === e.id) {
-                void run(
-                  'hl-off',
-                  async () => {
-                    await client.clearChatHighlight()
-                    setChatHighlight(null)
-                  },
-                  { success: 'Removed message from stream.' },
-                )
-              } else {
-                const name = tameText(e.kind.actor.display_name)
-                void run(
-                  'hl-on',
-                  async () => {
-                    const hl = await client.pinChatHighlight(e.id)
-                    setChatHighlight(hl)
-                  },
-                  { success: `Showing ${name} on stream.` },
-                )
-              }
-            },
+      highlight: !mayHighlight
+        ? undefined
+        : (e) => {
+            if (e.kind.type !== 'chat_message') return
+            if (highlightedId === e.id) {
+              void run(
+                'hl-off',
+                async () => {
+                  await client.clearChatHighlight()
+                  setChatHighlight(null)
+                },
+                { success: 'Removed message from stream.' },
+              )
+            } else {
+              const name = tameText(e.kind.actor.display_name)
+              void run(
+                'hl-on',
+                async () => {
+                  const hl = await client.pinChatHighlight(e.id)
+                  setChatHighlight(hl)
+                },
+                { success: `Showing ${name} on stream.` },
+              )
+            }
+          },
       highlightedId,
       card: openCard,
       sheet: (e) => setSheet(e),
@@ -853,7 +871,7 @@ export function useChatActions(
       approve,
       drop,
       offline,
-      isMod,
+      mayHighlight,
       modKey,
       highlightedId,
       setChatHighlight,
