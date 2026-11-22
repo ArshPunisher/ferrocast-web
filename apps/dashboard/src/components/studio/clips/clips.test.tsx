@@ -299,6 +299,48 @@ describe('the Clips tab', () => {
     expect(document.querySelectorAll('li[data-clip]').length).toBeGreaterThanOrEqual(5)
   })
 
+  it('opens Upload for a pick the search is hiding', async () => {
+    await mountDemo()
+    await settle()
+    await click(q('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]'))
+    await type(byLabel<HTMLInputElement>('Search clips by name'), 'boss')
+    await settle(400)
+    expect(q('[data-clip^="Replay 2026-11-22 21"]')).toBeNull() // hidden, still picked
+    await click(
+      [...document.body.querySelectorAll('button')].find((b) =>
+        b.textContent?.startsWith('Upload'),
+      ) ?? null,
+    )
+    await settle(400)
+    const dialog = q('dialog[open], [role=dialog]')
+    expect(dialog?.textContent).toContain('Replay 2026-11-22 21-04-12')
+    expect(dialog?.textContent).not.toContain("isn't in the folder")
+  })
+
+  it('probes each picked clip once, however the answers interleave', async () => {
+    const client = await mountDemo()
+    const real = client.request.bind(client)
+    let n = 0
+    // The first answer comes soonest, the next ones later: they finish one after another.
+    const spy = vi
+      .spyOn(client, 'request')
+      .mockImplementation(async (...a: Parameters<typeof real>) => {
+        if (a[0] === 'GET' && /^\/api\/v1\/clips\/[^/?]+$/.test(String(a[1])))
+          await new Promise((r) => setTimeout(r, 30 * ++n))
+        return real(...a)
+      })
+    await settle()
+    for (const prefix of ['21', '20']) {
+      await click(q(`[data-clip^="Replay 2026-11-22 ${prefix}"] input[type=checkbox]`))
+    }
+    await click(q('[data-clip^="Clutch"] input[type=checkbox]'))
+    await settle(400)
+    const probes = spy.mock.calls.filter(
+      ([m, path]) => m === 'GET' && /^\/api\/v1\/clips\/[^/?]+$/.test(String(path)),
+    )
+    expect(probes.length).toBe(3)
+  })
+
   it('reads a length as seconds or minutes', () => {
     expect(spanText(42_000)).toBe('42 s')
     expect(spanText(65_000)).toBe('1 min 5 s')

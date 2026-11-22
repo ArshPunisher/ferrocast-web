@@ -214,18 +214,28 @@ export function ClipsTab() {
     [clips, wanted],
   )
   const ffmpegReady = overview.data?.ffmpeg_ready ?? false
+  // Probes in flight: kept across length updates, so one finishing never restarts the others.
+  const probing = useRef(new Set<string>())
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   useEffect(() => {
     if (!ffmpegReady) return
-    let alive = true
     for (const id of picked) {
-      if (lengths.has(id)) continue
+      if (lengths.has(id) || probing.current.has(id)) continue
+      probing.current.add(id)
+      const done = (d: number | null) => {
+        probing.current.delete(id)
+        if (mounted.current) setLengths((m) => new Map(m).set(id, d))
+      }
       api
         .probe(id)
-        .then((p) => alive && setLengths((m) => new Map(m).set(id, p.duration_ms)))
-        .catch(() => alive && setLengths((m) => new Map(m).set(id, null)))
-    }
-    return () => {
-      alive = false
+        .then((p) => done(p.duration_ms))
+        .catch(() => done(null))
     }
   }, [picked, lengths, api, ffmpegReady])
   const pickedClips = picked
@@ -434,7 +444,8 @@ export function ClipsTab() {
                   const only = live[0]
                   if (live.length === 1 && only) {
                     setOpenSection('youtube')
-                    setOpen(only)
+                    // Resolves a pick the search hid (clears the search, opens when listed).
+                    show(only)
                   }
                 }}
               >
