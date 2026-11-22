@@ -15,6 +15,7 @@ import { IconButton, Button, Dialog, InfoLine, Skeleton, Switch, cx, toast } fro
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
 import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
+import { useSaveOrder } from '../save-order'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
@@ -104,6 +105,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           : { tone: 'ok', message: `Video bitrate set to ${kbps.toLocaleString()} kbps.` },
       )
     })
+  const saver = useSaveOrder(api, () => res.reload())
   const toggle = (d: DestinationView, enabled: boolean) => {
     if (!view) return
     // The engine wants every destination, in order, both pictures.
@@ -115,7 +117,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       ...(v ?? view),
       destinations: (v ?? view).destinations.map((x) => (x.id === d.id ? { ...x, enabled } : x)),
     }))
-    void run(`on:${d.id}`, () => api.saveOrder(all)).then((r) => {
+    void run(`on:${d.id}`, () => saver.request(all)).then((r) => {
       if (!r) res.reload()
     })
   }
@@ -193,6 +195,15 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         ) : (
           <>
             {!onAir && <AllFailedBanner view={view} compact />}
+            {live && mine.length > 0 && !view.destinations.some((d) => d.enabled) && (
+              <p
+                role="status"
+                className="m-0 border-b border-line px-3 py-2 text-[13.5px] text-text-2"
+              >
+                <b className="text-text">Live, not sending to any platform.</b> The stream and the
+                recording keep going: End stream is in the bar above.
+              </p>
+            )}
             {mine.length === 0 ? (
               <div className="flex flex-col items-start gap-3 p-3">
                 <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
@@ -236,6 +247,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       >
         {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
       </Dialog>
+      {saver.dialog}
     </section>
   )
 }

@@ -519,9 +519,15 @@ export function goliveApi(c: FerroClient) {
     view: () => get<GoLiveView>('/golive'),
     ingest: () => get<{ server: string; key: string; vertical_key: string }>('/golive/ingest'),
     /** Every destination once, top first (the bottom one pauses first). */
-    saveOrder: (destinations: { id: string; enabled: boolean }[]) =>
+    saveOrder: (
+      destinations: { id: string; enabled: boolean }[],
+      /** Answers to what a change while live asks first (409 `golive_upload_exceeded`, `golive_last_destination`). */
+      confirm: { upload?: boolean; last?: boolean } = {},
+    ) =>
       c.request<{ destinations: DestinationConfig[] }>('PUT', '/api/v1/golive/destinations', {
         destinations,
+        ...(confirm.upload ? { confirm_upload: true } : {}),
+        ...(confirm.last ? { confirm_last: true } : {}),
       }),
     addCustom: (name: string, url: string, key: string, canvas: Canvas = 'main') =>
       post<DestinationConfig>('/golive/destinations', { name, url, key, canvas }),
