@@ -598,6 +598,32 @@ for (const [name, size, touch] of [
       expect(errors).toEqual([])
     })
 
+    test('the cursor shows the group box handles, and a right-click inside it opens the several-picked menu', async ({
+      page,
+    }) => {
+      test.skip(touch, 'no hover or right-click on a phone')
+      await page.setViewportSize(size)
+      await mountMockStudio(page)
+      await openPreview(page, touch)
+      const { at } = await canvasBox(page)
+      await dragBetween(page, touch, at(50, 50), at(800, 560)) // Alpha, Beta and Gamma
+      const cursor = () =>
+        page.evaluate(
+          () =>
+            [...document.querySelectorAll<HTMLElement>('*')]
+              .map((e) => e.style.cursor)
+              .find(Boolean) ?? '',
+        )
+      // The group is x 100-700, y 100-500: its bottom right corner.
+      const corner = at(700, 500)
+      await page.mouse.move(corner.x, corner.y)
+      await expect.poll(cursor).toMatch(/resize/)
+      // Empty space inside it (between the sources): a right-click gives the several-picked menu.
+      const gap = at(500, 330)
+      await page.mouse.click(gap.x, gap.y, { button: 'right' })
+      await expect(page.getByRole('menuitem', { name: 'Group selected items' })).toBeVisible()
+    })
+
     test('arrow keys nudge 1 pixel, Shift 10; several picked go as one request', async ({
       page,
     }) => {

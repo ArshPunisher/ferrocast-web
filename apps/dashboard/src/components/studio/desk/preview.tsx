@@ -1398,7 +1398,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   const list = items.data ?? []
   // Sources inside groups too: a picked one is found, moved and nudged like any other.
   const flat = list.flatMap((i) => [i, ...i.children])
-  const where = (e: { clientX: number; clientY: number }) => {
+  const where = (e: { clientX: number; clientY: number; pointerType?: string }) => {
     const el = ref.current
     if (!el || !canvas) return null
     const r = el.getBoundingClientRect()
@@ -1407,7 +1407,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     return {
       p: { x: (e.clientX - r.left - f.ox) / f.scale, y: (e.clientY - r.top - f.oy) / f.scale },
       // Handles are 10 screen pixels; a little more is easier to grab.
-      reach: 9 / f.scale,
+      // A finger needs more: 22 px each way is a 44 px target.
+      reach: (e.pointerType === 'touch' ? 22 : 9) / f.scale,
       // Three screen pixels before a press becomes a drag.
       still: 3 / f.scale,
       // OBS's Snapping: how near (screen pixels), off when switched off.
@@ -1564,7 +1565,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       const target =
         (current?.frame && current.visible && inside(current.frame, w.p) ? current : null) ??
         flat.find((i) => also.includes(i.id) && i.visible && i.frame && inside(i.frame, w.p)) ??
-        pick(list, w.p)
+        pick(list, w.p) ??
+        // Empty space inside the box round several picked: their menu (Group, Align, Space out),
+        // not the empty canvas's.
+        (groupRect && inside(groupFrame(groupRect), w.p)
+          ? flat.find((i) => i.id === together[0]?.id)
+          : null)
       itemMenu.current?.(e, target?.id ?? null)
     },
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
@@ -1599,7 +1605,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (e.button !== 0) return
       const w = where(e)
       if (!w) return
-      ref.current?.focus({ preventScroll: true })
+      // The element that takes the keys (the stage), not the inner box, which isn't focusable.
+      e.currentTarget.focus({ preventScroll: true })
       // ⌘-click (Ctrl on Windows) picks or unpicks one more, as in OBS.
       // On empty canvas it starts a box to pick several (⌘/Ctrl toggles, Shift adds).
       const startMarquee = (mode: 'replace' | 'add' | 'toggle') => {
@@ -1757,19 +1764,27 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         // The cursor says what a press would do.
         const f = frameOf(selected)
         const g = f ? gripAt(f, w.p, w.reach) : null
-        const over = pv.locked
-          ? pick(list, w.p)
-            ? 'pointer'
-            : ''
-          : g
-            ? e.altKey
-              ? 'crosshair'
-              : cursorFor(f as Frame, g)
-            : f && inside(f, w.p)
+        // The box round several picked has handles and a middle that moves it.
+        const gf = groupRect ? groupFrame(groupRect) : null
+        const gg = gf && !e.altKey ? gripAt(gf, w.p, w.reach) : null
+        const over =
+          gf && gg
+            ? cursorFor(gf, gg)
+            : gf && inside(gf, w.p) && !pick(list, w.p)
               ? 'move'
-              : pick(list, w.p)
-                ? 'pointer'
-                : ''
+              : pv.locked
+                ? pick(list, w.p)
+                  ? 'pointer'
+                  : ''
+                : g
+                  ? e.altKey
+                    ? 'crosshair'
+                    : cursorFor(f as Frame, g)
+                  : f && inside(f, w.p)
+                    ? 'move'
+                    : pick(list, w.p)
+                      ? 'pointer'
+                      : ''
         e.currentTarget.style.cursor = over
         tellNative(over)
         return
