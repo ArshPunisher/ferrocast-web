@@ -28,7 +28,8 @@ test.describe('more platforms', () => {
     await expect(dialog.getByLabel('Name')).toHaveValue('Instagram')
     await dialog.getByLabel('Server').fill('rtmps://live-upload.example:443/rtmp/')
     await dialog.getByLabel('Stream key').fill('pasted-key-123')
-    await dialog.getByRole('button', { name: 'Add server' }).click()
+    // The button says what is being added.
+    await dialog.getByRole('button', { name: 'Add Instagram' }).click()
     await expect(page.getByText('Instagram added.')).toBeVisible()
   })
 
@@ -51,7 +52,17 @@ test.describe('more platforms', () => {
     await expect(p.getByText(/Connect Facebook in Settings/)).toBeVisible()
     // Planning never starts a stream.
     await expect(page.getByRole('switch', { name: 'Stream to Kick' })).toBeVisible()
+    // A broadcast was made on YouTube: removing the plan asks first, and says it stays there.
     await p.getByRole('button', { name: 'Remove Friday ranked grind' }).click()
+    const ask = page.getByRole('alertdialog', { name: 'Remove Friday ranked grind?' })
+    await expect(ask.getByText(/stays there/)).toBeVisible()
+    await ask.getByRole('button', { name: 'Keep' }).click()
+    await expect(p.getByText('Friday ranked grind')).toBeVisible()
+    await p.getByRole('button', { name: 'Remove Friday ranked grind' }).click()
+    await page
+      .getByRole('alertdialog', { name: 'Remove Friday ranked grind?' })
+      .getByRole('button', { name: 'Remove' })
+      .click()
     await expect(p.getByText('Nothing planned.')).toBeVisible()
   })
 
