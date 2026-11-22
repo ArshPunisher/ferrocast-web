@@ -226,7 +226,7 @@ export function Home() {
               alert.
             </EmptyState>
           ) : (
-            <ul className="-mx-2 flex flex-col">
+            <ul className="-mx-2 flex min-w-0 flex-col">
               {feed.map((e) => (
                 <EventRow key={e.id} event={e} now={now} />
               ))}
@@ -247,7 +247,7 @@ export function Home() {
             </a>
           }
         >
-          <div {...hold} className="flex min-h-0 flex-1 flex-col">
+          <div {...hold} className="flex min-h-0 min-w-0 flex-1 flex-col">
             <HighlightBanner />
             <ChatScroller
               count={peek.length}
@@ -259,7 +259,7 @@ export function Home() {
                   Messages from Twitch, YouTube and Kick appear here together.
                 </EmptyState>
               ) : (
-                <ul className="-mx-2 flex flex-col">
+                <ul className="-mx-2 flex min-w-0 flex-col">
                   {peek.map((e) => (
                     <ChatLine
                       key={e.id}

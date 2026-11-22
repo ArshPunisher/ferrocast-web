@@ -119,7 +119,10 @@ export function MiniFeedBar({
         ))}
       </div>
       {status && (
-        <p role="status" className="flex items-center gap-1.5 text-[13px] text-text-2">
+        <p
+          role="status"
+          className="flex min-w-0 items-center gap-1.5 break-words [overflow-wrap:anywhere] text-[13px] text-text-2"
+        >
           <BellSimpleSlash size={14} aria-hidden />
           {status}
         </p>

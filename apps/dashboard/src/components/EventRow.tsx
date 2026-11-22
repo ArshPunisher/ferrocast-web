@@ -55,21 +55,28 @@ export function EventRow({
     <li
       data-unread={unread ? 'true' : undefined}
       className={cx(
-        'group flex items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2',
+        'group flex min-w-0 items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2',
         unread && 'border-l-2 border-arc',
       )}
     >
       <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-3">
         <PlatformMark platform={event.platform} size={14} />
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-text-2">
+      <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+        <p className="text-sm leading-snug break-words [overflow-wrap:anywhere] text-text-2">
           {name && (
-            <span dir="auto" className="font-semibold break-words text-text">
+            <span
+              dir="auto"
+              className="font-semibold break-words [overflow-wrap:anywhere] text-text"
+            >
               {name}
             </span>
           )}{' '}
-          <span className={cx(big && 'font-medium text-text')}>{d.title}</span>
+          <span
+            className={cx('break-words [overflow-wrap:anywhere]', big && 'font-medium text-text')}
+          >
+            {d.title}
+          </span>
           {event.origin === 'test' && (
             <Badge className="ml-2 align-middle" tone="neutral">
               Test
@@ -91,7 +98,10 @@ export function EventRow({
           )}
         </p>
         {d.detail && !compact && (
-          <p dir="auto" className="mt-0.5 line-clamp-2 text-[14px] break-words text-text-3">
+          <p
+            dir="auto"
+            className="mt-0.5 line-clamp-2 text-[14px] break-words [overflow-wrap:anywhere] text-text-3"
+          >
             {d.detail}
           </p>
         )}
