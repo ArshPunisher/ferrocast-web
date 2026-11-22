@@ -57,7 +57,9 @@ import {
   planTimingSummary,
   readStandbySnapshot,
   resolveStandbyPhase,
+  resolveStandbyPreview,
   safeThumbUrl,
+  summarizeQuickChecks,
   writeStandbySnapshot,
   type QuickCheckId,
   type QuickCheckTone,
@@ -141,7 +143,7 @@ export function DeskStandby({
   const profiles = useResource(() => engine.shelf('profiles').catch(() => null), [engine])
   const scenes = useResource(() => engine.scenes().catch(() => null), [engine])
   const plansRes = useResource(() => schedule.list(), [schedule])
-  const clipsRes = useResource(() => clips.list().catch(() => null), [clips])
+  const clipsRes = useResource(() => clips.list(), [clips])
 
   const collectionName = useMemo(() => {
     const c = collections.data
@@ -154,12 +156,11 @@ export function DeskStandby({
     return p?.list.find((item) => item.id === p.current)?.name ?? null
   }, [profiles.data])
 
-  const sceneName = scenes.data?.current ?? scenes.data?.scenes[0]?.name ?? cached?.scene ?? null
+  const targetScene = scenes.data?.current ?? scenes.data?.scenes[0]?.name ?? null
   const scenesCount = scenes.data?.scenes.length ?? 0
 
-  const [fetchedThumb, setFetchedThumb] = useState<string | null>(null)
+  const [fetchedThumb, setFetchedThumb] = useState<{ scene: string; image: string } | null>(null)
   useEffect(() => {
-    const targetScene = scenes.data?.current ?? scenes.data?.scenes[0]?.name
     if (!targetScene) return
     let alive = true
     void engine
@@ -168,7 +169,7 @@ export function DeskStandby({
         if (!alive) return
         const clean = safeThumbUrl(r.image)
         if (clean) {
-          setFetchedThumb(clean)
+          setFetchedThumb({ scene: targetScene, image: clean })
           writeStandbySnapshot({ scene: targetScene, collection: collectionName, image: clean })
         }
       })
@@ -176,9 +177,12 @@ export function DeskStandby({
     return () => {
       alive = false
     }
-  }, [engine, scenes.data, collectionName])
+  }, [engine, targetScene, collectionName])
 
-  const thumbSrc = fetchedThumb ?? safeThumbUrl(cached?.image) ?? null
+  const preview = useMemo(
+    () => resolveStandbyPreview({ targetScene, fetchedThumb, cached }),
+    [targetScene, fetchedThumb, cached],
+  )
   const resolutionLabel = formatResolutionSummary(studioSettings.data)
   const phase = resolveStandbyPhase({
     available: status.available,
@@ -221,8 +225,7 @@ export function DeskStandby({
     ],
   )
 
-  const hasDangerCheck = checks.some((c) => c.tone === 'danger')
-  const hasWarnCheck = checks.some((c) => c.tone === 'warn')
+  const checksBadge = useMemo(() => summarizeQuickChecks(checks), [checks])
   const plans = useMemo(() => plansRes.data ?? [], [plansRes.data])
   const nextPlan = useMemo(() => pickNextPlan(plans, now), [plans, now])
   const recentClips = useMemo(() => (clipsRes.data?.clips ?? []).slice(0, 3), [clipsRes.data])
@@ -358,10 +361,12 @@ export function DeskStandby({
               data-testid="standby-stage-frame"
               className="relative aspect-video w-full overflow-hidden rounded-[10px] border border-line bg-[#141922]"
             >
-              {thumbSrc ? (
+              {preview.image ? (
                 <img
-                  src={thumbSrc}
-                  alt={sceneName ? `${sceneName} last scene preview` : 'Standby scene preview'}
+                  src={preview.image}
+                  alt={
+                    preview.scene ? `${preview.scene} last scene preview` : 'Standby scene preview'
+                  }
                   className={cx(
                     'h-full w-full object-cover transition-opacity duration-200',
                     phase === 'starting' ? 'opacity-45' : 'opacity-90',
@@ -388,7 +393,7 @@ export function DeskStandby({
                       <FerroGlyph size={22} />
                     </div>
                     <p className="m-0 text-[13.5px] font-semibold text-[#e6edf6]">
-                      {sceneName ?? 'Studio canvas ready'}
+                      {preview.scene ?? 'Studio canvas ready'}
                     </p>
                   </div>
                 </div>
@@ -401,7 +406,7 @@ export function DeskStandby({
 
               <div className="pointer-events-none absolute inset-x-2.5 bottom-2 flex items-center justify-between gap-2">
                 <span className="max-w-[65%] truncate rounded-full border border-white/15 bg-[#0b0d12]/85 px-2.5 py-0.5 text-[12px] font-semibold text-[#e6edf6]">
-                  {sceneName ? `Last scene · ${sceneName}` : 'Studio standby'}
+                  {preview.scene ? `Last scene · ${preview.scene}` : 'Studio standby'}
                 </span>
                 <span className="shrink-0 rounded-full border border-white/15 bg-[#0b0d12]/85 px-2.5 py-0.5 font-mono text-[11.5px] font-medium text-[#c5d0e0]">
                   {resolutionLabel ?? '16:9 canvas'}
@@ -590,9 +595,7 @@ export function DeskStandby({
           <section aria-label="Quick checks" className="px-3 py-2">
             <div className="mb-1 flex items-center justify-between gap-2">
               <h2 className="m-0 text-[13.5px] font-bold text-text">Quick checks</h2>
-              <Badge tone={hasDangerCheck ? 'danger' : hasWarnCheck ? 'warn' : 'ok'}>
-                {hasDangerCheck ? 'Action needed' : hasWarnCheck ? 'Review' : 'Ready'}
-              </Badge>
+              <Badge tone={checksBadge.tone}>{checksBadge.label}</Badge>
             </div>
             <div data-testid="standby-quick-checks" className="grid grid-cols-2 gap-1.5">
               {checks.map((check) => {
@@ -664,6 +667,7 @@ export function DeskStandby({
               </p>
             ) : (
               <CompactPlanRow
+                key={nextPlan.id}
                 plan={nextPlan}
                 totalCount={plans.length}
                 now={now}
@@ -704,7 +708,25 @@ export function DeskStandby({
         </div>
 
         <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-          {clipsRes.loading && !clipsRes.data ? (
+          {clipsRes.error && !clipsRes.data ? (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-danger/35 bg-danger-soft px-3 py-2 text-[12.5px] text-text lg:col-span-3"
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <WarningCircle
+                  size={15}
+                  weight="fill"
+                  className="shrink-0 text-danger"
+                  aria-hidden
+                />
+                <span>Could not load recordings.</span>
+              </span>
+              <Button size="xs" variant="ghost" onClick={clipsRes.reload}>
+                Retry
+              </Button>
+            </div>
+          ) : clipsRes.loading && !clipsRes.data ? (
             <>
               <Skeleton className="h-[54px]" />
               <Skeleton className="h-[54px]" />
@@ -738,7 +760,14 @@ export function DeskStandby({
         size="lg"
         title="Your platforms"
       >
-        {view && managingPlatforms && <Platforms view={view} onSaved={res.reload} canvas="main" />}
+        {view && managingPlatforms && (
+          <Platforms
+            view={view}
+            onSaved={res.reload}
+            onProtect={(protect) => res.set((v) => ({ ...(v ?? view), protect }))}
+            canvas="main"
+          />
+        )}
       </Dialog>
 
       <PlanDialog

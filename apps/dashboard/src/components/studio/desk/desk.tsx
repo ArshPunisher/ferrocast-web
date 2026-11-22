@@ -176,7 +176,16 @@ export function StudioDesk({
     }, 3000)
     return () => clearInterval(t)
   }, [off, reloadStatus])
-  if (status.error && !s) return <LoadError error={status.error} onRetry={status.reload} />
+  if (status.error && !s)
+    return (
+      <>
+        {lead && <InBar className="mb-2 flex">{lead}</InBar>}
+        <LoadError error={status.error} onRetry={status.reload} />
+        <div className="mt-5 max-w-3xl">
+          <SchedulePanel />
+        </div>
+      </>
+    )
   if (!s) return <Skeleton className="h-[560px]" />
   if (!s.running)
     return (

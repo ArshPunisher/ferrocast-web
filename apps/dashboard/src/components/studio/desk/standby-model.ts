@@ -104,6 +104,47 @@ export function formatResolutionSummary(
   return `${width}x${height} · ${fps} fps`
 }
 
+/**
+ * Pair each thumbnail strictly with its scene identity so stale artwork from one scene never
+ * renders beneath another scene's label.
+ */
+export function resolveStandbyPreview({
+  targetScene,
+  fetchedThumb,
+  cached,
+}: {
+  targetScene: string | null
+  fetchedThumb: { scene: string; image: string } | null
+  cached: StandbySnapshot | null
+}): { scene: string | null; image: string | null } {
+  if (targetScene) {
+    if (fetchedThumb && fetchedThumb.scene === targetScene) {
+      return { scene: targetScene, image: safeThumbUrl(fetchedThumb.image) }
+    }
+    if (cached && cached.scene === targetScene) {
+      return { scene: targetScene, image: safeThumbUrl(cached.image) }
+    }
+    return { scene: targetScene, image: null }
+  }
+  if (cached && (cached.scene || cached.image)) {
+    return { scene: cached.scene, image: safeThumbUrl(cached.image) }
+  }
+  return { scene: null, image: null }
+}
+
+/** Summarize quick checks honestly, reserving Ready for explicitly verified checks. */
+export function summarizeQuickChecks(checks: readonly QuickCheckItem[]): {
+  label: string
+  tone: QuickCheckTone
+} {
+  if (checks.some((c) => c.tone === 'danger')) return { label: 'Action needed', tone: 'danger' }
+  if (checks.some((c) => c.tone === 'warn')) return { label: 'Review', tone: 'warn' }
+  if (checks.length > 0 && checks.every((c) => c.tone === 'ok')) {
+    return { label: 'Ready', tone: 'ok' }
+  }
+  return { label: 'Standby', tone: 'neutral' }
+}
+
 function mapPreflightTone(status: PreflightCheck['status']): QuickCheckTone {
   if (status === 'fail') return 'danger'
   if (status === 'warn') return 'warn'
@@ -277,10 +318,10 @@ export function buildQuickChecks({
             id: 'disk',
             label: 'Disk',
             value: `Min ${minGb} GB`,
-            tone: 'ok',
+            tone: 'neutral',
             detail: folder
-              ? `Recordings save to ${folder}. Checked again when recording starts.`
-              : `Requires at least ${minGb} GB free for recordings and replay buffer.`,
+              ? `Requires at least ${minGb} GB free in ${folder} (space not measured yet).`
+              : `Requires at least ${minGb} GB free for recordings and replay buffer (space not measured yet).`,
           }
 
   // 4. Connections (keep platform names out of visible tile text so platforms appear once in dock)
@@ -288,25 +329,39 @@ export function buildQuickChecks({
   const armed = mainDests.filter((d) => d.enabled)
   const blockedArmed = armed.filter((d) => Boolean(d.blocked))
   const readyArmed = armed.filter((d) => d.connected && !d.blocked)
-  const connectorStates = connectors ? [connectors.twitch, connectors.youtube, connectors.kick] : []
-  const connErrors = connectorStates.filter(
-    (c) =>
+  const connEntries = connectors
+    ? ([
+        ['twitch', connectors.twitch],
+        ['youtube', connectors.youtube],
+        ['kick', connectors.kick],
+      ] as const)
+    : []
+  const connErrorEntries = connEntries.filter(
+    ([, c]) =>
       c.state === 'sign_in_needed' || c.state === 'scopes_missing' || c.state === 'reconnecting',
   )
-  const connLive = connectorStates.filter((c) => c.state === 'connected')
+  const connLive = connEntries.filter(([, c]) => c.state === 'connected')
 
   let connections: QuickCheckItem
-  if (blockedArmed.length > 0 || connErrors.length > 0) {
-    const issueCount = Math.max(blockedArmed.length, connErrors.length)
+  if (blockedArmed.length > 0 || connErrorEntries.length > 0) {
+    const issueKeys = new Set<string>([
+      ...blockedArmed.map((d) => (d.kind === 'custom' ? `dest:${d.id}` : `platform:${d.kind}`)),
+      ...connErrorEntries.map(([name]) => `platform:${name}`),
+    ])
+    const issueCount = issueKeys.size
+    const detailParts = [
+      ...blockedArmed.map((d) => d.blocked).filter((x): x is string => Boolean(x)),
+      ...connErrorEntries
+        .filter(([name]) => !blockedArmed.some((d) => d.kind === name))
+        .map(([, c]) => c.detail ?? 'Check account status under Settings -> Accounts.'),
+    ]
     connections = {
       id: 'connections',
       label: 'Connections',
       value: issueCount === 1 ? '1 needs check' : `${issueCount} need check`,
       tone: 'warn',
       detail:
-        blockedArmed[0]?.blocked ??
-        connErrors[0]?.detail ??
-        'Check account status under Settings -> Accounts or Destinations.',
+        detailParts.join(' ') || 'Check account status under Settings -> Accounts or Destinations.',
     }
   } else if (armed.length > 0) {
     connections = {
@@ -340,19 +395,16 @@ export function buildQuickChecks({
   return [mic, camera, disk, connections]
 }
 
-/** Pick the next upcoming scheduled stream first for compact dock summary. */
+/** Pick the next upcoming scheduled stream first; fall back to the most recent past plan. */
 export function pickNextPlan(
   plans: readonly ScheduledStream[],
   now: number,
 ): ScheduledStream | null {
   if (plans.length === 0) return null
-  const recentCutoff = now - 30 * 60_000
-  const upcoming = plans
-    .filter((p) => p.start_ms >= recentCutoff)
-    .sort((a, b) => a.start_ms - b.start_ms)
+  const upcoming = plans.filter((p) => p.start_ms >= now).sort((a, b) => a.start_ms - b.start_ms)
   if (upcoming.length > 0) return upcoming[0] ?? null
-  const sorted = [...plans].sort((a, b) => b.start_ms - a.start_ms)
-  return sorted[0] ?? null
+  const past = [...plans].sort((a, b) => b.start_ms - a.start_ms)
+  return past[0] ?? null
 }
 
 /** Short label describing when a scheduled stream starts for compact dock cards. */
