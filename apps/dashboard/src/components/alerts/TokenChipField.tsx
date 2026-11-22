@@ -59,6 +59,21 @@ export interface TokenOption {
   custom?: boolean
 }
 
+/**
+ * `value` with `token` written over the selection, or null when it would not fit in
+ * `maxLength` (cutting the end would slice the token or text the writer did not select).
+ */
+export function insertTokenAt(
+  value: string,
+  start: number,
+  end: number,
+  token: string,
+  maxLength: number,
+): string | null {
+  const next = value.slice(0, start) + token + value.slice(end)
+  return next.length > maxLength ? null : next
+}
+
 export function tokensForAlert(eventTokens: string[], customKeys: string[]): TokenOption[] {
   const seen = new Set<string>()
   const out: TokenOption[] = []
@@ -127,7 +142,11 @@ export function TokenChipField({
     const caller = typeof document !== 'undefined' ? document.activeElement : null
     const start = el?.selectionStart ?? value.length
     const end = el?.selectionEnd ?? start
-    const next = (value.slice(0, start) + token + value.slice(end)).slice(0, maxLength)
+    const next = insertTokenAt(value, start, end, token, maxLength)
+    if (next === null) {
+      setAnnouncement(`${token} doesn't fit: ${label} can be up to ${maxLength} characters.`)
+      return
+    }
     onChange(next)
     setAnnouncement(`Inserted ${token} into ${label}`)
     const nextPos = Math.min(start + token.length, next.length)

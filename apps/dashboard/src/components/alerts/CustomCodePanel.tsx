@@ -6,7 +6,7 @@ import {
   MAX_CUSTOM_HTML,
   MAX_CSS,
   checkCss,
-  findUnknownHtmlToken,
+  checkCustomHtml,
   isValidFieldKey,
   type CustomField,
   type CustomFieldKind,
@@ -88,6 +88,8 @@ export function CustomCodePanel({
   const cssId = useId()
   const htmlRef = useRef<HTMLTextAreaElement>(null)
   const [selectDrafts, setSelectDrafts] = useState<Record<string, string>>({})
+  /** A key being typed that another field already owns; the schema keeps the old key. */
+  const [keyDrafts, setKeyDrafts] = useState<Record<number, string>>({})
 
   const customEnabled = v.custom_enabled === true
   const html = v.html ?? ''
@@ -97,13 +99,15 @@ export function CustomCodePanel({
 
   const cssError = checkCss('Custom CSS', css)
   const htmlTooLong = Array.from(html).length > MAX_CUSTOM_HTML
-  const badHtmlToken = useMemo(
+  // The engine's own rules for custom HTML (code, navigation, fetches, token places).
+  const badHtml = useMemo(
     () =>
       customEnabled
-        ? findUnknownHtmlToken(
+        ? (checkCustomHtml(
+            '',
             html,
             fields.map((f) => f.key),
-          )
+          )?.replace(/^Variation '[^']*': /, '') ?? null)
         : null,
     [customEnabled, html, fields],
   )
@@ -152,6 +156,19 @@ export function CustomCodePanel({
     const nextFields = fields.map((f, i) => (i === idx ? updated : f))
     const nextValues = { ...values }
     const nextKey = patch.key
+    if (nextKey !== undefined && fields.some((f, i) => i !== idx && f.key === nextKey)) {
+      // Taken: keep what was typed on screen, but never move the other field's value.
+      setKeyDrafts((d) => ({ ...d, [idx]: nextKey }))
+      return
+    }
+    if (nextKey !== undefined) {
+      setKeyDrafts((d) => {
+        if (!(idx in d)) return d
+        const copy = { ...d }
+        delete copy[idx]
+        return copy
+      })
+    }
     if (nextKey !== undefined && nextKey !== prev.key) {
       const oldVal = nextValues[prev.key]
       delete nextValues[prev.key]
@@ -175,6 +192,7 @@ export function CustomCodePanel({
     if (!prev) return
     const nextValues = { ...values }
     delete nextValues[prev.key]
+    setKeyDrafts({})
     setSelectDrafts((d) => {
       if (!(prev.key in d)) return d
       const copy = { ...d }
@@ -216,7 +234,7 @@ export function CustomCodePanel({
         checked={customEnabled}
         onChange={toggleEnabled}
         label="Use custom HTML & CSS"
-        description="Renders isolated in a sandboxed iframe with no access to dashboard storage, cookies, or outside network."
+        description="HTML and CSS only, drawn in an isolated frame. No scripts, no links out."
       />
 
       {customEnabled && (
@@ -224,8 +242,9 @@ export function CustomCodePanel({
           <div className="flex items-start gap-2 rounded-control border border-arc/30 bg-arc-soft/30 px-3 py-2 text-[12.5px] font-medium text-text-2">
             <ShieldCheck size={16} className="mt-0.5 shrink-0 text-arc" aria-hidden="true" />
             <span>
-              Sandbox isolation active: scripts cannot read cookies, localStorage, session tokens,
-              or reach external URLs outside allowlisted CDN media hosts.
+              HTML and CSS only: scripts, forms, frames and event handlers are removed. Pictures
+              load only as small data: images or from the allowed picture hosts. Viewer names and
+              messages are always shown as plain text.
             </span>
           </div>
 
@@ -277,8 +296,8 @@ export function CustomCodePanel({
                           </label>
                           <Input
                             id={`fk-${idx}`}
-                            value={f.key}
-                            aria-invalid={!keyValid || undefined}
+                            value={keyDrafts[idx] ?? f.key}
+                            aria-invalid={!keyValid || keyDrafts[idx] !== undefined || undefined}
                             onChange={(e) => updateField(idx, { key: e.target.value })}
                             className="font-mono text-[13px]"
                           />
@@ -312,6 +331,13 @@ export function CustomCodePanel({
                                     ...values,
                                     [f.key]: nextFields[idx]!.default,
                                   }
+                                  // The old options text no longer describes this field.
+                                  setSelectDrafts((d) => {
+                                    if (!(f.key in d)) return d
+                                    const copy = { ...d }
+                                    delete copy[f.key]
+                                    return copy
+                                  })
                                   onChange({ ...v, fields: nextFields, field_values: nextValues })
                                 }}
                               >
@@ -334,6 +360,12 @@ export function CustomCodePanel({
                         </div>
                       </div>
 
+                      {keyDrafts[idx] !== undefined && (
+                        <p className="text-[12px] font-medium text-danger" role="alert">
+                          Another field already uses the key “{keyDrafts[idx]}”. Pick a different
+                          one; this field keeps “{f.key}” until you do.
+                        </p>
+                      )}
                       {!keyValid && (
                         <p className="text-[12px] font-medium text-danger" role="alert">
                           Keys use lowercase letters, numbers, and underscores, and cannot match
@@ -482,10 +514,7 @@ export function CustomCodePanel({
               spellCheck={false}
               value={html}
               onChange={(e) => onChange({ ...v, html: e.target.value })}
-              className={cx(
-                'font-mono text-[13px]',
-                (htmlTooLong || badHtmlToken) && 'border-danger',
-              )}
+              className={cx('font-mono text-[13px]', (htmlTooLong || badHtml) && 'border-danger')}
               placeholder={STARTER_HTML}
             />
             {htmlTooLong && (
@@ -493,16 +522,13 @@ export function CustomCodePanel({
                 Custom HTML can be up to {MAX_CUSTOM_HTML} characters.
               </p>
             )}
-            {badHtmlToken && (
+            {badHtml && (
               <p
                 className="flex items-center gap-1.5 text-[12.5px] font-medium text-danger"
                 role="alert"
               >
                 <Warning size={14} aria-hidden="true" />
-                <span>
-                  Unknown token <code className="font-mono">{`{${badHtmlToken}}`}</code>. Define a
-                  custom field key or use a built-in variable.
-                </span>
+                <span>{badHtml}</span>
               </p>
             )}
           </div>
