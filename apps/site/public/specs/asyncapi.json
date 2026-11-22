@@ -46,10 +46,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "account",
@@ -60,11 +57,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ferrocast cloud account sign-in transition (PC session only, never sent to API keys).",
@@ -77,10 +70,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "brb",
@@ -91,11 +81,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS BRB scene state (`{ on, scene }`).",
@@ -108,10 +94,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "chat_highlight",
@@ -122,11 +105,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Pinned or cleared featured chat message.",
@@ -139,10 +118,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "chatter",
@@ -153,11 +129,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated tracked chatter metadata.",
@@ -170,10 +142,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "counter",
@@ -184,11 +153,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated bot counter (`{ name, value }`).",
@@ -212,10 +177,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "event",
@@ -226,11 +188,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Normalized stream event (follow, sub, gift_sub, tip, bits, raid, chat_message, etc.).",
@@ -243,10 +201,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "giveaway",
@@ -257,11 +212,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active giveaway state, entry count, or winner.",
@@ -274,10 +225,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "goals",
@@ -288,11 +236,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Updated stream goals array.",
@@ -305,10 +249,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "golive",
@@ -319,11 +260,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Multistream output state and live bitrate telemetry.",
@@ -336,10 +273,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "held",
@@ -350,11 +284,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Message/event held by safety filters (`{ event_id, reason }`).",
@@ -367,10 +297,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "held_resolved",
@@ -381,11 +308,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Held event released or dropped (`{ event_id, outcome }`).",
@@ -403,10 +326,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "hello",
@@ -417,11 +337,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Initial handshake with highest sequence number (`{ seq }`).",
@@ -434,10 +350,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "lane",
@@ -448,11 +361,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live Moments lane items.",
@@ -465,10 +374,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "live_alert",
@@ -479,11 +385,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Live stream encoder/audio/network alert banner.",
@@ -496,10 +398,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "marker",
@@ -510,11 +409,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "New stream marker created.",
@@ -526,10 +421,7 @@
               "data": {
                 "properties": {
                   "key": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "level": {
                     "type": "string"
@@ -541,10 +433,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "notice",
@@ -555,11 +444,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Engine status notice or panic warning (`account:*` notices suppressed for API keys).",
@@ -572,10 +457,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "obs_health",
@@ -586,11 +468,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "OBS FPS/dropped-frames health snapshot.",
@@ -603,10 +481,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "panic",
@@ -617,11 +492,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Panic lockdown toggled (`{ on, plan }`).",
@@ -634,10 +505,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "poll",
@@ -648,11 +516,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Active poll progress or end state.",
@@ -665,10 +529,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "queue",
@@ -679,11 +540,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Alert queue snapshot (active/paused/muted/pending count).",
@@ -701,10 +558,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "resync",
@@ -715,11 +569,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Ring buffer gap notice (`{ missed }`); clients should re-fetch state over REST.",
@@ -732,10 +582,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "show",
@@ -746,11 +593,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Show countdown and live rundown state (`{ show }`).",
@@ -763,10 +606,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "smart_mod",
@@ -777,11 +617,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Smart Moderation triage card.",
@@ -794,10 +630,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "snapshot",
@@ -808,11 +641,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Overlay reconnect full state snapshot.",
@@ -830,10 +659,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "status",
@@ -844,11 +670,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Connector and OBS health snapshots.",
@@ -861,10 +683,7 @@
                 "type": "array"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "tts_pending",
@@ -875,11 +694,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "TTS queue items awaiting approval.",
@@ -892,10 +707,7 @@
                 "type": "object"
               },
               "seq": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": ["integer", "null"]
               },
               "type": {
                 "const": "update",
@@ -906,11 +718,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "type",
-              "data"
-            ],
+            "required": ["v", "type", "data"],
             "type": "object"
           },
           "summary": "Application update check/download state.",
@@ -940,12 +748,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Show alert visual & sound frame."
@@ -968,12 +771,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Dismiss active alert frame (`{ alert_id }`)."
@@ -996,12 +794,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Clear overlay chatbox history."
@@ -1024,12 +817,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Updated overlay config."
@@ -1052,12 +840,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Remove moderated chat message from overlay chatbox."
@@ -1080,12 +863,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Remove all messages from a timed-out/banned user."
@@ -1108,12 +886,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Public chat/event card frame."
@@ -1127,18 +900,11 @@
                     "type": "string"
                   },
                   "phase": {
-                    "enum": [
-                      "started",
-                      "finished",
-                      "failed"
-                    ],
+                    "enum": ["started", "finished", "failed"],
                     "type": "string"
                   }
                 },
-                "required": [
-                  "alert_id",
-                  "phase"
-                ],
+                "required": ["alert_id", "phase"],
                 "type": "object"
               },
               "type": {
@@ -1146,10 +912,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server alert playback acknowledgment: `{ type: 'ack', data: { alert_id, phase } }`."
@@ -1160,10 +923,7 @@
               "data": {
                 "properties": {
                   "since_seq": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ]
+                    "type": ["integer", "null"]
                   }
                 },
                 "type": "object"
@@ -1173,10 +933,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server on connect: where to resume from (`{ since_seq }`)."
@@ -1190,9 +947,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "visible"
-                ],
+                "required": ["visible"],
                 "type": "object"
               },
               "type": {
@@ -1200,10 +955,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "type",
-              "data"
-            ],
+            "required": ["type", "data"],
             "type": "object"
           },
           "summary": "Client -> server browser source visibility telemetry: `{ type: 'visibility', data: { visible } }`."
@@ -1226,12 +978,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Visualizer spectrum levels & track info."
@@ -1254,12 +1001,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Overlay token was rotated or deleted; client should stop reconnecting."
@@ -1282,12 +1024,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Initial full overlay config + widget state on connect."
@@ -1310,12 +1047,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Updated widget/goal/poll/giveaway/credits state."
@@ -1338,12 +1070,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "v",
-              "seq",
-              "type",
-              "data"
-            ],
+            "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
           "summary": "Play synthesized TTS audio in overlay."
