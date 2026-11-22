@@ -201,4 +201,20 @@ describe('Alert Editor v2 validation and rendering (R25)', () => {
     r.variations = Array.from({ length: 21 }, () => ({ ...r.variations[0]! }))
     expect(validateRule(r)).toMatch(/up to 20 looks/)
   })
+
+  it('rejects wrong shapes the engine would refuse (arrays, strings, fractions)', () => {
+    const t = (edit: (v: Record<string, unknown>) => void) => {
+      const r = baseRule()
+      edit(r.variations[0] as unknown as Record<string, unknown>)
+      return validateRule(r)
+    }
+    expect(t((v) => (v.field_values = []))).toMatch(/field_values/)
+    expect(t((v) => (v.fields = 'bad'))).toMatch(/fields must be a list/)
+    expect(t((v) => (v.custom_enabled = 'yes'))).toMatch(/custom_enabled/)
+    expect(t((v) => (v.html = 123))).toMatch(/html must be text/)
+    expect(t((v) => (v.volume = 70.5))).toMatch(/whole number/)
+    expect(t((v) => (v.duration_ms = Number.NaN))).toMatch(/whole number/)
+    expect(t((v) => ((v.anim as Record<string, unknown>).in_ms = 400.5))).toMatch(/whole number/)
+    expect(t(() => {})).toBeNull()
+  })
 })

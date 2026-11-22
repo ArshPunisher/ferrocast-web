@@ -654,7 +654,25 @@ export function validateRule(r: AlertRule): string | null {
   if (!r.variations.some((v) => v.condition === null))
     return 'The rule needs a default look (a variation without a condition).'
   for (const rawV of r.variations) {
+    const loose = rawV as unknown as Record<string, unknown>
+    if (loose.custom_enabled !== undefined && typeof loose.custom_enabled !== 'boolean')
+      return `Variation '${rawV.name}': custom_enabled must be true or false.`
+    if (loose.html !== undefined && typeof loose.html !== 'string')
+      return `Variation '${rawV.name}': html must be text.`
+    if (loose.fields !== undefined && !Array.isArray(loose.fields))
+      return `Variation '${rawV.name}': fields must be a list.`
+    const fv = loose.field_values
+    if (fv !== undefined && (typeof fv !== 'object' || fv === null || Array.isArray(fv)))
+      return `Variation '${rawV.name}': field_values must be an object keyed by field.`
     const v = normalizeVariation(rawV)
+    for (const [label, n] of [
+      ['volume', v.volume],
+      ['duration', v.duration_ms],
+      ['entrance timing', v.anim?.in_ms],
+      ['exit timing', v.anim?.out_ms],
+      ['text delay', v.anim?.text_delay_ms],
+    ] as const)
+      if (!Number.isInteger(n)) return `Variation '${v.name}': ${label} must be a whole number.`
     if (v.volume < 0 || v.volume > 100) return `Variation '${v.name}': volume must be 0 to 100.`
     if (v.duration_ms < MIN_DURATION_MS || v.duration_ms > MAX_DURATION_MS)
       return `Variation '${v.name}': duration must be 1 to 60 seconds.`
