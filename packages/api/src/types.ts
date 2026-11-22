@@ -1977,6 +1977,16 @@ export interface StreamHealthRecord {
   frame_ms: number
   destinations: DestinationHealthSnapshot[]
   issues: string[]
+  /** Destinations turned on or off while the stream ran (older records: none). */
+  destination_log?: DestinationEvent[]
+}
+
+export interface DestinationEvent {
+  id: string
+  name: string
+  at: Millis
+  /** true = it started sending, false = it stopped. */
+  on: boolean
 }
 
 export interface CrashDumpSummary {

@@ -745,3 +745,60 @@ describe('U6: reconnectingText keeps short reason in full and puts extras behind
     })
   })
 })
+
+describe('destinations while live (the demo answers like the engine)', () => {
+  const setLive = (engine: DemoEngine, steer: Record<string, unknown> = {}) => {
+    const d = engine as unknown as {
+      studio: { obs: { streaming: boolean } }
+      setGoLive: (s: Record<string, unknown>) => void
+    }
+    d.studio.obs.streaming = true
+    d.setGoLive({ points_here: true, ...steer })
+  }
+  const list = (api: ReturnType<typeof goliveApi>, on: string[]) =>
+    api.view().then((v) => v.destinations.map((d) => ({ id: d.id, enabled: on.includes(d.id) })))
+
+  it('asks before the last destination goes, and goes on with the confirmation', async () => {
+    const { engine, api } = demo()
+    setLive(engine)
+    await api.saveOrder(await list(api, ['twitch']))
+    await expect(api.saveOrder(await list(api, []))).rejects.toMatchObject({
+      code: 'golive_last_destination',
+    })
+    await expect(api.saveOrder(await list(api, []), { last: true })).resolves.toBeTruthy()
+  })
+
+  it('refuses what the running encode cannot serve, and asks when the upload will not carry it', async () => {
+    const { engine, api } = demo()
+    setLive(engine, { kbps: 7500, upload_kbps: 13000 })
+    await api.saveOrder(await list(api, ['youtube']))
+    await expect(api.saveOrder(await list(api, ['youtube', 'twitch']))).rejects.toMatchObject({
+      status: 422,
+      code: 'golive_needs_new_encode',
+    })
+    // Kick takes 8,000: it fits the encode; the measured upload decides.
+    await api.uploadCheck()
+    await expect(api.saveOrder(await list(api, ['youtube', 'kick']))).rejects.toMatchObject({
+      status: 409,
+      code: 'golive_upload_exceeded',
+    })
+    await expect(
+      api.saveOrder(await list(api, ['youtube', 'kick']), { upload: true }),
+    ).resolves.toBeTruthy()
+  })
+
+  it('refuses a codec the platform cannot take, mid-stream', async () => {
+    const { engine, api } = demo()
+    setLive(engine, { kbps: 5000, codec: 'hevc' })
+    await api.saveOrder(await list(api, ['youtube']))
+    await expect(api.saveOrder(await list(api, ['youtube', 'kick']))).rejects.toMatchObject({
+      status: 422,
+      code: 'golive_needs_new_encode',
+    })
+  })
+
+  it('does not ask while nothing is live', async () => {
+    const { api } = demo()
+    await expect(api.saveOrder(await list(api, []))).resolves.toBeTruthy()
+  })
+})
