@@ -3,6 +3,7 @@ import {
   ArrowsClockwise,
   DotsThree,
   Layout,
+  MagnifyingGlass,
   PencilSimple,
   Plus,
   Trash,
@@ -15,6 +16,7 @@ import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { go, href } from '../lib/router'
 import { useUsesObs } from '../lib/picture'
+import { useWidePage } from '../lib/wide'
 import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
 import { SavedOverlayPreview } from '../components/design/previews'
 
@@ -63,6 +65,8 @@ function LayoutThumb({ overlay }: { overlay: Overlay }) {
 }
 
 export function Overlays() {
+  // The cards use the whole window, however wide it is.
+  useWidePage()
   const client = useClient()
   const overlays = useResource((c) => c.overlays())
   const { run, busy } = useAction()
@@ -77,6 +81,7 @@ export function Overlays() {
   const [regen, setRegen] = useState<Overlay | null>(null)
   const [removing, setRemoving] = useState<Overlay | null>(null)
   const [renaming, setRenaming] = useState<{ o: Overlay; name: string } | null>(null)
+  const [q, setQ] = useState('')
 
   const create = async () => {
     const n = name.trim()
@@ -95,6 +100,11 @@ export function Overlays() {
     }
   }
 
+  const needle = q.trim().toLowerCase()
+  const shown = (overlays.data ?? []).filter(
+    (o) => !needle || o.name.toLowerCase().includes(needle),
+  )
+
   return (
     <div>
       <PageHeader
@@ -105,20 +115,40 @@ export function Overlays() {
             : 'Each overlay is one Browser source in your scenes. Group widgets to keep it light.'
         }
         actions={
-          <Button
-            variant="primary"
-            icon={<Plus size={16} weight="bold" />}
-            onClick={() => setCreating(true)}
-          >
-            New overlay
-          </Button>
+          <>
+            {!!overlays.data && overlays.data.length > 1 && (
+              <label className="relative block w-full sm:w-56">
+                <span className="sr-only">Search overlays</span>
+                <MagnifyingGlass
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-3"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  data-keep-placeholder
+                  placeholder="Search overlays"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="h-10 pl-9"
+                />
+              </label>
+            )}
+            <Button
+              variant="primary"
+              icon={<Plus size={16} weight="bold" />}
+              onClick={() => setCreating(true)}
+            >
+              New overlay
+            </Button>
+          </>
         }
       />
       {overlays.error ? (
         <LoadError error={overlays.error} onRetry={overlays.reload} />
       ) : !overlays.data ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1].map((i) => (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-72" />
           ))}
         </div>
@@ -134,9 +164,16 @@ export function Overlays() {
           An overlay holds your alerts, chat and goals. Add it to {usesObs ? 'OBS' : 'the Studio'}{' '}
           once and change it any time from here.
         </EmptyState>
+      ) : shown.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-panel border border-dashed border-line-strong px-4 py-10 text-center">
+          <b className="text-base text-text">No overlay is called “{q.trim()}”</b>
+          <Button size="sm" variant="secondary" onClick={() => setQ('')}>
+            Clear search
+          </Button>
+        </div>
       ) : (
-        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {overlays.data.map((o) => (
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {shown.map((o) => (
             <li
               key={o.id}
               className="flex min-w-0 flex-col gap-3 rounded-panel border border-line bg-surface-1 p-4 shadow-1"
