@@ -1,13 +1,20 @@
-import type {
-  EngineFilter,
-  EngineImportPreview,
-  EngineImportReport,
-  EngineImportSkip,
-  EngineLevel,
-  EngineObsCollection,
-  EngineOption,
-  EngineShelf,
-  NewEngineSource,
+import {
+  resolveTransitionFromScenes,
+  type EncodeBudget,
+  type EngineFilter,
+  type EngineImportPreview,
+  type EngineImportReport,
+  type EngineImportSkip,
+  type EngineLevel,
+  type EngineNamedTransition,
+  type EngineObsCollection,
+  type EngineOption,
+  type EngineSettings,
+  type EngineShelf,
+  type EngineStudioOptions,
+  type EngineTransition,
+  type EngineTransitionMatrixRule,
+  type NewEngineSource,
 } from '../../studio-engine'
 import { HttpError } from '../http-error'
 import { clone, requireObj } from './host'
@@ -345,8 +352,47 @@ export class DemoStudioEngine {
     current: 'default',
     list: [{ id: 'default', name: 'Default' }],
   }
-  private activeScenes: string[] = ['Main', 'BRB']
+  private activeScenes: string[] = ['Main', 'Gameplay', 'Chatting', 'BRB']
   private currentScene = 'Main'
+  private previewScene: string | null = null
+  /** The T-bar as it was last moved: active until it is released. */
+  private tbarState: { active: boolean; at: number } = { active: false, at: 0 }
+  private black = false
+  private previewPaused = false
+  private namedTransitions: EngineNamedTransition[] = [
+    { name: 'Fade', kind: 'fade_transition', ms: 300, settings: {}, default: true },
+    { name: 'Cut', kind: 'cut_transition', ms: 0, settings: {}, default: false },
+    {
+      name: 'Quick Swipe',
+      kind: 'swipe_transition',
+      ms: 450,
+      settings: { direction: 'left', swipe_in: false },
+      default: false,
+    },
+  ]
+  private transitionMatrix: EngineTransitionMatrixRule[] = [
+    { from: null, to: 'BRB', transition: 'Cut' },
+    { from: 'Main', to: 'Gameplay', transition: 'Quick Swipe' },
+  ]
+  private legacySceneTransitions = new Map<string, EngineTransition>()
+  private kindSettings = new Map<string, EngineSettings>()
+  private quickTransitions: EngineTransition[] = [
+    { kind: 'cut_transition', ms: 0 },
+    { kind: 'fade_transition', ms: 300 },
+  ]
+  private studioModeOptions: EngineStudioOptions = {
+    swap: true,
+    duplicate_scene: true,
+    duplicate_sources: false,
+    double_click: false,
+  }
+  public lastResolvedTransition: {
+    name: string
+    kind: string
+    ms: number
+    settings: EngineSettings
+    via: string
+  } | null = null
   private micSourceName = 'Mic'
   private micDeviceId = 'mic-builtin'
   private cameraSourceName = 'Webcam'
@@ -654,14 +700,216 @@ export class DemoStudioEngine {
         transitions: [
           { id: 'fade_transition', name: 'Fade' },
           { id: 'cut_transition', name: 'Cut' },
+          { id: 'swipe_transition', name: 'Swipe' },
+          { id: 'slide_transition', name: 'Slide' },
+          { id: 'fade_to_color_transition', name: 'Fade to colour' },
+          { id: 'wipe_transition', name: 'Wipe' },
+          { id: 'obs_stinger_transition', name: 'Stinger' },
+          { id: 'ferrocast_move', name: 'Move' },
         ],
         encoders: [{ id: 'obs_x264', name: 'x264' }],
         outputs: [],
       }
     }
 
+    if (method === 'GET' && rest[2] === 'kinds' && rest[4] === 'defaults') {
+      const kind = decodeURIComponent(rest[3]!)
+      if (kind === 'swipe_transition') return { direction: 'left', swipe_in: false }
+      if (kind === 'slide_transition') return { direction: 'left' }
+      if (kind === 'fade_to_color_transition') return { color: 0xff000000, switch_point: 50 }
+      if (kind === 'wipe_transition')
+        return { luma_image: '', luma_softness: 0.03, luma_invert: false }
+      if (kind === 'obs_stinger_transition') {
+        return { path: '', transition_point_type: 0, transition_point: 0 }
+      }
+      return {}
+    }
+
     if (method === 'GET' && rest[2] === 'kinds' && rest[4] === 'options') {
       const kind = decodeURIComponent(rest[3]!)
+      if (kind === 'swipe_transition' || kind === 'slide_transition') {
+        const list: EngineOption[] = [
+          {
+            key: 'direction',
+            label: 'Direction',
+            kind: 'list',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: ['Left', 'Right', 'Up', 'Down'],
+            values: ['left', 'right', 'up', 'down'],
+            group: [],
+            default: 'left',
+          },
+        ]
+        if (kind === 'swipe_transition') {
+          list.push({
+            key: 'swipe_in',
+            label: 'Swipe in',
+            kind: 'bool',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+            default: false,
+          })
+        }
+        return list
+      }
+      if (kind === 'fade_to_color_transition') {
+        return [
+          {
+            key: 'color',
+            label: 'Colour',
+            kind: 'color',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+          {
+            key: 'switch_point',
+            label: 'Fully coloured at',
+            kind: 'int',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: 0,
+            max: 100,
+            step: 1,
+            slider: true,
+            suffix: '%',
+            choices: [],
+            values: [],
+            group: [],
+          },
+        ]
+      }
+      if (kind === 'wipe_transition') {
+        return [
+          {
+            key: 'luma_image',
+            label: 'Image',
+            kind: 'path',
+            path: 'file',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+          {
+            key: 'luma_softness',
+            label: 'Softness',
+            kind: 'float',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            slider: true,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+          {
+            key: 'luma_invert',
+            label: 'Invert',
+            kind: 'bool',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+        ]
+      }
+      if (kind === 'obs_stinger_transition') {
+        return [
+          {
+            key: 'path',
+            label: 'Video',
+            kind: 'path',
+            path: 'file',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+          {
+            key: 'transition_point_type',
+            label: 'Switch scenes at',
+            kind: 'list',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: ['Time (milliseconds)', 'Frame'],
+            values: [0, 1],
+            group: [],
+          },
+          {
+            key: 'transition_point',
+            label: 'Switch point',
+            kind: 'int',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: 0,
+            max: 60000,
+            step: 1,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+          },
+        ]
+      }
       if (kind === 'av_capture_input_v2' || kind === 'dshow_input' || kind === 'v4l2_input') {
         const list = this.opts.hasCamera ? CAMERA_SVGS : []
         const opt: EngineOption = {
@@ -716,16 +964,461 @@ export class DemoStudioEngine {
     }
 
     if (is('GET', 'studio/engine/scenes')) {
-      return {
-        current: this.currentScene,
-        scenes: this.activeScenes.map((name) => ({
-          name,
-          items: name === this.currentScene ? 2 : 1,
-          current: name === this.currentScene,
-        })),
-        transition: { kind: 'fade_transition', ms: 300 },
-        vertical: null,
+      return this.scenesPayload()
+    }
+    if (is('POST', 'studio/engine/scenes')) {
+      const b = requireObj(body)
+      const name = String(b.name ?? '').trim()
+      if (!name || name.length > 100) {
+        throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
       }
+      if (this.activeScenes.includes(name)) {
+        throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
+      }
+      this.activeScenes.push(name)
+      return { name, items: 0, current: false, preview: false, transition: null }
+    }
+    if (method === 'DELETE' && rest[2] === 'scenes' && rest.length === 4) {
+      const name = decodeURIComponent(rest[3]!)
+      if (!this.activeScenes.includes(name)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${name}".`)
+      }
+      if (this.activeScenes.length < 2) {
+        throw new HttpError(409, 'studio_last_scene', 'A collection keeps at least one scene.')
+      }
+      this.activeScenes = this.activeScenes.filter((s) => s !== name)
+      this.transitionMatrix = this.transitionMatrix.filter((r) => r.from !== name && r.to !== name)
+      this.legacySceneTransitions.delete(name)
+      if (this.currentScene === name) this.currentScene = this.activeScenes[0]!
+      if (this.previewScene === name) this.previewScene = this.activeScenes[0]!
+      return undefined
+    }
+    if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'current') {
+      const name = decodeURIComponent(rest[3]!)
+      if (!this.activeScenes.includes(name)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${name}".`)
+      }
+      this.lastResolvedTransition = resolveTransitionFromScenes(
+        this.scenesPayload(),
+        this.currentScene,
+        name,
+      )
+      this.currentScene = name
+      this.black = false
+      return undefined
+    }
+    if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'duplicate') {
+      const src = decodeURIComponent(rest[3]!)
+      const name = String(requireObj(body).name ?? '').trim()
+      if (!this.activeScenes.includes(src)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
+      }
+      if (!name || this.activeScenes.includes(name)) {
+        throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
+      }
+      const idx = this.activeScenes.indexOf(src)
+      this.activeScenes.splice(idx + 1, 0, name)
+      return { name }
+    }
+    if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'move') {
+      const src = decodeURIComponent(rest[3]!)
+      const to = Number(requireObj(body).to ?? 0)
+      const idx = this.activeScenes.indexOf(src)
+      if (idx < 0) throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
+      const [item] = this.activeScenes.splice(idx, 1)
+      this.activeScenes.splice(Math.max(0, Math.min(to, this.activeScenes.length)), 0, item!)
+      return undefined
+    }
+    if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'items') {
+      return []
+    }
+    if (method === 'POST' && rest[2] === 'sources' && rest[4] === 'rename') {
+      const from = decodeURIComponent(rest[3]!)
+      const to = String(requireObj(body).name ?? '').trim()
+      if (!to) throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
+      if (this.activeScenes.includes(from)) {
+        if (from !== to && this.activeScenes.includes(to)) {
+          throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
+        }
+        this.activeScenes = this.activeScenes.map((s) => (s === from ? to : s))
+        if (this.currentScene === from) this.currentScene = to
+        if (this.previewScene === from) this.previewScene = to
+        this.transitionMatrix = this.transitionMatrix.map((r) => ({
+          ...r,
+          from: r.from === from ? to : r.from,
+          to: r.to === from ? to : r.to,
+        }))
+        const leg = this.legacySceneTransitions.get(from)
+        if (leg) {
+          this.legacySceneTransitions.delete(from)
+          this.legacySceneTransitions.set(to, leg)
+        }
+      }
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/transition')) {
+      const b = requireObj(body)
+      const kind = String(b.kind ?? '')
+      const ms = Math.max(0, Math.min(20_000, Number(b.ms ?? 300)))
+      const cur = this.namedTransitions.find((t) => t.default)
+      if (cur && cur.kind === kind) {
+        cur.ms = kind === 'cut_transition' ? 0 : ms
+      } else {
+        const match = this.namedTransitions.find((t) => t.kind === kind)
+        if (match) {
+          match.ms = kind === 'cut_transition' ? 0 : ms
+          for (const t of this.namedTransitions) t.default = t.name === match.name
+        } else {
+          for (const t of this.namedTransitions) t.default = false
+          // A name no preset has (one may already be called after this kind).
+          let name = kind
+          for (let n = 2; this.namedTransitions.some((t) => t.name === name); n++) {
+            name = `${kind} ${n}`
+          }
+          this.namedTransitions.push({
+            name,
+            kind,
+            ms: kind === 'cut_transition' ? 0 : ms,
+            settings: clone(this.kindSettings.get(kind) ?? {}),
+            default: true,
+          })
+        }
+      }
+      return undefined
+    }
+    if (method === 'PUT' && rest[2] === 'scenes' && rest[4] === 'transition') {
+      const scene = decodeURIComponent(rest[3]!)
+      if (!this.activeScenes.includes(scene)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${scene}".`)
+      }
+      const b = requireObj(body)
+      this.transitionMatrix = this.transitionMatrix.filter(
+        (r) => !(r.from === null && r.to === scene),
+      )
+      if (b.transition && typeof b.transition === 'object') {
+        const t = b.transition as EngineTransition
+        this.legacySceneTransitions.set(scene, {
+          kind: t.kind,
+          ms: t.kind === 'cut_transition' ? 0 : t.ms,
+        })
+      } else {
+        this.legacySceneTransitions.delete(scene)
+      }
+      return undefined
+    }
+    if (method === 'GET' && rest[2] === 'transitions' && rest[4] === 'settings') {
+      const kind = decodeURIComponent(rest[3]!)
+      return clone(this.kindSettings.get(kind) ?? {})
+    }
+    if (method === 'PUT' && rest[2] === 'transitions' && rest[4] === 'settings') {
+      const kind = decodeURIComponent(rest[3]!)
+      const settings = requireObj(requireObj(body).settings)
+      this.kindSettings.set(kind, { ...(this.kindSettings.get(kind) ?? {}), ...clone(settings) })
+      // The preset that plays is the default one of the kind, else the first of it; others stay.
+      const target =
+        this.namedTransitions.find((t) => t.default && t.kind === kind) ??
+        this.namedTransitions.find((t) => t.kind === kind)
+      if (target) target.settings = { ...target.settings, ...clone(settings) }
+      return undefined
+    }
+    if (is('POST', 'studio/engine/transitions')) {
+      const b = requireObj(body)
+      const name = String(b.name ?? '').trim()
+      const kind = String(b.kind ?? 'fade_transition')
+      const ms = Math.max(0, Math.min(20_000, Number(b.ms ?? 300)))
+      const settings =
+        b.settings && typeof b.settings === 'object' ? clone(b.settings as EngineSettings) : {}
+      const makeDefault = Boolean(b.default)
+      if (!name || name.length > 100) {
+        throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
+      }
+      if (this.namedTransitions.some((t) => t.name === name)) {
+        throw new HttpError(
+          409,
+          'studio_name_taken',
+          `There's already a transition called "${name}".`,
+        )
+      }
+      if (makeDefault) {
+        for (const t of this.namedTransitions) t.default = false
+      }
+      const created: EngineNamedTransition = {
+        name,
+        kind,
+        ms: kind === 'cut_transition' ? 0 : ms,
+        settings,
+        default: makeDefault,
+      }
+      this.namedTransitions.push(created)
+      return clone(created)
+    }
+    if (rest[2] === 'transitions' && rest.length === 4) {
+      const name = decodeURIComponent(rest[3]!)
+      const idx = this.namedTransitions.findIndex((t) => t.name === name)
+      if (method === 'PUT') {
+        if (idx < 0)
+          throw new HttpError(
+            404,
+            'studio_no_transition',
+            `There's no transition called "${name}".`,
+          )
+        const b = requireObj(body)
+        const cur = this.namedTransitions[idx]!
+        const nextKind = typeof b.kind === 'string' ? b.kind : cur.kind
+        const kindChanged = nextKind !== cur.kind
+        cur.kind = nextKind
+        if (typeof b.ms === 'number')
+          cur.ms = nextKind === 'cut_transition' ? 0 : Math.max(0, Math.min(20_000, b.ms))
+        else if (nextKind === 'cut_transition') cur.ms = 0
+        if (b.settings && typeof b.settings === 'object') {
+          cur.settings = kindChanged
+            ? clone(b.settings as EngineSettings)
+            : { ...cur.settings, ...clone(b.settings as EngineSettings) }
+        } else if (kindChanged) {
+          cur.settings = {}
+        }
+        if (b.default === true) {
+          for (const t of this.namedTransitions) t.default = t.name === name
+        }
+        return clone(cur)
+      }
+      if (method === 'DELETE') {
+        if (idx < 0)
+          throw new HttpError(
+            404,
+            'studio_no_transition',
+            `There's no transition called "${name}".`,
+          )
+        if (this.namedTransitions.length <= 1) {
+          throw new HttpError(
+            409,
+            'studio_last_transition',
+            'At least one transition must remain.',
+            'Keep at least one transition in the collection.',
+          )
+        }
+        const wasDef = this.namedTransitions[idx]!.default
+        this.namedTransitions.splice(idx, 1)
+        this.transitionMatrix = this.transitionMatrix.filter((r) => r.transition !== name)
+        if (wasDef && this.namedTransitions.length > 0) {
+          const nextDef =
+            this.namedTransitions.find((t) => t.name === 'Fade') ?? this.namedTransitions[0]!
+          nextDef.default = true
+        }
+        return undefined
+      }
+    }
+    if (method === 'POST' && rest[2] === 'transitions' && rest[4] === 'rename') {
+      const name = decodeURIComponent(rest[3]!)
+      const to = String(requireObj(body).name ?? '').trim()
+      if (!to || to.length > 100) {
+        throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
+      }
+      const cur = this.namedTransitions.find((t) => t.name === name)
+      if (!cur)
+        throw new HttpError(404, 'studio_no_transition', `There's no transition called "${name}".`)
+      if (name !== to && this.namedTransitions.some((t) => t.name === to)) {
+        throw new HttpError(
+          409,
+          'studio_name_taken',
+          `There's already a transition called "${to}".`,
+        )
+      }
+      cur.name = to
+      this.transitionMatrix = this.transitionMatrix.map((r) =>
+        r.transition === name ? { ...r, transition: to } : r,
+      )
+      return clone(cur)
+    }
+    if (method === 'POST' && rest[2] === 'transitions' && rest[4] === 'duplicate') {
+      const name = decodeURIComponent(rest[3]!)
+      const cur = this.namedTransitions.find((t) => t.name === name)
+      if (!cur)
+        throw new HttpError(404, 'studio_no_transition', `There's no transition called "${name}".`)
+      const reqName = requireObj(body).name
+      let nextName = typeof reqName === 'string' && reqName.trim() ? reqName.trim() : ''
+      if (nextName) {
+        if (this.namedTransitions.some((t) => t.name === nextName)) {
+          throw new HttpError(
+            409,
+            'studio_name_taken',
+            `There's already a transition called "${nextName}".`,
+          )
+        }
+      } else {
+        let n = 2
+        while (this.namedTransitions.some((t) => t.name === `${name} ${n}`)) n++
+        nextName = `${name} ${n}`
+      }
+      const dup: EngineNamedTransition = {
+        name: nextName,
+        kind: cur.kind,
+        ms: cur.ms,
+        settings: clone(cur.settings),
+        default: false,
+      }
+      this.namedTransitions.push(dup)
+      return clone(dup)
+    }
+    if (method === 'PUT' && rest[2] === 'transitions' && rest[4] === 'default') {
+      const name = decodeURIComponent(rest[3]!)
+      if (!this.namedTransitions.some((t) => t.name === name)) {
+        throw new HttpError(404, 'studio_no_transition', `There's no transition called "${name}".`)
+      }
+      for (const t of this.namedTransitions) t.default = t.name === name
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/transition-matrix')) {
+      const b = requireObj(body)
+      const from = typeof b.from === 'string' && b.from.trim() ? b.from.trim() : null
+      const to = typeof b.to === 'string' && b.to.trim() ? b.to.trim() : null
+      const tr =
+        typeof b.transition === 'string' && b.transition.trim() ? b.transition.trim() : null
+      if (from === null && to === null) {
+        throw new HttpError(
+          400,
+          'invalid',
+          'Pick a From scene, a To scene, or both; the default transition already covers Any to Any.',
+        )
+      }
+      if (from !== null && !this.activeScenes.includes(from)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${from}".`)
+      }
+      if (to !== null && !this.activeScenes.includes(to)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${to}".`)
+      }
+      if (tr !== null && !this.namedTransitions.some((t) => t.name === tr)) {
+        throw new HttpError(404, 'studio_no_transition', `There's no transition called "${tr}".`)
+      }
+      this.transitionMatrix = this.transitionMatrix.filter((r) => !(r.from === from && r.to === to))
+      if (tr !== null) {
+        this.transitionMatrix.push({ from, to, transition: tr })
+      }
+      if (from === null && to !== null) this.legacySceneTransitions.delete(to)
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/studio-mode')) {
+      const on = Boolean(requireObj(body).on)
+      this.previewScene = on ? this.currentScene : null
+      if (!on) this.tbarState = { active: false, at: 0 }
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/studio-mode/preview')) {
+      const scene = String(requireObj(body).scene ?? '')
+      if (!this.activeScenes.includes(scene)) {
+        throw new HttpError(404, 'studio_no_scene', `There's no scene called "${scene}".`)
+      }
+      this.previewScene = scene
+      return undefined
+    }
+    if (is('POST', 'studio/engine/studio-mode/transition')) {
+      if (!this.previewScene) {
+        throw new HttpError(422, 'studio_failed', 'Studio Mode is off.')
+      }
+      const b = requireObj(body)
+      const q = b.quick as EngineTransition | null | undefined
+      const pre = this.previewScene
+      const old = this.currentScene
+      if (q) {
+        this.lastResolvedTransition = {
+          name: '',
+          kind: q.kind,
+          ms: q.ms,
+          settings: clone(this.kindSettings.get(q.kind) ?? {}),
+          via: 'quick',
+        }
+      } else {
+        this.lastResolvedTransition = resolveTransitionFromScenes(this.scenesPayload(), old, pre)
+      }
+      this.currentScene = pre
+      // Swap on (the default): what was on air goes to the preview; off: the preview stays.
+      if (this.studioModeOptions.swap) this.previewScene = old
+      this.black = false
+      return undefined
+    }
+    if (is('POST', 'studio/engine/studio-mode/swap')) {
+      if (!this.previewScene) throw new HttpError(422, 'studio_failed', 'Studio Mode is off.')
+      const old = this.currentScene
+      this.currentScene = this.previewScene
+      this.previewScene = old
+      this.lastResolvedTransition = {
+        name: 'Cut',
+        kind: 'cut_transition',
+        ms: 0,
+        settings: {},
+        via: 'swap',
+      }
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/studio-mode/tbar')) {
+      if (!this.previewScene) throw new HttpError(422, 'studio_failed', 'Studio Mode is off.')
+      const b = requireObj(body)
+      const at = Math.max(0, Math.min(1, Number(b.at ?? 0)))
+      const release = Boolean(b.release)
+      if (release && at >= 0.5) {
+        const pre = this.previewScene
+        const old = this.currentScene
+        this.lastResolvedTransition = resolveTransitionFromScenes(this.scenesPayload(), old, pre)
+        this.currentScene = pre
+        if (this.studioModeOptions.swap) this.previewScene = old
+      }
+      this.tbarState = { active: !release, at: release ? 0 : at }
+      return clone(this.tbarState)
+    }
+    if (is('PUT', 'studio/engine/quick-transitions')) {
+      const list = requireObj(body).list
+      if (Array.isArray(list)) {
+        this.quickTransitions = clone(list as EngineTransition[])
+      }
+      return undefined
+    }
+    if (is('PUT', 'studio/engine/studio-mode/options')) {
+      this.studioModeOptions = {
+        ...this.studioModeOptions,
+        ...(requireObj(body) as Partial<EngineStudioOptions>),
+      }
+      return undefined
+    }
+    if (is('POST', 'studio/engine/black')) {
+      this.black = !this.black
+      return { black: this.black }
+    }
+    if (is('GET', 'studio/engine/stats')) {
+      return {
+        engine: { cpu: 4.2, fps: 60, frame_ms: 4.1, lagged: 0, frames: 3600, memory_mb: 240 },
+        canvas: { width: 1920, height: 1080, fps: 60 },
+        stream: null,
+        record: null,
+        scene: this.currentScene,
+      }
+    }
+    if (is('GET', 'studio/engine/history')) return { undo: [], redo: [] }
+    if (is('GET', 'studio/engine/audio-care')) return { ducking: null, loudness_lufs: null }
+    if (is('GET', 'studio/engine/privacy')) return { hide_notifications: true, hide_apps: [] }
+    if (is('GET', 'studio/engine/screens')) return []
+    if (is('GET', 'studio/engine/missing-files')) return []
+    if (is('GET', 'studio/engine/stream')) return null
+    if (is('GET', 'studio/engine/virtualcam/setup')) return { active: false, every_app: false }
+    if (is('GET', 'studio/engine/preview/pause')) return { paused: this.previewPaused }
+    if (is('PUT', 'studio/engine/preview/pause')) {
+      this.previewPaused = Boolean(requireObj(body).paused)
+      return { paused: this.previewPaused }
+    }
+    if (
+      is('PUT', 'studio/engine/preview') ||
+      is('PUT', 'studio/engine/preview/selection') ||
+      is('PUT', 'studio/engine/preview/cursor')
+    ) {
+      return undefined
+    }
+    if (is('GET', 'studio/engine/encode-budget') || is('POST', 'studio/engine/encode-budget')) {
+      const budget: EncodeBudget = {
+        budget_mpx: null,
+        shared: true,
+        why_not_shared: null,
+        level: 'unknown',
+      }
+      return budget
     }
 
     if (is('GET', 'studio/engine/sources')) {
@@ -883,6 +1576,40 @@ export class DemoStudioEngine {
       'That Studio action isn’t simulated in demo mode.',
       'Open Ferrocast on your computer to run all Studio actions.',
     )
+  }
+
+  private scenesPayload() {
+    const def = this.namedTransitions.find((t) => t.default) ?? this.namedTransitions[0]!
+    return {
+      current: this.currentScene,
+      scenes: this.activeScenes.map((name) => {
+        const anyTo = this.transitionMatrix.find((r) => r.from === null && r.to === name)
+        const anyToT = anyTo
+          ? this.namedTransitions.find((t) => t.name === anyTo.transition)
+          : undefined
+        const leg = this.legacySceneTransitions.get(name)
+        return {
+          name,
+          items: name === this.currentScene ? 2 : 1,
+          current: name === this.currentScene,
+          preview: this.previewScene === name,
+          transition: anyToT
+            ? { kind: anyToT.kind, ms: anyToT.kind === 'cut_transition' ? 0 : anyToT.ms }
+            : (leg ?? null),
+          ...(anyToT ? { transition_name: anyToT.name } : {}),
+        }
+      }),
+      transition: { kind: def.kind, ms: def.kind === 'cut_transition' ? 0 : def.ms },
+      named_transitions: clone(this.namedTransitions),
+      transition_matrix: clone(this.transitionMatrix),
+      preview: this.previewScene,
+      quick: clone(this.quickTransitions),
+      studio_options: clone(this.studioModeOptions),
+      tbar: clone(this.tbarState),
+      black: this.black,
+      vertical: null,
+      top_layer: null,
+    }
   }
 
   stillForDevice(device: string | null): { image: string | null; error?: string | null } {

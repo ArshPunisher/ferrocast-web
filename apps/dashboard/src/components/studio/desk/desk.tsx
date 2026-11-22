@@ -103,6 +103,7 @@ import { resetUploadRate, useEngineReading } from '../../../lib/engine-stats'
 import { MissingFiles } from './missing-files'
 import { SourcesDock } from './sources'
 import { ReadyCheck } from './ready-check'
+import { TransitionsDialog, type TransitionsDialogState } from './transitions'
 
 export function StudioDesk({
   res,
@@ -228,10 +229,38 @@ function scenesSame(a: EngineScenes | null | undefined, b: EngineScenes): boolea
       x.current !== y.current ||
       x.preview !== y.preview ||
       x.transition?.kind !== y.transition?.kind ||
-      x.transition?.ms !== y.transition?.ms
+      x.transition?.ms !== y.transition?.ms ||
+      x.transition_name !== y.transition_name
     ) {
       return false
     }
+  }
+  if (a.transition?.kind !== b.transition?.kind || a.transition?.ms !== b.transition?.ms) {
+    return false
+  }
+  const nta = a.named_transitions ?? []
+  const ntb = b.named_transitions ?? []
+  if (nta.length !== ntb.length) return false
+  for (let i = 0; i < nta.length; i++) {
+    const x = nta[i]!
+    const y = ntb[i]!
+    if (
+      x.name !== y.name ||
+      x.kind !== y.kind ||
+      x.ms !== y.ms ||
+      x.default !== y.default ||
+      JSON.stringify(x.settings) !== JSON.stringify(y.settings)
+    ) {
+      return false
+    }
+  }
+  const ma = a.transition_matrix ?? []
+  const mb = b.transition_matrix ?? []
+  if (ma.length !== mb.length) return false
+  for (let i = 0; i < ma.length; i++) {
+    const x = ma[i]!
+    const y = mb[i]!
+    if (x.from !== y.from || x.to !== y.to || x.transition !== y.transition) return false
   }
   const va = a.vertical?.scenes ?? []
   const vb = b.vertical?.scenes ?? []
@@ -358,6 +387,7 @@ function Running({
     )
   }, [])
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
+  const [transitionsAt, setTransitionsAt] = useState<TransitionsDialogState | null>(null)
   const [clip, setClip] = useState<string | null>(null)
   const [filterClip, setFilterClip] = useState<string | null>(null)
   // Edit transform (⌘E, the menu, a double-click) opens the source's drawer on Position: one
@@ -498,6 +528,14 @@ function Running({
     (page?: string) => setSettingsAt((page as Page | undefined) ?? 'stream'),
     [],
   )
+  const openTransitions = useCallback(
+    (opts?: { tab?: 'list' | 'matrix'; transitionName?: string }) =>
+      setTransitionsAt({
+        tab: opts?.tab ?? 'list',
+        ...(opts?.transitionName ? { transitionName: opts.transitionName } : {}),
+      }),
+    [],
+  )
   // File > Remux Recordings… (the Mac menu): the Recording page of these settings, whether the
   // Studio was already open or only just opened by the menu.
   useEffect(() => {
@@ -553,6 +591,7 @@ function Running({
       transformClip,
       setTransformClip,
       openSettings,
+      openTransitions,
     }),
     [
       api,
@@ -589,6 +628,7 @@ function Running({
       bumpLibrary,
       transformClip,
       openSettings,
+      openTransitions,
     ],
   )
   const docks = (id: DockId): React.ReactNode => {
@@ -633,6 +673,7 @@ function Running({
         start={settingsAt ?? undefined}
         onClose={() => setSettingsAt(null)}
       />
+      <TransitionsDialog initial={transitionsAt} onClose={() => setTransitionsAt(null)} />
       <SourcePanel />
     </DeskProvider>
   )

@@ -89,6 +89,9 @@ import {
   type Rect,
 } from './snap'
 import { PausedCard, PerformanceToggle, PreviewPausedSync } from './performance'
+import { HAS_SETTINGS, MatrixIcon, TRANSITIONS } from './transitions'
+
+export { TRANSITIONS } from './transitions'
 import {
   MOVE,
   at,
@@ -2093,27 +2096,6 @@ export function StageOff({
   )
 }
 
-export const TRANSITIONS: Record<string, string> = {
-  fade_transition: 'Fade',
-  cut_transition: 'Cut',
-  swipe_transition: 'Swipe',
-  slide_transition: 'Slide',
-  fade_to_color_transition: 'Fade to colour',
-  wipe_transition: 'Wipe',
-  obs_stinger_transition: 'Stinger',
-  // Ferrocast's own: what both scenes show glides into place.
-  ferrocast_move: 'Move',
-}
-
-/** Transitions with settings of their own (a direction, a colour, an image, a video). */
-const HAS_SETTINGS = new Set([
-  'swipe_transition',
-  'slide_transition',
-  'fade_to_color_transition',
-  'wipe_transition',
-  'obs_stinger_transition',
-])
-
 /** Under the picture: the scene on air and the transition between scenes. */
 /** True when frame `a` covers all of frame `b` that's on the canvas (`w` × `h`): what's off
  * the canvas isn't seen anyway. */
@@ -2255,7 +2237,8 @@ function ViewControls() {
 }
 
 export function StageBar() {
-  const { api, scenes, scene, kinds, openSettings, screens, refresh, size } = useDesk()
+  const { api, scenes, scene, kinds, openSettings, openTransitions, screens, refresh, size } =
+    useDesk()
   const { c, history } = useDeskStats(
     (s) => ({ c: s?.canvas ?? null, history: s?.history ?? null }),
     (a, b) =>
@@ -2358,12 +2341,30 @@ export function StageBar() {
     ])
   }
   const t = scenes.data?.transition
-  const [ms, setMs] = useState<number | null>(null)
+  const named = scenes.data?.named_transitions ?? []
+  const activeNamed = named.find((x) => x.default) ?? named[0] ?? null
+  const matrixCount = scenes.data?.transition_matrix?.length ?? 0
+  // The length being typed, with the transition it was typed for: if the default changes under
+  // the field (another dashboard), the draft isn't written to the new one.
+  const [draftMs, setDraftMs] = useState<{ for: string; ms: number } | null>(null)
+  const lengthOwner = activeNamed?.name ?? t?.kind ?? ''
+  const ms = draftMs && draftMs.for === lengthOwner ? draftMs.ms : null
   const [tuning, setTuning] = useState<string | null>(null)
   const kindsOn = (kinds.data?.transitions ?? []).filter((k) => TRANSITIONS[k.id])
   const set = async (kind: string, dur: number) => {
     const ok = await run('transition', async () => {
-      await api.setTransition({ kind, ms: dur })
+      if (activeNamed) {
+        await api.updateNamedTransition(activeNamed.name, { ms: dur })
+      } else {
+        await api.setTransition({ kind, ms: dur })
+      }
+      return true
+    })
+    if (ok) scenes.reload()
+  }
+  const selectDefaultNamed = async (name: string) => {
+    const ok = await run('transition', async () => {
+      await api.setDefaultNamedTransition(name)
       return true
     })
     if (ok) scenes.reload()
@@ -2383,12 +2384,16 @@ export function StageBar() {
           className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
           value={ms ?? t.ms}
           onChange={(e) =>
-            setMs(Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null)
+            setDraftMs(
+              Number.isFinite(e.target.valueAsNumber)
+                ? { for: lengthOwner, ms: e.target.valueAsNumber }
+                : null,
+            )
           }
           onBlur={() => {
             if (ms !== null && ms !== t.ms && ms >= 0 && ms <= 20000)
               void set(t.kind, Math.round(ms))
-            setMs(null)
+            setDraftMs(null)
           }}
         />
         <span aria-hidden>ms</span>
@@ -2517,14 +2522,23 @@ export function StageBar() {
               id="studio-transition"
               aria-label="Switch with"
               className="h-7! w-28! rounded-[5px]! py-0! pr-7! pl-2! text-[13px]!"
-              value={t.kind}
-              onChange={(e) => void set(e.target.value, t.ms)}
+              value={activeNamed ? activeNamed.name : t.kind}
+              onChange={(e) => {
+                if (named.length > 0) void selectDefaultNamed(e.target.value)
+                else void set(e.target.value, t.ms)
+              }}
             >
-              {(kindsOn.length ? kindsOn : [{ id: t.kind, name: t.kind }]).map((k) => (
-                <option key={k.id} value={k.id}>
-                  {TRANSITIONS[k.id] ?? k.name}
-                </option>
-              ))}
+              {named.length > 0
+                ? named.map((nt) => (
+                    <option key={nt.name} value={nt.name}>
+                      {nt.name}
+                    </option>
+                  ))
+                : (kindsOn.length ? kindsOn : [{ id: t.kind, name: t.kind }]).map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {TRANSITIONS[k.id] ?? k.name}
+                    </option>
+                  ))}
             </Select>
           </div>
         ),
@@ -2533,16 +2547,40 @@ export function StageBar() {
       key: 'gear',
       rank: 2,
       render: (panel) =>
-        t &&
-        HAS_SETTINGS.has(t.kind) && (
-          <span className="ml-1.5 flex items-center gap-1.5">
-            <IconButton
-              size="xs"
-              label={`${TRANSITIONS[t.kind] ?? 'Transition'} settings`}
-              onClick={() => setTuning(t.kind)}
-            >
-              <GearSix size={16} weight="bold" />
-            </IconButton>
+        t && (
+          <span className="ml-1 flex flex-wrap items-center gap-1.5">
+            {(HAS_SETTINGS.has(t.kind) || openTransitions) && (
+              <IconButton
+                size="xs"
+                label={
+                  openTransitions
+                    ? `Manage transition settings for ${activeNamed?.name ?? TRANSITIONS[t.kind] ?? 'Transition'}`
+                    : `${TRANSITIONS[t.kind] ?? 'Transition'} settings`
+                }
+                onClick={() =>
+                  openTransitions
+                    ? openTransitions({
+                        tab: 'list',
+                        ...(activeNamed ? { transitionName: activeNamed.name } : {}),
+                      })
+                    : setTuning(t.kind)
+                }
+              >
+                <GearSix size={16} weight="bold" />
+              </IconButton>
+            )}
+            {openTransitions && (
+              <Button
+                size="xs"
+                variant="outline"
+                aria-label="Open transitions and matrix"
+                onClick={() => openTransitions({ tab: 'matrix' })}
+              >
+                <MatrixIcon />
+                <span>Matrix</span>
+                {matrixCount > 0 && <Badge tone="accent">{matrixCount}</Badge>}
+              </Button>
+            )}
             {panel && <span>{TRANSITIONS[t.kind] ?? 'Transition'} settings</span>}
           </span>
         ),
