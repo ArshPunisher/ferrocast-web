@@ -235,44 +235,52 @@ export function ScenesDock() {
           },
         ],
       },
-      { sep: true },
-      {
-        label: 'Transition override',
-        icon: ArrowsLeftRight,
-        items: [
-          {
-            label: 'Use matrix / default',
-            checked: !scene.transition_name && !t,
-            onSelect: () => setNamedOverride(null),
-          },
-          { sep: true },
-          ...(namedList.length > 0
-            ? namedList.map((nt) => ({
-                label: `${nt.name} (${transitionSummary(nt)})`,
-                checked: scene.transition_name === nt.name,
-                onSelect: () => setNamedOverride(nt.name),
-              }))
-            : Object.entries(TRANSITIONS).map(([kind, label]) => ({
-                label:
-                  kind === 'cut_transition' || kind === 'obs_stinger_transition'
-                    ? label
-                    : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
-                checked: t?.kind === kind,
-                onSelect: () =>
-                  setT({ kind, ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms }),
-              }))),
-          ...(openTransitions
-            ? [
-                { sep: true } as const,
+      // A vertical scene is cut-only: there are no transitions to override (the engine would 404).
+      ...((tall
+        ? []
+        : [
+            { sep: true },
+            {
+              label: 'Transition override',
+              icon: ArrowsLeftRight,
+              items: [
                 {
-                  label: 'Transitions and matrix...',
-                  icon: ArrowsLeftRight,
-                  onSelect: () => openTransitions({ tab: 'matrix' }),
+                  label: 'Use matrix / default',
+                  checked: !scene.transition_name && !t,
+                  onSelect: () => setNamedOverride(null),
                 },
-              ]
-            : []),
-        ],
-      },
+                { sep: true },
+                ...(namedList.length > 0
+                  ? namedList.map((nt) => ({
+                      label: `${nt.name} (${transitionSummary(nt)})`,
+                      checked: scene.transition_name === nt.name,
+                      onSelect: () => setNamedOverride(nt.name),
+                    }))
+                  : Object.entries(TRANSITIONS).map(([kind, label]) => ({
+                      label:
+                        kind === 'cut_transition' || kind === 'obs_stinger_transition'
+                          ? label
+                          : `${label}, ${t?.kind === kind ? t.ms : ms} ms`,
+                      checked: t?.kind === kind,
+                      onSelect: () =>
+                        setT({
+                          kind,
+                          ms: kind === 'cut_transition' ? 0 : t?.kind === kind ? t.ms : ms,
+                        }),
+                    }))),
+                ...(openTransitions
+                  ? [
+                      { sep: true } as const,
+                      {
+                        label: 'Transitions and matrix...',
+                        icon: ArrowsLeftRight,
+                        onSelect: () => openTransitions({ tab: 'matrix' }),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]) as MenuItem[]),
       ...(tall
         ? []
         : [topLayerItem(name, top, (next) => void act('top', () => api.setTopLayer(next)))]),
