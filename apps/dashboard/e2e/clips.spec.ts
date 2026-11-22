@@ -11,6 +11,13 @@ async function shot(page: Page, name: string) {
   if (shots) await page.screenshot({ path: `${shots}/${name}.png`, fullPage: false })
 }
 
+/** Picks a clip, scrolled to the middle first (a phone's bottom bar covers the page's foot). */
+async function pickClip(page: Page, name: RegExp) {
+  const box = page.getByRole('checkbox', { name })
+  await box.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await box.check({ force: true })
+}
+
 async function noOverflowOrSeriousA11y(page: Page, scope = '#main') {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -56,25 +63,17 @@ for (const vp of [
       await page.getByRole('button', { name: 'Clear the search' }).first().click()
       await expect(grid.getByRole('listitem')).toHaveCount(5)
 
-      await page
-        .getByRole('checkbox', { name: /Pick Replay 2026-11-22 21-04-12/ })
-        .check({ force: true })
-      await page
-        .getByRole('checkbox', { name: /Pick Replay 2026-11-22 20-31-55/ })
-        .check({ force: true })
-      await expect(page.getByText('2 picked')).toBeVisible()
+      await pickClip(page, /Pick Replay 2026-11-22 21-04-12/)
+      await pickClip(page, /Pick Replay 2026-11-22 20-31-55/)
+      await expect(page.getByText('2 selected')).toBeVisible()
       await shot(page, `${vp.name}-03-picked`)
     })
 
     test('compile: order, crossfade, start, progress, stop', async ({ page }) => {
       // Slow steps, so the job is still running whenever a loaded machine gets to Stop.
       await open(page, 'studio/clips', 'autoplay=0&latency=0&clipstep=60000')
-      await page
-        .getByRole('checkbox', { name: /Pick Replay 2026-11-22 21-04-12/ })
-        .check({ force: true })
-      await page
-        .getByRole('checkbox', { name: /Pick Replay 2026-11-22 20-31-55/ })
-        .check({ force: true })
+      await pickClip(page, /Pick Replay 2026-11-22 21-04-12/)
+      await pickClip(page, /Pick Replay 2026-11-22 20-31-55/)
       await page.getByRole('button', { name: 'Compile', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Compile clips' })
       await expect(dialog).toBeVisible()
@@ -160,3 +159,82 @@ test('the Clips tab is in the Studio on the PC', async ({ page }) => {
   // The tab is hidden only for a paired phone (unit-tested with studioTabs); the demo is the PC.
   await expect(page.getByRole('radio', { name: 'Clips' })).toBeAttached()
 })
+
+// C3: one compact toolbar row, a full-width media wall, no horizontal scroll at any width.
+const c3Shots = process.env.FC_C3_SHOTS
+for (const vp of [
+  { width: 1440, height: 900, cols: 5 },
+  { width: 1280, height: 800, cols: 5 },
+  { width: 375, height: 812, cols: 1 },
+]) {
+  test(`Clips C3 at ${vp.width}: one toolbar row, the wall, selection in the same row`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await open(page, 'studio/clips')
+    const bar = page.getByTestId('clips-toolbar')
+    await expect(bar).toBeVisible()
+    await expect(
+      page.getByRole('list', { name: 'Clips', exact: true }).getByRole('listitem'),
+    ).toHaveCount(5)
+    const noScroll = async () => {
+      const bad = await page.evaluate(() => {
+        const root = document.querySelector('#main')!
+        const out: string[] = []
+        for (const el of [root, ...root.querySelectorAll('*')]) {
+          const cs = getComputedStyle(el)
+          if (
+            (cs.overflowX === 'auto' || cs.overflowX === 'scroll') &&
+            el.scrollWidth > el.clientWidth + 1
+          )
+            out.push(`${el.tagName}.${(el as HTMLElement).className}`.slice(0, 80))
+        }
+        if (document.documentElement.scrollWidth > document.documentElement.clientWidth)
+          out.push('page')
+        return out
+      })
+      expect(bad, 'horizontal scroll').toEqual([])
+    }
+    await noScroll()
+    // The search is small (about 220 to 260 px) on a wide window.
+    const search = await page.getByRole('searchbox', { name: 'Search clips by name' }).boundingBox()
+    if (vp.width >= 640) expect(search!.width).toBeGreaterThanOrEqual(220)
+    if (vp.width >= 640) expect(search!.width).toBeLessThanOrEqual(260)
+    // Wall columns.
+    const cols = await page.evaluate(
+      () =>
+        getComputedStyle(
+          document.querySelector('ul[aria-label="Clips"]')!,
+        ).gridTemplateColumns.split(' ').length,
+    )
+    expect(cols).toBe(vp.cols)
+    // Type, folder and reload in the one row.
+    await page.getByRole('combobox', { name: 'Type' }).selectOption('replays')
+    await expect(
+      page.getByRole('list', { name: 'Clips', exact: true }).getByRole('listitem'),
+    ).not.toHaveCount(0)
+    await page.getByRole('combobox', { name: 'Type' }).selectOption('all')
+    const height = async () => (await bar.boundingBox())!.height
+    const idle = await height()
+    await pickClip(page, /Pick Replay 2026-11-22 21-04-12/)
+    await pickClip(page, /Pick Replay 2026-11-22 20-31-55/)
+    const group = bar.getByRole('group', { name: 'Selected clips' })
+    await expect(group.getByText(/2 selected/)).toBeVisible()
+    for (const n of ['Compile', 'Caption', 'Upload', 'Clear'])
+      await expect(group.getByRole('button', { name: new RegExp(`^${n}`) })).toBeVisible()
+    if (vp.width >= 1280) {
+      // One row: the selection swaps the right side and adds no band.
+      expect(await height()).toBeLessThanOrEqual(idle + 2)
+      expect(await height()).toBeLessThan(60)
+    }
+    await noScroll()
+    await settled(page)
+    await page.evaluate(() => {
+      window.scrollTo(0, 0)
+      document.querySelector('#main')?.scrollTo?.(0, 0)
+    })
+    if (c3Shots) await page.screenshot({ path: `${c3Shots}/C3-${vp.width}.png` })
+    await noOverflowOrSeriousA11y(page)
+  })
+}

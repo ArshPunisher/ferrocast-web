@@ -12,6 +12,7 @@ export function PlatformTestBar({
   platforms = TEST_PLATFORMS,
   busy = false,
   compact = false,
+  warning = null,
 }: {
   selected: Platform
   statusText: string | null
@@ -22,12 +23,20 @@ export function PlatformTestBar({
   busy?: boolean
   /** One slim row for the editor's stage: no card, no stream button (it lives in the top bar). */
   compact?: boolean
+  /** The stage previews a platform the rule does not listen on. */
+  warning?: string | null
 }) {
   if (compact)
     return (
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        <span className="fc-label mr-1">Test in preview</span>
-        <div role="group" aria-label="Test alert by platform" className="flex flex-wrap gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span id="preview-as" className="fc-label">
+          Preview as
+        </span>
+        <div
+          role="group"
+          aria-labelledby="preview-as"
+          className="inline-flex rounded-control border border-line-strong bg-surface-1 p-0.5"
+        >
           {TEST_PLATFORMS.map((p) => {
             const active = selected === p
             const supported = platforms.includes(p)
@@ -42,10 +51,8 @@ export function PlatformTestBar({
                 onClick={() => onTestPlatform(p)}
                 className={cx(
                   'disabled:cursor-not-allowed disabled:opacity-45',
-                  'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14px] font-semibold transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                  active
-                    ? 'border-accent-line bg-accent-soft text-text'
-                    : 'border-line bg-surface-1 text-text-2 hover:border-line-strong hover:text-text',
+                  'fc-press inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-[14px] font-semibold transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  active ? 'fc-picked' : 'text-text-2 hover:bg-surface-2 hover:text-text',
                 )}
               >
                 <PlatformMark platform={p} size={13} />
@@ -54,6 +61,11 @@ export function PlatformTestBar({
             )
           })}
         </div>
+        {warning && (
+          <p role="status" className="basis-full text-[13.5px] font-medium text-warn">
+            {warning}
+          </p>
+        )}
         {statusText && (
           <p className="basis-full text-[13.5px] font-medium text-text-2" aria-live="polite">
             {statusText}

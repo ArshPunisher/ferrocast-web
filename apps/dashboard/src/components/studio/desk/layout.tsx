@@ -28,6 +28,8 @@ import {
 } from '@phosphor-icons/react'
 import { IconButton, Segmented, cx } from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
+import { ReadyPlacementContext } from './ready-check'
+import { useReadyCheckState } from './ready-check-state'
 
 export type BuiltIn = 'scenes' | 'sources' | 'audio' | 'golive' | 'chat' | 'events'
 /** A built-in panel, or a web panel (`web:` and its own id). */
@@ -391,14 +393,19 @@ export function DockWorkspace({
   top,
   stage,
   docks,
+  corner,
 }: {
   top?: ReactNode
   stage: ReactNode
   /** Each panel's content. */
   docks: (id: DockId) => ReactNode
+  /** Bottom-right Ready check overlay anchored in the right column on desktop or above nav on mobile. */
+  corner?: ReactNode
 }) {
   const [layout, setRaw] = useState<Layout>(load)
   const narrow = useMediaQuery('(max-width: 899px)')
+  const readyState = useReadyCheckState()
+  const hasFloatingReady = Boolean(readyState?.active && !readyState.dismissed)
   const ws = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState<number | null>(null)
   const setLayout = useCallback((f: (l: Layout) => Layout) => {
@@ -627,8 +634,18 @@ export function DockWorkspace({
               onChange={(d) => setLayout((l) => ({ ...l, mob: d }))}
             />
           )}
-          <div className="flex min-h-[320px] flex-col border-t border-line">{docks(cur)}</div>
+          <div
+            className={cx(
+              'flex min-h-[320px] flex-col border-t border-line',
+              hasFloatingReady && 'pb-14',
+            )}
+          >
+            {docks(cur)}
+          </div>
         </div>
+        {corner && (
+          <ReadyPlacementContext.Provider value="mobile">{corner}</ReadyPlacementContext.Provider>
+        )}
       </Ctx.Provider>
     )
   }
@@ -677,8 +694,18 @@ export function DockWorkspace({
             minWidth: MIN_PANEL_W,
           }
     return (
-      <div className={cx('flex min-h-0 min-w-0', vertical ? 'flex-col' : 'flex-row')} style={size}>
+      <div
+        className={cx(
+          'flex min-h-0 min-w-0',
+          vertical ? 'flex-col' : 'flex-row',
+          region === 'right' && 'relative',
+        )}
+        style={size}
+      >
         {out}
+        {region === 'right' && corner && (
+          <ReadyPlacementContext.Provider value="right">{corner}</ReadyPlacementContext.Provider>
+        )}
       </div>
     )
   }
@@ -697,7 +724,7 @@ export function DockWorkspace({
         aria-label="Studio layout"
         // Square, as OBS's: the live picture is a square native view over the stage, and a
         // rounded corner beside it looked broken (owner, 28 Oct).
-        className="fc-desk flex overflow-hidden border border-line-strong bg-surface-1"
+        className="fc-desk relative flex overflow-hidden border border-line-strong bg-surface-1"
         style={height ? { height } : undefined}
       >
         {left}
@@ -714,6 +741,9 @@ export function DockWorkspace({
         </div>
         {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
         {right}
+        {!right && corner && (
+          <ReadyPlacementContext.Provider value="desk">{corner}</ReadyPlacementContext.Provider>
+        )}
       </div>
       {floats.map(([id, f]) => (
         <FloatingDock key={id} id={id} f={f}>
