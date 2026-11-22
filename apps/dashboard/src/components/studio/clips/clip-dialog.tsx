@@ -30,7 +30,7 @@ import { Thumb, useThumb, type ThumbState } from './thumb'
 import { TrimSection } from './trim-section'
 import { UploadSection } from './upload-section'
 
-type Section = 'trim' | 'captions' | 'youtube' | 'details'
+export type Section = 'trim' | 'captions' | 'youtube' | 'details'
 
 export function ClipDialog({
   api,
@@ -44,6 +44,7 @@ export function ClipDialog({
   onRenamed,
   onClose,
   onDeleted,
+  initialSection,
 }: {
   api: ClipsApi
   /** The clip as the library lists it (null: it isn't listed). */
@@ -57,10 +58,12 @@ export function ClipDialog({
   onRenamed: (id: string) => void
   onClose: () => void
   onDeleted: () => void
+  /** The part to show first (the Clips toolbar's Upload opens on YouTube). */
+  initialSection?: Section | undefined
 }) {
   const client = useClient()
   const video = useRef<HTMLVideoElement>(null)
-  const [section, setSection] = useState<Section>('trim')
+  const [section, setSection] = useState<Section>(initialSection ?? 'trim')
   const [playable, setPlayable] = useState(true)
   // The video's length is known (the buttons that read its playhead are for then).
   const [ready, setReady] = useState(false)
