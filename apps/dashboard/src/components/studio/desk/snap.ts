@@ -387,8 +387,14 @@ export function scaleGroup(items: Arrangeable[], from: Rect, to: Rect): BoxFor[]
     const [vx, vy] = lv > 1e-9 ? [f[2] / lv, f[3] / lv] : [0, 1]
     const c = at(f, 0.5, 0.5)
     const nc = { x: to.left + (c.x - from.left) * sx, y: to.top + (c.y - from.top) * sy }
-    const w = Math.max(LEAST, lu * Math.hypot(ux * sx, uy * sy))
-    const h = Math.max(LEAST, lv * Math.hypot(vx * sx, vy * sy))
+    // A source turned part of the way can't be sheared, so sizing the group one way would grow it
+    // past the new box on the other: it grows evenly, by the smaller of the two. Upright and
+    // quarter-turned sources scale each way as asked.
+    const along = (a: number, b: number) => Math.abs(a) < 1e-6 || Math.abs(b) < 1e-6
+    const partTurn = !(along(uy, vx) || along(ux, vy))
+    const [kx, ky] = partTurn ? [Math.min(sx, sy), Math.min(sx, sy)] : [sx, sy]
+    const w = Math.max(LEAST, lu * Math.hypot(ux * kx, uy * ky))
+    const h = Math.max(LEAST, lv * Math.hypot(vx * kx, vy * ky))
     // The first corner: back from the middle by half of each side.
     out.push({
       id: it.id,

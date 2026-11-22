@@ -16,6 +16,8 @@ import {
   pickWith,
   rectOf,
   scaleGroup,
+  union,
+  type Rect,
   snapReach,
   snapTargets,
   type ItemLike,
@@ -574,5 +576,17 @@ describe('CodeRabbit pass 2', () => {
         bottom: 130,
       }),
     ).toEqual([2])
+  })
+
+  it('a turned source in a group sized one way grows evenly, so it stays inside the new box', () => {
+    const diamond = turned(250, 100, 100, 100, 45)
+    const from = union([rectOf(diamond), rectOf(box(0, 0, 50, 50))]) as Rect
+    // Double the width only.
+    const to = { ...from, right: from.left + (from.right - from.left) * 2 }
+    const out = scaleGroup([{ id: 1, frame: diamond, locked: false }], from, to)[0]!
+    const r = rectOf(frameOfBox(diamond, out))
+    expect(r.right).toBeLessThanOrEqual(to.right + 1e-6)
+    expect(r.top).toBeGreaterThanOrEqual(from.top - 1e-6)
+    expect(r.bottom).toBeLessThanOrEqual(from.bottom + 1e-6)
   })
 })
