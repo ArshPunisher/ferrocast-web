@@ -71,12 +71,15 @@ interface UndoSnapshot {
   /** The install's private records as they were (what it displaced, which design is which). */
   prev_displaced: [string, Variation][] | null
   prev_design_map: [string, string][] | null
+  prev_plugin_print: string | null
 }
 
 interface RuleChange {
   rule_id: string
   removed: Variation[]
   added: string[]
+  /** A default look the action put back (the user's own): undo leaves it if it was edited since. */
+  restored?: Variation[]
 }
 
 // 1x1 PNG sample bytes for asset verification simulation.
@@ -682,6 +685,18 @@ function seedCatalog(): InternalItem[] {
   ]
 }
 
+function json(status: number, v: unknown): Response {
+  return new Response(JSON.stringify(v), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/** What identifies the Store's copy of a plugin (not whether it is switched on). */
+function pluginPrint(p: Plugin): string {
+  return JSON.stringify([p.id, p.name, p.version, p.author, p.description, p.kind, p.actions])
+}
+
 export class DemoStore implements DemoFeature {
   private readonly host: DemoStoreHost
   private items: InternalItem[] = seedCatalog()
@@ -691,6 +706,8 @@ export class DemoStore implements DemoFeature {
   private displaced = new Map<string, Map<string, Variation>>()
   /** Which installed design is which of a package's designs, by item, so an update keeps ids. */
   private designMap = new Map<string, Map<string, string>>()
+  /** The plugin the Store installed, as it was: a plugin of that id that no longer matches is the user's. */
+  private pluginPrints = new Map<string, string>()
   fault: StoreFault = null
 
   constructor(host: DemoStoreHost) {
@@ -797,7 +814,7 @@ export class DemoStore implements DemoFeature {
     }
   }
 
-  private installOrUpdate(id: string, mode: 'install' | 'update'): StoreMutationResult {
+  private installOrUpdate(id: string, mode: 'install' | 'update'): StoreMutationResult | Response {
     this.checkCatalogFault()
     if (this.fault === 'tampered_asset') {
       throw new HttpError(
@@ -860,6 +877,7 @@ export class DemoStore implements DemoFeature {
     const prev_design_map = this.designMap.has(item.id)
       ? [...(this.designMap.get(item.id) ?? new Map<string, string>()).entries()]
       : null
+    const prev_plugin_print = this.pluginPrints.get(item.id) ?? null
 
     const createdDesigns: Design[] = []
     const ruleIds: string[] = []
@@ -966,18 +984,29 @@ export class DemoStore implements DemoFeature {
       }
       this.displaced.set(item.id, nextDisplaced)
     } else if (item.package.format === 'ferroplugin' && item.bundle_plugin) {
-      // The Store never overwrites a plugin it didn't install: the user's own copy stays as it is.
-      const owned = existing?.plugin_id === item.bundle_plugin.id
-      if (!owned && this.host.plugins().some((x) => x.id === item.bundle_plugin?.id)) {
+      // The Store never overwrites a plugin it didn't install: its own copy is the one it wrote
+      // (same fields), anything else with that id is the user's and stays as it is.
+      const manifestId = item.bundle_plugin.id
+      const there = this.host.plugins().find((x) => x.id === manifestId)
+      const recorded = this.pluginPrints.get(item.id)
+      const owned = !!there && !!existing && !!recorded && pluginPrint(there) === recorded
+      if (there && !owned) {
         throw new HttpError(
           409,
           'store_plugin_exists',
-          `A plugin with the id ${item.bundle_plugin.id} is already installed.`,
+          `A plugin with the id ${manifestId} is already installed.`,
           'Remove it first in Plugins if you want the Store’s copy. Nothing was changed.',
         )
       }
-      const p: Plugin = { ...clone(item.bundle_plugin), on: true, problem: null }
+      // A new install switches it on; an update keeps it as the person left it.
+      const p: Plugin = {
+        ...clone(item.bundle_plugin),
+        version: item.version,
+        on: owned ? (there?.on ?? true) : true,
+        problem: null,
+      }
       this.host.upsertPlugin(p)
+      this.pluginPrints.set(item.id, pluginPrint(p))
       pluginId = p.id
     }
     if (item.package.format === 'ferrodesign') this.designMap.set(item.id, nextMap)
@@ -1021,6 +1050,7 @@ export class DemoStore implements DemoFeature {
       prev_plugin,
       prev_displaced,
       prev_design_map,
+      prev_plugin_print,
     }
     this.undos.unshift(snap)
     if (this.undos.length > 20) this.undos.length = 20
@@ -1032,12 +1062,14 @@ export class DemoStore implements DemoFeature {
       item_title: item.title,
       created_at: now,
     }
-    return {
+    const result = {
       action: mode,
       installed: this.installedList().find((r) => r.item_id === item.id) ?? null,
       designs: createdDesigns,
       undo: summary,
     }
+    // Like the engine: an install is created (201); an update is 200.
+    return mode === 'install' ? json(201, result) : result
   }
 
   private uninstall(id: string): StoreMutationResult {
@@ -1076,6 +1108,7 @@ export class DemoStore implements DemoFeature {
         // The look the pack took the place of goes back; with none kept, a plain default.
         const back: Variation = clone(displaced.get(rule.id) ?? this.plainDefault())
         change.added.push(back.id)
+        change.restored = [clone(back)]
         next.variations.unshift(back)
       }
       this.host.saveRule(next)
@@ -1084,7 +1117,16 @@ export class DemoStore implements DemoFeature {
     const prev_plugin = existing.plugin_id
       ? clone(this.host.plugins().find((p) => p.id === existing.plugin_id) ?? null)
       : null
-    if (existing.plugin_id) this.host.removePlugin(existing.plugin_id)
+    // Only the Store's own copy goes; a plugin of that id the user put there since stays.
+    const thereNow = existing.plugin_id
+      ? this.host.plugins().find((x) => x.id === existing.plugin_id)
+      : undefined
+    const recorded = this.pluginPrints.get(id)
+    if (existing.plugin_id && thereNow && recorded && pluginPrint(thereNow) === recorded) {
+      this.host.removePlugin(existing.plugin_id)
+    }
+    const prev_plugin_print = recorded ?? null
+    this.pluginPrints.delete(id)
 
     const prev_displaced = this.displaced.has(id)
       ? [...displaced.entries()].map(([k, v]) => [k, clone(v)] as [string, Variation])
@@ -1112,6 +1154,7 @@ export class DemoStore implements DemoFeature {
       prev_plugin,
       prev_displaced,
       prev_design_map,
+      prev_plugin_print,
     }
     this.undos.unshift(snap)
     if (this.undos.length > 20) this.undos.length = 20
@@ -1194,6 +1237,22 @@ export class DemoStore implements DemoFeature {
         'Undo is kept for the last few Store actions.',
       )
     }
+    // A default look the action put back is the user's own: if it was edited since, undoing would
+    // overwrite that edit, so refuse and keep the token. Nothing has been changed yet.
+    for (const c of snap.rule_changes) {
+      const rule = this.host.rules().find((r) => r.id === c.rule_id)
+      for (const back of c.restored ?? []) {
+        const now = rule?.variations.find((v) => v.id === back.id)
+        if (now && JSON.stringify(now) !== JSON.stringify(back)) {
+          throw new HttpError(
+            409,
+            'store_undo_conflict',
+            `You changed the alert look “${now.name}” after the Store put it back, so undo would overwrite your change.`,
+            'Change it back, or leave it as it is. Undo stays available.',
+          )
+        }
+      }
+    }
     this.undos.shift()
     for (const did of snap.created_design_ids) {
       if (this.host.activeAlert() === did) this.host.setActiveAlert(null)
@@ -1247,6 +1306,8 @@ export class DemoStore implements DemoFeature {
     else this.displaced.delete(snap.item_id)
     if (snap.prev_design_map) this.designMap.set(snap.item_id, new Map(snap.prev_design_map))
     else this.designMap.delete(snap.item_id)
+    if (snap.prev_plugin_print) this.pluginPrints.set(snap.item_id, snap.prev_plugin_print)
+    else this.pluginPrints.delete(snap.item_id)
     return {
       reverted_action: snap.action,
       item_id: snap.item_id,
@@ -1318,7 +1379,10 @@ export class DemoStore implements DemoFeature {
       if (!it || !it.assets.some((x) => x.name === b)) {
         throw new HttpError(404, 'store_asset_not_found', 'That item has no such picture.')
       }
-      return new Blob([SAMPLE_PNG], { type: 'image/png' })
+      return new Response(SAMPLE_PNG as unknown as BodyInit, {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      })
     }
     if (sub === 'install' && is('POST', 2)) {
       const o = requireObj(body)
@@ -1339,7 +1403,8 @@ export class DemoStore implements DemoFeature {
       return this.uninstall(o.id)
     }
     if (sub === 'undo' && is('POST', 2)) {
-      const o = body && typeof body === 'object' ? (body as { token?: unknown }) : {}
+      // No body, or an empty object, is "the latest"; anything that is not an object is refused.
+      const o = body === undefined || body === null ? {} : (requireObj(body) as { token?: unknown })
       // A token that is there is a token, even null or empty: only a missing one means the latest.
       return this.undo(o.token, 'token' in o)
     }

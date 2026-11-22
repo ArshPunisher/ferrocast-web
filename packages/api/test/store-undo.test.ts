@@ -294,3 +294,109 @@ describe('the demo store as the engine serves it', () => {
     expect(notes).not.toMatch(/verified by|p2e|Sandboxed plugin verified/)
   })
 })
+
+describe('what review of the demo store found', () => {
+  const post = (demo: DemoEngine, path: string, body: unknown) =>
+    demo.fetch(`${demo.base}/api/v1/store/${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${DEMO_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+  it('answers an install with 201, like the engine, and an update or uninstall with 200', async () => {
+    const { demo } = setup()
+    expect((await post(demo, 'install', { id: 'aurora-pulse' })).status).toBe(201)
+    demo.bumpStoreItemVersion('aurora-pulse', '1.9.0')
+    expect((await post(demo, 'update', { id: 'aurora-pulse' })).status).toBe(200)
+    expect((await post(demo, 'uninstall', { id: 'aurora-pulse' })).status).toBe(200)
+  })
+
+  it('serves a store picture as a PNG, not as JSON', async () => {
+    const { demo } = setup()
+    const res = await demo.fetch(`${demo.base}/api/v1/store/assets/aurora-pulse/preview.png`, {
+      headers: { Authorization: `Bearer ${DEMO_TOKEN}` },
+    })
+    expect(res.headers.get('Content-Type')).toBe('image/png')
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47])
+  })
+
+  it('refuses an undo whose body is not an object, and takes a missing or empty one as the latest', async () => {
+    const { demo, store } = setup()
+    await store.install('aurora-pulse')
+    for (const body of ['"x"', '7', '[]', 'true']) {
+      const res = await demo.fetch(`${demo.base}/api/v1/store/undo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${DEMO_TOKEN}`, 'Content-Type': 'application/json' },
+        body,
+      })
+      expect(res.status, body).toBe(400)
+    }
+    expect((await store.installed()).installed.length).toBe(1)
+    expect((await store.undo()).item_id).toBe('aurora-pulse')
+  })
+
+  it('keeps a plugin switched off through an update, and shows the catalog version', async () => {
+    const { demo, store } = setup()
+    await store.install('soft-dimmer-shader')
+    const id = 'com.velaforge.softdimmer'
+    const mine = demo.plugins.all().find((p) => p.id === id)
+    if (!mine) throw new Error('installed')
+    demo.plugins.upsert({ ...mine, on: false })
+    demo.bumpStoreItemVersion('soft-dimmer-shader', '1.9.0')
+    await store.update('soft-dimmer-shader')
+    const after = demo.plugins.all().find((p) => p.id === id)
+    expect(after?.on).toBe(false)
+    expect(after?.version).toBe('1.9.0')
+  })
+
+  it('leaves a plugin of the same id alone once the Store’s own copy is gone', async () => {
+    const { demo, store } = setup()
+    await store.install('soft-dimmer-shader')
+    const id = 'com.velaforge.softdimmer'
+    demo.plugins.removeById(id)
+    demo.plugins.upsert({
+      id,
+      name: 'My own dimmer',
+      version: '0.1.0',
+      author: 'me',
+      description: 'mine',
+      kind: 'effect',
+      actions: [],
+      on: true,
+      problem: null,
+    })
+    demo.bumpStoreItemVersion('soft-dimmer-shader', '1.9.0')
+    await expect(store.update('soft-dimmer-shader')).rejects.toMatchObject({
+      status: 409,
+      code: 'store_plugin_exists',
+    })
+    await store.uninstall('soft-dimmer-shader')
+    expect(demo.plugins.all().find((p) => p.id === id)?.name).toBe('My own dimmer')
+  })
+
+  it('refuses to undo a removal over a default look the user edited since', async () => {
+    const { store, client } = setup()
+    const mine = await myOwnLook(client)
+    await store.install('arcade-ticker-alert')
+    const removed = await store.uninstall('arcade-ticker-alert')
+    const rule = await followRule(client)
+    const back = defaultOf(rule)
+    expect(back).toEqual(mine)
+    if (!back) throw new Error('no default')
+    back.title = 'edited after the removal'
+    await client.saveAlertRule(rule)
+    const err = await fails(store.undo(removed.undo.token))
+    expect(err).toMatchObject({ status: 409, code: 'store_undo_conflict' })
+    // Nothing was changed, and the token still works once the edit is out of the way.
+    expect(defaultOf(await followRule(client))?.title).toBe('edited after the removal')
+    expect((await store.installed()).installed.length).toBe(0)
+    const again = await followRule(client)
+    const d = defaultOf(again)
+    if (!d) throw new Error('no default')
+    d.title = mine.title
+    await client.saveAlertRule(again)
+    await store.undo(removed.undo.token)
+    expect((await store.installed()).installed.length).toBe(1)
+  })
+})
