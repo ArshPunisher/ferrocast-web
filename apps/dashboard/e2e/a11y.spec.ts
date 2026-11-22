@@ -17,6 +17,8 @@ const SCREENS = [
   'import',
   'import/streamlabs',
   'designs',
+  'store',
+  'store/creator/mira-atelier',
   'designer/builtin.molten-plate',
   'designer/builtin.forge',
   'designer/builtin.goal-segments',
