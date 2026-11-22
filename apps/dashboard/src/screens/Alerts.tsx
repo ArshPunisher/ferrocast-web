@@ -3,17 +3,14 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowCounterClockwise,
   Bell,
-  BracketsCurly,
   CaretDown,
   ChatCircleText,
   Diamond,
   Gift,
   HandCoins,
   Heart,
-  Lightning,
   PaintBrushBroad,
   Play,
-  Plus,
   RocketLaunch,
   Sparkle,
   SpeakerHigh,
@@ -29,7 +26,9 @@ import {
   PLATFORM_LABEL,
   SOUND_GROUPS,
   SOUND_LABEL,
-  checkTemplate,
+  defaultAlertAnim,
+  defaultRules,
+  describeError,
   eventVars,
   newVariation,
   pickLook,
@@ -59,14 +58,17 @@ import {
   Select,
   Skeleton,
   Switch,
-  Textarea,
   cx,
   toast,
 } from '@ferrocast/ui'
 import { LoadError, PageHeader } from '../components/Panel'
 import { TestAlertMenu } from '../components/alerts-live'
 import { AlertStage, alertHasSound } from '../components/AlertStage'
-import { Menu } from '../components/Menu'
+import { AlertTimeline } from '../components/alerts/AlertTimeline'
+import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
+import { PlatformTestBar } from '../components/alerts/PlatformTestBar'
+import { TokenChipField, tokensForAlert } from '../components/alerts/TokenChipField'
+import { VariationCards } from '../components/alerts/VariationCards'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useUnsavedWarning } from '../lib/unsaved'
@@ -117,59 +119,31 @@ function defaultCondition(t: CondType): Condition {
   }
 }
 
-function sampleFor(rule: AlertRule, platform: Platform | null): FerroEvent | null {
+function previewEventFor(rule: AlertRule, platform: Platform): FerroEvent {
+  for (const kind of rule.kinds) {
+    const match = sample(kind, platform, Date.now())
+    if (match) return match
+  }
+  const fallbackKind =
+    platform === 'tips' ? 'tip' : platform === 'youtube' ? 'subscription' : 'follow'
+  return (
+    sample(fallbackKind, platform, Date.now()) ??
+    sample(rule.kinds[0] ?? 'follow', platform, Date.now()) ??
+    sample('tip', 'tips', Date.now())!
+  )
+}
+
+function supportedStreamTestPlatform(rule: AlertRule, preferred: Platform): Platform | undefined {
   const kind = rule.kinds[0] ?? 'follow'
-  const ps = kind === 'tip' ? (['twitch'] as Platform[]) : platformsFor(kind)
-  const p = platform && ps.includes(platform) ? platform : (ps[0] ?? 'twitch')
-  return sample(kind, p, Date.now())
+  if (kind === 'tip') return undefined
+  const supported = platformsFor(kind)
+  return supported.includes(preferred) ? preferred : supported[0]
 }
 
 /** What a rule's row says on the right: off, how many looks, or on. */
 function ruleStatus(r: AlertRule): string {
   if (!r.enabled) return 'Off'
   return r.variations.length > 1 ? `${r.variations.length} looks` : 'On'
-}
-
-/**
- * "Insert" menu: puts `{var}` at the caret of the last focused template field. Lists the
- * variables this kind of event fills in (with the sample's value), else the common ones.
- */
-function InsertVarMenu({
-  event,
-  onPick,
-}: {
-  event: FerroEvent | null
-  onPick: (v: string) => void
-}) {
-  const vars = event ? eventVars(event) : {}
-  const names = KNOWN_VARS.filter((v) => v in vars)
-  const list = names.length > 0 ? names : KNOWN_VARS.slice(0, 10)
-  const short = (x: string) => (x.length > 18 ? `${x.slice(0, 17)}…` : x)
-  return (
-    <Menu
-      label="Insert a variable"
-      align="end"
-      trigger={(p) => (
-        <Button
-          {...p}
-          size="sm"
-          variant="ghost"
-          icon={<BracketsCurly size={15} />}
-          title="Insert a variable where the cursor is"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          Insert
-          <CaretDown size={12} className="-mr-0.5 opacity-70" />
-        </Button>
-      )}
-      items={list.map((v) => ({
-        key: v,
-        label: <span className="font-mono text-[14px]">{`{${v}}`}</span>,
-        ...(vars[v] ? { hint: short(vars[v]) } : {}),
-        onSelect: () => onPick(v),
-      }))}
-    />
-  )
 }
 
 const MB = 1024 * 1024
@@ -454,9 +428,9 @@ function Section({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-4 border-t border-line pt-5">
       <div className="-my-1 flex min-h-8 items-center justify-between gap-3">
-        <h3 id={id} className="font-display text-[18px] font-extrabold tracking-tight text-text">
+        <h2 id={id} className="font-display text-[18px] font-extrabold tracking-tight text-text">
           {title}
-        </h3>
+        </h2>
         {action}
       </div>
       {children}
@@ -481,27 +455,14 @@ function VariationEditor({
   onUploaded: (m: Media) => void
   onDelete: () => void
 }) {
-  const focused = useRef<{
-    el: HTMLInputElement | HTMLTextAreaElement
-    key: 'title' | 'body'
-  } | null>(null)
-  const titleCheck = checkTemplate(v.title)
-  const bodyCheck = checkTemplate(v.body)
-  const insert = (name: string) => {
-    const f = focused.current ?? null
-    const key = f?.key ?? 'title'
-    const el = f?.el
-    const src = v[key]
-    const token = `{${name}}`
-    const at = el ? (el.selectionStart ?? src.length) : src.length
-    const end = el ? (el.selectionEnd ?? at) : at
-    onChange({ ...v, [key]: src.slice(0, at) + token + src.slice(end) })
-    requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(at + token.length, at + token.length)
-    })
-  }
-  const seconds = Math.round(v.duration_ms / 100) / 10
+  const eventKeys = useMemo(
+    () => (event ? Object.keys(eventVars(event)) : ['name', 'amount', 'message']),
+    [event],
+  )
+  const customKeys = useMemo(() => (v.fields ?? []).map((f) => f.key), [v.fields])
+  const tokenOptions = useMemo(() => tokensForAlert(eventKeys, customKeys), [eventKeys, customKeys])
+  const allowedTokens = useMemo(() => new Set<string>([...KNOWN_VARS, ...customKeys]), [customKeys])
+
   return (
     <div className="flex flex-col gap-5">
       {!isDefault && (
@@ -528,66 +489,52 @@ function VariationEditor({
         </div>
       )}
 
-      <Section title="Message" action={<InsertVarMenu event={event} onPick={insert} />}>
-        <Field label="Headline" error={titleCheck.ok ? null : titleCheck.error}>
-          {(p) => (
-            <Input
-              {...p}
-              value={v.title}
-              maxLength={300}
-              onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'title' })}
-              onChange={(e) => onChange({ ...v, title: e.target.value })}
-            />
-          )}
-        </Field>
-        <Field label="Second line" error={bodyCheck.ok ? null : bodyCheck.error}>
-          {(p) => (
-            <Textarea
-              {...p}
-              rows={2}
-              value={v.body}
-              maxLength={500}
-              placeholder="Empty for a one-line alert"
-              onFocus={(e) => (focused.current = { el: e.currentTarget, key: 'body' })}
-              onChange={(e) => onChange({ ...v, body: e.target.value })}
-            />
-          )}
-        </Field>
+      <Section title="Message">
+        <TokenChipField
+          label="Headline"
+          value={v.title}
+          maxLength={300}
+          options={tokenOptions}
+          allowedSet={allowedTokens}
+          onChange={(title) => onChange({ ...v, title })}
+        />
+        <TokenChipField
+          label="Second line"
+          value={v.body}
+          maxLength={500}
+          multiline
+          placeholder="Empty for a one-line alert"
+          options={tokenOptions}
+          allowedSet={allowedTokens}
+          onChange={(body) => onChange({ ...v, body })}
+        />
       </Section>
 
-      <Section title="Look">
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="fc-label">Layout</span>
-            <Segmented
-              label="Layout"
-              value={
-                (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
-                  'stack' | 'side' | 'banner'
-              }
-              onChange={(layout) => onChange({ ...v, layout })}
-              options={[
-                { value: 'stack', label: 'Stacked' },
-                { value: 'side', label: 'Side' },
-                { value: 'banner', label: 'Banner' },
-              ]}
-            />
-          </div>
-          <Field label={`On screen for ${seconds} s`} className="min-w-44 flex-1">
-            {(p) => (
-              <input
-                {...p}
-                type="range"
-                min={1000}
-                max={30000}
-                step={500}
-                value={v.duration_ms}
-                aria-valuetext={`${seconds} seconds`}
-                onChange={(e) => onChange({ ...v, duration_ms: Number(e.target.value) })}
-                className="h-10 w-full"
+      <Section title="Look and timeline">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="fc-label">Layout</span>
+              <Segmented
+                label="Layout"
+                value={
+                  (['stack', 'side', 'banner'].includes(v.layout) ? v.layout : 'stack') as
+                    'stack' | 'side' | 'banner'
+                }
+                onChange={(layout) => onChange({ ...v, layout })}
+                options={[
+                  { value: 'stack', label: 'Stacked' },
+                  { value: 'side', label: 'Side' },
+                  { value: 'banner', label: 'Banner' },
+                ]}
               />
-            )}
-          </Field>
+            </div>
+          </div>
+          <AlertTimeline
+            durationMs={v.duration_ms}
+            anim={v.anim ?? defaultAlertAnim()}
+            onChange={(duration_ms, anim) => onChange({ ...v, duration_ms, anim })}
+          />
         </div>
       </Section>
 
@@ -623,6 +570,10 @@ function VariationEditor({
         </Field>
       </Section>
 
+      <Section title="Custom HTML, CSS and field schema">
+        <CustomCodePanel v={v} onChange={onChange} />
+      </Section>
+
       <details className="group border-t border-line pt-4">
         <summary className="-mx-1 flex cursor-pointer list-none items-center gap-2 rounded-control px-1 py-1 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
           <span className="font-display text-base font-bold tracking-tight text-text">More</span>
@@ -633,7 +584,7 @@ function VariationEditor({
             className="text-text-3 transition-transform duration-200 group-open:rotate-180"
           />
           <span className="ml-auto truncate text-[14px] font-medium text-text-3">
-            {isDefault ? 'Read aloud, custom CSS' : 'Read aloud, CSS, priority, chance'}
+            {isDefault ? 'Read aloud (TTS)' : 'Read aloud, priority, chance'}
           </span>
         </summary>
         <div className="flex flex-col gap-4 pt-4">
@@ -643,20 +594,6 @@ function VariationEditor({
             label="Read the message aloud"
             description="Follows your TTS rules. Turn TTS on in Settings first."
           />
-          <Field label="Custom CSS" hint="Applies only inside this alert.">
-            {(p) => (
-              <Textarea
-                {...p}
-                rows={4}
-                spellCheck={false}
-                className="font-mono text-[13.5px]"
-                placeholder=".fc-alert-title { letter-spacing: 0.02em }"
-                value={v.css}
-                maxLength={20000}
-                onChange={(e) => onChange({ ...v, css: e.target.value })}
-              />
-            )}
-          </Field>
           {!isDefault && (
             <>
               <Field label="Priority" hint="When several looks match, the highest wins.">
@@ -726,7 +663,11 @@ function RuleEditor({
   const { run, busy } = useAction()
   const [draft, setDraft] = useState(rule)
   const [vi, setVi] = useState(0)
-  const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null)
+  const [previewPlatform, setPreviewPlatform] = useState<Platform>(() =>
+    rule.kinds[0] === 'tip' ? 'tips' : (platformsFor(rule.kinds[0] ?? 'follow')[0] ?? 'twitch'),
+  )
+  const [previewStatus, setPreviewStatus] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<{ message: string; hint?: string } | null>(null)
   const [sound, setSound] = useState(false)
   const [replay, setReplay] = useState(0)
   const reduce = useReducedMotion()
@@ -739,7 +680,11 @@ function RuleEditor({
     if (prev.id !== rule.id) {
       setDraft(rule)
       setVi(0)
-      setPreviewPlatform(null)
+      setPreviewPlatform(
+        rule.kinds[0] === 'tip' ? 'tips' : (platformsFor(rule.kinds[0] ?? 'follow')[0] ?? 'twitch'),
+      )
+      setPreviewStatus(null)
+      setSaveError(null)
       return
     }
     setDraft((d) =>
@@ -752,13 +697,14 @@ function RuleEditor({
   const v = draft.variations[vi] ?? draft.variations[0]
   const kind = draft.kinds[0] ?? 'follow'
   const kindPlatforms = kind === 'tip' ? [] : platformsFor(kind)
-  // The platform picked in "Preview as", if this kind has it; the preview, the control and
-  // "Test on stream" all use this one value.
-  const pickedPlatform =
-    previewPlatform && kindPlatforms.includes(previewPlatform) ? previewPlatform : null
-  const event = useMemo(() => sampleFor(draft, pickedPlatform), [draft, pickedPlatform])
+  const [fireTick, setFireTick] = useState(0)
+  const event = useMemo(() => {
+    void fireTick
+    return previewEventFor(draft, previewPlatform)
+  }, [draft, previewPlatform, fireTick])
   // The alert design in use dresses every alert on stream (its look, words, picture and
-  // sound), so the preview plays it too; without one, the rule's own look.
+  // sound), so the preview plays it too; without one, or when custom HTML/CSS is active,
+  // the rule's own look plays directly.
   const activeDesign = useResource(async (c) => {
     const { design_id } = await c.activeAlertDesign()
     return design_id ? c.design(design_id) : null
@@ -766,19 +712,22 @@ function RuleEditor({
   const design: Design | null = activeDesign.data?.kind === 'alert' ? activeDesign.data : null
   const preview = useMemo(() => {
     if (!v || !event) return null
-    let a = renderAlert('preview', draft, v, event)
-    const look = design ? pickLook(design, event) : null
-    if (design && look) a = renderOnto(a, design, look.key, look.variation, event)
+    let a = renderAlert(`preview-${fireTick}`, draft, v, event)
+    const look = design && !v.custom_enabled ? pickLook(design, event) : null
+    if (design && look && !v.custom_enabled)
+      a = renderOnto(a, design, look.key, look.variation, event)
     const url = (id: string | null) => {
       const b = ruleBuiltinSound(id)
       if (b) return builtinSoundUrl(b)
       return id && media.some((x) => x.id === id) ? previewMediaUrl(client, media, id) : null
     }
     return { ...a, sound: url(a.sound), image: url(a.image) }
-  }, [draft, v, event, media, client, design])
+  }, [draft, v, event, media, client, design, fireTick])
   if (!v) return null
-  const setV = (nv: Variation) =>
+  const setV = (nv: Variation) => {
+    setSaveError(null)
     setDraft({ ...draft, variations: draft.variations.map((x, i) => (i === vi ? nv : x)) })
+  }
   const addVariation = () => {
     const nv: Variation = {
       ...newVariation(
@@ -793,14 +742,36 @@ function RuleEditor({
     setDraft({ ...draft, variations: [...draft.variations, nv] })
     setVi(draft.variations.length)
   }
-  const save = () =>
-    void run('save', () => client.saveAlertRule(draft), {
-      success: `“${draft.name}” saved. New alerts use it right away.`,
-    }).then((r) => r && onSaved(r))
+  const save = async () => {
+    setSaveError(null)
+    const saved = await run(
+      'save',
+      async () => {
+        try {
+          return await client.saveAlertRule(draft)
+        } catch (e) {
+          const d = describeError(e)
+          setSaveError({ message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+          throw e
+        }
+      },
+      { success: `“${draft.name}” saved. New alerts use it right away.`, quiet: true },
+    )
+    if (saved) onSaved(saved)
+  }
   const togglePlatform = (p: Platform) => {
     const all = draft.platforms.length === 0 ? [...kindPlatforms] : draft.platforms
     const next = all.includes(p) ? all.filter((x) => x !== p) : [...all, p]
     setDraft({ ...draft, platforms: next.length === kindPlatforms.length ? [] : next })
+  }
+  const firePlatformTest = (p: Platform) => {
+    setPreviewPlatform(p)
+    setFireTick((t) => t + 1)
+    setReplay((r) => r + 1)
+    const ev = previewEventFor(draft, p)
+    const evVars = eventVars(ev)
+    const actorName = evVars.name ?? PLATFORM_LABEL[p]
+    setPreviewStatus(`Previewing ${PLATFORM_LABEL[p]} test alert (${actorName}).`)
   }
 
   return (
@@ -876,35 +847,17 @@ function RuleEditor({
             />
           </div>
 
-          <div className="mb-5 flex flex-wrap items-center gap-1.5">
-            <div role="tablist" aria-label="Looks" className="contents">
-              {draft.variations.map((x, i) => (
-                <button
-                  key={x.id}
-                  role="tab"
-                  type="button"
-                  aria-selected={i === vi}
-                  onClick={() => setVi(i)}
-                  className={cx(
-                    'fc-press h-8 max-w-[18ch] truncate rounded-full border px-3.5 text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                    i === vi
-                      ? 'fc-picked border-transparent'
-                      : 'border-line text-text-2 hover:border-line-strong hover:text-text',
-                  )}
-                >
-                  {x.condition === null ? 'Default' : x.name || 'Untitled'}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addVariation}
-              className="fc-press inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[14px] font-semibold text-text-2 hover:border-text-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-            >
-              <Plus size={14} aria-hidden="true" />
-              Add a look
-            </button>
-          </div>
+          <VariationCards
+            variations={draft.variations}
+            selectedIndex={vi}
+            onSelect={setVi}
+            onAdd={addVariation}
+            onDelete={(idx) => {
+              if (draft.variations[idx]?.condition === null) return
+              setDraft({ ...draft, variations: draft.variations.filter((_, i) => i !== idx) })
+              setVi((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur))
+            }}
+          />
 
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -932,6 +885,16 @@ function RuleEditor({
           </AnimatePresence>
         </div>
 
+        {saveError && (
+          <div
+            role="alert"
+            className="rounded-panel border border-danger/50 bg-danger/10 px-4 py-3 text-[13.5px] text-danger"
+          >
+            <p className="font-semibold">{saveError.message}</p>
+            {saveError.hint && <p className="mt-0.5 text-text-2">{saveError.hint}</p>}
+          </div>
+        )}
+
         <AnimatePresence>
           {dirty && (
             <motion.div
@@ -950,7 +913,14 @@ function RuleEditor({
               >
                 {error ?? 'Unsaved changes'}
               </p>
-              <Button size="sm" variant="ghost" onClick={() => setDraft(rule)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSaveError(null)
+                  setDraft(rule)
+                }}
+              >
                 Discard
               </Button>
               <Button
@@ -958,7 +928,7 @@ function RuleEditor({
                 variant="primary"
                 disabled={!!error}
                 busy={busy === 'save'}
-                onClick={save}
+                onClick={() => void save()}
               >
                 Save
               </Button>
@@ -1006,24 +976,25 @@ function RuleEditor({
               <SpeakerSlash size={15} aria-hidden="true" /> No sound
             </span>
           )}
-          <Button
-            size="sm"
-            variant="primary"
-            className="ml-auto"
-            icon={<Lightning size={15} weight="fill" />}
-            busy={busy === 'test'}
-            onClick={() =>
-              void run('test', () => client.test(kind, pickedPlatform ?? undefined), {
+        </div>
+        <PlatformTestBar
+          selected={previewPlatform}
+          statusText={previewStatus}
+          busy={busy === 'test'}
+          onTestPlatform={firePlatformTest}
+          onTestOnStream={() =>
+            void run(
+              'test',
+              () => client.test(kind, supportedStreamTestPlatform(draft, previewPlatform)),
+              {
                 success: dirty
                   ? 'Test sent. It uses the saved version; save to test your changes.'
                   : 'Test sent to your overlays.',
-              })
-            }
-          >
-            Test on stream
-          </Button>
-        </div>
-        {design && (
+              },
+            )
+          }
+        />
+        {design && !v.custom_enabled && (
           <p className="text-[14.5px] leading-snug text-text-2">
             Alerts play with your alert design,{' '}
             <a
@@ -1034,22 +1005,6 @@ function RuleEditor({
             </a>
             . Its look, words and sound replace the ones set here.
           </p>
-        )}
-        {kindPlatforms.length > 1 && (
-          <div className="flex items-center gap-2.5">
-            <span className="fc-label">Preview as</span>
-            <Segmented
-              label="Preview as"
-              size="sm"
-              value={pickedPlatform ?? (kindPlatforms[0] as Platform)}
-              onChange={setPreviewPlatform}
-              options={kindPlatforms.map((p) => ({
-                value: p,
-                label: <PlatformMark platform={p} size={12} />,
-                title: `Preview a ${PLATFORM_LABEL[p]} event`,
-              }))}
-            />
-          </div>
         )}
       </aside>
     </>
@@ -1135,7 +1090,7 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
   const rules = useResource((c) => c.alertRules())
   const media = useResource((c) => c.media())
   const client = useClient()
-  const { run } = useAction()
+  const { busy, run } = useAction()
   const queue = useLive((s) => s.queue)
   const list = rules.data ?? []
   const selected = list.find((r) => r.id === ruleId) ?? list[0]
@@ -1147,6 +1102,17 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
     }).then((saved) => {
       if (!saved) rules.reload()
     })
+  }
+
+  const restoreDefaults = () => {
+    void run(
+      'restore',
+      async () => {
+        const created = await Promise.all(defaultRules().map((r) => client.createAlertRule(r)))
+        rules.set(created)
+      },
+      { success: 'Starter alert rules restored.' },
+    )
   }
 
   return (
@@ -1168,7 +1134,10 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
       ) : rules.loading && !rules.data ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5">
+        <div
+          data-testid="alerts-loading"
+          className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:gap-5"
+        >
           <div className="flex gap-2 overflow-hidden xl:flex-col xl:gap-1">
             {Array.from({ length: 8 }, (_, i) => (
               <Skeleton key={i} className="h-11 w-32 shrink-0 rounded-full xl:w-full" />
@@ -1178,8 +1147,16 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           <Skeleton className="hidden aspect-video rounded-panel xl:block" />
         </div>
       ) : list.length === 0 || !selected ? (
-        <EmptyState title="No alert rules">
-          Reset to the defaults in Settings → Data, or import from StreamElements or Streamlabs.
+        <EmptyState
+          title="No alert rules"
+          action={
+            <Button variant="primary" busy={busy === 'restore'} onClick={restoreDefaults}>
+              Restore default rules
+            </Button>
+          }
+        >
+          Restore starter rules here, or import alerts from StreamElements or Streamlabs in
+          Settings.
         </EmptyState>
       ) : (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[236px_minmax(0,1fr)_minmax(340px,0.9fr)] xl:items-start xl:gap-5">
