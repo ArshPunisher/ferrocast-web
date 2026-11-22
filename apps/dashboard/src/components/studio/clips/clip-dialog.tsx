@@ -62,12 +62,14 @@ export function ClipDialog({
   const video = useRef<HTMLVideoElement>(null)
   const [section, setSection] = useState<Section>('trim')
   const [playable, setPlayable] = useState(true)
+  // The video's length is known (the buttons that read its playhead are for then).
+  const [ready, setReady] = useState(false)
   const probe = useResource(() => api.probe(id), [api, id], { enabled: ffmpegReady })
   const asked = useThumb(api, clip ?? { id, size: 0, modified: 0 }, clip !== null && ffmpegReady)
   const thumb: ThumbState = ffmpegReady ? asked : { status: 'none' }
   const playhead = () => {
     const v = video.current
-    return v && playable && Number.isFinite(v.currentTime) ? v.currentTime * 1000 : null
+    return v && playable && ready && Number.isFinite(v.currentTime) ? v.currentTime * 1000 : null
   }
   const seek = (ms: number) => {
     if (video.current && playable) video.current.currentTime = ms / 1000
@@ -118,6 +120,7 @@ export function ClipDialog({
             {playable ? (
               <video
                 ref={video}
+                onLoadedMetadata={() => setReady(true)}
                 src={client.clipFileUrl(id)}
                 controls
                 playsInline

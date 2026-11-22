@@ -46,15 +46,21 @@ export function useClips(): ClipsData {
   }, [active, reloadJobs])
   // A job that just finished may have made a clip (or captions): the list shows it.
   const seen = useRef(new Map<string, ClipJob['state']>())
+  // Jobs from before this screen opened are not news; one first seen after that, already done
+  // (a quick trim finished before the first poll), is.
+  const firstLook = useRef(true)
   const reloadOverview = overview.reload
   useEffect(() => {
+    if (jobsRes.data === undefined) return
     let changed = false
     for (const j of jobs) {
       const before = seen.current.get(j.id)
       if (before && jobActive({ state: before }) && !jobActive(j)) changed = true
+      if (!before && !firstLook.current && j.state === 'done') changed = true
       seen.current.set(j.id, j.state)
     }
+    firstLook.current = false
     if (changed) reloadOverview()
-  }, [jobs, reloadOverview])
+  }, [jobs, jobsRes.data, reloadOverview])
   return { api, query, setQuery, overview, jobs, jobsError: jobsRes.error, reloadJobs }
 }

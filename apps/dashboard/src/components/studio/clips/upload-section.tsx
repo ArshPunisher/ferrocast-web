@@ -195,7 +195,7 @@ export function UploadSection({
       </p>
       {job && (
         <ul aria-label="This upload">
-          <JobRow job={job} />
+          <JobRow job={job} onCancel={(id) => void api.cancelJob(id).then(onStarted)} />
         </ul>
       )}
     </div>

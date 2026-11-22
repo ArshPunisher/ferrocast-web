@@ -1,7 +1,7 @@
 // Captions: made by the speech model already on this computer (nothing is sent anywhere), read
 // back as a list to fix, saved beside the clip as .srt, exported, or burned into a copy.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClosedCaptioning, DownloadSimple, Plus, Trash } from '@phosphor-icons/react'
 import {
   cuesProblem,
@@ -61,12 +61,15 @@ export function CaptionsSection({
   useEffect(() => {
     if (state === 'done') {
       setMaking(null)
-      load()
+      // Not over words being typed meanwhile ("Write them myself" while the job ran).
+      if (!dirtyRef.current) load()
       onChanged()
     } else if (state === 'cancelled') setMaking(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
   const dirty = saved !== null && !same(saved, draft)
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
   const problem = useMemo(() => cuesProblem(draft), [draft])
   const set = (i: number, patch: Partial<Cue>) =>
     setDraft((d) => d.map((c, j) => (j === i ? { ...c, ...patch } : c)))
@@ -123,6 +126,7 @@ export function CaptionsSection({
             <JobRow
               job={makingJob}
               compact
+              onCancel={(id) => void api.cancelJob(id).then(onStarted)}
               {...(makingJob.state === 'failed' ? { onDismiss: () => setMaking(null) } : {})}
             />
           </ul>

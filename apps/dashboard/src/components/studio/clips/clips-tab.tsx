@@ -2,7 +2,7 @@
 // vertical copies, recordings) to open, search, pick for a compilation, and the work in the
 // background. Phones never get it: clips are files on the PC.
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowsClockwise,
   FilmStrip,
@@ -162,12 +162,23 @@ export function ClipsTab() {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const searching = data.query.trim() !== ''
   const ffmpegMissing = overview.data ? !overview.data.ffmpeg_ready : false
+  // A clip to open as soon as the list has it (just made, or just renamed).
+  const [want, setWant] = useState<string | null>(null)
+  useEffect(() => {
+    if (want !== null && ids.has(want)) {
+      setOpen(want)
+      setWant(null)
+    }
+  }, [want, ids])
+  // Until the commit above lands, the wanted clip is already the one shown.
+  const openId = want !== null && ids.has(want) ? want : open
   const show = (id: string) => {
     if (ids.has(id)) setOpen(id)
     else {
       data.setQuery('')
+      // Opened once the list has it: opening first shows "isn't in the folder" for a moment.
       overview.reload()
-      setOpen(id)
+      setWant(id)
     }
   }
   return (
@@ -344,18 +355,22 @@ export function ClipsTab() {
           </p>
         )}
       </Panel>
-      {open !== null && (
+      {openId !== null && (
         <ClipDialog
-          key={open}
+          key={openId}
           api={api}
-          clip={clips.find((c) => c.id === open) ?? null}
-          id={open}
+          clip={clips.find((c) => c.id === openId) ?? null}
+          id={openId}
           ffmpegReady={overview.data?.ffmpeg_ready ?? true}
           youtubeConnected={overview.data?.youtube_connected ?? false}
           jobs={jobs}
           onJobStarted={() => data.reloadJobs()}
           onChanged={() => overview.reload()}
-          onRenamed={(id) => setOpen(id)}
+          onRenamed={(id) => {
+            // The list is read again first, so the renamed clip is there when the dialog looks.
+            overview.reload()
+            setWant(id)
+          }}
           onClose={() => setOpen(null)}
           onDeleted={() => {
             setOpen(null)
