@@ -2,7 +2,7 @@
 // the held-message review, the layout editor's leave check, honest backups, plain counts.
 
 import { expect, test, type Page } from '@playwright/test'
-import { demo, fault, open, pastSetupQuestions } from './helpers'
+import { demo, fault, open, pastImportAndMedia, pastSetupQuestions } from './helpers'
 
 const chatLog = (page: Page) => page.getByRole('log', { name: 'Merged chat' })
 
@@ -222,8 +222,8 @@ test.describe('words', () => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
     await pastSetupQuestions(page)
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps.nth(2)).toContainText('(current step)')
-    await expect(steps.nth(2)).not.toContainText('done')
+    await expect(steps.nth(4)).toContainText('(current step)')
+    await expect(steps.nth(4)).not.toContainText('done')
     await page.getByRole('button', { name: 'Skip for now' }).click()
     await expect(
       page.getByRole('heading', { name: /You’re live|Ready when you are/ }),
@@ -261,9 +261,7 @@ test.describe('home', () => {
 test.describe('first run asks what it is for first', () => {
   test('streaming: the picture, then Connect', async ({ page }) => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
-    await expect(
-      page.getByRole('heading', { name: 'What will you use Ferrocast for?' }),
-    ).toBeVisible()
+    await pastImportAndMedia(page)
     await page.getByText('Streaming', { exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByRole('heading', { name: 'Picture size and smoothness' })).toBeVisible()
@@ -273,14 +271,15 @@ test.describe('first run asks what it is for first', () => {
     await page.getByRole('button', { name: 'Use these settings' }).click()
     await expect(page.getByRole('heading', { name: 'Connect where you stream' })).toBeVisible()
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps).toHaveCount(3)
+    await expect(steps).toHaveCount(5)
   })
 
-  test('recording only: two steps, then the Studio', async ({ page }) => {
+  test('recording only: four steps, then the Studio', async ({ page }) => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
+    await pastImportAndMedia(page)
     await page.getByText('Recording only', { exact: true }).click()
     const steps = page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem')
-    await expect(steps).toHaveCount(2)
+    await expect(steps).toHaveCount(4)
     await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('button', { name: 'Done: open the Studio' }).click()
     await expect(page).toHaveURL(/#\/studio/)

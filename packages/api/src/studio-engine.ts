@@ -393,8 +393,34 @@ export interface EngineObsCollection {
   sources: number
 }
 
+/** One converted/reset device or skipped source/filter explained in plain words. */
+export interface EngineImportSkip {
+  category: 'source' | 'filter' | 'scene_item'
+  name: string
+  kind: string
+  reason: string
+}
+
+/** Read-only summary of an OBS Studio or Streamlabs collection before importing. */
+export interface EngineImportPreview {
+  source: 'obs' | 'streamlabs'
+  id: string
+  name: string
+  scenes: number
+  sources: number
+  web_pages: number
+  scene_names: string[]
+  truncated_scenes: number
+  device_resets: EngineImportSkip[]
+  skipped: EngineImportSkip[]
+  skipped_total: number
+  missing: string[]
+}
+
 /** What an import from OBS brought in. */
 export interface EngineImportReport {
+  id?: string
+  previous_id?: string | null
   name: string
   scenes: number
   sources: number
@@ -402,6 +428,11 @@ export interface EngineImportReport {
   web_pages: number
   /** Kinds of source this computer's OBS doesn't have. */
   missing: string[]
+  /** Browser sources whose page address was left empty (not an http(s) page or a plain local file). */
+  blocked_pages?: string[]
+  device_resets?: EngineImportSkip[]
+  skipped?: EngineImportSkip[]
+  skipped_total?: number
 }
 
 export type EngineMonitor = 'off' | 'only_me' | 'me_and_stream'
@@ -1126,7 +1157,7 @@ export function studioEngineApi(c: FerroClient) {
       w = 240,
       signal?: AbortSignal,
     ) =>
-      c.request<{ image: string | null }>(
+      c.request<{ image: string | null; error?: string | null }>(
         'GET',
         `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
         undefined,
@@ -1168,9 +1199,21 @@ export function studioEngineApi(c: FerroClient) {
     /** OBS's scene collections on this computer. */
     obsCollections: () =>
       c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/obs-collections'),
+    /** Read-only preview of an OBS scene collection before importing it. */
+    previewObs: (id: string) =>
+      c.request<EngineImportPreview>('POST', '/api/v1/studio/engine/obs-collections/preview', {
+        id,
+      }),
     /** Streamlabs Desktop's scene collections on this computer. */
     streamlabsCollections: () =>
       c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/streamlabs-collections'),
+    /** Read-only preview of a Streamlabs scene collection before importing it. */
+    previewStreamlabs: (id: string) =>
+      c.request<EngineImportPreview>(
+        'POST',
+        '/api/v1/studio/engine/streamlabs-collections/preview',
+        { id },
+      ),
     /** Adds one of Streamlabs' collections as a new scene collection. */
     importStreamlabs: (id: string) =>
       c.request<EngineImportReport>('POST', '/api/v1/studio/engine/streamlabs-collections/import', {

@@ -37,6 +37,7 @@ import {
 import type { ChatPlatform, Command, FerroEvent, Platform } from '../../types'
 import { HttpError } from '../http-error'
 import { NOT_MINE, clone, isWhole, requireObj, type DemoHost, type Routed } from './host'
+import type { DemoStudioEngine } from './studio-engine'
 
 /** The demo's Twitch and Kick categories: what its search offers and its preview finds. */
 const DEMO_CATEGORIES = [
@@ -233,6 +234,7 @@ export class DemoStudio {
     private readonly commands: () => Command[],
     /** Kick's demo sign-in predates the editor: it shows the reconnect flow. */
     private readonly kickNeedsReconnect = true,
+    private readonly studioEngine: DemoStudioEngine | null = null,
   ) {
     const now = Date.now()
     this.startedAt = now - 2 * 3_600_000 - 14 * 60_000
@@ -1504,8 +1506,11 @@ export class DemoStudio {
       return { show: clone(run) }
     }
 
-    // The Studio's engine needs the desktop app (libobs in its window), like the engine says.
+    // The Studio's engine runs locally when simulated (onboarding/tests); otherwise needs desktop.
     if (a === 'studio' && b === 'engine') {
+      if (this.studioEngine) {
+        return this.studioEngine.route(method, seg, body, url)
+      }
       if (is('GET', 'studio', 'engine'))
         return {
           available: false,

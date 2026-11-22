@@ -452,10 +452,28 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
   ])
   const params = new URLSearchParams(location.search)
   const setupDone = opts.setupDone ?? params.get('firstrun') === null
+  const useStudioEngine =
+    params.get('studioEngine') !== '0' && (!setupDone || params.get('studioEngine') === '1')
+  const colPreset = (v: string | null) =>
+    v === 'empty' || v === 'broken' || v === 'huge' || v === 'normal' ? v : undefined
+  const micPresetParam = (v: string | null) =>
+    v === 'quiet' || v === 'good' || v === 'loud' || v === 'silent' ? v : undefined
   window.__ferrocastDemo?.dispose()
   const engine = new DemoEngine({
     setupDone,
     persistQueue: true,
+    ...(useStudioEngine
+      ? {
+          studioEngine: {
+            obsPreset: colPreset(params.get('obs')) ?? 'normal',
+            streamlabsPreset: colPreset(params.get('sl')) ?? 'normal',
+            hasCamera: params.get('cam') !== 'none',
+            cameraDenied: params.get('cam') === 'denied',
+            hasMic: params.get('mic') !== 'none',
+            micPreset: micPresetParam(params.get('mic')) ?? 'quiet',
+          },
+        }
+      : {}),
     autoplay: params.get('autoplay') !== '0',
     ...(params.has('latency') ? { latencyMs: Number(params.get('latency')) } : {}),
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
