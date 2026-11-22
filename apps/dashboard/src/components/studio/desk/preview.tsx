@@ -266,9 +266,21 @@ const OVER = '[role="menu"], [role="listbox"], [data-over-preview]'
 /** The most holes the app takes; more than that and the picture hides instead. */
 const MAX_HOLES = 16
 
-/** The guides' lines and the overflow mask are holes too, but not the kind of crowd that hides
- * the picture: they aren't counted against the limit. */
-const freeHoles = (): number => document.querySelectorAll('[data-guide-hole]').length
+/** The engine takes at most this many holes in all (`PREVIEW_HOLES` there); more is a 400 and the
+ * picture would keep the last holes it had, painting over menus and guides. */
+export const MAX_SENT_HOLES = 64
+
+/** The guides' lines, the group box and the overflow mask are holes too, but not the kind of
+ * crowd that hides the picture: they aren't counted against `MAX_HOLES`. They are against the
+ * engine's limit, so when there are too many the ones that matter least (these) go first. */
+const isGuide = (el: Element): boolean => el.hasAttribute('data-guide-hole')
+
+/** The holes to send: menus and panels first and all of them, then as many guide holes as fit.
+ * Null: too many menus and panels (hide the picture). */
+function capHoles(first: Hole[], guides: Hole[]): Hole[] | null {
+  if (first.length > MAX_HOLES) return null
+  return [...first, ...guides.slice(0, Math.max(0, MAX_SENT_HOLES - first.length))]
+}
 
 /**
  * What lies over the box: the app's view can't be drawn under the page, so it leaves its
@@ -279,6 +291,7 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
   const r = new DOMRect(box.x - edge, box.y - edge, box.width + 2 * edge, box.height + 2 * edge)
   if (document.body.dataset.dockDrag) return null
   const holes: Hole[] = []
+  const guides: Hole[] = []
   for (const el of document.querySelectorAll(OVER)) {
     // A modal dialog's own box is the whole window; its panel says it's over the preview.
     if (el instanceof HTMLDialogElement) continue
@@ -287,10 +300,11 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
     if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) {
       // Its rounded corners too, so the picture shows round them, not a square of the page.
       const rad = Math.min(200, parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0)
-      holes.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad })
+      const hole = { x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad }
+      ;(isGuide(el) ? guides : holes).push(hole)
     }
   }
-  return holes.length - Math.min(freeHoles(), holes.length) > MAX_HOLES ? null : holes
+  return capHoles(holes, guides)
 }
 
 /** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
@@ -324,8 +338,10 @@ function cutOut(box: DOMRect, edge: number): Hole[] | null {
   const clip = clipToView(box, edge)
   const over = clip && overPreview(box, edge)
   if (!clip || !over) return null
-  const holes = [...clip, ...over]
-  return holes.length - Math.min(freeHoles(), holes.length) > MAX_HOLES ? null : holes
+  // The clip holes (under the bars) and the menus and panels count; `over` is already capped, so
+  // what is left of the room is for what it kept.
+  const room = Math.max(0, MAX_SENT_HOLES - clip.length)
+  return [...clip, ...over.slice(0, room)]
 }
 
 /** Where the live picture goes: the app draws it exactly on this box (its view reaches EDGE past it for handles). In Studio
