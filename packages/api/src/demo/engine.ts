@@ -3049,14 +3049,35 @@ export class DemoEngine {
     return out
   }
 
+  /** The first hype-train label's timing (seconds), else the defaults the engine uses. */
+  private demoTrainTimings(): { window: number; step: number; max: number; threshold: number } {
+    for (const o of this.overlays)
+      for (const w of o.widgets)
+        if (w.kind === 'label' && w.config.source === 'hype_train') {
+          const c = w.config
+          const window = c.train_window_s ?? 120
+          return {
+            window,
+            step: c.train_step_s ?? 15,
+            max: Math.max(c.train_max_s ?? 300, window),
+            threshold: c.train_threshold ?? 3,
+          }
+        }
+    return { window: 120, step: 15, max: 300, threshold: 3 }
+  }
+
   private bumpDemoTrain(actorName: string): void {
     const now = Date.now()
+    const t = this.demoTrainTimings()
     if (this.labelExtras.trainEndsAt <= now) {
-      this.labelExtras.trainEndsAt = now + 120_000
-      this.labelExtras.trainEvents = 3
+      this.labelExtras.trainEndsAt = now + t.window * 1000
+      this.labelExtras.trainEvents = t.threshold
       this.labelExtras.trainContributors = 1
     } else {
-      this.labelExtras.trainEndsAt = Math.min(now + 300_000, this.labelExtras.trainEndsAt + 15_000)
+      this.labelExtras.trainEndsAt = Math.min(
+        now + t.max * 1000,
+        this.labelExtras.trainEndsAt + t.step * 1000,
+      )
       this.labelExtras.trainEvents++
     }
     this.labelExtras.trainLatestActor = actorName

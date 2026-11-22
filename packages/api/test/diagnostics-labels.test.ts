@@ -203,4 +203,40 @@ describe('Diagnostics preview & zip export (#7)', () => {
       '20261122-073145',
     )
   })
+
+  it('the demo train follows the configured window, step and cap', async () => {
+    const o = (await client.overlays())[0]!
+    await client.saveOverlay({
+      ...o,
+      widgets: [
+        {
+          id: 'tr',
+          kind: 'label',
+          x: 0,
+          y: 0,
+          w: 400,
+          h: 80,
+          config: {
+            source: 'hype_train',
+            template: '{value}',
+            theme: 'molten',
+            train_window_s: 10,
+            train_step_s: 1,
+            train_max_s: 10,
+            train_threshold: 3,
+          },
+        },
+      ],
+    })
+    const e = engine as unknown as {
+      bumpDemoTrain: (n: string) => void
+      labelExtras: { trainEndsAt: number }
+    }
+    e.labelExtras.trainEndsAt = 0
+    const before = Date.now()
+    e.bumpDemoTrain('Ann')
+    expect(e.labelExtras.trainEndsAt - before).toBeLessThanOrEqual(10_100)
+    e.bumpDemoTrain('Ben')
+    expect(e.labelExtras.trainEndsAt - before).toBeLessThanOrEqual(10_100)
+  })
 })
