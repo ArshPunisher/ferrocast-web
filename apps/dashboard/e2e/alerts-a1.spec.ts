@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { open, settled } from './helpers'
+import { demo, open, settled } from './helpers'
 
 // A1: the alert editor opens full screen as three panes (rules and looks on the left, the
 // live stage with its timeline in the middle, collapsible property groups on the right).
@@ -91,6 +91,50 @@ for (const [width, height] of [
       expect(await noSideScroll(page)).toBe(true)
     })
 
+    test('Discard drops an added look and the first look is the one edited again', async ({
+      page,
+    }) => {
+      await open(page, 'alerts/sub')
+      await page.getByRole('button', { name: 'Add a look' }).click()
+      await expect(page.getByLabel('Look name')).toBeVisible()
+      await page.getByRole('button', { name: 'Discard' }).click()
+      await expect(page.locator('[data-variation-card]')).toHaveCount(2)
+      // The headline edit lands on the look shown, not on a missing one.
+      const headline = page.getByLabel('Headline', { exact: true })
+      await headline.fill('{name} again')
+      await expect(page.getByText('Unsaved edits')).toBeVisible()
+    })
+
+    test('Test on stream is the solid primary; Save is the quiet one; the default look says it in words', async ({
+      page,
+    }) => {
+      await open(page, 'alerts/follow')
+      const bar = page.getByTestId('alert-editor').locator('header')
+      const test = bar.getByRole('button', { name: 'Test on stream' })
+      const bg = await test.evaluate((el) => getComputedStyle(el).backgroundColor)
+      const fg = await test.evaluate((el) => getComputedStyle(el).color)
+      expect(fg).toBe('rgb(255, 255, 255)')
+      expect(bg).not.toBe('rgba(0, 0, 0, 0)')
+      const card = page.locator('[data-variation-card]').first()
+      await expect(card).toContainText('Used when no other look matches')
+      await expect(card).toContainText('7.0 s')
+      await expect(card).not.toContainText('fallback')
+      await expect(card.getByText('Default', { exact: true })).toHaveCount(1)
+    })
+
+    test('a token that does not fit keeps the palette and the focus', async ({ page }) => {
+      await open(page, 'alerts/follow')
+      const headline = page.getByLabel('Headline', { exact: true })
+      await headline.fill('x'.repeat(295))
+      await page.getByRole('button', { name: 'Tokens for Headline' }).click()
+      const opt = page.locator('[data-insert-token="platform"]')
+      await opt.focus()
+      await page.keyboard.press('Enter')
+      await expect(opt).toBeVisible()
+      await expect(opt).toBeFocused()
+      await expect(headline).toHaveValue('x'.repeat(295))
+    })
+
     test('has no serious accessibility problems', async ({ page }) => {
       await open(page, 'alerts/follow')
       await expect(page.getByTestId('alert-editor')).toBeVisible()
@@ -114,5 +158,31 @@ test.describe('A1 alert editor at 375 px', () => {
     await page.getByRole('button', { name: 'Tokens for Headline' }).click()
     await expect(page.getByRole('group', { name: 'Insert token into Headline' })).toBeVisible()
     expect(await noSideScroll(page)).toBe(true)
+  })
+})
+
+test.describe('A1 partial restore of the starter rules', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('the retry stays in the editor while one rule is still missing', async ({ page }) => {
+    await open(page, 'home')
+    await demo(
+      page,
+      `async (d) => {
+        const hdr = { Authorization: 'Bearer demo-session' }
+        const list = await (await d.fetch(d.base + '/api/v1/alert-rules', { headers: hdr })).json()
+        for (const r of list)
+          await d.fetch(d.base + '/api/v1/alert-rules/' + encodeURIComponent(r.id), { method: 'DELETE', headers: hdr })
+        d.addFault({ path: '/api/v1/alert-rules', method: 'POST', status: 500, message: 'Disk full', times: 1 })
+      }`,
+    )
+    await page.evaluate(() => (location.hash = '#/alerts'))
+    await page.getByRole('button', { name: 'Restore default rules' }).click()
+    // The other rules came back, so the editor is open, and the retry is still there.
+    await expect(page.getByTestId('alert-editor')).toBeVisible()
+    const retry = page.getByRole('button', { name: 'Restore the rest' })
+    await expect(retry).toBeVisible()
+    await retry.click()
+    await expect(retry).toHaveCount(0)
   })
 })

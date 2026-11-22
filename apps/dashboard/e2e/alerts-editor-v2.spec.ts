@@ -110,7 +110,7 @@ for (const width of [1280, 375] as const) {
       await open(page, 'alerts/sub')
 
       const cards = page.getByRole('group', { name: 'Alert variations' })
-      await expect(cards).toContainText('Default fallback')
+      await expect(cards).toContainText('Used when no other look matches')
       await expect(cards).toContainText('12+ months')
       await expect(cards).toContainText('Weight: 1')
 

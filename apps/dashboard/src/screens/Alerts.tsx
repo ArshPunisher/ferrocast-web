@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowCounterClockwise,
@@ -614,8 +614,11 @@ function RuleEditor({
   onSaved,
   onUploaded,
   onToggle,
+  notice,
 }: {
   rule: AlertRule
+  /** A line under the top bar (a partial restore of the starter rules, with its retry). */
+  notice?: ReactNode
   /** Every rule, for the left dock's list. */
   rules: AlertRule[]
   media: Media[]
@@ -836,13 +839,15 @@ function RuleEditor({
             onClick={() => {
               setSaveError(null)
               setDraft(rule)
+              // The added look is gone: the first look is the one shown.
+              setVi(0)
             }}
           >
             Discard
           </Button>
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             disabled={!dirty || !!error}
             busy={busy === 'save'}
             onClick={() => void save()}
@@ -851,7 +856,7 @@ function RuleEditor({
           </Button>
           <Button
             size="sm"
-            variant="secondary"
+            variant="primary"
             icon={<Lightning size={14} weight="fill" />}
             busy={busy === 'test'}
             onClick={() =>
@@ -870,6 +875,8 @@ function RuleEditor({
           </Button>
         </div>
       </header>
+
+      {notice}
 
       {banner && (
         <div
@@ -1150,6 +1157,17 @@ export function Alerts({ ruleId }: { ruleId?: string | undefined }) {
           onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
           onSaved={(r) => rules.set((prev) => (prev ?? []).map((x) => (x.id === r.id ? r : x)))}
           onToggle={(on) => toggle(selected, on)}
+          notice={
+            restoreLeft > 0 ? (
+              <p className="flex flex-wrap items-center gap-3 border-b border-warn/30 bg-warn-soft px-4 py-2 text-[14.5px] font-medium text-warn">
+                {restoreLeft} starter {restoreLeft === 1 ? 'rule' : 'rules'} couldn&apos;t be
+                restored.
+                <Button size="sm" busy={busy === 'restore'} onClick={restoreDefaults}>
+                  Restore the rest
+                </Button>
+              </p>
+            ) : null
+          }
         />
       </>
     )

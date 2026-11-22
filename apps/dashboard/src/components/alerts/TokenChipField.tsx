@@ -153,7 +153,8 @@ export function TokenChipField({
     if (paletteOpen) paletteRefs.current[0]?.focus()
   }, [paletteOpen])
 
-  const insertToken = (key: string) => {
+  /** Writes the token at the caret; false when it would not fit (nothing changed). */
+  const insertToken = (key: string): boolean => {
     const token = `{${key}}`
     const el = inputEl.current
     const caller = typeof document !== 'undefined' ? document.activeElement : null
@@ -162,7 +163,7 @@ export function TokenChipField({
     const next = insertTokenAt(value, start, end, token, maxLength)
     if (next === null) {
       setAnnouncement(`${token} doesn't fit: ${label} can be up to ${maxLength} characters.`)
-      return
+      return false
     }
     onChange(next)
     setAnnouncement(`Inserted ${token} into ${label}`)
@@ -176,6 +177,7 @@ export function TokenChipField({
       inputEl.current.focus()
       inputEl.current.setSelectionRange(nextPos, nextPos)
     })
+    return true
   }
 
   const removeToken = (tok: ParsedToken, focusNextIdx: number) => {
@@ -267,8 +269,8 @@ export function TokenChipField({
                   data-insert-token={opt.key}
                   title={`Insert {${opt.key}} (${opt.label})`}
                   onClick={() => {
-                    insertToken(opt.key)
-                    setPaletteOpen(false)
+                    // Closed only when it went in: a refusal keeps the focus on this option.
+                    if (insertToken(opt.key)) setPaletteOpen(false)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
