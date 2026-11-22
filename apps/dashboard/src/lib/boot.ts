@@ -478,6 +478,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
       : {}),
     autoplay: params.get('autoplay') !== '0',
     ...(params.has('latency') ? { latencyMs: Number(params.get('latency')) } : {}),
+    ...(params.has('clipstep') ? { clipStepMs: Number(params.get('clipstep')) } : {}),
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.
     ...(params.get('tips') === 'empty' ? { tips: 'empty' as const } : {}),
     ...(params.get('relay') === '0' ? { relay: false } : {}),

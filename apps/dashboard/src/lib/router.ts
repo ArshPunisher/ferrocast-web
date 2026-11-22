@@ -32,7 +32,8 @@ export type Route =
 export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
 const GALLERY_TABS: GalleryTab[] = ['themes', 'alerts', 'widgets', 'mine']
 
-export type StudioSection = 'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'engine'
+export type StudioSection =
+  'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'clips' | 'engine'
 const STUDIO_SECTIONS: StudioSection[] = [
   'golive',
   'vertical',
@@ -40,6 +41,7 @@ const STUDIO_SECTIONS: StudioSection[] = [
   'info',
   'obs',
   'moments',
+  'clips',
   'engine',
 ]
 
