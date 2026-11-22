@@ -158,6 +158,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           onClose={() => setOptimizing(false)}
           s={desk.prefs.data}
           onApply={applyOptimized}
+          onSynced={(next) => desk.prefs.set(next)}
         />
       )}
       <DockHeader

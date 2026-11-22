@@ -896,6 +896,26 @@ export class DemoGoLive {
     return this.obs()
   }
 
+  runUploadCheck(): UploadCheck {
+    return this.check()
+  }
+
+  enabledMainDestinations(): {
+    id: string
+    kind: Service
+    name: string
+    enhanced: boolean
+  }[] {
+    return this.cfg
+      .filter((d) => d.enabled && (!d.canvas || d.canvas === 'main') && !this.blocked(d))
+      .map((d) => ({
+        id: d.id,
+        kind: d.kind,
+        name: d.kind === 'custom' ? (d.name ?? 'Custom server') : LABELS[d.kind],
+        enhanced: !!d.enhanced || !!this.advanced.ignore_service_limits,
+      }))
+  }
+
   private check(): UploadCheck {
     // Nothing ticked still measures the upload, as the engine does (Set up for me asks first).
     const ticked = this.cfg.filter((d) => d.enabled)

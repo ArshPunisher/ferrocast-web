@@ -374,3 +374,18 @@ with backward-compatible defaults (`#[serde(default)]`):
   app/engine for desktop and OBS origins.
 - `RenderedAlert.duration_ms` is the total: for a look with `anim`, the exit plays inside it. An
   active alert design no longer dresses an alert whose look is custom-enabled.
+
+## R30. Encoder stress benchmark in auto-config with rollback (22 Nov)
+
+Roadmap Phase 2 #16 (`feat/p2-encoder-bench`). Measures real encoder frame times, headroom,
+skipped/lagged frames, and CPU/GPU load across hardware encoders (`VideoToolbox`, `NVENC`,
+`QSV`, `AMF`) and software `x264` presets over a canvas-shaped load, combines results with
+`/golive/upload-check`, and provides snapshot + 30 s Keep/Undo + 1-minute drop-watch rollback.
+
+- `GET /api/v1/studio/engine/auto-config` → `AutoConfigState` (`idle | running | failed | done | applied | rolled_back`, progress `phase` & `progress_pct`, `candidates[]`, `upload_check`, `picked`, `applied`, `confirm_remaining_s`, `watch_remaining_s`, `first_minute_drops`, `first_minute_lags`, `rollback_trigger`, `rollback_reason`, `restored`).
+- `POST /api/v1/studio/engine/auto-config/benchmark` `{ mode?: "stream" | "record", fps_preference?: 30 | 60, include_upload?: boolean, max_seconds?: number }` → starts cancellable ~20-30 s benchmark. Refuses `409 studio_busy` while streaming/recording/replay is active, `409 conflict` while running, `400 invalid` for bad inputs.
+- `POST /api/v1/studio/engine/auto-config/cancel` → aborts immediately, removes temp scratch files, returns `idle`.
+- `POST /api/v1/studio/engine/auto-config/apply` `{ encoder?, video_encoder?, encoder_settings?, scale?, fps?, video_kbps?, label? }` → snapshots `StudioSettings`, applies changes, starts 30 s auto-rollback timeout and 1-minute dropped/lagged-frame watchdog → `applied`.
+- `POST /api/v1/studio/engine/auto-config/keep` → clears 30 s timeout while keeping 1-minute drop protection → `applied` (`confirmed: true`). `409` if nothing is applied.
+- `POST /api/v1/studio/engine/auto-config/undo` → restores snapshot immediately → `rolled_back`. `409` if nothing is applied.
+- Live WebSocket frame: `auto_config AutoConfigState` (plus `notice` key `auto_config_rollback` on automatic rollback). PC-only (`/studio/engine/**` remains blocked to paired phones).

@@ -114,6 +114,11 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     )
   if (!draft || !loaded.data) return <Skeleton className="m-6 h-96" />
   const set = (patch: Partial<StudioSettings>) => setDraft((d) => (d ? { ...d, ...patch } : d))
+  const syncFromAutoConfig = (next: StudioSettings) => {
+    loaded.set(next)
+    prefs.set(next)
+    setDraft(next)
+  }
   const changed = JSON.stringify(draft) !== JSON.stringify(loaded.data)
   const save = async () => {
     setSaving(true)
@@ -197,7 +202,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
               {here.label}
             </h3>
           )}
-          {page === 'stream' && <StreamPage s={draft} set={set} />}
+          {page === 'stream' && <StreamPage s={draft} set={set} onSynced={syncFromAutoConfig} />}
           {page === 'audio' && <AudioPage s={draft} set={set} />}
           {page === 'picture' && <PicturePage s={draft} set={set} />}
           {page === 'record' && <RecordPage s={draft} set={set} />}
@@ -536,7 +541,11 @@ export function EncoderOptions({
   )
 }
 
-export function StreamPage({ s, set }: PageProps) {
+export function StreamPage({
+  s,
+  set,
+  onSynced,
+}: PageProps & { onSynced?: (next: StudioSettings) => void }) {
   const [wizard, setWizard] = useState(false)
   const [more, setMore] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
@@ -551,10 +560,18 @@ export function StreamPage({ s, set }: PageProps) {
         <Sparkle size={22} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
         <span className="flex flex-col">
           <b className="font-display text-[14px] text-text">Set up for me</b>
-          <span className="text-[13.5px] text-text-2">Tests your upload and picks for you.</span>
+          <span className="text-[13.5px] text-text-2">
+            Benchmarks your encoder and upload, with automatic rollback protection.
+          </span>
         </span>
       </button>
-      <AutoConfigDialog open={wizard} onClose={() => setWizard(false)} s={s} onApply={set} />
+      <AutoConfigDialog
+        open={wizard}
+        onClose={() => setWizard(false)}
+        s={s}
+        onApply={set}
+        {...(onSynced ? { onSynced } : {})}
+      />
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>
