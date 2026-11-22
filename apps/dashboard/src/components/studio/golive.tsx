@@ -72,6 +72,8 @@ import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
+import { useSaveOrder } from './save-order'
+import { useStudio } from './common'
 import { useObsHealth } from './obs'
 import { InBar, StudioDesk } from './desk/desk'
 
@@ -293,9 +295,10 @@ export function LiveCard({
   const failed = on.filter((d) => d.health?.state === 'failed').length
   const out = live.reduce((a, d) => a + (d.health?.kbps ?? 0), 0)
   const since = Math.min(...on.map((d) => d.health?.since_ms ?? Infinity))
+  const saver = useSaveOrder(api, onSaved)
   const stopTrying = (id: string) =>
     void run(`stop:${id}`, () =>
-      api.saveOrder(
+      saver.request(
         view.destinations.map((d) => ({ id: d.id, enabled: d.enabled && d.id !== id })),
       ),
     ).then((r) => r && onSaved())
@@ -309,6 +312,7 @@ export function LiveCard({
         <h2 className="sr-only">
           {canvas === 'main' ? 'Live on your platforms' : 'Vertical stream live'}
         </h2>
+        {on.length === 0 && <NotSending canvas={canvas} />}
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex h-7 items-center gap-2 rounded-full bg-[#c42339] px-3 font-mono text-[13px] font-extrabold tracking-[0.06em] text-white">
             <span className="size-[7px] rounded-full bg-white" aria-hidden />
@@ -493,7 +497,52 @@ export function LiveCard({
           Adding or removing a platform below doesn’t end the stream.
         </p>
       </div>
+      {saver.dialog}
     </Panel>
+  )
+}
+
+/** Every platform is switched off but the stream is still on air (a recording may need it). */
+function NotSending({ canvas }: { canvas: Canvas }) {
+  const studio = useStudio()
+  const { run, busy } = useAction()
+  const [ask, setAsk] = useState(false)
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[14.5px] text-text-2">
+        <b className="text-text">Live, not sending to any platform.</b> The stream and any recording
+        keep going until you end the stream.
+      </span>
+      {canvas === 'main' && (
+        <Button size="sm" variant="danger-ghost" onClick={() => setAsk(true)}>
+          End stream
+        </Button>
+      )}
+      <Dialog
+        open={ask}
+        onClose={() => setAsk(false)}
+        title="End the stream?"
+        description="Nothing is going to a platform now. Ending it also stops what depends on it, like a recording."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAsk(false)}>
+              Keep it on
+            </Button>
+            <Button
+              variant="danger"
+              busy={busy === 'end'}
+              onClick={() =>
+                void run('end', () => studio.setObsStream(false), {
+                  success: 'The stream ended.',
+                }).then(() => setAsk(false))
+              }
+            >
+              End stream
+            </Button>
+          </>
+        }
+      />
+    </div>
   )
 }
 
@@ -510,6 +559,36 @@ function elapsed(ms: number): string {
 }
 
 // ---------------------------------------------------------------- 2A: the platforms
+
+/**
+ * What a destination's row says about itself on the right: while the stream runs, where it
+ * is (starting, connecting, live with its rate, reconnecting, failed, paused, off); before, its rate.
+ */
+export function liveStatus(d: DestinationView, streaming: boolean, plan: number): string {
+  // A backup waiting for its main one isn't sending: not "Starting" for the whole stream.
+  if (streaming && d.standby_for) return 'Standby'
+  // An active backup isn't ticked but is sending: it shows its health, not Off.
+  if (!d.enabled && !(streaming && d.backup_for)) return streaming ? 'Off' : ''
+  if (!streaming) return d.health?.state === 'failed' ? 'Failed' : mbps(d.health?.kbps || plan)
+  switch (d.health?.state) {
+    case undefined:
+    case 'waiting':
+      return 'Starting'
+    case 'connecting':
+      return 'Connecting'
+    case 'reconnecting':
+      return 'Reconnecting'
+    case 'failed':
+      return 'Failed'
+    case 'paused':
+      return 'Paused'
+    case 'stopped':
+      return 'Stopped'
+    default:
+      // Live but nothing measured yet: said so, not the plan's number as if it were going out.
+      return d.health?.kbps ? mbps(d.health.kbps) : 'Live'
+  }
+}
 
 export function Platforms({
   view,
@@ -539,13 +618,16 @@ export function Platforms({
   }
   const merged = rows.map((r) => mine.find((d) => d.id === r.id) ?? r)
 
+  // What a change while live asks first (the upload won't carry it, or it was the last one).
+  const saver = useSaveOrder(api, onSaved)
   // The other picture's destinations go along unchanged (the engine wants every one).
   const save = (next: DestinationView[], label: string) => {
     setRows(next)
-    const all = canvas === 'main' ? [...next, ...others] : [...others, ...next]
-    void run('order', () => api.saveOrder(all.map((d) => ({ id: d.id, enabled: d.enabled }))), {
-      success: label,
-    }).then((r) => {
+    const all = (canvas === 'main' ? [...next, ...others] : [...others, ...next]).map((d) => ({
+      id: d.id,
+      enabled: d.enabled,
+    }))
+    void run('order', () => saver.request(all), { success: label }).then((r) => {
       if (r) onSaved()
       else setRows(mine)
     })
@@ -672,20 +754,32 @@ export function Platforms({
               <div className="flex items-center gap-1.5 sm:gap-3">
                 <span
                   className={cx(
-                    'hidden text-right font-mono text-[13px] leading-tight sm:block',
+                    'text-right font-mono text-[12.5px] leading-tight sm:block sm:text-[13px]',
+                    (vertical ? view.vertical_live : view.live) ? 'block' : 'hidden',
                     d.enabled && d.health?.state === 'failed'
                       ? 'font-semibold text-danger'
                       : 'text-text-2',
                   )}
                 >
-                  {!d.enabled
-                    ? ''
-                    : d.health?.state === 'failed'
-                      ? 'Failed'
-                      : d.health?.state === 'paused'
-                        ? 'Paused'
-                        : mbps(d.health?.kbps || plan)}
+                  {liveStatus(d, vertical ? view.vertical_live : view.live, plan)}
                 </span>
+                {d.enabled &&
+                  (vertical ? view.vertical_live : view.live) &&
+                  d.health?.state === 'failed' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      busy={busy === `retry:${d.id}`}
+                      aria-label={`Retry ${d.name}`}
+                      onClick={() =>
+                        void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
+                          success: `Trying ${d.name} again.`,
+                        }).then((r) => r && onSaved())
+                      }
+                    >
+                      Retry
+                    </Button>
+                  )}
                 {(d.kind === 'custom' || d.connected) && (
                   <IconButton
                     label={`Test connection to ${d.name}`}
@@ -767,6 +861,7 @@ export function Platforms({
         onAdded={onSaved}
         canvas={canvas}
       />
+      {saver.dialog}
       <Dialog
         open={removing !== null}
         onClose={() => setRemoving(null)}

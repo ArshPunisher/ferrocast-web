@@ -1367,6 +1367,8 @@ export interface Settings {
   reduced_motion: 'system' | 'on' | 'off'
   low_motion_overlays: boolean
   lan_access: boolean
+  /** Let local API keys work from other devices on the network (off: this PC only). */
+  api_keys_over_lan: boolean
   never_update_while_live: boolean
   launch_at_login: boolean
   close_to_tray: boolean
@@ -1977,6 +1979,16 @@ export interface StreamHealthRecord {
   frame_ms: number
   destinations: DestinationHealthSnapshot[]
   issues: string[]
+  /** Destinations turned on or off while the stream ran (older records: none). */
+  destination_log?: DestinationEvent[]
+}
+
+export interface DestinationEvent {
+  id: string
+  name: string
+  at: Millis
+  /** true = it started sending, false = it stopped. */
+  on: boolean
 }
 
 export interface CrashDumpSummary {

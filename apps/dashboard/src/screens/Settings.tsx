@@ -73,6 +73,7 @@ import { MusicSettings } from '../components/music-settings'
 import { AutomationsSettings } from '../components/automations-settings'
 import { PluginsSettings } from '../components/plugins-settings'
 import { SupportReportSection } from '../components/support-report'
+import { ApiKeysSection } from '../components/api-keys'
 import { useLive } from '../lib/store'
 import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
@@ -115,6 +116,7 @@ const SECTIONS: readonly SectionItem[] = GROUPS.flatMap((g): readonly SectionIte
 type SectionId = SectionItem[0]
 const ALIAS: Record<string, SectionId> = {
   remote: 'advanced',
+  'api-keys': 'advanced',
   'cloud-backups': 'data',
   'discord-pro': 'discord',
 }
@@ -1018,9 +1020,10 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
     <Section
       id="advanced"
       title="Advanced"
-      description="Support report, startup behaviour, and remote access."
+      description="Support report, local API keys, startup behaviour, and remote access."
     >
       <SupportReportSection />
+      <ApiKeysSection />
       <Group title="Starting and closing">
         <SwitchRow
           checked={settings.launch_at_login}
@@ -1051,6 +1054,12 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
           }}
           label="Allow other devices on my network"
           description="A mod’s phone or second PC on your Wi-Fi can open this with a link. Applies after restart."
+        />
+        <SwitchRow
+          checked={settings.api_keys_over_lan}
+          onChange={(v) => save({ ...settings, api_keys_over_lan: v })}
+          label="Allow API keys from other devices"
+          description="Off: a key only works from this computer. On: a script on your network can use one, over plain HTTP that others on the network can read."
         />
         {lanPending && (
           <Row child>
