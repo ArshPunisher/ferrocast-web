@@ -3,7 +3,7 @@
 // believable stream (chat flowing, alerts firing) so the dashboard and overlays can be
 // built, screenshotted and tested with no engine. Faults can be injected per route.
 
-import { render, select } from '../alert'
+import { normalizeVariation, render, select, validateRule } from '../alert'
 import { withAmount } from '../design'
 import { DemoDesigns } from './features/designs'
 import { DemoObsTheme } from './features/obs-theme'
@@ -2065,30 +2065,25 @@ export class DemoEngine {
     if (r.interrupt !== undefined && typeof r.interrupt !== 'boolean')
       throw new HttpError(400, 'invalid', 'interrupt: true or false.')
     r.interrupt = r.interrupt === true
-    for (const v of r.variations ?? []) if (v && v.weight === undefined) v.weight = 1
-    if (!Array.isArray(r.kinds) || r.kinds.length === 0)
-      throw new HttpError(400, 'invalid', 'kinds: the rule needs at least one event type.')
-    if (!Array.isArray(r.variations) || !r.variations.some((v) => v.condition === null))
+    if (!Array.isArray(r.variations))
       throw new HttpError(
         400,
         'invalid',
         'variations: the rule needs a default look (a variation without a condition).',
       )
-    for (const v of r.variations) {
-      if (v.duration_ms < 1000 || v.duration_ms > 60_000)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” must last 1 to 60 seconds.`)
-      if (v.volume < 0 || v.volume > 100)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” volume must be 0 to 100.`)
-      if (
-        v.weight !== undefined &&
-        (!Number.isInteger(v.weight) || v.weight < 0 || v.weight > 1000)
-      )
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” weight must be 0 to 1000.`)
-      if ((v.title.match(/{/g) ?? []).length !== (v.title.match(/}/g) ?? []).length)
-        throw new HttpError(400, 'invalid', `variations: “${v.name}” has a { that is never closed.`)
+    r.variations = r.variations.map((v) => ({
+      ...v,
+      weight: v?.weight === undefined ? 1 : v.weight,
+      css: v?.css === undefined ? '' : v.css,
+    }))
+    const err = validateRule(r)
+    if (err) throw new HttpError(400, 'invalid', err)
+    const normalized: AlertRule = {
+      ...clone(r),
+      variations: r.variations.map((v) => normalizeVariation(clone(v))),
     }
     if (id === null) {
-      const rule = { ...clone(r), id: r.id || `r-${randomToken().slice(0, 8)}` }
+      const rule = { ...normalized, id: normalized.id || `r-${randomToken().slice(0, 8)}` }
       if (this.rules.some((x) => x.id === rule.id))
         throw new HttpError(409, 'rule_exists', 'A rule with that id already exists.')
       this.rules.push(rule)
@@ -2102,7 +2097,7 @@ export class DemoEngine {
         'That alert rule doesn’t exist anymore.',
         'Reload the alerts list.',
       )
-    this.rules[i] = { ...clone(r), id }
+    this.rules[i] = { ...normalized, id }
     return clone(this.rules[i])
   }
 

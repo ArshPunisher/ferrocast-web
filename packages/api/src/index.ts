@@ -34,6 +34,10 @@ export {
   matches,
   mayAlert,
   newVariation,
+  normalizeVariation,
+  defaultAlertAnim,
+  checkCustomHtml,
+  isValidFieldKey,
   pick,
   render as renderAlert,
   select as selectAlert,
@@ -41,6 +45,13 @@ export {
   MAX_WEIGHT,
   MIN_DURATION_MS,
   MAX_DURATION_MS,
+  MAX_IN_MS,
+  MAX_OUT_MS,
+  MAX_TEXT_DELAY_MS,
+  MAX_CUSTOM_HTML,
+  MAX_CUSTOM_HTML_BYTES,
+  MAX_CUSTOM_FIELDS,
+  ALLOWED_ASSET_HOSTS,
 } from './alert'
 export * from './design'
 export * from './motion'

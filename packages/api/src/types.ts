@@ -181,6 +181,36 @@ export const ALERT_KINDS = [
 ] as const
 export type AlertKind = (typeof ALERT_KINDS)[number]
 
+export type CustomFieldKind = 'text' | 'number' | 'color' | 'toggle' | 'select'
+
+export type CustomFieldValue = string | number | boolean
+
+export interface CustomField {
+  key: string
+  label: string
+  type: CustomFieldKind
+  default: CustomFieldValue
+  min?: number
+  max?: number
+  options?: string[]
+}
+
+export interface AlertAnim {
+  in: AlertIn
+  out: AlertOut
+  text: TextAnim
+  in_ms: number
+  out_ms: number
+  text_delay_ms: number
+}
+
+export interface CustomAlertRender {
+  html: string
+  css: string
+  fields: Record<string, CustomFieldValue>
+  vars: Record<string, string>
+}
+
 export interface RenderedAlert {
   alert_id: string
   event_id: string
@@ -199,6 +229,10 @@ export interface RenderedAlert {
   tts_text: string | null
   tts_audio: string | null
   test: boolean
+  /** Animation timing and text effect (R25). */
+  anim?: AlertAnim
+  /** Present when variation has custom HTML/CSS enabled; rendered strictly in sandbox iframe (R25). */
+  custom?: CustomAlertRender
   /** Present when an alert design dressed it (API.md §4 Designs); `layout` is then "design". */
   design?: AlertDesignView
 }
@@ -231,6 +265,16 @@ export interface Variation {
   tts: boolean
   layout: string
   css: string
+  /** Timing and text effect (R25). Missing on legacy variations -> defaults apply. */
+  anim?: AlertAnim
+  /** When true, overlays render `html` + `css` inside a sandboxed iframe (R25). */
+  custom_enabled?: boolean
+  /** Custom HTML template with safe token substitution (R25). */
+  html?: string
+  /** Typed field schema exposed to custom HTML/CSS (R25). */
+  fields?: CustomField[]
+  /** Override values keyed by `CustomField.key` (R25). */
+  field_values?: Record<string, CustomFieldValue>
 }
 
 export interface AlertRule {
