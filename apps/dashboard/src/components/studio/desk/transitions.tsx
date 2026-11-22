@@ -856,9 +856,12 @@ function NamedTransitionSettingsForm({
     [api, transition.kind],
   )
   const [draft, setDraft] = useState<EngineSettings | null>(null)
+  // What the engine holds is the truth: another dashboard's change (or an undo) shows here
+  // instead of leaving this form pinned to an old local copy.
+  const settingsKey = JSON.stringify(transition.settings)
   useEffect(() => {
     setDraft(null)
-  }, [transition.name, transition.kind])
+  }, [transition.name, transition.kind, settingsKey])
 
   if (loaded.error && !loaded.data) {
     return <LoadError error={loaded.error} onRetry={loaded.reload} />
@@ -905,6 +908,18 @@ function TransitionMatrixTab({
   const [focusCell, setFocusCell] = useState<[number, number]>([0, sceneNames.length > 0 ? 1 : 0])
   const [editingCell, setEditingCell] = useState<[number, number] | null>(null)
   const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
+  // A scene removed elsewhere can leave the focused cell outside the grid, and then no cell is
+  // reachable by Tab; bring it back inside (and drop a stale edit).
+  useEffect(() => {
+    const last = sceneNames.length
+    setFocusCell(([r, c]) => {
+      const nr = Math.min(r, last)
+      let nc = Math.min(c, last)
+      if (nr > 0 && nr === nc) nc = nc > 1 ? nc - 1 : 0
+      return nr === r && nc === c ? [r, c] : [nr, nc]
+    })
+    setEditingCell((e) => (e && (e[0] > last || e[1] > last) ? null : e))
+  }, [sceneNames.length])
 
   // Mobile form state
   const [addFrom, setAddFrom] = useState<string>('__any__')
