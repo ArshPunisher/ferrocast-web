@@ -8,11 +8,14 @@ import {
   formatMoney,
   isAlertable,
 } from '@ferrocast/api/format'
+import { renderSafeTemplate } from '@ferrocast/api/template'
 import type {
   EventsConfig,
   FerroEvent,
   GoalConfig,
   LabelConfig,
+  LabelSource,
+  LabelTrainView,
   Platform,
   ViewersConfig,
   Widget,
@@ -162,10 +165,27 @@ export class GoalWidget implements WidgetView {
   }
 }
 
+function formatCountdown(ms: number): string {
+  const secs = Math.max(0, Math.ceil(ms / 1000))
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 export class LabelWidget implements WidgetView {
   readonly el: HTMLElement
   private id = ''
+  private source: LabelSource = 'latest_follower'
+  private template = '{value}'
   private readonly text = textSpan('fc-label-text', '')
+  private train: LabelTrainView | null = null
+  /** The train whose countdown ran out; it stays hidden until a different one arrives. */
+  private expiredTrain: LabelTrainView | null = null
+  private trainDeadlineMs = 0
+  private tickId: ReturnType<typeof setInterval> | null = null
 
   constructor(
     w: Widget & { kind: 'label' },
@@ -179,7 +199,10 @@ export class LabelWidget implements WidgetView {
   update(w: Widget): void {
     if (w.kind !== 'label') return
     this.id = w.id
-    this.el.dataset.theme = themeOf((w.config as LabelConfig | undefined)?.theme)
+    const cfg = w.config as LabelConfig | undefined
+    this.source = cfg?.source ?? 'latest_follower'
+    this.template = typeof cfg?.template === 'string' && cfg.template ? cfg.template : '{value}'
+    this.el.dataset.theme = themeOf(cfg?.theme)
     place(this.el, w)
     this.onState()
   }
@@ -189,13 +212,87 @@ export class LabelWidget implements WidgetView {
   }
 
   onState(): void {
+    const tr = this.ctx.state.label_trains?.[this.id]
+    if (this.source === 'hype_train' && tr && typeof tr === 'object') {
+      if (!tr.active || tr.remaining_ms <= 0) {
+        this.clearTrain()
+        this.setText('')
+        return
+      }
+      if (tr === this.expiredTrain) {
+        // The countdown already ran out: the state still holds that same train until a new one
+        // arrives, and an unrelated frame must not start it again.
+        this.setText('')
+        return
+      }
+      if (tr !== this.train) {
+        this.expiredTrain = null
+        this.train = tr
+        this.trainDeadlineMs = Date.now() + Math.max(0, tr.remaining_ms)
+      }
+      this.ensureClock()
+      this.renderTrain()
+      return
+    }
+
+    this.clearTrain()
     const v = this.ctx.state.labels?.[this.id]
-    const t = safeText(typeof v === 'string' ? v : '', 200)
+    this.setText(typeof v === 'string' ? v : '')
+  }
+
+  private setText(raw: string): void {
+    const t = safeText(raw, 200)
     if (this.text.textContent !== t) this.text.textContent = t
     this.el.hidden = t.trim() === ''
   }
 
+  private ensureClock(): void {
+    if (this.tickId !== null) return
+    this.tickId = setInterval(() => this.renderTrain(), 250)
+  }
+
+  private clearTrain(): void {
+    if (this.tickId !== null) {
+      clearInterval(this.tickId)
+      this.tickId = null
+    }
+    this.train = null
+    delete this.el.dataset.train
+  }
+
+  private renderTrain(): void {
+    const tr = this.train
+    if (!tr || !tr.active) {
+      this.clearTrain()
+      this.setText('')
+      return
+    }
+    const remMs = Math.max(0, this.trainDeadlineMs - Date.now())
+    if (remMs <= 0) {
+      this.expiredTrain = tr
+      this.clearTrain()
+      this.setText('')
+      return
+    }
+    const timer = formatCountdown(remMs)
+    const summary = `Lv.${tr.level} · ${tr.events} events · ${timer}`
+    const latest = tr.latest_actor ?? ''
+    const rendered = renderSafeTemplate(this.template, {
+      value: summary,
+      name: summary,
+      level: String(tr.level),
+      count: String(tr.events),
+      events: String(tr.events),
+      contributors: String(tr.contributors),
+      timer,
+      latest,
+    })
+    this.el.dataset.train = 'active'
+    this.setText(rendered)
+  }
+
   destroy(): void {
+    this.clearTrain()
     this.el.remove()
   }
 }

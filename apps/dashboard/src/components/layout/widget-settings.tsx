@@ -1,6 +1,6 @@
 // Widget settings and helpers shared by the overlay editor and the scene designer.
 
-import { useState } from 'react'
+import { useState, type ComponentProps } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -20,11 +20,13 @@ import {
 } from '@phosphor-icons/react'
 import {
   DEFAULT_THEME,
+  LABEL_SOURCES,
   PLATFORM_LABEL,
   type ChatPlatform,
   type CreditsSection,
   type EmotePhysics,
   type Goal,
+  type LabelConfig,
   type LabelSource,
   type Platform,
   type Theme,
@@ -79,14 +81,61 @@ const HIGHLIGHT_DURATIONS = [
   { value: '120', label: '2 minutes' },
 ]
 
-const LABEL_SOURCES: { value: LabelSource; label: string }[] = [
-  { value: 'latest_follower', label: 'Latest follower' },
-  { value: 'latest_sub', label: 'Latest subscriber' },
-  { value: 'latest_tip', label: 'Latest tip' },
-  { value: 'top_tip_session', label: 'Top tip this stream' },
-  { value: 'session_follows', label: 'Follows this stream' },
-  { value: 'session_subs', label: 'Subs this stream' },
+const LABEL_GROUPS = ['Latest', 'This stream', 'This month', 'All time', 'Hype train'] as const
+
+const DEFAULT_TEMPLATE_FOR_SOURCE: Partial<Record<LabelSource, string>> = {
+  latest_follower: 'Latest follower: {value}',
+  latest_sub: 'Latest sub: {value}',
+  latest_gifter: 'Latest gifter: {value}',
+  latest_tip: 'Latest tip: {value}',
+  latest_bits: 'Latest bits: {value}',
+  latest_raid: 'Latest raid: {value}',
+  session_follows: 'Stream follows: {value}',
+  session_subs: 'Stream subs: {value}',
+  session_bits: 'Stream bits: {value}',
+  session_tips: 'Stream tips: {value}',
+  session_raids: 'Stream raids: {value}',
+  top_tip_session: 'Top tip: {value}',
+  top_supporter_session: 'Top supporter: {value}',
+  monthly_follows: 'Month follows: {value}',
+  monthly_subs: 'Month subs: {value}',
+  monthly_bits: 'Month bits: {value}',
+  monthly_tips: 'Month tips: {value}',
+  monthly_raids: 'Month raids: {value}',
+  top_tip_monthly: 'Top tip (month): {value}',
+  top_supporter_monthly: 'Top supporter (month): {value}',
+  alltime_follows: 'All-time follows: {value}',
+  alltime_subs: 'All-time subs: {value}',
+  alltime_bits: 'All-time bits: {value}',
+  alltime_tips: 'All-time tips: {value}',
+  alltime_raids: 'All-time raids: {value}',
+  top_tip_alltime: 'Top tip (all time): {value}',
+  top_supporter_alltime: 'Top supporter (all time): {value}',
+  hype_train: 'Hype train · {value}',
+}
+
+const TIMEZONE_OPTIONS: { label: string; value: string; fallbackOffsetMin: number }[] = [
+  { label: 'UTC', value: 'UTC', fallbackOffsetMin: 0 },
+  { label: 'India (IST)', value: 'Asia/Kolkata', fallbackOffsetMin: 330 },
+  { label: 'UK / London (GMT/BST)', value: 'Europe/London', fallbackOffsetMin: 0 },
+  { label: 'Central Europe (CET/CEST)', value: 'Europe/Berlin', fallbackOffsetMin: 60 },
+  { label: 'US Eastern (ET)', value: 'America/New_York', fallbackOffsetMin: -300 },
+  { label: 'US Central (CT)', value: 'America/Chicago', fallbackOffsetMin: -360 },
+  { label: 'US Pacific (PT)', value: 'America/Los_Angeles', fallbackOffsetMin: -480 },
+  { label: 'Japan / Tokyo (JST)', value: 'Asia/Tokyo', fallbackOffsetMin: 540 },
+  { label: 'Australia / Sydney (AET)', value: 'Australia/Sydney', fallbackOffsetMin: 600 },
 ]
+
+function resolveTimezoneValue(config: LabelConfig): string {
+  if (config.timezone && TIMEZONE_OPTIONS.some((tz) => tz.value === config.timezone)) {
+    return config.timezone
+  }
+  if (typeof config.timezone_offset_min === 'number') {
+    const match = TIMEZONE_OPTIONS.find((tz) => tz.fallbackOffsetMin === config.timezone_offset_min)
+    if (match) return match.value
+  }
+  return 'UTC'
+}
 
 export function newWidget(
   kind: WidgetKind,
@@ -145,7 +194,7 @@ export function newWidget(
         ...center(420, 64),
         config: {
           source: 'latest_follower',
-          template: 'Latest follower: {name}',
+          template: 'Latest follower: {value}',
           theme: DEFAULT_THEME,
         },
       }
@@ -540,37 +589,10 @@ export function WidgetSettings({
         </>
       )}
       {w.kind === 'label' && (
-        <>
-          <Field label="Shows">
-            {(p) => (
-              <Select
-                {...p}
-                value={w.config.source}
-                onChange={(e) =>
-                  onChange({ ...w, config: { ...w.config, source: e.target.value as LabelSource } })
-                }
-              >
-                {LABEL_SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <Field label="Text" hint="{name} is replaced with the value.">
-            {(p) => (
-              <Input
-                {...p}
-                value={w.config.template}
-                maxLength={120}
-                onChange={(e) =>
-                  onChange({ ...w, config: { ...w.config, template: e.target.value } })
-                }
-              />
-            )}
-          </Field>
-        </>
+        <LabelSettings
+          config={w.config}
+          onChange={(nextCfg) => onChange({ ...w, config: nextCfg })}
+        />
       )}
       {w.kind === 'end_credits' && (
         <EndCreditsFields w={w} onChange={(config) => onChange({ ...w, config })} />
@@ -720,6 +742,200 @@ export function WidgetSettings({
         </div>
       </details>
     </div>
+  )
+}
+
+function BoundedNumberInput({
+  value,
+  min,
+  max,
+  onCommit,
+  ...rest
+}: {
+  value: number
+  min: number
+  max: number
+  onCommit: (next: number) => void
+} & Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'onChange' | 'min' | 'max'>) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  return (
+    <Input
+      {...rest}
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      value={draft ?? String(value)}
+      onFocus={(e) => {
+        setDraft(String(value))
+        rest.onFocus?.(e)
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        setDraft(raw)
+        if (raw.trim() === '') return
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed)) return
+        const rounded = Math.round(parsed)
+        if (rounded >= min && rounded <= max && rounded !== value) {
+          onCommit(rounded)
+        }
+      }}
+      onBlur={(e) => {
+        const raw = (draft ?? String(value)).trim()
+        const parsed = raw === '' ? Number.NaN : Number(raw)
+        const base = Number.isFinite(parsed) ? Math.round(parsed) : value
+        const next = Math.max(min, Math.min(max, base))
+        setDraft(null)
+        if (next !== value) onCommit(next)
+        rest.onBlur?.(e)
+      }}
+    />
+  )
+}
+
+function LabelSettings({
+  config,
+  onChange,
+}: {
+  config: LabelConfig
+  onChange: (next: LabelConfig) => void
+}) {
+  const isTrain = config.source === 'hype_train'
+  const isMonthly = config.source.startsWith('monthly_') || config.source.endsWith('_monthly')
+
+  const onSourceChange = (nextSource: LabelSource) => {
+    const prevDef = DEFAULT_TEMPLATE_FOR_SOURCE[config.source]
+    const nextDef = DEFAULT_TEMPLATE_FOR_SOURCE[nextSource]
+    const isDefaultTpl =
+      !config.template ||
+      config.template === '{value}' ||
+      config.template === prevDef ||
+      config.template === 'Latest follower: {name}'
+    const template = isDefaultTpl ? (nextDef ?? '{value}') : config.template
+    onChange({
+      ...config,
+      source: nextSource,
+      template,
+    })
+  }
+
+  return (
+    <>
+      <Field label="Shows">
+        {(p) => (
+          <Select
+            {...p}
+            value={config.source}
+            onChange={(e) => onSourceChange(e.target.value as LabelSource)}
+          >
+            {LABEL_GROUPS.map((grp) => (
+              <optgroup key={grp} label={grp}>
+                {LABEL_SOURCES.filter((s) => s.group === grp).map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <Field
+        label="Text"
+        hint={
+          isTrain
+            ? 'Variables: {value}, {level}, {count}, {timer}, {contributors}, {latest}.'
+            : '{value} is replaced with the live figure.'
+        }
+      >
+        {(p) => (
+          <Input
+            {...p}
+            value={config.template}
+            maxLength={240}
+            onChange={(e) => onChange({ ...config, template: e.target.value })}
+          />
+        )}
+      </Field>
+      {isMonthly && (
+        <Field label="Month boundary timezone">
+          {(p) => (
+            <Select
+              {...p}
+              value={resolveTimezoneValue(config)}
+              onChange={(e) => {
+                const tz = TIMEZONE_OPTIONS.find((opt) => opt.value === e.target.value)
+                if (!tz) return
+                onChange({
+                  ...config,
+                  timezone: tz.value,
+                  timezone_offset_min: tz.fallbackOffsetMin,
+                })
+              }}
+            >
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      )}
+      {isTrain && (
+        <div className="grid grid-cols-2 gap-2.5 rounded-[12px] border border-line bg-inset p-3">
+          <Field label="Window (s)">
+            {(p) => (
+              <BoundedNumberInput
+                {...p}
+                min={10}
+                max={3600}
+                value={config.train_window_s ?? 120}
+                onCommit={(v) => {
+                  const maxS = Math.max(v, config.train_max_s ?? 300)
+                  onChange({ ...config, train_window_s: v, train_max_s: maxS })
+                }}
+              />
+            )}
+          </Field>
+          <Field label="Grow per event (s)">
+            {(p) => (
+              <BoundedNumberInput
+                {...p}
+                min={1}
+                max={600}
+                value={config.train_step_s ?? 15}
+                onCommit={(v) => onChange({ ...config, train_step_s: v })}
+              />
+            )}
+          </Field>
+          <Field label="Max timer (s)">
+            {(p) => (
+              <BoundedNumberInput
+                {...p}
+                min={config.train_window_s ?? 10}
+                max={7200}
+                value={config.train_max_s ?? 300}
+                onCommit={(v) => onChange({ ...config, train_max_s: v })}
+              />
+            )}
+          </Field>
+          <Field label="Events to start">
+            {(p) => (
+              <BoundedNumberInput
+                {...p}
+                min={1}
+                max={50}
+                value={config.train_threshold ?? 3}
+                onCommit={(v) => onChange({ ...config, train_threshold: v })}
+              />
+            )}
+          </Field>
+        </div>
+      )}
+    </>
   )
 }
 

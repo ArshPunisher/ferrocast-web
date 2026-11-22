@@ -271,6 +271,16 @@ stripes (`bg` and `stripe`, 18 points across) lie over the part of an outlined s
 past the canvas; without it the surround stays plain. The dashboard sends the theme's
 `--fc-stage-b` as `stripe` next to `bg`. 400 for a value over 0xFFFFFF.
 
+## R29. `.overlay` theme-pack import, Google Fonts & Undo (Phase 2 #13, 22 Nov)
+
+Implemented in both repos (`ferrocast-p2d` and `ferrocast-web-p2d`, branch `feat/p2-overlay-import`):
+- `POST /api/v1/studio/engine/library/collections/overlay/preview` (multipart `file` upload)
+- `POST /api/v1/studio/engine/library/collections/overlay/import` (`{ preview_id, name?, create_overlays?, fetch_fonts? }`)
+- `POST /api/v1/studio/engine/library/collections/overlay/undo` (`{ undo_token }`)
+
+Also adds file-backed `GET/POST/PUT/DELETE` `/api/v1/studio/engine/library/*` fallback in `ferrocast-headless` when no desktop `StudioHost` is registered, and auto-loads `<FERROCAST_HOME>/fonts/` in `ferrocore::TextRenderer`.
+
+
 
 ## R21. Mini Feed: queue mute, alert interrupt and look weights (22 Nov)
 
@@ -396,3 +406,25 @@ and a directed from-scene / to-scene override matrix with deterministic preceden
   - `from: null` means `Any → to`; `to: null` means `from → Any`; both null returns `400`. Passing `transition: null` clears the rule.
   - Precedence on switch (direct, Studio Mode, T-bar, hotkeys, API/obs-websocket, automations): exact `(from, to)` → `Any → to` (or legacy scene override) → `from → Any` → default.
 - Demo engine (`packages/api/src/demo/features/studio-engine.ts`) simulates all named transition & matrix routes plus Studio Mode and scene switching so the live dashboard & browser walkthrough work end to end without desktop hardware.
+
+## R31. Support report & likely-cause analyzer (`#7`, 22 Nov)
+
+One-click redacted support archive (`.zip`) in Settings (`#/settings/advanced#support`), Studio Log dialog,
+and Desktop Help menu:
+- `GET /api/v1/diagnostics/preview` → redacted `SupportReport` (`likely_causes` ranked first, app/OS
+  versions, GPU & encoders, audio devices & sample rates, up to 5 recent streams' health, crash dumps,
+  safe mode / disk status).
+- `POST /api/v1/diagnostics/report` `{ folder? }` → picks folder on Desktop (`{ cancelled: true }` if
+  dismissed) or writes into explicit `folder` (`400` if missing/not a directory), saving a redacted `.zip`.
+- `POST /api/v1/diagnostics/report.zip` → streams the redacted `.zip` download for browsers.
+All three stay PC-only (`remoteAllowed` denies paired phones).
+
+## R32. Local stream labels+ & hype/combo train (`#8`, 22 Nov)
+
+`LabelConfig.source` covers Latest-X (`latest_follower`, `latest_sub`, `latest_gifter`, `latest_tip`,
+`latest_bits`, `latest_raid`), Session (`session_follows`, `session_subs`, `session_bits`, `session_tips`,
+`session_raids`, `top_tip_session`, `top_supporter_session`), Monthly (`monthly_*`, `top_tip_monthly`,
+`top_supporter_monthly` with optional DST-aware IANA `timezone` or fallback `timezone_offset_min`
+`-720..840`), All-time (`alltime_*`,
+`top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
+`train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
