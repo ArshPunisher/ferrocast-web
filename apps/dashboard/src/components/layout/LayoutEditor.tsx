@@ -400,6 +400,7 @@ function Canvas({
         const sel = w.id === selected
         const name = layerName(w)
         const kind = w.kind === 'layer' ? 'layer' : 'widget'
+        const passthrough = w.kind === 'emote_wall'
         return (
           <div
             key={w.id}
@@ -407,7 +408,7 @@ function Canvas({
             tabIndex={0}
             aria-pressed={sel}
             aria-label={`${w.kind === 'layer' ? name : kindInfo(w.kind).label} ${kind} at ${w.x}, ${w.y}, ${w.w} by ${w.h}.${w.locked ? ' Locked.' : ' Arrow keys move it, Alt with arrows resizes.'}${w.hidden ? ' Hidden on stream.' : ''}`}
-            onPointerDown={(e) => onDown(e, w, 'move')}
+            onPointerDown={passthrough ? undefined : (e) => onDown(e, w, 'move')}
             onFocus={() => onSelect(w.id)}
             onKeyDown={(e) => {
               if (fixed(w)) return
@@ -432,7 +433,7 @@ function Canvas({
             }}
             className={cx(
               'group absolute rounded-[6px] border-2 transition-[border-color,background-color] duration-100 focus-visible:outline-none',
-              fixed(w) ? 'cursor-default' : 'cursor-move',
+              passthrough ? 'pointer-events-none' : fixed(w) ? 'cursor-default' : 'cursor-move',
               sel
                 ? 'border-accent-text bg-accent-soft/40'
                 : preview
@@ -448,10 +449,48 @@ function Canvas({
               rotate: w.rotation ? `${w.rotation}deg` : undefined,
             }}
           >
+            {passthrough && (
+              <>
+                <span
+                  data-emote-wall-edge="top"
+                  onPointerDown={(e) => onDown(e, w, 'move')}
+                  className={cx(
+                    'pointer-events-auto absolute inset-x-1.5 top-0 h-1.5',
+                    fixed(w) ? 'cursor-default' : 'cursor-move',
+                  )}
+                />
+                <span
+                  data-emote-wall-edge="bottom"
+                  onPointerDown={(e) => onDown(e, w, 'move')}
+                  className={cx(
+                    'pointer-events-auto absolute inset-x-1.5 bottom-0 h-1.5',
+                    fixed(w) ? 'cursor-default' : 'cursor-move',
+                  )}
+                />
+                <span
+                  data-emote-wall-edge="left"
+                  onPointerDown={(e) => onDown(e, w, 'move')}
+                  className={cx(
+                    'pointer-events-auto absolute inset-y-1.5 left-0 w-1.5',
+                    fixed(w) ? 'cursor-default' : 'cursor-move',
+                  )}
+                />
+                <span
+                  data-emote-wall-edge="right"
+                  onPointerDown={(e) => onDown(e, w, 'move')}
+                  className={cx(
+                    'pointer-events-auto absolute inset-y-1.5 right-0 w-1.5',
+                    fixed(w) ? 'cursor-default' : 'cursor-move',
+                  )}
+                />
+              </>
+            )}
             {(!preview || sel) && (
               <span
+                onPointerDown={passthrough ? (e) => onDown(e, w, 'move') : undefined}
                 className={cx(
                   'absolute top-1 left-1 inline-flex max-w-[calc(100%-8px)] items-center gap-1 truncate rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
+                  passthrough && 'pointer-events-auto',
                   sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                 )}
               >
@@ -463,7 +502,7 @@ function Canvas({
               <span
                 role="presentation"
                 onPointerDown={(e) => onDown(e, w, 'resize')}
-                className="absolute -right-1.5 -bottom-1.5 size-4 cursor-nwse-resize rounded-[4px] border-2 border-accent-text bg-bg"
+                className="pointer-events-auto absolute -right-1.5 -bottom-1.5 size-4 cursor-nwse-resize rounded-[4px] border-2 border-accent-text bg-bg"
               />
             )}
           </div>
