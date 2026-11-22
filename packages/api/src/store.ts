@@ -197,6 +197,67 @@ function hasUnsafeControlChars(raw: string): boolean {
   return false
 }
 
+const isDigits = (s: string) => /^[0-9]+$/.test(s)
+
+/** Two decimal numbers of any length: by length once leading zeros are gone, then digit by digit. */
+function cmpDigits(a: string, b: string): number {
+  const x = a.replace(/^0+/, '')
+  const y = b.replace(/^0+/, '')
+  if (x.length !== y.length) return x.length < y.length ? -1 : 1
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
+/** A version as the engine reads it (`plugin_catalog.rs`): dotted numbers, an optional
+ * `-prerelease` of dotted `[0-9A-Za-z-]` identifiers, an optional `+build`. null when it isn't. */
+function parseStoreVersion(v: string): { nums: string[]; pre: string[] } | null {
+  const [rest = '', ...b] = v.split('+')
+  if (b.length > 1) return null
+  const build = b[0]
+  if (build !== undefined && !/^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/.test(build)) return null
+  const dash = rest.indexOf('-')
+  const core = dash === -1 ? rest : rest.slice(0, dash)
+  const pre = dash === -1 ? [] : rest.slice(dash + 1).split('.')
+  const nums = core.split('.')
+  if (!nums.every(isDigits)) return null
+  if (pre.some((id) => !/^[0-9A-Za-z-]+$/.test(id))) return null
+  return { nums, pre }
+}
+
+/** Whether the engine's update comparison can read this version (it admits no other). */
+export function readableStoreVersion(v: string): boolean {
+  return parseStoreVersion(v) !== null
+}
+
+/** Whether `a` is a newer version than `b`: the engine's comparison. What can't be read is never newer. */
+export function storeVersionNewer(a: string, b: string): boolean {
+  const x = parseStoreVersion(a)
+  const y = parseStoreVersion(b)
+  if (!x || !y) return false
+  for (let i = 0; i < Math.max(x.nums.length, y.nums.length); i++) {
+    const c = cmpDigits(x.nums[i] ?? '0', y.nums[i] ?? '0')
+    if (c !== 0) return c > 0
+  }
+  if (x.pre.length === 0 || y.pre.length === 0) return x.pre.length === 0 && y.pre.length > 0
+  for (let i = 0; i < Math.min(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i] as string
+    const q = y.pre[i] as string
+    const c =
+      isDigits(p) && isDigits(q)
+        ? cmpDigits(p, q)
+        : isDigits(p)
+          ? -1
+          : isDigits(q)
+            ? 1
+            : p < q
+              ? -1
+              : p > q
+                ? 1
+                : 0
+    if (c !== 0) return c > 0
+  }
+  return x.pre.length > y.pre.length
+}
+
 /** Strict client-side pre-check for `ferrocast://` install links before resolving on the engine. */
 export function parseFerrocastStoreLink(
   raw: string,
@@ -220,6 +281,13 @@ export function parseFerrocastStoreLink(
   // No port, no fragment (the engine refuses them too).
   if (u.port || u.hash || raw.includes('#')) return null
   if (u.pathname.includes('%')) return null
+  // The raw path, as it was written: `new URL` drops `.` and `%2e` segments (and `//`), so a path
+  // checked only after it was tidied would let an encoded dot through.
+  const afterScheme = raw.slice('ferrocast://'.length).split('?')[0] ?? ''
+  if (afterScheme.includes('%')) return null
+  const rawParts = afterScheme.split('/')
+  if (rawParts.at(-1) === '') rawParts.pop()
+  if (rawParts.slice(1).some((p) => p === '' || p === '.' || p === '..')) return null
   const segs = u.pathname
     .replace(/^\/+|\/+$/g, '')
     .split('/')
@@ -242,7 +310,7 @@ export function parseFerrocastStoreLink(
   let version: string | null = null
   for (const [k, v] of u.searchParams.entries()) {
     if (k !== 'v') return null
-    if (!/^[0-9][A-Za-z0-9._+-]{0,31}$/.test(v)) return null
+    if (v.length > 32 || !readableStoreVersion(v)) return null
     version = v
   }
   return { action, id, version }
@@ -323,7 +391,12 @@ export function storeApi(client: FerroClient) {
     uninstall: (id: string) =>
       client.request<StoreMutationResult>('POST', '/api/v1/store/uninstall', { id }),
     undo: (token?: string) =>
-      client.request<StoreUndoResult>('POST', '/api/v1/store/undo', token ? { token } : {}),
+      // Left out only when it is `undefined`: an empty token is sent as one and refused.
+      client.request<StoreUndoResult>(
+        'POST',
+        '/api/v1/store/undo',
+        token === undefined ? {} : { token },
+      ),
     resolveLink: (uri: string) =>
       client.request<StoreLinkPreview>('POST', '/api/v1/store/resolve-link', { uri }),
   }
