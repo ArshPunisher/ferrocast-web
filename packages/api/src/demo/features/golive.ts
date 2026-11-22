@@ -398,6 +398,7 @@ export class DemoGoLive {
         connected: custom || !!acct,
         health: backs ? null : this.health(d, now),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
+        ...(d.brand ? { brand: d.brand } : {}),
         rules: issues.map((i) => i.detail),
         issues,
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),

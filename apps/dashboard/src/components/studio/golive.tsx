@@ -32,6 +32,7 @@ import {
   directKind,
   goliveApi,
   PASTE_BRANDS,
+  urlAfterBrand,
   type PasteBrand,
   goingTo,
   healthText,
@@ -1124,7 +1125,10 @@ export function RowText({
                 {d.account ?? 'Your own server'} · {DIRECT_NAMES[d.direct]} from the Studio
               </>
             ) : (
-              <>{d.account ?? 'Your own server'} · video only</>
+              <>
+                {d.brand ? `${PASTE_BRANDS.find((x) => x.id === d.brand)?.label ?? ''} · ` : ''}
+                {d.account ?? 'Your own server'} · video only
+              </>
             )}
           </span>
         ) : d.connected ? (
@@ -1267,12 +1271,12 @@ function AddDestination({
   // pasted from there. Only names the server; nothing else about sending changes.
   const [brand, setBrand] = useState<PasteBrand | null>(null)
   const pickBrand = (b: PasteBrand | null) => {
-    setBrand(b)
     const info = PASTE_BRANDS.find((x) => x.id === b)
-    if (info) {
-      if (!name.trim() || PASTE_BRANDS.some((x) => x.label === name)) setName(info.label)
-      if (!url.trim() && info.server) setUrl(info.server)
-    }
+    setBrand(b)
+    if (info && (!name.trim() || PASTE_BRANDS.some((x) => x.label === name))) setName(info.label)
+    // The last brand's own server goes with it; one the person typed stays.
+    setUrl(urlAfterBrand(url, brand, b))
+    setErr((e) => (e?.field === 'brand' ? null : e))
   }
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
   // The last "Test connection": cleared when the address or key changes, and a slow answer
@@ -1359,7 +1363,7 @@ function AddDestination({
             }
             onClick={submit}
           >
-            Add server
+            {brand ? `Add ${PASTE_BRANDS.find((x) => x.id === brand)?.label ?? ''}` : 'Add server'}
           </Button>
         </>
       }
@@ -1392,6 +1396,11 @@ function AddDestination({
               </button>
             ))}
           </div>
+          {err?.field === 'brand' && (
+            <p role="alert" className="text-[13.5px] font-medium text-danger">
+              {err.message}
+            </p>
+          )}
           {brand && (
             <p className="text-[14px] text-text-2">
               {PASTE_BRANDS.find((x) => x.id === brand)?.where}{' '}

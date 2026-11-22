@@ -57,6 +57,23 @@ export const PASTE_BRANDS: readonly {
   },
 ]
 
+/**
+ * The server field after the platform pick changes from `prev` to `next`: empty, or still the
+ * previous brand's own preset, becomes the new brand's (none for the rest); an address the person
+ * typed or pasted stays. Facebook's server must not stay under Instagram, or an Instagram key
+ * could be pasted against Facebook's endpoint.
+ */
+export function urlAfterBrand(
+  url: string,
+  prev: PasteBrand | null,
+  next: PasteBrand | null,
+): string {
+  const preset = (b: PasteBrand | null) => PASTE_BRANDS.find((x) => x.id === b)?.server ?? ''
+  const t = url.trim()
+  if (t === '' || (preset(prev) !== '' && t === preset(prev))) return preset(next)
+  return url
+}
+
 export type PushState =
   | { state: 'waiting' | 'connecting' | 'live' | 'stopped' }
   | { state: 'reconnecting'; attempt: number; retry_in_ms: number; reason: string }
@@ -189,6 +206,8 @@ export interface DestinationView {
   health: PushHealth | null
   /** Why it can't start, in words. */
   blocked: string | null
+  /** A server and key pasted from X, Instagram or Facebook; absent when there is none. */
+  brand?: PasteBrand
   /** The platform's rules this stream breaks, in words. */
   rules: string[]
   /** Structured rules broken by the active stream (Contract C-2). */
