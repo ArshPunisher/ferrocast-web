@@ -384,10 +384,10 @@ test.describe('first run', () => {
     await expect(page.getByRole('dialog')).toContainText('Connected', { timeout: 10_000 })
     // The dialog closes itself a moment after the account connects.
     await expect(page.getByRole('dialog', { name: /Twitch/ })).toBeHidden({ timeout: 5_000 })
-    // Three steps only: the look and adding the overlay are in Overlays (owner, 10 Nov).
+    // Five steps: Import, Camera & mic, Use, Picture, Connect.
     await expect(
       page.getByRole('list', { name: 'Setup progress' }).getByRole('listitem'),
-    ).toHaveCount(3)
+    ).toHaveCount(5)
     await page.getByRole('button', { name: 'Finish' }).click()
     await expect(
       page.getByRole('heading', { name: /You’re live|Ready when you are/ }),

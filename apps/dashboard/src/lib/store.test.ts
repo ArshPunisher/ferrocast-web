@@ -349,11 +349,14 @@ describe('what a chat line offers', () => {
     const offline = { offline: true, moderates: (p: string) => p === 'twitch' }
     expect(lineActions(offline, line('m1'))).toEqual({
       reply: false,
+      highlight: false,
       card: false,
       remove: true,
       timeout: true,
       ban: true,
     })
+    expect(lineActions({ highlight: () => {} }, line('m1')).highlight).toBe(true)
+    expect(lineActions({ offline: true, highlight: () => {} }, line('m1')).highlight).toBe(false)
     expect(Object.values(lineActions(offline, line('m2', 'kick'))).some(Boolean)).toBe(false)
   })
 })

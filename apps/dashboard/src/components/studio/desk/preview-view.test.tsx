@@ -147,6 +147,7 @@ function fakeDesk(over: Record<string, unknown> = {}) {
     setItemCrop: vi.fn(async () => ({})),
     select: vi.fn(async () => ({})),
     previewCursor: vi.fn(async () => ({})),
+    setPreviewPaused: vi.fn(async (paused: boolean) => ({ paused })),
   }
   const base = {
     api,
@@ -248,6 +249,26 @@ describe('the preview toolbar', () => {
     expect(unlock?.getAttribute('aria-pressed')).toBe('true')
     await act(async () => unlock?.click())
     expect(getPreviewView().locked).toBe(false)
+  })
+
+  it('has a performance mode button that pauses the preview and says so, and resumes', async () => {
+    const { api, desk } = fakeDesk()
+    await act(async () =>
+      root.render(
+        <DeskProvider value={desk as never}>
+          <StageBar />
+        </DeskProvider>,
+      ),
+    )
+    const pause = byLabel(/^Pause the preview to save power/)
+    expect(pause?.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => pause?.click())
+    expect(api.setPreviewPaused).toHaveBeenLastCalledWith(true)
+    const resume = byLabel('Resume the preview')
+    expect(resume?.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => resume?.click())
+    expect(api.setPreviewPaused).toHaveBeenLastCalledWith(false)
+    expect(byLabel(/^Pause the preview to save power/)?.getAttribute('aria-pressed')).toBe('false')
   })
 
   it('zooms in and out by buttons, resets with Fit, and stops at the limits', async () => {

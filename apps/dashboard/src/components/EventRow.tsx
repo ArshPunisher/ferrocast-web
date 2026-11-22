@@ -29,10 +29,15 @@ export function EventRow({
   event,
   now,
   compact,
+  unread,
+  trailing,
 }: {
   event: FerroEvent
   now: number
   compact?: boolean
+  /** Mini Feed: an unread event gets a mark and a stronger row. */
+  unread?: boolean
+  trailing?: React.ReactNode
 }) {
   const client = useClient()
   const { busy, run } = useAction()
@@ -47,7 +52,13 @@ export function EventRow({
     event.kind.type === 'raid' ||
     event.kind.type === 'gift_batch'
   return (
-    <li className="group flex items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2">
+    <li
+      data-unread={unread ? 'true' : undefined}
+      className={cx(
+        'group flex items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2',
+        unread && 'border-l-2 border-arc',
+      )}
+    >
       <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-3">
         <PlatformMark platform={event.platform} size={14} />
       </span>
@@ -109,6 +120,7 @@ export function EventRow({
           <Question size={16} />
         </IconButton>
       </div>
+      {trailing && <div className="-my-1 shrink-0">{trailing}</div>}
       {why && <WhyDialog event={event} onClose={() => setWhy(false)} />}
     </li>
   )

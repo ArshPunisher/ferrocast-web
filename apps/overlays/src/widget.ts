@@ -33,6 +33,8 @@ export interface WidgetView {
   onClearChat?(platform: Platform | null): void
   /** OBS shows or hides the source. */
   onVisibility?(visible: boolean): void
+  /** `prefers-reduced-motion` changed dynamically. */
+  onMotion?(): void
   /** Called when a fresh snapshot replaces everything. */
   onSnapshot?(): void
   /** `silent`: the page was revoked, send nothing. */

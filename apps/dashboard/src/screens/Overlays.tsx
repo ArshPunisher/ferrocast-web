@@ -27,6 +27,9 @@ const WIDGET_NAME: Record<string, string> = {
   viewers: 'Viewers',
   poll: 'Poll',
   giveaway: 'Giveaway',
+  end_credits: 'End credits',
+  emote_wall: 'Emote wall',
+  chat_highlight: 'Chat highlight',
   // Designs' pictures and shapes: counted, not listed one by one.
   layer: '',
 }

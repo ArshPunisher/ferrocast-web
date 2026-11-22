@@ -207,7 +207,31 @@ export const ENGINE_DEINTERLACE = [
 ] as const
 export type EngineDeinterlace = (typeof ENGINE_DEINTERLACE)[number]
 
+/**
+ * Where an item is shown: on the stream and in the recording (the default), on the stream only
+ * (chat or alerts a clean recording leaves out) or in the recording only (a camera the stream
+ * doesn't carry). The preview and thumbnails always show every item.
+ */
+export const ENGINE_SHOWS = ['both', 'stream', 'recording'] as const
+export type EngineShow = (typeof ENGINE_SHOWS)[number]
+
 /** A source in a scene, top first. A group lists its own items. */
+/** What the Studio has copied (`GET /studio/engine/clipboard`): a source with `count` sources
+ * (a group carries its children), or `count` filters. */
+export interface EngineClipboard {
+  kind: 'source' | 'filters'
+  name: string
+  from: string
+  count: number
+}
+
+/** A paste: the new item (sources only) and what changed on the way (a name taken, a
+ * sidechain set to none). */
+export interface EnginePasteResult {
+  item?: EngineItem
+  notes: string[]
+}
+
 export interface EngineItem {
   id: number
   name: string
@@ -222,6 +246,11 @@ export interface EngineItem {
    * source is used"). Older engines send none: shared.
    */
   own_filters?: boolean
+  /**
+   * Where it is shown. Older engines send none: both. On a group it covers the group's items as
+   * a whole; one of a group's own keeps its own.
+   */
+  show?: EngineShow
   /** How it mixes with what's under it. */
   blend: EngineBlend
   /** How it's scaled. */
@@ -342,6 +371,12 @@ export type EngineItemEdit =
   | 'blend_method_default'
   | 'blend_method_srgb_off'
   | `scale_${EngineScaleFilter}`
+  /** Shown on the stream and in the recording (the default). */
+  | 'stream_and_recording'
+  /** Shown on the stream only. */
+  | 'stream_only'
+  /** Shown in the recording only. */
+  | 'recording_only'
 
 export interface NewEngineSource {
   kind: string
@@ -358,8 +393,34 @@ export interface EngineObsCollection {
   sources: number
 }
 
+/** One converted/reset device or skipped source/filter explained in plain words. */
+export interface EngineImportSkip {
+  category: 'source' | 'filter' | 'scene_item'
+  name: string
+  kind: string
+  reason: string
+}
+
+/** Read-only summary of an OBS Studio or Streamlabs collection before importing. */
+export interface EngineImportPreview {
+  source: 'obs' | 'streamlabs'
+  id: string
+  name: string
+  scenes: number
+  sources: number
+  web_pages: number
+  scene_names: string[]
+  truncated_scenes: number
+  device_resets: EngineImportSkip[]
+  skipped: EngineImportSkip[]
+  skipped_total: number
+  missing: string[]
+}
+
 /** What an import from OBS brought in. */
 export interface EngineImportReport {
+  id?: string
+  previous_id?: string | null
   name: string
   scenes: number
   sources: number
@@ -367,6 +428,11 @@ export interface EngineImportReport {
   web_pages: number
   /** Kinds of source this computer's OBS doesn't have. */
   missing: string[]
+  /** Browser sources whose page address was left empty (not an http(s) page or a plain local file). */
+  blocked_pages?: string[]
+  device_resets?: EngineImportSkip[]
+  skipped?: EngineImportSkip[]
+  skipped_total?: number
 }
 
 export type EngineMonitor = 'off' | 'only_me' | 'me_and_stream'
@@ -1091,7 +1157,7 @@ export function studioEngineApi(c: FerroClient) {
       w = 240,
       signal?: AbortSignal,
     ) =>
-      c.request<{ image: string | null }>(
+      c.request<{ image: string | null; error?: string | null }>(
         'GET',
         `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
         undefined,
@@ -1133,9 +1199,21 @@ export function studioEngineApi(c: FerroClient) {
     /** OBS's scene collections on this computer. */
     obsCollections: () =>
       c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/obs-collections'),
+    /** Read-only preview of an OBS scene collection before importing it. */
+    previewObs: (id: string) =>
+      c.request<EngineImportPreview>('POST', '/api/v1/studio/engine/obs-collections/preview', {
+        id,
+      }),
     /** Streamlabs Desktop's scene collections on this computer. */
     streamlabsCollections: () =>
       c.request<EngineObsCollection[]>('GET', '/api/v1/studio/engine/streamlabs-collections'),
+    /** Read-only preview of a Streamlabs scene collection before importing it. */
+    previewStreamlabs: (id: string) =>
+      c.request<EngineImportPreview>(
+        'POST',
+        '/api/v1/studio/engine/streamlabs-collections/preview',
+        { id },
+      ),
     /** Adds one of Streamlabs' collections as a new scene collection. */
     importStreamlabs: (id: string) =>
       c.request<EngineImportReport>('POST', '/api/v1/studio/engine/streamlabs-collections/import', {
@@ -1427,6 +1505,37 @@ export function studioEngineApi(c: FerroClient) {
     /** The cursor over the pictures, by its CSS name (Windows: they take the mouse themselves). */
     previewCursor: (cursor: string) =>
       c.request<void>('PUT', '/api/v1/studio/engine/preview/cursor', { cursor }),
+    /** Performance mode: whether the preview is paused (it can change by a shortcut). */
+    previewPaused: () =>
+      c.request<{ paused: boolean }>('GET', '/api/v1/studio/engine/preview/pause'),
+    /** Performance mode on or off: stops drawing the pictures to save GPU and CPU. Never
+     * touches the stream, a recording or the virtual camera. */
+    setPreviewPaused: (paused: boolean) =>
+      c.request<{ paused: boolean }>('PUT', '/api/v1/studio/engine/preview/pause', { paused }),
+    /** What is copied; a 404 `clipboard_empty` when nothing is. */
+    clipboard: () => c.request<EngineClipboard>('GET', '/api/v1/studio/engine/clipboard'),
+    clearClipboard: () => c.request<void>('DELETE', '/api/v1/studio/engine/clipboard'),
+    /** Copies an item with its source (a group with every source in it). It stays copied while
+     * another collection is opened. */
+    copySource: (scene: string, id: number) =>
+      c.request<EngineClipboard>('POST', '/api/v1/studio/engine/clipboard/source', { scene, id }),
+    /** Copies a source's filters (or an item's own, with `item`). */
+    copyFilters: (name: string, item?: { scene: string; id: number }) =>
+      c.request<EngineClipboard>('POST', '/api/v1/studio/engine/clipboard/filters', {
+        name,
+        ...(item ? { item } : {}),
+      }),
+    /** Pastes the copied source into `scene`; a name taken gets a number. */
+    pasteSource: (scene: string) =>
+      c.request<EnginePasteResult>('POST', '/api/v1/studio/engine/clipboard/paste/source', {
+        scene,
+      }),
+    /** Pastes the copied filters onto a source (or an item, with `item`). */
+    pasteFilterClip: (name: string, item?: { scene: string; id: number }) =>
+      c.request<EnginePasteResult>('POST', '/api/v1/studio/engine/clipboard/paste/filters', {
+        name,
+        ...(item ? { item } : {}),
+      }),
     /** Studio Mode on (its preview starts as what's on air) or off. */
     studioMode: (on: boolean) =>
       c.request<void>('PUT', '/api/v1/studio/engine/studio-mode', { on }),

@@ -18,7 +18,6 @@ import {
   MagicWand,
   Monitor,
   Plus,
-  Sparkle,
   SpeakerHigh,
   SquaresFour,
   Trash,
@@ -61,20 +60,15 @@ import {
 } from './common'
 import {
   DUCK_FILTER,
-  VERDICT_WORDS,
+  MIC_KINDS,
   VOICE_FILTER,
   VOICE_STYLES,
-  MIC_LEVEL_FILTER,
-  cleanMicPlan,
-  micGainDb,
-  voiceUsualPeak,
   duckFilter,
   duckMic,
-  freeName,
   voiceStyleOf,
-  voiceVerdict,
   type VoiceStyle,
 } from './cleanmic'
+import { CleanMicControl } from './cleanmic-ui'
 import { Meter, useLevels } from './mixer'
 import { useLevelFeed } from './meter-feed'
 import { RowLook } from './options'
@@ -83,6 +77,7 @@ import { KindSettings, SourcePreview } from './kind-settings'
 import { useFilterApi, useItemOf } from './item-filters'
 import { AreaPicker, CaptureForm, FilterForm, hasMore } from './filter-forms'
 import { readDefaults } from './kind-cache'
+import { ShownIn, canChooseWhere, editForShow, itemFor, showOf } from './shown-in'
 
 /** Sends edits once they've stopped changing for a moment (`live`: at once, one request at a
  *  time, the newest next, so a filter's picture follows the slider as a photo app's does;
@@ -191,13 +186,15 @@ function Panel({
   first: Tab | null
   onClose: () => void
 }) {
-  const { api, audio, items, scene, refresh, edit, kinds, canvas, undone } = useDesk()
+  const { api, audio, items, scene, refresh, edit, kinds, canvas, undone, selected } = useDesk()
   const { run, busy } = useAction()
   const [rename, setRename] = useState(name)
   // Removing asks once more: the button turns into "Sure? Remove".
   const [sure, setSure] = useState(false)
   const a = audio.data?.find((x) => x.name === name) ?? null
-  const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name) ?? null
+  // The one picked in the list when the same source is in the scene twice.
+  const item = itemFor(items.data ?? [], name, selected)
+  const parent = items.data?.find((i) => i.children.some((c) => c.id === item?.id)) ?? null
   const kind = a?.kind ?? item?.kind ?? ''
   const levels = useLevels(api, a ? [name] : [])
   const feed = useLevelFeed(api, a ? [name] : [])
@@ -437,7 +434,23 @@ function Panel({
                 <FollowFace scene={scene} item={item.id} />
               </Pad>
             )}
-            <Settings name={name} kind={kind} />
+            {/* Where it is shown: the stream, the recording or both (a source in this scene). */}
+            {item && canChooseWhere(kind, canvas) && (
+              <Pad>
+                <ShownIn
+                  item={item}
+                  parent={parent ? { name: parent.name, show: showOf(parent) } : null}
+                  busy={busy === 'shown'}
+                  onChoose={(to) =>
+                    void run('shown', () =>
+                      done(api.editItem(scene, item.id, editForShow(to))),
+                    ).then((ok) => ok && refresh())
+                  }
+                />
+              </Pad>
+            )}
+            {/* A group has no settings of its own to read: only where it is shown, above. */}
+            {kind !== 'group' && <Settings name={name} kind={kind} />}
             {kind === 'ferrocast_web' && (
               <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5">
                 <Button
@@ -1411,18 +1424,6 @@ function AddFilter({
   )
 }
 
-/** Microphones: the kinds "Clean up my mic" is offered for. */
-const MIC_KINDS = new Set([
-  'coreaudio_input_capture',
-  'wasapi_input_capture',
-  'pulse_input_capture',
-  'alsa_input_capture',
-])
-
-/**
- * One click to clean a mic (plan item 5): the filters it's missing, added in the order they
- * work best, and a word on the level while talking (the last 10 s of the meter).
- */
 /** "Follow my face" for an item of a vertical scene: hidden where the app can't do it. */
 function FollowFace({ scene, item }: { scene: string; item: number }) {
   const { api } = useDesk()
@@ -1494,75 +1495,15 @@ function CleanMic({
   list: Resource<EngineFilter[]>
 }) {
   const { api } = useDesk()
-  const { run, busy } = useAction()
-  const peaks = useRef<number[]>([])
-  useEffect(() => {
-    if (!level) return
-    peaks.current.push(Math.max(level.peak[0], level.peak[1]))
-    if (peaks.current.length > 100) peaks.current.shift()
-  }, [level])
-  const verdict = voiceVerdict(peaks.current)
-  const usual = voiceUsualPeak(peaks.current)
-  const gainDb = micGainDb(peaks.current)
-  const have = list.data ?? null
-  const plan = have
-    ? cleanMicPlan(
-        have.map((f) => f.kind),
-        { gainDb },
-      )
-    : []
-  const gainStep = plan.find((f) => f.kind === 'gain_filter')
-  const clean = async () => {
-    const taken = (have ?? []).map((f) => f.name)
-    const ok = await run('clean', async () => {
-      // One at a time, in order: each goes after the last (the chain's order matters).
-      for (const f of plan) {
-        const n = freeName(f.name, taken)
-        taken.push(n)
-        await api.addFilter(name, { ...f, name: n })
-        // The level goes first: every other step works on the raised voice.
-        if (f.kind === 'gain_filter') await api.editFilter(name, n, 'top')
-      }
-      return true
-    })
-    list.reload()
-    if (ok)
-      toast({ tone: 'ok', message: 'Your mic is cleaned up: noise out, level even, no clipping.' })
-  }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-      <span
-        className={cx(
-          'text-[13.5px] font-semibold',
-          verdict === 'good' ? 'text-ok' : verdict ? 'text-warn' : 'text-text-3',
-        )}
-        aria-live="polite"
-      >
-        {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
-        {gainStep && usual !== null && (
-          <>
-            {' '}
-            <span className="font-normal text-text-2">
-              Cleaning up will also raise it by {gainDb} dB.
-            </span>
-            <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
-              Your voice peaks around {Math.round(usual)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
-              step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
-              something to work on. Change it in Filters.
-            </InfoTip>
-          </>
-        )}
-      </span>
-      {!have ? null : plan.length > 0 ? (
-        <Button size="sm" variant="secondary" busy={busy === 'clean'} onClick={() => void clean()}>
-          <Sparkle size={15} weight="bold" /> Clean up my mic
-        </Button>
-      ) : (
-        <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-text-3">
-          <Check size={14} weight="bold" /> Mic cleaned up
-        </span>
-      )}
-    </div>
+    <CleanMicControl
+      api={api}
+      name={name}
+      level={level}
+      filters={list.data}
+      onReload={list.reload}
+      className="border-t border-line pt-3"
+    />
   )
 }
 

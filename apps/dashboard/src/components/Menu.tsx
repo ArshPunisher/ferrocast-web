@@ -108,10 +108,15 @@ export function Menu({
       if (!wrap.current?.contains(t) && !list.current?.contains(t)) setOpen(false)
     }
     document.addEventListener('pointerdown', onDown)
-    requestAnimationFrame(() =>
-      list.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(),
+    const raf = requestAnimationFrame(() =>
+      list.current
+        ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+        ?.focus({ preventScroll: true }),
     )
-    return () => document.removeEventListener('pointerdown', onDown)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('pointerdown', onDown)
+    }
   }, [open])
 
   const close = () => {

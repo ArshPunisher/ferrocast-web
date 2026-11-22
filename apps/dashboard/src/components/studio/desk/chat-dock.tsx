@@ -1,13 +1,14 @@
 // Chat and Events as Studio panels: Ferrocast's merged chat (Twitch, YouTube and Kick in one)
 // and the event feed beside the preview, where OBS has one platform's chat dock at a time.
 
-import { useMemo, useState } from 'react'
-import { Roles, type Actor } from '@ferrocast/api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Roles, actorOf, describeEvent, tameText, type Actor } from '@ferrocast/api'
 import { EmptyState, cx } from '@ferrocast/ui'
 import {
   ChatLine,
   ChatScroller,
   Composer,
+  HighlightBanner,
   ViewerCardDialog,
   useChatActions,
   type ReplyTarget,
@@ -16,6 +17,21 @@ import { EventRow } from '../../EventRow'
 import { useNow } from '../../../lib/hooks'
 import { useLive } from '../../../lib/store'
 import { DockHeader } from './layout'
+import { MiniFeedBar, ReadMark } from './mini-feed'
+import {
+  filterEvents,
+  isUnread,
+  loadFilter,
+  loadRead,
+  markAllRead,
+  markRead,
+  newestSeq,
+  saveFilter,
+  saveRead,
+  unreadCount,
+  type FeedFilter,
+  type ReadState,
+} from '../../../lib/mini-feed'
 
 export function ChatDock() {
   const now = useNow(15_000)
@@ -53,6 +69,7 @@ export function ChatDock() {
           </button>
         }
       />
+      <HighlightBanner />
       <ChatScroller count={lines.length} className="flex-1" label="Chat">
         {lines.length === 0 ? (
           <EmptyState compact title="Chat is quiet" />
@@ -83,17 +100,56 @@ export function ChatDock() {
 export function EventsDock() {
   const now = useNow(15_000)
   const events = useLive((s) => s.events)
-  const feed = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const [filter, setFilterState] = useState<FeedFilter>(() => loadFilter())
+  const [read, setReadState] = useState<ReadState | null>(() => loadRead())
+  const setRead = useCallback((r: ReadState) => {
+    setReadState(r)
+    saveRead(r)
+  }, [])
+  const setFilter = useCallback((f: FeedFilter) => {
+    setFilterState(f)
+    saveFilter(f)
+  }, [])
+  // The first time here, what is already in the feed counts as read, and that is kept at once
+  // (so leaving the panel and coming back doesn't make it all new). It waits for the feed to load.
+  useEffect(() => {
+    if (read === null && events.length > 0) setRead({ upTo: newestSeq(events), ids: [] })
+  }, [read, events, setRead])
+  const shown = useMemo(() => [...events].reverse().slice(0, 80), [events])
+  const feed = useMemo(() => filterEvents(shown, filter), [shown, filter])
+  const state = read ?? { upTo: Number.MAX_SAFE_INTEGER, ids: [] }
+  const unread = unreadCount(state, events)
   return (
     <section aria-label="Events" className="flex min-h-0 flex-1 flex-col">
       <DockHeader id="events" />
+      <MiniFeedBar
+        filter={filter}
+        onFilter={setFilter}
+        unread={unread}
+        onMarkAll={() => setRead(markAllRead(state, events))}
+      />
       <div className="fc-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {feed.length === 0 ? (
+        {shown.length === 0 ? (
           <EmptyState compact title="No events yet" />
+        ) : feed.length === 0 ? (
+          <EmptyState compact title="Nothing of this type yet" />
         ) : (
           <ul className="flex flex-col">
             {feed.map((e) => (
-              <EventRow key={e.id} event={e} now={now} compact />
+              <EventRow
+                key={e.id}
+                event={e}
+                now={now}
+                compact
+                unread={isUnread(state, e)}
+                trailing={
+                  <ReadMark
+                    unread={isUnread(state, e)}
+                    label={`Mark ${tameText(actorOf(e)?.display_name ?? 'someone')} ${describeEvent(e).title} as read`}
+                    onRead={() => setRead(markRead(state, e.id))}
+                  />
+                }
+              />
             ))}
           </ul>
         )}

@@ -41,4 +41,11 @@ describe('design fonts', () => {
     }
     expect(DESIGN_FONTS.length).toBeGreaterThanOrEqual(15)
   })
+
+  it("turns End Credits' 'system' into the system UI stack, not a font called system", () => {
+    const stack = fontStack('system')
+    expect(stack).not.toContain("'system'")
+    expect(stack.startsWith('ui-sans-serif')).toBe(true)
+    expect(stack).toContain('system-ui')
+  })
 })
