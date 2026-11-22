@@ -1255,6 +1255,20 @@ export const LABEL_SOURCES: ReadonlyArray<{
 
 const LABEL_SOURCE_SET = new Set<string>(LABEL_SOURCES.map((s) => s.value))
 
+export const SUPPORTED_TIMEZONES = [
+  'UTC',
+  'Asia/Kolkata',
+  'Asia/Tokyo',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+] as const
+
+const SUPPORTED_TIMEZONE_SET = new Set<string>(SUPPORTED_TIMEZONES)
+
 /** core::overlay::validate_label */
 export function validateLabelConfig(config: unknown): string | null {
   if (!isObj(config)) return 'config: must be an object.'
@@ -1273,6 +1287,10 @@ export function validateLabelConfig(config: unknown): string | null {
       !/^[A-Za-z0-9_-]+$/.test(config.theme)
     )
       return 'config.theme: use a valid theme id.'
+  }
+  if (config.timezone !== undefined) {
+    if (typeof config.timezone !== 'string' || !SUPPORTED_TIMEZONE_SET.has(config.timezone))
+      return `config.timezone: unsupported timezone '${String(config.timezone)}'.`
   }
   if (config.timezone_offset_min !== undefined) {
     if (

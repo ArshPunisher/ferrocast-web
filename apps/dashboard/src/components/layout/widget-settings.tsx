@@ -76,16 +76,28 @@ const DEFAULT_TEMPLATE_FOR_SOURCE: Partial<Record<LabelSource, string>> = {
   hype_train: 'Hype train · {value}',
 }
 
-const TIMEZONE_OPTIONS: { label: string; offsetMin: number }[] = [
-  { label: 'UTC (00:00)', offsetMin: 0 },
-  { label: 'India (UTC+05:30)', offsetMin: 330 },
-  { label: 'UK / London (UTC+00:00)', offsetMin: 0 },
-  { label: 'Central Europe (UTC+01:00)', offsetMin: 60 },
-  { label: 'US Eastern (UTC-05:00)', offsetMin: -300 },
-  { label: 'US Central (UTC-06:00)', offsetMin: -360 },
-  { label: 'US Pacific (UTC-08:00)', offsetMin: -480 },
-  { label: 'Japan / Tokyo (UTC+09:00)', offsetMin: 540 },
+const TIMEZONE_OPTIONS: { label: string; value: string; fallbackOffsetMin: number }[] = [
+  { label: 'UTC', value: 'UTC', fallbackOffsetMin: 0 },
+  { label: 'India (IST)', value: 'Asia/Kolkata', fallbackOffsetMin: 330 },
+  { label: 'UK / London (GMT/BST)', value: 'Europe/London', fallbackOffsetMin: 0 },
+  { label: 'Central Europe (CET/CEST)', value: 'Europe/Berlin', fallbackOffsetMin: 60 },
+  { label: 'US Eastern (ET)', value: 'America/New_York', fallbackOffsetMin: -300 },
+  { label: 'US Central (CT)', value: 'America/Chicago', fallbackOffsetMin: -360 },
+  { label: 'US Pacific (PT)', value: 'America/Los_Angeles', fallbackOffsetMin: -480 },
+  { label: 'Japan / Tokyo (JST)', value: 'Asia/Tokyo', fallbackOffsetMin: 540 },
+  { label: 'Australia / Sydney (AET)', value: 'Australia/Sydney', fallbackOffsetMin: 600 },
 ]
+
+function resolveTimezoneValue(config: LabelConfig): string {
+  if (config.timezone && TIMEZONE_OPTIONS.some((tz) => tz.value === config.timezone)) {
+    return config.timezone
+  }
+  if (typeof config.timezone_offset_min === 'number') {
+    const match = TIMEZONE_OPTIONS.find((tz) => tz.fallbackOffsetMin === config.timezone_offset_min)
+    if (match) return match.value
+  }
+  return 'UTC'
+}
 
 export function newWidget(
   kind: WidgetKind,
@@ -581,11 +593,19 @@ function LabelSettings({
           {(p) => (
             <Select
               {...p}
-              value={String(config.timezone_offset_min ?? 0)}
-              onChange={(e) => onChange({ ...config, timezone_offset_min: Number(e.target.value) })}
+              value={resolveTimezoneValue(config)}
+              onChange={(e) => {
+                const tz = TIMEZONE_OPTIONS.find((opt) => opt.value === e.target.value)
+                if (!tz) return
+                onChange({
+                  ...config,
+                  timezone: tz.value,
+                  timezone_offset_min: tz.fallbackOffsetMin,
+                })
+              }}
             >
               {TIMEZONE_OPTIONS.map((tz) => (
-                <option key={tz.label} value={tz.offsetMin}>
+                <option key={tz.value} value={tz.value}>
                   {tz.label}
                 </option>
               ))}

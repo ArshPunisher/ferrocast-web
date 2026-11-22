@@ -378,6 +378,7 @@ export interface LabelConfig {
   source: LabelSource
   template: string
   theme: string
+  timezone?: string
   timezone_offset_min?: number
   train_window_s?: number
   train_step_s?: number

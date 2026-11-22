@@ -82,7 +82,7 @@ test.describe('Stream labels+ & hype train (#8)', () => {
       // Monthly total + timezone selector.
       await shows.selectOption('monthly_tips')
       await expect(page.getByLabel('Month boundary timezone')).toBeVisible()
-      await page.getByLabel('Month boundary timezone').selectOption('330')
+      await page.getByLabel('Month boundary timezone').selectOption('Asia/Kolkata')
       await expect(page.getByLabel('Text')).toHaveValue('Month tips: {value}')
 
       // Top supporter all-time & session counts.

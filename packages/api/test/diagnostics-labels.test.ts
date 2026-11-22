@@ -57,6 +57,11 @@ describe('Label validation & sources (#8)', () => {
     expect(validateLabelConfig({ source: 'monthly_subs', timezone_offset_min: 900 })).toMatch(
       /timezone_offset_min/,
     )
+    expect(validateLabelConfig({ source: 'monthly_subs', timezone: 'Europe/London' })).toBeNull()
+    expect(validateLabelConfig({ source: 'monthly_subs', timezone: 'Australia/Sydney' })).toBeNull()
+    expect(validateLabelConfig({ source: 'monthly_subs', timezone: 'Mars/Olympus' })).toMatch(
+      /timezone/,
+    )
     expect(validateLabelConfig({ source: 'hype_train', train_window_s: 5 })).toMatch(
       /train_window_s/,
     )

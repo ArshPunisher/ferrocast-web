@@ -237,7 +237,8 @@ All three stay PC-only (`remoteAllowed` denies paired phones).
 `LabelConfig.source` covers Latest-X (`latest_follower`, `latest_sub`, `latest_gifter`, `latest_tip`,
 `latest_bits`, `latest_raid`), Session (`session_follows`, `session_subs`, `session_bits`, `session_tips`,
 `session_raids`, `top_tip_session`, `top_supporter_session`), Monthly (`monthly_*`, `top_tip_monthly`,
-`top_supporter_monthly` with optional `timezone_offset_min` `-720..840`), All-time (`alltime_*`,
+`top_supporter_monthly` with optional DST-aware IANA `timezone` or fallback `timezone_offset_min`
+`-720..840`), All-time (`alltime_*`,
 `top_tip_alltime`, `top_supporter_alltime`), and Hype/Combo train (`hype_train` with `train_window_s`,
 `train_step_s`, `train_max_s`, `train_threshold`). Overlay WS `snapshot` & `state` carry `label_trains`.
 
