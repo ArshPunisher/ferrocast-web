@@ -1579,6 +1579,10 @@ export class DemoStudioEngine {
       this.streamActive = false
       this.streamStartedAt = 0
       this.stopRecordingState()
+      // The outputs go down with the engine; a restart starts them off (the last saved replay's
+      // name stays: that file exists).
+      this.replayActive = false
+      this.virtualcam = { active: false, source: null }
       if (wasStreaming) this.onStreamChange?.(false)
       return {
         available: true,
