@@ -56,6 +56,7 @@ function runExtendedTextEffect(
   titleEl: HTMLElement,
   t0: number,
   tracks: Animation[],
+  budgetMs = Infinity,
 ): void {
   const push = (a: Animation | null) => {
     if (a) tracks.push(a)
@@ -73,7 +74,12 @@ function runExtendedTextEffect(
           { opacity: 0, transform: 'translateY(18px) scale(0.88)' },
           { opacity: 1, transform: 'none' },
         ],
-        { duration: 420, delay: t0 + i * 34, fill: 'backwards', easing: EASE_IN },
+        {
+          duration: 420,
+          delay: t0 + i * staggerStep(34, chars.length, 420, budgetMs),
+          fill: 'backwards',
+          easing: EASE_IN,
+        },
       ),
     )
     return
@@ -88,7 +94,12 @@ function runExtendedTextEffect(
           { transform: 'none', offset: 0.7 },
           { transform: 'none' },
         ],
-        { duration: 1200, delay: t0 + i * 50, iterations: 3, easing: 'ease-in-out' },
+        {
+          duration: 1200,
+          delay: t0 + i * staggerStep(50, chars.length, 1200, budgetMs),
+          iterations: 3,
+          easing: 'ease-in-out',
+        },
       ),
     )
     return
@@ -102,7 +113,12 @@ function runExtendedTextEffect(
           { transform: 'scaleX(1.12) scaleY(0.92)', opacity: 1, offset: 0.65 },
           { transform: 'none', opacity: 1 },
         ],
-        { duration: 480, delay: t0 + i * 24, fill: 'backwards', easing: EASE_IN },
+        {
+          duration: 480,
+          delay: t0 + i * staggerStep(24, chars.length, 480, budgetMs),
+          fill: 'backwards',
+          easing: EASE_IN,
+        },
       ),
     )
     return
@@ -115,7 +131,12 @@ function runExtendedTextEffect(
           { opacity: 0, transform: 'rotate(-180deg) scale(0.5)' },
           { opacity: 1, transform: 'none' },
         ],
-        { duration: 500, delay: t0 + i * 30, fill: 'backwards', easing: EASE_IN },
+        {
+          duration: 500,
+          delay: t0 + i * staggerStep(30, chars.length, 500, budgetMs),
+          fill: 'backwards',
+          easing: EASE_IN,
+        },
       ),
     )
     return
@@ -137,6 +158,30 @@ function runExtendedTextEffect(
   textAnimation(kind, chars, [titleEl], t0, trackAnimate)
 }
 
+/** Whole characters as people see them: a flag or a letter with an accent is one. */
+function graphemes(text: string): string[] {
+  const Seg = (
+    Intl as unknown as {
+      Segmenter?: new (
+        l?: string,
+        o?: object,
+      ) => { segment(t: string): Iterable<{ segment: string }> }
+    }
+  ).Segmenter
+  if (Seg)
+    return Array.from(
+      new Seg(undefined, { granularity: 'grapheme' }).segment(text),
+      (x) => x.segment,
+    )
+  return Array.from(text)
+}
+
+/** Delay between characters so the last one has finished before the exit starts. */
+function staggerStep(base: number, count: number, perCharMs: number, budgetMs: number): number {
+  if (count <= 1) return 0
+  return Math.min(base, Math.max(0, budgetMs - perCharMs) / (count - 1))
+}
+
 function appendTitleChars(titleEl: HTMLElement, text: string): Element[] {
   const chars: Element[] = []
   // Group non-space runs inside `.al-word` so line wrapping happens only between words.
@@ -148,7 +193,7 @@ function appendTitleChars(titleEl: HTMLElement, text: string): Element[] {
     }
     const word = document.createElement('span')
     word.className = 'al-word'
-    for (const ch of Array.from(part)) {
+    for (const ch of graphemes(part)) {
       const s = document.createElement('span')
       s.className = 'al-char'
       s.textContent = ch
@@ -227,7 +272,8 @@ export function buildAlert(
   if (a.anim) {
     card.dataset.animIn = String(a.anim.in)
     card.dataset.animOut = String(a.anim.out)
-    card.dataset.textAnim = String(a.anim.text)
+    // What actually plays: low motion skips the text effect, so its styles stay off too.
+    card.dataset.textAnim = lowMotion ? 'none' : String(a.anim.text)
     card.dataset.customAnim = '1'
   }
   card.setAttribute('role', 'status')
@@ -298,19 +344,25 @@ export function buildAlert(
     }
 
     if (textEffect !== 'none') {
-      runExtendedTextEffect(textEffect, chars, title, a.anim?.text_delay_ms ?? 150, anims)
+      const delay = a.anim?.text_delay_ms ?? 150
+      const visibleMs =
+        (Number.isFinite(a.duration_ms) ? a.duration_ms : 7000) - exitMsFor(a, false)
+      runExtendedTextEffect(textEffect, chars, title, delay, anims, Math.max(0, visibleMs - delay))
     }
   }
 
   if (a.anim) {
     const inMs = Math.max(0, Math.min(3000, a.anim.in_ms ?? 400))
     if (lowMotion) {
-      const aIn = safeAnimate(animTarget, IN.fade.kf, {
-        duration: Math.min(200, inMs || 200),
-        easing: 'ease-out',
-        fill: 'both',
-      })
-      if (aIn) anims.push(aIn)
+      // Low motion only shortens an entrance; a zero stays no entrance.
+      if (inMs > 0) {
+        const aIn = safeAnimate(animTarget, IN.fade.kf, {
+          duration: Math.min(200, inMs),
+          easing: 'ease-out',
+          fill: 'both',
+        })
+        if (aIn) anims.push(aIn)
+      }
     } else if (inMs > 0) {
       const spec = IN[a.anim.in as AnimIn] ?? IN.fade
       if (spec.kf.length) {
@@ -519,7 +571,8 @@ export class AlertsWidget implements WidgetView {
       : 7000
     // A look with its own timing counts the exit inside the total; older alerts keep
     // hold plus the fixed exit.
-    const hold = alert.anim && !design ? Math.max(0, ms - exitMsFor(alert, this.ctx.lowMotion())) : ms
+    const hold =
+      alert.anim && !design ? Math.max(0, ms - exitMsFor(alert, this.ctx.lowMotion())) : ms
     const p: Playing = {
       alert,
       primary,

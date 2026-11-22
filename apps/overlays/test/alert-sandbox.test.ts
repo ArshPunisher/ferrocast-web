@@ -171,4 +171,67 @@ describe('custom alert sandbox & anim rendering (R25)', () => {
     expect(lowCard.dataset.motion).toBe('low')
     expect(lowHost.shadowRoot?.querySelectorAll('.al-char').length).toBe(0)
   })
+
+  describe('text effects and timing details', () => {
+    type Call = { target: Element; opts: KeyframeAnimationOptions }
+    let calls: Call[] = []
+    beforeEach(() => {
+      calls = []
+      ;(HTMLElement.prototype as unknown as { animate: unknown }).animate = function (
+        this: Element,
+        _kf: unknown,
+        opts: KeyframeAnimationOptions,
+      ) {
+        calls.push({ target: this, opts })
+        return { cancel() {}, finished: Promise.resolve() }
+      }
+    })
+    afterEach(() => {
+      delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate
+    })
+    const anim = (over: Record<string, unknown> = {}) => ({
+      in: 'pop' as const,
+      out: 'fade' as const,
+      text: 'cascade' as const,
+      in_ms: 300,
+      out_ms: 300,
+      text_delay_ms: 200,
+      ...over,
+    })
+
+    it('animates a flag or an accented letter as one character', () => {
+      const host = buildAlert(
+        alert('g1', { title: 'e\u0301 \u{1F1EE}\u{1F1F3} ok', anim: anim() }),
+        'molten',
+        false,
+        false,
+      )
+      const chars = [...(host.shadowRoot?.querySelectorAll('.al-char') ?? [])].map(
+        (c) => c.textContent,
+      )
+      expect(chars).toEqual(['e\u0301', '\u{1F1EE}\u{1F1F3}', 'o', 'k'])
+    })
+
+    it('fits the stagger into the visible time of a short alert', () => {
+      const title = 'A'.repeat(100)
+      buildAlert(alert('b1', { title, duration_ms: 2000, anim: anim() }), 'molten', false, false)
+      const charCalls = calls.filter((c) => c.target.classList.contains('al-char'))
+      expect(charCalls.length).toBe(100)
+      const last = Math.max(...charCalls.map((c) => Number(c.opts.delay) + Number(c.opts.duration)))
+      // The whole effect ends before the exit starts (duration 2000 - exit 300).
+      expect(last).toBeLessThanOrEqual(2000 - 300)
+    })
+
+    it('keeps a zero entrance zero in low motion and sets the title style from the effective effect', () => {
+      const host = buildAlert(
+        alert('z1', { title: 'Nova joined', anim: anim({ in_ms: 0 }) }),
+        'molten',
+        true,
+        false,
+      )
+      const card = host.shadowRoot?.querySelector('.al') as HTMLElement
+      expect(calls.filter((c) => c.target === card.firstElementChild)).toEqual([])
+      expect(card.dataset.textAnim).toBe('none')
+    })
+  })
 })

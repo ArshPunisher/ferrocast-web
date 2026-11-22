@@ -332,8 +332,10 @@
   overflow: visible;
 }
 .al-word {
+  /* One block per word keeps words together; a word wider than the card breaks anywhere. */
   display: inline-block;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .al-char {
   display: inline-block;
