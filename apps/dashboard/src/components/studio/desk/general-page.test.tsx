@@ -84,4 +84,17 @@ describe('Settings › General', () => {
       expect(saved[key], key).toBe(true)
     }
   })
+
+  it('shows snapping to sources and the middle as on when the settings do not say (as the preview treats them)', async () => {
+    await mount({}) // an older or partial settings object
+    const on = (label: string) => sw(label)?.getAttribute('aria-checked')
+    expect(on('To other sources')).toBe('true')
+    expect(on('To the middle of the screen')).toBe('true')
+    // And a saved choice is shown as it is.
+    act(() => root.unmount())
+    root = createRoot(host)
+    await mount({ snap_sources: false, snap_center: false })
+    expect(on('To other sources')).toBe('false')
+    expect(on('To the middle of the screen')).toBe('false')
+  })
 })
