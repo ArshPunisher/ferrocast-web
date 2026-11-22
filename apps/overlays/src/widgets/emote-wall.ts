@@ -428,5 +428,6 @@ export class EmoteWallWidget implements WidgetView {
     this.particles = []
     this.ro?.disconnect()
     this.ro = null
+    this.el.remove()
   }
 }

@@ -246,5 +246,6 @@ export class ChatHighlightWidget implements WidgetView {
 
   destroy(): void {
     this.clearTimer()
+    this.el.remove()
   }
 }

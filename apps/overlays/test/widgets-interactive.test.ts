@@ -345,3 +345,19 @@ describe('chat_highlight widget', () => {
     }
   })
 })
+
+describe('removing a widget', () => {
+  it('takes its element off the page for all three new widgets', () => {
+    rt = createOverlay(root, { audio: false })
+    rt.apply(
+      snapshot({}, overlay([creditsWidget(), emoteWidget(), highlightWidget({ duration_s: 10 })])),
+    )
+    for (const c of ['end-credits', 'emote-wall', 'chat-highlight']) {
+      expect(root.querySelector(`.fc-w-${c}`), c).not.toBeNull()
+    }
+    rt.apply(frame('config', overlay([])))
+    for (const c of ['end-credits', 'emote-wall', 'chat-highlight']) {
+      expect(root.querySelector(`.fc-w-${c}`), c).toBeNull()
+    }
+  })
+})

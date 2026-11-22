@@ -362,5 +362,6 @@ export class EndCreditsWidget implements WidgetView {
     this.stopLoop()
     this.ro?.disconnect()
     this.ro = null
+    this.el.remove()
   }
 }
