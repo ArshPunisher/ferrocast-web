@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ApiError, FerroClient, type ClipJob, type ClipsOverview } from '@ferrocast/api'
 import { DemoEngine, DEMO_TOKEN } from '@ferrocast/api/demo'
 import { useLive } from '../../../lib/store'
-import { ClipsTab } from './clips-tab'
+import { ClipsTab, spanText } from './clips-tab'
 import { JobRow, JobsPanel } from './jobs-panel'
 import { resetThumbs } from './thumb'
 
@@ -233,10 +233,10 @@ describe('the Clips tab', () => {
     const first = q<HTMLInputElement>('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]')
     const second = q<HTMLInputElement>('[data-clip^="Replay 2026-11-22 20"] input[type=checkbox]')
     await click(first)
-    expect(text()).toContain('1 picked')
+    expect(text()).toContain('1 selected')
     expect(buttonByText('Compile')?.disabled).toBe(true)
     await click(second)
-    expect(text()).toContain('2 picked')
+    expect(text()).toContain('2 selected')
     expect(buttonByText('Compile')?.disabled).toBe(false)
     await click(buttonByText('Compile'))
     await settle()
@@ -258,17 +258,106 @@ describe('the Clips tab', () => {
     expect(document.querySelectorAll('li[data-clip]').length).toBeGreaterThanOrEqual(5) // nothing was made
   })
 
+  it('has one toolbar row: search, Type, folder and reload; selecting swaps its right side', async () => {
+    await mountDemo()
+    await settle()
+    const bar = q('[data-testid="clips-toolbar"]')!
+    expect(bar.querySelector('[aria-label="Search clips by name"]')).not.toBeNull()
+    expect(bar.querySelector('select[aria-label="Type"]')).not.toBeNull()
+    expect(bar.querySelector('[aria-label="Copy the clips folder path"]')).not.toBeNull()
+    expect(bar.querySelector('[aria-label="Reload the clips"]')).not.toBeNull()
+    expect(bar.querySelector('[aria-label="Selected clips"]')).toBeNull()
+    await click(q('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]'))
+    // The same row now carries the selection actions (no second band).
+    const group = q('[data-testid="clips-toolbar"] [aria-label="Selected clips"]')!
+    expect(group.textContent).toContain('1 selected')
+    expect(group.textContent).toContain('Compile')
+    expect(group.textContent).toContain('Caption')
+    expect(group.textContent).toContain('Upload')
+    expect(group.textContent).toContain('Clear')
+    await click(buttonByText('Clear'))
+    expect(q('[aria-label="Selected clips"]')).toBeNull()
+  })
+
+  it('filters by Type and says so when none match', async () => {
+    await mountDemo()
+    await settle()
+    const sel = q<HTMLSelectElement>('select[aria-label="Type"]')!
+    const set = async (v: string) => {
+      await act(async () => {
+        sel.value = v
+        sel.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    await set('replays')
+    const kinds = [...document.querySelectorAll('li[data-clip]')].map((l) => l.textContent)
+    expect(kinds.length).toBeGreaterThan(0)
+    expect(kinds.every((t) => t?.includes('Replay'))).toBe(true)
+    await set('moments')
+    expect(text()).toMatch(/No clips of that type|Edit/)
+    await set('all')
+    expect(document.querySelectorAll('li[data-clip]').length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('opens Upload for a pick the search is hiding', async () => {
+    await mountDemo()
+    await settle()
+    await click(q('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]'))
+    await type(byLabel<HTMLInputElement>('Search clips by name'), 'boss')
+    await settle(400)
+    expect(q('[data-clip^="Replay 2026-11-22 21"]')).toBeNull() // hidden, still picked
+    await click(
+      [...document.body.querySelectorAll('button')].find((b) =>
+        b.textContent?.startsWith('Upload'),
+      ) ?? null,
+    )
+    await settle(400)
+    const dialog = q('dialog[open], [role=dialog]')
+    expect(dialog?.textContent).toContain('Replay 2026-11-22 21-04-12')
+    expect(dialog?.textContent).not.toContain("isn't in the folder")
+  })
+
+  it('probes each picked clip once, however the answers interleave', async () => {
+    const client = await mountDemo()
+    const real = client.request.bind(client)
+    let n = 0
+    // The first answer comes soonest, the next ones later: they finish one after another.
+    const spy = vi
+      .spyOn(client, 'request')
+      .mockImplementation(async (...a: Parameters<typeof real>) => {
+        if (a[0] === 'GET' && /^\/api\/v1\/clips\/[^/?]+$/.test(String(a[1])))
+          await new Promise((r) => setTimeout(r, 30 * ++n))
+        return real(...a)
+      })
+    await settle()
+    for (const prefix of ['21', '20']) {
+      await click(q(`[data-clip^="Replay 2026-11-22 ${prefix}"] input[type=checkbox]`))
+    }
+    await click(q('[data-clip^="Clutch"] input[type=checkbox]'))
+    await settle(400)
+    const probes = spy.mock.calls.filter(
+      ([m, path]) => m === 'GET' && /^\/api\/v1\/clips\/[^/?]+$/.test(String(path)),
+    )
+    expect(probes.length).toBe(3)
+  })
+
+  it('reads a length as seconds or minutes', () => {
+    expect(spanText(42_000)).toBe('42 s')
+    expect(spanText(65_000)).toBe('1 min 5 s')
+    expect(spanText(120_000)).toBe('2 min')
+  })
+
   it('keeps clips picked for a compilation when a search hides them', async () => {
     await mountDemo()
     await settle()
     // Pick two replays, then search for a clip that is neither.
     await click(q('[data-clip^="Replay 2026-11-22 21"] input[type=checkbox]'))
     await click(q('[data-clip^="Replay 2026-11-22 20"] input[type=checkbox]'))
-    expect(text()).toContain('2 picked')
+    expect(text()).toContain('2 selected')
     await type(byLabel<HTMLInputElement>('Search clips by name'), 'boss')
     await settle(400)
     // Still two picked, and the compilation still holds both.
-    expect(text()).toContain('2 picked')
+    expect(text()).toContain('2 selected')
     await click(buttonByText('Compile'))
     await settle()
     expect(document.querySelectorAll('ol[aria-label="Clips in order"] li').length).toBe(2)
@@ -310,7 +399,7 @@ describe('the Clips tab', () => {
     await click(openBtn('Clutch round vertical'))
     await settle()
     await choose('YouTube')
-    const privacy = q<HTMLSelectElement>('select')!
+    const privacy = q<HTMLSelectElement>('dialog select, [role=dialog] select')!
     expect(privacy.value).toBe('private')
     const shorts = switchNamed('Send as a Short')!
     expect(shorts.disabled).toBe(false) // the clip is tall and short
