@@ -14,6 +14,7 @@ import type {
   BanEntry,
   BanResult,
   ChatHighlight,
+  AccountPlatform,
   ChatPlatform,
   Command,
   ConnectFlow,
@@ -320,8 +321,8 @@ export class FerroClient {
 
   // Accounts
   accounts = () => this.get<Account[]>('/api/v1/accounts')
-  connect = (p: ChatPlatform) => this.post<ConnectFlow>(`/api/v1/accounts/${p}/connect`)
-  disconnect = (p: ChatPlatform) => this.del(`/api/v1/accounts/${p}`)
+  connect = (p: AccountPlatform) => this.post<ConnectFlow>(`/api/v1/accounts/${p}/connect`)
+  disconnect = (p: AccountPlatform) => this.del(`/api/v1/accounts/${p}`)
 
   // Overlays
   overlays = () => this.get<Overlay[]>('/api/v1/overlays')

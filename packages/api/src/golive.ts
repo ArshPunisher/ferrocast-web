@@ -24,7 +24,38 @@ export interface DestinationConfig {
   light?: boolean
   /** Twitch Enhanced Broadcasting (Twitch, main picture); left out when off. */
   enhanced?: boolean
+  /** A server and key pasted from X, Instagram or Facebook; left out for any other. */
+  brand?: PasteBrand
 }
+
+/** Platforms whose keys are made in their own app, so the streamer pastes server and key. */
+export type PasteBrand = 'x' | 'instagram' | 'facebook'
+export const PASTE_BRANDS: readonly {
+  id: PasteBrand
+  label: string
+  server: string
+  where: string
+}[] = [
+  {
+    id: 'x',
+    label: 'X',
+    server: '',
+    where: 'In X’s own broadcast setup, copy the server URL and the stream key.',
+  },
+  {
+    id: 'instagram',
+    label: 'Instagram',
+    server: '',
+    where:
+      'In Instagram’s own Live setup on a computer, copy the stream URL and key. Not every account is given one.',
+  },
+  {
+    id: 'facebook',
+    label: 'Facebook',
+    server: 'rtmps://live-api-s.facebook.com:443/rtmp/',
+    where: 'In Facebook’s Live Producer, choose streaming software and copy the stream key.',
+  },
+]
 
 export type PushState =
   | { state: 'waiting' | 'connecting' | 'live' | 'stopped' }
@@ -529,8 +560,20 @@ export function goliveApi(c: FerroClient) {
         ...(confirm.upload ? { confirm_upload: true } : {}),
         ...(confirm.last ? { confirm_last: true } : {}),
       }),
-    addCustom: (name: string, url: string, key: string, canvas: Canvas = 'main') =>
-      post<DestinationConfig>('/golive/destinations', { name, url, key, canvas }),
+    addCustom: (
+      name: string,
+      url: string,
+      key: string,
+      canvas: Canvas = 'main',
+      brand?: PasteBrand,
+    ) =>
+      post<DestinationConfig>('/golive/destinations', {
+        name,
+        url,
+        key,
+        canvas,
+        ...(brand ? { brand } : {}),
+      }),
     /** The Studio's lighter stream (720p) for this platform, or the full one. */
     setLight: (id: string, on: boolean) =>
       c.request<{ destinations: DestinationConfig[] }>(

@@ -3,10 +3,19 @@
 // with "type", times in Unix milliseconds. Keep this file in step with API.md: it is the
 // contract, and the demo engine is checked against it by the tests.
 
-export type Platform = 'twitch' | 'youtube' | 'kick' | 'tips' | 'ferrocast'
+export type Platform = 'twitch' | 'youtube' | 'kick' | 'facebook' | 'tips' | 'ferrocast'
 export type ChatPlatform = 'twitch' | 'youtube' | 'kick'
+/** A platform a streamer can sign in to: the chat ones, and Facebook (comments only). */
+export type AccountPlatform = ChatPlatform | 'facebook'
 export const CHAT_PLATFORMS: readonly ChatPlatform[] = ['twitch', 'youtube', 'kick']
-export const PLATFORMS: readonly Platform[] = ['twitch', 'youtube', 'kick', 'tips', 'ferrocast']
+export const PLATFORMS: readonly Platform[] = [
+  'twitch',
+  'youtube',
+  'kick',
+  'facebook',
+  'tips',
+  'ferrocast',
+]
 
 export type Millis = number
 
@@ -306,7 +315,7 @@ export interface ConnectorState {
   last_event_at: Millis | null
 }
 
-export type ConnectorName = 'twitch' | 'youtube' | 'kick' | 'obs' | 'relay'
+export type ConnectorName = 'twitch' | 'youtube' | 'kick' | 'facebook' | 'obs' | 'relay'
 export type Connectors = Record<ConnectorName, ConnectorState>
 
 /** Safe Mode state reported by `GET /api/v1/status` and `GET /api/v1/studio/engine` (M11-03). */
@@ -341,7 +350,7 @@ export interface Status {
 }
 
 export interface Account {
-  platform: ChatPlatform
+  platform: AccountPlatform
   name: string
   avatar_url: string | null
   connected_at: Millis

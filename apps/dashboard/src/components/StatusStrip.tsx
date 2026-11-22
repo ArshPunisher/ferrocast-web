@@ -10,6 +10,7 @@ const NAMES: Record<ConnectorName, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
   kick: 'Kick',
+  facebook: 'Facebook',
   obs: 'OBS',
   relay: 'Relay',
 }

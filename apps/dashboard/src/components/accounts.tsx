@@ -4,7 +4,7 @@ import {
   ApiError,
   PLATFORM_LABEL,
   describeError,
-  type ChatPlatform,
+  type AccountPlatform,
   type ConnectFlow,
 } from '@ferrocast/api'
 import {
@@ -23,22 +23,23 @@ import { useLive } from '../lib/store'
 import { stateCopy } from './StatusStrip'
 import { browserDidntOpen, externalLink, openExternal } from '../lib/external'
 
-const BLURB: Record<ChatPlatform, string> = {
+const BLURB: Record<AccountPlatform, string> = {
+  facebook: 'Comments on your Page’s live videos show up in chat, and you can reply.',
   twitch: 'Chat, follows, subs, Bits, raids and channel points.',
   youtube: 'Chat, Super Chats and memberships while you’re live.',
   kick: 'Chat, follows, subs and KICKs, through the Ferrocast relay.',
 }
 
-/** Connect one platform: Twitch shows a device code; YouTube and Kick finish in the browser. */
+/** Connect one platform: Twitch shows a device code; YouTube, Kick and Facebook finish in the browser. */
 export function useConnect(): {
-  connect: (p: ChatPlatform) => Promise<void>
-  busy: ChatPlatform | null
+  connect: (p: AccountPlatform) => Promise<void>
+  busy: AccountPlatform | null
   dialog: React.ReactNode
 } {
   const client = useClient()
-  const [busy, setBusy] = useState<ChatPlatform | null>(null)
+  const [busy, setBusy] = useState<AccountPlatform | null>(null)
   const [flow, setFlow] = useState<{
-    platform: ChatPlatform
+    platform: AccountPlatform
     flow: ConnectFlow
     at: number
   } | null>(null)
@@ -59,7 +60,7 @@ export function useConnect(): {
       return () => clearTimeout(t)
     }
   }, [done, flow])
-  const connect = async (p: ChatPlatform) => {
+  const connect = async (p: AccountPlatform) => {
     setBusy(p)
     try {
       const f = await client.connect(p)
@@ -181,7 +182,7 @@ export function AccountRow({
   busy,
   onDisconnect,
 }: {
-  platform: ChatPlatform
+  platform: AccountPlatform
   onConnect: () => void
   busy: boolean
   onDisconnect?: () => void

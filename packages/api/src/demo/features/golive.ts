@@ -3,7 +3,7 @@
 // lines while the pretend OBS streams. Same routes, shapes, error codes and messages as API.md
 // §4 "Go live everywhere".
 
-import { checkAdvanced, checkCut, directKind } from '../../golive'
+import { checkAdvanced, checkCut, directKind, type PasteBrand } from '../../golive'
 import type {
   Advanced,
   AitumOutput,
@@ -778,6 +778,13 @@ export class DemoGoLive {
         'invalid',
         'canvas: SRT, RIST and WebRTC send the main picture only.',
       )
+    const brand = typeof b.brand === 'string' ? b.brand : undefined
+    if (
+      b.brand !== undefined &&
+      b.brand !== null &&
+      !['x', 'instagram', 'facebook'].includes(brand ?? '')
+    )
+      throw new HttpError(400, 'invalid', 'brand: one of x, instagram, facebook, or none.')
     if ((!key && !direct) || key.length > 512 || /\s/.test(key))
       throw new HttpError(
         400,
@@ -793,6 +800,7 @@ export class DemoGoLive {
       url: direct ? url : url.replace(/\/+$/, ''),
       enabled: true,
       ...(b.canvas === 'vertical' ? { canvas: 'vertical' as const } : {}),
+      ...(brand ? { brand: brand as PasteBrand } : {}),
     }
     this.cfg.push(d)
     this.tick()

@@ -99,6 +99,7 @@
   --fc-pink: #ff7ab6;
   --fc-youtube: #ff3b4e;
   --fc-kick: #53fc18;
+  --fc-facebook: #6aa5ff;
   --fc-tips: #f2b84b;
   /* Leaderboard crowns. */
   --fc-gold: #f5c542;
@@ -400,6 +401,7 @@
   --fc-pink: #b8327a;
   --fc-youtube: #e0001f;
   --fc-kick: #23a100;
+  --fc-facebook: #1664d9;
   --fc-tips: #946200;
   --fc-gold: #a87a00;
   --fc-silver: #5f6a7a;
@@ -584,6 +586,7 @@
     --fc-pink: #b8327a;
     --fc-youtube: #e0001f;
     --fc-kick: #23a100;
+    --fc-facebook: #1664d9;
     --fc-tips: #946200;
     --fc-gold: #a87a00;
     --fc-silver: #5f6a7a;

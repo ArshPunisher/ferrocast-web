@@ -479,3 +479,11 @@ Engine side done (`docs/API.md`, `PUT /golive/destinations`). The dashboard uses
 - `DELETE /api/v1/api-keys/{id}` -> `204 No Content`. Revokes immediately.
 - `/api-keys*` is PC-only (`OWNER_DENIED` on remote sessions, never accessible via API keys). API keys also can never reach secrets, accounts, diagnostics export, plugin install/execution, session pairing, imports/exports/restores, or change `lan_access`. Per-key sliding-window rate limit returns `429 rate_limited` with `Retry-After` and `X-RateLimit-*` headers. Every API key use logs to tracing and SQLite audit without the key or hash.
 
+
+## R38. More platforms: Facebook, pasted X/Instagram/Facebook servers, stream schedule (Phase 3 #24, 22 Nov)
+
+Engine side done (`docs/API.md`: Accounts, Go live destinations, Stream schedule). No TikTok, by project rule.
+
+- `Platform` and `ConnectorName` gain `facebook`; `Account.platform` is `AccountPlatform` (`twitch | youtube | kick | facebook`). `POST /accounts/facebook/connect` → `{ flow: "browser", url }`, or 422 when this build has no Facebook app set up (the owner registers one). Facebook comments arrive as chat events (`platform: "facebook"`); `CHAT_PLATFORMS` is unchanged (no polls, shows or bot sends to Facebook).
+- `POST /golive/destinations` takes `brand?: "x" | "instagram" | "facebook"` (server and key pasted from that platform's own app); `DestinationConfig.brand` (left out when none). 400 `brand: …` for any other value. The key is never returned.
+- `GET /schedule` → `{ streams: ScheduledStream[] }`; `POST /schedule` `{ info, platforms, start_ms, remind_minutes? }` → 201 (400 names `start`, `title`, `platforms` or `remind_minutes`; 409 over 50); `DELETE /schedule/{id}` → 204 / 404. Each `broadcasts[]` row has `id`/`url` when the platform made a scheduled broadcast, else a plain `note`. A reminder is one `notice` frame (key `schedule:{id}`). Planning never goes live.
