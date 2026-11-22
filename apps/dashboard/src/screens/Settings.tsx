@@ -72,6 +72,7 @@ import { RemoteDevices } from '../components/remote'
 import { MusicSettings } from '../components/music-settings'
 import { AutomationsSettings } from '../components/automations-settings'
 import { PluginsSettings } from '../components/plugins-settings'
+import { SupportReportSection } from '../components/support-report'
 import { useLive } from '../lib/store'
 import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
@@ -1014,7 +1015,12 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
         : 'Works on this computer only. For a phone, allow other devices and restart.'
     : null
   return (
-    <Section id="advanced" title="Advanced" description="How the app starts, and who can reach it.">
+    <Section
+      id="advanced"
+      title="Advanced"
+      description="Support report, startup behaviour, and remote access."
+    >
+      <SupportReportSection />
       <Group title="Starting and closing">
         <SwitchRow
           checked={settings.launch_at_login}

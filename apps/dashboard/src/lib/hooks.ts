@@ -21,15 +21,21 @@ export interface Resource<T> {
 export function useResource<T>(
   load: (c: FerroClient) => Promise<T>,
   deps: unknown[] = [],
+  opts: { enabled?: boolean } = {},
 ): Resource<T> {
+  const enabled = opts.enabled ?? true
   const client = useClient()
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [nonce, setNonce] = useState(0)
   const loadRef = useRef(load)
   loadRef.current = load
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false)
+      return
+    }
     let alive = true
     setLoading(true)
     loadRef
@@ -49,7 +55,7 @@ export function useResource<T>(
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, nonce, ...deps])
+  }, [client, nonce, enabled, ...deps])
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   const set = useCallback((v: T | ((prev: T | null) => T)) => {
     setData((prev) => (typeof v === 'function' ? (v as (p: T | null) => T)(prev) : v))

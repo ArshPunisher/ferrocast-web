@@ -39,6 +39,7 @@ import type {
   FerroEvent,
   Frame,
   FrameVariant,
+  LabelSource,
   LookLayout,
   MotionTag,
   OriginKind,
@@ -1141,6 +1142,109 @@ export function validateLayer(config: unknown): string | null {
   return null
 }
 
+export const LABEL_SOURCES: ReadonlyArray<{
+  value: LabelSource
+  label: string
+  group: 'Latest' | 'This stream' | 'This month' | 'All time' | 'Hype train'
+}> = [
+  { value: 'latest_follower', label: 'Latest follower', group: 'Latest' },
+  { value: 'latest_sub', label: 'Latest subscriber', group: 'Latest' },
+  { value: 'latest_gifter', label: 'Latest gifter', group: 'Latest' },
+  { value: 'latest_tip', label: 'Latest tip', group: 'Latest' },
+  { value: 'latest_bits', label: 'Latest bits', group: 'Latest' },
+  { value: 'latest_raid', label: 'Latest raid', group: 'Latest' },
+  { value: 'session_follows', label: 'Follows this stream', group: 'This stream' },
+  { value: 'session_subs', label: 'Subs this stream', group: 'This stream' },
+  { value: 'session_bits', label: 'Bits this stream', group: 'This stream' },
+  { value: 'session_tips', label: 'Tips this stream', group: 'This stream' },
+  { value: 'session_raids', label: 'Raids this stream', group: 'This stream' },
+  { value: 'top_tip_session', label: 'Top tip this stream', group: 'This stream' },
+  { value: 'top_supporter_session', label: 'Top supporter this stream', group: 'This stream' },
+  { value: 'monthly_follows', label: 'Follows this month', group: 'This month' },
+  { value: 'monthly_subs', label: 'Subs this month', group: 'This month' },
+  { value: 'monthly_bits', label: 'Bits this month', group: 'This month' },
+  { value: 'monthly_tips', label: 'Tips this month', group: 'This month' },
+  { value: 'monthly_raids', label: 'Raids this month', group: 'This month' },
+  { value: 'top_tip_monthly', label: 'Top tip this month', group: 'This month' },
+  { value: 'top_supporter_monthly', label: 'Top supporter this month', group: 'This month' },
+  { value: 'alltime_follows', label: 'All-time follows', group: 'All time' },
+  { value: 'alltime_subs', label: 'All-time subs', group: 'All time' },
+  { value: 'alltime_bits', label: 'All-time bits', group: 'All time' },
+  { value: 'alltime_tips', label: 'All-time tips', group: 'All time' },
+  { value: 'alltime_raids', label: 'All-time raids', group: 'All time' },
+  { value: 'top_tip_alltime', label: 'All-time top tip', group: 'All time' },
+  { value: 'top_supporter_alltime', label: 'All-time top supporter', group: 'All time' },
+  { value: 'hype_train', label: 'Hype / combo train timer', group: 'Hype train' },
+]
+
+const LABEL_SOURCE_SET = new Set<string>(LABEL_SOURCES.map((s) => s.value))
+
+export const SUPPORTED_TIMEZONES = [
+  'UTC',
+  'Asia/Kolkata',
+  'Asia/Tokyo',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+] as const
+
+const SUPPORTED_TIMEZONE_SET = new Set<string>(SUPPORTED_TIMEZONES)
+
+/** core::overlay::validate_label */
+export function validateLabelConfig(config: unknown): string | null {
+  if (!isObj(config)) return 'config: must be an object.'
+  const src = typeof config.source === 'string' ? config.source : null
+  if (!src || !LABEL_SOURCE_SET.has(src)) return 'config.source: pick a valid label source.'
+  if (config.template !== undefined) {
+    if (typeof config.template !== 'string') return 'config.template: must be text.'
+    const err = checkTemplate('config.template', config.template, 240)
+    if (err) return err
+  }
+  if (config.theme !== undefined) {
+    if (
+      typeof config.theme !== 'string' ||
+      config.theme.length === 0 ||
+      config.theme.length > 40 ||
+      !/^[A-Za-z0-9_-]+$/.test(config.theme)
+    )
+      return 'config.theme: use a valid theme id.'
+  }
+  if (config.timezone !== undefined) {
+    if (typeof config.timezone !== 'string' || !SUPPORTED_TIMEZONE_SET.has(config.timezone))
+      return `config.timezone: unsupported timezone '${String(config.timezone)}'.`
+  }
+  if (config.timezone_offset_min !== undefined) {
+    if (
+      typeof config.timezone_offset_min !== 'number' ||
+      !Number.isInteger(config.timezone_offset_min) ||
+      config.timezone_offset_min < -720 ||
+      config.timezone_offset_min > 840
+    )
+      return 'config.timezone_offset_min: must be -720 to 840 minutes.'
+  }
+  const win = config.train_window_s ?? 120
+  if (typeof win !== 'number' || !Number.isInteger(win) || win < 10 || win > 3600)
+    return 'config.train_window_s: must be 10 to 3600 seconds.'
+  if (config.train_step_s !== undefined) {
+    const step = config.train_step_s
+    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 600)
+      return 'config.train_step_s: must be 1 to 600 seconds.'
+  }
+  const maxS = config.train_max_s ?? 300
+  if (typeof maxS !== 'number' || !Number.isInteger(maxS) || maxS < 10 || maxS > 7200)
+    return 'config.train_max_s: must be 10 to 7200 seconds.'
+  if (maxS < win) return 'config.train_max_s: must be at least train_window_s.'
+  if (config.train_threshold !== undefined) {
+    const th = config.train_threshold
+    if (typeof th !== 'number' || !Number.isInteger(th) || th < 1 || th > 50)
+      return 'config.train_threshold: must be 1 to 50 events.'
+  }
+  return null
+}
+
 /** core::layer::validate_widget_style */
 export function validateWidgetStyle(style: unknown, path = 'config.style'): string | null {
   if (!isObj(style)) return `${path}: must be an object.`
@@ -1208,6 +1312,10 @@ export function validateLayout(
       const e = validateLayer(w.config)
       if (e) return `layer '${w.id}': ${e}`
     } else {
+      if (w.kind === 'label') {
+        const e = validateLabelConfig(w.config)
+        if (e) return `label '${w.id}': ${e}`
+      }
       const ce = validateWidgetConfig(w.kind, w.config)
       if (ce) return `widget '${w.id}': ${ce}`
       if (isObj(w.config) && 'style' in w.config && w.config.style !== undefined) {

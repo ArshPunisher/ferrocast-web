@@ -883,4 +883,193 @@ describe('review fixes', () => {
     rt.apply(frame('event', { ...first, seq: 99_999 }))
     expect(root.querySelector('.fc-ev .fc-ev-name')?.textContent).toBe('first-follower')
   })
+
+  it('hype train label counts down strictly via textContent, extends on events, and hides on expiry', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = {
+        source: 'hype_train',
+        template: 'Hype Lv.{level} ({count}) {timer}',
+        theme: 'molten',
+      }
+      const s = snapshot(
+        {
+          labels: { wl: 'Hype Lv.1 (3) 01:00' },
+          label_trains: {
+            wl: {
+              active: true,
+              level: 1,
+              events: 3,
+              contributors: 2,
+              latest_actor: 'NeelaMoth',
+              remaining_ms: 60_000,
+              ends_at: Date.now() + 60_000,
+              warmup_count: 3,
+              threshold: 3,
+            },
+          },
+        },
+        overlay(ws),
+      )
+      rt.apply(s)
+
+      const labelEl = root.querySelector('.fc-w-label') as HTMLElement
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      expect(textEl.children.length).toBe(0)
+      expect(textEl.textContent).toBe('Hype Lv.1 (3) 01:00')
+      expect(labelEl.hidden).toBe(false)
+
+      // Advance 10s -> timer ticks down
+      vi.advanceTimersByTime(10_000)
+      expect(textEl.textContent).toBe('Hype Lv.1 (3) 00:50')
+
+      // New event extends countdown window (+15s) and bumps level/count
+      rt.apply(
+        frame('state', {
+          labels: { wl: 'Hype Lv.2 (4) 01:05' },
+          label_trains: {
+            wl: {
+              active: true,
+              level: 2,
+              events: 4,
+              contributors: 3,
+              latest_actor: '<img onerror=alert(1)>Ravi',
+              remaining_ms: 65_000,
+              ends_at: Date.now() + 65_000,
+              warmup_count: 4,
+              threshold: 3,
+            },
+          },
+        }),
+      )
+      expect(textEl.textContent).toBe('Hype Lv.2 (4) 01:05')
+      expect(textEl.children.length).toBe(0)
+
+      // Countdown hits 0 -> hides cleanly
+      vi.advanceTimersByTime(65_500)
+      expect(textEl.textContent).toBe('')
+      expect(labelEl.hidden).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('an expired hype train stays hidden when an unrelated state frame arrives', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = { source: 'hype_train', template: '{timer}', theme: 'molten' }
+      rt.apply(
+        snapshot(
+          {
+            labels: { wl: '00:10' },
+            label_trains: {
+              wl: {
+                active: true,
+                level: 1,
+                events: 3,
+                contributors: 2,
+                latest_actor: 'Ann',
+                remaining_ms: 10_000,
+                ends_at: Date.now() + 10_000,
+                warmup_count: 3,
+                threshold: 3,
+              },
+            },
+          },
+          overlay(ws),
+        ),
+      )
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      const labelEl = root.querySelector('.fc-w-label') as HTMLElement
+      vi.advanceTimersByTime(11_000)
+      expect(labelEl.hidden).toBe(true)
+      // Viewer counts arrive; the train object in the state is still the expired one.
+      rt.apply(frame('state', { viewers: { twitch: 12 } }))
+      expect(textEl.textContent).toBe('')
+      expect(labelEl.hidden).toBe(true)
+      vi.advanceTimersByTime(30_000)
+      expect(labelEl.hidden).toBe(true)
+      // A new train observation shows again.
+      rt.apply(
+        frame('state', {
+          label_trains: {
+            wl: {
+              active: true,
+              level: 1,
+              events: 3,
+              contributors: 2,
+              latest_actor: 'Ben',
+              remaining_ms: 20_000,
+              ends_at: Date.now() + 20_000,
+              warmup_count: 3,
+              threshold: 3,
+            },
+          },
+        }),
+      )
+      expect(labelEl.hidden).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves hype train countdown across unrelated state frames and supports template filters & $& names', () => {
+    vi.useFakeTimers()
+    try {
+      const ws = widgets()
+      const lbl = ws.find((w) => w.kind === 'label')!
+      lbl.config = {
+        source: 'hype_train',
+        template: 'Hype {latest|upper} {timer} ({latest})',
+        theme: 'molten',
+      }
+      rt.apply(
+        snapshot(
+          {
+            labels: { wl: 'Hype ALICE$&$$ 01:00 (Alice$&$$)' },
+            label_trains: {
+              wl: {
+                active: true,
+                level: 1,
+                events: 3,
+                contributors: 2,
+                latest_actor: 'Alice$&$$',
+                remaining_ms: 60_000,
+                ends_at: Date.now() + 60_000,
+                warmup_count: 3,
+                threshold: 3,
+              },
+            },
+          },
+          overlay(ws),
+        ),
+      )
+
+      const textEl = root.querySelector('.fc-label-text') as HTMLElement
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 01:00 (Alice$&$$)')
+
+      // Advance 20s -> 00:40 remaining
+      vi.advanceTimersByTime(20_000)
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 00:40 (Alice$&$$)')
+
+      // Unrelated state frame (viewers + other label) must NOT reset countdown back to 01:00
+      rt.apply(
+        frame('state', {
+          viewers: { twitch: 250 },
+          labels: { other_widget: 'ignored' },
+        }),
+      )
+      expect(textEl.textContent).toBe('Hype ALICE$&$$ 00:40 (Alice$&$$)')
+
+      // Reaches 0 on schedule (~40s later, not 60s later)
+      vi.advanceTimersByTime(40_500)
+      expect(textEl.textContent).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
