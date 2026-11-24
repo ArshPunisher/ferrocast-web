@@ -55,14 +55,20 @@ export function DockHandle({
 }) {
   const drag = useRef<{ x: number; w: number } | null>(null)
   const [active, setActive] = useState(false)
-  // A window that shrinks under a wide dock pulls it in.
+  // A window that shrinks (or a sidebar that unfolds) under a wide dock pulls it in.
   useEffect(() => {
     const onWin = () => {
       const fit = clampDock(spec, width, otherWidth, window.innerWidth - navWidth())
       if (fit !== width) onResize(fit, otherWidth)
     }
+    onWin()
     window.addEventListener('resize', onWin)
-    return () => window.removeEventListener('resize', onWin)
+    const mo = typeof MutationObserver === 'function' ? new MutationObserver(onWin) : null
+    mo?.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
+    return () => {
+      window.removeEventListener('resize', onWin)
+      mo?.disconnect()
+    }
   }, [spec, width, otherWidth, onResize])
   return (
     <div

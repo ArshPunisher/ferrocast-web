@@ -136,7 +136,7 @@ export function Switch({
   const auto = useId()
   const sid = id ?? auto
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className={cx('flex justify-between gap-4', description ? 'items-start' : 'items-center')}>
       {!hideLabel && (
         <div className="flex min-w-0 items-center gap-1">
           <label htmlFor={sid} className="text-sm font-medium text-text">
@@ -154,7 +154,8 @@ export function Switch({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cx(
-          'relative mt-0.5 h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
+          'relative h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
+          description && 'mt-0.5',
           'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-40',
           checked ? 'border-arc bg-arc' : 'border-transparent bg-line-strong',
         )}
