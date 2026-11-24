@@ -25,15 +25,24 @@ const ICON: Record<Status, { Icon: typeof CheckCircle; cls: string; label: strin
   waiting: { Icon: Circle, cls: 'text-accent-text', label: 'Waiting' },
 }
 
-export function StatusIcon({ status, className }: { status: Status; className?: string }) {
+export function StatusIcon({
+  status,
+  className,
+  size = 18,
+  decorative = false,
+}: {
+  status: Status
+  className?: string
+  size?: number
+  decorative?: boolean
+}) {
   const s = ICON[status]
   return (
     <s.Icon
-      size={18}
+      size={size}
       weight="fill"
       className={cx('shrink-0', s.cls, className)}
-      aria-label={s.label}
-      role="img"
+      {...(decorative ? { 'aria-hidden': true } : { 'aria-label': s.label, role: 'img' })}
     />
   )
 }

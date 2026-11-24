@@ -279,6 +279,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             canvas={managing}
             videoKbps={desk.prefs.data?.video_kbps}
             audioKbps={desk.prefs.data?.audio_kbps}
+            inDialog
           />
         )}
       </Dialog>
