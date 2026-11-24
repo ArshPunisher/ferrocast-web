@@ -16,6 +16,7 @@ test.describe('studio', () => {
       ['studio/info', 'Stream info'],
       ['studio/obs', 'Scenes'],
       ['studio/moments', 'Moments'],
+      ['studio/schedule', 'Planned streams'],
     ] as const) {
       await open(page, route)
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
@@ -279,7 +280,14 @@ test.describe('studio', () => {
   })
 
   for (const scheme of ['dark', 'light'] as const)
-    for (const route of ['studio/show', 'studio/info', 'studio/obs', 'studio/moments', 'bot'])
+    for (const route of [
+      'studio/show',
+      'studio/info',
+      'studio/obs',
+      'studio/moments',
+      'studio/schedule',
+      'bot',
+    ])
       test(`${route} has no serious accessibility problems (${scheme})`, async ({ page }) => {
         await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
         await open(page, route)

@@ -5,7 +5,7 @@
 // A box is a `Frame`: first corner and the two sides as vectors, so a turned box is no special
 // case. What snaps and lines up is a box's bounds on the canvas (`rectOf`), as OBS does.
 
-import { at, boxOf, type Box, type Crop, type Frame, type Pt } from './stage-edit'
+import { at, boxOf, type Box, type Frame, type Pt } from './stage-edit'
 
 /** A box's bounds on the canvas. */
 export interface Rect {
@@ -511,10 +511,8 @@ export function pickedGroup<T extends ItemLike>(
   return { members, rect }
 }
 
-/** The crop an Alt-drag started with, to put back when it is cancelled (null: none read yet). */
-export function revertCrop(
-  crop: { from: Crop; size: { width: number; height: number } } | null | 'reading',
-): Crop | null {
+/** The crop or transform an Alt-drag started with, to put back when cancelled (null: none read yet). */
+export function revertCrop<T>(crop: { from: T } | null | 'reading'): T | null {
   return crop && crop !== 'reading' ? crop.from : null
 }
 

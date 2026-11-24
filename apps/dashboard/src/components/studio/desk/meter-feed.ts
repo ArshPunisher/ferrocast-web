@@ -1,7 +1,7 @@
 // Live meter levels without React: one shared poller per (engine, set of sounds) writes the
 // latest levels into a plain object, and one requestAnimationFrame loop draws every meter from
 // it with direct style writes. Nothing here sets React state per tick.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { EngineLevel } from '@ferrocast/api'
 import type { EngineApi } from './common'
 
@@ -10,8 +10,13 @@ export const POLL_MS = 33
 /** Levels older than this are treated as silence (the engine stopped or stalled). */
 export const STALE_MS = 1000
 
+export type LevelStatus = 'connecting' | 'connected' | 'disconnected'
+
 export interface LevelFeed {
   get(name: string): EngineLevel | undefined
+  status?(name: string): LevelStatus
+  seq?(): number
+  busy?(): boolean
   subscribe(fn: () => void): () => void
 }
 
@@ -26,17 +31,30 @@ const feeds = new WeakMap<object, Map<string, Entry>>()
 function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () => void } {
   let latest: Record<string, EngineLevel> = {}
   let at = 0
+  let hasData = false
+  let settled = false
+  let seq = 0
+  let erroredWhileStale = false
   const subs = new Set<() => void>()
   let alive = true
   let busy = false
   let timer = 0
+  const isStale = () => !hasData || performance.now() - at > STALE_MS
   const feed: LevelFeed = {
-    get: (name) => (performance.now() - at > STALE_MS ? undefined : latest[name]),
+    get: (name) => (isStale() ? undefined : latest[name]),
+    status: (name) => {
+      if (!settled && !hasData) return 'connecting'
+      if (isStale()) return 'disconnected'
+      return Object.prototype.hasOwnProperty.call(latest, name) ? 'connected' : 'disconnected'
+    },
+    seq: () => seq,
+    busy: () => busy,
     subscribe: (fn) => {
       subs.add(fn)
       return () => subs.delete(fn)
     },
   }
+  const notify = () => subs.forEach((f) => f())
   const next = () => {
     if (alive && !document.hidden) timer = window.setTimeout(() => void tick(), POLL_MS)
   }
@@ -46,12 +64,23 @@ function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () 
     try {
       const v = await api.levels(list, 'fast')
       if (alive) {
+        settled = true
+        hasData = true
+        seq++
+        erroredWhileStale = false
         latest = v
         at = performance.now()
-        subs.forEach((f) => f())
+        notify()
       }
     } catch {
-      // Stopped or busy: the next tick tries again; stale levels read as silence.
+      // Stopped or busy: the next tick tries again; notify once when transitioning disconnected.
+      if (alive) {
+        settled = true
+        if (isStale() && !erroredWhileStale) {
+          erroredWhileStale = true
+          notify()
+        }
+      }
     } finally {
       busy = false
       next()
@@ -76,7 +105,14 @@ function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () 
 /** The shared feed for these sounds (a stable object while the list is the same). */
 export function useLevelFeed(api: EngineApi, names: string[]): LevelFeed {
   const key = names.join('\n')
-  const idle = useMemo<LevelFeed>(() => ({ get: () => undefined, subscribe: () => () => {} }), [])
+  const idle = useMemo<LevelFeed>(
+    () => ({
+      get: () => undefined,
+      status: () => 'connecting',
+      subscribe: () => () => {},
+    }),
+    [],
+  )
   const [feed, setFeed] = useState<LevelFeed>(idle)
   useEffect(() => {
     if (!key) {
@@ -101,6 +137,22 @@ export function useLevelFeed(api: EngineApi, names: string[]): LevelFeed {
     }
   }, [api, key, idle])
   return feed
+}
+
+/** Subscribes to connection state transitions for a single source without re-rendering per sample. */
+export function useLevelStatus(feed: LevelFeed, name: string | null): LevelStatus {
+  const get = useCallback<() => LevelStatus>(
+    () =>
+      name
+        ? feed.status
+          ? feed.status(name)
+          : feed.get(name)
+            ? 'connected'
+            : 'connecting'
+        : 'connecting',
+    [feed, name],
+  )
+  return useSyncExternalStore(feed.subscribe, get, get)
 }
 
 // ---- Ballistics (pure, so they can be tested) ----

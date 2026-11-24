@@ -351,39 +351,9 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     return client
   }
 
-  it('binds the removal confirmation dialog to the selected plan when nextPlan changes on a tick', async () => {
-    const baseNow = 1_700_000_000_000
-    vi.useFakeTimers({
-      toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'],
-    })
-    vi.setSystemTime(baseNow)
-
-    const planA: ScheduledStream = {
-      id: 'plan-a',
-      info: { title: 'Plan A' },
-      platforms: ['youtube'],
-      start_ms: baseNow + 10_000,
-      remind_minutes: 15,
-      reminded: false,
-      broadcasts: [{ platform: 'youtube', id: 'yt-1' }],
-    }
-    const planB: ScheduledStream = {
-      id: 'plan-b',
-      info: { title: 'Plan B' },
-      platforms: ['youtube'],
-      start_ms: baseNow + 60_000,
-      remind_minutes: 15,
-      reminded: false,
-      broadcasts: [{ platform: 'youtube', id: 'yt-2' }],
-    }
-    const deleted: string[] = []
+  it('does not render Planned streams inside DeskStandby (moved to Schedule tab)', async () => {
     installClient(async (method, path) => {
-      if (path === '/api/v1/schedule' && method === 'GET') return { streams: [planA, planB] }
-      if (path.startsWith('/api/v1/schedule/') && method === 'DELETE') {
-        deleted.push(path.replace('/api/v1/schedule/', ''))
-        return undefined
-      }
-      if (path === '/api/v1/clips')
+      if (path === '/api/v1/clips' && method === 'GET')
         return { folder: '', ffmpeg_ready: false, youtube_connected: false, clips: [] }
       throw new ApiError(422, 'studio_not_running', 'Off')
     })
@@ -405,29 +375,15 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
 
     await act(async () => root.render(<Harness />))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      await Promise.resolve()
     })
 
-    const removeA = host.querySelector(
-      'button[aria-label="Remove Plan A"]',
-    ) as HTMLButtonElement | null
-    expect(removeA).not.toBeNull()
-    await act(async () => {
-      removeA!.click()
-    })
-    expect(host.querySelector('dialog[open]')?.textContent).toContain('Remove Plan A?')
-
-    // Advance past planA's start_ms cleanly so useNow(30_000) ticks and switches nextPlan to planB.
-    await act(async () => {
-      vi.setSystemTime(baseNow + 31_000)
-      await vi.advanceTimersByTimeAsync(30_000)
-    })
-
-    expect(host.textContent).toContain('Plan B')
-    // Confirmation dialog for Plan A must NOT rebind to Plan B!
-    const openDialog = host.querySelector('dialog[open]')
-    expect(openDialog).toBeNull()
-    expect(deleted).toEqual([])
+    expect(host.textContent).not.toContain('Planned streams')
+    const planBtn = Array.from(host.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Plan a stream'),
+    )
+    expect(planBtn).toBeUndefined()
   })
 
   it('shows a load error with Retry instead of "No recordings yet" when clips.list() fails', async () => {
@@ -660,12 +616,11 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     expect(protectSwitch!.getAttribute('aria-checked')).toBe('false')
   })
 
-  it('keeps Planned streams reachable when studio engine status fails to load', async () => {
+  it('omits Planned streams in StudioDesk when studio engine status fails to load', async () => {
     installClient(async (_method, path) => {
       if (path === '/api/v1/studio/engine') {
         throw new ApiError(500, 'engine_down', 'Engine daemon not reachable.')
       }
-      if (path === '/api/v1/schedule') return { streams: [] }
       throw new ApiError(404, 'not_found', 'none')
     })
 
@@ -680,10 +635,10 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     })
 
     expect(host.textContent).toContain('Try again')
-    expect(host.textContent).toContain('Planned streams')
+    expect(host.textContent).not.toContain('Planned streams')
     const planBtn = Array.from(host.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Plan a stream'),
     )
-    expect(planBtn).toBeDefined()
+    expect(planBtn).toBeUndefined()
   })
 })

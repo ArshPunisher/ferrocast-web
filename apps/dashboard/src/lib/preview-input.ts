@@ -80,8 +80,9 @@ export function installPreviewInput(cursor: (css: string) => void): () => void {
   const tellCursor = (el: Element | null) => {
     const css = el ? getComputedStyle(el).cursor || 'default' : 'default'
     const name = css === 'auto' ? 'default' : css
-    // A cursor from a picture (url(...)) shows as the arrow.
-    const plain = /^[a-z-]+$/.test(name) ? name : 'default'
+    // A custom url(...) cursor carries a fallback CSS keyword after the comma.
+    const tail = name.includes(',') ? name.slice(name.lastIndexOf(',') + 1).trim() : name
+    const plain = /^[a-z-]+$/.test(tail) ? tail : 'default'
     if (plain !== shown) {
       shown = plain
       cursor(plain)

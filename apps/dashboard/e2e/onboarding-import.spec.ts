@@ -215,4 +215,105 @@ test.describe('first-run import and camera/mic check', () => {
     await expect(mediaHeading).toBeFocused()
     await checkAxe()
   })
+
+  test('camera preview keeps refreshing and recovers automatically when a camera stops and comes back', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+    await expect(page.locator('img[alt^="Preview from"]')).toBeVisible()
+
+    // Simulate iPhone camera sleeping / stopping frames -> shows calm waiting state with Refresh frame button.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ cameraSleeping: true })
+    })
+    await expect(
+      page.getByText(
+        'Waiting for your camera. An iPhone can switch off when it sleeps or locks: unlock it and keep it near. Ferrocast will pick it up again.',
+      ),
+    ).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('button', { name: 'Refresh frame' })).toBeVisible()
+
+    // Also verify zero horizontal overflow at 375px while in waiting state.
+    await page.setViewportSize({ width: 375, height: 812 })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+
+    // Camera wakes back up -> recovers automatically without reloading or clicking.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ cameraSleeping: false })
+    })
+    await expect(page.locator('img[alt^="Preview from"]')).toBeVisible({ timeout: 8000 })
+  })
+
+  test('mic level meter animates with signal, shows named silence prompt, and distinguishes disconnected meter', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty&mic=silent')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+
+    // Connected silent mic: names active device and guides user cleanly.
+    await expect(
+      page.getByText(
+        'No sound from MacBook Pro Microphone yet. Say something, or check the mic is not muted.',
+      ),
+    ).toBeVisible()
+
+    // Switching mic device updates controlled select and named prompt.
+    await page.getByLabel('Choose microphone').selectOption('mic-shure')
+    await expect(
+      page.getByText(
+        'No sound from Shure MV7 USB yet. Say something, or check the mic is not muted.',
+      ),
+    ).toBeVisible()
+
+    // Speaking moves the meter bar away from 0% and clears the silent prompt.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ micPreset: 'good' })
+    })
+    await expect(page.getByText(/No sound from .* yet\./)).toHaveCount(0)
+    await expect
+      .poll(async () => {
+        const cover = page.locator('[aria-label="Microphone check"] .bg-inset\\/80').first()
+        const style = await cover.getAttribute('style')
+        const m = style?.match(/translate3d\(([0-9.]+)%/)
+        return m ? Number(m[1]) : 0
+      })
+      .toBeGreaterThan(20)
+
+    // Engine returns {} (unmetered onboarding engine): shows distinct "not connected" banner.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ levelsConnected: false })
+    })
+    await expect(page.getByText('Microphone meter is not connected.')).toBeVisible()
+    await expect(page.getByText(/No sound from .* yet\./)).toHaveCount(0)
+
+    await page.setViewportSize({ width: 375, height: 812 })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
 })

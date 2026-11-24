@@ -37,8 +37,14 @@ test.describe('more platforms', () => {
     page,
   }) => {
     await open(page, 'studio/golive')
+    // Planned streams is no longer under the Go live column; click the Schedule tab instead.
+    await expect(page.getByRole('heading', { name: 'Planned streams' })).toHaveCount(0)
+    const sectionTabs = page.getByRole('radiogroup', { name: 'Studio section' })
+    await sectionTabs.getByText('Schedule').click()
+    await expect(page).toHaveURL(/#\/studio\/schedule/)
     const p = panel(page, 'Planned streams')
     await expect(p.getByText('Nothing planned.')).toBeVisible()
+    await expect(p.getByText('Ferrocast never goes live by itself')).toBeVisible()
     await p.getByRole('button', { name: 'Plan a stream' }).click()
     const dialog = page.getByRole('dialog', { name: 'Plan a stream' })
     // Nothing typed: the button waits.
@@ -51,7 +57,9 @@ test.describe('more platforms', () => {
     await expect(p.getByText('YouTube', { exact: true })).toBeVisible()
     await expect(p.getByText(/Connect Facebook in Settings/)).toBeVisible()
     // Planning never starts a stream.
+    await sectionTabs.getByText('Go live').click()
     await expect(page.getByRole('switch', { name: 'Stream to Kick' })).toBeVisible()
+    await sectionTabs.getByText('Schedule').click()
     // A broadcast was made on YouTube: removing the plan asks first, and says it stays there.
     await p.getByRole('button', { name: 'Remove Friday ranked grind' }).click()
     const ask = page.getByRole('alertdialog', { name: 'Remove Friday ranked grind?' })
@@ -67,7 +75,7 @@ test.describe('more platforms', () => {
   })
 
   test('a start time in the past is refused with the field named', async ({ page }) => {
-    await open(page, 'studio/golive')
+    await open(page, 'studio/schedule')
     const p = panel(page, 'Planned streams')
     await p.getByRole('button', { name: 'Plan a stream' }).click()
     const dialog = page.getByRole('dialog', { name: 'Plan a stream' })
@@ -79,7 +87,9 @@ test.describe('more platforms', () => {
 
   test('the plan dialog works at 375 px and has no axe violations', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    await open(page, 'studio/golive')
+    await open(page, 'studio/schedule')
+    const scheduleTab = page.getByRole('radio', { name: 'Schedule' })
+    await expect(scheduleTab).toBeVisible()
     await page.getByRole('button', { name: 'Plan a stream' }).click()
     const dialog = page.getByRole('dialog', { name: 'Plan a stream' })
     await expect(dialog.getByRole('button', { name: 'Plan it' })).toBeVisible()

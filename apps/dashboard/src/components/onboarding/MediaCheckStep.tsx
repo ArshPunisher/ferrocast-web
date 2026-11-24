@@ -22,9 +22,12 @@ import { Button, IconButton, Skeleton } from '@ferrocast/ui'
 import { CleanMicControl } from '../studio/desk/cleanmic-ui'
 import { MIC_KINDS } from '../studio/desk/cleanmic'
 import { Meter, useLevels } from '../studio/desk/mixer'
-import { useLevelFeed } from '../studio/desk/meter-feed'
+import { useLevelFeed, useLevelStatus } from '../studio/desk/meter-feed'
 
 type EngineApi = ReturnType<typeof studioEngineApi>
+
+const CAMERA_POLL_MS = 1000
+const CAMERA_BACKOFF_MS = 5000
 
 const CAMERA_KINDS = ['av_capture_input_v2', 'dshow_input', 'v4l2_input', 'av_capture_input']
 const INPUT_AUDIO_KINDS = [
@@ -213,14 +216,24 @@ export function MediaCheckStep({
   const [camLoading, setCamLoading] = useState(false)
   const [camError, setCamError] = useState<unknown>(null)
   const [camProblem, setCamProblem] = useState<string | null>(null)
+  const [camWaiting, setCamWaiting] = useState(false)
   // The option that names the camera (it differs by system).
   const [camKey, setCamKey] = useState('device')
+  const refreshCameraRef = useRef<() => void>(() => undefined)
 
   const [mics, setMics] = useState<DeviceChoice[]>([])
+  const [selectedMic, setSelectedMic] = useState('')
+  const [micSwitching, setMicSwitching] = useState(false)
   const [micAudio, setMicAudio] = useState<EngineAudio | null>(null)
   const [micFilters, setMicFilters] = useState<EngineFilter[] | null>(null)
   const [micError, setMicError] = useState<unknown>(null)
+  const [heardSignal, setHeardSignal] = useState(false)
+  const heardRef = useRef(false)
+  heardRef.current = heardSignal
   const probeReqRef = useRef(0)
+  const confirmedMicRef = useRef('')
+  const micSwitchReqRef = useRef(0)
+  const minSampleSeqRef = useRef(0)
 
   const probeMedia = useCallback(async () => {
     const req = ++probeReqRef.current
@@ -275,26 +288,38 @@ export function MediaCheckStep({
       }))
       setMics(micChoices)
 
+      ++micSwitchReqRef.current
+      setMicSwitching(false)
+      minSampleSeqRef.current = 0
       const foundMic =
         audioList.find((a) => MIC_KINDS.has(a.kind)) ??
         audioList.find((a) => a.name.toLowerCase().includes('mic')) ??
         null
       if (foundMic) {
+        const micSettings = await engine.settings(foundMic.name).catch(() => null)
+        if (probeReqRef.current !== req) return
+        const configured = micSettings?.device_id
+        const matched =
+          typeof configured === 'string' && configured.length > 0 ? configured : 'default'
+        confirmedMicRef.current = matched
         setMicAudio(foundMic)
+        setSelectedMic(matched)
       } else if (micChoices.some((c) => c.value !== 'default')) {
         // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
         const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
         if (probeReqRef.current !== req) return
         let micNew = 'Mic'
         for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
+        const initialMic = micChoices[0]!.value
         await engine.setChannel(3, {
           kind: micKind,
           name: micNew,
-          settings: { device_id: micChoices[0]!.value },
+          settings: { device_id: initialMic },
         })
         if (probeReqRef.current !== req) return
         const refreshed = await engine.audio(scenes.current).catch(() => [] as EngineAudio[])
         if (probeReqRef.current !== req) return
+        confirmedMicRef.current = initialMic
         setMicAudio(
           refreshed.find((a) => a.name === micNew) ?? {
             name: micNew,
@@ -305,8 +330,11 @@ export function MediaCheckStep({
             monitor: 'off',
           },
         )
+        setSelectedMic(initialMic)
       } else {
+        confirmedMicRef.current = ''
         setMicAudio(null)
+        setSelectedMic('')
       }
     } catch (e) {
       if (probeReqRef.current !== req) return
@@ -328,38 +356,140 @@ export function MediaCheckStep({
     }
   }, [probeMedia])
 
-  const loadCameraStill = useCallback(
-    async (cam: DeviceChoice, signal?: AbortSignal) => {
-      setCamLoading(true)
-      setCamError(null)
-      setCamProblem(null)
-      try {
-        const res = await engine.sourceStill(cam.kind, camKey, cam.value, 480, signal)
-        if (!signal?.aborted) {
-          setStillUrl(res.image)
-          // No picture with a reason (the camera is off for this app, or in use): say it.
-          if (!res.image && res.error) setCamProblem(res.error)
-        }
-      } catch (e) {
-        if (!signal?.aborted && (e as { name?: string })?.name !== 'AbortError') {
-          setCamError(e)
-        }
-      } finally {
-        if (!signal?.aborted) setCamLoading(false)
-      }
-    },
-    [engine, camKey],
-  )
-
   useEffect(() => {
     if (!selectedCam) {
       setStillUrl(null)
+      setCamLoading(false)
+      setCamError(null)
+      setCamProblem(null)
+      setCamWaiting(false)
+      refreshCameraRef.current = () => undefined
       return
     }
-    const ac = new AbortController()
-    void loadCameraStill(selectedCam, ac.signal)
-    return () => ac.abort()
-  }, [selectedCam, loadCameraStill])
+
+    let alive = true
+    let hadStill = false
+    let activeAc: AbortController | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    setStillUrl(null)
+    setCamLoading(true)
+    setCamError(null)
+    setCamProblem(null)
+    setCamWaiting(false)
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    const schedule = (ms: number) => {
+      clearTimer()
+      if (!alive || document.hidden) return
+      timer = setTimeout(() => {
+        timer = null
+        void runOnce()
+      }, ms)
+    }
+
+    const runOnce = async () => {
+      if (!alive || document.hidden || activeAc !== null) return
+      clearTimer()
+      const reqAc = new AbortController()
+      activeAc = reqAc
+      let nextDelay = CAMERA_POLL_MS
+      try {
+        const res = await engine.sourceStill(
+          selectedCam.kind,
+          camKey,
+          selectedCam.value,
+          480,
+          reqAc.signal,
+        )
+        if (!alive || activeAc !== reqAc || reqAc.signal.aborted) return
+        if (res.image) {
+          hadStill = true
+          setStillUrl(res.image)
+          setCamProblem(null)
+          setCamError(null)
+          setCamWaiting(false)
+          nextDelay = CAMERA_POLL_MS
+        } else if (res.error) {
+          hadStill = false
+          setStillUrl(null)
+          setCamError(null)
+          setCamWaiting(false)
+          setCamProblem(res.error)
+          nextDelay = CAMERA_BACKOFF_MS
+        } else {
+          setStillUrl(null)
+          setCamError(null)
+          setCamProblem(null)
+          setCamWaiting(true)
+          nextDelay = CAMERA_BACKOFF_MS
+        }
+      } catch (e) {
+        if (
+          !alive ||
+          activeAc !== reqAc ||
+          reqAc.signal.aborted ||
+          (e as { name?: string })?.name === 'AbortError'
+        ) {
+          return
+        }
+        nextDelay = CAMERA_BACKOFF_MS
+        if (hadStill) {
+          // Picture stopped after working (e.g. iPhone Continuity Camera slept): keep checking calmly.
+          setStillUrl(null)
+          setCamError(null)
+          setCamProblem(null)
+          setCamWaiting(true)
+        } else {
+          setCamWaiting(false)
+          setCamError(e)
+        }
+      } finally {
+        if (activeAc === reqAc) {
+          activeAc = null
+          if (alive) {
+            setCamLoading(false)
+            if (!document.hidden && !reqAc.signal.aborted) schedule(nextDelay)
+          }
+        }
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (!alive) return
+      if (document.hidden) {
+        clearTimer()
+        activeAc?.abort()
+        activeAc = null
+      } else {
+        void runOnce()
+      }
+    }
+
+    refreshCameraRef.current = () => {
+      if (!alive || activeAc !== null) return
+      clearTimer()
+      void runOnce()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    if (!document.hidden) void runOnce()
+
+    return () => {
+      alive = false
+      refreshCameraRef.current = () => undefined
+      clearTimer()
+      activeAc?.abort()
+      activeAc = null
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [selectedCam, engine, camKey])
 
   const micName = micAudio?.name ?? null
   const reloadMicFilters = useCallback(async () => {
@@ -383,17 +513,57 @@ export function MediaCheckStep({
 
   const trackedNames = useMemo(() => (micName ? [micName] : []), [micName])
   const feed = useLevelFeed(engine, trackedNames)
+  const feedStatus = useLevelStatus(feed, micName)
   const levels: Record<string, EngineLevel> = useLevels(engine, trackedNames)
   const currentLevel = micName ? levels[micName] : undefined
+  const micMuted = !!micAudio?.muted
+  const matchedMicChoice = mics.find((m) => m.value === selectedMic)
+  const unavailableMicLabel =
+    selectedMic === 'default' ? 'System default microphone' : 'Saved microphone (not plugged in)'
+  const showUnavailableOption = Boolean(selectedMic) && !matchedMicChoice
+  const micLabel =
+    matchedMicChoice?.label ??
+    (showUnavailableOption ? unavailableMicLabel : (micAudio?.name ?? 'your microphone'))
+
+  useEffect(() => {
+    setHeardSignal(false)
+  }, [micName, selectedMic, micMuted])
+
+  useEffect(() => {
+    if (!micName || micMuted || micSwitching) return
+    const check = () => {
+      if (heardRef.current) return
+      if (feed.seq && feed.seq() <= minSampleSeqRef.current) return
+      const lv = feed.get(micName)
+      if (!lv) return
+      if (Math.max(lv.peak[0] ?? -100, lv.peak[1] ?? -100) > -60) {
+        setHeardSignal(true)
+      }
+    }
+    check()
+    return feed.subscribe(check)
+  }, [feed, micName, micMuted, micSwitching])
 
   const switchMicDevice = async (value: string) => {
     if (!micAudio) return
+    const req = ++micSwitchReqRef.current
+    setSelectedMic(value)
+    setMicSwitching(true)
+    setHeardSignal(false)
+    setMicError(null)
     try {
       // In place: only the device changes, so the mic keeps its filters, volume and mute (and
       // a mic that lives in a scene, as in an imported collection, can be switched too).
       await engine.update(micAudio.name, { device_id: value })
+      if (micSwitchReqRef.current !== req) return
+      confirmedMicRef.current = value
+      minSampleSeqRef.current = (feed.seq?.() ?? 0) + (feed.busy?.() ? 1 : 0)
+      setMicSwitching(false)
       onEdited?.()
     } catch (e) {
+      if (micSwitchReqRef.current !== req) return
+      setSelectedMic(confirmedMicRef.current)
+      setMicSwitching(false)
       setMicError(e)
     }
   }
@@ -540,7 +710,7 @@ export function MediaCheckStep({
                   Check again
                 </Button>
               </div>
-            ) : camLoading && !stillUrl ? (
+            ) : camLoading && !stillUrl && !camWaiting && !camProblem && !describedCamError ? (
               <Skeleton className="aspect-video w-full max-w-[420px] rounded-[12px]" />
             ) : describedCamError ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]">
@@ -555,7 +725,7 @@ export function MediaCheckStep({
                     size="sm"
                     variant="secondary"
                     icon={<ArrowsClockwise size={15} />}
-                    onClick={() => void loadCameraStill(selectedCam)}
+                    onClick={() => refreshCameraRef.current()}
                   >
                     Retry camera
                   </Button>
@@ -577,7 +747,7 @@ export function MediaCheckStep({
                     size="sm"
                     variant="secondary"
                     icon={<ArrowsClockwise size={15} />}
-                    onClick={() => void loadCameraStill(selectedCam)}
+                    onClick={() => refreshCameraRef.current()}
                   >
                     Retry camera
                   </Button>
@@ -594,14 +764,15 @@ export function MediaCheckStep({
                 </div>
                 <div className="flex flex-col items-start gap-2">
                   <p className="text-[13px] leading-relaxed text-text-2">
-                    Snapshot updates when refreshed. Check framing and lighting before going live.
+                    Checks automatically every second while open. Check framing and lighting before
+                    going live.
                   </p>
                   {selectedCam && (
                     <Button
                       size="sm"
                       variant="secondary"
                       icon={<ArrowsClockwise size={15} />}
-                      onClick={() => void loadCameraStill(selectedCam)}
+                      onClick={() => refreshCameraRef.current()}
                     >
                       Refresh frame
                     </Button>
@@ -609,15 +780,19 @@ export function MediaCheckStep({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 rounded-[12px] border border-line bg-surface-2 px-4 py-4 text-[13px] text-text-2">
-                <span>Camera connected: {selectedCam?.label}. Preview is warming up.</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line bg-surface-2 px-4 py-4 text-[13px] text-text-2">
+                <span>
+                  Waiting for your camera. An iPhone can switch off when it sleeps or locks: unlock
+                  it and keep it near. Ferrocast will pick it up again.
+                </span>
                 {selectedCam && (
                   <Button
-                    size="xs"
+                    size="sm"
                     variant="secondary"
-                    onClick={() => void loadCameraStill(selectedCam)}
+                    icon={<ArrowsClockwise size={15} />}
+                    onClick={() => refreshCameraRef.current()}
                   >
-                    Refresh
+                    Refresh frame
                   </Button>
                 )}
               </div>
@@ -637,13 +812,16 @@ export function MediaCheckStep({
                 )}
                 <h2 className="text-[15px] font-bold text-text">Microphone and level</h2>
               </div>
-              {mics.length > 1 && micAudio && (
+              {(mics.length > 1 || (mics.length > 0 && showUnavailableOption)) && micAudio && (
                 <select
                   aria-label="Choose microphone"
-                  defaultValue={mics[0]?.value ?? 'default'}
+                  value={selectedMic}
                   onChange={(e) => void switchMicDevice(e.target.value)}
                   className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                 >
+                  {showUnavailableOption && (
+                    <option value={selectedMic}>{unavailableMicLabel}</option>
+                  )}
                   {mics.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
@@ -700,6 +878,27 @@ export function MediaCheckStep({
                     />
                   </div>
                 </div>
+
+                {feedStatus === 'disconnected' ? (
+                  <div
+                    role="status"
+                    className="rounded-[10px] border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] text-text"
+                  >
+                    <p className="font-semibold">Microphone meter is not connected.</p>
+                    <p className="mt-0.5 text-text-2">
+                      Ferrocast is not receiving live audio levels from the engine yet. Continue
+                      setup to open Studio, or reopen Ferrocast and try again.
+                    </p>
+                  </div>
+                ) : (
+                  feedStatus === 'connected' &&
+                  !micSwitching &&
+                  (micAudio.muted || !heardSignal) && (
+                    <p role="status" className="text-[13px] text-text-2">
+                      No sound from {micLabel} yet. Say something, or check the mic is not muted.
+                    </p>
+                  )
+                )}
 
                 {describedMicError && (
                   <p role="alert" className="text-[13px] text-danger">

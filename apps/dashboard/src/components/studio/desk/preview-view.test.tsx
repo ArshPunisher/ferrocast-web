@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -146,6 +146,25 @@ function fakeDesk(over: Record<string, unknown> = {}) {
   const api = {
     setItemBox: vi.fn(async () => ({})),
     setItemCrop: vi.fn(async () => ({})),
+    transform: vi.fn(async () => ({
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scale_x: 1,
+      scale_y: 1,
+      alignment: 5,
+      bounds: 'stretch',
+      bounds_alignment: 5,
+      bounds_width: 1920,
+      bounds_height: 1080,
+      crop_left: 0,
+      crop_top: 0,
+      crop_right: 0,
+      crop_bottom: 0,
+      width: 1920,
+      height: 1080,
+    })),
+    setTransform: vi.fn(async () => ({})),
     select: vi.fn(async () => ({})),
     previewCursor: vi.fn(async () => ({})),
     setPreviewPaused: vi.fn(async (paused: boolean) => ({ paused })),
@@ -337,9 +356,9 @@ describe('the stage: lock, pan and pinch', () => {
     },
   ]
   function Stage() {
-    const ref = { current: null as HTMLDivElement | null }
+    const ref = useRef<HTMLDivElement | null>(null)
     const handlers = useStageEdit(ref, true)
-    return <div data-stage tabIndex={0} {...handlers} />
+    return <div ref={ref} data-stage tabIndex={0} {...handlers} />
   }
   beforeEach(() => {
     localStorage.clear()
@@ -363,9 +382,10 @@ describe('the stage: lock, pan and pinch', () => {
     act(() => set?.(v))
     act(() => r.unmount())
   }
-  const mount = async (locked: boolean) => {
+  const mount = async (locked: boolean, apiOver: Record<string, unknown> = {}) => {
     setView({ locked, zoom: 1, pan: [0, 0] })
     const { api, desk } = fakeDesk({ items: { data: items, set() {} }, flat: items })
+    Object.assign(api, apiOver)
     await act(async () =>
       root.render(
         <DeskProvider value={desk as never}>
@@ -451,5 +471,270 @@ describe('the stage: lock, pan and pinch', () => {
     act(() => void el.dispatchEvent(pointer('pointerup', { id: 2, kind: 'touch' })))
     act(() => void el.dispatchEvent(pointer('pointerup', { id: 1, kind: 'touch' })))
     expect(api.setItemBox).not.toHaveBeenCalled()
+  })
+
+  it('switches immediately between resize arrows and crop cursor on Alt press/release without pointer move', async () => {
+    const { el } = await mount(false)
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+    // Item 1 is [1920, 0, 0, 1080, 0, 0]; left-middle handle is at (0, 540).
+    act(() => void el.dispatchEvent(pointer('pointerenter', { x: 0, y: 540 })))
+    act(() => void el.dispatchEvent(pointer('pointermove', { x: 0, y: 540 })))
+    expect(el.style.cursor).toBe('ew-resize')
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Alt', altKey: true, bubbles: true }),
+      )
+    })
+    expect(el.style.cursor).toContain('url("data:image/svg+xml,')
+    expect(el.style.cursor).toContain('ew-resize')
+    expect(el.style.cursor).not.toBe('crosshair')
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Alt', altKey: false, bubbles: true }))
+    })
+    expect(el.style.cursor).toBe('ew-resize')
+
+    // Hovering inside item (960, 540) keeps move cursor even when Alt is held.
+    act(() => void el.dispatchEvent(pointer('pointermove', { x: 960, y: 540 })))
+    expect(el.style.cursor).toBe('move')
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Alt', altKey: true, bubbles: true }),
+      )
+    })
+    expect(el.style.cursor).toBe('move')
+  })
+
+  it('crops left edge inward via setTransform (moving x and shrinking bounds, never moving whole body)', async () => {
+    const { api, el } = await mount(false)
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    // Wait for api.transform() to resolve.
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const move = pointer('pointermove', { x: 150, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 150, y: 540 })))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.setTransform).toHaveBeenCalled()
+    expect(api.setItemCrop).not.toHaveBeenCalled()
+    const call = api.setTransform.mock.calls.at(-1) as unknown as [
+      string,
+      number,
+      Record<string, unknown>,
+    ]
+    expect(call[0]).toBe('Main')
+    expect(call[1]).toBe(1)
+    expect(call[2]).toMatchObject({
+      crop_left: 150,
+      crop_right: 0,
+      x: 150,
+      y: 0,
+      bounds_width: 1770,
+      bounds_height: 1080,
+    })
+  })
+
+  it('keeps deferred Alt-drag crop ordered ahead of a following ArrowRight nudge so x = crop + 1', async () => {
+    let resolveTransform!: (t: Record<string, unknown>) => void
+    const transformPromise = new Promise<Record<string, unknown>>((r) => {
+      resolveTransform = r
+    })
+    const { api, el } = await mount(false, {
+      transform: vi.fn(() => transformPromise),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    const move = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    // Release before api.transform() resolves, then immediately nudge +1 px right.
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+
+    await act(async () => {
+      resolveTransform({
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scale_x: 1,
+        scale_y: 1,
+        alignment: 5,
+        bounds: 'stretch',
+        bounds_alignment: 5,
+        bounds_width: 1920,
+        bounds_height: 1080,
+        crop_left: 0,
+        crop_top: 0,
+        crop_right: 0,
+        crop_bottom: 0,
+        width: 1920,
+        height: 1080,
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.setTransform).toHaveBeenCalledTimes(1)
+    const call = api.setTransform.mock.calls[0] as unknown as [
+      string,
+      number,
+      Record<string, unknown>,
+    ]
+    expect(call[2]).toMatchObject({
+      crop_left: 100,
+      bounds_width: 1820,
+      x: 101,
+      y: 0,
+    })
+    // Must never overwrite with a pre-crop setItemBox at (1, 0) / width 1920.
+    expect(api.setItemBox).not.toHaveBeenCalled()
+  })
+
+  it('completes a deferred Alt-drag crop cleanly when no later nudge occurs, and preserves nudge if transform read fails', async () => {
+    let resolveTransform!: (t: Record<string, unknown>) => void
+    const first = mount(false, {
+      transform: vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>((r) => {
+            resolveTransform = r
+          }),
+      ),
+    })
+    const { api, el } = await first
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    const move = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+
+    await act(async () => {
+      resolveTransform({
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scale_x: 1,
+        scale_y: 1,
+        alignment: 5,
+        bounds: 'stretch',
+        bounds_alignment: 5,
+        bounds_width: 1920,
+        bounds_height: 1080,
+        crop_left: 0,
+        crop_top: 0,
+        crop_right: 0,
+        crop_bottom: 0,
+        width: 1920,
+        height: 1080,
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.setTransform).toHaveBeenCalledWith(
+      'Main',
+      1,
+      expect.objectContaining({ crop_left: 100, x: 100, bounds_width: 1820 }),
+    )
+
+    // Failure path: if transform() rejects after ArrowRight, the nudge still applies.
+    let rejectTransform!: (e: Error) => void
+    const second = await mount(false, {
+      transform: vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>((_r, rej) => {
+            rejectTransform = rej
+          }),
+      ),
+    })
+    vi.spyOn(second.el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+    const down2 = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down2, 'altKey', { value: true })
+    act(() => void second.el.dispatchEvent(down2))
+    const move2 = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move2, 'altKey', { value: true })
+    act(() => void second.el.dispatchEvent(move2))
+    act(() => void second.el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+    act(() => {
+      second.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+    await act(async () => {
+      rejectTransform(new Error('network'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(second.api.setTransform).not.toHaveBeenCalled()
+    expect(second.api.setItemBox).toHaveBeenCalledWith(
+      'Main',
+      1,
+      expect.objectContaining({ x: 1, y: 0, w: 1920, h: 1080, save: true }),
+    )
   })
 })

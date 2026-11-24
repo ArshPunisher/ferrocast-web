@@ -54,8 +54,12 @@ export interface DemoStudioEngineOptions {
   hasCamera?: boolean
   /** The camera is there but this computer won't let the app use it (macOS privacy). */
   cameraDenied?: boolean
+  /** The camera is connected (e.g. iPhone Continuity Camera) but asleep and yielding no frame. */
+  cameraSleeping?: boolean
   hasMic?: boolean
   micPreset?: DemoMicPreset
+  /** False simulates an unstarted engine whose `/levels` returns `{}` (meter not connected). */
+  levelsConnected?: boolean
   running?: boolean
   /** Benchmark machine profile in demo mode. */
   benchProfile?: DemoBenchProfile
@@ -649,8 +653,10 @@ export class DemoStudioEngine {
       streamlabsPreset: opts.streamlabsPreset ?? 'normal',
       hasCamera: opts.hasCamera ?? true,
       cameraDenied: opts.cameraDenied ?? false,
+      cameraSleeping: opts.cameraSleeping ?? false,
       hasMic: opts.hasMic ?? true,
       micPreset: opts.micPreset ?? 'quiet',
+      levelsConnected: opts.levelsConnected ?? true,
       running: opts.running ?? false,
       benchProfile: opts.benchProfile ?? 'apple_vt',
       benchStepMs: opts.benchStepMs ?? 180,
@@ -2764,6 +2770,7 @@ export class DemoStudioEngine {
     }
 
     if (is('POST', 'studio/engine/levels')) {
+      if (!this.opts.levelsConnected) return {}
       const b = requireObj(body)
       const names = Array.isArray(b.names) ? b.names.map(String) : []
       const out: Record<string, EngineLevel> = {}
@@ -3651,6 +3658,7 @@ export class DemoStudioEngine {
         error:
           'The camera is turned off for Ferrocast. Open System Settings, Privacy & Security, Camera, turn Ferrocast on, then press Retry.',
       }
+    if (this.opts.cameraSleeping) return { image: null }
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
   }
 

@@ -44,6 +44,7 @@ import {
   type EngineItem,
   type EngineSettings,
   type EngineStudioOptions,
+  type EngineTransform,
   type EngineTransition,
   type PreviewRect,
   type SafeModeStatus,
@@ -101,16 +102,17 @@ import {
   MOVE,
   at,
   boxOf,
+  cropCursorFor,
+  croppedFrame,
+  cropTransform,
   cursorFor,
   drag,
   addsToPick,
-  cropDrag,
   fit,
   gripAt,
   inside,
   pick,
   type Box,
-  type Crop,
   type Frame,
   type Grip,
   type Pt,
@@ -1272,6 +1274,7 @@ function TBar() {
 /** A drag in the preview: the item, the box and pointer it started from, and the handle. */
 interface Held {
   id: number
+  scene: string
   from: Frame
   start: Pt
   grip: Grip
@@ -1280,9 +1283,16 @@ interface Held {
   last: Box | null
   /** Other sources picked with it, moved by the same amount (OBS's multi-select). */
   others: { id: number; from: Frame }[]
-  /** Alt held on a handle: cropping, from this crop and source size once they're read. */
-  crop: { from: Crop; size: { width: number; height: number } } | null | 'reading'
-  lastCrop: Crop | null
+  /** Alt held on a handle: cropping, from the initial transform once it's read. */
+  crop: { from: EngineTransform } | null | 'reading'
+  cropRead?: Promise<EngineTransform | null>
+  cropSettled?: Promise<void>
+  cropDone?: () => void
+  cropSeq?: number
+  lastDelta: Pt | null
+  lastTransform: EngineTransform | null
+  postShift: Pt
+  aborted: boolean
   /** A handle of the box round several picked sources: they are sized together, from these. */
   group?: { items: { id: number; frame: Frame; locked: boolean }[]; rect: Rect }
   /** The boxes of the last step of a group drag, for the step that saves. */
@@ -1292,7 +1302,10 @@ interface Held {
 /** What the next request for a source does (the newest replaces an older one). Several at once
  * (`boxes`) are one request, one undo step. */
 type JobBody =
-  { box: Box; save: boolean } | { crop: Crop; save: boolean } | { boxes: BoxFor[]; save: boolean }
+  | { box: Box; save: boolean }
+  | { transform: EngineTransform; save: boolean }
+  | { pendingCrop: Held; id: number; save: boolean }
+  | { boxes: BoxFor[]; save: boolean }
 
 /** A request waiting its turn: for which scene (the picked one may change before it is sent),
  * and for which source when it is a single one. */
@@ -1361,6 +1374,15 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   // Every source's outline shows while the pointer is over the preview (as OBS's hover
   // outlines), and goes when it leaves: a click elsewhere leaves only what's picked.
   const [over, setOver] = useState(false)
+  const stageEl = useRef<HTMLDivElement | null>(null)
+  const lastPointer = useRef<{ clientX: number; clientY: number; pointerType?: string } | null>(
+    null,
+  )
+  const altHeld = useRef(false)
+  const refreshCursorRef = useRef<(alt: boolean) => void>(() => undefined)
+  const pendingCrops = useRef(new Map<string, Held>())
+  const pendingFrames = useRef(new Map<string, Frame>())
+  const cropSeq = useRef(0)
   const sending = useRef<{ busy: boolean; next: Map<string, Job> }>({
     busy: false,
     next: new Map(),
@@ -1425,7 +1447,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     }
   }
 
-  const put = (item: EngineItem) =>
+  const put = (item: Pick<EngineItem, 'id' | 'frame'>) =>
     items.set((prev) =>
       (prev ?? []).map((i) => {
         const one = (x: EngineItem) =>
@@ -1433,6 +1455,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         return { ...one(i), children: i.children.map(one) }
       }),
     )
+
+  useEffect(() => {
+    if (!sending.current.busy && sending.current.next.size === 0) {
+      pendingFrames.current.clear()
+    }
+  }, [items.data, scene, on])
 
   // One request on the way at a time; for each source the newest waits and replaces older ones.
   const sceneNow = useRef(scene)
@@ -1446,12 +1474,51 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     q.next.delete(key)
     q.busy = true
     // To the scene it was asked for in, whichever is picked by now.
-    const go: Promise<EngineItem | EngineItem[]> =
-      'boxes' in job
-        ? api.setItemBoxes(job.scene, { items: job.boxes, save: job.save })
-        : 'box' in job
-          ? api.setItemBox(job.scene, job.id ?? 0, { ...job.box, save: job.save })
-          : api.setItemCrop(job.scene, job.id ?? 0, { ...job.crop, save: job.save })
+    const execute = async (): Promise<EngineItem | EngineItem[]> => {
+      if ('boxes' in job) {
+        return api.setItemBoxes(job.scene, { items: job.boxes, save: job.save })
+      }
+      if ('box' in job) {
+        return api.setItemBox(job.scene, job.id ?? 0, { ...job.box, save: job.save })
+      }
+      if ('pendingCrop' in job) {
+        const pc = job.pendingCrop
+        const k = queueKey(job.scene, pc.id)
+        try {
+          const t = await (pc.cropRead ?? Promise.resolve(null))
+          pendingCrops.current.delete(k)
+          if (!t || pc.aborted || !pc.lastDelta) {
+            if (pc.postShift.x !== 0 || pc.postShift.y !== 0) {
+              const b = boxOf(pc.from)
+              return await api.setItemBox(job.scene, pc.id, {
+                ...b,
+                x: b.x + pc.postShift.x,
+                y: b.y + pc.postShift.y,
+                save: true,
+              })
+            }
+            return []
+          }
+          const cropped = cropTransform(pc.from, pc.grip, pc.lastDelta, t)
+          const next: EngineTransform =
+            pc.postShift.x !== 0 || pc.postShift.y !== 0
+              ? { ...cropped, x: cropped.x + pc.postShift.x, y: cropped.y + pc.postShift.y }
+              : cropped
+          pc.lastTransform = next
+          const cf = croppedFrame(pc.from, t, next)
+          pendingFrames.current.set(k, cf)
+          if (job.scene === sceneNow.current && !queuedIds(sending.current.next).has(pc.id)) {
+            put({ id: pc.id, frame: cf })
+          }
+          return await api.setTransform(job.scene, pc.id, next)
+        } finally {
+          pendingCrops.current.delete(k)
+          pc.cropDone?.()
+        }
+      }
+      return api.setTransform(job.scene, job.id ?? 0, job.transform)
+    }
+    const go = execute()
     const done = job.save ? run('move', () => go) : go.catch(() => undefined)
     void done
       .then((res) => {
@@ -1460,23 +1527,32 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         if (job.scene !== sceneNow.current) return
         const waiting = queuedIds(sending.current.next)
         for (const item of Array.isArray(res) ? res : res ? [res] : []) {
-          if (!waiting.has(item.id)) put(item)
+          if (!waiting.has(item.id)) {
+            pendingFrames.current.delete(queueKey(job.scene, item.id))
+            put(item)
+          }
         }
       })
       .finally(() => {
         q.busy = false
+        if (q.next.size === 0) pendingFrames.current.clear()
         pump()
       })
   }
-  const queue = (key: number | string, job: JobBody) => {
+  const queue = (key: number | string, job: JobBody, forScene = scene) => {
     const q = sending.current
-    const k = queueKey(scene, key)
+    const k = queueKey(forScene, key)
     // A newer request replaces an older one for the same source(s), keeping a save; requests
     // that overlap are sent in the order they were made.
-    enqueueJob(q.next, k, { ...job, scene, ...(typeof key === 'number' ? { id: key } : {}) })
+    enqueueJob(q.next, k, {
+      ...job,
+      scene: forScene,
+      ...(typeof key === 'number' ? { id: key } : {}),
+    })
     pump()
   }
-  const send = (id: number, b: Box, save: boolean) => queue(id, { box: b, save })
+  const send = (id: number, b: Box, save: boolean, forScene = scene) =>
+    queue(id, { box: b, save }, forScene)
 
   const frameOf = (id: number | null) => flat.find((i) => i.id === id)?.frame ?? null
   const pickedIds = [selected, ...also].filter((id): id is number => id !== null)
@@ -1484,7 +1560,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
   // Where every source of the drag goes: the held one by the drag, the others by as much. Several
   // go in one request, so the whole drag is one undo step.
   const moveAll = (h: Held, b: Box, save: boolean) => {
-    if (h.others.length === 0) return send(h.id, b, save)
+    if (h.others.length === 0) return send(h.id, b, save, h.scene)
     const dx = b.x - h.from[4]
     const dy = b.y - h.from[5]
     const boxes: BoxFor[] = [{ id: h.id, ...b }]
@@ -1492,13 +1568,20 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       const ob = boxOf(o.from)
       boxes.push({ id: o.id, ...ob, x: ob.x + dx, y: ob.y + dy })
     }
-    queue(manyKey(boxes), { boxes, save })
+    queue(manyKey(boxes), { boxes, save }, h.scene)
   }
   const finish = (h: Held | null) => {
     clearHints()
     if (!h?.moved) return
-    if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true })
-    else if (h.group && h.lastBoxes) queue(manyKey(h.lastBoxes), { boxes: h.lastBoxes, save: true })
+    if (h.crop === 'reading') {
+      pendingCrops.current.set(queueKey(h.scene, h.id), h)
+      const seq = (h.cropSeq ??= ++cropSeq.current)
+      queue(`crop:${h.id}:${seq}`, { pendingCrop: h, id: h.id, save: true }, h.scene)
+      return
+    }
+    if (h.lastTransform) queue(h.id, { transform: h.lastTransform, save: true }, h.scene)
+    else if (h.group && h.lastBoxes)
+      queue(manyKey(h.lastBoxes), { boxes: h.lastBoxes, save: true }, h.scene)
     else if (h.last) moveAll(h, h.last, true)
   }
 
@@ -1509,11 +1592,13 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     marquee.current = null
     const h = held.current
     held.current = null
-    if (!h?.moved) return
-    // A crop goes back to the one the drag started with (nothing read yet: nothing was changed).
-    if (h.crop || h.lastCrop) {
+    if (!h) return
+    h.aborted = true
+    if (!h.moved) return
+    // A crop goes back to the transform the drag started with (nothing read yet: nothing changed).
+    if (h.crop || h.lastTransform) {
       const original = revertCrop(h.crop)
-      if (original && h.lastCrop) queue(h.id, { crop: original, save: true })
+      if (original && h.lastTransform) queue(h.id, { transform: original, save: true })
       return
     }
     const boxes = revertBoxes(h)
@@ -1553,12 +1638,90 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     })
   }
 
+  const hoverCursorAt = (w: { p: Pt; reach: number; least: number }, alt: boolean) => {
+    if (space.current) return { css: 'grab', native: 'grab' }
+    if (pv.locked) {
+      const hit = pick(list, w.p) ? 'pointer' : ''
+      return { css: hit, native: hit }
+    }
+    const f = frameOf(selected)
+    const g = f ? gripAt(f, w.p, w.reach, w.least) : null
+    // The box round several picked has handles and a middle that moves it.
+    const gf = groupRect ? groupFrame(groupRect) : null
+    const gg = gf && !alt ? gripAt(gf, w.p, w.reach, w.least) : null
+    if (gf && gg) {
+      const css = cursorFor(gf, gg)
+      return { css, native: css }
+    }
+    if (g && g.u >= 0 && f) {
+      return { css: cropCursorFor(f, g, alt), native: cursorFor(f, g) }
+    }
+    if (gf && inside(gf, w.p) && !pick(list, w.p)) {
+      return { css: 'move', native: 'move' }
+    }
+    if ((f && inside(f, w.p)) || g) {
+      return { css: 'move', native: 'move' }
+    }
+    const overAny = pick(list, w.p) ? 'pointer' : ''
+    return { css: overAny, native: overAny }
+  }
+
+  refreshCursorRef.current = (alt: boolean) => {
+    altHeld.current = alt
+    if (
+      held.current ||
+      panning.current ||
+      marquee.current ||
+      !lastPointer.current ||
+      !stageEl.current
+    )
+      return
+    const w = where(lastPointer.current)
+    if (!w) return
+    const cur = hoverCursorAt(w, alt)
+    stageEl.current.style.cursor = cur.css
+    tellNative(cur.native)
+  }
+
+  useEffect(() => {
+    if (!on) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Alt' || e.altKey !== altHeld.current) {
+        refreshCursorRef.current(e.altKey)
+      }
+    }
+    const onWindowBlur = () => {
+      space.current = false
+      refreshCursorRef.current(false)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+  }, [on])
+
   if (!on || !canvas) return {}
   return {
     tabIndex: 0,
-    onPointerEnter: () => setOver(true),
+    onPointerEnter: (e: PointerEvent<HTMLDivElement>) => {
+      stageEl.current = e.currentTarget
+      lastPointer.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerType: e.pointerType,
+      }
+      setOver(true)
+      refreshCursorRef.current(e.altKey)
+    },
     onPointerLeave: () => {
-      if (!held.current) setOver(false)
+      if (!held.current) {
+        setOver(false)
+        lastPointer.current = null
+      }
       tellNative('')
     },
     // Right-click: the Sources panel's menu for what's under the pointer, as in OBS (never the
@@ -1580,6 +1743,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       itemMenu.current?.(e, target?.id ?? null)
     },
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      stageEl.current = e.currentTarget
+      lastPointer.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerType: e.pointerType,
+      }
       if (e.pointerType === 'touch') {
         touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
         if (touches.current.size === 2) {
@@ -1633,6 +1802,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           const items = together.filter((i) => !i.locked)
           held.current = {
             id: items[0]?.id ?? 0,
+            scene,
             from: groupFrame(groupRect),
             start: w.p,
             grip: g,
@@ -1640,7 +1810,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
             last: null,
             others: [],
             crop: null,
-            lastCrop: null,
+            lastDelta: null,
+            lastTransform: null,
+            postShift: { x: 0, y: 0 },
+            aborted: false,
             group: { items, rect: groupRect },
           }
           return
@@ -1686,9 +1859,13 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (target.locked || pv.locked) return
       e.currentTarget.setPointerCapture(e.pointerId)
       const cropping = e.altKey && grip.u >= 0
+      const k = queueKey(scene, target.id)
+      const prevCrop = pendingCrops.current.get(k)
+      const baseFrame = pendingFrames.current.get(k) ?? target.frame
       const h: Held = {
         id: target.id,
-        from: target.frame,
+        scene,
+        from: baseFrame,
         start: w.p,
         grip,
         moved: false,
@@ -1705,27 +1882,35 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
               )
             : [],
         crop: cropping ? 'reading' : null,
-        lastCrop: null,
+        lastDelta: null,
+        lastTransform: null,
+        postShift: { x: 0, y: 0 },
+        aborted: false,
       }
       held.current = h
       if (cropping) {
-        // The crop and the source's own size, to work the drag out in its pixels.
-        void api
-          .transform(scene, target.id)
+        h.cropSettled = new Promise<void>((resolve) => {
+          h.cropDone = resolve
+        })
+        // The initial transform and source size, to compute both crop and anchored position.
+        const readInitial = () => api.transform(scene, target.id)
+        const pendingRead = prevCrop?.cropSettled
+          ? prevCrop.cropSettled.then(readInitial)
+          : readInitial()
+        h.cropRead = pendingRead
           .then((t) => {
-            if (held.current !== h) return
-            h.crop = {
-              from: {
-                left: t.crop_left,
-                top: t.crop_top,
-                right: t.crop_right,
-                bottom: t.crop_bottom,
-              },
-              size: { width: t.width, height: t.height },
+            if (h.aborted || held.current !== h) return t
+            h.crop = { from: t }
+            if (h.moved && h.lastDelta) {
+              const next = cropTransform(h.from, h.grip, h.lastDelta, t)
+              h.lastTransform = next
+              queue(h.id, { transform: next, save: false }, h.scene)
             }
+            return t
           })
           .catch(() => {
             if (held.current === h) h.crop = null
+            return null
           })
       }
     },
@@ -1752,6 +1937,13 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         viewSet({ pan: [from.pan[0] + e.clientX - from.x, from.pan[1] + e.clientY - from.y] })
         return
       }
+      stageEl.current = e.currentTarget
+      lastPointer.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerType: e.pointerType,
+      }
+      altHeld.current = e.altKey
       const w = where(e)
       if (!w) return
       const m = marquee.current
@@ -1768,42 +1960,20 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       const h = held.current
       if (!h) {
-        // The cursor says what a press would do.
-        const f = frameOf(selected)
-        const g = f ? gripAt(f, w.p, w.reach, w.least) : null
-        // The box round several picked has handles and a middle that moves it.
-        const gf = groupRect ? groupFrame(groupRect) : null
-        const gg = gf && !e.altKey ? gripAt(gf, w.p, w.reach, w.least) : null
-        const over =
-          gf && gg
-            ? cursorFor(gf, gg)
-            : gf && inside(gf, w.p) && !pick(list, w.p)
-              ? 'move'
-              : pv.locked
-                ? pick(list, w.p)
-                  ? 'pointer'
-                  : ''
-                : g
-                  ? e.altKey
-                    ? 'crosshair'
-                    : cursorFor(f as Frame, g)
-                  : f && inside(f, w.p)
-                    ? 'move'
-                    : pick(list, w.p)
-                      ? 'pointer'
-                      : ''
-        e.currentTarget.style.cursor = over
-        tellNative(over)
+        const cur = hoverCursorAt(w, e.altKey)
+        e.currentTarget.style.cursor = cur.css
+        tellNative(cur.native)
         return
       }
       const d = { x: w.p.x - h.start.x, y: w.p.y - h.start.y }
       if (!h.moved && Math.hypot(d.x, d.y) < w.still) return
       h.moved = true
       if (h.crop) {
+        h.lastDelta = d
         if (h.crop === 'reading') return
-        const c = cropDrag(h.from, h.grip, d, h.crop.from, h.crop.size)
-        h.lastCrop = c
-        queue(h.id, { crop: c, save: false })
+        const next = cropTransform(h.from, h.grip, d, h.crop.from)
+        h.lastTransform = next
+        queue(h.id, { transform: next, save: false })
         return
       }
       // Alt (Option) held: no snapping this once, as in OBS.
@@ -1886,6 +2056,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (e.currentTarget.hasPointerCapture(e.pointerId))
         e.currentTarget.releasePointerCapture(e.pointerId)
       finish(h)
+      lastPointer.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerType: e.pointerType,
+      }
+      refreshCursorRef.current(e.altKey)
     },
     // The browser or system took the pointer away without a pointerup or cancel (a system
     // dialog, Alt-Tab): a drag left hanging is saved as it is, not left on screen.
@@ -1959,11 +2135,20 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       e.preventDefault()
       const boxes: BoxFor[] = []
       for (const it of moving) {
-        const f = it.frame as Frame
+        const k = queueKey(scene, it.id)
+        const f = (pendingFrames.current.get(k) ?? it.frame) as Frame
         const b = boxOf(f)
+        const shifted: Frame = [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y]
         // Moved here at once, so a held key builds on each step before the engine answers.
-        put({ ...it, frame: [f[0], f[1], f[2], f[3], f[4] + d.x, f[5] + d.y] })
-        boxes.push({ id: it.id, ...b, x: b.x + d.x, y: b.y + d.y })
+        put({ id: it.id, frame: shifted })
+        pendingFrames.current.set(k, shifted)
+        const pc = pendingCrops.current.get(k)
+        if (pc) {
+          pc.postShift.x += d.x
+          pc.postShift.y += d.y
+        } else {
+          boxes.push({ id: it.id, ...b, x: b.x + d.x, y: b.y + d.y })
+        }
       }
       // One request for all of them, so a nudge of several is one undo step.
       if (boxes.length > 1) queue(manyKey(boxes), { boxes, save: true })
