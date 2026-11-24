@@ -801,7 +801,7 @@ function RuleEditor({
   return (
     <div
       data-testid="alert-editor"
-      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px))] lg:overflow-hidden"
+      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
     >
       {/* Top bar: where I am, what is unsaved, and the ways out. */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">
@@ -816,7 +816,7 @@ function RuleEditor({
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           className="min-w-[8rem] flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-0.5 font-display text-lg font-bold tracking-tight text-text hover:border-line focus:border-accent-text focus:outline-none lg:w-40 lg:flex-none xl:w-52"
         />
-        <div className="inline-flex h-8 shrink-0 items-center rounded-full border border-line-strong bg-surface-2 pr-1.5 pl-3">
+        <div className="inline-flex h-8 shrink-0 items-center self-center rounded-full border border-line-strong bg-surface-2 pr-1.5 pl-3 [&_label]:leading-none">
           {/* The switch is the state (a screen reader hears "Rule, switch, on"). */}
           <Switch checked={rule.enabled} onChange={onToggle} label="Rule" />
         </div>
@@ -888,15 +888,15 @@ function RuleEditor({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
         {/* Left dock: the alert rules, and this rule's looks. */}
         <div
-          className="relative order-2 min-w-0 lg:order-none lg:w-[var(--dock-l)] lg:shrink-0"
+          className="relative order-2 min-w-0 lg:order-none lg:h-full lg:min-h-0 lg:w-[var(--dock-l)] lg:shrink-0"
           style={{ '--dock-l': `${leftDock.width}px` } as React.CSSProperties}
         >
           <aside
             aria-label="Alert rules and looks"
-            className="fc-scroll flex min-w-0 flex-col gap-3 border-b border-line bg-surface-1 p-3 lg:h-full lg:overflow-y-auto lg:border-r lg:border-b-0"
+            className="fc-scroll flex min-w-0 flex-col gap-3 border-b border-line bg-surface-1 p-3 lg:h-full lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto lg:border-r lg:border-b-0"
           >
             <RuleList list={rules} selectedId={rule.id} />
             <div className="border-t border-line pt-3">
@@ -929,9 +929,9 @@ function RuleEditor({
         {/* Centre: the live stage and, right under it, the timeline. */}
         <section
           aria-label="Live preview"
-          className="fc-scroll order-1 flex min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
+          className="fc-scroll order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
         >
-          <div className="relative">
+          <div className="relative mx-auto w-full shrink-0 lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
             <AlertStage
               alert={preview}
               theme="molten"
@@ -946,13 +946,13 @@ function RuleEditor({
                 : {})}
             />
             {/* On the stage: which platform's sample to preview, replay and sound, what it is. */}
-            <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-2">
+            <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start justify-between gap-1.5">
               <div
                 role="group"
                 aria-label="Preview"
-                className="pointer-events-auto inline-flex items-center gap-1 rounded-[10px] bg-black/60 p-1 pl-2.5"
+                className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-line-strong bg-surface-1/95 p-1 pl-2.5 text-text shadow-1 backdrop-blur-sm"
               >
-                <span aria-hidden="true" className="mr-1 text-[12.5px] font-semibold text-white/90">
+                <span aria-hidden="true" className="mr-1 text-[12.5px] font-semibold text-text">
                   Preview
                 </span>
                 {(['twitch', 'youtube', 'kick', 'tips'] as Platform[]).map((p) => {
@@ -973,10 +973,10 @@ function RuleEditor({
                       disabled={!supported}
                       onClick={() => firePlatformTest(p)}
                       className={cx(
-                        'fc-press grid size-8 place-items-center rounded-[8px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40',
+                        'fc-press grid size-7 place-items-center rounded-[7px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:size-8',
                         active
-                          ? 'border-white/70 bg-white/25'
-                          : 'border-white/15 bg-white/5 hover:bg-white/15',
+                          ? 'border-pick bg-surface-1 ring-2 ring-pick'
+                          : 'border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3',
                       )}
                     >
                       <PlatformMark platform={p} size={15} />
@@ -988,7 +988,7 @@ function RuleEditor({
                 <button
                   type="button"
                   onClick={() => setReplay((n) => n + 1)}
-                  className="fc-press inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] font-semibold text-white hover:bg-black/75 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                  className="fc-press inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text shadow-1 backdrop-blur-sm hover:border-text-3 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:h-9 sm:px-3 sm:text-[14px]"
                 >
                   <ArrowCounterClockwise size={15} aria-hidden="true" />
                   Replay
@@ -1002,7 +1002,7 @@ function RuleEditor({
                       unlockAudio()
                       setSound((x) => !x)
                     }}
-                    className="fc-press inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] font-semibold text-white hover:bg-black/75 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    className="fc-press inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text shadow-1 backdrop-blur-sm hover:border-text-3 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:h-9 sm:px-3 sm:text-[14px]"
                   >
                     {sound ? (
                       <SpeakerHigh size={15} aria-hidden="true" />
@@ -1054,7 +1054,7 @@ function RuleEditor({
 
         {/* Right dock: collapsible property groups for the look picked on the left. */}
         <div
-          className="relative order-3 min-w-0 lg:order-none lg:w-[var(--dock-r)] lg:shrink-0"
+          className="relative order-3 min-w-0 lg:order-none lg:h-full lg:min-h-0 lg:w-[var(--dock-r)] lg:shrink-0"
           style={{ '--dock-r': `${rightDock.width}px` } as React.CSSProperties}
         >
           <DockHandle
@@ -1069,7 +1069,7 @@ function RuleEditor({
           />
           <aside
             aria-label="Look properties"
-            className="fc-scroll flex min-w-0 flex-col gap-2.5 border-t border-line bg-surface-1 p-3 lg:h-full lg:overflow-y-auto lg:border-t-0 lg:border-l"
+            className="fc-scroll flex min-w-0 flex-col gap-2.5 border-t border-line bg-surface-1 p-3 lg:h-full lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto lg:border-t-0 lg:border-l"
           >
             <div className="flex items-center justify-between gap-3 border-b border-line pb-2.5">
               <Switch

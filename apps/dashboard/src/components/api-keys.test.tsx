@@ -321,4 +321,22 @@ describe('ApiKeysSection', () => {
     expect(findBtn('Copied')).toBeDefined()
     expect(findBtn('Copy key')).toBeUndefined()
   })
+
+  it('renders header padding and compact empty state when zero keys exist', async () => {
+    const { host } = await mount({ apiKeys: vi.fn(async () => ({ keys: [], audit: [] })) })
+    expect(host.textContent).toContain('0 of 32 active keys')
+    expect(host.textContent).toContain('No API keys yet')
+    const createBtn = Array.from(host.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Create API key'),
+    )!
+    const header = createBtn.parentElement!
+    expect(header.className).toContain('px-4')
+    expect(header.className).toContain('sm:px-5')
+    const emptyTitle = Array.from(host.querySelectorAll('p')).find(
+      (p) => p.textContent?.trim() === 'No API keys yet',
+    )!
+    const emptyCard = emptyTitle.closest('div[class*="border-dashed"]')!
+    expect(emptyCard).not.toBeNull()
+    expect(emptyCard.className).toContain('py-3.5')
+  })
 })

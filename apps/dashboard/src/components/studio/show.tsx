@@ -8,6 +8,7 @@ import {
   describeError,
   fieldError,
   type AtZero,
+  type CheckStatus,
   type Preflight,
   type PreflightCheck,
   type ShowConfig,
@@ -210,68 +211,194 @@ export function useShow(): [ShowRun | null | undefined, (r: ShowRun | null) => v
   return [live !== undefined ? live : loaded, setShow]
 }
 
-export function PreflightList({ pf, onFixed }: { pf: Preflight; onFixed: (p: Preflight) => void }) {
+const CHECK_META: Record<
+  CheckStatus,
+  { word: string; badgeCls: string; tileCls: string; iconWrapCls: string }
+> = {
+  ok: {
+    word: 'Ready',
+    badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
+    tileCls: 'border-line bg-surface-1',
+    iconWrapCls: 'border-ok/25 bg-ok-soft text-ok',
+  },
+  warn: {
+    word: 'Warning',
+    badgeCls: 'border border-warn/45 bg-surface-1 text-warn',
+    tileCls: 'border-warn/40 bg-warn-soft/35',
+    iconWrapCls: 'border-warn/35 bg-warn-soft text-warn',
+  },
+  fail: {
+    word: 'Problem',
+    badgeCls: 'border border-danger/40 bg-surface-1 text-danger',
+    tileCls: 'border-danger/40 bg-danger-soft/45',
+    iconWrapCls: 'border-danger/35 bg-danger-soft text-danger',
+  },
+  skip: {
+    word: 'Skipped',
+    badgeCls: 'border border-line bg-surface-1 text-text-2',
+    tileCls: 'border-line bg-surface-2/70',
+    iconWrapCls: 'border-line bg-surface-2 text-text-3',
+  },
+}
+
+function preflightSummaryText(
+  pf: Preflight,
+  issueCount: number,
+  okCount: number,
+  skipCount: number,
+): string {
+  if (pf.checks.length === 0) return 'No checks configured.'
+  if (issueCount === 0) {
+    if (okCount === 0 && skipCount > 0) {
+      return `${skipCount} ${skipCount === 1 ? 'check' : 'checks'} skipped. Ready to start.`
+    }
+    if (skipCount > 0) {
+      return `${okCount} passed, ${skipCount} skipped. Ready to start.`
+    }
+    return okCount === 1
+      ? 'Check passed. Ready to start.'
+      : `All ${okCount} checks passed. Ready to start.`
+  }
+  const issueWord = issueCount === 1 ? '1 item needs' : `${issueCount} items need`
+  const otherParts = [
+    okCount > 0 ? `${okCount} passed` : null,
+    skipCount > 0 ? `${skipCount} skipped` : null,
+  ].filter(Boolean)
+  const tail = pf.ready
+    ? 'Optional items can be fixed below.'
+    : 'Fix the red items, or start anyway.'
+  return otherParts.length > 0
+    ? `${issueWord} attention, ${otherParts.join(', ')}. ${tail}`
+    : `${issueWord} attention. ${tail}`
+}
+
+export function PreflightList({
+  pf,
+  onFixed,
+  onNavigate,
+}: {
+  pf: Preflight
+  onFixed: (p: Preflight) => void
+  onNavigate?: (() => void) | undefined
+}) {
   const studio = useStudio()
   const { run, busy } = useAction()
-  const row = (c: PreflightCheck) => (
-    <li
-      key={c.id}
-      className="flex flex-col gap-1.5 rounded-control px-1 py-2 sm:flex-row sm:items-start sm:gap-3"
-    >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
-        <StatusIcon status={c.status} className="mt-0.5" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-text">{c.label}</p>
-          <p className="text-[14.5px] break-words text-text-2">{c.detail}</p>
+  const goTo = (href: string) => {
+    onNavigate?.()
+    const target = href.startsWith('#') ? href : `#${href.replace(/^\/?/, '/')}`
+    window.location.hash = target
+  }
+  const row = (c: PreflightCheck) => {
+    const meta = CHECK_META[c.status]
+    const detail = c.detail.trim()
+    return (
+      <li
+        key={c.id}
+        data-preflight-tile={c.id}
+        className={cx(
+          'flex flex-col gap-2.5 rounded-[12px] border p-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3',
+          meta.tileCls,
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span
+            aria-hidden="true"
+            className={cx(
+              'grid size-9 shrink-0 place-items-center rounded-[10px] border',
+              meta.iconWrapCls,
+            )}
+          >
+            <StatusIcon status={c.status} size={18} decorative />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[14.5px] font-semibold text-text">{c.label}</p>
+              <span
+                className={cx(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold',
+                  meta.badgeCls,
+                )}
+              >
+                <StatusIcon status={c.status} size={12} decorative />
+                <span>{meta.word}</span>
+              </span>
+            </div>
+            {detail && (
+              <p
+                data-tile-detail
+                className="mt-1 text-[13.5px] leading-snug break-words text-text-2"
+              >
+                {detail}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-      {c.fix && (
-        <div className="shrink-0 pl-[30px] sm:pl-0">
-          {c.fix.href.startsWith('action:') ? (
-            <Button
-              size="sm"
-              busy={busy === c.id}
-              onClick={() =>
-                void run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' }).then(
-                  (p) => p && onFixed(p),
-                )
-              }
-            >
-              {c.fix.label}
-            </Button>
-          ) : (
-            <a
-              href={c.fix.href}
-              className="-ml-2 inline-block rounded-control px-2 py-1 text-[14.5px] font-semibold text-accent-text hover:bg-surface-2 sm:ml-0"
-            >
-              {c.fix.label}
-            </a>
-          )}
-        </div>
-      )}
-    </li>
-  )
-  // Problems first; the checks that passed fold away so the fixes stand out.
+        {c.fix && (
+          <div className="flex shrink-0 justify-end pl-12 sm:pl-0">
+            {c.fix.href.startsWith('action:') ? (
+              <Button
+                size="sm"
+                variant="outline"
+                busy={busy === c.id}
+                onClick={() =>
+                  void run(c.id, () => studio.preflightFix(c.fix!.href), {
+                    success: 'Fixed.',
+                  }).then((p) => p && onFixed(p))
+                }
+              >
+                {c.fix.label}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => goTo(c.fix!.href)}>
+                {c.fix.label}
+              </Button>
+            )}
+          </div>
+        )}
+      </li>
+    )
+  }
+  // Problems first; the checks that passed or skipped fold cleanly under a matching bordered bar.
   const issues = pf.checks.filter((c) => c.status === 'fail' || c.status === 'warn')
+  const okChecks = pf.checks.filter((c) => c.status === 'ok')
+  const skippedChecks = pf.checks.filter((c) => c.status === 'skip')
   const fine = pf.checks.filter((c) => c.status !== 'fail' && c.status !== 'warn')
+  const fineSummary =
+    skippedChecks.length > 0 && okChecks.length > 0
+      ? `${okChecks.length} passed, ${skippedChecks.length} skipped`
+      : skippedChecks.length > 0
+        ? `${skippedChecks.length} ${skippedChecks.length === 1 ? 'check' : 'checks'} skipped`
+        : `${okChecks.length} ${okChecks.length === 1 ? 'check' : 'checks'} passed`
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-3">
+      <p
+        data-preflight-summary
+        role="status"
+        className="rounded-[12px] border border-line bg-surface-2 px-3.5 py-2.5 text-[13.5px] font-medium text-text-2"
+      >
+        {preflightSummaryText(pf, issues.length, okChecks.length, skippedChecks.length)}
+      </p>
       {issues.length > 0 && (
-        <ul className="flex flex-col gap-1" aria-label="Pre-flight problems">
+        <ul className="flex flex-col gap-2.5" aria-label="Pre-flight problems">
           {issues.map(row)}
         </ul>
       )}
-      {fine.length > 0 && (
-        <details className="rounded-control" open={issues.length === 0}>
-          <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1 py-2 text-[14.5px] font-medium text-text-2 hover:text-text">
-            <StatusIcon status="ok" />
-            {fine.length} {fine.length === 1 ? 'check' : 'checks'} passed
-          </summary>
-          <ul className="flex flex-col gap-1" aria-label="Pre-flight checks that passed">
+      {fine.length > 0 &&
+        (issues.length === 0 ? (
+          <ul className="flex flex-col gap-2.5" aria-label="Pre-flight checks that passed">
             {fine.map(row)}
           </ul>
-        </details>
-      )}
+        ) : (
+          <details className="rounded-[12px] border border-line bg-surface-2/60 p-2.5">
+            <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1.5 py-1 text-[13.5px] font-semibold text-text-2 hover:text-text">
+              <StatusIcon status={okChecks.length > 0 ? 'ok' : 'skip'} size={16} decorative />
+              <span>{fineSummary}</span>
+            </summary>
+            <ul className="mt-2.5 flex flex-col gap-2.5" aria-label="Pre-flight checks that passed">
+              {fine.map(row)}
+            </ul>
+          </details>
+        ))}
     </div>
   )
 }
@@ -302,6 +429,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
     <Dialog
       open={open}
       onClose={onClose}
+      size="lg"
       title="Start show"
       description="Checks first, then your go-live checklist runs."
       footer={
@@ -333,14 +461,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
       ) : !pf ? (
         <Skeleton className="h-40" />
       ) : (
-        <>
-          {!pf.ready && (
-            <p role="status" className="mb-2 text-[14.5px] font-medium text-text-2">
-              Fix the red items, or start anyway.
-            </p>
-          )}
-          <PreflightList pf={pf} onFixed={setPf} />
-        </>
+        <PreflightList pf={pf} onFixed={setPf} onNavigate={onClose} />
       )}
     </Dialog>
   )

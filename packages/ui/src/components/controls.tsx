@@ -136,7 +136,7 @@ export function Switch({
   const auto = useId()
   const sid = id ?? auto
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className={cx('flex justify-between gap-4', description ? 'items-start' : 'items-center')}>
       {!hideLabel && (
         <div className="flex min-w-0 items-center gap-1">
           <label htmlFor={sid} className="text-sm font-medium text-text">
@@ -154,7 +154,8 @@ export function Switch({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cx(
-          'relative mt-0.5 h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
+          'relative h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
+          description && 'mt-0.5',
           'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-40',
           checked ? 'border-arc bg-arc' : 'border-transparent bg-line-strong',
         )}
@@ -278,6 +279,8 @@ export interface SegmentedProps<T extends string> {
   options: { value: T; label: ReactNode; title?: string }[]
   onChange: (v: T) => void
   size?: 'sm' | 'md'
+  /** Stretch segments into equal-width columns across the container. */
+  even?: boolean
   className?: string
 }
 
@@ -288,6 +291,7 @@ export function Segmented<T extends string>({
   options,
   onChange,
   size = 'md',
+  even = false,
   className,
 }: SegmentedProps<T>) {
   const name = useId()
@@ -297,7 +301,11 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cx('inline-flex rounded-control border border-line bg-inset p-0.5', className)}
+      className={cx(
+        even ? 'grid w-full auto-cols-fr grid-flow-col' : 'inline-flex',
+        'rounded-control border border-line bg-inset p-0.5',
+        className,
+      )}
     >
       {options.map((o) => {
         const on = o.value === value
@@ -307,6 +315,7 @@ export function Segmented<T extends string>({
             title={o.title}
             className={cx(
               'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
+              even && 'flex items-center justify-center text-center',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
               'has-[:disabled]:cursor-not-allowed',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Sparkle } from '@phosphor-icons/react'
 import type { EngineFilter, EngineLevel, studioEngineApi } from '@ferrocast/api'
 import { Button, InfoTip, cx, toast } from '@ferrocast/ui'
@@ -23,6 +23,7 @@ export function CleanMicControl({
   filters,
   onReload,
   onCleaned,
+  footer,
   className,
 }: {
   api: EngineApi
@@ -31,6 +32,7 @@ export function CleanMicControl({
   filters: EngineFilter[] | null | undefined
   onReload: () => void
   onCleaned?: (() => void) | undefined
+  footer?: ReactNode | undefined
   className?: string | undefined
 }) {
   const { run, busy } = useAction()
@@ -97,47 +99,75 @@ export function CleanMicControl({
   }
 
   return (
-    <div className={cx('flex flex-wrap items-center justify-between gap-2', className)}>
-      <span
-        className={cx(
-          'text-[13.5px] font-semibold',
-          verdict === 'good' ? 'text-ok' : verdict ? 'text-warn' : 'text-text-3',
-        )}
-        aria-live="polite"
-      >
-        {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
-        {gainStep && usual !== null && (
-          <>
-            {' '}
-            <span className="font-normal text-text-2">
-              Cleaning up will also raise it by {gainDb} dB.
+    <div
+      data-testid="clean-mic-tile"
+      className={cx(
+        'flex flex-col gap-2.5 rounded-[12px] border border-line bg-surface-1 p-3',
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p className="text-[13.5px] leading-tight font-semibold text-text">Auto mic cleanup</p>
+          <div
+            className={cx(
+              'text-[12.5px] leading-snug',
+              verdict === 'good'
+                ? 'font-medium text-ok'
+                : verdict
+                  ? 'font-medium text-warn'
+                  : 'text-text-2',
+            )}
+            aria-live="polite"
+          >
+            {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
+            {gainStep && usual !== null && (
+              <>
+                {' '}
+                <span className="font-normal text-text-2">
+                  Cleaning up will also raise it by {gainDb} dB.
+                </span>
+                <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
+                  Your voice peaks around {Math.round(usual)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
+                  step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
+                  something to work on. Change it in Filters.
+                </InfoTip>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 sm:justify-end">
+          {!have ? (
+            <Button size="sm" variant="secondary" onClick={onReload} className="w-full sm:w-auto">
+              Couldn’t read your mic’s filters. Try again
+            </Button>
+          ) : plan.length > 0 ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              busy={busy === 'clean'}
+              onClick={() => void clean()}
+              className="w-full whitespace-nowrap sm:w-auto"
+            >
+              <Sparkle size={15} weight="bold" /> Clean up my mic
+            </Button>
+          ) : (
+            <span className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-ok/35 bg-ok-soft px-2.5 py-1 text-[12.5px] font-semibold whitespace-nowrap text-text sm:w-auto">
+              <Check size={14} weight="bold" className="text-ok" aria-hidden="true" /> Mic cleaned
+              up
             </span>
-            <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
-              Your voice peaks around {Math.round(usual)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
-              step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
-              something to work on. Change it in Filters.
-            </InfoTip>
-          </>
-        )}
-      </span>
+          )}
+        </div>
+      </div>
       {failed && (
-        <p role="alert" className="w-full text-[13px] font-medium text-danger">
+        <p
+          role="alert"
+          className="rounded-[8px] border border-danger/35 bg-danger-soft px-2.5 py-1.5 text-[12.5px] font-medium text-text"
+        >
           {failed}
         </p>
       )}
-      {!have ? (
-        <Button size="sm" variant="secondary" onClick={onReload}>
-          Couldn’t read your mic’s filters. Try again
-        </Button>
-      ) : plan.length > 0 ? (
-        <Button size="sm" variant="secondary" busy={busy === 'clean'} onClick={() => void clean()}>
-          <Sparkle size={15} weight="bold" /> Clean up my mic
-        </Button>
-      ) : (
-        <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-ok">
-          <Check size={14} weight="bold" /> Mic cleaned up
-        </span>
-      )}
+      {footer && <div className="border-t border-line pt-2.5">{footer}</div>}
     </div>
   )
 }

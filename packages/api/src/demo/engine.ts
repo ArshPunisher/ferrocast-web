@@ -749,6 +749,7 @@ export class DemoEngine {
       () => this.studio.obs.streaming,
       () => this.obs.state === 'connected',
       () => this.studioEngine?.isStreaming() ?? false,
+      () => this.studioEngine?.currentVideoKbps() ?? null,
     )
     this.studioEngine?.setAutoConfigDeps({
       runUploadCheck: () => this.golive.runUploadCheck(),

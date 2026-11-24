@@ -3,7 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
-import { AllFailedBanner, GoLiveTab, LiveCard, RowText, liveStatus } from './golive'
+import { AllFailedBanner, GoLiveTab, LiveCard, Platforms, RowText, liveStatus } from './golive'
+import { describeDestinationRate, describeStreamCap } from './bitrate-summary'
 import { LiveLine } from './desk/golive-dock'
 
 let root: Root | null = null
@@ -599,5 +600,118 @@ describe('Setup in OBS mode when OBS is already streaming (Problem 3)', () => {
         b.textContent?.includes('Point OBS at Ferrocast'),
       )?.disabled,
     ).toBe(false)
+  })
+})
+
+describe('U2 Platforms and RowText shared-bitrate explanation', () => {
+  it('shows "Same stream as Twitch: 6.0 Mbps" on YouTube and "3 places x 6.2 Mbps = 18 Mbps upload" in Platforms', async () => {
+    localStorage.setItem('fc-golive-picture', 'ferrocast')
+    const tw = baseDest({
+      id: 'twitch',
+      kind: 'twitch',
+      name: 'Twitch',
+      health: null,
+      capped: {
+        kbps: 6000,
+        separate_encode: false,
+        summary: 'Capped at 6,000 kbps for Twitch',
+        detail: 'Your 12,000 kbps stream is capped at 6,000 kbps.',
+      },
+    })
+    const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
+    const kick = baseDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      health: null,
+      capped: {
+        kbps: 6000,
+        separate_encode: false,
+        summary: 'Capped at 6,000 kbps for Twitch',
+        detail: 'Your 12,000 kbps stream is capped at 6,000 kbps.',
+      },
+    })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw, yt, kick],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+    }
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    const el = await renderNode(<Platforms view={view} onSaved={() => {}} videoKbps={12000} />)
+    expect(el.textContent).toContain('Same stream as Twitch: 6.0 Mbps')
+    expect(el.textContent).toContain('Capped at 6,000 kbps for Twitch')
+    expect(el.textContent).toContain('3 places x 6.2 Mbps = 18 Mbps upload')
+    const whyBtn = el.querySelector('button[aria-label="Why upload adds up"]') as HTMLButtonElement
+    expect(whyBtn).not.toBeNull()
+  })
+
+  it('compact GoLiveDock RowText shows actual rate and "Same stream as Twitch: 6.0 Mbps" on YouTube', async () => {
+    const tw = baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch', health: null })
+    const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
+    const kick = baseDest({ id: 'kick', kind: 'kick', name: 'Kick', health: null })
+    const cap = describeStreamCap(12000, [tw, yt, kick])
+    const rate = describeDestinationRate(yt, cap, { streamKbps: 6160 })
+    const rowEl = await renderNode(<RowText d={yt} rateInfo={rate} compact />)
+    expect(rowEl.textContent).toContain('6.0 Mbps')
+    expect(rowEl.textContent).toContain('Same stream as Twitch: 6.0 Mbps')
   })
 })

@@ -15,6 +15,7 @@ import {
   Gauge,
   Info,
   LockSimple,
+  MinusCircle,
   Pause,
   Plus,
   Plug,
@@ -40,6 +41,7 @@ import {
   mbps,
   onCanvas,
   reconnectingText,
+  studioEngineApi,
   viaOf,
   withVia,
   type Canvas,
@@ -74,7 +76,13 @@ import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
-import { setPictureSource, usePictureSource } from '../../lib/picture'
+import { setPictureSource, usePictureSource, useUsesObs } from '../../lib/picture'
+import {
+  describeDestinationRate,
+  describeStreamCapFromView,
+  describeUploadNeed,
+  type DestinationRateDisplay,
+} from './bitrate-summary'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
 import { useSaveOrder } from './save-order'
 import { useStudio } from './common'
@@ -594,16 +602,109 @@ export function liveStatus(d: DestinationView, streaming: boolean, plan: number)
   }
 }
 
+function platformTileTone(
+  d: DestinationView,
+  streaming: boolean,
+): {
+  tileCls: string
+  icon: typeof CheckCircle
+  word: string
+  badgeCls: string
+} {
+  if (d.blocked) {
+    return {
+      tileCls: 'border-danger/40 bg-danger-soft/45',
+      icon: WarningCircle,
+      word: 'Action needed',
+      badgeCls: 'border border-danger/40 bg-surface-1 text-danger',
+    }
+  }
+  if (streaming && d.standby_for) {
+    return {
+      tileCls: 'border-line bg-surface-2/70',
+      icon: MinusCircle,
+      word: 'Standby',
+      badgeCls: 'border border-line bg-surface-1 text-text-2',
+    }
+  }
+  if (!d.enabled && !(streaming && d.backup_for)) {
+    return {
+      tileCls: 'border-line bg-surface-2/70',
+      icon: MinusCircle,
+      word: 'Off',
+      badgeCls: 'border border-line bg-surface-1 text-text-2',
+    }
+  }
+  if (d.health?.state === 'failed') {
+    return {
+      tileCls: 'border-danger/40 bg-danger-soft/45',
+      icon: WarningCircle,
+      word: 'Failed',
+      badgeCls: 'border border-danger/40 bg-surface-1 text-danger',
+    }
+  }
+  if (d.health?.state === 'reconnecting') {
+    return {
+      tileCls: 'border-warn/40 bg-warn-soft/35',
+      icon: ArrowsClockwise,
+      word: 'Reconnecting',
+      badgeCls: 'border border-warn/45 bg-surface-1 text-warn',
+    }
+  }
+  if (d.health?.state === 'paused') {
+    return {
+      tileCls: 'border-warn/40 bg-warn-soft/35',
+      icon: Pause,
+      word: 'Paused',
+      badgeCls: 'border border-warn/45 bg-surface-1 text-warn',
+    }
+  }
+  if (streaming && d.health?.state === 'live') {
+    return {
+      tileCls: 'border-line bg-surface-1',
+      icon: CheckCircle,
+      word: 'Live',
+      badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
+    }
+  }
+  if (streaming) {
+    const word =
+      d.health?.state === 'connecting'
+        ? 'Connecting'
+        : d.health?.state === 'stopped'
+          ? 'Stopped'
+          : 'Starting'
+    return {
+      tileCls: 'border-line bg-surface-1',
+      icon: d.health?.state === 'stopped' ? MinusCircle : ArrowsClockwise,
+      word,
+      badgeCls: 'border border-line bg-surface-1 text-text-2',
+    }
+  }
+  return {
+    tileCls: 'border-line bg-surface-1',
+    icon: CheckCircle,
+    word: 'Ready',
+    badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
+  }
+}
+
 export function Platforms({
   view,
   onSaved,
   onProtect,
   canvas = 'main',
+  videoKbps,
+  audioKbps = 160,
+  inDialog = false,
 }: {
   view: GoLiveView
   onSaved: () => void
-  onProtect?: (on: boolean) => void
-  canvas?: Canvas
+  onProtect?: ((on: boolean) => void) | undefined
+  canvas?: Canvas | undefined
+  videoKbps?: number | undefined
+  audioKbps?: number | undefined
+  inDialog?: boolean | undefined
 }) {
   const api = useGoLive()
   const { run, busy } = useAction()
@@ -682,40 +783,79 @@ export function Platforms({
   const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
   const [mode] = useMode('studio')
-  // Before anything streamed: what the engine plans (1080p60, or 1080x1920 for vertical).
-  const plan = vertical ? view.vertical_stats.kbps || 4660 : view.stats.kbps || 6160
-  const need = ticked.reduce((a, d) => a + (d.health?.kbps || plan), 0)
-  const twitchShared = !vertical && ticked.some((d) => d.kind === 'twitch') && ticked.length > 1
-  return (
-    <Panel
-      id="golive-platforms"
-      title={vertical ? 'Where it goes' : 'Your platforms'}
-      description={
-        vertical
-          ? 'YouTube Shorts live, or a server of your own. Twitch and Kick take one live per channel.'
-          : 'Drag to set what pauses first if your upload struggles: the bottom one.'
-      }
-      actions={
-        <Button
-          size="sm"
-          icon={<Plus size={15} />}
-          aria-label="Add a destination"
-          onClick={() => setAdding(true)}
-        >
-          {/* Short on a phone, so the panel's name keeps its room. */}
-          <span className="sm:hidden">Add</span>
-          <span className="hidden sm:inline">Add a destination</span>
-        </Button>
-      }
+  const usesObs = useUsesObs()
+  const conn = useLive((s) => s.conn)
+  const [fetchedSettings, setFetchedSettings] = useState<{
+    video_kbps: number
+    audio_kbps: number
+  } | null>(null)
+  useEffect(() => {
+    if (usesObs || videoKbps !== undefined || !conn) return
+    let alive = true
+    void studioEngineApi(conn.client)
+      .studioSettings()
+      .then(
+        (s) => alive && setFetchedSettings({ video_kbps: s.video_kbps, audio_kbps: s.audio_kbps }),
+      )
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [usesObs, videoKbps, conn])
+  const chosenVideoKbps = videoKbps ?? fetchedSettings?.video_kbps ?? null
+  const chosenAudioKbps = fetchedSettings?.audio_kbps ?? audioKbps
+  const capSummary = useMemo(
+    () => describeStreamCapFromView(merged, chosenVideoKbps),
+    [merged, chosenVideoKbps],
+  )
+  const fallbackMainKbps =
+    capSummary.capped && capSummary.effectiveVideoKbps
+      ? capSummary.effectiveVideoKbps + chosenAudioKbps
+      : chosenVideoKbps
+        ? chosenVideoKbps + chosenAudioKbps
+        : 6160
+  // Before anything streamed: what the engine plans (effective main stream or vertical cut).
+  const plan = vertical ? view.vertical_stats.kbps || 4660 : view.stats.kbps || fallbackMainKbps
+  const uploadSummary = useMemo(
+    () =>
+      describeUploadNeed(ticked, {
+        planKbps: plan,
+        vertical,
+        limiterName: capSummary.capped ? capSummary.limiter?.name : null,
+        limiterKbps: capSummary.capped ? capSummary.effectiveVideoKbps : null,
+      }),
+    [ticked, plan, vertical, capSummary],
+  )
+  const panelDescription = vertical
+    ? 'YouTube Shorts live, or a server of your own. Twitch and Kick take one live per channel.'
+    : 'Drag to set what pauses first if your upload struggles: the bottom one.'
+  const addAction = (
+    <Button
+      size="sm"
+      icon={<Plus size={15} />}
+      aria-label="Add a destination"
+      onClick={() => setAdding(true)}
     >
-      <div className="flex flex-col gap-3">
-        <ul
-          className="overflow-hidden rounded-panel border border-line"
-          aria-label="Platforms, top first"
-        >
-          {merged.map((d, i) => (
+      {/* Short on a phone, so the panel's name keeps its room. */}
+      <span className="sm:hidden">Add</span>
+      <span className="hidden sm:inline">Add a destination</span>
+    </Button>
+  )
+  const streaming = vertical ? view.vertical_live : view.live
+  const content = (
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-2.5" aria-label="Platforms, top first">
+        {merged.map((d, i) => {
+          const tone = platformTileTone(d, streaming)
+          const StatusGlyph = tone.icon
+          const rateText = liveStatus(d, streaming, plan)
+          const showRate =
+            Boolean(rateText) &&
+            !['Off', 'Failed', 'Reconnecting', 'Paused', 'Standby'].includes(rateText)
+          return (
             <li
               key={d.id}
+              data-platform-tile={d.id}
               draggable
               onDragStart={() => (dragged.current = i)}
               onDragOver={(e) => e.preventDefault()}
@@ -724,52 +864,69 @@ export function Platforms({
                 dragged.current = null
               }}
               className={cx(
-                'grid grid-cols-[18px_28px_minmax(0,1fr)_auto] items-center gap-2 border-b border-line px-2.5 py-3 last:border-b-0 sm:grid-cols-[22px_30px_minmax(0,1fr)_auto] sm:gap-3 sm:px-3',
-                d.enabled ? 'bg-surface-1' : 'bg-surface-2',
+                'flex flex-col gap-2.5 rounded-[12px] border p-3.5 transition-colors',
+                tone.tileCls,
               )}
             >
-              <button
-                type="button"
-                className="grid cursor-grab place-items-center rounded-[calc(var(--fc-radius-control)-2px)] text-text-2 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-                aria-label={`Move ${d.name}: arrow up or down`}
-                onKeyDown={onGripKey(i)}
-              >
-                <DotsSixVertical size={16} aria-hidden />
-              </button>
-              <Logo kind={d.kind} />
-              <div className="min-w-0">
-                <RowText d={d} />
-                {!(vertical ? view.vertical_live : view.live) &&
-                  d.enabled &&
-                  d.health?.state === 'failed' &&
-                  (() => {
-                    const t = healthText(d.health, d.blocked, d.kind)
-                    return (
-                      <InfoLine
-                        detail={t.detail ?? undefined}
-                        label={`More about ${d.name}`}
-                        className="mt-1"
-                      >
-                        <span className="text-[13px] font-semibold text-danger">{t.label}</span>
-                      </InfoLine>
-                    )
-                  })()}
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-3">
-                <span
-                  className={cx(
-                    'text-right font-mono text-[12.5px] leading-tight sm:block sm:text-[13px]',
-                    (vertical ? view.vertical_live : view.live) ? 'block' : 'hidden',
-                    d.enabled && d.health?.state === 'failed'
-                      ? 'font-semibold text-danger'
-                      : 'text-text-2',
+              <div className="flex flex-wrap items-start gap-2.5 sm:flex-nowrap sm:items-center sm:gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center sm:gap-3">
+                  <button
+                    type="button"
+                    className="grid size-8 shrink-0 cursor-grab place-items-center rounded-[calc(var(--fc-radius-control)-2px)] text-text-2 hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    aria-label={`Move ${d.name}: arrow up or down`}
+                    onKeyDown={onGripKey(i)}
+                  >
+                    <DotsSixVertical size={16} aria-hidden />
+                  </button>
+                  <span
+                    aria-hidden="true"
+                    className="grid size-10 shrink-0 place-items-center rounded-[10px] border border-line bg-surface-2"
+                  >
+                    <Logo kind={d.kind} size={22} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <RowText
+                      d={d}
+                      statusBadge={
+                        <span
+                          className={cx(
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold',
+                            tone.badgeCls,
+                          )}
+                        >
+                          <StatusGlyph size={12} weight="fill" aria-hidden />
+                          <span>{tone.word}</span>
+                        </span>
+                      }
+                      rateInfo={describeDestinationRate(d, capSummary, {
+                        streamKbps: plan,
+                        verticalKbps: view.vertical_stats.kbps || 4660,
+                      })}
+                    />
+                    {!streaming &&
+                      d.enabled &&
+                      d.health?.state === 'failed' &&
+                      (() => {
+                        const t = healthText(d.health, d.blocked, d.kind)
+                        return (
+                          <InfoLine
+                            detail={t.detail ?? undefined}
+                            label={`More about ${d.name}`}
+                            className="mt-1"
+                          >
+                            <span className="text-[13px] font-semibold text-danger">{t.label}</span>
+                          </InfoLine>
+                        )
+                      })()}
+                  </div>
+                </div>
+                <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+                  {showRate && (
+                    <span className="font-mono text-[13px] font-medium text-text-2 tabular-nums">
+                      {rateText}
+                    </span>
                   )}
-                >
-                  {liveStatus(d, vertical ? view.vertical_live : view.live, plan)}
-                </span>
-                {d.enabled &&
-                  (vertical ? view.vertical_live : view.live) &&
-                  d.health?.state === 'failed' && (
+                  {d.enabled && streaming && d.health?.state === 'failed' && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -784,57 +941,65 @@ export function Platforms({
                       Retry
                     </Button>
                   )}
-                {(d.kind === 'custom' || d.connected) && (
-                  <IconButton
-                    label={`Test connection to ${d.name}`}
-                    size="sm"
-                    disabled={busy === `test:${d.id}`}
-                    onClick={() => test(d)}
-                  >
-                    {busy === `test:${d.id}` ? (
-                      <span className="fc-busy" aria-hidden />
-                    ) : (
-                      <Pulse size={15} />
-                    )}
-                  </IconButton>
-                )}
-                {d.kind === 'custom' && (
-                  <IconButton
-                    label={`Remove ${d.name}`}
-                    size="sm"
-                    disabled={busy === `rm:${d.id}`}
-                    onClick={() => setRemoving(d)}
-                  >
-                    <Trash size={15} />
-                  </IconButton>
-                )}
-                <Switch
-                  label={`Stream to ${d.name}`}
-                  hideLabel
-                  checked={d.enabled}
-                  disabled={busy === 'order'}
-                  onChange={(on) => toggle(d.id, on)}
-                />
+                  {(d.kind === 'custom' || d.connected) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<Pulse size={14} />}
+                      busy={busy === `test:${d.id}`}
+                      aria-label={`Test connection to ${d.name}`}
+                      onClick={() => test(d)}
+                    >
+                      Test
+                    </Button>
+                  )}
+                  {d.kind === 'custom' && (
+                    <IconButton
+                      label={`Remove ${d.name}`}
+                      size="sm"
+                      disabled={busy === `rm:${d.id}`}
+                      onClick={() => setRemoving(d)}
+                    >
+                      <Trash size={15} />
+                    </IconButton>
+                  )}
+                  <Switch
+                    label={`Stream to ${d.name}`}
+                    hideLabel
+                    checked={d.enabled}
+                    disabled={busy === 'order'}
+                    onChange={(on) => toggle(d.id, on)}
+                  />
+                </div>
               </div>
               {tests[d.id] !== undefined && (
-                <ReachLine r={tests[d.id]!} className="col-span-2 col-start-3" />
+                <ReachLine r={tests[d.id]!} className="pl-[86px] sm:pl-[92px]" />
               )}
             </li>
-          ))}
-        </ul>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14.5px]">
-          <b className="font-semibold">{goingTo(merged)}.</b>
-          {ticked.length > 0 && <span className="text-text-3">Needs {mbps(need)} upload.</span>}
-          {(vertical || twitchShared) && (
-            <InfoTip>
-              {vertical
-                ? 'Upload protection counts the vertical stream too: it pauses before the platforms on the Go live tab.'
-                : 'Twitch asks that every platform gets the same quality as Twitch, or lower. Ferrocast sends the same stream to all, so you’re fine.'}
-            </InfoTip>
+          )
+        })}
+      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line bg-surface-2 px-3.5 py-2.5 text-[14px]">
+        <b className="font-semibold text-text">{goingTo(merged)}.</b>
+        <div className="flex flex-wrap items-center gap-2">
+          {uploadSummary ? (
+            <>
+              <span className="text-text-2">{uploadSummary.line}</span>
+              <InfoTip label="Why upload adds up">{uploadSummary.detail}</InfoTip>
+            </>
+          ) : (
+            vertical && (
+              <InfoTip label="About vertical upload">
+                Upload protection counts the vertical stream too: it pauses before the platforms on
+                the Go live tab.
+              </InfoTip>
+            )
           )}
         </div>
-        {vertical ? null : (
-          <div className="border-t border-line pt-3">
+      </div>
+      {vertical ? null : (
+        <div className="divide-y divide-line rounded-[12px] border border-line bg-surface-1">
+          <div className="p-3.5">
             <Switch
               label="Upload protection"
               description="If your upload can’t carry every platform, the bottom one pauses for a while so the ones above stay smooth."
@@ -847,18 +1012,40 @@ export function Platforms({
                 <ProtectionRule view={view} onSaved={onSaved} />
               </div>
             )}
-            <div className="mt-3">
-              <Switch
-                label="Auto quality"
-                description="If your upload struggles, the stream’s quality drops a little so it stays smooth, then comes back by itself."
-                checked={view.auto_quality}
-                disabled={busy === 'auto-quality'}
-                onChange={autoQuality}
-              />
-            </div>
           </div>
-        )}
-      </div>
+          <div className="p-3.5">
+            <Switch
+              label="Auto quality"
+              description="If your upload struggles, the stream’s quality drops a little so it stays smooth, then comes back by itself."
+              checked={view.auto_quality}
+              disabled={busy === 'auto-quality'}
+              onChange={autoQuality}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+  return (
+    <>
+      {inDialog ? (
+        <div id="golive-platforms" className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="m-0 text-[13.5px] text-text-2">{panelDescription}</p>
+            {addAction}
+          </div>
+          {content}
+        </div>
+      ) : (
+        <Panel
+          id="golive-platforms"
+          title={vertical ? 'Where it goes' : 'Your platforms'}
+          description={panelDescription}
+          actions={addAction}
+        >
+          {content}
+        </Panel>
+      )}
       <AddDestination
         open={adding}
         onClose={() => setAdding(false)}
@@ -885,7 +1072,7 @@ export function Platforms({
           </>
         }
       />
-    </Panel>
+    </>
   )
 }
 
@@ -1080,15 +1267,26 @@ export function RowText({
   d,
   fixBitrate,
   compact = false,
+  rateInfo,
+  statusBadge,
 }: {
   d: DestinationView
   /** The Studio streams: a button sets its video bitrate to what the warning asks for. */
   fixBitrate?: ((kbps: number) => void) | undefined
   /** The compact Studio's Go live panel: smaller type. */
   compact?: boolean
+  /** Shared stream cap and effective rate context. */
+  rateInfo?: DestinationRateDisplay | undefined
+  /** Explicit status indicator badge on tile rows. */
+  statusBadge?: React.ReactNode
 }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   const notices = rowNotices(d)
+  const capBadge = d.capped ?? rateInfo?.ownCapNote
+  const showCompactRate =
+    compact &&
+    !!rateInfo?.rateLabel &&
+    (!d.health || d.health.state === 'waiting' || d.health.state === 'stopped')
   return (
     <div className="@container min-w-0">
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -1101,7 +1299,13 @@ export function RowText({
         >
           {d.name}
         </b>
+        {statusBadge}
         <RowAlerts d={d} notices={notices} fixBitrate={fixBitrate} compact={compact} />
+        {showCompactRate && (
+          <span className="ml-auto shrink-0 font-mono text-[12px] font-medium text-text-3 tabular-nums">
+            {rateInfo.rateLabel}
+          </span>
+        )}
       </div>
       <span
         className={cx(
@@ -1149,15 +1353,31 @@ export function RowText({
           Backup for {d.standby_for}: sends only if it can’t
         </span>
       )}
-      {d.capped && (
-        <InfoLine detail={d.capped.detail} label={`About ${d.name} limits`} className="mt-1">
+      {capBadge && (
+        <InfoLine detail={capBadge.detail} label={`About ${d.name} limits`} className="mt-1">
           <span
             className={cx(
               'inline-flex max-w-full items-center rounded-full bg-surface-2 px-2 py-0.5 font-medium text-text-2 ring-1 ring-line',
               compact ? 'text-[11.5px]' : 'text-[12px]',
             )}
           >
-            {d.capped.summary}
+            {capBadge.summary}
+          </span>
+        </InfoLine>
+      )}
+      {rateInfo?.heldBackNote && (
+        <InfoLine
+          detail={rateInfo.heldBackNote.detail}
+          label={`About ${d.name} stream rate`}
+          className="mt-1"
+        >
+          <span
+            className={cx(
+              'inline-flex max-w-full items-center rounded-full bg-surface-2 px-2 py-0.5 font-medium text-text-2 ring-1 ring-line',
+              compact ? 'text-[11.5px]' : 'text-[12px]',
+            )}
+          >
+            {rateInfo.heldBackNote.summary}
           </span>
         </InfoLine>
       )}

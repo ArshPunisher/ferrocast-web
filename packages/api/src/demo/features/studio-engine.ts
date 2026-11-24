@@ -895,6 +895,10 @@ export class DemoStudioEngine {
     }
   }
 
+  currentVideoKbps(): number {
+    return Number(this.studioSettingsData.video_kbps ?? 6000) || 6000
+  }
+
   setStreaming(on: boolean): EngineStreamStats | null {
     if (on && !this.opts.running) {
       throw new HttpError(
@@ -2731,6 +2735,7 @@ export class DemoStudioEngine {
       const patch = requireObj(body)
       const prev = this.studioSettingsData
       this.studioSettingsData = { ...this.studioSettingsData, ...patch }
+      if ('video_kbps' in patch) this.onStreamChange?.(this.streamActive)
       if (this.autoConfigState.state === 'applied' && this.autoConfigState.applied) {
         const keys = ['encoder', 'video_encoder', 'encoder_settings', 'scale', 'fps', 'video_kbps']
         const outputChanged = keys.some(
