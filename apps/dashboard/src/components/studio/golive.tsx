@@ -669,6 +669,20 @@ function platformTileTone(
       badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
     }
   }
+  if (streaming) {
+    const word =
+      d.health?.state === 'connecting'
+        ? 'Connecting'
+        : d.health?.state === 'stopped'
+          ? 'Stopped'
+          : 'Starting'
+    return {
+      tileCls: 'border-line bg-surface-1',
+      icon: d.health?.state === 'stopped' ? MinusCircle : ArrowsClockwise,
+      word,
+      badgeCls: 'border border-line bg-surface-1 text-text-2',
+    }
+  }
   return {
     tileCls: 'border-line bg-surface-1',
     icon: CheckCircle,

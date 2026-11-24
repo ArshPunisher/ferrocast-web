@@ -241,19 +241,34 @@ const CHECK_META: Record<
   },
 }
 
-function preflightSummaryText(pf: Preflight, issueCount: number, fineCount: number): string {
+function preflightSummaryText(
+  pf: Preflight,
+  issueCount: number,
+  okCount: number,
+  skipCount: number,
+): string {
   if (pf.checks.length === 0) return 'No checks configured.'
   if (issueCount === 0) {
-    return fineCount === 1
+    if (okCount === 0 && skipCount > 0) {
+      return `${skipCount} ${skipCount === 1 ? 'check' : 'checks'} skipped. Ready to start.`
+    }
+    if (skipCount > 0) {
+      return `${okCount} passed, ${skipCount} skipped. Ready to start.`
+    }
+    return okCount === 1
       ? 'Check passed. Ready to start.'
-      : `All ${fineCount} checks passed. Ready to start.`
+      : `All ${okCount} checks passed. Ready to start.`
   }
   const issueWord = issueCount === 1 ? '1 item needs' : `${issueCount} items need`
+  const otherParts = [
+    okCount > 0 ? `${okCount} passed` : null,
+    skipCount > 0 ? `${skipCount} skipped` : null,
+  ].filter(Boolean)
   const tail = pf.ready
     ? 'Optional items can be fixed below.'
     : 'Fix the red items, or start anyway.'
-  return fineCount > 0
-    ? `${issueWord} attention, ${fineCount} passed. ${tail}`
+  return otherParts.length > 0
+    ? `${issueWord} attention, ${otherParts.join(', ')}. ${tail}`
     : `${issueWord} attention. ${tail}`
 }
 
@@ -343,9 +358,17 @@ export function PreflightList({
       </li>
     )
   }
-  // Problems first; the checks that passed fold cleanly under a matching bordered bar.
+  // Problems first; the checks that passed or skipped fold cleanly under a matching bordered bar.
   const issues = pf.checks.filter((c) => c.status === 'fail' || c.status === 'warn')
+  const okChecks = pf.checks.filter((c) => c.status === 'ok')
+  const skippedChecks = pf.checks.filter((c) => c.status === 'skip')
   const fine = pf.checks.filter((c) => c.status !== 'fail' && c.status !== 'warn')
+  const fineSummary =
+    skippedChecks.length > 0 && okChecks.length > 0
+      ? `${okChecks.length} passed, ${skippedChecks.length} skipped`
+      : skippedChecks.length > 0
+        ? `${skippedChecks.length} ${skippedChecks.length === 1 ? 'check' : 'checks'} skipped`
+        : `${okChecks.length} ${okChecks.length === 1 ? 'check' : 'checks'} passed`
   return (
     <div className="flex flex-col gap-3">
       <p
@@ -353,7 +376,7 @@ export function PreflightList({
         role="status"
         className="rounded-[12px] border border-line bg-surface-2 px-3.5 py-2.5 text-[13.5px] font-medium text-text-2"
       >
-        {preflightSummaryText(pf, issues.length, fine.length)}
+        {preflightSummaryText(pf, issues.length, okChecks.length, skippedChecks.length)}
       </p>
       {issues.length > 0 && (
         <ul className="flex flex-col gap-2.5" aria-label="Pre-flight problems">
@@ -368,10 +391,8 @@ export function PreflightList({
         ) : (
           <details className="rounded-[12px] border border-line bg-surface-2/60 p-2.5">
             <summary className="flex cursor-pointer items-center gap-2 rounded-control px-1.5 py-1 text-[13.5px] font-semibold text-text-2 hover:text-text">
-              <StatusIcon status="ok" size={16} decorative />
-              <span>
-                {fine.length} {fine.length === 1 ? 'check' : 'checks'} passed
-              </span>
+              <StatusIcon status={okChecks.length > 0 ? 'ok' : 'skip'} size={16} decorative />
+              <span>{fineSummary}</span>
             </summary>
             <ul className="mt-2.5 flex flex-col gap-2.5" aria-label="Pre-flight checks that passed">
               {fine.map(row)}

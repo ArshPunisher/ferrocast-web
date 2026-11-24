@@ -90,4 +90,23 @@ describe('U3 PreflightList bordered tiles', () => {
     const detailPs = emptyTile.querySelectorAll('[data-tile-detail]')
     expect(detailPs).toHaveLength(0)
   })
+
+  it('counts skipped checks separately from passed checks in summary text', async () => {
+    await act(async () =>
+      root!.render(
+        <PreflightList
+          pf={{
+            ready: true,
+            checks: [
+              { id: 'obs', label: 'Studio', status: 'ok', detail: 'Running.', fix: null },
+              { id: 'discord', label: 'Discord', status: 'skip', detail: 'Turned off.', fix: null },
+            ],
+          }}
+          onFixed={() => {}}
+        />,
+      ),
+    )
+    const summary = host!.querySelector('[data-preflight-summary]')
+    expect(summary?.textContent).toBe('1 passed, 1 skipped. Ready to start.')
+  })
 })
