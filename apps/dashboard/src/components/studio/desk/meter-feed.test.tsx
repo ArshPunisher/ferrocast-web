@@ -9,10 +9,12 @@ import {
   ATTACK_MS,
   FLOOR,
   POLL_MS,
+  STALE_MS,
   activeMeters,
   initialMeter,
   stepMeter,
   useLevelFeed,
+  useLevelStatus,
 } from './meter-feed'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -112,5 +114,70 @@ describe('live meters', () => {
     act(() => root?.unmount())
     root = null
     expect(activeMeters()).toBe(0)
+  })
+
+  it('distinguishes connected silent meters from omitted or failing/stale unmetered feeds without extra renders', async () => {
+    let mode: 'silent' | 'talking' | 'omitted' | 'error' = 'silent'
+    let level = -100
+    const api = {
+      levels: vi.fn(async (): Promise<Record<string, EngineLevel>> => {
+        if (mode === 'error') throw new Error('offline')
+        if (mode === 'omitted') return {}
+        return { Mic: { peak: [level, level], magnitude: [level, level] } }
+      }),
+    } as unknown as EngineApi
+
+    let renders = 0
+    let latestStatus = ''
+    function StatusProbe() {
+      renders++
+      const feed = useLevelFeed(api, ['Mic'])
+      latestStatus = useLevelStatus(feed, 'Mic')
+      return <span data-status={latestStatus} />
+    }
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<StatusProbe />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(latestStatus).toBe('connected')
+    const afterConnected = renders
+
+    // Oscillating speech keeps status 'connected' with zero re-renders.
+    mode = 'talking'
+    level = -12
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    level = -28
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(latestStatus).toBe('connected')
+    expect(renders).toBe(afterConnected)
+
+    // Engine returns {} omitting Mic (onboarding unstarted engine) -> transitions to 'disconnected'.
+    mode = 'omitted'
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(latestStatus).toBe('disconnected')
+
+    // Recovers cleanly when Mic returns, even at silent -100 dB.
+    mode = 'silent'
+    level = -100
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(latestStatus).toBe('connected')
+
+    // Engine stops/errors past STALE_MS -> transitions to 'disconnected'.
+    mode = 'error'
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_MS + 150)
+    })
+    expect(latestStatus).toBe('disconnected')
   })
 })

@@ -58,6 +58,8 @@ export interface DemoStudioEngineOptions {
   cameraSleeping?: boolean
   hasMic?: boolean
   micPreset?: DemoMicPreset
+  /** False simulates an unstarted engine whose `/levels` returns `{}` (meter not connected). */
+  levelsConnected?: boolean
   running?: boolean
   /** Benchmark machine profile in demo mode. */
   benchProfile?: DemoBenchProfile
@@ -654,6 +656,7 @@ export class DemoStudioEngine {
       cameraSleeping: opts.cameraSleeping ?? false,
       hasMic: opts.hasMic ?? true,
       micPreset: opts.micPreset ?? 'quiet',
+      levelsConnected: opts.levelsConnected ?? true,
       running: opts.running ?? false,
       benchProfile: opts.benchProfile ?? 'apple_vt',
       benchStepMs: opts.benchStepMs ?? 180,
@@ -2767,6 +2770,7 @@ export class DemoStudioEngine {
     }
 
     if (is('POST', 'studio/engine/levels')) {
+      if (!this.opts.levelsConnected) return {}
       const b = requireObj(body)
       const names = Array.isArray(b.names) ? b.names.map(String) : []
       const out: Record<string, EngineLevel> = {}

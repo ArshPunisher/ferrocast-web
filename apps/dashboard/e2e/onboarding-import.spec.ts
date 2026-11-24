@@ -257,4 +257,63 @@ test.describe('first-run import and camera/mic check', () => {
     })
     await expect(page.locator('img[alt^="Preview from"]')).toBeVisible({ timeout: 8000 })
   })
+
+  test('mic level meter animates with signal, shows named silence prompt, and distinguishes disconnected meter', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty&mic=silent')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+
+    // Connected silent mic: names active device and guides user cleanly.
+    await expect(
+      page.getByText(
+        'No sound from MacBook Pro Microphone yet. Say something, or check the mic is not muted.',
+      ),
+    ).toBeVisible()
+
+    // Switching mic device updates controlled select and named prompt.
+    await page.getByLabel('Choose microphone').selectOption('mic-shure')
+    await expect(
+      page.getByText(
+        'No sound from Shure MV7 USB yet. Say something, or check the mic is not muted.',
+      ),
+    ).toBeVisible()
+
+    // Speaking moves the meter bar away from 0% and clears the silent prompt.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ micPreset: 'good' })
+    })
+    await expect(page.getByText(/No sound from .* yet\./)).toHaveCount(0)
+    await expect
+      .poll(async () => {
+        const cover = page.locator('[aria-label="Microphone check"] .bg-inset\\/80').first()
+        const style = await cover.getAttribute('style')
+        const m = style?.match(/translate3d\(([0-9.]+)%/)
+        return m ? Number(m[1]) : 0
+      })
+      .toBeGreaterThan(20)
+
+    // Engine returns {} (unmetered onboarding engine): shows distinct "not connected" banner.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ levelsConnected: false })
+    })
+    await expect(page.getByText('Microphone meter is not connected.')).toBeVisible()
+    await expect(page.getByText(/No sound from .* yet\./)).toHaveCount(0)
+
+    await page.setViewportSize({ width: 375, height: 812 })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
 })

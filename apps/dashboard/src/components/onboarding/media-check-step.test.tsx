@@ -310,3 +310,248 @@ describe('MediaCheckStep camera preview polling (W3)', () => {
     expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_B)
   })
 })
+
+describe('MediaCheckStep microphone meter & connection states (W4)', () => {
+  let host: HTMLDivElement
+  let root: Root | null = null
+  let rafId = 0
+  let rafCb: FrameRequestCallback | null = null
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    rafId = 0
+    rafCb = null
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      rafCb = cb
+      return ++rafId
+    })
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      rafCb = null
+    })
+  })
+
+  afterEach(async () => {
+    await act(async () => root?.unmount())
+    root = null
+    host.remove()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function multiMicEngine(
+    levelsFn: () => Promise<
+      Record<string, { peak: [number, number]; magnitude: [number, number] }>
+    >,
+  ) {
+    return makeEngine({
+      options: vi.fn(async (kind: string) => {
+        if (kind === 'av_capture_input_v2') {
+          return [{ key: 'device', label: 'Device', type: 'list', choices: [], values: [] }]
+        }
+        return [
+          {
+            key: 'device_id',
+            label: 'Device',
+            type: 'list',
+            choices: ['MacBook Pro Microphone', 'KREO KAST'],
+            values: ['mic-builtin', 'kreo-id'],
+          },
+        ]
+      }),
+      settings: vi.fn(async () => ({ device_id: 'kreo-id' })),
+      levels: vi.fn(levelsFn),
+    })
+  }
+
+  it('syncs selected mic from engine settings, moves meter bars on signal, and clears no-signal notice', async () => {
+    let peak = -100
+    const engine = multiMicEngine(async () => ({
+      'Mic/Aux': { peak: [peak, peak], magnitude: [peak, peak] },
+    }))
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Choose microphone"]')
+    expect(select?.value).toBe('kreo-id')
+    expect(host.textContent).toContain(
+      'No sound from KREO KAST yet. Say something, or check the mic is not muted.',
+    )
+
+    // Talking moves the level bars and dismisses the silent hint.
+    peak = -12
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+      await flush()
+      rafCb?.(performance.now() + 20)
+      rafCb?.(performance.now() + 40)
+    })
+    const cover = host.querySelector<HTMLElement>('.bg-inset\\/80')
+    expect(cover?.style.transform).toMatch(/translate3d\([1-9]\d?(\.\d+)?%/)
+    expect(host.textContent).not.toContain('No sound from KREO KAST yet.')
+  })
+
+  it('distinguishes unmetered {} engine response from connected silent microphone', async () => {
+    const engine = multiMicEngine(async () => ({}))
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50)
+      await flush()
+    })
+
+    expect(host.textContent).toMatch(/meter is not connected|not connected/i)
+    expect(host.textContent).not.toContain('No sound from KREO KAST yet.')
+  })
+
+  it('preserves an unavailable configured device instead of impersonating the first plugged mic', async () => {
+    const engine = makeEngine({
+      options: vi.fn(async (kind: string) =>
+        kind === 'av_capture_input_v2'
+          ? []
+          : [
+              {
+                key: 'device_id',
+                label: 'Device',
+                type: 'list',
+                choices: ['MacBook Pro Microphone', 'KREO KAST'],
+                values: ['mic-builtin', 'kreo-id'],
+              },
+            ],
+      ),
+      settings: vi.fn(async () => ({ device_id: 'old-usb-unplugged' })),
+      levels: vi.fn(async () => ({
+        'Mic/Aux': { peak: [-100, -100], magnitude: [-100, -100] },
+      })),
+    })
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Choose microphone"]')
+    expect(select?.value).toBe('old-usb-unplugged')
+    expect(host.textContent).toContain('Saved microphone (not plugged in)')
+    expect(host.textContent).toContain(
+      'No sound from Saved microphone (not plugged in) yet. Say something, or check the mic is not muted.',
+    )
+    expect(host.textContent).not.toContain('No sound from MacBook Pro Microphone yet.')
+  })
+
+  it('ignores stale switch rollback and previous-device audio samples across rapid mic switches', async () => {
+    let activePeak = -12
+    const updateCalls: {
+      val: string
+      resolve: () => void
+      reject: (e: Error) => void
+    }[] = []
+    const engine = makeEngine({
+      options: vi.fn(async (kind: string) =>
+        kind === 'av_capture_input_v2'
+          ? []
+          : [
+              {
+                key: 'device_id',
+                label: 'Device',
+                type: 'list',
+                choices: ['Mic A', 'Mic B', 'Mic C'],
+                values: ['mic-a', 'mic-b', 'mic-c'],
+              },
+            ],
+      ),
+      settings: vi.fn(async () => ({ device_id: 'mic-a' })),
+      update: vi.fn(
+        (_name: string, s: { device_id?: string }) =>
+          new Promise<void>((resolve, reject) => {
+            updateCalls.push({ val: String(s.device_id), resolve, reject })
+          }),
+      ),
+      levels: vi.fn(async () => ({
+        'Mic/Aux': { peak: [activePeak, activePeak], magnitude: [activePeak, activePeak] },
+      })),
+    })
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Choose microphone"]')!
+    expect(select.value).toBe('mic-a')
+
+    // Rapid switch A -> B -> C while noisy Mic A sample (-12 dB) is still flowing.
+    await act(async () => {
+      select.value = 'mic-b'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      select.value = 'mic-c'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    // Mic C succeeds while new Mic C is silent (-100 dB); stale Mic B rejects later.
+    activePeak = -100
+    await act(async () => {
+      updateCalls[1]!.resolve()
+      await flush()
+      updateCalls[0]!.reject(new Error('old B failed'))
+      await flush()
+    })
+    // Stale B error must not overwrite C selection or show an error.
+    expect(select.value).toBe('mic-c')
+    expect(host.textContent).not.toContain('old B failed')
+
+    // Advance so post-switch Mic C poll arrives -> must NOT carry over Mic A's -12 dB.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+      await flush()
+    })
+    expect(host.textContent).toContain(
+      'No sound from Mic C yet. Say something, or check the mic is not muted.',
+    )
+  })
+})

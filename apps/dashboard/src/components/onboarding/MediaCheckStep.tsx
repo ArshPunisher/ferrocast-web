@@ -22,7 +22,7 @@ import { Button, IconButton, Skeleton } from '@ferrocast/ui'
 import { CleanMicControl } from '../studio/desk/cleanmic-ui'
 import { MIC_KINDS } from '../studio/desk/cleanmic'
 import { Meter, useLevels } from '../studio/desk/mixer'
-import { useLevelFeed } from '../studio/desk/meter-feed'
+import { useLevelFeed, useLevelStatus } from '../studio/desk/meter-feed'
 
 type EngineApi = ReturnType<typeof studioEngineApi>
 
@@ -222,10 +222,18 @@ export function MediaCheckStep({
   const refreshCameraRef = useRef<() => void>(() => undefined)
 
   const [mics, setMics] = useState<DeviceChoice[]>([])
+  const [selectedMic, setSelectedMic] = useState('')
+  const [micSwitching, setMicSwitching] = useState(false)
   const [micAudio, setMicAudio] = useState<EngineAudio | null>(null)
   const [micFilters, setMicFilters] = useState<EngineFilter[] | null>(null)
   const [micError, setMicError] = useState<unknown>(null)
+  const [heardSignal, setHeardSignal] = useState(false)
+  const heardRef = useRef(false)
+  heardRef.current = heardSignal
   const probeReqRef = useRef(0)
+  const confirmedMicRef = useRef('')
+  const micSwitchReqRef = useRef(0)
+  const minSampleSeqRef = useRef(0)
 
   const probeMedia = useCallback(async () => {
     const req = ++probeReqRef.current
@@ -280,26 +288,38 @@ export function MediaCheckStep({
       }))
       setMics(micChoices)
 
+      ++micSwitchReqRef.current
+      setMicSwitching(false)
+      minSampleSeqRef.current = 0
       const foundMic =
         audioList.find((a) => MIC_KINDS.has(a.kind)) ??
         audioList.find((a) => a.name.toLowerCase().includes('mic')) ??
         null
       if (foundMic) {
+        const micSettings = await engine.settings(foundMic.name).catch(() => null)
+        if (probeReqRef.current !== req) return
+        const configured = micSettings?.device_id
+        const matched =
+          typeof configured === 'string' && configured.length > 0 ? configured : 'default'
+        confirmedMicRef.current = matched
         setMicAudio(foundMic)
+        setSelectedMic(matched)
       } else if (micChoices.some((c) => c.value !== 'default')) {
         // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
         const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
         if (probeReqRef.current !== req) return
         let micNew = 'Mic'
         for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
+        const initialMic = micChoices[0]!.value
         await engine.setChannel(3, {
           kind: micKind,
           name: micNew,
-          settings: { device_id: micChoices[0]!.value },
+          settings: { device_id: initialMic },
         })
         if (probeReqRef.current !== req) return
         const refreshed = await engine.audio(scenes.current).catch(() => [] as EngineAudio[])
         if (probeReqRef.current !== req) return
+        confirmedMicRef.current = initialMic
         setMicAudio(
           refreshed.find((a) => a.name === micNew) ?? {
             name: micNew,
@@ -310,8 +330,11 @@ export function MediaCheckStep({
             monitor: 'off',
           },
         )
+        setSelectedMic(initialMic)
       } else {
+        confirmedMicRef.current = ''
         setMicAudio(null)
+        setSelectedMic('')
       }
     } catch (e) {
       if (probeReqRef.current !== req) return
@@ -490,17 +513,57 @@ export function MediaCheckStep({
 
   const trackedNames = useMemo(() => (micName ? [micName] : []), [micName])
   const feed = useLevelFeed(engine, trackedNames)
+  const feedStatus = useLevelStatus(feed, micName)
   const levels: Record<string, EngineLevel> = useLevels(engine, trackedNames)
   const currentLevel = micName ? levels[micName] : undefined
+  const micMuted = !!micAudio?.muted
+  const matchedMicChoice = mics.find((m) => m.value === selectedMic)
+  const unavailableMicLabel =
+    selectedMic === 'default' ? 'System default microphone' : 'Saved microphone (not plugged in)'
+  const showUnavailableOption = Boolean(selectedMic) && !matchedMicChoice
+  const micLabel =
+    matchedMicChoice?.label ??
+    (showUnavailableOption ? unavailableMicLabel : (micAudio?.name ?? 'your microphone'))
+
+  useEffect(() => {
+    setHeardSignal(false)
+  }, [micName, selectedMic, micMuted])
+
+  useEffect(() => {
+    if (!micName || micMuted || micSwitching) return
+    const check = () => {
+      if (heardRef.current) return
+      if (feed.seq && feed.seq() <= minSampleSeqRef.current) return
+      const lv = feed.get(micName)
+      if (!lv) return
+      if (Math.max(lv.peak[0] ?? -100, lv.peak[1] ?? -100) > -60) {
+        setHeardSignal(true)
+      }
+    }
+    check()
+    return feed.subscribe(check)
+  }, [feed, micName, micMuted, micSwitching])
 
   const switchMicDevice = async (value: string) => {
     if (!micAudio) return
+    const req = ++micSwitchReqRef.current
+    setSelectedMic(value)
+    setMicSwitching(true)
+    setHeardSignal(false)
+    setMicError(null)
     try {
       // In place: only the device changes, so the mic keeps its filters, volume and mute (and
       // a mic that lives in a scene, as in an imported collection, can be switched too).
       await engine.update(micAudio.name, { device_id: value })
+      if (micSwitchReqRef.current !== req) return
+      confirmedMicRef.current = value
+      minSampleSeqRef.current = (feed.seq?.() ?? 0) + (feed.busy?.() ? 1 : 0)
+      setMicSwitching(false)
       onEdited?.()
     } catch (e) {
+      if (micSwitchReqRef.current !== req) return
+      setSelectedMic(confirmedMicRef.current)
+      setMicSwitching(false)
       setMicError(e)
     }
   }
@@ -749,13 +812,16 @@ export function MediaCheckStep({
                 )}
                 <h2 className="text-[15px] font-bold text-text">Microphone and level</h2>
               </div>
-              {mics.length > 1 && micAudio && (
+              {(mics.length > 1 || (mics.length > 0 && showUnavailableOption)) && micAudio && (
                 <select
                   aria-label="Choose microphone"
-                  defaultValue={mics[0]?.value ?? 'default'}
+                  value={selectedMic}
                   onChange={(e) => void switchMicDevice(e.target.value)}
                   className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                 >
+                  {showUnavailableOption && (
+                    <option value={selectedMic}>{unavailableMicLabel}</option>
+                  )}
                   {mics.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
@@ -812,6 +878,27 @@ export function MediaCheckStep({
                     />
                   </div>
                 </div>
+
+                {feedStatus === 'disconnected' ? (
+                  <div
+                    role="status"
+                    className="rounded-[10px] border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] text-text"
+                  >
+                    <p className="font-semibold">Microphone meter is not connected.</p>
+                    <p className="mt-0.5 text-text-2">
+                      Ferrocast is not receiving live audio levels from the engine yet. Continue
+                      setup to open Studio, or reopen Ferrocast and try again.
+                    </p>
+                  </div>
+                ) : (
+                  feedStatus === 'connected' &&
+                  !micSwitching &&
+                  (micAudio.muted || !heardSignal) && (
+                    <p role="status" className="text-[13px] text-text-2">
+                      No sound from {micLabel} yet. Say something, or check the mic is not muted.
+                    </p>
+                  )
+                )}
 
                 {describedMicError && (
                   <p role="alert" className="text-[13px] text-danger">
