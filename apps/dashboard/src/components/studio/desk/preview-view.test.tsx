@@ -9,12 +9,18 @@ import {
   ZOOM_MAX,
   ZOOM_MIN,
   StageBar,
+  clampPan,
   clampZoom,
+  fitBoxSize,
   getPreviewView,
+  pixelZoomForStage,
+  scrollPan,
+  setStageSize,
   stripeOf,
   useStageEdit,
   usePreviewView,
   zoomAt,
+  zoomBoundsPan,
 } from './preview'
 import { GuideOverlay, OverflowMask, guideLines } from './preview-guides'
 
@@ -36,6 +42,37 @@ describe('zoom maths', () => {
     expect(zoomAt(3, [0, 0], 10, [0, 0]).zoom).toBe(ZOOM_MAX)
     expect(zoomAt(0.3, [0, 0], 0.01, [0, 0]).zoom).toBe(ZOOM_MIN)
     expect(clampZoom(99)).toBe(ZOOM_MAX)
+  })
+  it('computes fit box size and 100% pixel scale purely from stage dimensions', () => {
+    expect(fitBoxSize(800, 600)).toEqual({ width: 800, height: 450 })
+    expect(fitBoxSize(1600, 450)).toEqual({ width: 800, height: 450 })
+    expect(fitBoxSize(0, 450)).toEqual({ width: 0, height: 0 })
+
+    expect(pixelZoomForStage(1920, 800)).toBeCloseTo(2.4)
+    expect(pixelZoomForStage(3840, 600)).toBe(ZOOM_MAX)
+    expect(pixelZoomForStage(1920, 0)).toBeNull()
+    expect(pixelZoomForStage(0, 800)).toBeNull()
+  })
+  it('clamps pan and scroll within the overflow area and stays centred when fitting', () => {
+    const stage = { width: 800, height: 450 }
+    const fit = fitBoxSize(stage.width, stage.height)
+    expect(zoomBoundsPan(1, fit, stage)).toEqual([0, 0])
+    expect(zoomBoundsPan(0.5, fit, stage)).toEqual([0, 0])
+    expect(zoomBoundsPan(2, fit, stage)).toEqual([400, 225])
+
+    expect(clampPan([500, -300], [400, 225])).toEqual([400, -225])
+    expect(clampPan([-0, -0], [0, 0])).toEqual([0, 0])
+
+    // Wheel scrolling down/right moves canvas left/up (negative pan) within bounds.
+    expect(scrollPan([0, 0], [120, 80], [400, 225])).toEqual([-120, -80])
+    expect(scrollPan([-350, -200], [120, 80], [400, 225])).toEqual([-400, -225])
+    // When canvas fits, scrolling leaves it centred.
+    expect(scrollPan([40, -20], [120, 80], [0, 0])).toEqual([0, 0])
+
+    // Zooming out back to Fit clears any leftover pan offset.
+    const zoomedOut = zoomAt(2, [300, -180], 0.5, [100, 50], { fit, stage })
+    expect(zoomedOut.zoom).toBe(1)
+    expect(zoomedOut.pan).toEqual([0, 0])
   })
 })
 
@@ -433,6 +470,38 @@ describe('the stage: lock, pan and pinch', () => {
     act(() => void el.dispatchEvent(pointer('pointermove', { button: 1, x: 5, y: 5 })))
     expect(getPreviewView().pan).toEqual([35, -15])
     act(() => void el.dispatchEvent(pointer('pointerup', { button: 1 })))
+  })
+
+  it('reconciles stored pan when the stage shrinks so dragging left moves immediately', async () => {
+    const { el } = await mount(false)
+    try {
+      act(() => setStageSize({ width: 800, height: 450 }))
+      key(el, 'keydown', '=', { ctrlKey: true })
+      key(el, 'keydown', '=', { ctrlKey: true })
+      act(() => void el.dispatchEvent(pointer('pointerdown', { button: 1, x: 0, y: 0 })))
+      act(() => void el.dispatchEvent(pointer('pointermove', { button: 1, x: 500, y: 0 })))
+      act(() => void el.dispatchEvent(pointer('pointerup', { button: 1 })))
+      const zoomed = getPreviewView().zoom
+      const fitBefore = fitBoxSize(800, 450)
+      const maxBefore = zoomBoundsPan(zoomed, fitBefore, { width: 800, height: 450 })
+      expect(getPreviewView().pan[0]).toBeCloseTo(maxBefore[0], 1)
+
+      // Shrink the stage: stored pan reconciles immediately to the smaller bounds.
+      act(() => setStageSize({ width: 400, height: 225 }))
+      const maxAfter = zoomBoundsPan(zoomed, fitBoxSize(400, 225), { width: 400, height: 225 })
+      expect(getPreviewView().pan[0]).toBeCloseTo(maxAfter[0], 1)
+
+      // A 10 px left drag moves immediately instead of fighting stale pan headroom.
+      act(() => void el.dispatchEvent(pointer('pointerdown', { button: 1, x: 100, y: 0 })))
+      act(() => void el.dispatchEvent(pointer('pointermove', { button: 1, x: 90, y: 0 })))
+      act(() => void el.dispatchEvent(pointer('pointerup', { button: 1 })))
+      expect(getPreviewView().pan[0]).toBeCloseTo(maxAfter[0] - 10, 1)
+    } finally {
+      act(() => {
+        setStageSize(null)
+        key(el, 'keydown', '0', { ctrlKey: true })
+      })
+    }
   })
 
   it('zooms with the keys and by pinching with two fingers, and does not drag a source then', async () => {

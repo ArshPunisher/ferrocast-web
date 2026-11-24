@@ -129,20 +129,99 @@ export const ZOOM_MAX = 4
 export const ZOOM_STEP = 1.25
 export const clampZoom = (z: number): number => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
 
+export interface StageSize {
+  width: number
+  height: number
+}
+
+const cleanZero = (n: number): number => (Object.is(n, -0) || Math.abs(n) < 1e-9 ? 0 : n)
+
+/**
+ * Fitted box size of an aspect-ratio canvas inside a stage content area (`stageW` × `stageH`).
+ */
+export function fitBoxSize(
+  stageW: number,
+  stageH: number,
+  aspect = 16 / 9,
+): { width: number; height: number } {
+  if (!(stageW > 0 && stageH > 0 && aspect > 0)) return { width: 0, height: 0 }
+  const width = Math.min(stageW, stageH * aspect)
+  return { width, height: width / aspect }
+}
+
+/**
+ * Zoom factor (relative to Fit = 1) that draws `canvasWidth` canvas pixels 1:1 with CSS pixels,
+ * clamped to `[ZOOM_MIN, ZOOM_MAX]`. Returns `null` when dimensions are unavailable.
+ */
+export function pixelZoomForStage(canvasWidth: number, fitWidth: number): number | null {
+  if (!(
+    Number.isFinite(canvasWidth) &&
+    Number.isFinite(fitWidth) &&
+    canvasWidth > 0 &&
+    fitWidth > 0
+  ))
+    return null
+  return clampZoom(canvasWidth / fitWidth)
+}
+
+/**
+ * Maximum `[x, y]` pan offset (px from stage centre) before a zoomed box leaves empty margin
+ * inside the stage. Zero on an axis when the box already fits on that axis.
+ */
+export function zoomBoundsPan(
+  zoom: number,
+  fit: { width: number; height: number },
+  stage: { width: number; height: number },
+): [number, number] {
+  return [
+    Math.max(0, (fit.width * zoom - stage.width) / 2),
+    Math.max(0, (fit.height * zoom - stage.height) / 2),
+  ]
+}
+
+/** Clamps `pan` to `[-maxPan, +maxPan]` on each axis and normalises `-0`. */
+export function clampPan(
+  pan: readonly [number, number],
+  maxPan: readonly [number, number],
+): [number, number] {
+  const cx = Math.min(maxPan[0], Math.max(-maxPan[0], pan[0]))
+  const cy = Math.min(maxPan[1], Math.max(-maxPan[1], pan[1]))
+  return [cleanZero(cx), cleanZero(cy)]
+}
+
+/**
+ * Applies a scroll delta (`+dx/+dy` = scroll right/down, shifting the canvas left/up) and clamps
+ * within `maxPan` so the canvas stays centred when it fits inside the stage.
+ */
+export function scrollPan(
+  pan: readonly [number, number],
+  delta: readonly [number, number],
+  maxPan: readonly [number, number],
+): [number, number] {
+  return clampPan([pan[0] - delta[0], pan[1] - delta[1]], maxPan)
+}
+
 /**
  * Zooms by `k` keeping the picture point under `at` (the pointer, from the stage's centre) where
  * it is: the box sits centred in its stage and `pan` moves it, so the new pan follows from the
- * old one. Returns the clamped zoom and the pan that goes with it.
+ * old one. When `bounds` is supplied, clamps the resulting pan to the overflow bounds so zooming
+ * back to Fit or smaller recentres cleanly.
  */
 export function zoomAt(
   zoom: number,
   pan: readonly [number, number],
   k: number,
   at: readonly [number, number],
+  bounds?: { fit: { width: number; height: number }; stage: { width: number; height: number } },
 ): { zoom: number; pan: [number, number] } {
   const next = clampZoom(zoom * k)
   const r = next / zoom
-  return { zoom: next, pan: [at[0] - (at[0] - pan[0]) * r, at[1] - (at[1] - pan[1]) * r] }
+  const raw: [number, number] = [
+    cleanZero(at[0] - (at[0] - pan[0]) * r),
+    cleanZero(at[1] - (at[1] - pan[1]) * r),
+  ]
+  const clamped = bounds ? clampPan(raw, zoomBoundsPan(next, bounds.fit, bounds.stage)) : raw
+  return { zoom: next, pan: clamped }
 }
 
 /** The preview's zoom, whether every source shows its outline, and whether frames keep their
@@ -167,6 +246,51 @@ const VIEWS: PictureView[] = ['wide', 'both', 'vertical']
 const VIEW_KEY = 'fc-preview-view'
 const viewSubs = new Set<() => void>()
 let view: PreviewView = readView()
+
+const stageSubs = new Set<() => void>()
+let stageSize: StageSize | null = null
+
+function displayedPan(v: PreviewView = view): [number, number] {
+  const b = getStageBounds(v.zoom)
+  return b ? clampPan(v.pan, b.maxPan) : v.pan
+}
+
+export function setStageSize(next: StageSize | null): void {
+  if (stageSize?.width === next?.width && stageSize?.height === next?.height) return
+  stageSize = next
+  const b = getStageBounds(view.zoom)
+  if (b) {
+    const pan = clampPan(view.pan, b.maxPan)
+    if (pan[0] !== view.pan[0] || pan[1] !== view.pan[1]) {
+      view = { ...view, pan }
+      for (const cb of viewSubs) cb()
+    }
+  }
+  for (const cb of stageSubs) cb()
+}
+
+function useStageSize(): StageSize | null {
+  return useSyncExternalStore(
+    (cb) => {
+      stageSubs.add(cb)
+      return () => stageSubs.delete(cb)
+    },
+    () => stageSize,
+  )
+}
+
+function getStageMetrics(): { fit: StageSize; stage: StageSize } | null {
+  if (!stageSize) return null
+  const fit = fitBoxSize(stageSize.width, stageSize.height)
+  if (!(fit.width > 0 && fit.height > 0)) return null
+  return { fit, stage: stageSize }
+}
+
+function getStageBounds(zoom: number): { maxPan: [number, number] } | null {
+  const m = getStageMetrics()
+  if (!m) return null
+  return { maxPan: zoomBoundsPan(zoom, m.fit, m.stage) }
+}
 
 function readView(): PreviewView {
   try {
@@ -202,7 +326,28 @@ function readView(): PreviewView {
 }
 
 function viewSet(next: Partial<PreviewView>): void {
-  view = { ...view, ...next }
+  const zoom = next.zoom !== undefined ? clampZoom(next.zoom) : view.zoom
+  const rawPan: [number, number] = next.pan
+    ? [cleanZero(next.pan[0]), cleanZero(next.pan[1])]
+    : view.pan
+  const b = getStageBounds(zoom)
+  const pan = b ? clampPan(rawPan, b.maxPan) : rawPan
+  const updated: PreviewView = { ...view, ...next, zoom, pan }
+  if (
+    updated.zoom === view.zoom &&
+    updated.pan[0] === view.pan[0] &&
+    updated.pan[1] === view.pan[1] &&
+    updated.locked === view.locked &&
+    updated.frames === view.frames &&
+    updated.keep === view.keep &&
+    updated.overflow === view.overflow &&
+    updated.view === view.view &&
+    updated.safe.action === view.safe.action &&
+    updated.safe.title === view.safe.title &&
+    updated.safe.cross === view.safe.cross
+  )
+    return
+  view = updated
   try {
     const { pan: _pan, ...kept } = view
     localStorage.setItem(VIEW_KEY, JSON.stringify(kept))
@@ -245,7 +390,8 @@ export function fitPreview(): void {
 /** Zooms the preview by `k` round `at` (from the stage's centre). */
 export function zoomView(k: number, at: [number, number] = [0, 0]): void {
   const v = getPreviewView()
-  const next = zoomAt(v.zoom, v.pan, k, at)
+  const m = getStageMetrics()
+  const next = zoomAt(v.zoom, v.pan, k, at, m ?? undefined)
   viewSet({ zoom: next.zoom, pan: next.pan })
 }
 
@@ -388,15 +534,58 @@ function PreviewBoxes({ running }: { running: boolean }) {
     return installPreviewInput((css) => void api.previewCursor(css).catch(() => undefined))
   }, [api, desktop, running])
   const [pv] = usePreviewView()
-  // ⌘/Ctrl + scroll (and a trackpad pinch, which arrives the same way) zooms round the pointer.
-  // A listener of its own: React's wheel handler can't stop the page from zooming itself.
+  const stage = useStageSize()
+  // Measure the active stage's inner content area so `100%` and scroll bounds stay exact and
+  // independent of the current zoom level (works in both desktop and browser/demo mode).
+  useEffect(() => {
+    const el = studio || (tall && pv.view === 'vertical') ? null : stageRef.current
+    if (!el) {
+      setStageSize(null)
+      return
+    }
+    const measure = () => {
+      const cs = getComputedStyle(el)
+      const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+      const width = Math.max(0, el.clientWidth - padX)
+      const height = Math.max(0, el.clientHeight - padY)
+      setStageSize(width > 0 && height > 0 ? { width, height } : null)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return () => setStageSize(null)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      setStageSize(null)
+    }
+  }, [studio, tall, pv.view])
+  // ⌘/Ctrl + scroll (and a trackpad pinch, which arrives the same way) zooms round the pointer;
+  // plain wheel / two-finger scroll pans inside the canvas area when it is larger than the view.
+  // A listener of its own: React's wheel handler can't stop the page from zooming or scrolling.
   useEffect(() => {
     const els = [stageRef.current, vStageRef.current].filter((e): e is HTMLDivElement => !!e)
     const off = els.map((el) => {
       const onWheel = (e: WheelEvent) => {
-        if (!(e.ctrlKey || e.metaKey)) return
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          zoomView(Math.exp(-e.deltaY * 0.0025), pointerFromCentre(el, e.clientX, e.clientY))
+          return
+        }
+        // Only the wide stage supports boxStyle pan transforms; never pan it from the vertical view.
+        if (el !== stageRef.current) return
+        const m = getStageMetrics()
+        if (!m) return
+        const v = getPreviewView()
+        const maxPan = zoomBoundsPan(v.zoom, m.fit, m.stage)
+        if (maxPan[0] <= 0 && maxPan[1] <= 0) return
         e.preventDefault()
-        zoomView(Math.exp(-e.deltaY * 0.0025), pointerFromCentre(el, e.clientX, e.clientY))
+        const mult = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? m.stage.height : 1
+        const rawDx = e.deltaX * mult
+        const rawDy = e.deltaY * mult
+        const dx = e.shiftKey && rawDx === 0 ? rawDy : rawDx
+        const dy = e.shiftKey && rawDx === 0 ? 0 : rawDy
+        viewSet({ pan: scrollPan(v.pan, [dx, dy], maxPan) })
       }
       el.addEventListener('wheel', onWheel, { passive: false })
       return () => el.removeEventListener('wheel', onWheel)
@@ -716,10 +905,14 @@ function PreviewBoxes({ running }: { running: boolean }) {
   }, [api, running, desktop, studio, tall])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
-  // The zoom, and where the zoomed canvas sits against the stage's centre.
+  // The zoom, and where the zoomed canvas sits against the stage's centre (clamped so Fit stays
+  // centred and never carries a stale pan offset after a resize or zoom-out).
+  const pan = stage
+    ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitBoxSize(stage.width, stage.height), stage))
+    : pv.pan
   const boxStyle = {
     '--fc-zoom': pv.zoom,
-    ...(pv.pan[0] || pv.pan[1] ? { transform: `translate(${pv.pan[0]}px, ${pv.pan[1]}px)` } : {}),
+    ...(pan[0] || pan[1] ? { transform: `translate(${pan[0]}px, ${pan[1]}px)` } : {}),
   } as CSSProperties
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
@@ -745,8 +938,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
           ? 'Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it.'
           : 'Click to edit it.'
       }`
-    const stage =
-      'grid min-h-0 touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+    const stageClass =
+      'grid min-h-0 touch-none overscroll-contain grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
     // One picture on its own (owner's pick X1): the other stage is hidden, so the app is told
     // to draw nothing for it, and the one shown fills the stage.
     const only = pv.view === 'both' ? null : pv.view
@@ -758,7 +951,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
           aria-label={label('main', !onTall)}
           data-stage-bg
           hidden={only === 'vertical'}
-          className={cx(stage, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
+          className={cx(stageClass, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
           {...(onTall ? pick('main') : editing)}
         >
           <div
@@ -781,7 +974,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
           data-stage-bg
           hidden={only === 'wide'}
           className={cx(
-            stage,
+            stageClass,
             // The tall picture as tall as the stage (owner, 28 Oct: not shrunk), with room on
             // its sides where what's off its canvas shows with its outline.
             only === 'vertical'
@@ -810,7 +1003,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
         ref={stageRef}
         aria-label="Studio preview. Click a source to pick it, drag to move it, drag a handle to resize it, arrow keys nudge it."
         data-stage-bg
-        className="grid min-h-16 flex-1 touch-none grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+        className="grid min-h-16 flex-1 touch-none overscroll-contain grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         {...editing}
       >
         <div
@@ -1595,7 +1788,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           pinch.current = {
             dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
             zoom: v.zoom,
-            pan: v.pan,
+            pan: displayedPan(v),
             mid: pointerFromCentre(e.currentTarget, (a.x + b.x) / 2, (a.y + b.y) / 2),
           }
           return
@@ -1604,7 +1797,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (e.button === 1 || (e.button === 0 && space.current)) {
         e.preventDefault()
         e.currentTarget.setPointerCapture(e.pointerId)
-        panning.current = { x: e.clientX, y: e.clientY, pan: getPreviewView().pan }
+        panning.current = { x: e.clientX, y: e.clientY, pan: displayedPan() }
         e.currentTarget.style.cursor = 'grabbing'
         return
       }
@@ -1749,7 +1942,12 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       if (panning.current) {
         const from = panning.current
-        viewSet({ pan: [from.pan[0] + e.clientX - from.x, from.pan[1] + e.clientY - from.y] })
+        const raw: [number, number] = [
+          from.pan[0] + e.clientX - from.x,
+          from.pan[1] + e.clientY - from.y,
+        ]
+        const bounds = getStageBounds(getPreviewView().zoom)
+        viewSet({ pan: bounds ? clampPan(raw, bounds.maxPan) : raw })
         return
       }
       const w = where(e)
@@ -2162,12 +2360,15 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
   const { api, scene, scenes, items, selected, refresh, size } = useDesk()
   const { run } = useAction()
   const [pv, setPv] = usePreviewView()
+  const stage = useStageSize()
   const c = size
-  // One canvas pixel per screen pixel: the zoom (against the fit) that makes the box as wide as
-  // the canvas. Known once the box is on the page.
-  const box = typeof document === 'undefined' ? null : document.querySelector('[data-canvas-box]')
-  const fitWidth = box ? box.getBoundingClientRect().width / pv.zoom : 0
-  const pixelZoom = c && fitWidth > 0 ? c.width / fitWidth : null
+  // One canvas pixel per screen pixel: derived strictly from the stage's fitted width (not from
+  // the current zoomed box), so repeated clicks on 100% never drift or double-scale.
+  const fitSize = stage ? fitBoxSize(stage.width, stage.height) : null
+  const pixelZoom = c && fitSize ? pixelZoomForStage(c.width, fitSize.width) : null
+  const clampedPan =
+    stage && fitSize ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitSize, stage)) : pv.pan
+  const isCentered = Math.abs(clampedPan[0]) < 0.5 && Math.abs(clampedPan[1]) < 0.5
   const list = items.data ?? []
   const idx = list.findIndex((i) => i.id === selected)
   const it = idx >= 0 ? list[idx] : undefined
@@ -2206,27 +2407,32 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
           aria-label="Zoom"
           className={cx('flex items-center gap-0.5', panel && 'flex-wrap gap-1')}
         >
-          {ZOOMS.map((z) => (
-            <button
-              key={z}
-              type="button"
-              aria-pressed={pv.zoom === z && !pv.pan[0] && !pv.pan[1]}
-              aria-label={z === 1 ? 'Fit the canvas and centre it' : `Zoom ${z * 100}%`}
-              title={z === 1 ? 'Fit the canvas and centre it (⌘0)' : undefined}
-              onClick={() => setPv({ zoom: z, pan: [0, 0] })}
-              className={zoomButton(pv.zoom === z && !pv.pan[0] && !pv.pan[1])}
-            >
-              {z === 1 ? 'Fit' : `${z * 100}%`}
-            </button>
-          ))}
+          {ZOOMS.map((z) => {
+            const active = Math.abs(pv.zoom - z) < 0.005 && isCentered
+            return (
+              <button
+                key={z}
+                type="button"
+                aria-pressed={active}
+                aria-label={z === 1 ? 'Fit the canvas and centre it' : `Zoom ${z * 100}%`}
+                title={z === 1 ? 'Fit the canvas and centre it (⌘0)' : undefined}
+                onClick={() => setPv({ zoom: z, pan: [0, 0] })}
+                className={zoomButton(active)}
+              >
+                {z === 1 ? 'Fit' : `${z * 100}%`}
+              </button>
+            )
+          })}
           <button
             type="button"
-            aria-label="Zoom to canvas pixels (100%)"
+            aria-label="Zoom 100%, canvas pixels"
             title="One canvas pixel per screen pixel"
-            aria-pressed={pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005}
+            aria-pressed={pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005 && isCentered}
             disabled={pixelZoom === null}
-            onClick={() => pixelZoom !== null && setPv({ zoom: clampZoom(pixelZoom), pan: [0, 0] })}
-            className={zoomButton(pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005)}
+            onClick={() => pixelZoom !== null && setPv({ zoom: pixelZoom, pan: [0, 0] })}
+            className={zoomButton(
+              pixelZoom !== null && Math.abs(pv.zoom - pixelZoom) < 0.005 && isCentered,
+            )}
           >
             100%
           </button>
