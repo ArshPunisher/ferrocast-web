@@ -215,3 +215,48 @@ describe('the B-frames switch', () => {
     ).toBe(true)
   })
 })
+
+describe('Stream quality bitrate cap note (U2)', () => {
+  it('shows the calm effective-rate sentence under the quality grid when Twitch caps Max 12 Mbps', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () =>
+      root?.render(
+        <StreamPage
+          s={mk({ video_kbps: 12000 })}
+          set={() => {}}
+          destinations={[
+            {
+              id: 'twitch',
+              kind: 'twitch',
+              canvas: 'main',
+              name: 'Twitch',
+              account: 'arsh',
+              enabled: true,
+              connected: true,
+              health: null,
+              blocked: null,
+              rules: [],
+            },
+            {
+              id: 'youtube',
+              kind: 'youtube',
+              canvas: 'main',
+              name: 'YouTube',
+              account: 'arsh',
+              enabled: true,
+              connected: true,
+              health: null,
+              blocked: null,
+              rules: [],
+            },
+          ]}
+        />,
+      ),
+    )
+    expect(host?.textContent).toContain(
+      'Sending 6.0 Mbps right now. Twitch takes at most 6 Mbps, and every place gets the same picture. Turn Twitch off to send 12 Mbps.',
+    )
+  })
+})

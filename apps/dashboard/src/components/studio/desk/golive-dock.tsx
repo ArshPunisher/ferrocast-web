@@ -15,6 +15,7 @@ import { IconButton, Button, Dialog, InfoLine, Skeleton, Switch, cx, toast } fro
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
 import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
+import { describeDestinationRate, describeStreamCapFromView } from '../bitrate-summary'
 import { useSaveOrder } from '../save-order'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
@@ -131,13 +132,35 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       if (r) res.reload()
     })
   const canRetry = onAir || live
+  const capSummary = view
+    ? describeStreamCapFromView(view.destinations, desk.prefs.data?.video_kbps)
+    : null
+  const mainStreamKbps = view
+    ? view.stats.kbps ||
+      (capSummary?.effectiveVideoKbps
+        ? capSummary.effectiveVideoKbps + (desk.prefs.data?.audio_kbps ?? 160)
+        : 6160)
+    : 6160
+  const vertStreamKbps = view ? view.vertical_stats.kbps || 4660 : 4660
   const row = (d: DestinationView) => (
     <li key={d.id} className="flex items-start gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
       <div className="mt-0.5 shrink-0">
         <Logo kind={d.kind} size={20} />
       </div>
       <div className="min-w-0 flex-1">
-        <RowText d={d} fixBitrate={fixBitrate} compact />
+        <RowText
+          d={d}
+          fixBitrate={fixBitrate}
+          compact
+          rateInfo={
+            capSummary
+              ? describeDestinationRate(d, capSummary, {
+                  streamKbps: mainStreamKbps,
+                  verticalKbps: vertStreamKbps,
+                })
+              : undefined
+          }
+        />
         <LiveLine
           d={d}
           canRetry={canRetry}
@@ -249,7 +272,15 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         size="lg"
         title={managing === 'vertical' ? 'Your vertical platforms' : 'Your platforms'}
       >
-        {view && managing && <Platforms view={view} onSaved={res.reload} canvas={managing} />}
+        {view && managing && (
+          <Platforms
+            view={view}
+            onSaved={res.reload}
+            canvas={managing}
+            videoKbps={desk.prefs.data?.video_kbps}
+            audioKbps={desk.prefs.data?.audio_kbps}
+          />
+        )}
       </Dialog>
       {saver.dialog}
     </section>

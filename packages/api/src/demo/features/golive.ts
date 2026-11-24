@@ -141,7 +141,10 @@ export class DemoGoLive {
     private readonly obsStreaming: () => boolean,
     private readonly obsConnected: () => boolean,
     private readonly studioStreaming: () => boolean = () => false,
+    private readonly studioVideoKbps: () => number | null = () => null,
   ) {}
+
+  private customKbps = false
 
   notifyStreamChange(): void {
     this.tick()
@@ -149,7 +152,10 @@ export class DemoGoLive {
 
   setup(s: DemoGoLiveSetup): void {
     if (s.upload_kbps !== undefined) this.uploadKbps = s.upload_kbps
-    if (s.kbps !== undefined) this.kbps = s.kbps
+    if (s.kbps !== undefined) {
+      this.kbps = s.kbps
+      this.customKbps = true
+    }
     if (s.points_here !== undefined) {
       this.pointsHere = s.points_here
       this.before = s.points_here ? 'Twitch' : null
@@ -240,6 +246,51 @@ export class DemoGoLive {
     }
   }
 
+  private mainCapState(): {
+    effectiveKbps: number
+    targetVideo: number | null
+    limiter: { id: string; name: string; ceiling: number } | null
+  } {
+    const obsSupplying = this.pointsHere && this.obsStreaming() && !this.studioStreaming()
+    const targetVideo = !this.customKbps && !obsSupplying ? this.studioVideoKbps() : null
+    if (targetVideo === null) {
+      return { effectiveKbps: this.kbps, targetVideo: null, limiter: null }
+    }
+    const candidates = this.advanced.ignore_service_limits
+      ? []
+      : this.cfg
+          .filter((d) => {
+            if (!d.enabled || (d.canvas ?? 'main') !== 'main' || d.light) return false
+            const primary = Object.entries(this.advanced.per).find(
+              ([, a]) => a.backup === d.id,
+            )?.[0]
+            const backs = primary ? this.cfg.some((x) => x.id === primary && x.enabled) : false
+            return !backs
+          })
+          .map((d) => {
+            const ceiling =
+              d.kind === 'twitch' && !d.enhanced
+                ? 6000
+                : d.kind === 'kick' && !d.enhanced
+                  ? 8000
+                  : null
+            return ceiling !== null
+              ? { id: d.id, name: LABELS[d.kind as 'twitch' | 'kick'], ceiling }
+              : null
+          })
+          .filter((x): x is { id: string; name: string; ceiling: number } => x !== null)
+          .sort((a, b) => a.ceiling - b.ceiling)
+    const lowest = candidates[0] ?? null
+    if (lowest && targetVideo > lowest.ceiling) {
+      return { effectiveKbps: lowest.ceiling + 160, targetVideo, limiter: lowest }
+    }
+    return {
+      effectiveKbps: targetVideo === 6000 ? this.kbps : targetVideo + 160,
+      targetVideo,
+      limiter: null,
+    }
+  }
+
   private stats(): StreamStats {
     if (!this.live())
       return {
@@ -251,7 +302,7 @@ export class DemoGoLive {
         fps: null,
       }
     return {
-      kbps: this.kbps,
+      kbps: this.mainCapState().effectiveKbps,
       keyframe_interval_ms: this.keyint,
       video_codec: this.codec,
       width: 1920,
@@ -308,7 +359,7 @@ export class DemoGoLive {
       }
     }
     const wobble = Math.round((this.host.random() - 0.5) * 300)
-    const base = d.canvas === 'vertical' ? 4500 : 6100
+    const base = d.canvas === 'vertical' ? 4500 : this.mainCapState().effectiveKbps
     const health: PushHealth = { state: 'live', kbps: base + wobble, dropped: 0, since_ms: since }
     // A direct destination measures its network: a weak patch every half minute, resent.
     if (directKind(d.url ?? '')) {
@@ -377,6 +428,7 @@ export class DemoGoLive {
     const now = Date.now()
     const s = this.stats()
     const vs = this.verticalStats()
+    const { limiter, targetVideo } = this.mainCapState()
     const nameOf = (d: DestinationConfig) =>
       d.kind === 'custom'
         ? (d.name ?? 'Custom server')
@@ -393,6 +445,22 @@ export class DemoGoLive {
       const issues = d.enabled
         ? this.rulesStructured(d.kind, vertical ? vs : s, vertical, !!d.enhanced)
         : []
+      const capped =
+        limiter &&
+        targetVideo !== null &&
+        d.enabled &&
+        !vertical &&
+        !d.light &&
+        !d.enhanced &&
+        !backs &&
+        (d.kind === 'twitch' || d.kind === 'kick')
+          ? {
+              kbps: limiter.ceiling,
+              separate_encode: false,
+              summary: `Capped at ${limiter.ceiling.toLocaleString()} kbps for ${limiter.name}`,
+              detail: `Your ${targetVideo.toLocaleString()} kbps stream is capped at ${limiter.ceiling.toLocaleString()} kbps H.264 (2 s keyframes, 1x VBV) so ${limiter.name} viewers don’t stutter.`,
+            }
+          : undefined
       return {
         id: d.id,
         kind: d.kind,
@@ -404,6 +472,7 @@ export class DemoGoLive {
         health: backs ? null : this.health(d, now),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
         ...(d.brand ? { brand: d.brand } : {}),
+        ...(capped ? { capped } : {}),
         rules: issues.map((i) => i.detail),
         issues,
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),

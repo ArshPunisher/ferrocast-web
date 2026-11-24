@@ -35,8 +35,10 @@ import {
 import {
   WRITTEN_RECORD_FORMATS,
   describeError,
+  goliveApi,
   writtenFormat,
   type AudioCare,
+  type DestinationView,
   type WrittenRecordFormat,
   type PrivacyGuard,
   type StudioSettings,
@@ -56,6 +58,8 @@ import {
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
+import { useLive } from '../../../lib/store'
+import { describeStreamCap } from '../bitrate-summary'
 import { useDesk, type EngineApi } from './common'
 import { sharedNote } from './record-notes'
 import { AutoConfigDialog } from './auto-config'
@@ -606,11 +610,33 @@ export function StreamPage({
   s,
   set,
   onSynced,
-}: PageProps & { onSynced?: (next: StudioSettings) => void }) {
+  destinations,
+}: PageProps & { onSynced?: (next: StudioSettings) => void; destinations?: DestinationView[] }) {
   const [wizard, setWizard] = useState(false)
   const [more, setMore] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
   const quality = streamQuality(s)
+  const conn = useLive((st) => st.conn)
+  const liveDests = useLive((st) => st.goliveView?.destinations ?? st.studio.golive?.destinations)
+  const [fetched, setFetched] = useState<{ conn: typeof conn; dests: DestinationView[] } | null>(
+    null,
+  )
+  useEffect(() => {
+    if (destinations || liveDests || !conn) return
+    let alive = true
+    void goliveApi(conn.client)
+      .view()
+      .then((v) => alive && setFetched({ conn, dests: v.destinations }))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [conn, destinations, liveDests])
+  const fetchedDests = fetched && fetched.conn === conn ? fetched.dests : null
+  const capSummary = useMemo(
+    () => describeStreamCap(s.video_kbps, destinations ?? liveDests ?? fetchedDests ?? []),
+    [s.video_kbps, destinations, liveDests, fetchedDests],
+  )
   return (
     <>
       <button
@@ -661,6 +687,15 @@ export function StreamPage({
           onPick={() => setMore(true)}
         />
       </ChoiceGrid>
+      {capSummary.settingsNote && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-control border border-line bg-surface-2 px-3 py-2 text-[13.5px] leading-snug text-text-2"
+        >
+          <Info size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0 text-accent-text" />
+          <span>{capSummary.settingsNote}</span>
+        </p>
+      )}
       <Heading
         info={
           isMac
