@@ -215,4 +215,46 @@ test.describe('first-run import and camera/mic check', () => {
     await expect(mediaHeading).toBeFocused()
     await checkAxe()
   })
+
+  test('camera preview keeps refreshing and recovers automatically when a camera stops and comes back', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+    await expect(page.locator('img[alt^="Preview from"]')).toBeVisible()
+
+    // Simulate iPhone camera sleeping / stopping frames -> shows calm waiting state with Refresh frame button.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ cameraSleeping: true })
+    })
+    await expect(
+      page.getByText(
+        'Waiting for your camera. An iPhone can switch off when it sleeps or locks: unlock it and keep it near. Ferrocast will pick it up again.',
+      ),
+    ).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('button', { name: 'Refresh frame' })).toBeVisible()
+
+    // Also verify zero horizontal overflow at 375px while in waiting state.
+    await page.setViewportSize({ width: 375, height: 812 })
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+
+    // Camera wakes back up -> recovers automatically without reloading or clicking.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ cameraSleeping: false })
+    })
+    await expect(page.locator('img[alt^="Preview from"]')).toBeVisible({ timeout: 8000 })
+  })
 })
