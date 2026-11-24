@@ -76,7 +76,6 @@ import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
 import { setPictureSource, usePictureSource } from '../../lib/picture'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
-import { SchedulePanel } from './schedule'
 import { useSaveOrder } from './save-order'
 import { useStudio } from './common'
 import { useObsHealth } from './obs'
@@ -225,7 +224,6 @@ export function GoLiveTab() {
           )}
           <Setup view={view} onObs={(obs) => set({ obs })} onUpload={(upload) => set({ upload })} />
           {view.upload && <Upload view={view} onUpload={(upload) => set({ upload })} />}
-          <SchedulePanel />
         </div>
       </div>
     </>

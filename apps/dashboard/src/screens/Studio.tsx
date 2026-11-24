@@ -2,11 +2,13 @@
 // "Studio" and "Go live everywhere").
 
 import { useState, type ReactNode } from 'react'
+import { Calendar } from '@phosphor-icons/react'
 import { Segmented } from '@ferrocast/ui'
 import { PageHeader } from '../components/Panel'
 import { useStudio } from '../components/studio/common'
 import { BarSlot } from '../components/studio/desk/common'
 import { GoLiveTab, GoingToLine } from '../components/studio/golive'
+import { SchedulePanel } from '../components/studio/schedule'
 import { VerticalTab } from '../components/studio/vertical'
 import {
   DontMissLane,
@@ -35,7 +37,7 @@ import { TranscriptPanel } from '../components/studio/transcript'
 import { ClipsTab } from '../components/studio/clips/clips-tab'
 import { useLive } from '../lib/store'
 
-const TABS: { value: StudioSection; label: ReactNode }[] = [
+export const STUDIO_TABS: { value: StudioSection; label: ReactNode }[] = [
   { value: 'golive', label: 'Go live' },
   // Second: what viewers see is set right after picking where to go (owner, 29 Oct).
   { value: 'info', label: 'Stream info' },
@@ -44,6 +46,15 @@ const TABS: { value: StudioSection; label: ReactNode }[] = [
   { value: 'obs', label: 'OBS' },
   { value: 'moments', label: 'Moments' },
   { value: 'clips', label: 'Clips' },
+  {
+    value: 'schedule',
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <Calendar size={14} aria-hidden />
+        Schedule
+      </span>
+    ),
+  },
 ]
 
 /** The tabs this window shows: OBS and Vertical only for those who stream from OBS, and no Clips
@@ -93,7 +104,7 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
   const showOn = !!run && run.phase !== 'ended'
   // Clips are files on this PC: a paired phone gets no Clips tab (its requests are denied).
   const onPhone = useLive((s) => !!s.remote)
-  const tabs = markRunningShow(studioTabs(TABS, { usesObs, onPhone }), showOn)
+  const tabs = markRunningShow(studioTabs(STUDIO_TABS, { usesObs, onPhone }), showOn)
   const info = useResource(() => studio.streamInfo(), [studio])
   // OBS's scenes only for its own tab: asked on every Studio page they failed without OBS (a
   // 422 on each load); elsewhere the request just waits, never sent.
@@ -217,6 +228,11 @@ export function Studio({ section = 'golive' }: { section?: StudioSection | undef
         ) : (
           <ClipsTab />
         ))}
+      {section === 'schedule' && (
+        <div className="max-w-3xl">
+          <SchedulePanel />
+        </div>
+      )}
       {section === 'moments' && (
         <div className="flex flex-col gap-5">
           <MomentsTimeline />

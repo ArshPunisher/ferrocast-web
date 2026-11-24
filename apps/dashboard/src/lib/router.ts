@@ -34,7 +34,7 @@ export type GalleryTab = 'themes' | 'alerts' | 'widgets' | 'mine'
 const GALLERY_TABS: GalleryTab[] = ['themes', 'alerts', 'widgets', 'mine']
 
 export type StudioSection =
-  'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'clips' | 'engine'
+  'golive' | 'vertical' | 'show' | 'info' | 'obs' | 'moments' | 'clips' | 'schedule' | 'engine'
 const STUDIO_SECTIONS: StudioSection[] = [
   'golive',
   'vertical',
@@ -43,6 +43,7 @@ const STUDIO_SECTIONS: StudioSection[] = [
   'obs',
   'moments',
   'clips',
+  'schedule',
   'engine',
 ]
 

@@ -3,7 +3,15 @@ import { open } from './helpers'
 
 test.use({ viewport: { width: 375, height: 812 } })
 
-for (const s of ['studio/show', 'studio/info', 'studio/obs', 'studio/moments', 'bot', 'home'])
+for (const s of [
+  'studio/show',
+  'studio/info',
+  'studio/obs',
+  'studio/moments',
+  'studio/schedule',
+  'bot',
+  'home',
+])
   test(`${s} fits a 375 px phone`, async ({ page }) => {
     await open(page, s)
     await page.waitForTimeout(400)

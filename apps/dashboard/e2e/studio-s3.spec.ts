@@ -137,23 +137,30 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
       // Capture deliverable screenshot before mutating schedule/route state.
       await maybeShot(page, vp.width)
 
-      // Planned streams stays reachable inside the dock and can plan & remove a stream.
-      await dock.getByRole('button', { name: 'Plan a stream' }).click()
-      const dialog = page.getByRole('dialog', { name: 'Plan a stream' })
-      await expect(dialog).toBeVisible()
-      await dialog.getByLabel('Title').fill('Evening dev stream')
-      await dialog.getByRole('button', { name: 'Plan it' }).click()
-      await expect(dock.getByText('Evening dev stream')).toBeVisible()
-      await dock.getByRole('button', { name: 'Remove Evening dev stream' }).click()
-      const confirmRemove = page.getByRole('alertdialog', { name: 'Remove Evening dev stream?' })
-      if (await confirmRemove.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await confirmRemove.getByRole('button', { name: 'Remove' }).click()
-      }
-      await expect(dock.getByText('Nothing planned yet.')).toBeVisible()
+      // Planned streams no longer sits in the Go live dock; it lives in its own Schedule tab.
+      await expect(dock.getByRole('heading', { name: 'Planned streams' })).toHaveCount(0)
+      await expect(main.getByRole('heading', { name: 'Planned streams' })).toHaveCount(0)
 
       // Clicking Open clips navigates cleanly to Studio > Clips.
       await clips.getByRole('button', { name: 'Open clips' }).click()
       await expect(page).toHaveURL(/#\/studio\/clips/)
+
+      // Clicking the Schedule tab navigates to Studio > Schedule and plans & removes a stream.
+      await page.getByRole('radiogroup', { name: 'Studio section' }).getByText('Schedule').click()
+      await expect(page).toHaveURL(/#\/studio\/schedule/)
+      await expect(page.getByRole('heading', { name: 'Planned streams' })).toBeVisible()
+      await page.getByRole('button', { name: 'Plan a stream' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Plan a stream' })
+      await expect(dialog).toBeVisible()
+      await dialog.getByLabel('Title').fill('Evening dev stream')
+      await dialog.getByRole('button', { name: 'Plan it' }).click()
+      await expect(page.getByText('Evening dev stream')).toBeVisible()
+      await page.getByRole('button', { name: 'Remove Evening dev stream' }).click()
+      const confirmRemove = page.getByRole('alertdialog', { name: 'Remove Evening dev stream?' })
+      if (await confirmRemove.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await confirmRemove.getByRole('button', { name: 'Remove' }).click()
+      }
+      await expect(page.getByText('Nothing planned.')).toBeVisible()
     })
   }
 
@@ -674,6 +681,10 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Your platforms' })).toBeHidden()
 
+    const scheduleTab = page.getByRole('radio', { name: 'Schedule' })
+    await scheduleTab.focus()
+    await page.keyboard.press('Space')
+    await expect(page).toHaveURL(/#\/studio\/schedule/)
     await page.getByRole('button', { name: 'Plan a stream' }).focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('dialog', { name: 'Plan a stream' })).toBeVisible()
@@ -856,10 +867,13 @@ test.describe('Studio > Go live pre-start S3 (Studio-Desk Silhouette)', () => {
     await clips.getByRole('button', { name: 'Retry' }).click()
     await expect(clips).toContainText('Recovered recording')
 
-    // Part B: engine status error preserves Planned streams alongside LoadError.
+    // Part B: engine status error omits Planned streams in Go live, while Schedule tab stays reachable.
     failEngineStatus = true
     await page.reload()
     await expect(page.getByText('Engine unreachable.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Planned streams' })).toHaveCount(0)
+    await page.getByRole('radiogroup', { name: 'Studio section' }).getByText('Schedule').click()
+    await expect(page).toHaveURL(/#\/studio\/schedule/)
     await expect(page.getByRole('heading', { name: 'Planned streams' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Plan a stream' })).toBeEnabled()
   })

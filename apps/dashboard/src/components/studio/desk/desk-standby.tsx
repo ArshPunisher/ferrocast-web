@@ -1,18 +1,16 @@
-// Studio > Go live pre-start view: S3 "Studio-Desk Silhouette" — a 16:9 standby stage on the
-// left, a compact right dock with platforms (shown once), quick checks, and Planned streams,
+// Studio > Go live pre-start view: S3 "Studio-Desk Silhouette", a 16:9 standby stage on the
+// left and a compact right dock with platforms (shown once) and quick checks,
 // plus a full-width recent recordings strip below.
 
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
-  CalendarPlus,
   FilmSlate,
   HardDrive,
   Microphone,
   Play,
   Plug,
   ShieldWarning,
-  Trash,
   VideoCamera,
   WarningCircle,
 } from '@phosphor-icons/react'
@@ -21,40 +19,24 @@ import {
   clipSize,
   onCanvas,
   relativeTime,
-  scheduleApi,
   studioApi,
   type Clip,
   type GoLiveView,
-  type ScheduledStream,
   type StudioEngineStatus,
   type StudioStartOptions,
 } from '@ferrocast/api'
-import {
-  Badge,
-  Button,
-  ConfirmDialog,
-  Dialog,
-  FerroGlyph,
-  IconButton,
-  InfoLine,
-  InfoTip,
-  Skeleton,
-  cx,
-} from '@ferrocast/ui'
-import { useAction, useClient, useNow, useResource, type Resource } from '../../../lib/hooks'
+import { Badge, Button, Dialog, FerroGlyph, InfoLine, InfoTip, Skeleton, cx } from '@ferrocast/ui'
+import { useClient, useNow, useResource, type Resource } from '../../../lib/hooks'
 import { go } from '../../../lib/router'
 import { useLive } from '../../../lib/store'
 import { isSafeModeLocked } from '../../safe-mode'
 import { Logo, Platforms } from '../golive'
-import { Plan, PlanDialog } from '../schedule'
 import { KIND_LABEL } from '../clips/labels'
 import { Thumb, useThumb } from '../clips/thumb'
 import { useEngine } from './common'
 import {
   buildQuickChecks,
   formatResolutionSummary,
-  pickNextPlan,
-  planTimingSummary,
   readStandbySnapshot,
   resolveStandbyPhase,
   resolveStandbyPreview,
@@ -66,14 +48,6 @@ import {
   type StartChoice,
   type StartFailure,
 } from './standby-model'
-
-const WHEN = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  hour: 'numeric',
-  minute: '2-digit',
-})
 
 const DOT_CLS: Record<QuickCheckTone, string> = {
   ok: 'bg-ok',
@@ -122,17 +96,13 @@ export function DeskStandby({
   const client = useClient()
   const engine = useEngine()
   const studio = useMemo(() => studioApi(client), [client])
-  const schedule = useMemo(() => scheduleApi(client), [client])
   const clips = useMemo(() => clipsApi(client), [client])
   const connectors = useLive((s) => s.connectors)
   const obsHealth = useLive((s) => s.studio.health)
-  const { run, busy } = useAction()
   const now = useNow(30_000)
 
   const [cached] = useState(() => readStandbySnapshot())
   const [managingPlatforms, setManagingPlatforms] = useState(false)
-  const [planOpen, setPlanOpen] = useState(false)
-  const [allPlansOpen, setAllPlansOpen] = useState(false)
 
   // Every optional pre-start fetch catches gracefully: a cold real desktop engine may reject
   // live-scene queries before Start the Studio is pressed.
@@ -142,7 +112,6 @@ export function DeskStandby({
   const collections = useResource(() => engine.shelf('collections').catch(() => null), [engine])
   const profiles = useResource(() => engine.shelf('profiles').catch(() => null), [engine])
   const scenes = useResource(() => engine.scenes().catch(() => null), [engine])
-  const plansRes = useResource(() => schedule.list(), [schedule])
   const clipsRes = useResource(() => clips.list(), [clips])
 
   const collectionName = useMemo(() => {
@@ -226,19 +195,11 @@ export function DeskStandby({
   )
 
   const checksBadge = useMemo(() => summarizeQuickChecks(checks), [checks])
-  const plans = useMemo(() => plansRes.data ?? [], [plansRes.data])
-  const nextPlan = useMemo(() => pickNextPlan(plans, now), [plans, now])
   const recentClips = useMemo(() => (clipsRes.data?.clips ?? []).slice(0, 3), [clipsRes.data])
 
   const triggerStart = (choice: StartChoice, opts?: StudioStartOptions) => {
     if (starting !== null) return
     void onStart(choice, opts)
-  }
-
-  const removePlan = (id: string) => {
-    void run(`del:${id}`, () => schedule.remove(id), {
-      success: 'Removed. A broadcast already made on a platform stays there.',
-    }).then(() => plansRes.reload())
   }
 
   return (
@@ -514,7 +475,7 @@ export function DeskStandby({
           </footer>
         </section>
 
-        {/* Right: Go live dock mirror (Platforms ONCE + Quick checks + Planned streams) */}
+        {/* Right: Go live dock mirror (Platforms ONCE + Quick checks) */}
         <aside
           aria-label="Pre-start dock"
           className="flex min-w-0 flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-surface-1"
@@ -637,46 +598,6 @@ export function DeskStandby({
               })}
             </div>
           </section>
-
-          {/* 3. Planned streams reachable inside the dock */}
-          <section aria-label="Planned streams" className="flex flex-1 flex-col px-3 py-2">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <h2 className="m-0 text-[13.5px] font-bold text-text">Planned streams</h2>
-              <Button
-                size="xs"
-                variant="secondary"
-                icon={<CalendarPlus size={14} aria-hidden />}
-                onClick={() => setPlanOpen(true)}
-              >
-                Plan a stream
-              </Button>
-            </div>
-
-            {plansRes.error && !plansRes.data ? (
-              <div className="flex items-center justify-between gap-2 text-[12.5px] text-text-2">
-                <span>Could not load schedule.</span>
-                <Button size="xs" variant="ghost" onClick={plansRes.reload}>
-                  Retry
-                </Button>
-              </div>
-            ) : !plansRes.data ? (
-              <Skeleton className="h-11" />
-            ) : !nextPlan ? (
-              <p className="m-0 text-[12.5px] leading-snug text-text-2">
-                Nothing planned yet. Schedule a reminder before you go live.
-              </p>
-            ) : (
-              <CompactPlanRow
-                key={nextPlan.id}
-                plan={nextPlan}
-                totalCount={plans.length}
-                now={now}
-                busy={busy === `del:${nextPlan.id}`}
-                onOpenAll={() => setAllPlansOpen(true)}
-                onDelete={() => removePlan(nextPlan.id)}
-              />
-            )}
-          </section>
         </aside>
       </div>
 
@@ -769,92 +690,6 @@ export function DeskStandby({
           />
         )}
       </Dialog>
-
-      <PlanDialog
-        open={planOpen}
-        onClose={() => setPlanOpen(false)}
-        onSaved={() => {
-          setPlanOpen(false)
-          plansRes.reload()
-        }}
-      />
-
-      <Dialog
-        compact
-        open={allPlansOpen}
-        onClose={() => setAllPlansOpen(false)}
-        size="md"
-        title="Planned streams"
-      >
-        <ul className="m-0 flex list-none flex-col gap-2.5 p-1">
-          {plans.map((p) => (
-            <Plan
-              key={p.id}
-              s={p}
-              now={now}
-              busy={busy === `del:${p.id}`}
-              onDelete={() => removePlan(p.id)}
-            />
-          ))}
-        </ul>
-      </Dialog>
-    </div>
-  )
-}
-
-function CompactPlanRow({
-  plan,
-  totalCount,
-  now,
-  busy,
-  onOpenAll,
-  onDelete,
-}: {
-  plan: ScheduledStream
-  totalCount: number
-  now: number
-  busy: boolean
-  onOpenAll: () => void
-  onDelete: () => void
-}) {
-  const [asking, setAsking] = useState(false)
-  const made = plan.broadcasts.some((b) => b.id)
-  return (
-    <div className="flex items-start justify-between gap-2 rounded-control border border-line bg-surface-2/50 px-2.5 py-1.5">
-      <ConfirmDialog
-        open={asking}
-        onClose={() => setAsking(false)}
-        title={`Remove ${plan.info.title ?? 'this plan'}?`}
-        description="The broadcast already made on a platform stays there. Delete it on that platform too."
-        confirm="Remove"
-        onConfirm={() => {
-          setAsking(false)
-          onDelete()
-        }}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="m-0 truncate text-[13px] font-semibold text-text">
-          {plan.info.title || 'Scheduled stream'}
-        </p>
-        <p className="m-0 truncate text-[12px] text-text-2">
-          {WHEN.format(plan.start_ms)} · {planTimingSummary(plan, now)}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {totalCount > 1 && (
-          <Button size="xs" variant="ghost" onClick={onOpenAll}>
-            +{totalCount - 1}
-          </Button>
-        )}
-        <IconButton
-          size="xs"
-          label={`Remove ${plan.info.title ?? 'plan'}`}
-          disabled={busy}
-          onClick={() => (made ? setAsking(true) : onDelete())}
-        >
-          <Trash size={14} aria-hidden />
-        </IconButton>
-      </div>
     </div>
   )
 }

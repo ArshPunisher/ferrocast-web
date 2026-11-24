@@ -93,7 +93,6 @@ import { AudioDock } from './mixer'
 import { PreviewBox, StageBar } from './preview'
 import { DeskStandby } from './desk-standby'
 import type { StartChoice, StartFailure } from './standby-model'
-import { SchedulePanel } from '../schedule'
 import { ScenesDock } from './scenes'
 import { SettingsDialog, type Page } from './settings'
 import { takePendingSettings } from '../../../lib/menu'
@@ -195,9 +194,6 @@ export function StudioDesk({
       <>
         {lead && <InBar className="mb-2 flex">{lead}</InBar>}
         <LoadError error={status.error} onRetry={status.reload} />
-        <div className="mt-5 max-w-3xl">
-          <SchedulePanel />
-        </div>
       </>
     )
   if (!s) return <Skeleton className="h-[560px]" />
@@ -746,9 +742,6 @@ function Running({
         <TransitionsDialog initial={transitionsAt} onClose={() => setTransitionsAt(null)} />
         <SourcePanel />
       </DeskProvider>
-      <div className="mt-5 max-w-3xl">
-        <SchedulePanel />
-      </div>
     </>
   )
 }

@@ -2,7 +2,8 @@
 import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
-import { markRunningShow, studioTabs } from './Studio'
+import { href, parseRoute } from '../lib/router'
+import { markRunningShow, STUDIO_TABS, studioTabs } from './Studio'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -52,5 +53,36 @@ describe('which Studio tabs a window shows', () => {
   it('gives a paired phone no Clips tab (the PC refuses it those calls)', () => {
     expect(names(true, true)).not.toContain('clips')
     expect(names(false, true)).toEqual(['golive', 'info', 'show', 'moments'])
+  })
+})
+
+describe('the Schedule tab and deep link', () => {
+  it('parses and formats the #/studio/schedule deep link', () => {
+    expect(parseRoute('#/studio/schedule')).toEqual({ name: 'studio', section: 'schedule' })
+    expect(href({ name: 'studio', section: 'schedule' })).toBe('#/studio/schedule')
+  })
+
+  it('includes a Schedule tab with an icon + label across OBS and phone views', async () => {
+    const sched = STUDIO_TABS.find((t) => t.value === 'schedule')
+    expect(sched).toBeDefined()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => root.render(<>{sched!.label}</>))
+    expect(host.textContent).toBe('Schedule')
+    expect(host.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    await act(async () => root.unmount())
+    host.remove()
+
+    expect(studioTabs(STUDIO_TABS, { usesObs: false, onPhone: false }).map((t) => t.value)).toEqual(
+      ['golive', 'info', 'show', 'moments', 'clips', 'schedule'],
+    )
+    expect(studioTabs(STUDIO_TABS, { usesObs: false, onPhone: true }).map((t) => t.value)).toEqual([
+      'golive',
+      'info',
+      'show',
+      'moments',
+      'schedule',
+    ])
   })
 })
