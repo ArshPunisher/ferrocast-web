@@ -93,4 +93,19 @@ describe('Clean up my mic', () => {
     await press(/try again|retry/i)
     expect(onReload).toHaveBeenCalled()
   })
+
+  it('renders a compact bordered tile with title, hint, action slot, and optional voice footer', async () => {
+    const api = {
+      addFilter: vi.fn(async () => undefined),
+      editFilter: vi.fn(async () => undefined),
+      removeFilter: vi.fn(async () => undefined),
+    }
+    await mount(api, { footer: <div data-testid="voice-footer">Presets</div> })
+    const tile = host.querySelector('[data-testid="clean-mic-tile"]') as HTMLElement | null
+    expect(tile).not.toBeNull()
+    expect(tile?.className).toContain('border')
+    expect(tile?.textContent).toContain('Auto mic cleanup')
+    expect(tile?.textContent).toContain('Clean up my mic')
+    expect(tile?.querySelector('[data-testid="voice-footer"]')).not.toBeNull()
+  })
 })

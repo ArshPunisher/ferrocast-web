@@ -279,6 +279,8 @@ export interface SegmentedProps<T extends string> {
   options: { value: T; label: ReactNode; title?: string }[]
   onChange: (v: T) => void
   size?: 'sm' | 'md'
+  /** Stretch segments into equal-width columns across the container. */
+  even?: boolean
   className?: string
 }
 
@@ -289,6 +291,7 @@ export function Segmented<T extends string>({
   options,
   onChange,
   size = 'md',
+  even = false,
   className,
 }: SegmentedProps<T>) {
   const name = useId()
@@ -298,7 +301,11 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cx('inline-flex rounded-control border border-line bg-inset p-0.5', className)}
+      className={cx(
+        even ? 'grid w-full auto-cols-fr grid-flow-col' : 'inline-flex',
+        'rounded-control border border-line bg-inset p-0.5',
+        className,
+      )}
     >
       {options.map((o) => {
         const on = o.value === value
@@ -308,6 +315,7 @@ export function Segmented<T extends string>({
             title={o.title}
             className={cx(
               'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
+              even && 'flex items-center justify-center text-center',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
               'has-[:disabled]:cursor-not-allowed',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',

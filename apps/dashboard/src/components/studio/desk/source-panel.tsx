@@ -2,7 +2,7 @@
 // rename it; for a sound, its level, "hear it" and the scenes it plays in; its filters in
 // plain words; and every setting OBS has for it, applied as you change them.
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -408,9 +408,13 @@ function Panel({
             {MIC_KINDS.has(kind) && (
               <section aria-label="Clean up" className="flex flex-col">
                 <Band icon={Waveform} tone="var(--fc-ok)" title="Clean up" />
-                <Pad className="flex flex-col gap-2.5">
-                  <CleanMic name={name} level={levels[name]} list={filters} />
-                  <VoiceStyleRow name={name} list={filters} />
+                <Pad>
+                  <CleanMic
+                    name={name}
+                    level={levels[name]}
+                    list={filters}
+                    footer={<VoiceStyleRow name={name} list={filters} />}
+                  />
                 </Pad>
               </section>
             )}
@@ -1489,10 +1493,12 @@ function CleanMic({
   name,
   level,
   list,
+  footer,
 }: {
   name: string
   level: EngineLevel | undefined
   list: Resource<EngineFilter[]>
+  footer?: ReactNode
 }) {
   const { api } = useDesk()
   return (
@@ -1502,7 +1508,7 @@ function CleanMic({
       level={level}
       filters={list.data}
       onReload={list.reload}
-      className="border-t border-line pt-3"
+      footer={footer}
     />
   )
 }
@@ -1542,8 +1548,8 @@ function VoiceStyleRow({ name, list }: { name: string; list: Resource<EngineFilt
     eq.reload()
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <span className="flex items-center gap-1.5 text-sm font-semibold">
+    <div className="flex flex-col gap-1.5">
+      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-text-2">
         Voice
         <InfoTip label="About voice">
           Warm radio: fuller and warmer. Clear podcast: less boom, clearer words. Natural: as the
@@ -1552,7 +1558,10 @@ function VoiceStyleRow({ name, list }: { name: string; list: Resource<EngineFilt
       </span>
       <Segmented
         label="Voice"
+        size="sm"
+        even
         value={style}
+        className="[&>label]:px-1.5"
         options={[
           { value: 'natural', label: 'Natural' },
           { value: 'radio', label: 'Warm radio' },
