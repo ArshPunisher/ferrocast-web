@@ -130,7 +130,7 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
     (showSaved ? saved?.report : undefined) ?? preview.data ?? saved?.report ?? null
 
   return (
-    <div id="support" className="scroll-mt-8">
+    <div id="support" className="mb-7 scroll-mt-8 last:mb-0">
       <Group
         title={compact ? 'One-click support report' : 'Help and support report'}
         note="Creates a redacted zip with likely causes, hardware, audio sample rates, recent stream health, logs, and crash dumps."
@@ -143,13 +143,14 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
               : 'Downloads a redacted zip to your computer.'
           }
           control={
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <Button
                 variant="primary"
                 icon={inDesktopApp() ? <FolderOpen size={16} /> : <FileArchive size={16} />}
                 busy={busyAction === 'save' || (!inDesktopApp() && busyAction === 'download')}
                 disabled={busyAction !== null}
                 onClick={() => void createZip(false)}
+                className="whitespace-nowrap"
               >
                 {inDesktopApp() ? 'Create support report…' : 'Create support report'}
               </Button>
@@ -160,6 +161,7 @@ export function SupportReportSection({ compact = false }: { compact?: boolean })
                   busy={busyAction === 'download'}
                   disabled={busyAction !== null}
                   onClick={() => void createZip(true)}
+                  className="whitespace-nowrap"
                 >
                   Download copy
                 </Button>
@@ -243,11 +245,11 @@ function ReportSummaryCard({
   return (
     <div
       data-testid="support-report-preview"
-      className="flex flex-col gap-3.5 rounded-card border border-line bg-inset p-4"
+      className="flex flex-col gap-3.5 rounded-[12px] border border-line bg-inset p-4"
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="m-0 font-display text-[15px] font-bold tracking-tight text-text">
+          <h4 className="m-0 font-display text-[15.5px] font-bold tracking-tight text-text">
             Likely causes
           </h4>
           <div className="flex items-center gap-2">
@@ -282,14 +284,14 @@ function ReportSummaryCard({
             No obvious issues detected across your last streams, encoders, audio devices, or logs.
           </p>
         ) : (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {report.likely_causes.map((c) => {
               const tone = CAUSE_TONE[c.severity]
               return (
                 <li
                   key={c.code}
                   className={cx(
-                    'flex flex-col gap-1 rounded-control border border-line bg-surface-1 px-3 py-2.5',
+                    'flex flex-col gap-1.5 rounded-[10px] border border-line bg-surface-1 px-3.5 py-3',
                   )}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -303,7 +305,9 @@ function ReportSummaryCard({
                     </div>
                     <span className={cx(CHIP_BASE, tone.className)}>{tone.label}</span>
                   </div>
-                  <p className="m-0 text-[13.5px] text-text-2">{c.detail}</p>
+                  <p className="m-0 text-[13.5px] leading-relaxed break-words text-text-2">
+                    {c.detail}
+                  </p>
                   <p className="m-0 text-[13px] font-medium text-text-3">{c.recommendation}</p>
                 </li>
               )
@@ -313,31 +317,31 @@ function ReportSummaryCard({
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 border-t border-line pt-3 text-[13px] sm:grid-cols-2">
-        <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
-          <span className="font-semibold text-text-3">App & OS</span>
-          <span className="font-mono break-words text-text">
+        <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-1 px-3.5 py-2.5">
+          <span className="text-[12.5px] font-semibold text-text-3">App & OS</span>
+          <span className="font-mono leading-snug break-words text-text">
             Ferrocast {report.app.version} · {report.os.name || report.app.os} {report.os.version}
           </span>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
-          <span className="font-semibold text-text-3">GPU & Encoder</span>
-          <span className="font-mono break-words text-text">
+        <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-1 px-3.5 py-2.5">
+          <span className="text-[12.5px] font-semibold text-text-3">GPU & Encoder</span>
+          <span className="font-mono leading-snug break-words text-text">
             {report.gpu.name || 'Unavailable'} ({report.gpu.backend})
             {hwEncoder ? ` · ${hwEncoder.label}` : ''}
           </span>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
-          <span className="font-semibold text-text-3">Audio & Sample Rate</span>
-          <span className="font-mono break-words text-text">
+        <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-1 px-3.5 py-2.5">
+          <span className="text-[12.5px] font-semibold text-text-3">Audio & Sample Rate</span>
+          <span className="font-mono leading-snug break-words text-text">
             {report.audio.studio_sample_rate_hz} Hz ·{' '}
             {report.audio.enumeration_supported === false
               ? 'Enumeration unsupported'
               : `${report.audio.devices.length} device(s)`}
           </span>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-control bg-surface-1 px-3 py-2">
-          <span className="font-semibold text-text-3">Stream History & Crashes</span>
-          <span className="font-mono break-words text-text">
+        <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-1 px-3.5 py-2.5">
+          <span className="text-[12.5px] font-semibold text-text-3">Stream History & Crashes</span>
+          <span className="font-mono leading-snug break-words text-text">
             {report.last_streams.length} recent stream(s) · {report.crashes.length} crash dump(s)
           </span>
         </div>

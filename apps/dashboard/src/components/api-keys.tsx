@@ -14,7 +14,6 @@ import {
   Badge,
   Button,
   Dialog,
-  EmptyState,
   Field,
   Input,
   Select,
@@ -84,32 +83,34 @@ export function ApiKeysSection() {
   }
 
   return (
-    <div id="api-keys" className="scroll-mt-20">
+    <div id="api-keys" className="mb-7 scroll-mt-20 last:mb-0">
       <Group
         title="Local API keys"
         note="Scoped keys for local scripts, Stream Decks, and automations talking to this PC. Keys never reach accounts, secrets, diagnostics exports, plugins, or other keys."
       >
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2 text-[14px] text-text-3">
-              <span>
-                {activeCount} of {API_KEY_LIMITS.maxActiveKeys} active keys
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>{API_KEY_LIMITS.rateLimitPerMin} req/min limit</span>
-            </div>
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Plus size={18} weight="bold" />}
-              onClick={() => setCreating(true)}
-              disabled={!v || activeCount >= API_KEY_LIMITS.maxActiveKeys}
-              className="w-full sm:w-auto"
-            >
-              Create API key
-            </Button>
+        <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-text-2">
+            <span>
+              {activeCount} of {API_KEY_LIMITS.maxActiveKeys} active keys
+            </span>
+            <span aria-hidden="true" className="text-text-3">
+              ·
+            </span>
+            <span className="text-text-3">{API_KEY_LIMITS.rateLimitPerMin} req/min limit</span>
           </div>
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Plus size={18} weight="bold" />}
+            onClick={() => setCreating(true)}
+            disabled={!v || activeCount >= API_KEY_LIMITS.maxActiveKeys}
+            className="w-full shrink-0 whitespace-nowrap sm:w-auto"
+          >
+            Create API key
+          </Button>
+        </div>
 
+        <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
           {res.error && !v ? (
             <LoadError error={res.error} onRetry={res.reload} />
           ) : !v ? (
@@ -118,9 +119,17 @@ export function ApiKeysSection() {
               <Skeleton className="h-20" />
             </div>
           ) : v.keys.length === 0 ? (
-            <EmptyState compact title="No API keys yet">
-              Create a key with only the scopes your local script needs.
-            </EmptyState>
+            <div className="flex items-center gap-3 rounded-[10px] border border-dashed border-line-strong bg-surface-2 px-4 py-3.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-line bg-surface-1 text-text-3">
+                <Key size={18} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[14.5px] font-semibold text-text">No API keys yet</p>
+                <p className="text-[13.5px] text-text-3">
+                  Create a key with only the scopes your local script needs.
+                </p>
+              </div>
+            </div>
           ) : (
             <ul className="flex flex-col gap-2.5" aria-label="Local API keys">
               {v.keys.map((k) => {
