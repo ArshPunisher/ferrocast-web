@@ -195,8 +195,8 @@ export function AccountRow({
   return (
     <li
       className={cx(
-        'flex flex-col gap-3 rounded-[12px] border p-3.5 sm:flex-row sm:items-center',
-        on ? 'border-line' : needs ? 'border-warn/40 bg-warn-soft' : 'border-line',
+        'flex flex-col gap-3 rounded-[12px] border bg-surface-1 p-3.5 sm:flex-row sm:items-center',
+        needs ? 'border-warn/45' : 'border-line',
       )}
     >
       <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-surface-3">
