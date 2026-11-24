@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { MOVE, boxOf, cropDrag, cursorFor, drag, fit, gripAt, pick, type Frame } from './stage-edit'
+import type { EngineTransform } from '@ferrocast/api'
+import {
+  MOVE,
+  boxOf,
+  cropCursorFor,
+  cropDrag,
+  croppedFrame,
+  cropTransform,
+  cursorFor,
+  drag,
+  fit,
+  gripAt,
+  pick,
+  type Frame,
+} from './stage-edit'
 
 const canvas = { width: 1920, height: 1080 }
 // A 400×300 box at (100, 50).
@@ -239,5 +253,151 @@ describe('cropping with Alt (OBS)', () => {
     // A box smaller than the reach still gives its handles the least reach, never less.
     const tiny: Frame = [20, 0, 0, 20, 500, 500]
     expect(gripAt(tiny, { x: 530, y: 510 }, 122, 50)?.u).toBeGreaterThanOrEqual(0) // a handle
+  })
+})
+
+describe('cropCursorFor and cropTransform', () => {
+  const baseTransform = (over: Partial<EngineTransform> = {}): EngineTransform => ({
+    x: 100,
+    y: 100,
+    rotation: 0,
+    scale_x: 1,
+    scale_y: 1,
+    alignment: 5,
+    bounds: 'none',
+    bounds_alignment: 5,
+    bounds_width: 0,
+    bounds_height: 0,
+    crop_left: 0,
+    crop_top: 0,
+    crop_right: 0,
+    crop_bottom: 0,
+    width: 1000,
+    height: 500,
+    ...over,
+  })
+
+  it('uses an SVG crop cursor (never crosshair) on handles with Alt and resize arrows without Alt', () => {
+    const f: Frame = [400, 0, 0, 200, 100, 100]
+    expect(cropCursorFor(f, { u: 0, v: 0.5 }, false)).toBe('ew-resize')
+    const altLeft = cropCursorFor(f, { u: 0, v: 0.5 }, true)
+    expect(altLeft).toContain('url("data:image/svg+xml,')
+    expect(altLeft).toContain('ew-resize')
+    expect(altLeft).not.toBe('crosshair')
+
+    const altTop = cropCursorFor(f, { u: 0.5, v: 0 }, true)
+    expect(altTop).toContain('ns-resize')
+    expect(cropCursorFor(f, { u: 0, v: 0 }, true)).toContain('nwse-resize')
+    // Hovering inside the source still moves even when Alt is held.
+    expect(cropCursorFor(f, MOVE, true)).toBe('move')
+  })
+
+  it('at scale 1, cropping left or top shifts x/y inward and keeps the opposite edge pinned', () => {
+    const f: Frame = [1000, 0, 0, 500, 100, 100]
+    const from = baseTransform()
+    const leftIn = cropTransform(f, { u: 0, v: 0.5 }, { x: 120, y: 0 }, from)
+    expect(leftIn.crop_left).toBe(120)
+    expect(leftIn.x).toBe(220)
+    expect(leftIn.y).toBe(100)
+    expect(leftIn.x + (leftIn.width - leftIn.crop_left - leftIn.crop_right)).toBe(1100)
+
+    const topIn = cropTransform(f, { u: 0.5, v: 0 }, { x: 0, y: 80 }, from)
+    expect(topIn.crop_top).toBe(80)
+    expect(topIn.y).toBe(180)
+    expect(topIn.x).toBe(100)
+    expect(topIn.y + (topIn.height - topIn.crop_top - topIn.crop_bottom)).toBe(600)
+  })
+
+  it('at scale 0.5 (bounds none and stretch), keeps the visible pixels stationary on canvas', () => {
+    const f: Frame = [500, 0, 0, 250, 100, 100]
+    const half = baseTransform({ scale_x: 0.5, scale_y: 0.5 })
+    const res = cropTransform(f, { u: 0, v: 0 }, { x: 50, y: 25 }, half)
+    expect(res.crop_left).toBe(100)
+    expect(res.crop_top).toBe(50)
+    expect(res.x).toBe(150)
+    expect(res.y).toBe(125)
+    expect(res.scale_x).toBe(0.5)
+    expect(res.scale_y).toBe(0.5)
+
+    // With bounding box (as demo items use), shrinks bounds size cleanly instead of stretching!
+    const boxed = baseTransform({
+      bounds: 'stretch',
+      bounds_width: 500,
+      bounds_height: 250,
+    })
+    const boxedLeft = cropTransform(f, { u: 0, v: 0.5 }, { x: 50, y: 0 }, boxed)
+    expect(boxedLeft.crop_left).toBe(100)
+    expect(boxedLeft.x).toBe(150)
+    expect(boxedLeft.bounds_width).toBe(450)
+    expect(boxedLeft.bounds_height).toBe(250)
+    expect(boxedLeft.x + boxedLeft.bounds_width).toBe(600)
+  })
+
+  it('when flipped on X (scale_x < 0), crops the edge under the handle without moving opposite side', () => {
+    // Source sits visually across x = 100..1100; u=0 is at x=1100 (right), u=1 at x=100 (left).
+    const f: Frame = [-1000, 0, 0, 500, 1100, 100]
+    const flippedX = baseTransform({ x: 1100, y: 100, scale_x: -1 })
+    const dragRightSideIn = cropTransform(f, { u: 0, v: 0.5 }, { x: -100, y: 0 }, flippedX)
+    expect(dragRightSideIn.crop_left).toBe(100)
+    expect(dragRightSideIn.x).toBe(1000)
+    // Left visual edge (u = 1) stays at 100.
+    expect(dragRightSideIn.x - (1000 - dragRightSideIn.crop_left)).toBe(100)
+
+    const dragLeftSideIn = cropTransform(f, { u: 1, v: 0.5 }, { x: 100, y: 0 }, flippedX)
+    expect(dragLeftSideIn.crop_right).toBe(100)
+    expect(dragLeftSideIn.x).toBe(1100)
+  })
+
+  it('when rotated 90 degrees clockwise, maps drag along rotated axes and keeps far edge fixed', () => {
+    // Source width runs down (+y) from (500, 100) to (500, 1100); height runs left (-x) to (0, 100).
+    const f: Frame = [0, 1000, -500, 0, 500, 100]
+    const rot90 = baseTransform({ x: 500, y: 100, rotation: 90 })
+    const topEdgeDown = cropTransform(f, { u: 0, v: 0.5 }, { x: 0, y: 100 }, rot90)
+    expect(topEdgeDown.crop_left).toBe(100)
+    expect(topEdgeDown.x).toBe(500)
+    expect(topEdgeDown.y).toBe(200)
+
+    const rightEdgeLeft = cropTransform(f, { u: 0.5, v: 0 }, { x: -50, y: 0 }, rot90)
+    expect(rightEdgeLeft.crop_top).toBe(50)
+    expect(rightEdgeLeft.x).toBe(450)
+    expect(rightEdgeLeft.y).toBe(100)
+  })
+
+  it('with existing crop, updates origin incrementally and uncrops back without drift', () => {
+    // Previously cropped 100 left and 50 top -> seen 900x450 shown at half scale: 450x225 at (150, 125).
+    const f: Frame = [450, 0, 0, 225, 150, 125]
+    const existing = baseTransform({
+      x: 150,
+      y: 125,
+      scale_x: 0.5,
+      scale_y: 0.5,
+      crop_left: 100,
+      crop_top: 50,
+    })
+    const moreIn = cropTransform(f, { u: 0, v: 0 }, { x: 25, y: 15 }, existing)
+    expect(moreIn.crop_left).toBe(150)
+    expect(moreIn.crop_top).toBe(80)
+    expect(moreIn.x).toBe(175)
+    expect(moreIn.y).toBe(140)
+
+    const uncropAll = cropTransform(f, { u: 0, v: 0 }, { x: -300, y: -300 }, existing)
+    expect(uncropAll.crop_left).toBe(0)
+    expect(uncropAll.crop_top).toBe(0)
+    expect(uncropAll.x).toBe(100)
+    expect(uncropAll.y).toBe(100)
+  })
+
+  it('croppedFrame scales edge vectors and sets post-crop origin for synchronous local state', () => {
+    const f: Frame = [1920, 0, 0, 1080, 0, 0]
+    const from = baseTransform({
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1080,
+      bounds_width: 1920,
+      bounds_height: 1080,
+    })
+    const next = cropTransform(f, { u: 0, v: 0.5 }, { x: 100, y: 0 }, from)
+    expect(croppedFrame(f, from, next)).toEqual([1820, 0, 0, 1080, 100, 0])
   })
 })

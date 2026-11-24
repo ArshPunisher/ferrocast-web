@@ -526,9 +526,9 @@ describe('CodeRabbit pass 2', () => {
     expect(saved.get('a')?.save).toBe(true)
   })
 
-  it('Escape in a crop drag goes back to the crop the drag started with', () => {
+  it('Escape in a crop drag goes back to the transform/crop the drag started with', () => {
     const from = { left: 1, top: 2, right: 3, bottom: 4 }
-    expect(revertCrop({ from, size: { width: 10, height: 10 } })).toEqual(from)
+    expect(revertCrop({ from })).toEqual(from)
     expect(revertCrop('reading')).toBeNull()
     expect(revertCrop(null)).toBeNull()
   })
