@@ -1975,6 +1975,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     if (boxes.length === 1 && only) send(h.id, only, true, h.scene)
     else queue(manyKey(boxes), { boxes, save: true }, h.scene)
   }
+  const canZoomWide = () =>
+    pictureCanvas !== 'vertical' &&
+    !(Boolean(scenes?.data?.vertical) && getPreviewView().view === 'vertical')
+
   // The scene changed, or the editor went away, with a drag in the air: it is cancelled in the
   // scene it was made in (the queue remembers it), so no frozen guides or half drag are left.
   useEffect(() => abortDrag, [scene, on]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -2125,6 +2129,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           // picked up, saved, not left half moved), nor a box being dragged round some (its
           // points are the old view's).
           abortDrag()
+          if (!canZoomWide()) return
           const [a, b] = [...touches.current.values()] as [
             { x: number; y: number },
             { x: number; y: number },
@@ -2306,6 +2311,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     },
     onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
       if (pinch.current && touches.current.has(e.pointerId)) {
+        if (!canZoomWide()) {
+          pinch.current = null
+          return
+        }
         touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
         const [a, b] = [...touches.current.values()] as [
           { x: number; y: number },
@@ -2552,12 +2561,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       // ⌘/Ctrl with + − 0: zoom in, out, back to fit (wide canvas only).
       if ((e.metaKey || e.ctrlKey) && ['=', '+', '-', '0'].includes(e.key)) {
-        if (
-          pictureCanvas === 'vertical' ||
-          (Boolean(scenes?.data?.vertical) && pv.view === 'vertical')
-        ) {
-          return
-        }
+        if (!canZoomWide()) return
         e.preventDefault()
         if (e.key === '0') viewSet({ zoom: 1, pan: [0, 0] })
         else zoomView(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP)

@@ -1781,6 +1781,82 @@ describe('H11: native preview hole sync and vertical-only zoom guard', () => {
     }
   })
 
+  it('ignores two-finger pinch on vertical canvas or in vertical-only view without zooming wide stage', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { desktop: true }
+    const { desk } = fakeDesk({
+      canvas: 'vertical',
+      scenes: {
+        data: {
+          current: 'Main',
+          preview: null,
+          vertical: { scenes: ['Vert'], current: 'Vert' },
+          transition: { kind: 'cut_transition', ms: 0 },
+        },
+        reload() {},
+      },
+    })
+    const previewReq = vi.fn(async () => undefined)
+    useLive.setState({ conn: { client: { request: previewReq } } as never })
+
+    let setView: ReturnType<typeof usePreviewView>[1] | null = null
+    function Harness() {
+      setView = usePreviewView()[1]
+      return <PreviewBox running />
+    }
+
+    const touch = (type: string, id: number, x: number, y: number) => {
+      const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y })
+      Object.defineProperty(e, 'pointerId', { value: id })
+      Object.defineProperty(e, 'pointerType', { value: 'touch' })
+      return e
+    }
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () =>
+        root.render(
+          <DeskProvider value={desk as never}>
+            <Harness />
+          </DeskProvider>,
+        ),
+      )
+      act(() => setView?.({ view: 'both', zoom: 1, pan: [0, 0] }))
+
+      const vStage = host.querySelector('[aria-label^="Vertical picture"]') as HTMLDivElement
+      expect(vStage).not.toBeNull()
+      vStage.setPointerCapture = () => {}
+      vStage.releasePointerCapture = () => {}
+      vStage.hasPointerCapture = () => false
+
+      act(() => void vStage.dispatchEvent(touch('pointerdown', 1, 50, 100)))
+      act(() => void vStage.dispatchEvent(touch('pointerdown', 2, 150, 100)))
+      act(() => void vStage.dispatchEvent(touch('pointermove', 2, 250, 100)))
+      expect(getPreviewView().zoom).toBe(1)
+      expect(getPreviewView().pan).toEqual([0, 0])
+      act(() => void vStage.dispatchEvent(touch('pointerup', 2, 250, 100)))
+      act(() => void vStage.dispatchEvent(touch('pointerup', 1, 50, 100)))
+
+      act(() => setView?.({ view: 'vertical', zoom: 1, pan: [0, 0] }))
+      act(() => void vStage.dispatchEvent(touch('pointerdown', 1, 50, 100)))
+      act(() => void vStage.dispatchEvent(touch('pointerdown', 2, 150, 100)))
+      act(() => void vStage.dispatchEvent(touch('pointermove', 2, 250, 100)))
+      expect(getPreviewView().zoom).toBe(1)
+      expect(getPreviewView().pan).toEqual([0, 0])
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
   it('re-syncs native preview immediately on zoom/pan changes without waiting for 500 ms poll', async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
