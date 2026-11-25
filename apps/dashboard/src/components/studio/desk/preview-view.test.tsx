@@ -4,10 +4,13 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeskProvider } from './common'
+import { useLive } from '../../../lib/store'
+import { HOLES_CHANGED } from './snap-overlay'
 import { PerformanceToggle } from './performance'
 import {
   ZOOM_MAX,
   ZOOM_MIN,
+  PreviewBox,
   StageBar,
   clampPan,
   clampZoom,
@@ -204,6 +207,7 @@ function fakeDesk(over: Record<string, unknown> = {}) {
     setTransform: vi.fn(async () => ({})),
     select: vi.fn(async () => ({})),
     previewCursor: vi.fn(async () => ({})),
+    previewPaused: vi.fn(async () => ({ paused: false })),
     setPreviewPaused: vi.fn(async (paused: boolean) => ({ paused })),
   }
   const base = {
@@ -976,5 +980,216 @@ describe('the stage: lock, pan and pinch', () => {
       1,
       expect.objectContaining({ x: 1, y: 0, w: 1920, h: 1080, save: true }),
     )
+  })
+})
+
+describe('H11: native preview hole sync and vertical-only zoom guard', () => {
+  afterEach(() => {
+    delete (window as { __FERROCAST__?: unknown }).__FERROCAST__
+    useLive.setState({ conn: null })
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('hides Zoom controls when vertical-only view is selected', async () => {
+    const { desk } = fakeDesk({
+      canvas: 'vertical',
+      scenes: {
+        data: {
+          current: 'Main',
+          preview: null,
+          vertical: { scenes: ['Vert'], current: 'Vert' },
+          transition: { kind: 'cut_transition', ms: 0 },
+        },
+        reload() {},
+      },
+    })
+
+    let setView: ReturnType<typeof usePreviewView>[1] | null = null
+    function Harness() {
+      setView = usePreviewView()[1]
+      return <StageBar />
+    }
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () =>
+        root.render(
+          <DeskProvider value={desk as never}>
+            <Harness />
+          </DeskProvider>,
+        ),
+      )
+
+      act(() => setView?.({ view: 'both', zoom: 1, pan: [0, 0] }))
+      expect(host.querySelector('[role="group"][aria-label="Zoom"]')).not.toBeNull()
+
+      act(() => setView?.({ view: 'vertical' }))
+      expect(host.querySelector('[role="group"][aria-label="Zoom"]')).toBeNull()
+
+      act(() => setView?.({ view: 'wide' }))
+      expect(host.querySelector('[role="group"][aria-label="Zoom"]')).not.toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('ignores ctrl/meta+wheel over vertical stage or in vertical-only view without zooming wide stage', async () => {
+    const { desk } = fakeDesk({
+      canvas: 'vertical',
+      scenes: {
+        data: {
+          current: 'Main',
+          preview: null,
+          vertical: { scenes: ['Vert'], current: 'Vert' },
+          transition: { kind: 'cut_transition', ms: 0 },
+        },
+        reload() {},
+      },
+    })
+    const previewReq = vi.fn(async () => undefined)
+    useLive.setState({ conn: { client: { request: previewReq } } as never })
+
+    let setView: ReturnType<typeof usePreviewView>[1] | null = null
+    function Harness() {
+      setView = usePreviewView()[1]
+      return <PreviewBox running />
+    }
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () =>
+        root.render(
+          <DeskProvider value={desk as never}>
+            <Harness />
+          </DeskProvider>,
+        ),
+      )
+      act(() => setView?.({ view: 'both', zoom: 1, pan: [0, 0] }))
+
+      const vStage = host.querySelector('[aria-label^="Vertical picture"]') as HTMLDivElement
+      expect(vStage).not.toBeNull()
+      act(() => {
+        vStage.dispatchEvent(
+          new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, cancelable: true }),
+        )
+      })
+      expect(getPreviewView().zoom).toBe(1)
+
+      act(() => setView?.({ view: 'vertical', zoom: 1, pan: [0, 0] }))
+      const wideStage = host.querySelector('[aria-label^="Wide picture"]') as HTMLDivElement
+      act(() => {
+        wideStage.dispatchEvent(
+          new WheelEvent('wheel', { deltaY: -120, metaKey: true, cancelable: true }),
+        )
+      })
+      expect(getPreviewView().zoom).toBe(1)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('re-syncs native preview immediately on zoom/pan changes without waiting for 500 ms poll', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { desktop: true }
+
+    const previewReq = vi.fn(async () => undefined)
+    useLive.setState({ conn: { client: { request: previewReq } } as never })
+    // `size: null` avoids accidental side-effects from EditHints/GroupBox, proving PreviewBoxes syncs directly.
+    const { desk } = fakeDesk({ size: null })
+
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.hasAttribute('data-canvas-box')) {
+        const m = /translate\(([-.\d]+)px,\s*([-.\d]+)px\)/.exec(this.style.transform || '')
+        const tx = m ? Number(m[1]) : 0
+        const ty = m ? Number(m[2]) : 0
+        return {
+          left: 100 + tx,
+          top: 50 + ty,
+          width: 800,
+          height: 450,
+          right: 900 + tx,
+          bottom: 500 + ty,
+          x: 100 + tx,
+          y: 50 + ty,
+          toJSON: () => {},
+        }
+      }
+      return {
+        left: 0,
+        top: 0,
+        width: 1200,
+        height: 700,
+        right: 1200,
+        bottom: 700,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      }
+    })
+
+    let setView: ReturnType<typeof usePreviewView>[1] | null = null
+    function Harness() {
+      setView = usePreviewView()[1]
+      return <PreviewBox running />
+    }
+
+    const holesEvents: number[] = []
+    const onHoles = () => holesEvents.push(1)
+    window.addEventListener(HOLES_CHANGED, onHoles)
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <Harness />
+          </DeskProvider>,
+        )
+        await vi.advanceTimersByTimeAsync(20)
+      })
+
+      previewReq.mockClear()
+      holesEvents.length = 0
+
+      await act(async () => {
+        setView?.({ zoom: 2, pan: [40, 20] })
+        // Wait only ~25 ms (< 500 ms watch interval) for commit + rAF hole placement.
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      expect(holesEvents.length).toBeGreaterThanOrEqual(1)
+      expect(previewReq).toHaveBeenCalledWith(
+        'PUT',
+        '/api/v1/studio/engine/preview',
+        expect.objectContaining({
+          rect: expect.objectContaining({
+            canvas: expect.objectContaining({ x: 140, y: 70 }),
+          }),
+        }),
+      )
+    } finally {
+      window.removeEventListener(HOLES_CHANGED, onHoles)
+      await act(async () => root.unmount())
+      host.remove()
+    }
   })
 })

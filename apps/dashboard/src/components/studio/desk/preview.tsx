@@ -569,13 +569,13 @@ function PreviewBoxes({ running }: { running: boolean }) {
     const els = [stageRef.current, vStageRef.current].filter((e): e is HTMLDivElement => !!e)
     const off = els.map((el) => {
       const onWheel = (e: WheelEvent) => {
+        // Only the wide stage supports zoom/pan; never zoom or pan it from the vertical view.
+        if (el !== stageRef.current || (tall && getPreviewView().view === 'vertical')) return
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault()
           zoomView(Math.exp(-e.deltaY * 0.0025), pointerFromCentre(el, e.clientX, e.clientY))
           return
         }
-        // Only the wide stage supports boxStyle pan transforms; never pan it from the vertical view.
-        if (el !== stageRef.current) return
         const m = getStageMetrics()
         if (!m) return
         const v = getPreviewView()
@@ -912,10 +912,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
   const pan = stage
     ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitBoxSize(stage.width, stage.height), stage))
     : pv.pan
+  const [panX, panY] = pan
   const boxStyle = {
     '--fc-zoom': pv.zoom,
-    ...(pan[0] || pan[1] ? { transform: `translate(${pan[0]}px, ${pan[1]}px)` } : {}),
+    ...(panX || panY ? { transform: `translate(${panX}px, ${panY}px)` } : {}),
   } as CSSProperties
+  // Re-sync native preview rects immediately when zoom, pan, or split view changes CSS transforms.
+  useEffect(() => {
+    if (running && desktop) window.dispatchEvent(new Event(HOLES_CHANGED))
+  }, [running, desktop, pv.zoom, panX, panY, pv.view])
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
@@ -1558,6 +1563,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     prefs,
     itemMenu,
     size,
+    canvas: pictureCanvas,
+    scenes,
   } = useDesk()
   const { run } = useAction()
   const p = prefs.data
@@ -2402,8 +2409,14 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         if (!panning.current) e.currentTarget.style.cursor = 'grab'
         return
       }
-      // ⌘/Ctrl with + − 0: zoom in, out, back to fit.
+      // ⌘/Ctrl with + − 0: zoom in, out, back to fit (wide canvas only).
       if ((e.metaKey || e.ctrlKey) && ['=', '+', '-', '0'].includes(e.key)) {
+        if (
+          pictureCanvas === 'vertical' ||
+          (Boolean(scenes?.data?.vertical) && pv.view === 'vertical')
+        ) {
+          return
+        }
         e.preventDefault()
         if (e.key === '0') viewSet({ zoom: 1, pan: [0, 0] })
         else zoomView(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP)
@@ -2668,6 +2681,8 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
             (o) => o.visible && o.frame && covers(o.frame, it.frame as Frame, c.width, c.height),
           )
       : undefined
+  const showZoom =
+    !scenes.data?.preview && !(Boolean(scenes.data?.vertical) && pv.view === 'vertical')
   return (
     <>
       {it && cover && (
@@ -2689,7 +2704,7 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
           <span className="hidden truncate @[1440px]:inline">Behind {cover.name} · To front</span>
         </button>
       )}
-      {!scenes.data?.preview && (
+      {showZoom && (
         <div
           role="group"
           aria-label="Zoom"
@@ -2746,7 +2761,7 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
           </ToolButton>
         </div>
       )}
-      {!panel && <span aria-hidden className="h-5 w-px bg-line" />}
+      {showZoom && !panel && <span aria-hidden className="h-5 w-px bg-line" />}
       <ToolButton
         panel={panel}
         text={pv.frames ? 'Outlines on' : 'Source outlines'}
