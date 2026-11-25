@@ -5,7 +5,9 @@ import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
 import { AllFailedBanner, GoLiveTab, LiveCard, Platforms, RowText, liveStatus } from './golive'
 import { describeDestinationRate, describeStreamCap } from './bitrate-summary'
-import { LiveLine } from './desk/golive-dock'
+import { GoLiveDock, LiveLine } from './desk/golive-dock'
+import { DeskProvider, type Desk } from './desk/common'
+import { DockWorkspace } from './desk/layout'
 
 let root: Root | null = null
 
@@ -888,5 +890,165 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     expect(reach!.className).toContain('pl-0')
     expect(reach!.className).toContain('sm:pl-[92px]')
     expect(reach!.className).not.toContain('pl-[86px]')
+  })
+
+  it('GoLiveDock allows turning off a destination that is enabled and blocked, while keeping off+blocked disabled', async () => {
+    const tw = baseDest({
+      id: 'twitch',
+      kind: 'twitch',
+      name: 'Twitch',
+      enabled: true,
+      connected: false,
+      health: null,
+      blocked: 'Connect Twitch first.',
+    })
+    const kick = baseDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      enabled: false,
+      connected: false,
+      health: null,
+      blocked: 'Connect Kick first.',
+    })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw, kick],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+    }
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (method === 'PUT' && path === '/api/v1/golive/destinations') {
+        return { ok: true, destinations: (body as { destinations: unknown[] }).destinations }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const desk = {
+      api: { studioSettings: vi.fn(), setStudioSettings: vi.fn() },
+      scenes: { data: { current: 'Main', vertical: null }, reload: vi.fn() },
+      prefs: { data: { video_kbps: 6000, audio_kbps: 160 }, set: vi.fn() },
+      stats: null,
+    } as unknown as Desk
+    const res = {
+      data: view,
+      loading: false,
+      error: null,
+      reload: vi.fn(),
+      set: vi.fn(),
+    }
+
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({
+        matches: false,
+        media: q,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+
+    try {
+      const el = await renderNode(
+        <DeskProvider value={desk}>
+          <DockWorkspace
+            stage={null}
+            docks={(id) => (id === 'golive' ? <GoLiveDock res={res} view={view} /> : null)}
+          />
+        </DeskProvider>,
+      )
+
+      const twSwitch = el.querySelector(
+        'button[role="switch"][aria-label="Go live on Twitch"]',
+      ) as HTMLButtonElement
+      const kickSwitch = el.querySelector(
+        'button[role="switch"][aria-label="Go live on Kick"]',
+      ) as HTMLButtonElement
+      expect(twSwitch.disabled).toBe(false)
+      expect(kickSwitch.disabled).toBe(true)
+
+      await act(async () => {
+        twSwitch.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(request).toHaveBeenCalledWith('PUT', '/api/v1/golive/destinations', {
+        destinations: [
+          { id: 'twitch', enabled: false },
+          { id: 'kick', enabled: false },
+        ],
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
