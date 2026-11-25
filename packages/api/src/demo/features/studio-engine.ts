@@ -132,7 +132,8 @@ interface CopiedSourceBundle {
 
 interface UndoEntry {
   label: string
-  snapshot: CollectionSnapshot
+  snapshot?: CollectionSnapshot
+  itemUndo?: { id: number; transform: EngineTransform }
 }
 
 const CANVAS_W = 1920
@@ -825,8 +826,7 @@ export class DemoStudioEngine {
         this.seedForScenes(['Main'], true)
         this.collections.set(restored, this.captureSnapshot())
       }
-      this.undoStack = []
-      this.redoStack = []
+      this.clearHistory()
     }
     this.shelfCollections.list = this.shelfCollections.list.filter((c) => c.id !== collectionId)
     this.collections.delete(collectionId)
@@ -1296,7 +1296,51 @@ export class DemoStudioEngine {
     }
   }
 
-  private pendingUndo = new Map<string, { label: string; snapshot: CollectionSnapshot }>()
+  private pendingUndo = new Map<string, UndoEntry>()
+
+  private clearHistory(): void {
+    this.undoStack = []
+    this.redoStack = []
+    this.pendingUndo.clear()
+  }
+
+  private findItemAcrossScenes(id: number): { item: EngineItem; parent: EngineItem | null } | null {
+    const search = (
+      list: EngineItem[],
+      parent: EngineItem | null,
+    ): { item: EngineItem; parent: EngineItem | null } | null => {
+      for (const it of list) {
+        if (it.id === id) return { item: it, parent }
+        if (it.children.length) {
+          const inner = search(it.children, it)
+          if (inner) return inner
+        }
+      }
+      return null
+    }
+    for (const root of this.sceneItems.values()) {
+      const found = search(root, null)
+      if (found) return found
+    }
+    return null
+  }
+
+  private applyUndoEntry(entry: UndoEntry): UndoEntry {
+    if (entry.itemUndo) {
+      const current = clone(this.transforms.get(entry.itemUndo.id) ?? defaultTransform())
+      const loc = this.findItemAcrossScenes(entry.itemUndo.id)
+      if (loc) {
+        this.setItemTransform(loc.item, clone(entry.itemUndo.transform))
+        if (loc.parent) this.syncGroupFrame(loc.parent)
+      } else {
+        this.transforms.set(entry.itemUndo.id, clone(entry.itemUndo.transform))
+      }
+      return { label: entry.label, itemUndo: { id: entry.itemUndo.id, transform: current } }
+    }
+    const current = this.captureSnapshot()
+    if (entry.snapshot) this.restoreSnapshot(entry.snapshot, true)
+    return { label: entry.label, snapshot: current }
+  }
 
   private pushUndo(label: string): void {
     this.undoStack.unshift({ label, snapshot: this.captureSnapshot() })
@@ -1305,10 +1349,10 @@ export class DemoStudioEngine {
   }
 
   /**
-   * Records one undo entry for a continuous preview drag: captures the pre-drag snapshot on the
-   * first `save: false` request and pushes that pre-drag snapshot onto `undoStack` on `save: true`.
+   * Records one item-local undo entry for a continuous crop drag: captures the pre-drag transform on
+   * the first `save: false` request and pushes that pre-drag entry onto `undoStack` on `save: true`.
    */
-  private recordDragUndo(key: string, label: string, save: boolean): void {
+  private recordDragUndo(key: string, itemId: number, label: string, save: boolean): void {
     if (save) {
       const pending = this.pendingUndo.get(key)
       this.pendingUndo.delete(key)
@@ -1318,11 +1362,25 @@ export class DemoStudioEngine {
         this.redoStack = []
         return
       }
-      this.pushUndo(label)
+      this.undoStack.unshift({
+        label,
+        itemUndo: {
+          id: itemId,
+          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
+        },
+      })
+      if (this.undoStack.length > 50) this.undoStack.pop()
+      this.redoStack = []
       return
     }
     if (!this.pendingUndo.has(key)) {
-      this.pendingUndo.set(key, { label, snapshot: this.captureSnapshot() })
+      this.pendingUndo.set(key, {
+        label,
+        itemUndo: {
+          id: itemId,
+          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
+        },
+      })
     }
   }
 
@@ -1335,9 +1393,7 @@ export class DemoStudioEngine {
     this.transforms.clear()
     this.itemFilters.clear()
     this.nextItemId = 1
-    this.undoStack = []
-    this.redoStack = []
-    this.pendingUndo.clear()
+    this.clearHistory()
     this.ensureGlobalSources()
     for (const s of this.activeScenes) this.sceneItems.set(s, [])
   }
@@ -1672,6 +1728,8 @@ export class DemoStudioEngine {
           this.collections.set(shelf.current, this.captureSnapshot())
           if (!b.copy) {
             this.seedForScenes(['Main'], true)
+          } else {
+            this.clearHistory()
           }
           this.collections.set(id, this.captureSnapshot())
         }
@@ -1692,8 +1750,7 @@ export class DemoStudioEngine {
             this.seedForScenes(['Main'], true)
             this.collections.set(id, this.captureSnapshot())
           }
-          this.undoStack = []
-          this.redoStack = []
+          this.clearHistory()
         }
         shelf.current = id
         return { id }
@@ -2581,8 +2638,7 @@ export class DemoStudioEngine {
       this.pendingUndo.clear()
       const top = this.undoStack.shift()
       if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
-      this.redoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot, true)
+      this.redoStack.unshift(this.applyUndoEntry(top))
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,
@@ -2593,8 +2649,7 @@ export class DemoStudioEngine {
       this.pendingUndo.clear()
       const top = this.redoStack.shift()
       if (!top) return { done: null, undo: this.undoStack[0]?.label ?? null, redo: null }
-      this.undoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot, true)
+      this.undoStack.unshift(this.applyUndoEntry(top))
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,
@@ -2906,7 +2961,12 @@ export class DemoStudioEngine {
         bottom: number
         save?: boolean
       }
-      this.recordDragUndo(`crop:${loc.item.id}`, `Crop ${loc.item.name}`, Boolean(b.save))
+      this.recordDragUndo(
+        `crop:${this.shelfCollections.current}:${loc.item.id}`,
+        loc.item.id,
+        `Crop ${loc.item.name}`,
+        Boolean(b.save),
+      )
       const before = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
       const cur = clone(before)
       const w = Math.max(1, before.width)

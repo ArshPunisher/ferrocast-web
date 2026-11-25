@@ -1399,5 +1399,95 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('scopes pending crop undo to the active collection and clears pendingUndo on collection switch', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const colA = (await api.shelf('collections')).current
+        const webcam = (await api.items('Main')).find((i) => i.name === 'Webcam')!
+
+        // Start a crop preview in collection A, then copy A -> B, add a B-only scene, and finish crop on same ID in B.
+        await api.setItemCrop('Main', webcam.id, {
+          left: 40,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        const { id: colB } = await api.newShelf('collections', 'Collection B', true)
+        await api.addScene('B Only Scene')
+        await api.setItemCrop('Main', webcam.id, {
+          left: 120,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+
+        // Undo in B must not restore collection A's stale snapshot (which would erase B Only Scene).
+        await api.undo()
+        const bScenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(bScenes).toContain('B Only Scene')
+        expect((await api.transform('Main', webcam.id)).crop_left).toBe(40)
+
+        // Switching back to A and saving crop on matching ID does not leak from B.
+        await api.switchShelf('collections', colA)
+        await api.setItemCrop('Main', webcam.id, {
+          left: 100,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        await api.switchShelf('collections', colB)
+        expect((await api.scenes()).scenes.map((s) => s.name)).toContain('B Only Scene')
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('keeps intervening edits intact when undoing a save:false -> save:true crop', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = 'Main'
+        const webcam = (await api.items(scene)).find((i) => i.name === 'Webcam')!
+        await api.setItemCrop(scene, webcam.id, {
+          left: 50,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        // Intervening undoable edit while preview crop is open.
+        await api.addScene('Intervening Scene')
+        await api.setItemCrop(scene, webcam.id, {
+          left: 150,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+
+        // Undoing the crop reverts Webcam's crop without deleting Intervening Scene.
+        await api.undo()
+        const scenesAfterUndo = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenesAfterUndo).toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })
