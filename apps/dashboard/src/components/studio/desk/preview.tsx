@@ -2287,8 +2287,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
             : readInitial()
         h.cropRead = pendingRead
           .then((t) => {
-            if (h.aborted || held.current !== h) return t
+            if (h.aborted) return t
             if (prevCrop?.cropComplete && prevCrop.settledFrame) h.from = prevCrop.settledFrame
+            if (held.current !== h) return t
             h.crop = { from: cropOf(t), size: { width: t.width, height: t.height } }
             if (h.moved && h.lastDelta) {
               const next = cropDrag(h.from, h.grip, h.lastDelta, h.crop.from, h.crop.size)

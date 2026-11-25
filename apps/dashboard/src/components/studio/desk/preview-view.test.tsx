@@ -1563,6 +1563,109 @@ describe('the stage: lock, pan and pinch', () => {
       expect.objectContaining({ x: 120, y: 0, w: 1820, h: 1080, save: true }),
     )
   })
+
+  it('starts a chained fast Alt+drag from the previous crop settled frame when released early', async () => {
+    let resolveCrop1!: (v: Record<string, unknown>) => void
+    let cropLeft = 0
+    const { api, el } = await mount(false, {
+      transform: vi.fn(async () => ({
+        x: cropLeft,
+        y: 0,
+        rotation: 0,
+        scale_x: 1,
+        scale_y: 1,
+        alignment: 5,
+        bounds: 'stretch',
+        bounds_alignment: 5,
+        bounds_width: 1920 - cropLeft,
+        bounds_height: 1080,
+        crop_left: cropLeft,
+        crop_top: 0,
+        crop_right: 0,
+        crop_bottom: 0,
+        width: 1920,
+        height: 1080,
+      })),
+      setItemCrop: vi.fn(
+        (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number; save?: boolean },
+        ) => {
+          cropLeft = c.left
+          if (c.left === 100 && c.save) {
+            return new Promise<Record<string, unknown>>((r) => {
+              resolveCrop1 = r
+            })
+          }
+          return Promise.resolve({
+            id,
+            frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+          })
+        },
+      ),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    // Drag 1: Alt+drag left handle by +100 px and release; its save:true request stays in flight.
+    const down1 = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down1, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down1))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const move1 = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move1, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move1))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.setItemCrop).toHaveBeenCalledWith('Main', 1, {
+      left: 100,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
+    })
+
+    // Drag 2: start from (100, 540) (or left handle grip at pre-crop (0, 540) since items.data has not updated yet)
+    // and drag +200 px before Drag 1 settles, releasing immediately before Drag 1 settles.
+    const down2 = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down2, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down2))
+    const move2 = pointer('pointermove', { x: 200, y: 540 })
+    Object.defineProperty(move2, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move2))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 200, y: 540 })))
+
+    // Now Drag 1 settles at frame [1820, 0, 0, 1080, 100, 0].
+    // Drag 2 must compute from settled width 1820 (1:1 ratio -> 100 + 200 = 300), not stale width 1920 (290).
+    await act(async () => {
+      resolveCrop1({ id: 1, frame: [1820, 0, 0, 1080, 100, 0] })
+      for (let i = 0; i < 8; i++) await Promise.resolve()
+    })
+
+    expect(api.setItemCrop).toHaveBeenLastCalledWith('Main', 1, {
+      left: 300,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
+    })
+  })
 })
 
 describe('H11: native preview hole sync and vertical-only zoom guard', () => {
