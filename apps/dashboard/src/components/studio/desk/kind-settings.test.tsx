@@ -224,7 +224,9 @@ describe('duplicate source Mirror and SourcePreview selection', () => {
     })
 
     expect(transform).toHaveBeenCalledWith('Main', 2)
-    const mirror = host.querySelector('button[role="switch"][aria-label="Mirror"]') as HTMLButtonElement
+    const mirror = host.querySelector(
+      'button[role="switch"][aria-label="Mirror"]',
+    ) as HTMLButtonElement
     expect(mirror).not.toBeNull()
     expect(mirror.getAttribute('aria-checked')).toBe('true')
 

@@ -1292,15 +1292,39 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         const baselineUndoCount = (await api.history()).undo.length
 
         // 1. Direct no-op save:true and round-trip save:false -> back to start save:true push nothing.
-        await api.setItemCrop(scene, webcam.id, { left: 0, top: 0, right: 0, bottom: 0, save: true })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
         expect((await api.history()).undo.length).toBe(baselineUndoCount)
 
-        await api.setItemCrop(scene, webcam.id, { left: 40, top: 0, right: 0, bottom: 0, save: false })
-        await api.setItemCrop(scene, webcam.id, { left: 0, top: 0, right: 0, bottom: 0, save: true })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 40,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
         expect((await api.history()).undo.length).toBe(baselineUndoCount)
 
         // 2. Calling POST /undo while a drag (save:false) is open reverts that drag without popping Prior Scene.
-        await api.setItemCrop(scene, webcam.id, { left: 60, top: 0, right: 0, bottom: 0, save: false })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 60,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
         expect((await api.transform(scene, webcam.id)).crop_left).toBe(60)
         const undone = await api.undo()
         expect(undone.done).toContain('Crop')
@@ -1672,9 +1696,16 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
           new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
         )
         const spy = vi.spyOn(engine.studioEngine!, 'stillForDevice')
-        const res = await api.sourceStill('macos-avcapture', 'device', 'cam-facetime', 480, undefined, {
-          fresh: true,
-        })
+        const res = await api.sourceStill(
+          'macos-avcapture',
+          'device',
+          'cam-facetime',
+          480,
+          undefined,
+          {
+            fresh: true,
+          },
+        )
         expect(res.image).toMatch(/^data:image\/svg\+xml/)
         expect(spy).toHaveBeenCalledWith('cam-facetime', { fresh: true })
 

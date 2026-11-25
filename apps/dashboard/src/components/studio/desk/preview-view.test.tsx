@@ -1419,7 +1419,11 @@ describe('the stage: lock, pan and pinch', () => {
         },
       ),
       setItemBox: vi.fn(
-        async (_scene: string, id: number, b: { x: number; y: number; w: number; h: number; save?: boolean }) => {
+        async (
+          _scene: string,
+          id: number,
+          b: { x: number; y: number; w: number; h: number; save?: boolean },
+        ) => {
           order1.push(`box:${b.x}:${b.w}:${String(b.save)}`)
           return { id, frame: [b.w, 0, 0, b.h, b.x, b.y] }
         },
@@ -1509,7 +1513,11 @@ describe('the stage: lock, pan and pinch', () => {
         },
       ),
       setItemBox: vi.fn(
-        async (_scene: string, id: number, b: { x: number; y: number; w: number; h: number; save?: boolean }) => {
+        async (
+          _scene: string,
+          id: number,
+          b: { x: number; y: number; w: number; h: number; save?: boolean },
+        ) => {
           order2.push(`box:${b.x}:${b.w}:${String(b.save)}`)
           return { id, frame: [b.w, 0, 0, b.h, b.x, b.y] }
         },

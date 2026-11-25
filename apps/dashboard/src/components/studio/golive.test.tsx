@@ -1151,7 +1151,9 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
 
     // Explicit audioKbps prop must beat fetchedSettings.audio_kbps even after initial fetch.
     await act(async () => {
-      root!.render(<Platforms view={makeView()} onSaved={() => {}} videoKbps={6000} audioKbps={320} />)
+      root!.render(
+        <Platforms view={makeView()} onSaved={() => {}} videoKbps={6000} audioKbps={320} />,
+      )
       await Promise.resolve()
       await Promise.resolve()
     })

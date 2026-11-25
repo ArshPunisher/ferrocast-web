@@ -280,7 +280,8 @@ export function MediaCheckStep({
         const camKind =
           kinds.inputs.find((k) => CAMERA_KINDS.includes(k.id))?.id ?? 'av_capture_input_v2'
         const micKind =
-          kinds.inputs.find((k) => INPUT_AUDIO_KINDS.includes(k.id))?.id ?? 'coreaudio_input_capture'
+          kinds.inputs.find((k) => INPUT_AUDIO_KINDS.includes(k.id))?.id ??
+          'coreaudio_input_capture'
 
         const [camOpts, micOpts, audioList] = await Promise.all([
           engine.options(camKind).catch(() => []),
@@ -451,9 +452,16 @@ export function MediaCheckStep({
       let nextDelay = CAMERA_POLL_MS
       try {
         const res = fresh
-          ? await engine.sourceStill(selectedCam.kind, camKey, selectedCam.value, 480, reqAc.signal, {
-              fresh: true,
-            })
+          ? await engine.sourceStill(
+              selectedCam.kind,
+              camKey,
+              selectedCam.value,
+              480,
+              reqAc.signal,
+              {
+                fresh: true,
+              },
+            )
           : await engine.sourceStill(selectedCam.kind, camKey, selectedCam.value, 480, reqAc.signal)
         if (!alive || activeAc !== reqAc || reqAc.signal.aborted) return
         if (res.image) {

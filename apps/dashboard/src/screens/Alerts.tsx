@@ -1021,7 +1021,9 @@ function RuleEditor({
               />
               <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
                 <PlatformMark platform={previewPlatform} size={12} />
-                Simulated {previewPlatform === 'tips' ? 'Tips' : PLATFORM_LABEL[previewPlatform]}{' '}
+                Simulated {previewPlatform === 'tips'
+                  ? 'Tips'
+                  : PLATFORM_LABEL[previewPlatform]}{' '}
                 sample
               </p>
             </div>

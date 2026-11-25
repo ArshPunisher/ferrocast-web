@@ -721,8 +721,24 @@ describe('MediaCheckStep microphone meter & connection states (W4)', () => {
     const engine = makeEngine({
       options: vi.fn(async (kind: string) =>
         kind === 'av_capture_input_v2'
-          ? [{ key: 'device', label: 'Device', type: 'list', choices: camChoices, values: camValues }]
-          : [{ key: 'device_id', label: 'Device', type: 'list', choices: micChoices, values: micValues }],
+          ? [
+              {
+                key: 'device',
+                label: 'Device',
+                type: 'list',
+                choices: camChoices,
+                values: camValues,
+              },
+            ]
+          : [
+              {
+                key: 'device_id',
+                label: 'Device',
+                type: 'list',
+                choices: micChoices,
+                values: micValues,
+              },
+            ],
       ),
       settings: vi.fn(async () => ({ device_id: 'builtin-mic' })),
     })
@@ -743,7 +759,9 @@ describe('MediaCheckStep microphone meter & connection states (W4)', () => {
 
     const refreshButtons = () =>
       [...host.querySelectorAll('button')].filter(
-        (b) => b.getAttribute('aria-label') === 'Refresh devices' || b.textContent?.includes('Refresh devices'),
+        (b) =>
+          b.getAttribute('aria-label') === 'Refresh devices' ||
+          b.textContent?.includes('Refresh devices'),
       )
 
     // Both Camera preview and Microphone sections expose Refresh devices even when only 1 device exists.
@@ -777,7 +795,9 @@ describe('MediaCheckStep microphone meter & connection states (W4)', () => {
       await flush()
     })
 
-    const micSelect = host.querySelector<HTMLSelectElement>('select[aria-label="Choose microphone"]')
+    const micSelect = host.querySelector<HTMLSelectElement>(
+      'select[aria-label="Choose microphone"]',
+    )
     expect(micSelect).not.toBeNull()
     expect([...micSelect!.options].map((o) => o.textContent)).toEqual([
       'Built-in Mic',
