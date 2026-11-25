@@ -1342,8 +1342,60 @@ export class DemoStudioEngine {
     return { label: entry.label, snapshot: current }
   }
 
+  private reconcilePendingUndoSnapshot(snap: CollectionSnapshot): CollectionSnapshot {
+    if (this.pendingUndo.size === 0) return snap
+    const patchList = (
+      list: EngineItem[],
+      id: number,
+      frame: ReturnType<typeof frameFromTransform>,
+    ): boolean => {
+      for (const it of list) {
+        if (it.id === id) {
+          it.frame = frame
+          return true
+        }
+        if (it.children.length > 0 && patchList(it.children, id, frame)) {
+          const box = this.groupBox(it.children)
+          if (box) {
+            it.frame = [box.w, 0, 0, box.h, box.x, box.y]
+            const gt = snap.transforms[it.id]
+            if (gt) {
+              snap.transforms[it.id] = {
+                ...gt,
+                x: box.x,
+                y: box.y,
+                alignment: 5,
+                bounds: 'stretch',
+                bounds_alignment: 5,
+                bounds_width: box.w,
+                bounds_height: box.h,
+              }
+            }
+          }
+          return true
+        }
+      }
+      return false
+    }
+    for (const pending of this.pendingUndo.values()) {
+      if (!pending.itemUndo) continue
+      const { id, transform } = pending.itemUndo
+      if (id in snap.transforms) {
+        snap.transforms[id] = clone(transform)
+      }
+      const committedFrame = frameFromTransform(transform)
+      for (const sceneList of Object.values(snap.sceneItems)) {
+        if (patchList(sceneList, id, committedFrame)) break
+      }
+    }
+    return snap
+  }
+
   private pushUndo(label: string): void {
-    this.undoStack.unshift({ label, snapshot: this.captureSnapshot() })
+    this.undoStack.unshift({
+      label,
+      snapshot: this.reconcilePendingUndoSnapshot(this.captureSnapshot()),
+    })
     if (this.undoStack.length > 50) this.undoStack.pop()
     this.redoStack = []
   }
@@ -1549,13 +1601,13 @@ export class DemoStudioEngine {
     return this.requireSource(name)
   }
 
-  private syncGroupFrame(group: EngineItem): void {
-    if (!group.group || group.children.length === 0) return
+  private groupBox(children: EngineItem[]): { x: number; y: number; w: number; h: number } | null {
+    if (children.length === 0) return null
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
     let maxY = -Infinity
-    for (const c of group.children) {
+    for (const c of children) {
       const f = c.frame ?? [100, 0, 0, 100, 0, 0]
       const xs = [f[4], f[4] + f[0], f[4] + f[2], f[4] + f[0] + f[2]]
       const ys = [f[5], f[5] + f[1], f[5] + f[3], f[5] + f[1] + f[3]]
@@ -1564,14 +1616,19 @@ export class DemoStudioEngine {
       maxX = Math.max(maxX, ...xs)
       maxY = Math.max(maxY, ...ys)
     }
-    if (Number.isFinite(minX) && Number.isFinite(maxX)) {
-      this.applyBox(group, {
-        x: minX,
-        y: minY,
-        w: Math.max(1, maxX - minX),
-        h: Math.max(1, maxY - minY),
-      })
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
+    return {
+      x: minX,
+      y: minY,
+      w: Math.max(1, maxX - minX),
+      h: Math.max(1, maxY - minY),
     }
+  }
+
+  private syncGroupFrame(group: EngineItem): void {
+    if (!group.group) return
+    const box = this.groupBox(group.children)
+    if (box) this.applyBox(group, box)
   }
 
   private scenesWithSplitShow(): boolean {

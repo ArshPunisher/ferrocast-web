@@ -1482,9 +1482,24 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
 
         // Undoing the crop reverts Webcam's crop without deleting Intervening Scene.
         await api.undo()
-        const scenesAfterUndo = (await api.scenes()).scenes.map((s) => s.name)
-        expect(scenesAfterUndo).toContain('Intervening Scene')
+        let scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).toContain('Intervening Scene')
         expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        // Second undo removes Intervening Scene and still keeps last committed crop_left (0, not 50).
+        await api.undo()
+        scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).not.toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        // Two redos bring back Intervening Scene and then the saved crop_left (150).
+        await api.redo()
+        scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        await api.redo()
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(150)
       } finally {
         engine.dispose()
       }

@@ -1501,6 +1501,7 @@ interface Held {
   cropRead?: Promise<EngineTransform | null>
   cropSettled?: Promise<void>
   cropDone?: () => void
+  cropComplete?: boolean
   cropSeq?: number
   settledFrame?: Frame | null
   cropAfter?: Held | null
@@ -1732,7 +1733,6 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
               latest[4] + sx,
               latest[5] + sy,
             ]
-            pc.settledFrame = shifted
             pendingFrames.current.set(k, shifted)
             if (job.scene === sceneNow.current && !queuedIds(sending.current.next).has(pc.id)) {
               put({ id: pc.id, frame: shifted })
@@ -1760,10 +1760,23 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
             height: t.height,
           })
           pc.lastCrop = next
-          const cropped = await api.setItemCrop(job.scene, pc.id, { ...next, save: true })
+          let cropped: EngineItem
+          try {
+            cropped = await api.setItemCrop(job.scene, pc.id, { ...next, save: true })
+          } catch (err) {
+            // Do not silently drop keyboard nudges queued while the crop request was in flight.
+            if (pc.postShift.x !== 0 || pc.postShift.y !== 0) {
+              await drainShift(pc.from).catch(() => undefined)
+            } else {
+              pc.settledFrame = pc.from
+              pendingFrames.current.set(k, pc.from)
+            }
+            throw err
+          }
           const shifted = await drainShift(cropped.frame ?? pc.from)
           return shifted ?? cropped
         } finally {
+          pc.cropComplete = true
           if (pendingCrops.current.get(k) === pc) pendingCrops.current.delete(k)
           pc.cropDone?.()
         }
@@ -1827,11 +1840,14 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     id: number,
     ca: Held | null | undefined,
     fallbackFrame: Frame,
-  ): Frame => ca?.settledFrame ?? pendingFrames.current.get(queueKey(forScene, id)) ?? fallbackFrame
+  ): Frame =>
+    (ca?.cropComplete ? ca.settledFrame : null) ??
+    pendingFrames.current.get(queueKey(forScene, id)) ??
+    fallbackFrame
 
   const pendingDragCrops = (h: Held): Promise<void>[] =>
     [h.cropAfter, ...h.others.map((o) => o.cropAfter)].flatMap((c) =>
-      c?.cropSettled && !c.settledFrame ? [c.cropSettled] : [],
+      c?.cropSettled && !c.cropComplete ? [c.cropSettled] : [],
     )
 
   const afterCropIds = (h: Held): number[] => [h.id, ...h.others.map((o) => o.id)]
@@ -2192,7 +2208,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       const cropping = e.altKey && grip.u >= 0
       const k = queueKey(scene, target.id)
       const prevCrop = pendingCrops.current.get(k)
-      const baseFrame = pendingFrames.current.get(k) ?? target.frame
+      const baseFrame =
+        (prevCrop?.cropComplete ? prevCrop.settledFrame : null) ??
+        pendingFrames.current.get(k) ??
+        target.frame
       const h: Held = {
         id: target.id,
         scene,
@@ -2215,14 +2234,17 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
                 return [
                   {
                     id: i.id,
-                    from: oc?.settledFrame ?? pendingFrames.current.get(ok) ?? i.frame,
-                    cropAfter: !cropping && oc?.cropSettled ? oc : null,
+                    from:
+                      (oc?.cropComplete ? oc.settledFrame : null) ??
+                      pendingFrames.current.get(ok) ??
+                      i.frame,
+                    cropAfter: !cropping && oc?.cropSettled && !oc.cropComplete ? oc : null,
                   },
                 ]
               })
             : [],
         crop: cropping ? 'reading' : null,
-        cropAfter: !cropping && prevCrop?.cropSettled ? prevCrop : null,
+        cropAfter: !cropping && prevCrop?.cropSettled && !prevCrop.cropComplete ? prevCrop : null,
         lastAfterCrop: null,
         lastDelta: null,
         lastCrop: null,
@@ -2231,18 +2253,20 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       }
       held.current = h
       if (cropping) {
+        h.cropComplete = false
         h.cropSettled = new Promise<void>((resolve) => {
           h.cropDone = resolve
         })
         // The initial crop and source size, while the engine anchors position on crop updates.
         const readInitial = () => api.transform(scene, target.id)
-        const pendingRead = prevCrop?.cropSettled
-          ? prevCrop.cropSettled.then(readInitial)
-          : readInitial()
+        const pendingRead =
+          prevCrop?.cropSettled && !prevCrop.cropComplete
+            ? prevCrop.cropSettled.then(readInitial)
+            : readInitial()
         h.cropRead = pendingRead
           .then((t) => {
             if (h.aborted || held.current !== h) return t
-            if (prevCrop?.settledFrame) h.from = prevCrop.settledFrame
+            if (prevCrop?.cropComplete && prevCrop.settledFrame) h.from = prevCrop.settledFrame
             h.crop = { from: cropOf(t), size: { width: t.width, height: t.height } }
             if (h.moved && h.lastDelta) {
               const next = cropDrag(h.from, h.grip, h.lastDelta, h.crop.from, h.crop.size)
@@ -2345,15 +2369,16 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         showHints(next, movingIds, snap > 0)
         return
       }
-      if (h.cropAfter?.settledFrame) {
+      if (h.cropAfter?.cropComplete && h.cropAfter.settledFrame) {
         h.from = h.cropAfter.settledFrame
         h.cropAfter = null
         h.lastAfterCrop = null
       }
       for (const o of h.others) {
-        if (o.cropAfter?.settledFrame) {
+        if (o.cropAfter?.cropComplete && o.cropAfter.settledFrame) {
           o.from = o.cropAfter.settledFrame
           o.cropAfter = null
+          h.lastAfterCrop = null
         }
       }
       const dragOpts = { free: e.shiftKey, keep: pv.keep, canvas, snap, to }
@@ -2399,7 +2424,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
                 compute: (base) => drag(base, h.grip, d, dragOpts),
                 fallback: b,
                 getBase: () =>
-                  h.cropAfter?.settledFrame ??
+                  (h.cropAfter?.cropComplete ? h.cropAfter.settledFrame : null) ??
                   pendingFrames.current.get(queueKey(h.scene, h.id)) ??
                   null,
               }
@@ -2418,6 +2443,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         }
         return
       }
+      h.lastAfterCrop = null
       h.last = b
       showHints(shown, movingIds, snap > 0)
       moveAll(h, b, false)

@@ -1163,6 +1163,232 @@ describe('the stage: lock, pan and pinch', () => {
       save: true,
     })
   })
+
+  it('applies queued ArrowRight postShift onto pre-crop frame if setItemCrop rejects', async () => {
+    let rejectCrop!: (err: Error) => void
+    const { api, el } = await mount(false, {
+      setItemCrop: vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>((_r, rej) => {
+            rejectCrop = rej
+          }),
+      ),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    const move = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    key(el, 'keydown', 'ArrowRight')
+    expect(api.setItemBox).not.toHaveBeenCalled()
+
+    await act(async () => {
+      rejectCrop(new Error('crop rejected'))
+      for (let i = 0; i < 6; i++) await Promise.resolve()
+    })
+
+    expect(api.setItemBox).toHaveBeenCalledWith(
+      'Main',
+      1,
+      expect.objectContaining({ x: 1, y: 0, w: 1920, h: 1080, save: true }),
+    )
+  })
+
+  it('clears stale lastAfterCrop when companion source crop finishes mid-drag so final displacement wins', async () => {
+    let resolveTransform!: (t: Record<string, unknown>) => void
+    const multiItems = [
+      {
+        id: 1,
+        name: 'Cam',
+        frame: [400, 0, 0, 200, 600, 600],
+        visible: true,
+        locked: false,
+        children: [],
+      },
+      {
+        id: 2,
+        name: 'Bg',
+        frame: [1920, 0, 0, 1080, 0, 0],
+        visible: true,
+        locked: false,
+        children: [],
+      },
+    ]
+    const { api, el, rerender } = await mount(
+      false,
+      {
+        transform: vi.fn(
+          () =>
+            new Promise<Record<string, unknown>>((r) => {
+              resolveTransform = r
+            }),
+        ),
+        setItemCrop: vi.fn(
+          async (
+            _scene: string,
+            id: number,
+            c: { left: number; top: number; right: number; bottom: number },
+          ) => ({
+            id,
+            frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+          }),
+        ),
+      },
+      { items: { data: multiItems, set() {} }, flat: multiItems, selected: 2, also: [] },
+    )
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    // 1. Alt+crop companion (id: 2) while transform() is still pending.
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    const move = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+
+    // 2. Select id: 1 with companion id: 2 and drag +50px before id: 2's crop settles.
+    await rerender({ selected: 1, also: [2] })
+    act(() => void el.dispatchEvent(pointer('pointerdown', { x: 700, y: 700 })))
+    act(() => void el.dispatchEvent(pointer('pointermove', { x: 750, y: 700 })))
+
+    // 3. Companion id: 2 settles mid-drag; drag then continues to +100px before release.
+    await act(async () => {
+      resolveTransform({
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scale_x: 1,
+        scale_y: 1,
+        alignment: 5,
+        bounds: 'stretch',
+        bounds_alignment: 5,
+        bounds_width: 1920,
+        bounds_height: 1080,
+        crop_left: 0,
+        crop_top: 0,
+        crop_right: 0,
+        crop_bottom: 0,
+        width: 1920,
+        height: 1080,
+      })
+      for (let i = 0; i < 6; i++) await Promise.resolve()
+    })
+
+    await act(async () => {
+      el.dispatchEvent(pointer('pointermove', { x: 800, y: 700 }))
+      el.dispatchEvent(pointer('pointerup', { x: 800, y: 700 }))
+      for (let i = 0; i < 4; i++) await Promise.resolve()
+    })
+
+    expect(api.setItemBoxes).toHaveBeenLastCalledWith('Main', {
+      items: [
+        { id: 1, x: 700, y: 600, w: 400, h: 200 },
+        { id: 2, x: 200, y: 0, w: 1820, h: 1080 },
+      ],
+      save: true,
+    })
+  })
+
+  it('keeps waiting until all postShift writes finish instead of adopting an intermediate frame', async () => {
+    const boxResolvers: Array<(v: Record<string, unknown>) => void> = []
+    const { api, el } = await mount(false, {
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number },
+        ) => ({
+          id,
+          frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+        }),
+      ),
+      setItemBox: vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>((r) => {
+            boxResolvers.push(r)
+          }),
+      ),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    // 1. Release Alt+crop left=100; ArrowRight #1 triggers drainShift first setItemBox (in flight at x=101).
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    const move = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+    key(el, 'keydown', 'ArrowRight')
+
+    await act(async () => {
+      for (let i = 0; i < 4; i++) await Promise.resolve()
+    })
+    expect(boxResolvers).toHaveLength(1)
+
+    // 2. While first shift write is still in flight, nudge #2 (x=102) and start +50px drag.
+    key(el, 'keydown', 'ArrowRight')
+    act(() => void el.dispatchEvent(pointer('pointerdown', { x: 500, y: 500 })))
+    act(() => void el.dispatchEvent(pointer('pointermove', { x: 550, y: 500 })))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 550, y: 500 })))
+
+    await act(async () => {
+      boxResolvers[0]!({ id: 1, frame: [1820, 0, 0, 1080, 101, 0] })
+      for (let i = 0; i < 4; i++) await Promise.resolve()
+    })
+    expect(boxResolvers).toHaveLength(2)
+    await act(async () => {
+      boxResolvers[1]!({ id: 1, frame: [1820, 0, 0, 1080, 102, 0] })
+      for (let i = 0; i < 6; i++) await Promise.resolve()
+    })
+    expect(boxResolvers).toHaveLength(3)
+
+    expect(api.setItemBox).toHaveBeenLastCalledWith(
+      'Main',
+      1,
+      expect.objectContaining({ x: 152, y: 0, w: 1820, h: 1080, save: true }),
+    )
+  })
 })
 
 describe('H11: native preview hole sync and vertical-only zoom guard', () => {
