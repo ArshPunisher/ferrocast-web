@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cx } from '@ferrocast/ui'
 import { clampDock, dockKeyTarget, readDock, saveDock, type DockSpec } from '../../lib/dock-size'
 
@@ -8,16 +8,20 @@ export function useDockWidth(spec: DockSpec): {
   set: (w: number, other: number) => void
   reset: () => void
 } {
+  const { key, def, min, max } = spec
   const [width, setWidth] = useState(() => readDock(spec))
-  const set = (w: number, other: number) => {
-    const next = clampDock(spec, w, other, window.innerWidth - navWidth())
-    setWidth(next)
-    saveDock(spec, next)
-  }
-  const reset = () => {
-    setWidth(spec.def)
-    saveDock(spec, spec.def)
-  }
+  const set = useCallback(
+    (w: number, other: number) => {
+      const next = clampDock({ key, def, min, max }, w, other, window.innerWidth - navWidth())
+      setWidth(next)
+      saveDock({ key, def, min, max }, next)
+    },
+    [key, def, min, max],
+  )
+  const reset = useCallback(() => {
+    setWidth(def)
+    saveDock({ key, def, min, max }, def)
+  }, [key, def, min, max])
   return { width, set, reset }
 }
 
