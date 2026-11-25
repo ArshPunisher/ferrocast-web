@@ -177,6 +177,28 @@ function frameFromTransform(t: EngineTransform): [number, number, number, number
   return [clean(sx * cos), clean(sx * sin), clean(-sy * sin), clean(sy * cos), clean(x), clean(y)]
 }
 
+function sameTransform(a: EngineTransform, b: EngineTransform): boolean {
+  const eq = (x: number, y: number) => Math.abs(x - y) < 1e-4
+  return (
+    eq(a.x, b.x) &&
+    eq(a.y, b.y) &&
+    eq(a.rotation, b.rotation) &&
+    eq(a.scale_x, b.scale_x) &&
+    eq(a.scale_y, b.scale_y) &&
+    a.alignment === b.alignment &&
+    a.bounds === b.bounds &&
+    a.bounds_alignment === b.bounds_alignment &&
+    eq(a.bounds_width, b.bounds_width) &&
+    eq(a.bounds_height, b.bounds_height) &&
+    a.crop_left === b.crop_left &&
+    a.crop_top === b.crop_top &&
+    a.crop_right === b.crop_right &&
+    a.crop_bottom === b.crop_bottom &&
+    a.width === b.width &&
+    a.height === b.height
+  )
+}
+
 function defaultTransform(
   box: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H },
 ): EngineTransform {
@@ -1402,35 +1424,36 @@ export class DemoStudioEngine {
 
   /**
    * Records one item-local undo entry for a continuous crop drag: captures the pre-drag transform on
-   * the first `save: false` request and pushes that pre-drag entry onto `undoStack` on `save: true`.
+   * the first `save: false` request and pushes that pre-drag entry onto `undoStack` on `save: true`,
+   * skipping no-op drags where the final transform equals the starting transform.
    */
-  private recordDragUndo(key: string, itemId: number, label: string, save: boolean): void {
+  private recordDragUndo(
+    key: string,
+    itemId: number,
+    label: string,
+    save: boolean,
+    before: EngineTransform,
+    after: EngineTransform,
+  ): void {
     if (save) {
       const pending = this.pendingUndo.get(key)
       this.pendingUndo.delete(key)
-      if (pending) {
-        this.undoStack.unshift(pending)
-        if (this.undoStack.length > 50) this.undoStack.pop()
-        this.redoStack = []
-        return
-      }
+      const initial = pending?.itemUndo?.transform ?? before
+      if (sameTransform(initial, after)) return
       this.undoStack.unshift({
         label,
-        itemUndo: {
-          id: itemId,
-          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
-        },
+        itemUndo: { id: itemId, transform: clone(initial) },
       })
       if (this.undoStack.length > 50) this.undoStack.pop()
       this.redoStack = []
       return
     }
-    if (!this.pendingUndo.has(key)) {
+    if (!this.pendingUndo.has(key) && !sameTransform(before, after)) {
       this.pendingUndo.set(key, {
         label,
         itemUndo: {
           id: itemId,
-          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
+          transform: clone(before),
         },
       })
     }
@@ -1539,6 +1562,26 @@ export class DemoStudioEngine {
       const candidate = `${base} ${n}`
       if (!taken.has(candidate)) return candidate
     }
+  }
+
+  private changeInPlace(
+    item: EngineItem,
+    t: EngineTransform,
+    parent: EngineItem | null,
+    change: (tr: EngineTransform) => void,
+  ): void {
+    const before = frameFromTransform(t)
+    const cx0 = before[4] + (before[0] + before[2]) * 0.5
+    const cy0 = before[5] + (before[1] + before[3]) * 0.5
+    change(t)
+    const after = frameFromTransform(t)
+    const cx1 = after[4] + (after[0] + after[2]) * 0.5
+    const cy1 = after[5] + (after[1] + after[3]) * 0.5
+    const clean = (n: number) => (Math.abs(n) < 1e-6 ? 0 : Math.round(n * 1000) / 1000)
+    t.x = clean(t.x + cx0 - cx1)
+    t.y = clean(t.y + cy0 - cy1)
+    this.setItemTransform(item, t)
+    if (parent) this.syncGroupFrame(parent)
   }
 
   private setItemTransform(item: EngineItem, next: EngineTransform): void {
@@ -2692,7 +2735,21 @@ export class DemoStudioEngine {
       }
     }
     if (is('POST', 'studio/engine/undo')) {
+      const open = [...this.pendingUndo.entries()]
       this.pendingUndo.clear()
+      for (let i = open.length - 1; i >= 0; i--) {
+        const [, entry] = open[i]!
+        if (!entry.itemUndo) continue
+        const current = this.transforms.get(entry.itemUndo.id) ?? defaultTransform()
+        if (!sameTransform(entry.itemUndo.transform, current)) {
+          this.redoStack.unshift(this.applyUndoEntry(entry))
+          return {
+            done: entry.label,
+            undo: this.undoStack[0]?.label ?? null,
+            redo: this.redoStack[0]?.label ?? null,
+          }
+        }
+      }
       const top = this.undoStack.shift()
       if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
       this.redoStack.unshift(this.applyUndoEntry(top))
@@ -2865,7 +2922,7 @@ export class DemoStudioEngine {
     }
 
     if (rest[2] === 'sources' && rest.length >= 4) {
-      return this.handleSourceRoute(method, decodeURIComponent(rest[3]!), rest.slice(4), body)
+      return this.handleSourceRoute(method, decodeURIComponent(rest[3]!), rest.slice(4), body, url)
     }
 
     if (is('GET', 'studio/engine/settings')) {
@@ -3018,12 +3075,6 @@ export class DemoStudioEngine {
         bottom: number
         save?: boolean
       }
-      this.recordDragUndo(
-        `crop:${this.shelfCollections.current}:${loc.item.id}`,
-        loc.item.id,
-        `Crop ${loc.item.name}`,
-        Boolean(b.save),
-      )
       const before = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
       const cur = clone(before)
       const w = Math.max(1, before.width)
@@ -3055,11 +3106,19 @@ export class DemoStudioEngine {
         const sameShape = nextW / nextH / (seenW / seenH)
         cur.bounds = before.bounds === 'fit' && Math.abs(sameShape - 1) < 0.005 ? 'fit' : 'stretch'
         cur.bounds_alignment = 5
-        cur.bounds_width = nw
-        cur.bounds_height = nh
+        cur.bounds_width = clean(nw)
+        cur.bounds_height = clean(nh)
       }
       this.setItemTransform(loc.item, cur)
       if (loc.parent) this.syncGroupFrame(loc.parent)
+      this.recordDragUndo(
+        `crop:${this.shelfCollections.current}:${loc.item.id}`,
+        loc.item.id,
+        `Crop ${loc.item.name}`,
+        Boolean(b.save),
+        before,
+        cur,
+      )
       return clone(loc.item)
     }
     if (tail[1] === 'transform' && tail.length === 2) {
@@ -3376,21 +3435,24 @@ export class DemoStudioEngine {
     }
     if (edit === 'flip_h') {
       this.pushUndo(`Flip ${item.name} sideways`)
-      t.scale_x *= -1
-      this.setItemTransform(item, t)
+      this.changeInPlace(item, t, parent, (tr) => {
+        tr.scale_x *= -1
+      })
       return undefined
     }
     if (edit === 'flip_v') {
       this.pushUndo(`Flip ${item.name} upside down`)
-      t.scale_y *= -1
-      this.setItemTransform(item, t)
+      this.changeInPlace(item, t, parent, (tr) => {
+        tr.scale_y *= -1
+      })
       return undefined
     }
     if (edit === 'rotate_cw' || edit === 'rotate_ccw' || edit === 'rotate180') {
       this.pushUndo(`Turn ${item.name}`)
       const delta = edit === 'rotate_cw' ? 90 : edit === 'rotate_ccw' ? 270 : 180
-      t.rotation = (t.rotation + delta) % 360
-      this.setItemTransform(item, t)
+      this.changeInPlace(item, t, parent, (tr) => {
+        tr.rotation = (((tr.rotation + delta) % 360) + 360) % 360
+      })
       return undefined
     }
     if (edit === 'duplicate') {
@@ -3687,7 +3749,13 @@ export class DemoStudioEngine {
     throw new HttpError(404, 'not_found', 'Unknown filter route.')
   }
 
-  private handleSourceRoute(method: string, name: string, tail: string[], body: unknown): unknown {
+  private handleSourceRoute(
+    method: string,
+    name: string,
+    tail: string[],
+    body: unknown,
+    url?: URL,
+  ): unknown {
     if (method === 'POST' && tail[0] === 'record' && tail.length === 1) {
       if (
         !name ||
@@ -3713,6 +3781,50 @@ export class DemoStudioEngine {
       return { file }
     }
     if (method === 'POST' && tail[0] === 'screenshot' && tail.length === 1) {
+      const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+      const qScene = url?.searchParams.has('scene') ? url.searchParams.get('scene')! : undefined
+      let qItem: number | undefined
+      if (url?.searchParams.has('item')) {
+        const raw = url.searchParams.get('item')!
+        const n = Number(raw)
+        if (raw === '' || !Number.isInteger(n)) {
+          throw new HttpError(400, 'invalid', 'item: whole number id.')
+        }
+        qItem = n
+      }
+      const bScene = b.scene !== undefined && b.scene !== null ? String(b.scene) : undefined
+      let bItem: number | undefined
+      if (b.item !== undefined && b.item !== null) {
+        const n = Number(b.item)
+        if (typeof b.item !== 'number' || !Number.isInteger(n)) {
+          throw new HttpError(400, 'invalid', 'item: whole number id.')
+        }
+        bItem = n
+      }
+      if (qScene !== undefined && bScene !== undefined && qScene !== bScene) {
+        throw new HttpError(400, 'invalid', 'scene: query and body do not match.')
+      }
+      if (qItem !== undefined && bItem !== undefined && qItem !== bItem) {
+        throw new HttpError(400, 'invalid', 'item: query and body do not match.')
+      }
+      const targetScene = bScene ?? qScene
+      const targetItem = bItem ?? qItem
+      if ((targetScene !== undefined) !== (targetItem !== undefined)) {
+        throw new HttpError(400, 'invalid', 'scene, item: give both or neither.')
+      }
+      if (targetScene !== undefined && targetItem !== undefined) {
+        const loc = this.findItem(targetScene, targetItem)
+        if (name && loc.item.name !== name) {
+          throw new HttpError(
+            422,
+            'studio_failed',
+            `There's no source called "${name}" for item ${targetItem} in "${targetScene}".`,
+          )
+        }
+        return {
+          file: `${this.recordFolder()}/${loc.item.name.replace(/[/\\]/g, '-')} screenshot.png`,
+        }
+      }
       if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
         throw new HttpError(404, 'studio_no_source', `There’s no source called "${name}".`)
       }
