@@ -153,9 +153,13 @@ test.describe('Alert editor toolbar and layout (U4)', () => {
     })
   }
 
-  test('works at 375 px with zero sideways scroll and passes light/dark axe checks', async ({
+  test('works at 375 px with zero sideways scroll, preserves desktop dock widths, and passes light/dark axe checks', async ({
     page,
   }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('fc-alerts-dock-left', '340')
+      localStorage.setItem('fc-alerts-dock-right', '480')
+    })
     await page.setViewportSize({ width: 1280, height: 800 })
     await open(page, 'alerts/sub')
     await expect(page.getByTestId('alert-editor')).toBeVisible()
@@ -176,14 +180,42 @@ test.describe('Alert editor toolbar and layout (U4)', () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+    const docks = await page.evaluate(() => ({
+      left: localStorage.getItem('fc-alerts-dock-left'),
+      right: localStorage.getItem('fc-alerts-dock-right'),
+    }))
+    expect(docks).toEqual({ left: '340', right: '480' })
   })
 
-  test('keeps preview touch targets >= 32px at 375px and themes silent No sound chip at Replay height', async ({
+  test('keeps preview touch targets >= 32px, places toolbar above stage at 375px, and themes silent No sound chip at Replay height', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await open(page, 'alerts/sub')
     await expect(page.getByTestId('alert-editor')).toBeVisible()
+
+    // Below md/lg at 375 px, the preview toolbar sits above the AlertStage so it never covers it.
+    const placement = await page.evaluate(() => {
+      const stage = document.querySelector('[aria-label="Alert preview"]')?.getBoundingClientRect()
+      const group = document
+        .querySelector('[role="group"][aria-label="Preview"]')
+        ?.getBoundingClientRect()
+      const replay = Array.from(document.querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Replay')
+        ?.getBoundingClientRect()
+      if (!stage || !group || !replay) throw new Error('missing stage or toolbar')
+      return {
+        stageTop: stage.top,
+        groupBottom: group.bottom,
+        replayBottom: replay.bottom,
+      }
+    })
+    expect(placement.groupBottom, 'preview chips sit above stage at 375px').toBeLessThanOrEqual(
+      placement.stageTop + 1,
+    )
+    expect(placement.replayBottom, 'Replay button sits above stage at 375px').toBeLessThanOrEqual(
+      placement.stageTop + 1,
+    )
 
     // Touch targets inside the preview toolbar must be at least 32px on phones too.
     const smallButtons = await page.evaluate(() => {
