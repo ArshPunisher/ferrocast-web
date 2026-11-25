@@ -318,6 +318,15 @@ export function MiniPad({
   )
 }
 
+function patchItemFrame(list: EngineItem[], moved: Pick<EngineItem, 'id' | 'frame'>): EngineItem[] {
+  const frame = moved.frame
+  if (!frame) return list
+  return list.map((i) => ({
+    ...(i.id === moved.id ? { ...i, frame } : i),
+    children: i.children.length > 0 ? patchItemFrame(i.children, moved) : i.children,
+  }))
+}
+
 /**
  * The Position tab (design A, #7): where it is and its size, a snap to the nine points of the
  * picture with Fit and Stretch, turn, flip, and crop. Changes show in the picture at once.
@@ -364,12 +373,7 @@ export function PositionTab({ scene, item }: { scene: string; item: EngineItem }
     const go = () => {
       pending.current = null
       void run('transform', () => api.setTransform(scene, item.id, next)).then((moved) => {
-        if (moved)
-          items.set((prev) =>
-            (prev ?? []).map((i) =>
-              i.id === moved.id && moved.frame ? { ...i, frame: moved.frame } : i,
-            ),
-          )
+        if (moved?.frame) items.set((prev) => patchItemFrame(prev ?? [], moved))
       })
     }
     pending.current = go
