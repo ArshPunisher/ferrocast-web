@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { fault, open } from './helpers'
 
 test.describe('Clean up my mic tile (U7)', () => {
   test('renders as one compact bordered tile with button on right at desktop, even Voice segments, and done status in tile', async ({
@@ -198,5 +198,69 @@ test.describe('Clean up my mic tile (U7)', () => {
 
     await checkVoiceSeg({ width: 375, height: 812 })
     await checkVoiceSeg({ width: 320, height: 812 })
+  })
+
+  test('wraps filter read error message with a compact Try again button that fits 375px and recovers on retry', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('fc-golive-picture', 'ferrocast')
+      localStorage.removeItem('fc-studio-standby-scene')
+    })
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await open(page, 'studio', 'autoplay=0&latency=0&studioEngine=1')
+    await page.getByRole('button', { name: 'Start the Studio' }).click()
+    await page.locator('[data-canvas-box]').waitFor({ state: 'visible', timeout: 10000 })
+
+    await fault(page, {
+      method: 'GET',
+      path: '/api/v1/studio/engine/sources/Mic/filters',
+      status: 500,
+      code: 'engine_error',
+      message: 'Failed to read filters',
+    })
+
+    await page
+      .getByRole('radiogroup', { name: 'Panel' })
+      .getByText('Sources', { exact: true })
+      .click()
+    await page
+      .getByRole('region', { name: /Sources in/ })
+      .getByRole('button', { name: 'Mic', exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Settings of Mic' }).click()
+    const drawer = page.getByRole('complementary', { name: 'Mic settings' })
+    await expect(drawer).toBeVisible()
+    await drawer.getByRole('tab', { name: 'Sound' }).click()
+
+    const tile = page.getByTestId('clean-mic-tile')
+    await expect(tile).toBeVisible()
+    await expect(tile.getByText('Couldn’t read your mic’s filters.')).toBeVisible()
+    const retryBtn = tile.getByRole('button', { name: 'Try again', exact: true })
+    await expect(retryBtn).toBeVisible()
+
+    const fit = await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="clean-mic-tile"]') as HTMLElement | null
+      if (!card) throw new Error('missing tile')
+      const btn = Array.from(card.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Try again',
+      )
+      if (!btn) throw new Error('missing Try again button')
+      const cR = card.getBoundingClientRect()
+      const bR = btn.getBoundingClientRect()
+      return {
+        pageOverflow: document.documentElement.scrollWidth > window.innerWidth,
+        btnFitsTile: bR.left >= cR.left - 1 && bR.right <= cR.right + 1,
+        btnNoScroll: btn.scrollWidth <= btn.clientWidth + 1,
+      }
+    })
+    expect(fit.pageOverflow, 'zero page overflow at 375px').toBe(false)
+    expect(fit.btnFitsTile, 'Try again button fits inside tile at 375px').toBe(true)
+    expect(fit.btnNoScroll, 'Try again button text does not clip').toBe(true)
+
+    await page.evaluate(() => window.__ferrocastDemo?.clearFaults())
+    await retryBtn.click()
+    await expect(tile.getByRole('button', { name: /Clean up my mic/ })).toBeVisible()
   })
 })
