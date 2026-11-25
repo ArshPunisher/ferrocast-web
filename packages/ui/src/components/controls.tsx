@@ -41,6 +41,35 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   busy?: boolean
 }
 
+/** Shared button class list so real links (`<a>`) can visually match `<Button>` without losing semantics. */
+export function buttonStyle({
+  variant = 'secondary',
+  size = 'md',
+  disabled = false,
+  busy = false,
+  className,
+}: {
+  variant?: Variant
+  size?: Size
+  disabled?: boolean
+  busy?: boolean
+  className?: string | undefined
+} = {}): string {
+  return cx(
+    'fc-press inline-flex shrink-0 items-center justify-center rounded-control font-semibold whitespace-nowrap select-none',
+    'transition-[background-color,border-color,color,transform,filter] duration-150 ease-out',
+    'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+    'disabled:cursor-not-allowed',
+    // A primary that can't be pressed yet goes neutral instead of a faded, glowing orange;
+    // a busy one keeps its colour.
+    variant === 'primary' && disabled && !busy
+      ? 'border border-line bg-surface-3 text-text-3'
+      : cx(variants[variant], 'disabled:opacity-50'),
+    sizes[size],
+    className,
+  )
+}
+
 /** Pressable everywhere: scales to 0.97 on press, never wraps its label. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { variant = 'secondary', size = 'md', icon, busy, className, children, disabled, type, ...rest },
@@ -52,19 +81,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type ?? 'button'}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={cx(
-        'fc-press inline-flex shrink-0 items-center justify-center rounded-control font-semibold whitespace-nowrap select-none',
-        'transition-[background-color,border-color,color,transform,filter] duration-150 ease-out',
-        'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-        'disabled:cursor-not-allowed',
-        // A primary that can't be pressed yet goes neutral instead of a faded, glowing orange;
-        // a busy one keeps its colour.
-        variant === 'primary' && disabled && !busy
-          ? 'border border-line bg-surface-3 text-text-3'
-          : cx(variants[variant], 'disabled:opacity-50'),
-        sizes[size],
-        className,
-      )}
+      className={buttonStyle({ variant, size, disabled: !!disabled, busy: !!busy, className })}
       {...rest}
     >
       {busy ? <span className="fc-busy" aria-hidden="true" /> : icon}

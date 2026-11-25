@@ -1004,7 +1004,7 @@ export function Platforms({
                 </div>
               </div>
               {tests[d.id] !== undefined && (
-                <ReachLine r={tests[d.id]!} className="pl-[86px] sm:pl-[92px]" />
+                <ReachLine r={tests[d.id]!} className="pl-0 sm:pl-[92px]" />
               )}
             </li>
           )

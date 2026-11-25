@@ -18,10 +18,10 @@ test.describe('Start show & Your platforms tile redesign (U3)', () => {
     expect(count).toBeGreaterThanOrEqual(2)
 
     await expect(dialog.locator('[data-preflight-summary]')).toBeVisible()
-    // Reconnect / fix actions in the pre-flight are real buttons on the tile.
-    await expect(
-      dialog.getByRole('button', { name: /Open Accounts|Discord settings/i }).first(),
-    ).toBeVisible()
+    // Route-navigation fixes in pre-flight stay real <a> links styled as buttons.
+    const fixLink = dialog.getByRole('link', { name: /Open Accounts|Discord settings/i }).first()
+    await expect(fixLink).toBeVisible()
+    await expect(fixLink).toHaveAttribute('href', /#\/settings\//)
 
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.waitForTimeout(150)
@@ -78,10 +78,23 @@ test.describe('Start show & Your platforms tile redesign (U3)', () => {
     const darkAxe = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(darkAxe.violations).toEqual([])
 
-    // 375 px phone check inside both dialogs: zero sideways overflow.
+    // 375 px phone check inside both dialogs: zero sideways overflow and ReachLine indent 0.
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'linen'))
     await page.setViewportSize({ width: 375, height: 812 })
     await settled(page)
+    await page
+      .getByRole('radiogroup', { name: 'Panel' })
+      .getByText('Go live to', { exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Manage platforms' }).click()
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Test connection to YouTube' }).click()
+    const reachStatus = dialog.locator('[data-platform-tile]').first().locator('[role="status"]')
+    await expect(reachStatus).toBeVisible()
+    const reachPadLeft = await reachStatus.evaluate((el) =>
+      parseFloat(getComputedStyle(el).paddingLeft),
+    )
+    expect(reachPadLeft, 'ReachLine left indent is 0 at 375 px').toBe(0)
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)

@@ -799,4 +799,94 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     expect(rowEl.textContent).toContain('6.2 Mbps')
     expect(rowEl.textContent).toContain('Same stream as Twitch: 6.2 Mbps')
   })
+
+  it('uses pl-0 sm:pl-[92px] on ReachLine in Platforms so mobile connection results are not over-indented', async () => {
+    localStorage.setItem('fc-golive-picture', 'ferrocast')
+    const tw = baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch', health: null })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+    }
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'POST' && path.includes('/reach')) {
+        return { ok: true, message: 'Reachable in 28 ms.' }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const el = await renderNode(<Platforms view={view} onSaved={() => {}} />)
+    const testBtn = Array.from(el.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Test connection to Twitch',
+    ) as HTMLButtonElement | undefined
+    expect(testBtn).toBeDefined()
+    await act(async () => {
+      testBtn!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const reach = el.querySelector('[data-platform-tile="twitch"] [role="status"]')
+    expect(reach).not.toBeNull()
+    expect(reach!.className).toContain('pl-0')
+    expect(reach!.className).toContain('sm:pl-[92px]')
+    expect(reach!.className).not.toContain('pl-[86px]')
+  })
 })
