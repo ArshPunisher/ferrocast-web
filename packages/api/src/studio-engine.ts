@@ -1022,7 +1022,7 @@ export interface EngineFollow {
 export interface EngineCaptureProblem {
   source: string
   kind: string
-  problem: 'permission' | 'no_picture' | 'black'
+  problem: 'permission' | 'no_picture' | 'black' | 'waiting'
 }
 
 /** One-shot still frame answer for a capture device or window in setup/pickers. */
