@@ -526,6 +526,23 @@ describe('CodeRabbit pass 2', () => {
     expect(saved.get('a')?.save).toBe(true)
   })
 
+  it('reorders overlapping multi-item jobs queued with ids instead of boxes', () => {
+    type J = { save: boolean; id?: number; ids?: number[]; boxes?: { id: number }[] }
+    const next = new Map<string, J>()
+    enqueueJob(next, 'many:1,2', { save: false, ids: [1, 2] })
+    enqueueJob(next, '1', { save: false, id: 1 })
+    enqueueJob(next, 'many:1,2', { save: true, ids: [1, 2] })
+    expect([...next.keys()]).toEqual(['1', 'many:1,2'])
+    expect(next.get('many:1,2')?.save).toBe(true)
+
+    // Also overlaps when a single-item job sits between boxes and ids jobs.
+    const mixed = new Map<string, J>()
+    enqueueJob(mixed, '1', { save: false, id: 1 })
+    enqueueJob(mixed, 'many:1,2', { save: false, ids: [1, 2] })
+    enqueueJob(mixed, '1', { save: true, id: 1 })
+    expect([...mixed.keys()]).toEqual(['many:1,2', '1'])
+  })
+
   it('Escape in a crop drag goes back to the transform/crop the drag started with', () => {
     const from = { left: 1, top: 2, right: 3, bottom: 4 }
     expect(revertCrop({ from })).toEqual(from)

@@ -530,14 +530,17 @@ export function revertCrop<T>(crop: { from: T } | null | 'reading'): T | null {
  * sources, so those go out in the order they were made (A+B, A, A+B must end with A+B's newest).
  */
 export function enqueueJob<
-  J extends { save: boolean; id?: number | undefined; boxes?: { id: number }[] | undefined },
+  J extends {
+    save: boolean
+    id?: number | undefined
+    ids?: number[] | undefined
+    boxes?: { id: number }[] | undefined
+  },
 >(next: Map<string, J>, key: string, job: J): void {
   const prev = next.get(key)
   const merged = { ...job, save: job.save || !!prev?.save }
   if (prev) {
-    const mine = new Set<number>(
-      job.boxes ? job.boxes.map((b) => b.id) : job.id !== undefined ? [job.id] : [],
-    )
+    const mine = queuedIds(new Map([[key, job]]))
     let later = false
     let overlaps = false
     for (const [k, j] of next) {
@@ -545,8 +548,14 @@ export function enqueueJob<
         later = true
         continue
       }
-      const ids = j.boxes ? j.boxes.map((b) => b.id) : j.id !== undefined ? [j.id] : []
-      if (later && ids.some((id) => mine.has(id))) overlaps = true
+      if (!later) continue
+      for (const id of queuedIds(new Map([[k, j]]))) {
+        if (mine.has(id)) {
+          overlaps = true
+          break
+        }
+      }
+      if (overlaps) break
     }
     if (overlaps) next.delete(key)
   }
