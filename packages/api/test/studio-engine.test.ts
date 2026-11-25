@@ -1060,4 +1060,59 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
       }
     })
   })
+
+  describe('item screenshot routing', () => {
+    it('routes item screenshots through scenes/{scene}/items/{id}/screenshot and keeps name-only when omitted', async () => {
+      const requests: { method: string; url: string }[] = []
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        requests.push({ method: init?.method ?? 'GET', url })
+        return new Response(JSON.stringify({ file: '/recordings/Screenshot.png' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      })
+      const api = studioEngineApi(
+        new FerroClient({ base: 'http://127.0.0.1:47820', token: 't', fetch: fetchMock }),
+      )
+
+      await api.screenshot('Camera', { scene: 'Gameplay', item: 7 })
+      await api.screenshot('Gameplay')
+
+      expect(requests).toEqual([
+        {
+          method: 'POST',
+          url: 'http://127.0.0.1:47820/api/v1/studio/engine/scenes/Gameplay/items/7/screenshot',
+        },
+        {
+          method: 'POST',
+          url: 'http://127.0.0.1:47820/api/v1/studio/engine/sources/Gameplay/screenshot',
+        },
+      ])
+    })
+
+    it('handles scene item screenshots in DemoStudioEngine and rejects missing items', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = (await api.scenes()).current
+        const items = await api.items(scene)
+        const target = items.find((i) => !i.group)!
+
+        const shot = await api.screenshot(target.name, { scene, item: target.id })
+        expect(shot.file).toMatch(/\.png$/)
+
+        await expect(api.screenshot(target.name, { scene, item: 999_999 })).rejects.toMatchObject({
+          status: 404,
+          code: 'studio_no_source',
+        })
+      } finally {
+        engine.dispose()
+      }
+    })
+  })
 })

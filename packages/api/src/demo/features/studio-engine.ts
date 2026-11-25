@@ -2858,6 +2858,10 @@ export class DemoStudioEngine {
     if (method === 'POST' && tail[1] === 'edit' && tail.length === 2) {
       return this.applyItemEdit(scene, loc, String(requireObj(body).do ?? ''))
     }
+    if (method === 'POST' && tail[1] === 'screenshot' && tail.length === 2) {
+      const safe = loc.item.name.replace(/[/\\]/g, '-')
+      return { file: `${this.recordFolder()}/${safe} screenshot.png` }
+    }
     if (method === 'PUT' && tail[1] === 'box' && tail.length === 2) {
       const b = requireObj(body) as { x: number; y: number; w: number; h: number; save?: boolean }
       this.validateBoxCoords(b)
