@@ -177,4 +177,65 @@ test.describe('Alert editor toolbar and layout (U4)', () => {
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
   })
+
+  test('keeps preview touch targets >= 32px at 375px and themes silent No sound chip at Replay height', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await open(page, 'alerts/sub')
+    await expect(page.getByTestId('alert-editor')).toBeVisible()
+
+    // Touch targets inside the preview toolbar must be at least 32px on phones too.
+    const smallButtons = await page.evaluate(() => {
+      const chips = Array.from(document.querySelectorAll('[data-platform-test]'))
+      return chips.map((el) => {
+        const r = el.getBoundingClientRect()
+        return { width: r.width, height: r.height }
+      })
+    })
+    expect(smallButtons.length).toBeGreaterThanOrEqual(3)
+    for (const box of smallButtons) {
+      expect(box.width, 'platform test width >= 32 at 375px').toBeGreaterThanOrEqual(32)
+      expect(box.height, 'platform test height >= 32 at 375px').toBeGreaterThanOrEqual(32)
+    }
+
+    // Make the preview silent so the "No sound" chip renders alongside Replay.
+    const soundSelect = page.getByLabel('Sound', { exact: true })
+    await soundSelect.selectOption('')
+    const ttsSummary = page.getByText('Read aloud (TTS)')
+    if (await ttsSummary.isVisible()) {
+      await ttsSummary.click()
+      const ttsSwitch = page.getByRole('switch', { name: 'Read the message aloud' })
+      if ((await ttsSwitch.getAttribute('aria-checked')) === 'true') {
+        await ttsSwitch.click()
+      }
+    }
+
+    const noSound = page.locator('section[aria-label="Live preview"]').getByText('No sound')
+    await expect(noSound).toBeVisible()
+    const chipMetrics = await page.evaluate(() => {
+      const replay = Array.from(document.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Replay',
+      )
+      const chip = Array.from(
+        document.querySelectorAll('section[aria-label="Live preview"] span'),
+      ).find((s) => s.textContent?.trim() === 'No sound')
+      if (!replay || !chip) throw new Error('Replay or No sound chip missing')
+      const rR = replay.getBoundingClientRect()
+      const cR = chip.getBoundingClientRect()
+      const cCs = getComputedStyle(chip)
+      return {
+        replayH: rR.height,
+        chipH: cR.height,
+        chipBg: cCs.backgroundColor,
+        chipBorder: parseFloat(cCs.borderTopWidth),
+      }
+    })
+    expect(chipMetrics.chipBg).not.toBe('rgba(0, 0, 0, 0.6)')
+    expect(chipMetrics.chipBorder).toBeGreaterThanOrEqual(1)
+    expect(Math.abs(chipMetrics.chipH - chipMetrics.replayH)).toBeLessThanOrEqual(1)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+  })
 })

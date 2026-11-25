@@ -200,6 +200,43 @@ describe('the Studio engine in the demo (no desktop app)', () => {
     )
     expect(calls[1]?.signal).toBe(ac.signal)
   })
+
+  it('returns waiting:true when cameraSleeping in DemoStudioEngine and error only when cameraDenied', async () => {
+    const sleeping = new DemoEngine({
+      autoplay: false,
+      latencyMs: 0,
+      studioEngine: { cameraSleeping: true },
+    })
+    const denied = new DemoEngine({
+      autoplay: false,
+      latencyMs: 0,
+      studioEngine: { cameraDenied: true },
+    })
+    try {
+      const sleepApi = studioEngineApi(
+        new FerroClient({ base: sleeping.base, token: DEMO_TOKEN, fetch: sleeping.fetch }),
+      )
+      const deniedApi = studioEngineApi(
+        new FerroClient({ base: denied.base, token: DEMO_TOKEN, fetch: denied.fetch }),
+      )
+      await expect(
+        sleepApi.sourceStill('av_capture_input_v2', 'device', 'cam-facetime', 240),
+      ).resolves.toEqual({ image: null, waiting: true, error: null })
+
+      const errRes = await deniedApi.sourceStill(
+        'av_capture_input_v2',
+        'device',
+        'cam-facetime',
+        240,
+      )
+      expect(errRes.image).toBeNull()
+      expect(errRes.waiting).toBeFalsy()
+      expect(errRes.error).toContain('turned off for Ferrocast')
+    } finally {
+      sleeping.dispose()
+      denied.dispose()
+    }
+  })
 })
 
 describe('simulated Studio engine in demo mode (studioEngine option)', () => {
@@ -1056,6 +1093,414 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         expect((await golive.view()).live).toBe(false)
       } finally {
         vi.useRealTimers()
+        engine.dispose()
+      }
+    })
+  })
+
+  describe('item screenshot routing', () => {
+    it('routes item screenshots through scenes/{scene}/items/{id}/screenshot and keeps name-only when omitted', async () => {
+      const requests: { method: string; url: string }[] = []
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        requests.push({ method: init?.method ?? 'GET', url })
+        return new Response(JSON.stringify({ file: '/recordings/Screenshot.png' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      })
+      const api = studioEngineApi(
+        new FerroClient({ base: 'http://127.0.0.1:47820', token: 't', fetch: fetchMock }),
+      )
+
+      await api.screenshot('Camera', { scene: 'Gameplay', item: 7 })
+      await api.screenshot('Gameplay')
+
+      expect(requests).toEqual([
+        {
+          method: 'POST',
+          url: 'http://127.0.0.1:47820/api/v1/studio/engine/scenes/Gameplay/items/7/screenshot',
+        },
+        {
+          method: 'POST',
+          url: 'http://127.0.0.1:47820/api/v1/studio/engine/sources/Gameplay/screenshot',
+        },
+      ])
+    })
+
+    it('handles scene item screenshots in DemoStudioEngine and rejects missing items', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = (await api.scenes()).current
+        const items = await api.items(scene)
+        const target = items.find((i) => !i.group)!
+
+        const shot = await api.screenshot(target.name, { scene, item: target.id })
+        expect(shot.file).toMatch(/\.png$/)
+
+        await expect(api.screenshot(target.name, { scene, item: 999_999 })).rejects.toMatchObject({
+          status: 404,
+          code: 'studio_no_source',
+        })
+      } finally {
+        engine.dispose()
+      }
+    })
+  })
+
+  describe('setItemCrop anchoring, group sync, clamping, and undo coalescing', () => {
+    it('anchors visible pixels for bounded, unbounded scaled/flipped/rotated, and grouped items', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = 'Main'
+        const items = await api.items(scene)
+        const webcam = items.find((i) => i.name === 'Webcam')!
+
+        // Top-level bounded item: crop_left=100, crop_top=50 anchors opposite corner and shrinks bounds.
+        await api.setTransform(scene, webcam.id, {
+          x: 960,
+          y: 540,
+          rotation: 0,
+          scale_x: 1,
+          scale_y: 1,
+          alignment: 5,
+          bounds: 'stretch',
+          bounds_alignment: 5,
+          bounds_width: 480,
+          bounds_height: 270,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 1920,
+          height: 1080,
+        })
+        const afterBounded = await api.setItemCrop(scene, webcam.id, {
+          left: 192,
+          top: 108,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        const trBounded = await api.transform(scene, webcam.id)
+        expect(trBounded.x).toBeCloseTo(1008, 2)
+        expect(trBounded.y).toBeCloseTo(567, 2)
+        expect(trBounded.bounds_width).toBeCloseTo(432, 2)
+        expect(trBounded.bounds_height).toBeCloseTo(243, 2)
+        expect(trBounded.bounds).toBe('stretch')
+        expect(afterBounded.frame?.[4]).toBeCloseTo(1008, 2)
+        expect((afterBounded.frame?.[4] ?? 0) + (afterBounded.frame?.[0] ?? 0)).toBeCloseTo(1440, 2)
+        expect((afterBounded.frame?.[5] ?? 0) + (afterBounded.frame?.[3] ?? 0)).toBeCloseTo(810, 2)
+
+        // Bounds fit preserves 'fit' when crop aspect stays equal, switches to 'stretch' otherwise.
+        await api.setTransform(scene, webcam.id, {
+          ...trBounded,
+          bounds: 'fit',
+          bounds_width: 480,
+          bounds_height: 270,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          x: 960,
+          y: 540,
+        })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 160,
+          top: 90,
+          right: 160,
+          bottom: 90,
+          save: false,
+        })
+        expect((await api.transform(scene, webcam.id)).bounds).toBe('fit')
+        await api.setItemCrop(scene, webcam.id, {
+          left: 200,
+          top: 90,
+          right: 160,
+          bottom: 90,
+          save: false,
+        })
+        expect((await api.transform(scene, webcam.id)).bounds).toBe('stretch')
+
+        // Unbounded flipped + rotated item: shifts x,y along item axes so far edge remains anchored.
+        await api.setTransform(scene, webcam.id, {
+          x: 500,
+          y: 100,
+          rotation: 90,
+          scale_x: -0.5,
+          scale_y: 0.5,
+          alignment: 5,
+          bounds: 'none',
+          bounds_alignment: 5,
+          bounds_width: 0,
+          bounds_height: 0,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 1000,
+          height: 500,
+        })
+        const rotRes = await api.setItemCrop(scene, webcam.id, {
+          left: 100,
+          top: 40,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        // At rotation 90 & scale (-0.5, 0.5), initial frame is [0, -500, -250, 0, 500, 100].
+        // Cropping left=100 (du=0.1) and top=40 (dv=0.08) shifts x by -250*0.08 = -20 and y by -500*0.1 = -50.
+        const rotTr = await api.transform(scene, webcam.id)
+        expect(rotTr.x).toBeCloseTo(480, 2)
+        expect(rotTr.y).toBeCloseTo(50, 2)
+        expect(rotRes.frame?.[4]).toBeCloseTo(480, 2)
+        expect(rotRes.frame?.[5]).toBeCloseTo(50, 2)
+
+        // Grouped item: cropping child updates both child and parent group frame.
+        const addedRes = await api.addSource(scene, {
+          kind: 'color_source_v3',
+          name: 'Crop Child',
+          settings: { color: 0xffff0000, width: 400, height: 200 },
+        })
+        const added = addedRes.item
+        await api.setTransform(scene, added.id, {
+          x: 100,
+          y: 100,
+          rotation: 0,
+          scale_x: 1,
+          scale_y: 1,
+          alignment: 5,
+          bounds: 'stretch',
+          bounds_alignment: 5,
+          bounds_width: 400,
+          bounds_height: 200,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 400,
+          height: 200,
+        })
+        const grp = await api.groupItems(scene, [added.id], 'Crop Group')
+        await api.setItemCrop(scene, added.id, {
+          left: 80,
+          top: 20,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        const updatedItems = await api.items(scene)
+        const groupNow = updatedItems.find((i) => i.id === grp.id)!
+        const childNow = groupNow.children.find((c) => c.id === added.id)!
+        expect(childNow.frame).toEqual([320, 0, 0, 180, 180, 120])
+        expect(groupNow.frame).toEqual([320, 0, 0, 180, 180, 120])
+
+        // Clamping: at least 1 pixel remains each way.
+        await api.setItemCrop(scene, added.id, {
+          left: 500,
+          top: 500,
+          right: 500,
+          bottom: 500,
+          save: true,
+        })
+        const clampedTr = await api.transform(scene, added.id)
+        expect(400 - clampedTr.crop_left - clampedTr.crop_right).toBe(1)
+        expect(200 - clampedTr.crop_top - clampedTr.crop_bottom).toBe(1)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('coalesces save:false drag steps into one pre-drag undo step committed on save:true', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = 'Main'
+        const items = await api.items(scene)
+        const webcam = items.find((i) => i.name === 'Webcam')!
+        await api.setTransform(scene, webcam.id, {
+          x: 960,
+          y: 540,
+          rotation: 0,
+          scale_x: 1,
+          scale_y: 1,
+          alignment: 5,
+          bounds: 'stretch',
+          bounds_alignment: 5,
+          bounds_width: 480,
+          bounds_height: 270,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 1920,
+          height: 1080,
+        })
+        const beforeUndoCount = (await api.history()).undo.length
+
+        await api.setItemCrop(scene, webcam.id, {
+          left: 40,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 80,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 160,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        // Nothing pushed to undo stack yet during drag.
+        expect((await api.history()).undo.length).toBe(beforeUndoCount)
+
+        await api.setItemCrop(scene, webcam.id, {
+          left: 200,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        const histAfter = await api.history()
+        expect(histAfter.undo.length).toBe(beforeUndoCount + 1)
+        expect(histAfter.undo[0]).toContain('Crop')
+
+        // Single undo restores the pre-drag position, size, and zero crop.
+        await api.undo()
+        const restored = await api.transform(scene, webcam.id)
+        expect(restored.crop_left).toBe(0)
+        expect(restored.x).toBe(960)
+        expect(restored.bounds_width).toBe(480)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('scopes pending crop undo to the active collection and clears pendingUndo on collection switch', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const colA = (await api.shelf('collections')).current
+        const webcam = (await api.items('Main')).find((i) => i.name === 'Webcam')!
+
+        // Start a crop preview in collection A, then copy A -> B, add a B-only scene, and finish crop on same ID in B.
+        await api.setItemCrop('Main', webcam.id, {
+          left: 40,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        const { id: colB } = await api.newShelf('collections', 'Collection B', true)
+        await api.addScene('B Only Scene')
+        await api.setItemCrop('Main', webcam.id, {
+          left: 120,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+
+        // Undo in B must not restore collection A's stale snapshot (which would erase B Only Scene).
+        await api.undo()
+        const bScenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(bScenes).toContain('B Only Scene')
+        expect((await api.transform('Main', webcam.id)).crop_left).toBe(40)
+
+        // Switching back to A and saving crop on matching ID does not leak from B.
+        await api.switchShelf('collections', colA)
+        await api.setItemCrop('Main', webcam.id, {
+          left: 100,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        await api.switchShelf('collections', colB)
+        expect((await api.scenes()).scenes.map((s) => s.name)).toContain('B Only Scene')
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('keeps intervening edits intact when undoing a save:false -> save:true crop', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = 'Main'
+        const webcam = (await api.items(scene)).find((i) => i.name === 'Webcam')!
+        await api.setItemCrop(scene, webcam.id, {
+          left: 50,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        // Intervening undoable edit while preview crop is open.
+        await api.addScene('Intervening Scene')
+        await api.setItemCrop(scene, webcam.id, {
+          left: 150,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+
+        // Undoing the crop reverts Webcam's crop without deleting Intervening Scene.
+        await api.undo()
+        let scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        // Second undo removes Intervening Scene and still keeps last committed crop_left (0, not 50).
+        await api.undo()
+        scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).not.toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        // Two redos bring back Intervening Scene and then the saved crop_left (150).
+        await api.redo()
+        scenes = (await api.scenes()).scenes.map((s) => s.name)
+        expect(scenes).toContain('Intervening Scene')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+
+        await api.redo()
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(150)
+      } finally {
         engine.dispose()
       }
     })

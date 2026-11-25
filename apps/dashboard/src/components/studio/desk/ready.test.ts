@@ -40,9 +40,19 @@ describe('ready check', () => {
     expect(silentMics({ Mic: [-60] })).toEqual([])
   })
 
-  it('turns captures that show nothing into checks', () => {
-    const got = captureChecks([{ source: 'Screen', kind: 'screen_capture', problem: 'black' }])
+  it('turns captures that show nothing into checks and uses calm waiting wording for waiting cameras', () => {
+    const got = captureChecks([
+      { source: 'Screen', kind: 'screen_capture', problem: 'black' },
+      {
+        source: 'iPhone Cam',
+        kind: 'av_capture_input_v2',
+        problem: 'waiting',
+      },
+    ])
     expect(got[0]).toMatchObject({ id: 'capture:Screen', status: 'warn' })
+    expect(got[1]).toMatchObject({ id: 'capture:iPhone Cam', status: 'warn' })
+    expect(got[1]?.detail).toContain('iPhone Cam is waiting for the camera')
+    expect(got[1]?.detail).not.toContain('all black')
     expect(captureChecks(undefined)).toEqual([])
   })
 

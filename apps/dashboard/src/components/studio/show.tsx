@@ -19,6 +19,7 @@ import {
 import {
   Badge,
   Button,
+  buttonStyle,
   Dialog,
   Field,
   Input,
@@ -283,11 +284,8 @@ export function PreflightList({
 }) {
   const studio = useStudio()
   const { run, busy } = useAction()
-  const goTo = (href: string) => {
-    onNavigate?.()
-    const target = href.startsWith('#') ? href : `#${href.replace(/^\/?/, '/')}`
-    window.location.hash = target
-  }
+  const preflightHref = (href: string) =>
+    href.startsWith('#') ? href : `#${href.replace(/^\/?/, '/')}`
   const row = (c: PreflightCheck) => {
     const meta = CHECK_META[c.status]
     const detail = c.detail.trim()
@@ -349,9 +347,13 @@ export function PreflightList({
                 {c.fix.label}
               </Button>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => goTo(c.fix!.href)}>
+              <a
+                href={preflightHref(c.fix.href)}
+                onClick={() => onNavigate?.()}
+                className={buttonStyle({ variant: 'outline', size: 'sm' })}
+              >
                 {c.fix.label}
-              </Button>
+              </a>
             )}
           </div>
         )}

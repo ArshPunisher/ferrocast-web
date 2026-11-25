@@ -487,11 +487,19 @@ export function revertBoxes(h: {
  * earlier request must not overwrite where these are now (the screen already shows them moved).
  */
 export function queuedIds(
-  next: Map<unknown, { id?: number | undefined; boxes?: { id: number }[] | undefined }>,
+  next: Map<
+    unknown,
+    {
+      id?: number | undefined
+      ids?: number[] | undefined
+      boxes?: { id: number }[] | undefined
+    }
+  >,
 ): Set<number> {
   const out = new Set<number>()
   for (const j of next.values()) {
     if (j.id !== undefined) out.add(j.id)
+    for (const id of j.ids ?? []) out.add(id)
     for (const b of j.boxes ?? []) out.add(b.id)
   }
   return out

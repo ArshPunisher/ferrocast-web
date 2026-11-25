@@ -260,7 +260,15 @@ export class DemoGoLive {
       ? []
       : this.cfg
           .filter((d) => {
-            if (!d.enabled || (d.canvas ?? 'main') !== 'main' || d.light) return false
+            if (
+              !d.enabled ||
+              (d.canvas ?? 'main') !== 'main' ||
+              d.light ||
+              (d.kind === 'custom' && directKind(d.url ?? '') !== null) ||
+              this.blocked(d) !== null
+            ) {
+              return false
+            }
             const primary = Object.entries(this.advanced.per).find(
               ([, a]) => a.backup === d.id,
             )?.[0]
@@ -445,22 +453,34 @@ export class DemoGoLive {
       const issues = d.enabled
         ? this.rulesStructured(d.kind, vertical ? vs : s, vertical, !!d.enhanced)
         : []
+      const direct = custom ? directKind(d.url ?? '') : null
+      const isBlocked = this.blocked(d) !== null
       const capped =
-        limiter &&
-        targetVideo !== null &&
-        d.enabled &&
-        !vertical &&
-        !d.light &&
-        !d.enhanced &&
-        !backs &&
-        (d.kind === 'twitch' || d.kind === 'kick')
+        direct === 'whip' && d.enabled && !vertical && !backs && !isBlocked && targetVideo !== null
           ? {
-              kbps: limiter.ceiling,
+              kbps: limiter ? Math.min(targetVideo, limiter.ceiling) : targetVideo,
               separate_encode: false,
-              summary: `Capped at ${limiter.ceiling.toLocaleString()} kbps for ${limiter.name}`,
-              detail: `Your ${targetVideo.toLocaleString()} kbps stream is capped at ${limiter.ceiling.toLocaleString()} kbps H.264 (2 s keyframes, 1x VBV) so ${limiter.name} viewers don’t stutter.`,
+              summary: 'B-frames off for WebRTC',
+              detail:
+                'B-frames are turned off for this stream because WebRTC (WHIP) can’t carry them.',
             }
-          : undefined
+          : limiter &&
+              targetVideo !== null &&
+              d.enabled &&
+              !vertical &&
+              !d.light &&
+              !d.enhanced &&
+              !backs &&
+              !direct &&
+              !isBlocked &&
+              (d.kind === 'twitch' || d.kind === 'kick')
+            ? {
+                kbps: limiter.ceiling,
+                separate_encode: false,
+                summary: `Capped at ${limiter.ceiling.toLocaleString()} kbps for ${limiter.name}`,
+                detail: `Your ${targetVideo.toLocaleString()} kbps stream is capped at ${limiter.ceiling.toLocaleString()} kbps H.264 (2 s keyframes, 1x VBV) so ${limiter.name} viewers don’t stutter.`,
+              }
+            : undefined
       return {
         id: d.id,
         kind: d.kind,

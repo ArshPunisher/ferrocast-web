@@ -132,16 +132,22 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       if (r) res.reload()
     })
   const canRetry = onAir || live
+  const ignoreServiceLimits = Boolean(view?.advanced?.ignore_service_limits)
+  const audioKbps = desk.prefs.data?.audio_kbps ?? 160
+  const videoKbps = desk.prefs.data?.video_kbps ?? null
   const capSummary = view
-    ? describeStreamCapFromView(view.destinations, desk.prefs.data?.video_kbps)
+    ? describeStreamCapFromView(view.destinations, videoKbps, {
+        ignoreServiceLimits,
+        live: view.live,
+      })
     : null
   const mainStreamKbps = view
     ? view.stats.kbps ||
       (capSummary?.effectiveVideoKbps
-        ? capSummary.effectiveVideoKbps + (desk.prefs.data?.audio_kbps ?? 160)
-        : 6160)
-    : 6160
-  const vertStreamKbps = view ? view.vertical_stats.kbps || 4660 : 4660
+        ? capSummary.effectiveVideoKbps + audioKbps
+        : 6000 + audioKbps)
+    : 6000 + audioKbps
+  const vertStreamKbps = view ? view.vertical_stats.kbps || 4500 + audioKbps : 4500 + audioKbps
   const row = (d: DestinationView) => (
     <li key={d.id} className="flex items-start gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
       <div className="mt-0.5 shrink-0">
@@ -157,6 +163,10 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               ? describeDestinationRate(d, capSummary, {
                   streamKbps: mainStreamKbps,
                   verticalKbps: vertStreamKbps,
+                  videoKbps,
+                  audioKbps,
+                  ignoreServiceLimits,
+                  live: Boolean(d.canvas === 'vertical' ? view?.vertical_live : view?.live),
                 })
               : undefined
           }

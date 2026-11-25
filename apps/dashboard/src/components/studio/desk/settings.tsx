@@ -611,31 +611,67 @@ export function StreamPage({
   set,
   onSynced,
   destinations,
-}: PageProps & { onSynced?: (next: StudioSettings) => void; destinations?: DestinationView[] }) {
+  ignoreServiceLimits,
+  live,
+}: PageProps & {
+  onSynced?: (next: StudioSettings) => void
+  destinations?: DestinationView[]
+  ignoreServiceLimits?: boolean
+  live?: boolean
+}) {
   const [wizard, setWizard] = useState(false)
   const [more, setMore] = useState(false)
   const sent = s.scale ?? [s.width, s.height]
   const quality = streamQuality(s)
   const conn = useLive((st) => st.conn)
-  const liveDests = useLive((st) => st.goliveView?.destinations ?? st.studio.golive?.destinations)
-  const [fetched, setFetched] = useState<{ conn: typeof conn; dests: DestinationView[] } | null>(
-    null,
-  )
+  const goliveView = useLive((st) => st.goliveView)
+  const storeFrame = useLive((st) => st.studio.golive)
+  const liveDests = goliveView?.destinations ?? storeFrame?.destinations
+  const [fetched, setFetched] = useState<{
+    conn: typeof conn
+    dests: DestinationView[]
+    ignoreServiceLimits: boolean
+    live: boolean
+  } | null>(null)
   useEffect(() => {
-    if (destinations || liveDests || !conn) return
+    if (
+      (destinations && ignoreServiceLimits !== undefined && live !== undefined) ||
+      goliveView ||
+      !conn
+    )
+      return
     let alive = true
     void goliveApi(conn.client)
       .view()
-      .then((v) => alive && setFetched({ conn, dests: v.destinations }))
+      .then(
+        (v) =>
+          alive &&
+          setFetched({
+            conn,
+            dests: v.destinations,
+            ignoreServiceLimits: Boolean(v.advanced?.ignore_service_limits),
+            live: Boolean(v.live),
+          }),
+      )
       .catch(() => undefined)
     return () => {
       alive = false
     }
-  }, [conn, destinations, liveDests])
-  const fetchedDests = fetched && fetched.conn === conn ? fetched.dests : null
+  }, [conn, destinations, goliveView, ignoreServiceLimits, live])
+  const fetchedData = fetched && fetched.conn === conn ? fetched : null
+  const ignoreLimits =
+    ignoreServiceLimits ??
+    goliveView?.advanced?.ignore_service_limits ??
+    fetchedData?.ignoreServiceLimits ??
+    false
+  const isLive = live ?? goliveView?.live ?? storeFrame?.live ?? fetchedData?.live ?? false
   const capSummary = useMemo(
-    () => describeStreamCap(s.video_kbps, destinations ?? liveDests ?? fetchedDests ?? []),
-    [s.video_kbps, destinations, liveDests, fetchedDests],
+    () =>
+      describeStreamCap(s.video_kbps, destinations ?? liveDests ?? fetchedData?.dests ?? [], {
+        ignoreServiceLimits: ignoreLimits,
+        live: isLive,
+      }),
+    [s.video_kbps, destinations, liveDests, fetchedData, ignoreLimits, isLive],
   )
   return (
     <>

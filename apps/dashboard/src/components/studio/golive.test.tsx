@@ -604,7 +604,7 @@ describe('Setup in OBS mode when OBS is already streaming (Problem 3)', () => {
 })
 
 describe('U2 Platforms and RowText shared-bitrate explanation', () => {
-  it('shows "Same stream as Twitch: 6.0 Mbps" on YouTube and "3 places x 6.2 Mbps = 18 Mbps upload" in Platforms', async () => {
+  it('shows consistent total rates, reconciles upload math, excludes blocked, and honors ignore_service_limits', async () => {
     localStorage.setItem('fc-golive-picture', 'ferrocast')
     const tw = baseDest({
       id: 'twitch',
@@ -697,21 +697,196 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     const request = vi.fn(async () => ({}))
     useLive.setState({ conn: { client: { request } } as never })
     const el = await renderNode(<Platforms view={view} onSaved={() => {}} videoKbps={12000} />)
-    expect(el.textContent).toContain('Same stream as Twitch: 6.0 Mbps')
+    expect(el.textContent).toContain('Same stream as Twitch: 6.2 Mbps')
     expect(el.textContent).toContain('Capped at 6,000 kbps for Twitch')
-    expect(el.textContent).toContain('3 places x 6.2 Mbps = 18 Mbps upload')
+    expect(el.textContent).toContain('3 places x 6.2 Mbps = 18.6 Mbps upload')
     const whyBtn = el.querySelector('button[aria-label="Why upload adds up"]') as HTMLButtonElement
     expect(whyBtn).not.toBeNull()
   })
 
-  it('compact GoLiveDock RowText shows actual rate and "Same stream as Twitch: 6.0 Mbps" on YouTube', async () => {
+  it('excludes blocked destinations and suppresses caps when ignore_service_limits is true', async () => {
+    localStorage.setItem('fc-golive-picture', 'ferrocast')
+    const tw = baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch', health: null })
+    const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
+    const kick = baseDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      health: null,
+      blocked: 'Connect Kick first.',
+    })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw, yt, kick],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+        ignore_service_limits: true,
+      },
+    }
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    const ignoredEl = await renderNode(
+      <Platforms view={view} onSaved={() => {}} videoKbps={12000} />,
+    )
+    expect(ignoredEl.textContent).not.toContain('Same stream as Twitch')
+    expect(ignoredEl.textContent).not.toContain('Capped at')
+    expect(ignoredEl.textContent).toContain('2 places x 12 Mbps = 24 Mbps upload')
+  })
+
+  it('compact GoLiveDock RowText shows consistent 6.2 Mbps rate and "Same stream as Twitch: 6.2 Mbps" on YouTube', async () => {
     const tw = baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch', health: null })
     const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
     const kick = baseDest({ id: 'kick', kind: 'kick', name: 'Kick', health: null })
     const cap = describeStreamCap(12000, [tw, yt, kick])
-    const rate = describeDestinationRate(yt, cap, { streamKbps: 6160 })
+    const rate = describeDestinationRate(yt, cap, { streamKbps: 6160, audioKbps: 160 })
     const rowEl = await renderNode(<RowText d={yt} rateInfo={rate} compact />)
-    expect(rowEl.textContent).toContain('6.0 Mbps')
-    expect(rowEl.textContent).toContain('Same stream as Twitch: 6.0 Mbps')
+    expect(rowEl.textContent).toContain('6.2 Mbps')
+    expect(rowEl.textContent).toContain('Same stream as Twitch: 6.2 Mbps')
+  })
+
+  it('uses pl-0 sm:pl-[92px] on ReachLine in Platforms so mobile connection results are not over-indented', async () => {
+    localStorage.setItem('fc-golive-picture', 'ferrocast')
+    const tw = baseDest({ id: 'twitch', kind: 'twitch', name: 'Twitch', health: null })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+    }
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'POST' && path.includes('/reach')) {
+        return { ok: true, message: 'Reachable in 28 ms.' }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const el = await renderNode(<Platforms view={view} onSaved={() => {}} />)
+    const testBtn = Array.from(el.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Test connection to Twitch',
+    ) as HTMLButtonElement | undefined
+    expect(testBtn).toBeDefined()
+    await act(async () => {
+      testBtn!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const reach = el.querySelector('[data-platform-tile="twitch"] [role="status"]')
+    expect(reach).not.toBeNull()
+    expect(reach!.className).toContain('pl-0')
+    expect(reach!.className).toContain('sm:pl-[92px]')
+    expect(reach!.className).not.toContain('pl-[86px]')
   })
 })

@@ -780,8 +780,9 @@ export function Platforms({
       success: on ? 'Auto quality is on.' : 'Auto quality is off.',
     }).then((r) => r && onSaved())
 
-  const ticked = merged.filter((d) => d.enabled)
   const vertical = canvas === 'vertical'
+  const streaming = vertical ? view.vertical_live : view.live
+  const ignoreServiceLimits = Boolean(view.advanced?.ignore_service_limits)
   const [mode] = useMode('studio')
   const usesObs = useUsesObs()
   const conn = useLive((s) => s.conn)
@@ -805,26 +806,55 @@ export function Platforms({
   const chosenVideoKbps = videoKbps ?? fetchedSettings?.video_kbps ?? null
   const chosenAudioKbps = fetchedSettings?.audio_kbps ?? audioKbps
   const capSummary = useMemo(
-    () => describeStreamCapFromView(merged, chosenVideoKbps),
-    [merged, chosenVideoKbps],
+    () =>
+      describeStreamCapFromView(merged, chosenVideoKbps, {
+        ignoreServiceLimits,
+        live: streaming,
+      }),
+    [merged, chosenVideoKbps, ignoreServiceLimits, streaming],
   )
   const fallbackMainKbps =
     capSummary.capped && capSummary.effectiveVideoKbps
       ? capSummary.effectiveVideoKbps + chosenAudioKbps
       : chosenVideoKbps
         ? chosenVideoKbps + chosenAudioKbps
-        : 6160
+        : 6000 + chosenAudioKbps
+  const verticalPlanKbps = view.vertical_stats.kbps || 4500 + chosenAudioKbps
   // Before anything streamed: what the engine plans (effective main stream or vertical cut).
-  const plan = vertical ? view.vertical_stats.kbps || 4660 : view.stats.kbps || fallbackMainKbps
+  const plan = vertical ? verticalPlanKbps : view.stats.kbps || fallbackMainKbps
+  const rateOpts = useMemo(
+    () => ({
+      streamKbps: plan,
+      verticalKbps: verticalPlanKbps,
+      videoKbps: chosenVideoKbps,
+      audioKbps: chosenAudioKbps,
+      ignoreServiceLimits,
+      live: streaming,
+    }),
+    [plan, verticalPlanKbps, chosenVideoKbps, chosenAudioKbps, ignoreServiceLimits, streaming],
+  )
+  const activeTicked = merged.filter(
+    (d) =>
+      !d.blocked &&
+      !d.standby_for &&
+      (d.enabled || (streaming && !!d.backup_for && d.health?.state === 'live')),
+  )
   const uploadSummary = useMemo(
     () =>
-      describeUploadNeed(ticked, {
-        planKbps: plan,
-        vertical,
-        limiterName: capSummary.capped ? capSummary.limiter?.name : null,
-        limiterKbps: capSummary.capped ? capSummary.effectiveVideoKbps : null,
-      }),
-    [ticked, plan, vertical, capSummary],
+      describeUploadNeed(
+        activeTicked.map((d) => ({
+          ...d,
+          kbps: describeDestinationRate(d, capSummary, rateOpts).kbps,
+        })),
+        {
+          planKbps: plan,
+          vertical,
+          limiterName: capSummary.capped ? capSummary.limiter?.name : null,
+          limiterKbps: capSummary.capped ? capSummary.effectiveVideoKbps : null,
+          audioKbps: chosenAudioKbps,
+        },
+      ),
+    [activeTicked, capSummary, rateOpts, plan, vertical, chosenAudioKbps],
   )
   const panelDescription = vertical
     ? 'YouTube Shorts live, or a server of your own. Twitch and Kick take one live per channel.'
@@ -841,14 +871,18 @@ export function Platforms({
       <span className="hidden sm:inline">Add a destination</span>
     </Button>
   )
-  const streaming = vertical ? view.vertical_live : view.live
   const content = (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2.5" aria-label="Platforms, top first">
         {merged.map((d, i) => {
           const tone = platformTileTone(d, streaming)
           const StatusGlyph = tone.icon
-          const rateText = liveStatus(d, streaming, plan)
+          const rateInfo = describeDestinationRate(d, capSummary, rateOpts)
+          const rateText = !streaming
+            ? d.enabled && d.health?.state === 'failed'
+              ? 'Failed'
+              : (rateInfo.rateLabel ?? '')
+            : liveStatus(d, streaming, rateInfo.kbps ?? plan)
           const showRate =
             Boolean(rateText) &&
             !['Off', 'Failed', 'Reconnecting', 'Paused', 'Standby'].includes(rateText)
@@ -898,10 +932,7 @@ export function Platforms({
                           <span>{tone.word}</span>
                         </span>
                       }
-                      rateInfo={describeDestinationRate(d, capSummary, {
-                        streamKbps: plan,
-                        verticalKbps: view.vertical_stats.kbps || 4660,
-                      })}
+                      rateInfo={rateInfo}
                     />
                     {!streaming &&
                       d.enabled &&
@@ -973,7 +1004,7 @@ export function Platforms({
                 </div>
               </div>
               {tests[d.id] !== undefined && (
-                <ReachLine r={tests[d.id]!} className="pl-[86px] sm:pl-[92px]" />
+                <ReachLine r={tests[d.id]!} className="pl-0 sm:pl-[92px]" />
               )}
             </li>
           )

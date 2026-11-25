@@ -416,18 +416,18 @@ export function MediaCheckStep({
           setCamError(null)
           setCamWaiting(false)
           nextDelay = CAMERA_POLL_MS
-        } else if (res.error) {
+        } else if (res.waiting || !res.error) {
+          setStillUrl(null)
+          setCamError(null)
+          setCamProblem(null)
+          setCamWaiting(true)
+          nextDelay = CAMERA_BACKOFF_MS
+        } else {
           hadStill = false
           setStillUrl(null)
           setCamError(null)
           setCamWaiting(false)
           setCamProblem(res.error)
-          nextDelay = CAMERA_BACKOFF_MS
-        } else {
-          setStillUrl(null)
-          setCamError(null)
-          setCamProblem(null)
-          setCamWaiting(true)
           nextDelay = CAMERA_BACKOFF_MS
         }
       } catch (e) {

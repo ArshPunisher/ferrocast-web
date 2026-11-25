@@ -103,8 +103,7 @@ import {
   at,
   boxOf,
   cropCursorFor,
-  croppedFrame,
-  cropTransform,
+  cropDrag,
   cursorFor,
   drag,
   addsToPick,
@@ -113,6 +112,7 @@ import {
   inside,
   pick,
   type Box,
+  type Crop,
   type Frame,
   type Grip,
   type Pt,
@@ -569,13 +569,13 @@ function PreviewBoxes({ running }: { running: boolean }) {
     const els = [stageRef.current, vStageRef.current].filter((e): e is HTMLDivElement => !!e)
     const off = els.map((el) => {
       const onWheel = (e: WheelEvent) => {
+        // Only the wide stage supports zoom/pan; never zoom or pan it from the vertical view.
+        if (el !== stageRef.current || (tall && getPreviewView().view === 'vertical')) return
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault()
           zoomView(Math.exp(-e.deltaY * 0.0025), pointerFromCentre(el, e.clientX, e.clientY))
           return
         }
-        // Only the wide stage supports boxStyle pan transforms; never pan it from the vertical view.
-        if (el !== stageRef.current) return
         const m = getStageMetrics()
         if (!m) return
         const v = getPreviewView()
@@ -912,10 +912,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
   const pan = stage
     ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitBoxSize(stage.width, stage.height), stage))
     : pv.pan
+  const [panX, panY] = pan
   const boxStyle = {
     '--fc-zoom': pv.zoom,
-    ...(pan[0] || pan[1] ? { transform: `translate(${pan[0]}px, ${pan[1]}px)` } : {}),
+    ...(panX || panY ? { transform: `translate(${panX}px, ${panY}px)` } : {}),
   } as CSSProperties
+  // Re-sync native preview rects immediately when zoom, pan, or split view changes CSS transforms.
+  useEffect(() => {
+    if (running && desktop) window.dispatchEvent(new Event(HOLES_CHANGED))
+  }, [running, desktop, pv.zoom, panX, panY, pv.view])
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
     // Square like the picture the app draws on it. In the app the picture covers it, so it's
@@ -1464,6 +1469,21 @@ function TBar() {
   )
 }
 
+const cropOf = (t: EngineTransform): Crop => ({
+  left: t.crop_left,
+  top: t.crop_top,
+  right: t.crop_right,
+  bottom: t.crop_bottom,
+})
+
+interface AfterCropBox {
+  wait: Promise<void>
+  compute: (base: Frame) => Box
+  fallback: Box
+  getBase: () => Frame | null
+  computeBoxes?: () => BoxFor[]
+}
+
 /** A drag in the preview: the item, the box and pointer it started from, and the handle. */
 interface Held {
   id: number
@@ -1475,15 +1495,19 @@ interface Held {
   moved: boolean
   last: Box | null
   /** Other sources picked with it, moved by the same amount (OBS's multi-select). */
-  others: { id: number; from: Frame }[]
-  /** Alt held on a handle: cropping, from the initial transform once it's read. */
-  crop: { from: EngineTransform } | null | 'reading'
+  others: { id: number; from: Frame; cropAfter?: Held | null }[]
+  /** Alt held on a handle: cropping, from the initial crop and source size once read. */
+  crop: { from: Crop; size: { width: number; height: number } } | null | 'reading'
   cropRead?: Promise<EngineTransform | null>
   cropSettled?: Promise<void>
   cropDone?: () => void
+  cropComplete?: boolean
   cropSeq?: number
+  settledFrame?: Frame | null
+  cropAfter?: Held | null
+  lastAfterCrop?: AfterCropBox | null
   lastDelta: Pt | null
-  lastTransform: EngineTransform | null
+  lastCrop: Crop | null
   postShift: Pt
   aborted: boolean
   /** A handle of the box round several picked sources: they are sized together, from these. */
@@ -1496,7 +1520,8 @@ interface Held {
  * (`boxes`) are one request, one undo step. */
 type JobBody =
   | { box: Box; save: boolean }
-  | { transform: EngineTransform; save: boolean }
+  | { afterCrop: AfterCropBox; ids?: number[]; save: boolean }
+  | { crop: Crop; save: boolean }
   | { pendingCrop: Held; id: number; save: boolean }
   | { boxes: BoxFor[]; save: boolean }
 
@@ -1540,6 +1565,8 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     prefs,
     itemMenu,
     size,
+    canvas: pictureCanvas,
+    scenes,
   } = useDesk()
   const { run } = useAction()
   const p = prefs.data
@@ -1674,42 +1701,87 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if ('box' in job) {
         return api.setItemBox(job.scene, job.id ?? 0, { ...job.box, save: job.save })
       }
+      if ('afterCrop' in job) {
+        await job.afterCrop.wait
+        if (job.afterCrop.computeBoxes) {
+          return api.setItemBoxes(job.scene, {
+            items: job.afterCrop.computeBoxes(),
+            save: job.save,
+          })
+        }
+        const base = job.afterCrop.getBase()
+        const box = base ? job.afterCrop.compute(base) : job.afterCrop.fallback
+        return api.setItemBox(job.scene, job.id ?? 0, { ...box, save: job.save })
+      }
       if ('pendingCrop' in job) {
         const pc = job.pendingCrop
         const k = queueKey(job.scene, pc.id)
+        const drainShift = async (startFrame: Frame): Promise<EngineItem | EngineItem[] | null> => {
+          let latest = startFrame
+          let res: EngineItem | EngineItem[] | null = null
+          while (pc.postShift.x !== 0 || pc.postShift.y !== 0) {
+            const sx = pc.postShift.x
+            const sy = pc.postShift.y
+            pc.postShift.x = 0
+            pc.postShift.y = 0
+            const b = boxOf(latest)
+            const shifted: Frame = [
+              latest[0],
+              latest[1],
+              latest[2],
+              latest[3],
+              latest[4] + sx,
+              latest[5] + sy,
+            ]
+            pendingFrames.current.set(k, shifted)
+            if (job.scene === sceneNow.current && !queuedIds(sending.current.next).has(pc.id)) {
+              put({ id: pc.id, frame: shifted })
+            }
+            const moved = await api.setItemBox(job.scene, pc.id, {
+              ...b,
+              x: b.x + sx,
+              y: b.y + sy,
+              save: true,
+            })
+            latest = moved.frame ?? shifted
+            res = moved
+          }
+          pc.settledFrame = latest
+          pendingFrames.current.set(k, latest)
+          return res
+        }
         try {
           const t = await (pc.cropRead ?? Promise.resolve(null))
-          pendingCrops.current.delete(k)
           if (!t || pc.aborted || !pc.lastDelta) {
+            return (await drainShift(pc.from)) ?? []
+          }
+          const next = cropDrag(pc.from, pc.grip, pc.lastDelta, cropOf(t), {
+            width: t.width,
+            height: t.height,
+          })
+          pc.lastCrop = next
+          let cropped: EngineItem
+          try {
+            cropped = await api.setItemCrop(job.scene, pc.id, { ...next, save: true })
+          } catch (err) {
+            // Do not silently drop keyboard nudges queued while the crop request was in flight.
             if (pc.postShift.x !== 0 || pc.postShift.y !== 0) {
-              const b = boxOf(pc.from)
-              return await api.setItemBox(job.scene, pc.id, {
-                ...b,
-                x: b.x + pc.postShift.x,
-                y: b.y + pc.postShift.y,
-                save: true,
-              })
+              await drainShift(pc.from).catch(() => undefined)
+            } else {
+              pc.settledFrame = pc.from
+              pendingFrames.current.set(k, pc.from)
             }
-            return []
+            throw err
           }
-          const cropped = cropTransform(pc.from, pc.grip, pc.lastDelta, t)
-          const next: EngineTransform =
-            pc.postShift.x !== 0 || pc.postShift.y !== 0
-              ? { ...cropped, x: cropped.x + pc.postShift.x, y: cropped.y + pc.postShift.y }
-              : cropped
-          pc.lastTransform = next
-          const cf = croppedFrame(pc.from, t, next)
-          pendingFrames.current.set(k, cf)
-          if (job.scene === sceneNow.current && !queuedIds(sending.current.next).has(pc.id)) {
-            put({ id: pc.id, frame: cf })
-          }
-          return await api.setTransform(job.scene, pc.id, next)
+          const shifted = await drainShift(cropped.frame ?? pc.from)
+          return shifted ?? cropped
         } finally {
-          pendingCrops.current.delete(k)
+          pc.cropComplete = true
+          if (pendingCrops.current.get(k) === pc) pendingCrops.current.delete(k)
           pc.cropDone?.()
         }
       }
-      return api.setTransform(job.scene, job.id ?? 0, job.transform)
+      return api.setItemCrop(job.scene, job.id ?? 0, { ...job.crop, save: job.save })
     }
     const go = execute()
     const done = job.save ? run('move', () => go) : go.catch(() => undefined)
@@ -1763,6 +1835,34 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     }
     queue(manyKey(boxes), { boxes, save }, h.scene)
   }
+  const settledFrameFor = (
+    forScene: string,
+    id: number,
+    ca: Held | null | undefined,
+    fallbackFrame: Frame,
+  ): Frame =>
+    (ca?.cropComplete ? ca.settledFrame : null) ??
+    pendingFrames.current.get(queueKey(forScene, id)) ??
+    fallbackFrame
+
+  const pendingDragCrops = (h: Held): Promise<void>[] =>
+    [h.cropAfter, ...h.others.map((o) => o.cropAfter)].flatMap((c) =>
+      c?.cropSettled && !c.cropComplete ? [c.cropSettled] : [],
+    )
+
+  const afterCropIds = (h: Held): number[] => [h.id, ...h.others.map((o) => o.id)]
+
+  const shiftedBoxesAfterCrop = (h: Held, dx: number, dy: number): BoxFor[] => {
+    const hb = boxOf(settledFrameFor(h.scene, h.id, h.cropAfter, h.from))
+    return [
+      { id: h.id, ...hb, x: hb.x + dx, y: hb.y + dy },
+      ...h.others.map((o) => {
+        const ob = boxOf(settledFrameFor(h.scene, o.id, o.cropAfter, o.from))
+        return { id: o.id, ...ob, x: ob.x + dx, y: ob.y + dy }
+      }),
+    ]
+  }
+
   const finish = (h: Held | null) => {
     clearHints()
     if (!h?.moved) return
@@ -1772,8 +1872,19 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       queue(`crop:${h.id}:${seq}`, { pendingCrop: h, id: h.id, save: true }, h.scene)
       return
     }
-    if (h.lastTransform) queue(h.id, { transform: h.lastTransform, save: true }, h.scene)
-    else if (h.group && h.lastBoxes)
+    if (h.lastCrop) queue(h.id, { crop: h.lastCrop, save: true }, h.scene)
+    else if (h.lastAfterCrop) {
+      if (h.lastAfterCrop.computeBoxes) {
+        const ids = afterCropIds(h)
+        queue(
+          manyKey(ids.map((id) => ({ id, x: 0, y: 0, w: 0, h: 0 }))),
+          { afterCrop: h.lastAfterCrop, ids, save: true },
+          h.scene,
+        )
+      } else {
+        queue(h.id, { afterCrop: h.lastAfterCrop, save: true }, h.scene)
+      }
+    } else if (h.group && h.lastBoxes)
       queue(manyKey(h.lastBoxes), { boxes: h.lastBoxes, save: true }, h.scene)
     else if (h.last) moveAll(h, h.last, true)
   }
@@ -1787,17 +1898,60 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
     held.current = null
     if (!h) return
     h.aborted = true
-    if (!h.moved) return
-    // A crop goes back to the transform the drag started with (nothing read yet: nothing changed).
-    if (h.crop || h.lastTransform) {
+    if (!h.moved) {
+      h.cropDone?.()
+      return
+    }
+    // A crop goes back to the crop the drag started with (nothing read yet: nothing changed).
+    if (h.crop || h.lastCrop) {
       const original = revertCrop(h.crop)
-      if (original && h.lastTransform) queue(h.id, { transform: original, save: true })
+      if (original && h.lastCrop) queue(h.id, { crop: original, save: true }, h.scene)
+      else h.cropDone?.()
+      return
+    }
+    const waits = pendingDragCrops(h)
+    if (waits.length > 0 && !h.group) {
+      const wait = Promise.all(waits).then(() => undefined)
+      if (h.others.length === 0) {
+        const only = boxOf(h.from)
+        queue(
+          h.id,
+          {
+            afterCrop: {
+              wait,
+              compute: (base) => boxOf(base),
+              fallback: only,
+              getBase: () => settledFrameFor(h.scene, h.id, h.cropAfter, h.from),
+            },
+            save: true,
+          },
+          h.scene,
+        )
+      } else {
+        const ids = afterCropIds(h)
+        const only = boxOf(h.from)
+        queue(
+          manyKey(ids.map((id) => ({ id, x: 0, y: 0, w: 0, h: 0 }))),
+          {
+            afterCrop: {
+              wait,
+              compute: (base) => boxOf(base),
+              fallback: only,
+              getBase: () => settledFrameFor(h.scene, h.id, h.cropAfter, h.from),
+              computeBoxes: () => shiftedBoxesAfterCrop(h, 0, 0),
+            },
+            ids,
+            save: true,
+          },
+          h.scene,
+        )
+      }
       return
     }
     const boxes = revertBoxes(h)
     const only = boxes[0]
-    if (boxes.length === 1 && only) send(h.id, only, true)
-    else queue(manyKey(boxes), { boxes, save: true })
+    if (boxes.length === 1 && only) send(h.id, only, true, h.scene)
+    else queue(manyKey(boxes), { boxes, save: true }, h.scene)
   }
   // The scene changed, or the editor went away, with a drag in the air: it is cancelled in the
   // scene it was made in (the queue remembers it), so no frozen guides or half drag are left.
@@ -2004,7 +2158,7 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
             others: [],
             crop: null,
             lastDelta: null,
-            lastTransform: null,
+            lastCrop: null,
             postShift: { x: 0, y: 0 },
             aborted: false,
             group: { items, rect: groupRect },
@@ -2054,7 +2208,10 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       const cropping = e.altKey && grip.u >= 0
       const k = queueKey(scene, target.id)
       const prevCrop = pendingCrops.current.get(k)
-      const baseFrame = pendingFrames.current.get(k) ?? target.frame
+      const baseFrame =
+        (prevCrop?.cropComplete ? prevCrop.settledFrame : null) ??
+        pendingFrames.current.get(k) ??
+        target.frame
       const h: Held = {
         id: target.id,
         scene,
@@ -2070,34 +2227,51 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           grip.u < 0 &&
           !list.some((g) => pickedIds.includes(g.id) && g.children.some((c) => c.id === target.id))
             ? // The displayed group's members: a hidden picked source stays where it is.
-              together.flatMap((i) =>
-                i.id !== target.id && !i.locked ? [{ id: i.id, from: i.frame }] : [],
-              )
+              together.flatMap((i) => {
+                if (i.id === target.id || i.locked) return []
+                const ok = queueKey(scene, i.id)
+                const oc = pendingCrops.current.get(ok)
+                return [
+                  {
+                    id: i.id,
+                    from:
+                      (oc?.cropComplete ? oc.settledFrame : null) ??
+                      pendingFrames.current.get(ok) ??
+                      i.frame,
+                    cropAfter: !cropping && oc?.cropSettled && !oc.cropComplete ? oc : null,
+                  },
+                ]
+              })
             : [],
         crop: cropping ? 'reading' : null,
+        cropAfter: !cropping && prevCrop?.cropSettled && !prevCrop.cropComplete ? prevCrop : null,
+        lastAfterCrop: null,
         lastDelta: null,
-        lastTransform: null,
+        lastCrop: null,
         postShift: { x: 0, y: 0 },
         aborted: false,
       }
       held.current = h
       if (cropping) {
+        h.cropComplete = false
         h.cropSettled = new Promise<void>((resolve) => {
           h.cropDone = resolve
         })
-        // The initial transform and source size, to compute both crop and anchored position.
+        // The initial crop and source size, while the engine anchors position on crop updates.
         const readInitial = () => api.transform(scene, target.id)
-        const pendingRead = prevCrop?.cropSettled
-          ? prevCrop.cropSettled.then(readInitial)
-          : readInitial()
+        const pendingRead =
+          prevCrop?.cropSettled && !prevCrop.cropComplete
+            ? prevCrop.cropSettled.then(readInitial)
+            : readInitial()
         h.cropRead = pendingRead
           .then((t) => {
             if (h.aborted || held.current !== h) return t
-            h.crop = { from: t }
+            if (prevCrop?.cropComplete && prevCrop.settledFrame) h.from = prevCrop.settledFrame
+            h.crop = { from: cropOf(t), size: { width: t.width, height: t.height } }
             if (h.moved && h.lastDelta) {
-              const next = cropTransform(h.from, h.grip, h.lastDelta, t)
-              h.lastTransform = next
-              queue(h.id, { transform: next, save: false }, h.scene)
+              const next = cropDrag(h.from, h.grip, h.lastDelta, h.crop.from, h.crop.size)
+              h.lastCrop = next
+              queue(h.id, { crop: next, save: false }, h.scene)
             }
             return t
           })
@@ -2169,9 +2343,9 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
       if (h.crop) {
         h.lastDelta = d
         if (h.crop === 'reading') return
-        const next = cropTransform(h.from, h.grip, d, h.crop.from)
-        h.lastTransform = next
-        queue(h.id, { transform: next, save: false })
+        const next = cropDrag(h.from, h.grip, d, h.crop.from, h.crop.size)
+        h.lastCrop = next
+        queue(h.id, { crop: next, save: false }, h.scene)
         return
       }
       // Alt (Option) held: no snapping this once, as in OBS.
@@ -2191,10 +2365,23 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         const boxes = scaleGroup(h.group.items, h.group.rect, next)
         h.last = b
         h.lastBoxes = boxes
-        queue(manyKey(boxes), { boxes, save: false })
+        queue(manyKey(boxes), { boxes, save: false }, h.scene)
         showHints(next, movingIds, snap > 0)
         return
       }
+      if (h.cropAfter?.cropComplete && h.cropAfter.settledFrame) {
+        h.from = h.cropAfter.settledFrame
+        h.cropAfter = null
+        h.lastAfterCrop = null
+      }
+      for (const o of h.others) {
+        if (o.cropAfter?.cropComplete && o.cropAfter.settledFrame) {
+          o.from = o.cropAfter.settledFrame
+          o.cropAfter = null
+          h.lastAfterCrop = null
+        }
+      }
+      const dragOpts = { free: e.shiftKey, keep: pv.keep, canvas, snap, to }
       let b: Box
       let shown: Rect
       if (h.others.length > 0 && h.grip.u < 0) {
@@ -2213,9 +2400,50 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
           bottom: at.bottom + dy,
         }
       } else {
-        b = drag(h.from, h.grip, d, { free: e.shiftKey, keep: pv.keep, canvas, snap, to })
+        b = drag(h.from, h.grip, d, dragOpts)
         shown = rectOf(frameOfBox(h.from, b))
       }
+      const waits = pendingDragCrops(h)
+      if (waits.length > 0) {
+        const wait = Promise.all(waits).then(() => undefined)
+        const after: AfterCropBox =
+          h.others.length > 0 && h.grip.u < 0
+            ? (() => {
+                const dx = b.x - h.from[4]
+                const dy = b.y - h.from[5]
+                return {
+                  wait,
+                  compute: (base) => drag(base, h.grip, d, dragOpts),
+                  fallback: b,
+                  getBase: () => settledFrameFor(h.scene, h.id, h.cropAfter, h.from),
+                  computeBoxes: () => shiftedBoxesAfterCrop(h, dx, dy),
+                }
+              })()
+            : {
+                wait,
+                compute: (base) => drag(base, h.grip, d, dragOpts),
+                fallback: b,
+                getBase: () =>
+                  (h.cropAfter?.cropComplete ? h.cropAfter.settledFrame : null) ??
+                  pendingFrames.current.get(queueKey(h.scene, h.id)) ??
+                  null,
+              }
+        h.last = b
+        h.lastAfterCrop = after
+        showHints(shown, movingIds, snap > 0)
+        if (h.others.length > 0 && after.computeBoxes) {
+          const ids = afterCropIds(h)
+          queue(
+            manyKey(ids.map((id) => ({ id, x: 0, y: 0, w: 0, h: 0 }))),
+            { afterCrop: after, ids, save: false },
+            h.scene,
+          )
+        } else {
+          queue(h.id, { afterCrop: after, save: false }, h.scene)
+        }
+        return
+      }
+      h.lastAfterCrop = null
       h.last = b
       showHints(shown, movingIds, snap > 0)
       moveAll(h, b, false)
@@ -2299,8 +2527,14 @@ export function useStageEdit(ref: React.RefObject<HTMLDivElement | null>, on: bo
         if (!panning.current) e.currentTarget.style.cursor = 'grab'
         return
       }
-      // ⌘/Ctrl with + − 0: zoom in, out, back to fit.
+      // ⌘/Ctrl with + − 0: zoom in, out, back to fit (wide canvas only).
       if ((e.metaKey || e.ctrlKey) && ['=', '+', '-', '0'].includes(e.key)) {
+        if (
+          pictureCanvas === 'vertical' ||
+          (Boolean(scenes?.data?.vertical) && pv.view === 'vertical')
+        ) {
+          return
+        }
         e.preventDefault()
         if (e.key === '0') viewSet({ zoom: 1, pan: [0, 0] })
         else zoomView(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP)
@@ -2565,6 +2799,8 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
             (o) => o.visible && o.frame && covers(o.frame, it.frame as Frame, c.width, c.height),
           )
       : undefined
+  const showZoom =
+    !scenes.data?.preview && !(Boolean(scenes.data?.vertical) && pv.view === 'vertical')
   return (
     <>
       {it && cover && (
@@ -2586,7 +2822,7 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
           <span className="hidden truncate @[1440px]:inline">Behind {cover.name} · To front</span>
         </button>
       )}
-      {!scenes.data?.preview && (
+      {showZoom && (
         <div
           role="group"
           aria-label="Zoom"
@@ -2643,7 +2879,7 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
           </ToolButton>
         </div>
       )}
-      {!panel && <span aria-hidden className="h-5 w-px bg-line" />}
+      {showZoom && !panel && <span aria-hidden className="h-5 w-px bg-line" />}
       <ToolButton
         panel={panel}
         text={pv.frames ? 'Outlines on' : 'Source outlines'}

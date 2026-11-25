@@ -1022,7 +1022,14 @@ export interface EngineFollow {
 export interface EngineCaptureProblem {
   source: string
   kind: string
-  problem: 'permission' | 'no_picture' | 'black'
+  problem: 'permission' | 'no_picture' | 'black' | 'waiting'
+}
+
+/** One-shot still frame answer for a capture device or window in setup/pickers. */
+export interface StillResult {
+  image: string | null
+  waiting?: boolean
+  error?: string | null
 }
 
 export interface EngineStats {
@@ -1422,7 +1429,7 @@ export function studioEngineApi(c: FerroClient) {
       w = 240,
       signal?: AbortSignal,
     ) =>
-      c.request<{ image: string | null; error?: string | null }>(
+      c.request<StillResult>(
         'GET',
         `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
         undefined,
@@ -1451,11 +1458,13 @@ export function studioEngineApi(c: FerroClient) {
         `/api/v1/studio/engine/sources/${enc(name)}/filters/${enc(filter)}/vst`,
         { do: what },
       ),
-    /** A PNG of a scene or source, saved where recordings go. */
-    screenshot: (name: string) =>
+    /** A PNG of a scene, source or placed item, saved where recordings go. */
+    screenshot: (name: string, target?: { scene: string; item: number }) =>
       c.request<{ file: string }>(
         'POST',
-        `/api/v1/studio/engine/sources/${enc(name)}/screenshot`,
+        target
+          ? `/api/v1/studio/engine/scenes/${enc(target.scene)}/items/${target.item}/screenshot`
+          : `/api/v1/studio/engine/sources/${enc(name)}/screenshot`,
         {},
       ),
     /** A Web page source: on screen to click and type in, back off-screen, or loaded again. */

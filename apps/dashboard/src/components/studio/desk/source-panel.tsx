@@ -1561,7 +1561,7 @@ function VoiceStyleRow({ name, list }: { name: string; list: Resource<EngineFilt
         size="sm"
         even
         value={style}
-        className="[&>label]:px-1.5"
+        className="[&>label]:px-1.5 max-sm:[&>label]:px-1 max-sm:[&>label]:text-[12px]"
         options={[
           { value: 'natural', label: 'Natural' },
           { value: 'radio', label: 'Warm radio' },

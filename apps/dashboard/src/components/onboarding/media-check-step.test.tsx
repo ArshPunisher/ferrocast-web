@@ -203,7 +203,9 @@ describe('MediaCheckStep camera preview polling (W3)', () => {
   })
 
   it('shows waiting message on stopped picture, backs off to 5 s, keeps Refresh frame, and auto-resumes', async () => {
-    let stillResult: { image: string | null; error?: string | null } = { image: FRAME_A }
+    let stillResult: { image: string | null; waiting?: boolean; error?: string | null } = {
+      image: FRAME_A,
+    }
     const engine = makeEngine({
       sourceStill: vi.fn(async () => stillResult),
     })
@@ -223,8 +225,8 @@ describe('MediaCheckStep camera preview polling (W3)', () => {
     })
     expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_A)
 
-    // Simulate iPhone sleeping / camera stopping (no frame).
-    stillResult = { image: null }
+    // Simulate iPhone sleeping / camera waiting (waiting: true, image: null).
+    stillResult = { image: null, waiting: true, error: null }
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
       await flush()
@@ -233,6 +235,7 @@ describe('MediaCheckStep camera preview polling (W3)', () => {
     expect(host.textContent).toContain(
       'Waiting for your camera. An iPhone can switch off when it sleeps or locks: unlock it and keep it near. Ferrocast will pick it up again.',
     )
+    expect(host.querySelector('[role="alert"]')).toBeNull()
     expect(host.querySelector('button')?.textContent).toBeDefined()
     const refreshBtn = [...host.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('Refresh frame'),
@@ -261,6 +264,53 @@ describe('MediaCheckStep camera preview polling (W3)', () => {
       await flush()
     })
     expect(engine.sourceStill).toHaveBeenCalledTimes(4)
+  })
+
+  it('prefers waiting:true calm view over error banner and keeps polling until camera recovers', async () => {
+    let reply: { image: string | null; waiting?: boolean; error?: string | null } = {
+      image: null,
+      waiting: true,
+      error: 'Waiting for camera signal',
+    }
+    const engine = makeEngine({
+      sourceStill: vi.fn(async () => reply),
+    })
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+    expect(host.textContent).toContain('Waiting for your camera.')
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+
+    // Real hard error (!waiting) shows error banner and Retry camera.
+    reply = { image: null, error: 'Camera permission is denied.' }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+      await flush()
+    })
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      'Camera permission is denied.',
+    )
+    expect(host.textContent).toContain('Retry camera')
+
+    // Auto-recovers when still image arrives on next poll.
+    reply = { image: FRAME_B }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+      await flush()
+    })
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_B)
   })
 
   it('triggers immediate single-flight check when Refresh frame is pressed while waiting, and handles error backoff recovery', async () => {

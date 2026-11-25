@@ -596,7 +596,7 @@ export function SourcesDock() {
       label: 'Screenshot',
       icon: Camera,
       onSelect: () =>
-        void run('shot', () => api.screenshot(item.name), {
+        void run('shot', () => api.screenshot(item.name, { scene, item: item.id }), {
           success: 'Screenshot saved with your recordings.',
         }),
     },

@@ -39,6 +39,7 @@ import {
   type LimitedBy,
   type NewEngineSource,
   type RollbackTrigger,
+  type StillResult,
 } from '../../studio-engine'
 import type { Service, UploadCheck } from '../../golive'
 import { HttpError } from '../http-error'
@@ -131,7 +132,8 @@ interface CopiedSourceBundle {
 
 interface UndoEntry {
   label: string
-  snapshot: CollectionSnapshot
+  snapshot?: CollectionSnapshot
+  itemUndo?: { id: number; transform: EngineTransform }
 }
 
 const CANVAS_W = 1920
@@ -824,8 +826,7 @@ export class DemoStudioEngine {
         this.seedForScenes(['Main'], true)
         this.collections.set(restored, this.captureSnapshot())
       }
-      this.undoStack = []
-      this.redoStack = []
+      this.clearHistory()
     }
     this.shelfCollections.list = this.shelfCollections.list.filter((c) => c.id !== collectionId)
     this.collections.delete(collectionId)
@@ -1295,10 +1296,144 @@ export class DemoStudioEngine {
     }
   }
 
+  private pendingUndo = new Map<string, UndoEntry>()
+
+  private clearHistory(): void {
+    this.undoStack = []
+    this.redoStack = []
+    this.pendingUndo.clear()
+  }
+
+  private findItemAcrossScenes(id: number): { item: EngineItem; parent: EngineItem | null } | null {
+    const search = (
+      list: EngineItem[],
+      parent: EngineItem | null,
+    ): { item: EngineItem; parent: EngineItem | null } | null => {
+      for (const it of list) {
+        if (it.id === id) return { item: it, parent }
+        if (it.children.length) {
+          const inner = search(it.children, it)
+          if (inner) return inner
+        }
+      }
+      return null
+    }
+    for (const root of this.sceneItems.values()) {
+      const found = search(root, null)
+      if (found) return found
+    }
+    return null
+  }
+
+  private applyUndoEntry(entry: UndoEntry): UndoEntry {
+    if (entry.itemUndo) {
+      const current = clone(this.transforms.get(entry.itemUndo.id) ?? defaultTransform())
+      const loc = this.findItemAcrossScenes(entry.itemUndo.id)
+      if (loc) {
+        this.setItemTransform(loc.item, clone(entry.itemUndo.transform))
+        if (loc.parent) this.syncGroupFrame(loc.parent)
+      } else {
+        this.transforms.set(entry.itemUndo.id, clone(entry.itemUndo.transform))
+      }
+      return { label: entry.label, itemUndo: { id: entry.itemUndo.id, transform: current } }
+    }
+    const current = this.captureSnapshot()
+    if (entry.snapshot) this.restoreSnapshot(entry.snapshot, true)
+    return { label: entry.label, snapshot: current }
+  }
+
+  private reconcilePendingUndoSnapshot(snap: CollectionSnapshot): CollectionSnapshot {
+    if (this.pendingUndo.size === 0) return snap
+    const patchList = (
+      list: EngineItem[],
+      id: number,
+      frame: ReturnType<typeof frameFromTransform>,
+    ): boolean => {
+      for (const it of list) {
+        if (it.id === id) {
+          it.frame = frame
+          return true
+        }
+        if (it.children.length > 0 && patchList(it.children, id, frame)) {
+          const box = this.groupBox(it.children)
+          if (box) {
+            it.frame = [box.w, 0, 0, box.h, box.x, box.y]
+            const gt = snap.transforms[it.id]
+            if (gt) {
+              snap.transforms[it.id] = {
+                ...gt,
+                x: box.x,
+                y: box.y,
+                alignment: 5,
+                bounds: 'stretch',
+                bounds_alignment: 5,
+                bounds_width: box.w,
+                bounds_height: box.h,
+              }
+            }
+          }
+          return true
+        }
+      }
+      return false
+    }
+    for (const pending of this.pendingUndo.values()) {
+      if (!pending.itemUndo) continue
+      const { id, transform } = pending.itemUndo
+      if (id in snap.transforms) {
+        snap.transforms[id] = clone(transform)
+      }
+      const committedFrame = frameFromTransform(transform)
+      for (const sceneList of Object.values(snap.sceneItems)) {
+        if (patchList(sceneList, id, committedFrame)) break
+      }
+    }
+    return snap
+  }
+
   private pushUndo(label: string): void {
-    this.undoStack.unshift({ label, snapshot: this.captureSnapshot() })
+    this.undoStack.unshift({
+      label,
+      snapshot: this.reconcilePendingUndoSnapshot(this.captureSnapshot()),
+    })
     if (this.undoStack.length > 50) this.undoStack.pop()
     this.redoStack = []
+  }
+
+  /**
+   * Records one item-local undo entry for a continuous crop drag: captures the pre-drag transform on
+   * the first `save: false` request and pushes that pre-drag entry onto `undoStack` on `save: true`.
+   */
+  private recordDragUndo(key: string, itemId: number, label: string, save: boolean): void {
+    if (save) {
+      const pending = this.pendingUndo.get(key)
+      this.pendingUndo.delete(key)
+      if (pending) {
+        this.undoStack.unshift(pending)
+        if (this.undoStack.length > 50) this.undoStack.pop()
+        this.redoStack = []
+        return
+      }
+      this.undoStack.unshift({
+        label,
+        itemUndo: {
+          id: itemId,
+          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
+        },
+      })
+      if (this.undoStack.length > 50) this.undoStack.pop()
+      this.redoStack = []
+      return
+    }
+    if (!this.pendingUndo.has(key)) {
+      this.pendingUndo.set(key, {
+        label,
+        itemUndo: {
+          id: itemId,
+          transform: clone(this.transforms.get(itemId) ?? defaultTransform()),
+        },
+      })
+    }
   }
 
   private seedForScenes(sceneNames: string[], clearAll = false): void {
@@ -1310,8 +1445,7 @@ export class DemoStudioEngine {
     this.transforms.clear()
     this.itemFilters.clear()
     this.nextItemId = 1
-    this.undoStack = []
-    this.redoStack = []
+    this.clearHistory()
     this.ensureGlobalSources()
     for (const s of this.activeScenes) this.sceneItems.set(s, [])
   }
@@ -1467,13 +1601,13 @@ export class DemoStudioEngine {
     return this.requireSource(name)
   }
 
-  private syncGroupFrame(group: EngineItem): void {
-    if (!group.group || group.children.length === 0) return
+  private groupBox(children: EngineItem[]): { x: number; y: number; w: number; h: number } | null {
+    if (children.length === 0) return null
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
     let maxY = -Infinity
-    for (const c of group.children) {
+    for (const c of children) {
       const f = c.frame ?? [100, 0, 0, 100, 0, 0]
       const xs = [f[4], f[4] + f[0], f[4] + f[2], f[4] + f[0] + f[2]]
       const ys = [f[5], f[5] + f[1], f[5] + f[3], f[5] + f[1] + f[3]]
@@ -1482,14 +1616,19 @@ export class DemoStudioEngine {
       maxX = Math.max(maxX, ...xs)
       maxY = Math.max(maxY, ...ys)
     }
-    if (Number.isFinite(minX) && Number.isFinite(maxX)) {
-      this.applyBox(group, {
-        x: minX,
-        y: minY,
-        w: Math.max(1, maxX - minX),
-        h: Math.max(1, maxY - minY),
-      })
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
+    return {
+      x: minX,
+      y: minY,
+      w: Math.max(1, maxX - minX),
+      h: Math.max(1, maxY - minY),
     }
+  }
+
+  private syncGroupFrame(group: EngineItem): void {
+    if (!group.group) return
+    const box = this.groupBox(group.children)
+    if (box) this.applyBox(group, box)
   }
 
   private scenesWithSplitShow(): boolean {
@@ -1646,6 +1785,8 @@ export class DemoStudioEngine {
           this.collections.set(shelf.current, this.captureSnapshot())
           if (!b.copy) {
             this.seedForScenes(['Main'], true)
+          } else {
+            this.clearHistory()
           }
           this.collections.set(id, this.captureSnapshot())
         }
@@ -1666,8 +1807,7 @@ export class DemoStudioEngine {
             this.seedForScenes(['Main'], true)
             this.collections.set(id, this.captureSnapshot())
           }
-          this.undoStack = []
-          this.redoStack = []
+          this.clearHistory()
         }
         shelf.current = id
         return { id }
@@ -2552,10 +2692,10 @@ export class DemoStudioEngine {
       }
     }
     if (is('POST', 'studio/engine/undo')) {
+      this.pendingUndo.clear()
       const top = this.undoStack.shift()
       if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
-      this.redoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot, true)
+      this.redoStack.unshift(this.applyUndoEntry(top))
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,
@@ -2563,10 +2703,10 @@ export class DemoStudioEngine {
       }
     }
     if (is('POST', 'studio/engine/redo')) {
+      this.pendingUndo.clear()
       const top = this.redoStack.shift()
       if (!top) return { done: null, undo: this.undoStack[0]?.label ?? null, redo: null }
-      this.undoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
-      this.restoreSnapshot(top.snapshot, true)
+      this.undoStack.unshift(this.applyUndoEntry(top))
       return {
         done: top.label,
         undo: this.undoStack[0]?.label ?? null,
@@ -2858,6 +2998,10 @@ export class DemoStudioEngine {
     if (method === 'POST' && tail[1] === 'edit' && tail.length === 2) {
       return this.applyItemEdit(scene, loc, String(requireObj(body).do ?? ''))
     }
+    if (method === 'POST' && tail[1] === 'screenshot' && tail.length === 2) {
+      const safe = loc.item.name.replace(/[/\\]/g, '-')
+      return { file: `${this.recordFolder()}/${safe} screenshot.png` }
+    }
     if (method === 'PUT' && tail[1] === 'box' && tail.length === 2) {
       const b = requireObj(body) as { x: number; y: number; w: number; h: number; save?: boolean }
       this.validateBoxCoords(b)
@@ -2874,13 +3018,48 @@ export class DemoStudioEngine {
         bottom: number
         save?: boolean
       }
-      if (b.save) this.pushUndo(`Crop ${loc.item.name}`)
-      const cur = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
-      cur.crop_left = Math.max(0, Math.round(Number(b.left ?? 0)))
-      cur.crop_top = Math.max(0, Math.round(Number(b.top ?? 0)))
-      cur.crop_right = Math.max(0, Math.round(Number(b.right ?? 0)))
-      cur.crop_bottom = Math.max(0, Math.round(Number(b.bottom ?? 0)))
+      this.recordDragUndo(
+        `crop:${this.shelfCollections.current}:${loc.item.id}`,
+        loc.item.id,
+        `Crop ${loc.item.name}`,
+        Boolean(b.save),
+      )
+      const before = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
+      const cur = clone(before)
+      const w = Math.max(1, before.width)
+      const h = Math.max(1, before.height)
+      const right = Math.min(Math.max(0, Math.round(Number(b.right ?? 0))), w - 1)
+      const left = Math.min(Math.max(0, Math.round(Number(b.left ?? 0))), w - 1 - right)
+      const bottom = Math.min(Math.max(0, Math.round(Number(b.bottom ?? 0))), h - 1)
+      const top = Math.min(Math.max(0, Math.round(Number(b.top ?? 0))), h - 1 - bottom)
+      const seenW = Math.max(1, w - before.crop_left - before.crop_right)
+      const seenH = Math.max(1, h - before.crop_top - before.crop_bottom)
+      const nextW = Math.max(1, w - left - right)
+      const nextH = Math.max(1, h - top - bottom)
+      const f = frameFromTransform(before)
+      const du = (left - before.crop_left) / seenW
+      const dv = (top - before.crop_top) / seenH
+      const clean = (n: number) => (Math.abs(n) < 1e-6 ? 0 : Math.round(n * 1000) / 1000)
+      cur.x = clean(f[4] + f[0] * du + f[2] * dv)
+      cur.y = clean(f[5] + f[1] * du + f[3] * dv)
+      cur.alignment = 5
+      cur.crop_left = left
+      cur.crop_top = top
+      cur.crop_right = right
+      cur.crop_bottom = bottom
+      if (before.bounds !== 'none') {
+        const lu = Math.hypot(f[0], f[1])
+        const lv = Math.hypot(f[2], f[3])
+        const nw = lu * (nextW / seenW)
+        const nh = lv * (nextH / seenH)
+        const sameShape = nextW / nextH / (seenW / seenH)
+        cur.bounds = before.bounds === 'fit' && Math.abs(sameShape - 1) < 0.005 ? 'fit' : 'stretch'
+        cur.bounds_alignment = 5
+        cur.bounds_width = nw
+        cur.bounds_height = nh
+      }
       this.setItemTransform(loc.item, cur)
+      if (loc.parent) this.syncGroupFrame(loc.parent)
       return clone(loc.item)
     }
     if (tail[1] === 'transform' && tail.length === 2) {
@@ -3653,7 +3832,7 @@ export class DemoStudioEngine {
     }
   }
 
-  stillForDevice(device: string | null): { image: string | null; error?: string | null } {
+  stillForDevice(device: string | null): StillResult {
     if (!this.opts.hasCamera) {
       throw new HttpError(404, 'studio_no_source', 'No camera is available on this computer.')
     }
@@ -3663,7 +3842,7 @@ export class DemoStudioEngine {
         error:
           'The camera is turned off for Ferrocast. Open System Settings, Privacy & Security, Camera, turn Ferrocast on, then press Retry.',
       }
-    if (this.opts.cameraSleeping) return { image: null }
+    if (this.opts.cameraSleeping) return { image: null, waiting: true, error: null }
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
   }
 

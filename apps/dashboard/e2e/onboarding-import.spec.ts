@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { fault, open } from './helpers'
+import { demo, fault, open } from './helpers'
 
 test.describe('first-run import and camera/mic check', () => {
   test('OBS Studio preview, import result, Undo/Start over, and full flow at 1280px', async ({
@@ -248,6 +248,43 @@ test.describe('first-run import and camera/mic check', () => {
     expect(overflow).toBeLessThanOrEqual(0)
 
     // Camera wakes back up -> recovers automatically without reloading or clicking.
+    await page.evaluate(() => {
+      ;(
+        window as unknown as {
+          __ferrocastDemo?: { setStudioOnboardingState: (s: Record<string, unknown>) => void }
+        }
+      ).__ferrocastDemo?.setStudioOnboardingState({ cameraSleeping: false })
+    })
+    await expect(page.locator('img[alt^="Preview from"]')).toBeVisible({ timeout: 8000 })
+  })
+
+  test('starts in calm Waiting for your camera view for waiting:true without error banner and auto-resumes', async ({
+    page,
+  }) => {
+    await open(page, 'home', 'firstrun&autoplay=0&latency=0&obs=empty&cam=sleeping')
+    await page.getByText('Import from OBS Studio', { exact: true }).click()
+    await page.getByRole('button', { name: 'Start fresh instead' }).click()
+    await expect(page.getByRole('heading', { name: 'Camera and mic check' })).toBeVisible()
+
+    const stillReply = await demo<{
+      image: string | null
+      waiting?: boolean
+      error?: string | null
+    }>(page, `(d) => d.studioEngine.stillForDevice(null)`)
+    expect(stillReply).toEqual({ image: null, waiting: true, error: null })
+
+    await expect(
+      page.getByText(
+        'Waiting for your camera. An iPhone can switch off when it sleeps or locks: unlock it and keep it near. Ferrocast will pick it up again.',
+      ),
+    ).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry camera' })).toHaveCount(0)
+
+    await page.setViewportSize({ width: 375, height: 812 })
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+
     await page.evaluate(() => {
       ;(
         window as unknown as {

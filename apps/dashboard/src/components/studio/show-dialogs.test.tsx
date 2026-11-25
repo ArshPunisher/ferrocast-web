@@ -78,12 +78,34 @@ describe('U3 PreflightList bordered tiles', () => {
     const summary = host!.querySelector('[data-preflight-summary]')
     expect(summary?.textContent).toMatch(/2 items need attention, 2 passed/i)
 
-    // Action fixes (including route navigation like Discord settings) are real buttons on the tile
-    const buttons = Array.from(host!.querySelectorAll('button'))
-    const discordBtn = buttons.find((b) => b.textContent?.trim() === 'Discord settings')
-    expect(discordBtn).toBeTruthy()
-    await act(async () => discordBtn!.click())
+    // Route navigation fixes stay real <a> links styled as buttons (cmd/ctrl+click, link semantics),
+    // while action: fixes stay real <button>s.
+    const links = Array.from(host!.querySelectorAll('a'))
+    const discordLink = links.find((a) => a.textContent?.trim() === 'Discord settings')
+    expect(discordLink).toBeTruthy()
+    expect(discordLink?.getAttribute('href')).toBe('#/settings/discord')
+    expect(discordLink?.className).toContain('border')
+    expect(discordLink?.className).toContain('rounded-control')
+    await act(async () => discordLink!.click())
     expect(onNavigate).toHaveBeenCalled()
+
+    const actionPf: Preflight = {
+      ready: false,
+      checks: [
+        {
+          id: 'act',
+          label: 'Studio',
+          status: 'fail',
+          detail: 'Start needed.',
+          fix: { label: 'Start now', href: 'action:start' },
+        },
+      ],
+    }
+    await act(async () => root!.render(<PreflightList pf={actionPf} onFixed={() => {}} />))
+    const actionBtn = Array.from(host!.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Start now',
+    )
+    expect(actionBtn).toBeTruthy()
 
     // Empty detail produces no blank second-row paragraph
     const emptyTile = tiles.find((t) => t.textContent?.includes('Alerts'))!

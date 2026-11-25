@@ -108,4 +108,95 @@ test.describe('Clean up my mic tile (U7)', () => {
     expect(stacked.btnBelowHint, 'button stacks below hint at 375px').toBe(true)
     expect(stacked.noOverflow, 'zero sideways scroll at 375px').toBe(true)
   })
+
+  test('fits Voice segmented control ("Clear podcast") inside 375px SourcePanel without clipping or overflow', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('fc-golive-picture', 'ferrocast')
+      localStorage.removeItem('fc-studio-standby-scene')
+    })
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await open(page, 'studio', 'autoplay=0&latency=0&studioEngine=1')
+    await page.getByRole('button', { name: 'Start the Studio' }).click()
+    await page.locator('[data-canvas-box]').waitFor({ state: 'visible', timeout: 10000 })
+
+    await page
+      .getByRole('radiogroup', { name: 'Panel' })
+      .getByText('Sources', { exact: true })
+      .click()
+    await page
+      .getByRole('region', { name: /Sources in/ })
+      .getByRole('button', { name: 'Mic', exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Settings of Mic' }).click()
+    const drawer = page.getByRole('complementary', { name: 'Mic settings' })
+    await expect(drawer).toBeVisible()
+    await drawer.getByRole('tab', { name: 'Sound' }).click()
+
+    const tile = page.getByTestId('clean-mic-tile')
+    await expect(tile).toBeVisible()
+
+    const checkVoiceSeg = async (vp: { width: number; height: number }) => {
+      await page.setViewportSize(vp)
+      const seg = await page.evaluate(() => {
+        const voice = document.querySelector('[role="radiogroup"][aria-label="Voice"]')
+        const drawerEl = document.querySelector('[aria-label="Mic settings"]')
+        if (!voice || !drawerEl) throw new Error('missing Voice segmented or drawer')
+        const gR = voice.getBoundingClientRect()
+        const dR = drawerEl.getBoundingClientRect()
+        const opts = Array.from(voice.querySelectorAll('label')).map((el) => {
+          const r = el.getBoundingClientRect()
+          return {
+            text: el.textContent?.trim() ?? '',
+            scrollW: Math.ceil(el.scrollWidth),
+            clientW: Math.floor(el.clientWidth),
+            left: r.left,
+            right: r.right,
+            width: r.width,
+            height: r.height,
+          }
+        })
+        return {
+          pageOverflow: document.documentElement.scrollWidth > window.innerWidth,
+          groupInsideDrawer: gR.left >= dR.left - 1 && gR.right <= dR.right + 1,
+          groupNoScroll: voice.scrollWidth <= voice.clientWidth + 1,
+          opts,
+        }
+      })
+
+      expect(seg.pageOverflow, `zero horizontal overflow at ${vp.width}px`).toBe(false)
+      expect(
+        seg.groupInsideDrawer,
+        `Voice radiogroup fits inside SourcePanel drawer at ${vp.width}px`,
+      ).toBe(true)
+      expect(
+        seg.groupNoScroll,
+        `Voice radiogroup does not horizontally clip at ${vp.width}px`,
+      ).toBe(true)
+      expect(seg.opts).toHaveLength(3)
+      for (let i = 0; i < seg.opts.length; i++) {
+        const o = seg.opts[i]!
+        expect(
+          o.scrollW,
+          `${o.text} text must not clip horizontally at ${vp.width}px`,
+        ).toBeLessThanOrEqual(o.clientW + 1)
+        if (i > 0) {
+          expect(
+            o.left,
+            `${o.text} must not overlap previous segment at ${vp.width}px`,
+          ).toBeGreaterThanOrEqual(seg.opts[i - 1]!.right - 1)
+        }
+      }
+      const minW = Math.min(...seg.opts.map((o) => o.width))
+      const maxW = Math.max(...seg.opts.map((o) => o.width))
+      expect(maxW - minW, `Voice segments remain equal width at ${vp.width}px`).toBeLessThanOrEqual(
+        2,
+      )
+    }
+
+    await checkVoiceSeg({ width: 375, height: 812 })
+    await checkVoiceSeg({ width: 320, height: 812 })
+  })
 })

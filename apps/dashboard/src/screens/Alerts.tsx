@@ -973,7 +973,7 @@ function RuleEditor({
                       disabled={!supported}
                       onClick={() => firePlatformTest(p)}
                       className={cx(
-                        'fc-press grid size-7 place-items-center rounded-[7px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:size-8',
+                        'fc-press grid size-8 place-items-center rounded-[7px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40',
                         active
                           ? 'border-pick bg-surface-1 ring-2 ring-pick'
                           : 'border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3',
@@ -1012,7 +1012,7 @@ function RuleEditor({
                     Mute
                   </button>
                 ) : (
-                  <span className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-black/60 px-3 text-[14px] text-white/80">
+                  <span className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text-2 shadow-1 backdrop-blur-sm sm:h-9 sm:px-3 sm:text-[14px]">
                     <SpeakerSlash size={15} aria-hidden="true" /> No sound
                   </span>
                 )}

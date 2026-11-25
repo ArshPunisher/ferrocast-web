@@ -119,5 +119,12 @@ describe('the black screen fixer', () => {
     expect(captureWords({ ...black, problem: 'permission' })).toMatch(/Allow, then restart/)
     expect(captureWords(none)).toMatch(/^“Cam” has no picture/)
     expect(captureWords(black)).toMatch(/all black/)
+    const waiting = captureWords({
+      source: 'iPhone Cam',
+      kind: 'av_capture_input_v2',
+      problem: 'waiting',
+    })
+    expect(waiting).toContain('iPhone Cam is waiting for the camera')
+    expect(waiting).not.toContain('all black')
   })
 })

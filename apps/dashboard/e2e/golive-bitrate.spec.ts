@@ -25,35 +25,35 @@ test.describe('Bitrate caps and shared stream explanations (U2)', () => {
     await expect(settingsDialog).toBeVisible()
     await settingsDialog.getByRole('radio', { name: /Max/i }).click()
 
-    // (a) Honest cap explanation appears directly under Stream quality.
+    // (a) Honest offline cap explanation appears directly under Stream quality.
     await expect(
       settingsDialog.getByText(
-        /Sending 6\.0 Mbps right now\. Twitch takes at most 6 Mbps.*Turn Twitch.*off to send 12 Mbps\./,
+        /Will send 6\.0 Mbps\. Twitch takes at most 6 Mbps.*Turn Twitch.*off to send 12 Mbps\./,
       ),
     ).toBeVisible()
 
     await settingsDialog.getByRole('button', { name: 'Save' }).click()
     await expect(settingsDialog).toBeHidden()
 
-    // (b) Go live to dock shows what each row gets and explains YouTube shares Twitch's 6.0 Mbps stream.
+    // (b) Go live to dock shows what each row gets and explains YouTube shares Twitch's 6.2 Mbps stream.
     const dock = page.getByRole('region', { name: 'Go live to' })
     const dockTwitch = dock
       .locator('li')
       .filter({ has: page.locator('b', { hasText: /^Twitch$/ }) })
     const dockYt = dock.locator('li').filter({ has: page.locator('b', { hasText: /^YouTube$/ }) })
-    await expect(dockYt.getByText('Same stream as Twitch: 6.0 Mbps')).toBeVisible()
-    await expect(dockTwitch.getByText('6.0 Mbps', { exact: true })).toBeVisible()
-    await expect(dockYt.getByText('6.0 Mbps', { exact: true })).toBeVisible()
+    await expect(dockYt.getByText('Same stream as Twitch: 6.2 Mbps')).toBeVisible()
+    await expect(dockTwitch.getByText('6.2 Mbps', { exact: true })).toBeVisible()
+    await expect(dockYt.getByText('6.2 Mbps', { exact: true })).toBeVisible()
 
-    // (b, c) Your platforms modal shows row rates, YouTube explanation, and "3 places x ... = ... upload".
+    // (b, c) Your platforms modal shows row rates, YouTube explanation, and reconciled "3 places x 6.2 Mbps = 18.6 Mbps upload".
     await page.getByRole('button', { name: 'Manage platforms' }).click()
     const platforms = page.getByRole('dialog', { name: 'Your platforms' })
     await expect(platforms).toBeVisible()
     const platYt = platforms
       .locator('li')
       .filter({ has: page.locator('b', { hasText: /^YouTube$/ }) })
-    await expect(platYt.getByText('Same stream as Twitch: 6.0 Mbps')).toBeVisible()
-    await expect(platforms.getByText(/^3 places x 6\.2 Mbps = 18 Mbps upload$/)).toBeVisible()
+    await expect(platYt.getByText('Same stream as Twitch: 6.2 Mbps')).toBeVisible()
+    await expect(platforms.getByText(/^3 places x 6\.2 Mbps = 18\.6 Mbps upload$/)).toBeVisible()
     await platforms.getByRole('button', { name: 'About YouTube stream rate' }).click()
     await expect(platforms.getByText(/Ferrocast sends one shared main picture/)).toBeVisible()
 
@@ -66,9 +66,9 @@ test.describe('Bitrate caps and shared stream explanations (U2)', () => {
     const darkAxe = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(darkAxe.violations).toEqual([])
 
-    // Turning Twitch off lifts the 6 Mbps cap down to Kick's 8 Mbps cap.
+    // Turning Twitch off lifts the 6 Mbps cap down to Kick's 8 Mbps cap (8.2 Mbps with audio).
     await platforms.getByRole('switch', { name: 'Stream to Twitch' }).click()
-    await expect(platYt.getByText('Same stream as Kick: 8.0 Mbps')).toBeVisible()
+    await expect(platYt.getByText('Same stream as Kick: 8.2 Mbps')).toBeVisible()
   })
 
   test('Stream quality and Your platforms have no horizontal scroll at 375 px', async ({

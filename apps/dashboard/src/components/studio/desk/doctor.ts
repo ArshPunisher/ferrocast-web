@@ -117,5 +117,7 @@ export function captureWords(p: EngineCaptureProblem): string {
     return `${name} shows nothing: macOS doesn't let Ferrocast record the screen. Press Allow, then restart Ferrocast.`
   if (p.problem === 'no_picture')
     return `${name} has no picture: pick a window, screen or camera in its settings.`
+  if (p.problem === 'waiting')
+    return `${p.source} is waiting for the camera. Ferrocast will keep checking until a picture arrives.`
   return `${name} is all black: the window may be minimised or covered, or the game blocks capture (try Display Capture).`
 }

@@ -23,7 +23,8 @@ async function readWebcamState(page: Page): Promise<{ item: EngineItem; tr: Engi
       const se = d.studioEngine
       if (!se) throw new Error('studioEngine missing')
       const items = se.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items'], undefined)
-      const cam = items.find((i) => i.name === 'Webcam')
+      const flat = items.flatMap((i) => [i, ...(i.children ?? [])])
+      const cam = flat.find((i) => i.name === 'Webcam')
       if (!cam) throw new Error('Webcam item missing')
       const tr = se.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items', String(cam.id), 'transform'], undefined)
       return { item: cam, tr }
@@ -38,7 +39,8 @@ async function resetWebcam(page: Page): Promise<void> {
       const se = d.studioEngine
       if (!se) throw new Error('studioEngine missing')
       const items = se.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items'], undefined)
-      const cam = items.find((i) => i.name === 'Webcam')
+      const flat = items.flatMap((i) => [i, ...(i.children ?? [])])
+      const cam = flat.find((i) => i.name === 'Webcam')
       if (!cam) throw new Error('Webcam item missing')
       const tr = se.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items', String(cam.id), 'transform'], undefined)
       se.route('PUT', ['studio', 'engine', 'scenes', 'Main', 'items', String(cam.id), 'transform'], {
@@ -218,5 +220,88 @@ test.describe('Studio preview Alt+drag cropping', () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+  })
+
+  test('routes crop drags through PUT .../crop (save:false then save:true), supports grouped items, and coalesces undo', async ({
+    page,
+  }) => {
+    await openRunningStudio(page)
+    await resetWebcam(page)
+    const { at } = await stageHelper(page)
+
+    const beforeUndo = await demo<number>(
+      page,
+      `(d) => d.studioEngine.route('GET', ['studio', 'engine', 'history'], undefined).undo.length`,
+    )
+
+    await demo(
+      page,
+      `(d) => {
+        const se = d.studioEngine
+        const orig = se.route.bind(se)
+        window.__cropCalls = []
+        se.route = (method, rest, body, url) => {
+          if (method === 'PUT' && rest.includes('crop')) {
+            window.__cropCalls.push({ kind: 'crop', save: Boolean(body?.save) })
+          } else if (method === 'PUT' && rest.includes('transform')) {
+            window.__cropCalls.push({ kind: 'transform' })
+          }
+          return orig(method, rest, body, url)
+        }
+      }`,
+    )
+
+    await altDragCanvas(page, at, { x: 960, y: 675 }, { x: 1020, y: 675 })
+    const calls = await page.evaluate(
+      () =>
+        (window as unknown as { __cropCalls: { kind: string; save?: boolean }[] }).__cropCalls ??
+        [],
+    )
+    const cropSaves = calls.filter((c) => c.kind === 'crop').map((c) => Boolean(c.save))
+    const transformPuts = calls.filter((c) => c.kind === 'transform').length
+    expect(cropSaves.length).toBeGreaterThanOrEqual(2)
+    expect(cropSaves.slice(0, -1).every((s) => !s)).toBe(true)
+    expect(cropSaves.at(-1)).toBe(true)
+    expect(transformPuts).toBe(0)
+
+    // One drag creates exactly one undo entry and Undo restores pre-drag state.
+    const afterUndo = await demo<number>(
+      page,
+      `(d) => d.studioEngine.route('GET', ['studio', 'engine', 'history'], undefined).undo.length`,
+    )
+    expect(afterUndo).toBe(beforeUndo + 1)
+
+    await demo(page, `(d) => d.studioEngine.route('POST', ['studio', 'engine', 'undo'], {})`)
+    const afterUndoState = await readWebcamState(page)
+    expect(afterUndoState.tr.crop_left).toBe(0)
+    expect(afterUndoState.tr.x).toBeCloseTo(960, 0)
+    expect(afterUndoState.tr.bounds_width).toBeCloseTo(480, 0)
+
+    // Grouped item: Alt+drag crops child inside its group and keeps opposite corner anchored.
+    const groupedId = await demo<number>(
+      page,
+      `(d) => {
+        const se = d.studioEngine
+        const cam = se.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items'], undefined).find((i) => i.name === 'Webcam')
+        const grp = se.route('POST', ['studio', 'engine', 'scenes', 'Main', 'items'], { group: 'Crop Group', items: [cam.id] })
+        return grp.id
+      }`,
+    )
+    const scenes = page.getByRole('region', { name: 'Scenes' })
+    await scenes.getByRole('button', { name: /^Starting Soon\b/ }).click()
+    await scenes.getByRole('button', { name: /^Main\b/ }).click()
+    await page.getByRole('button', { name: 'Webcam', exact: true }).click()
+
+    await altDragCanvas(page, at, { x: 960, y: 675 }, { x: 1020, y: 675 })
+    const groupedAfter = await readWebcamState(page)
+    const groupBox = await demo<number[]>(
+      page,
+      `(d) => d.studioEngine.route('GET', ['studio', 'engine', 'scenes', 'Main', 'items'], undefined).find((i) => i.id === ${groupedId}).frame`,
+    )
+    expect(groupedAfter.tr.crop_left).toBeGreaterThanOrEqual(50)
+    expect(groupedAfter.tr.x).toBeGreaterThan(960)
+    expect(groupedAfter.tr.x + groupedAfter.tr.bounds_width).toBeCloseTo(1440, 0)
+    expect(groupBox[4]).toBeGreaterThan(960)
+    expect((groupBox[4] ?? 0) + (groupBox[0] ?? 0)).toBeCloseTo(1440, 0)
   })
 })
