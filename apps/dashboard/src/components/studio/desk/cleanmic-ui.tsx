@@ -149,7 +149,7 @@ export function CleanMicControl({
               onClick={() => void clean()}
               className="w-full whitespace-nowrap sm:w-auto"
             >
-              <Sparkle size={15} weight="bold" /> Clean up my mic
+              <Sparkle size={15} weight="bold" aria-hidden="true" /> Clean up my mic
             </Button>
           ) : (
             <span className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-ok/35 bg-ok-soft px-2.5 py-1 text-[12.5px] font-semibold whitespace-nowrap text-text sm:w-auto">

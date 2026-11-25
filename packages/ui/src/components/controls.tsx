@@ -302,7 +302,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={label}
       className={cx(
-        even ? 'grid w-full auto-cols-fr grid-flow-col' : 'inline-flex',
+        even ? 'grid w-full min-w-0 auto-cols-fr grid-flow-col' : 'inline-flex max-w-full',
         'rounded-control border border-line bg-inset p-0.5',
         className,
       )}
@@ -314,8 +314,9 @@ export function Segmented<T extends string>({
             key={o.value}
             title={o.title}
             className={cx(
-              'relative cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
-              even && 'flex items-center justify-center text-center',
+              'relative min-w-0 cursor-pointer rounded-[8px] font-semibold whitespace-nowrap transition-colors duration-150',
+              even &&
+                'flex items-center justify-center text-center max-sm:leading-tight max-sm:whitespace-normal',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
               'has-[:disabled]:cursor-not-allowed',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',

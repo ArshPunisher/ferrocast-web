@@ -107,5 +107,7 @@ describe('Clean up my mic', () => {
     expect(tile?.textContent).toContain('Auto mic cleanup')
     expect(tile?.textContent).toContain('Clean up my mic')
     expect(tile?.querySelector('[data-testid="voice-footer"]')).not.toBeNull()
+    const sparkle = tile?.querySelector('button svg')
+    expect(sparkle?.getAttribute('aria-hidden')).toBe('true')
   })
 })
