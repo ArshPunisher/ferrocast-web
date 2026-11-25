@@ -641,4 +641,47 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     )
     expect(planBtn).toBeUndefined()
   })
+
+  it('passes inDialog to Platforms in DeskStandby so Manage opens without duplicate heading or nested panel', async () => {
+    installClient(async (_method, path) => {
+      if (path === '/api/v1/schedule') return { streams: [] }
+      if (path === '/api/v1/clips')
+        return { folder: '', ffmpeg_ready: false, youtube_connected: false, clips: [] }
+      throw new ApiError(422, 'studio_not_running', 'Off')
+    })
+
+    function Harness() {
+      const res = useResource(() => Promise.resolve(seedView()), [])
+      return (
+        <DeskStandby
+          status={standbyStatus()}
+          view={res.data}
+          res={res}
+          starting={null}
+          startError={null}
+          onStart={async () => undefined}
+          onRetryStatus={() => undefined}
+        />
+      )
+    }
+
+    await act(async () => root.render(<Harness />))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const manageBtn = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Manage',
+    ) as HTMLButtonElement
+    await act(async () => manageBtn.click())
+
+    const dialog = host.querySelector('dialog') as HTMLElement | null
+    expect(dialog).not.toBeNull()
+    const headings = Array.from(dialog!.querySelectorAll('h1, h2, h3, [role="heading"]')).filter(
+      (el) => el.textContent?.trim() === 'Your platforms',
+    )
+    expect(headings).toHaveLength(1)
+    const platformsRoot = dialog!.querySelector('#golive-platforms')
+    expect(platformsRoot?.tagName).toBe('DIV')
+  })
 })

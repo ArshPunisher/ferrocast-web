@@ -687,6 +687,7 @@ export function DeskStandby({
             onSaved={res.reload}
             onProtect={(protect) => res.set((v) => ({ ...(v ?? view), protect }))}
             canvas="main"
+            inDialog
           />
         )}
       </Dialog>
