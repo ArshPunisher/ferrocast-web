@@ -3,6 +3,7 @@ import type { DestinationView } from '@ferrocast/api'
 import {
   describeDestinationRate,
   describeStreamCap,
+  describeStreamCapFromView,
   describeUploadNeed,
   type StreamCapSummary,
 } from './bitrate-summary'
@@ -34,8 +35,7 @@ describe('U2 bitrate cap wording and math', () => {
     name: 'YouTube Shorts',
   })
 
-  it('no cap: uncapped platforms or bitrates at/below ceiling produce no cap warning and show chosen rate', () => {
-    // Only YouTube enabled at 12 Mbps -> no cap
+  it('no cap: uncapped platforms or bitrates at/below ceiling produce no cap warning and show chosen total rate', () => {
     const ytOnly = describeStreamCap(12000, [youtube])
     expect(ytOnly.capped).toBe(false)
     expect(ytOnly.effectiveVideoKbps).toBe(12000)
@@ -45,58 +45,158 @@ describe('U2 bitrate cap wording and math', () => {
     )
     expect(describeDestinationRate(youtube, ytOnly, { streamKbps: 12160 }).heldBackNote).toBeNull()
 
-    // Twitch + YouTube enabled at 6 Mbps (Sharp) -> 6000 <= 6000, no cap applies
     const sharp = describeStreamCap(6000, [twitch, youtube])
     expect(sharp.capped).toBe(false)
     expect(sharp.effectiveVideoKbps).toBe(6000)
     expect(sharp.settingsNote).toBeNull()
 
-    // Twitch Enhanced Broadcasting removes the 6 Mbps ceiling
     const enhancedTwitch = dest({ ...twitch, enhanced: true })
     const enh = describeStreamCap(12000, [enhancedTwitch, youtube])
     expect(enh.capped).toBe(false)
     expect(enh.settingsNote).toBeNull()
   })
 
-  it('one cap: Twitch at 6 Mbps caps shared encode for Twitch and YouTube and explains both', () => {
-    const summary: StreamCapSummary = describeStreamCap(12000, [twitch, youtube, ytVertical])
-    expect(summary.capped).toBe(true)
-    expect(summary.effectiveVideoKbps).toBe(6000)
-    expect(summary.limiter?.name).toBe('Twitch')
-    expect(summary.settingsNote).toBe(
-      'Sending 6.0 Mbps right now. Twitch takes at most 6 Mbps, and every place gets the same picture. Turn Twitch off to send 12 Mbps.',
-    )
+  it('ignore_service_limits: suppresses all caps, badges, and notes everywhere', () => {
+    const ignored = describeStreamCap(12000, [twitch, youtube], { ignoreServiceLimits: true })
+    expect(ignored.capped).toBe(false)
+    expect(ignored.effectiveVideoKbps).toBe(12000)
+    expect(ignored.settingsNote).toBeNull()
 
-    // Twitch row stays explained by its cap
-    const twRow = describeDestinationRate(twitch, summary, { streamKbps: 6160 })
-    expect(twRow.rateLabel).toBe('6.0 Mbps')
-    expect(twRow.heldBackNote).toBeNull()
-
-    // YouTube row explains that it receives Twitch's capped shared stream
-    const ytRow = describeDestinationRate(youtube, summary, { streamKbps: 6160 })
-    expect(ytRow.rateLabel).toBe('6.0 Mbps')
-    expect(ytRow.heldBackNote?.summary).toBe('Same stream as Twitch: 6.0 Mbps')
-    expect(ytRow.heldBackNote?.detail).toContain('Twitch')
-
-    // Vertical Shorts stream is separate and never held back by main Twitch cap
-    const vertRow = describeDestinationRate(ytVertical, summary, {
-      streamKbps: 6160,
-      verticalKbps: 4500,
+    const ignoredView = describeStreamCapFromView([twitch, youtube], 12000, {
+      ignoreServiceLimits: true,
     })
-    expect(vertRow.heldBackNote).toBeNull()
-    expect(vertRow.rateLabel).toBe('4.5 Mbps')
+    expect(ignoredView.capped).toBe(false)
+    expect(ignoredView.settingsNote).toBeNull()
+
+    const twRow = describeDestinationRate(twitch, ignored, {
+      streamKbps: 12160,
+      videoKbps: 12000,
+      audioKbps: 160,
+      ignoreServiceLimits: true,
+    })
+    const ytRow = describeDestinationRate(youtube, ignored, {
+      streamKbps: 12160,
+      videoKbps: 12000,
+      audioKbps: 160,
+      ignoreServiceLimits: true,
+    })
+    expect(twRow.ownCapNote).toBeNull()
+    expect(twRow.rateLabel).toBe('12 Mbps')
+    expect(ytRow.heldBackNote).toBeNull()
+    expect(ytRow.rateLabel).toBe('12 Mbps')
   })
 
-  it('several caps: names the strictest limiter and lists other capping platforms cleanly', () => {
+  it('offline vs live wording differs honestly in Stream settings', () => {
+    const offline: StreamCapSummary = describeStreamCap(12000, [twitch, youtube, ytVertical])
+    expect(offline.capped).toBe(true)
+    expect(offline.effectiveVideoKbps).toBe(6000)
+    expect(offline.limiter?.name).toBe('Twitch')
+    expect(offline.settingsNote).toBe(
+      'Will send 6.0 Mbps. Twitch takes at most 6 Mbps, and every place gets the same picture. Turn Twitch off to send 12 Mbps.',
+    )
+
+    const liveSummary = describeStreamCap(12000, [twitch, youtube], { live: true })
+    expect(liveSummary.settingsNote).toBe(
+      'Sending 6.0 Mbps on this stream; turning Twitch off applies from your next stream. Twitch takes at most 6 Mbps, and every place gets the same picture.',
+    )
+
+    // Total send rate (6000 + 160 = 6.2 Mbps) is consistent between row rate and badge.
+    const twRow = describeDestinationRate(twitch, offline, { videoKbps: 12000, audioKbps: 160 })
+    expect(twRow.rateLabel).toBe('6.2 Mbps')
+    expect(twRow.heldBackNote).toBeNull()
+
+    const ytRow = describeDestinationRate(youtube, offline, { videoKbps: 12000, audioKbps: 160 })
+    expect(ytRow.rateLabel).toBe('6.2 Mbps')
+    expect(ytRow.heldBackNote?.summary).toBe('Same stream as Twitch: 6.2 Mbps')
+    expect(ytRow.heldBackNote?.detail).toContain('Twitch')
+
+    const vertRow = describeDestinationRate(ytVertical, offline, {
+      videoKbps: 12000,
+      audioKbps: 160,
+      verticalKbps: 4660,
+    })
+    expect(vertRow.heldBackNote).toBeNull()
+    expect(vertRow.rateLabel).toBe('4.7 Mbps')
+  })
+
+  it('excludes direct, lighter_for_route, light, standby_for, and blocked from shared cap', () => {
+    const directWhip = dest({
+      id: 'c_whip',
+      kind: 'custom',
+      name: 'WebRTC',
+      direct: 'whip',
+      capped: {
+        kbps: 12000,
+        separate_encode: false,
+        summary: 'B-frames off for WebRTC',
+        detail: "B-frames are turned off for this stream because WebRTC (WHIP) can't carry them.",
+      },
+    })
+    const directSrt = dest({ id: 'c_srt', kind: 'custom', name: 'SRT Box', direct: 'srt' })
+    const lightTwitch = dest({ ...twitch, light: true })
+    const autoLightKick = dest({ ...kick, lighter_for_route: true })
+    const standbyTwitch = dest({ ...twitch, standby_for: 'YouTube' })
+
+    // WHIP B-frames notice must NEVER count as a bitrate cap even when named "WebRTC".
+    expect(describeStreamCap(12000, [youtube, directWhip]).capped).toBe(false)
+    expect(describeStreamCapFromView([youtube, directWhip]).capped).toBe(false)
+    expect(
+      describeStreamCapFromView([
+        youtube,
+        {
+          ...directWhip,
+          capped: {
+            kbps: 6000,
+            separate_encode: false,
+            summary: 'B-frames off for WebRTC',
+            detail: '',
+          },
+        },
+      ]).capped,
+    ).toBe(false)
+
+    // direct SRT, light, lighter_for_route, standby_for, and blocked do not cap YouTube.
+    expect(
+      describeStreamCap(12000, [youtube, directSrt, lightTwitch, autoLightKick, standbyTwitch])
+        .capped,
+    ).toBe(false)
+
+    // Light and lighter_for_route destinations use min(video_kbps, 3000) + audioKbps = 3.2 Mbps (at 12 Mbps).
+    const cap = describeStreamCap(12000, [youtube])
+    expect(
+      describeDestinationRate(lightTwitch, cap, { videoKbps: 12000, audioKbps: 160 }).rateLabel,
+    ).toBe('3.2 Mbps')
+    expect(
+      describeDestinationRate(autoLightKick, cap, { videoKbps: 12000, audioKbps: 160 }).rateLabel,
+    ).toBe('3.2 Mbps')
+    // Below 3000 (e.g. 2000 video), light stays at chosen 2000 + 160 = 2.2 Mbps.
+    expect(
+      describeDestinationRate(lightTwitch, describeStreamCap(2000, [youtube]), {
+        videoKbps: 2000,
+        audioKbps: 160,
+      }).rateLabel,
+    ).toBe('2.2 Mbps')
+  })
+
+  it('drops cap summary while live if cap_failed reported via bitrate issue and missing capped badge', () => {
+    const capFailedTwitch = dest({
+      ...twitch,
+      issues: [{ code: 'bitrate', message: 'Over 6 Mbps' } as never],
+    })
+    const summary = describeStreamCap(12000, [capFailedTwitch, youtube], { live: true })
+    expect(summary.capped).toBe(false)
+    expect(summary.settingsNote).toBeNull()
+  })
+
+  it('several caps: names strictest limiter and handles offline and live tied wording', () => {
     const summary = describeStreamCap(12000, [twitch, youtube, kick])
     expect(summary.capped).toBe(true)
     expect(summary.effectiveVideoKbps).toBe(6000)
     expect(summary.limiter?.name).toBe('Twitch')
     expect(summary.settingsNote).toBe(
-      'Sending 6.0 Mbps right now. Twitch takes at most 6 Mbps (and Kick takes at most 8 Mbps), and every place gets the same picture. Turn Twitch and Kick off to send 12 Mbps.',
+      'Will send 6.0 Mbps. Twitch takes at most 6 Mbps (and Kick takes at most 8 Mbps), and every place gets the same picture. Turn Twitch and Kick off to send 12 Mbps.',
     )
 
-    // Two destinations tied at the same lowest limit
     const altLow = dest({
       id: 'c_1',
       kind: 'custom',
@@ -111,7 +211,7 @@ describe('U2 bitrate cap wording and math', () => {
     const tied = describeStreamCap(12000, [twitch, altLow, youtube])
     expect(tied.capped).toBe(true)
     expect(tied.settingsNote).toBe(
-      'Sending 6.0 Mbps right now. Twitch and Mirror take at most 6 Mbps, and every place gets the same picture. Turn them off to send 12 Mbps.',
+      'Will send 6.0 Mbps. Twitch and Mirror take at most 6 Mbps, and every place gets the same picture. Turn them off to send 12 Mbps.',
     )
   })
 
@@ -134,16 +234,37 @@ describe('U2 bitrate cap wording and math', () => {
     expect(blockedTwitch.settingsNote).toBeNull()
   })
 
-  it('upload math shows N places x rate = total upload and calm explanation', () => {
+  it('reconciles upload math arithmetically using the displayed rounded per-place rate', () => {
     const three = describeUploadNeed([twitch, youtube, kick], {
       planKbps: 6160,
       vertical: false,
       limiterName: 'Twitch',
       limiterKbps: 6000,
+      audioKbps: 160,
     })
-    expect(three?.line).toBe('3 places x 6.2 Mbps = 18 Mbps upload')
+    expect(three?.line).toBe('3 places x 6.2 Mbps = 18.6 Mbps upload')
     expect(three?.detail).toContain('separate copy')
     expect(three?.detail).toContain('Twitch')
+
+    const twoUncapped = describeUploadNeed([youtube, kick], {
+      planKbps: 12160,
+      vertical: false,
+      audioKbps: 160,
+    })
+    expect(twoUncapped?.line).toBe('2 places x 12 Mbps = 24 Mbps upload')
+
+    const mixed = describeUploadNeed(
+      [
+        { ...twitch, kbps: 6160 },
+        { ...kick, light: true, kbps: 3160 },
+      ],
+      {
+        planKbps: 6160,
+        vertical: false,
+        audioKbps: 160,
+      },
+    )
+    expect(mixed?.line).toBe('6.2 Mbps + 3.2 Mbps = 9.4 Mbps upload')
 
     const one = describeUploadNeed([youtube], {
       planKbps: 6160,

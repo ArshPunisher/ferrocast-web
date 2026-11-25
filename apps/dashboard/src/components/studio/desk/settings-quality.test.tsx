@@ -217,46 +217,67 @@ describe('the B-frames switch', () => {
 })
 
 describe('Stream quality bitrate cap note (U2)', () => {
-  it('shows the calm effective-rate sentence under the quality grid when Twitch caps Max 12 Mbps', async () => {
+  const capDests = [
+    {
+      id: 'twitch',
+      kind: 'twitch' as const,
+      canvas: 'main' as const,
+      name: 'Twitch',
+      account: 'arsh',
+      enabled: true,
+      connected: true,
+      health: null,
+      blocked: null,
+      rules: [],
+    },
+    {
+      id: 'youtube',
+      kind: 'youtube' as const,
+      canvas: 'main' as const,
+      name: 'YouTube',
+      account: 'arsh',
+      enabled: true,
+      connected: true,
+      health: null,
+      blocked: null,
+      rules: [],
+    },
+  ]
+
+  it('shows offline vs live effective-rate wording and suppresses note under ignoreServiceLimits', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () =>
       root?.render(
-        <StreamPage
-          s={mk({ video_kbps: 12000 })}
-          set={() => {}}
-          destinations={[
-            {
-              id: 'twitch',
-              kind: 'twitch',
-              canvas: 'main',
-              name: 'Twitch',
-              account: 'arsh',
-              enabled: true,
-              connected: true,
-              health: null,
-              blocked: null,
-              rules: [],
-            },
-            {
-              id: 'youtube',
-              kind: 'youtube',
-              canvas: 'main',
-              name: 'YouTube',
-              account: 'arsh',
-              enabled: true,
-              connected: true,
-              health: null,
-              blocked: null,
-              rules: [],
-            },
-          ]}
-        />,
+        <StreamPage s={mk({ video_kbps: 12000 })} set={() => {}} destinations={capDests} />,
       ),
     )
     expect(host?.textContent).toContain(
-      'Sending 6.0 Mbps right now. Twitch takes at most 6 Mbps, and every place gets the same picture. Turn Twitch off to send 12 Mbps.',
+      'Will send 6.0 Mbps. Twitch takes at most 6 Mbps, and every place gets the same picture. Turn Twitch off to send 12 Mbps.',
     )
+
+    await act(async () =>
+      root?.render(
+        <StreamPage s={mk({ video_kbps: 12000 })} set={() => {}} destinations={capDests} live />,
+      ),
+    )
+    expect(host?.textContent).toContain(
+      'Sending 6.0 Mbps on this stream; turning Twitch off applies from your next stream.',
+    )
+
+    await act(async () =>
+      root?.render(
+        <StreamPage
+          s={mk({ video_kbps: 12000 })}
+          set={() => {}}
+          destinations={capDests}
+          ignoreServiceLimits
+        />,
+      ),
+    )
+    expect(host?.textContent).not.toContain('Twitch takes at most')
+    expect(host?.textContent).not.toContain('Will send 6.0 Mbps')
   })
 })

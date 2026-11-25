@@ -19,6 +19,7 @@ import {
 } from '../src/golive'
 import { remoteAllowed } from '../src/remote'
 import { studioApi } from '../src/studio'
+import { studioEngineApi } from '../src/studio-engine'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import { FerroClient } from '../src/client'
 import { ApiError } from '../src/errors'
@@ -800,5 +801,62 @@ describe('destinations while live (the demo answers like the engine)', () => {
   it('does not ask while nothing is live', async () => {
     const { api } = demo()
     await expect(api.saveOrder(await list(api, []))).resolves.toBeTruthy()
+  })
+})
+
+describe('DemoGoLive cap alignment with engine studio_limit and WHIP B-frames notice', () => {
+  it('excludes blocked destinations, marks WHIP with B-frames off without capping, and respects ignore_service_limits', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+
+      const curSettings = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({ ...curSettings, video_kbps: 12000 })
+
+      // 1. Disconnected (blocked) Twitch does not impose a 6 Mbps cap on YouTube.
+      await client.disconnect('twitch')
+      const unlinkedView = await api.view()
+      expect(unlinkedView.destinations.find((d) => d.id === 'twitch')?.capped).toBeUndefined()
+      expect(unlinkedView.destinations.find((d) => d.id === 'youtube')?.capped).toBeUndefined()
+    } finally {
+      engine.dispose()
+    }
+
+    const engine2 = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({
+        base: engine2.base,
+        token: DEMO_TOKEN,
+        fetch: engine2.fetch,
+      })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+      const curSettings = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({ ...curSettings, video_kbps: 12000 })
+
+      const cappedView = await api.view()
+      expect(cappedView.destinations.find((d) => d.id === 'twitch')?.capped?.kbps).toBe(6000)
+
+      // 2. ignore_service_limits removes shared bitrate cap even when Twitch is enabled.
+      await api.setAdvanced({ ...cappedView.advanced, ignore_service_limits: true })
+      const ignoredView = await api.view()
+      expect(ignoredView.destinations.find((d) => d.id === 'twitch')?.capped).toBeUndefined()
+
+      // 3. Enabled WHIP server emits "B-frames off for WebRTC" without capping bitrate.
+      await api.setAdvanced({ ...ignoredView.advanced, ignore_service_limits: false })
+      await api.saveOrder(
+        ignoredView.destinations.map((d) => ({ id: d.id, enabled: d.id === 'youtube' })),
+      )
+      await api.addCustom('WebRTC', 'https://whip.example/x', '')
+      const whipView = await api.view()
+      const whip = whipView.destinations.find((d) => d.name === 'WebRTC')!
+      expect(whip.direct).toBe('whip')
+      expect(whip.capped?.summary).toBe('B-frames off for WebRTC')
+      expect(whipView.destinations.find((d) => d.id === 'youtube')?.capped).toBeUndefined()
+    } finally {
+      engine2.dispose()
+    }
   })
 })
