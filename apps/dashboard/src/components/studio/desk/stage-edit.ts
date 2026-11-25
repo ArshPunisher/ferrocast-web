@@ -1,8 +1,6 @@
 // Picking, moving and resizing sources in the preview, as OBS's own preview does. All of it
 // is canvas pixels: the page turns pointer positions into them, the engine draws the outline.
 
-import type { EngineTransform } from '@ferrocast/api'
-
 export type Frame = [number, number, number, number, number, number]
 
 export interface Pt {
@@ -352,72 +350,4 @@ export function cropCursorFor(f: Frame, g: Grip, alt: boolean): string {
   const resize = cursorFor(f, g)
   if (!alt) return resize
   return `url("data:image/svg+xml,${CROP_CURSOR_SVG}") 12 12, ${resize}`
-}
-
-/**
- * OBS-style Alt+drag crop on `from`: crops the edge(s) under `g` after pointer move `d` while
- * keeping the uncropped pixels anchored at their exact canvas position and scale (updating
- * both `x`/`y` when `left`/`top` change, and `bounds_width`/`bounds_height` when bounded).
- */
-export function cropTransform(f: Frame, g: Grip, d: Pt, from: EngineTransform): EngineTransform {
-  const lu = len(f[0], f[1])
-  const lv = len(f[2], f[3])
-  const seenW = from.width - from.crop_left - from.crop_right
-  const seenH = from.height - from.crop_top - from.crop_bottom
-  if (g.u < 0 || lu === 0 || lv === 0 || seenW <= 0 || seenH <= 0) return { ...from }
-
-  const next = cropDrag(
-    f,
-    g,
-    d,
-    {
-      left: from.crop_left,
-      top: from.crop_top,
-      right: from.crop_right,
-      bottom: from.crop_bottom,
-    },
-    { width: from.width, height: from.height },
-  )
-  const nextW = from.width - next.left - next.right
-  const nextH = from.height - next.top - next.bottom
-  if (nextW <= 0 || nextH <= 0) return { ...from }
-
-  const du0 = (next.left - from.crop_left) / seenW
-  const dv0 = (next.top - from.crop_top) / seenH
-  const out: EngineTransform = {
-    ...from,
-    x: f[4] + du0 * f[0] + dv0 * f[2],
-    y: f[5] + du0 * f[1] + dv0 * f[3],
-    alignment: 5,
-    crop_left: next.left,
-    crop_top: next.top,
-    crop_right: next.right,
-    crop_bottom: next.bottom,
-  }
-  if (from.bounds !== 'none') {
-    const newW = lu * (nextW / seenW)
-    const newH = lv * (nextH / seenH)
-    const sx = Math.abs(from.scale_x)
-    const sy = Math.abs(from.scale_y)
-    const pictureAspect = sx > 0 && sy > 0 ? (nextW * sx) / (nextH * sy) : newW / newH
-    const sameAspect =
-      newH > 0 && pictureAspect > 0 && Math.abs(newW / newH / pictureAspect - 1) <= 0.005
-    out.bounds = from.bounds === 'fit' && sameAspect ? 'fit' : 'stretch'
-    out.bounds_alignment = 5
-    out.bounds_width = newW
-    out.bounds_height = newH
-  }
-  return out
-}
-
-/** Updates `f` locally to match a `cropTransform` before the engine responds. */
-export function croppedFrame(f: Frame, from: EngineTransform, next: EngineTransform): Frame {
-  const seenW = from.width - from.crop_left - from.crop_right
-  const seenH = from.height - from.crop_top - from.crop_bottom
-  const nextW = next.width - next.crop_left - next.crop_right
-  const nextH = next.height - next.crop_top - next.crop_bottom
-  if (seenW <= 0 || seenH <= 0 || nextW <= 0 || nextH <= 0) return f
-  const ku = nextW / seenW
-  const kv = nextH / seenH
-  return [f[0] * ku, f[1] * ku, f[2] * kv, f[3] * kv, next.x, next.y]
 }

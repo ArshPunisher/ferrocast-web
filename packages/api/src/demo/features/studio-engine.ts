@@ -1295,10 +1295,34 @@ export class DemoStudioEngine {
     }
   }
 
+  private pendingUndo = new Map<string, { label: string; snapshot: CollectionSnapshot }>()
+
   private pushUndo(label: string): void {
     this.undoStack.unshift({ label, snapshot: this.captureSnapshot() })
     if (this.undoStack.length > 50) this.undoStack.pop()
     this.redoStack = []
+  }
+
+  /**
+   * Records one undo entry for a continuous preview drag: captures the pre-drag snapshot on the
+   * first `save: false` request and pushes that pre-drag snapshot onto `undoStack` on `save: true`.
+   */
+  private recordDragUndo(key: string, label: string, save: boolean): void {
+    if (save) {
+      const pending = this.pendingUndo.get(key)
+      this.pendingUndo.delete(key)
+      if (pending) {
+        this.undoStack.unshift(pending)
+        if (this.undoStack.length > 50) this.undoStack.pop()
+        this.redoStack = []
+        return
+      }
+      this.pushUndo(label)
+      return
+    }
+    if (!this.pendingUndo.has(key)) {
+      this.pendingUndo.set(key, { label, snapshot: this.captureSnapshot() })
+    }
   }
 
   private seedForScenes(sceneNames: string[], clearAll = false): void {
@@ -1312,6 +1336,7 @@ export class DemoStudioEngine {
     this.nextItemId = 1
     this.undoStack = []
     this.redoStack = []
+    this.pendingUndo.clear()
     this.ensureGlobalSources()
     for (const s of this.activeScenes) this.sceneItems.set(s, [])
   }
@@ -2552,6 +2577,7 @@ export class DemoStudioEngine {
       }
     }
     if (is('POST', 'studio/engine/undo')) {
+      this.pendingUndo.clear()
       const top = this.undoStack.shift()
       if (!top) return { done: null, undo: null, redo: this.redoStack[0]?.label ?? null }
       this.redoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
@@ -2563,6 +2589,7 @@ export class DemoStudioEngine {
       }
     }
     if (is('POST', 'studio/engine/redo')) {
+      this.pendingUndo.clear()
       const top = this.redoStack.shift()
       if (!top) return { done: null, undo: this.undoStack[0]?.label ?? null, redo: null }
       this.undoStack.unshift({ label: top.label, snapshot: this.captureSnapshot() })
@@ -2878,13 +2905,43 @@ export class DemoStudioEngine {
         bottom: number
         save?: boolean
       }
-      if (b.save) this.pushUndo(`Crop ${loc.item.name}`)
-      const cur = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
-      cur.crop_left = Math.max(0, Math.round(Number(b.left ?? 0)))
-      cur.crop_top = Math.max(0, Math.round(Number(b.top ?? 0)))
-      cur.crop_right = Math.max(0, Math.round(Number(b.right ?? 0)))
-      cur.crop_bottom = Math.max(0, Math.round(Number(b.bottom ?? 0)))
+      this.recordDragUndo(`crop:${loc.item.id}`, `Crop ${loc.item.name}`, Boolean(b.save))
+      const before = clone(this.transforms.get(loc.item.id) ?? defaultTransform())
+      const cur = clone(before)
+      const w = Math.max(1, before.width)
+      const h = Math.max(1, before.height)
+      const right = Math.min(Math.max(0, Math.round(Number(b.right ?? 0))), w - 1)
+      const left = Math.min(Math.max(0, Math.round(Number(b.left ?? 0))), w - 1 - right)
+      const bottom = Math.min(Math.max(0, Math.round(Number(b.bottom ?? 0))), h - 1)
+      const top = Math.min(Math.max(0, Math.round(Number(b.top ?? 0))), h - 1 - bottom)
+      const seenW = Math.max(1, w - before.crop_left - before.crop_right)
+      const seenH = Math.max(1, h - before.crop_top - before.crop_bottom)
+      const nextW = Math.max(1, w - left - right)
+      const nextH = Math.max(1, h - top - bottom)
+      const f = frameFromTransform(before)
+      const du = (left - before.crop_left) / seenW
+      const dv = (top - before.crop_top) / seenH
+      const clean = (n: number) => (Math.abs(n) < 1e-6 ? 0 : Math.round(n * 1000) / 1000)
+      cur.x = clean(f[4] + f[0] * du + f[2] * dv)
+      cur.y = clean(f[5] + f[1] * du + f[3] * dv)
+      cur.alignment = 5
+      cur.crop_left = left
+      cur.crop_top = top
+      cur.crop_right = right
+      cur.crop_bottom = bottom
+      if (before.bounds !== 'none') {
+        const lu = Math.hypot(f[0], f[1])
+        const lv = Math.hypot(f[2], f[3])
+        const nw = lu * (nextW / seenW)
+        const nh = lv * (nextH / seenH)
+        const sameShape = nextW / nextH / (seenW / seenH)
+        cur.bounds = before.bounds === 'fit' && Math.abs(sameShape - 1) < 0.005 ? 'fit' : 'stretch'
+        cur.bounds_alignment = 5
+        cur.bounds_width = nw
+        cur.bounds_height = nh
+      }
       this.setItemTransform(loc.item, cur)
+      if (loc.parent) this.syncGroupFrame(loc.parent)
       return clone(loc.item)
     }
     if (tail[1] === 'transform' && tail.length === 2) {

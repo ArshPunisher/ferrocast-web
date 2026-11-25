@@ -585,8 +585,19 @@ describe('the stage: lock, pan and pinch', () => {
     expect(el.style.cursor).toBe('move')
   })
 
-  it('crops left edge inward via setTransform (moving x and shrinking bounds, never moving whole body)', async () => {
-    const { api, el } = await mount(false)
+  it('crops left edge inward via api.setItemCrop (save:false on move, save:true on release, never setTransform)', async () => {
+    const { api, el } = await mount(false, {
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number },
+        ) => ({
+          id,
+          frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+        }),
+      ),
+    })
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
       left: 0,
       top: 0,
@@ -609,36 +620,48 @@ describe('the stage: lock, pan and pinch', () => {
     const move = pointer('pointermove', { x: 150, y: 540 })
     Object.defineProperty(move, 'altKey', { value: true })
     act(() => void el.dispatchEvent(move))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.setItemCrop).toHaveBeenCalledWith('Main', 1, {
+      left: 150,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: false,
+    })
+
     act(() => void el.dispatchEvent(pointer('pointerup', { x: 150, y: 540 })))
     await act(async () => {
       await Promise.resolve()
     })
-    expect(api.setTransform).toHaveBeenCalled()
-    expect(api.setItemCrop).not.toHaveBeenCalled()
-    const call = api.setTransform.mock.calls.at(-1) as unknown as [
-      string,
-      number,
-      Record<string, unknown>,
-    ]
-    expect(call[0]).toBe('Main')
-    expect(call[1]).toBe(1)
-    expect(call[2]).toMatchObject({
-      crop_left: 150,
-      crop_right: 0,
-      x: 150,
-      y: 0,
-      bounds_width: 1770,
-      bounds_height: 1080,
+    expect(api.setItemCrop).toHaveBeenLastCalledWith('Main', 1, {
+      left: 150,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
     })
+    expect(api.setTransform).not.toHaveBeenCalled()
   })
 
-  it('keeps deferred Alt-drag crop ordered ahead of a following ArrowRight nudge so x = crop + 1', async () => {
+  it('keeps deferred Alt-drag crop ordered ahead of ArrowRight nudge via setItemCrop', async () => {
     let resolveTransform!: (t: Record<string, unknown>) => void
     const transformPromise = new Promise<Record<string, unknown>>((r) => {
       resolveTransform = r
     })
     const { api, el } = await mount(false, {
       transform: vi.fn(() => transformPromise),
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number },
+        ) => ({
+          id,
+          frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+        }),
+      ),
     })
     vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
       left: 0,
@@ -688,23 +711,159 @@ describe('the stage: lock, pan and pinch', () => {
       await Promise.resolve()
     })
 
-    expect(api.setTransform).toHaveBeenCalledTimes(1)
-    const call = api.setTransform.mock.calls[0] as unknown as [
-      string,
-      number,
-      Record<string, unknown>,
-    ]
-    expect(call[2]).toMatchObject({
-      crop_left: 100,
-      bounds_width: 1820,
-      x: 101,
-      y: 0,
+    expect(api.setItemCrop).toHaveBeenCalledWith('Main', 1, {
+      left: 100,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
     })
-    // Must never overwrite with a pre-crop setItemBox at (1, 0) / width 1920.
-    expect(api.setItemBox).not.toHaveBeenCalled()
+    expect(api.setItemBox).toHaveBeenCalledWith(
+      'Main',
+      1,
+      expect.objectContaining({ x: 101, y: 0, w: 1820, h: 1080, save: true }),
+    )
+    expect(api.setTransform).not.toHaveBeenCalled()
   })
 
-  it('completes a deferred Alt-drag crop cleanly when no later nudge occurs, and preserves nudge if transform read fails', async () => {
+  it('orders a fast Alt-drag crop ahead of a subsequent regular move drag (H8)', async () => {
+    let resolveTransform!: (t: Record<string, unknown>) => void
+    const transformPromise = new Promise<Record<string, unknown>>((r) => {
+      resolveTransform = r
+    })
+    const order: string[] = []
+    const { api, el } = await mount(false, {
+      transform: vi.fn(() => transformPromise),
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number; save?: boolean },
+        ) => {
+          order.push(`crop:${c.left}:${String(c.save)}`)
+          return {
+            id,
+            frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+          }
+        },
+      ),
+      setItemBox: vi.fn(
+        async (_scene: string, id: number, b: { x: number; y: number; w: number; h: number }) => {
+          order.push(`box:${b.x}:${b.w}`)
+          return { id, frame: [b.w, 0, 0, b.h, b.x, b.y] }
+        },
+      ),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+
+    // 1. Fast Alt+drag left handle by +100px and release before transform() resolves.
+    const altDown = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(altDown, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(altDown))
+    const altMove = pointer('pointermove', { x: 100, y: 540 })
+    Object.defineProperty(altMove, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(altMove))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 100, y: 540 })))
+
+    // 2. Immediately do a regular move drag (no Alt) inside the item by (+20, 0) while transform is still pending.
+    act(() => void el.dispatchEvent(pointer('pointerdown', { x: 400, y: 540 })))
+    act(() => void el.dispatchEvent(pointer('pointermove', { x: 420, y: 540 })))
+    act(() => void el.dispatchEvent(pointer('pointerup', { x: 420, y: 540 })))
+
+    await act(async () => {
+      resolveTransform({
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scale_x: 1,
+        scale_y: 1,
+        alignment: 5,
+        bounds: 'stretch',
+        bounds_alignment: 5,
+        bounds_width: 1920,
+        bounds_height: 1080,
+        crop_left: 0,
+        crop_top: 0,
+        crop_right: 0,
+        crop_bottom: 0,
+        width: 1920,
+        height: 1080,
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(order[0]).toBe('crop:100:true')
+    const boxCall = api.setItemBox.mock.calls.at(-1) as unknown as [
+      string,
+      number,
+      { x: number; y: number; w: number; h: number; save?: boolean },
+    ]
+    // Must keep post-crop width 1820 and start moving from post-crop x=100 -> 120, never pre-crop 1920!
+    expect(boxCall[2]).toMatchObject({ x: 120, y: 0, w: 1820, h: 1080, save: true })
+  })
+
+  it('aborts an in-progress Alt-drag crop via setItemCrop targeting the drag scene', async () => {
+    const { api, el } = await mount(false, {
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number },
+        ) => ({
+          id,
+          frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+        }),
+      ),
+    })
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+      right: 1920,
+      bottom: 1080,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })
+    const down = pointer('pointerdown', { x: 0, y: 540 })
+    Object.defineProperty(down, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(down))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const move = pointer('pointermove', { x: 150, y: 540 })
+    Object.defineProperty(move, 'altKey', { value: true })
+    act(() => void el.dispatchEvent(move))
+    act(() => void el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.setItemCrop).toHaveBeenLastCalledWith('Main', 1, {
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
+    })
+  })
+
+  it('completes a deferred Alt-drag crop via setItemCrop and preserves nudge if transform read fails', async () => {
     let resolveTransform!: (t: Record<string, unknown>) => void
     const first = mount(false, {
       transform: vi.fn(
@@ -712,6 +871,16 @@ describe('the stage: lock, pan and pinch', () => {
           new Promise<Record<string, unknown>>((r) => {
             resolveTransform = r
           }),
+      ),
+      setItemCrop: vi.fn(
+        async (
+          _scene: string,
+          id: number,
+          c: { left: number; top: number; right: number; bottom: number },
+        ) => ({
+          id,
+          frame: [1920 - c.left - c.right, 0, 0, 1080 - c.top - c.bottom, c.left, c.top],
+        }),
       ),
     })
     const { api, el } = await first
@@ -757,11 +926,13 @@ describe('the stage: lock, pan and pinch', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(api.setTransform).toHaveBeenCalledWith(
-      'Main',
-      1,
-      expect.objectContaining({ crop_left: 100, x: 100, bounds_width: 1820 }),
-    )
+    expect(api.setItemCrop).toHaveBeenCalledWith('Main', 1, {
+      left: 100,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      save: true,
+    })
 
     // Failure path: if transform() rejects after ArrowRight, the nudge still applies.
     let rejectTransform!: (e: Error) => void
@@ -799,7 +970,7 @@ describe('the stage: lock, pan and pinch', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(second.api.setTransform).not.toHaveBeenCalled()
+    expect(second.api.setItemCrop).not.toHaveBeenCalled()
     expect(second.api.setItemBox).toHaveBeenCalledWith(
       'Main',
       1,
