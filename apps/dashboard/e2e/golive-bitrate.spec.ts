@@ -79,12 +79,50 @@ test.describe('Bitrate caps and shared stream explanations (U2)', () => {
       localStorage.setItem('fc-golive-picture', 'ferrocast')
       localStorage.removeItem('fc-studio-standby-scene')
     })
-    await page.goto('./?autoplay=0&latency=0&studioEngine=1#/studio/golive')
-    await expect(page.locator('#main')).toBeVisible()
+    await page.goto('./?autoplay=0&latency=0&studioEngine=1#/studio')
+    await page.getByRole('button', { name: 'Start the Studio' }).click()
+    await expect(page.locator('[data-canvas-box]')).toBeVisible({ timeout: 10_000 })
     await settled(page)
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth,
-    )
-    expect(overflow).toBe(false)
+
+    await page.getByRole('button', { name: 'Studio settings' }).first().click()
+    const settingsDialog = page.getByRole('dialog', { name: 'Studio settings' })
+    await expect(settingsDialog).toBeVisible()
+    await settingsDialog.getByRole('radio', { name: /Max/i }).click()
+    await expect(
+      settingsDialog.getByText(/Will send 6\.0 Mbps\. Twitch takes at most 6 Mbps/),
+    ).toBeVisible()
+    await settled(page)
+    const settingsOverflow = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth > window.innerWidth,
+      dialog: (() => {
+        const d = document.querySelector('dialog[open]')
+        return d ? d.scrollWidth > d.clientWidth + 1 : true
+      })(),
+    }))
+    expect(settingsOverflow).toEqual({ page: false, dialog: false })
+    await settingsDialog.getByRole('button', { name: 'Save' }).click()
+    await expect(settingsDialog).toBeHidden()
+
+    await page
+      .getByRole('radiogroup', { name: 'Panel' })
+      .getByText('Go live to', { exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Manage platforms' }).click()
+    const platforms = page.getByRole('dialog', { name: 'Your platforms' })
+    await expect(platforms).toBeVisible()
+    await expect(platforms.getByText('Same stream as Twitch: 6.2 Mbps')).toBeVisible()
+    await expect(
+      platforms.getByText('2 places x 6.2 Mbps = 12.4 Mbps upload', { exact: true }),
+    ).toBeVisible()
+    await settled(page)
+
+    const platformsOverflow = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth > window.innerWidth,
+      dialog: (() => {
+        const d = document.querySelector('dialog[open]')
+        return d ? d.scrollWidth > d.clientWidth + 1 : true
+      })(),
+    }))
+    expect(platformsOverflow).toEqual({ page: false, dialog: false })
   })
 })
