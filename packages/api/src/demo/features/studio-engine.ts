@@ -147,7 +147,14 @@ const AUDIO_KINDS = new Set([
   'pulse_input_capture',
   'pulse_output_capture',
 ])
-const CAMERA_KINDS = new Set(['av_capture_input_v2', 'dshow_input', 'v4l2_input'])
+const CAMERA_KINDS = new Set([
+  'av_capture_input_v2',
+  'av_capture_input',
+  'macos-avcapture',
+  'macos-avcapture-fast',
+  'dshow_input',
+  'v4l2_input',
+])
 const BLEND_SET = new Set<string>(ENGINE_BLENDS)
 const SCALE_SET = new Set<string>(ENGINE_SCALE_FILTERS)
 const DEINTERLACE_SET = new Set<string>(ENGINE_DEINTERLACE)
@@ -2137,7 +2144,7 @@ export class DemoStudioEngine {
           },
         ]
       }
-      if (kind === 'av_capture_input_v2' || kind === 'dshow_input' || kind === 'v4l2_input') {
+      if (CAMERA_KINDS.has(kind)) {
         const list = this.opts.hasCamera ? CAMERA_SVGS : []
         const opt: EngineOption = {
           key: 'device',
@@ -2187,7 +2194,12 @@ export class DemoStudioEngine {
     }
 
     if (is('GET', 'studio/engine/still')) {
-      return this.stillForDevice(url?.searchParams.get('value') ?? null)
+      const fresh =
+        url?.searchParams.get('fresh') === '1' || url?.searchParams.get('fresh') === 'true'
+      return this.stillForDevice(
+        url?.searchParams.get('value') ?? null,
+        fresh ? { fresh: true } : undefined,
+      )
     }
 
     if (is('GET', 'studio/engine/scenes')) {
@@ -3899,7 +3911,7 @@ export class DemoStudioEngine {
   }
 
   private sourceSvg(name: string, kind: string, w: number, h: number): string {
-    if (kind === 'av_capture_input_v2' || kind === 'dshow_input' || kind === 'v4l2_input') {
+    if (CAMERA_KINDS.has(kind)) {
       return cameraFrameSvg(this.sources.get(name)?.settings.device ?? CAMERA_SVGS[0].id)
     }
     return svgDataUrl(
@@ -3944,7 +3956,7 @@ export class DemoStudioEngine {
     }
   }
 
-  stillForDevice(device: string | null): StillResult {
+  stillForDevice(device: string | null, _opts?: { fresh?: boolean }): StillResult {
     if (!this.opts.hasCamera) {
       throw new HttpError(404, 'studio_no_source', 'No camera is available on this computer.')
     }

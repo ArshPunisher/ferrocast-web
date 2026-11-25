@@ -191,6 +191,13 @@ describe('the Studio engine in the demo (no desktop app)', () => {
     ).resolves.toEqual({
       image: 'data:image/jpeg;base64,abc',
     })
+    await expect(
+      client.sourceStill('av_capture_input_v2', 'device', 'usb/cam:1', 240, ac.signal, {
+        fresh: true,
+      }),
+    ).resolves.toEqual({
+      image: 'data:image/jpeg;base64,abc',
+    })
     expect(calls[0]?.url).toBe(
       'http://127.0.0.1:47820/api/v1/studio/engine/screens/42/still?w=240&window=true',
     )
@@ -199,6 +206,9 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       'http://127.0.0.1:47820/api/v1/studio/engine/still?kind=av_capture_input_v2&key=device&value=usb%2Fcam%3A1&w=240',
     )
     expect(calls[1]?.signal).toBe(ac.signal)
+    expect(calls[2]?.url).toBe(
+      'http://127.0.0.1:47820/api/v1/studio/engine/still?kind=av_capture_input_v2&key=device&value=usb%2Fcam%3A1&w=240&fresh=1',
+    )
   })
 
   it('returns waiting:true when cameraSleeping in DemoStudioEngine and error only when cameraDenied', async () => {
@@ -1650,6 +1660,26 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
 
         await api.redo()
         expect((await api.transform(scene, webcam.id)).crop_left).toBe(150)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('handles fresh stills and macos-avcapture camera options in DemoStudioEngine', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        const spy = vi.spyOn(engine.studioEngine!, 'stillForDevice')
+        const res = await api.sourceStill('macos-avcapture', 'device', 'cam-facetime', 480, undefined, {
+          fresh: true,
+        })
+        expect(res.image).toMatch(/^data:image\/svg\+xml/)
+        expect(spy).toHaveBeenCalledWith('cam-facetime', { fresh: true })
+
+        const optsFast = await api.options('macos-avcapture-fast')
+        expect(optsFast.some((o) => o.key === 'device' && (o.choices?.length ?? 0) > 0)).toBe(true)
       } finally {
         engine.dispose()
       }

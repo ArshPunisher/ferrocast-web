@@ -29,7 +29,14 @@ type EngineApi = ReturnType<typeof studioEngineApi>
 const CAMERA_POLL_MS = 1000
 const CAMERA_BACKOFF_MS = 5000
 
-const CAMERA_KINDS = ['av_capture_input_v2', 'dshow_input', 'v4l2_input', 'av_capture_input']
+const CAMERA_KINDS = [
+  'av_capture_input_v2',
+  'macos-avcapture',
+  'macos-avcapture-fast',
+  'dshow_input',
+  'v4l2_input',
+  'av_capture_input',
+]
 const INPUT_AUDIO_KINDS = [
   'coreaudio_input_capture',
   'wasapi_input_capture',
@@ -227,126 +234,159 @@ export function MediaCheckStep({
   const [micAudio, setMicAudio] = useState<EngineAudio | null>(null)
   const [micFilters, setMicFilters] = useState<EngineFilter[] | null>(null)
   const [micError, setMicError] = useState<unknown>(null)
+  const [refreshingDevices, setRefreshingDevices] = useState(false)
   const [heardSignal, setHeardSignal] = useState(false)
   const heardRef = useRef(false)
   heardRef.current = heardSignal
   const probeReqRef = useRef(0)
+  const initInFlightRef = useRef(false)
+  const blockedByInitRef = useRef(true)
+  blockedByInitRef.current = initLoading || unavailable || initError !== null
+  const micAudioRef = useRef<EngineAudio | null>(null)
+  micAudioRef.current = micAudio
   const confirmedMicRef = useRef('')
   const micSwitchReqRef = useRef(0)
   const minSampleSeqRef = useRef(0)
 
-  const probeMedia = useCallback(async () => {
-    const req = ++probeReqRef.current
-    setInitLoading(true)
-    setInitError(null)
-    setUnavailable(false)
-    setCamError(null)
-    setMicError(null)
-    try {
-      const status = await engine.status()
-      if (probeReqRef.current !== req) return
-      if (!status.available) {
-        setUnavailable(true)
-        return
+  const probeMedia = useCallback(
+    async ({ quiet = false }: { quiet?: boolean } = {}) => {
+      if (quiet && initInFlightRef.current) return
+      const req = ++probeReqRef.current
+      if (quiet) {
+        setRefreshingDevices(true)
+      } else {
+        initInFlightRef.current = true
+        setInitLoading(true)
+        setInitError(null)
+        setUnavailable(false)
+        setCamError(null)
+        setMicError(null)
       }
-      if (!status.running) {
-        await engine.start()
+      try {
+        const status = await engine.status()
         if (probeReqRef.current !== req) return
-      }
+        if (!status.available) {
+          if (!quiet) setUnavailable(true)
+          return
+        }
+        if (!status.running) {
+          if (quiet) return
+          await engine.start()
+          if (probeReqRef.current !== req) return
+        }
 
-      const [kinds, scenes] = await Promise.all([engine.kinds(), engine.scenes()])
-      if (probeReqRef.current !== req) return
-      const camKind =
-        kinds.inputs.find((k) => CAMERA_KINDS.includes(k.id))?.id ?? 'av_capture_input_v2'
-      const micKind =
-        kinds.inputs.find((k) => INPUT_AUDIO_KINDS.includes(k.id))?.id ?? 'coreaudio_input_capture'
-
-      const [camOpts, micOpts, audioList] = await Promise.all([
-        engine.options(camKind).catch(() => []),
-        engine.options(micKind).catch(() => []),
-        engine.audio(scenes.current).catch(() => [] as EngineAudio[]),
-      ])
-      if (probeReqRef.current !== req) return
-
-      const devOpt = camOpts.find(
-        (o) => o.key === 'device' || o.key === 'video_device_id' || o.key === 'device_id',
-      )
-      setCamKey(devOpt?.key ?? 'device')
-      const camChoices: DeviceChoice[] = (devOpt?.choices ?? []).map((label, i) => ({
-        label,
-        value: String(devOpt?.values?.[i] ?? label),
-        kind: camKind,
-      }))
-      setCameras(camChoices)
-      setSelectedCam(camChoices[0] ?? null)
-
-      const micDevOpt = micOpts.find((o) => o.key === 'device_id')
-      const micChoices: DeviceChoice[] = (micDevOpt?.choices ?? []).map((label, i) => ({
-        label,
-        value: String(micDevOpt?.values?.[i] ?? 'default'),
-        kind: micKind,
-      }))
-      setMics(micChoices)
-
-      ++micSwitchReqRef.current
-      setMicSwitching(false)
-      minSampleSeqRef.current = 0
-      const foundMic =
-        audioList.find((a) => MIC_KINDS.has(a.kind)) ??
-        audioList.find((a) => a.name.toLowerCase().includes('mic')) ??
-        null
-      if (foundMic) {
-        const micSettings = await engine.settings(foundMic.name).catch(() => null)
+        const [kinds, scenes] = await Promise.all([engine.kinds(), engine.scenes()])
         if (probeReqRef.current !== req) return
-        const configured = micSettings?.device_id
-        const matched =
-          typeof configured === 'string' && configured.length > 0 ? configured : 'default'
-        confirmedMicRef.current = matched
-        setMicAudio(foundMic)
-        setSelectedMic(matched)
-      } else if (micChoices.some((c) => c.value !== 'default')) {
-        // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
-        const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
+        const camKind =
+          kinds.inputs.find((k) => CAMERA_KINDS.includes(k.id))?.id ?? 'av_capture_input_v2'
+        const micKind =
+          kinds.inputs.find((k) => INPUT_AUDIO_KINDS.includes(k.id))?.id ?? 'coreaudio_input_capture'
+
+        const [camOpts, micOpts, audioList] = await Promise.all([
+          engine.options(camKind).catch(() => []),
+          engine.options(micKind).catch(() => []),
+          engine.audio(scenes.current).catch(() => [] as EngineAudio[]),
+        ])
         if (probeReqRef.current !== req) return
-        let micNew = 'Mic'
-        for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
-        const initialMic = micChoices[0]!.value
-        await engine.setChannel(3, {
-          kind: micKind,
-          name: micNew,
-          settings: { device_id: initialMic },
-        })
-        if (probeReqRef.current !== req) return
-        const refreshed = await engine.audio(scenes.current).catch(() => [] as EngineAudio[])
-        if (probeReqRef.current !== req) return
-        confirmedMicRef.current = initialMic
-        setMicAudio(
-          refreshed.find((a) => a.name === micNew) ?? {
-            name: micNew,
-            kind: micKind,
-            channel: 3,
-            volume_db: 0,
-            muted: false,
-            monitor: 'off',
-          },
+
+        const devOpt = camOpts.find(
+          (o) => o.key === 'device' || o.key === 'video_device_id' || o.key === 'device_id',
         )
-        setSelectedMic(initialMic)
-      } else {
-        confirmedMicRef.current = ''
-        setMicAudio(null)
-        setSelectedMic('')
+        setCamKey(devOpt?.key ?? 'device')
+        const camChoices: DeviceChoice[] = (devOpt?.choices ?? []).map((label, i) => ({
+          label,
+          value: String(devOpt?.values?.[i] ?? label),
+          kind: camKind,
+        }))
+        setCameras(camChoices)
+        setSelectedCam((prev) => {
+          if (prev) {
+            const match = camChoices.find((c) => c.value === prev.value && c.kind === prev.kind)
+            if (match) return match.label === prev.label ? prev : match
+          }
+          return camChoices[0] ?? null
+        })
+
+        const micDevOpt = micOpts.find((o) => o.key === 'device_id')
+        const micChoices: DeviceChoice[] = (micDevOpt?.choices ?? []).map((label, i) => ({
+          label,
+          value: String(micDevOpt?.values?.[i] ?? 'default'),
+          kind: micKind,
+        }))
+        setMics(micChoices)
+
+        const foundMic =
+          audioList.find((a) => MIC_KINDS.has(a.kind)) ??
+          audioList.find((a) => a.name.toLowerCase().includes('mic')) ??
+          null
+        if (quiet && micAudioRef.current !== null && foundMic !== null) {
+          if (foundMic.name !== micAudioRef.current.name) {
+            setMicAudio(foundMic)
+          }
+          return
+        }
+
+        ++micSwitchReqRef.current
+        setMicSwitching(false)
+        minSampleSeqRef.current = 0
+        if (foundMic) {
+          const micSettings = await engine.settings(foundMic.name).catch(() => null)
+          if (probeReqRef.current !== req) return
+          const configured = micSettings?.device_id
+          const matched =
+            typeof configured === 'string' && configured.length > 0 ? configured : 'default'
+          confirmedMicRef.current = matched
+          setMicAudio(foundMic)
+          setSelectedMic(matched)
+        } else if (micChoices.some((c) => c.value !== 'default')) {
+          // A name nothing in the collection uses yet (an imported one may have a "Mic" in a scene).
+          const taken = new Set((await engine.sources().catch(() => [])).map((x) => x.name))
+          if (probeReqRef.current !== req) return
+          let micNew = 'Mic'
+          for (let n = 2; taken.has(micNew); n++) micNew = `Mic ${n}`
+          const initialMic = micChoices[0]!.value
+          await engine.setChannel(3, {
+            kind: micKind,
+            name: micNew,
+            settings: { device_id: initialMic },
+          })
+          if (probeReqRef.current !== req) return
+          const refreshed = await engine.audio(scenes.current).catch(() => [] as EngineAudio[])
+          if (probeReqRef.current !== req) return
+          confirmedMicRef.current = initialMic
+          setMicAudio(
+            refreshed.find((a) => a.name === micNew) ?? {
+              name: micNew,
+              kind: micKind,
+              channel: 3,
+              volume_db: 0,
+              muted: false,
+              monitor: 'off',
+            },
+          )
+          setSelectedMic(initialMic)
+        } else {
+          confirmedMicRef.current = ''
+          setMicAudio(null)
+          setSelectedMic('')
+        }
+      } catch (e) {
+        if (probeReqRef.current !== req || quiet) return
+        if (e instanceof ApiError && e.code === 'studio_unavailable') {
+          setUnavailable(true)
+        } else {
+          setInitError(e)
+        }
+      } finally {
+        if (!quiet) initInFlightRef.current = false
+        if (probeReqRef.current === req) {
+          if (!quiet) setInitLoading(false)
+          setRefreshingDevices(false)
+        }
       }
-    } catch (e) {
-      if (probeReqRef.current !== req) return
-      if (e instanceof ApiError && e.code === 'studio_unavailable') {
-        setUnavailable(true)
-      } else {
-        setInitError(e)
-      }
-    } finally {
-      if (probeReqRef.current === req) setInitLoading(false)
-    }
-  }, [engine])
+    },
+    [engine],
+  )
 
   useEffect(() => {
     void probeMedia()
@@ -354,6 +394,15 @@ export function MediaCheckStep({
     return () => {
       probes.current += 1
     }
+  }, [probeMedia])
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.hidden || initInFlightRef.current || blockedByInitRef.current) return
+      void probeMedia({ quiet: true })
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [probeMedia])
 
   useEffect(() => {
@@ -394,20 +443,18 @@ export function MediaCheckStep({
       }, ms)
     }
 
-    const runOnce = async () => {
+    const runOnce = async (fresh = false) => {
       if (!alive || document.hidden || activeAc !== null) return
       clearTimer()
       const reqAc = new AbortController()
       activeAc = reqAc
       let nextDelay = CAMERA_POLL_MS
       try {
-        const res = await engine.sourceStill(
-          selectedCam.kind,
-          camKey,
-          selectedCam.value,
-          480,
-          reqAc.signal,
-        )
+        const res = fresh
+          ? await engine.sourceStill(selectedCam.kind, camKey, selectedCam.value, 480, reqAc.signal, {
+              fresh: true,
+            })
+          : await engine.sourceStill(selectedCam.kind, camKey, selectedCam.value, 480, reqAc.signal)
         if (!alive || activeAc !== reqAc || reqAc.signal.aborted) return
         if (res.image) {
           hadStill = true
@@ -475,7 +522,7 @@ export function MediaCheckStep({
     refreshCameraRef.current = () => {
       if (!alive || activeAc !== null) return
       clearTimer()
-      void runOnce()
+      void runOnce(true)
     }
 
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -671,25 +718,43 @@ export function MediaCheckStep({
                 )}
                 <h2 className="text-[15px] font-bold text-text">Camera preview</h2>
               </div>
-              {cameras.length > 1 && (
-                <label className="flex items-center gap-2 text-[13px] text-text-2">
-                  <span className="sr-only">Choose camera</span>
-                  <select
-                    aria-label="Choose camera"
-                    value={selectedCam?.value ?? ''}
-                    onChange={(e) => {
-                      const next = cameras.find((c) => c.value === e.target.value) ?? null
-                      setSelectedCam(next)
-                    }}
-                    className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              {cameras.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {cameras.length > 1 && (
+                    <label className="flex items-center gap-2 text-[13px] text-text-2">
+                      <span className="sr-only">Choose camera</span>
+                      <select
+                        aria-label="Choose camera"
+                        value={selectedCam?.value ?? ''}
+                        onChange={(e) => {
+                          const next = cameras.find((c) => c.value === e.target.value) ?? null
+                          setSelectedCam(next)
+                        }}
+                        className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                      >
+                        {cameras.map((cam) => (
+                          <option key={cam.value} value={cam.value}>
+                            {cam.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <IconButton
+                    label="Refresh devices"
+                    size="sm"
+                    variant="outline"
+                    className="max-sm:size-11"
+                    aria-busy={refreshingDevices || undefined}
+                    onClick={() => void probeMedia({ quiet: true })}
                   >
-                    {cameras.map((cam) => (
-                      <option key={cam.value} value={cam.value}>
-                        {cam.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <ArrowsClockwise
+                      size={15}
+                      className={refreshingDevices ? 'animate-spin' : undefined}
+                      aria-hidden
+                    />
+                  </IconButton>
+                </div>
               )}
             </div>
 
@@ -812,22 +877,40 @@ export function MediaCheckStep({
                 )}
                 <h2 className="text-[15px] font-bold text-text">Microphone and level</h2>
               </div>
-              {(mics.length > 1 || (mics.length > 0 && showUnavailableOption)) && micAudio && (
-                <select
-                  aria-label="Choose microphone"
-                  value={selectedMic}
-                  onChange={(e) => void switchMicDevice(e.target.value)}
-                  className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-                >
-                  {showUnavailableOption && (
-                    <option value={selectedMic}>{unavailableMicLabel}</option>
+              {(mics.length > 0 || Boolean(micAudio)) && (
+                <div className="flex items-center gap-1.5">
+                  {(mics.length > 1 || (mics.length > 0 && showUnavailableOption)) && micAudio && (
+                    <select
+                      aria-label="Choose microphone"
+                      value={selectedMic}
+                      onChange={(e) => void switchMicDevice(e.target.value)}
+                      className="h-8 max-w-[220px] rounded-control max-sm:h-11 border border-line-strong bg-surface-2 px-2.5 text-[13px] text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                    >
+                      {showUnavailableOption && (
+                        <option value={selectedMic}>{unavailableMicLabel}</option>
+                      )}
+                      {mics.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
                   )}
-                  {mics.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                  <IconButton
+                    label="Refresh devices"
+                    size="sm"
+                    variant="outline"
+                    className="max-sm:size-11"
+                    aria-busy={refreshingDevices || undefined}
+                    onClick={() => void probeMedia({ quiet: true })}
+                  >
+                    <ArrowsClockwise
+                      size={15}
+                      className={refreshingDevices ? 'animate-spin' : undefined}
+                      aria-hidden
+                    />
+                  </IconButton>
+                </div>
               )}
             </div>
 
