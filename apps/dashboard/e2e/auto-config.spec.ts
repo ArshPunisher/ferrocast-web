@@ -158,14 +158,16 @@ test.describe('auto-config encoder benchmark and rollback', () => {
     // 3. Refuses with 409 while streaming
     await demo(page, '(d) => { d.studioEngine?.setStreamActive(true) }')
     await openWizardViaSettings(page)
-    const runAgain = dlg.getByRole('button', { name: 'Run benchmark again' })
-    if (await runAgain.isVisible().catch(() => false)) {
-      await runAgain.click()
-    }
-    await dlg.getByRole('button', { name: 'Run benchmark', exact: true }).click()
-    await expect(
-      dlg.getByRole('alert').getByText(/Stop streaming and recording before testing the encoder\./),
-    ).toBeVisible()
+    // The button reads "Run benchmark again" once an earlier result is kept, and the dialog
+    // fills in after it opens: click whichever shows and look again until the refusal appears.
+    await expect(async () => {
+      await dlg.getByRole('button', { name: /^Run benchmark( again)?$/ }).click({ timeout: 2000 })
+      await expect(
+        dlg
+          .getByRole('alert')
+          .getByText(/Stop streaming and recording before testing the encoder\./),
+      ).toBeVisible({ timeout: 2000 })
+    }).toPass({ timeout: 20_000 })
   })
 
   test('fits 375 px phone viewport without horizontal overflow across wizard and rollback bar', async ({
