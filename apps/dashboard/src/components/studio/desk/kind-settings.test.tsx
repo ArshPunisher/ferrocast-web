@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { createElement } from 'react'
+// @vitest-environment jsdom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type EngineOption } from '@ferrocast/api'
+import { useLive } from '../../../lib/store'
+import { DeskProvider, type Desk } from './common'
 import { KindSettings, layoutOf } from './kind-settings'
 import { RowLook } from './options'
 
@@ -108,5 +112,133 @@ describe('settings laid out per kind (design A)', () => {
     const html = drawn('some_plugin_source', [opt('speed', 'Speed', 'int')], {})
     expect(html).toContain('>Settings<')
     expect(html).toContain('>Speed<')
+  })
+})
+
+describe('duplicate source Mirror and SourcePreview selection', () => {
+  let root: Root | null = null
+
+  afterEach(async () => {
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+    useLive.setState({ conn: null })
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('Mirror toggle and SourcePreview flip reflect the selected item when a camera appears twice in one scene', async () => {
+    vi.useFakeTimers()
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    useLive.setState({ conn: { client: {} } as never })
+
+    const transform = vi.fn(async (_scene: string, id: number) => ({
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scale_x: id === 2 ? -1 : 1,
+      scale_y: 1,
+      alignment: 5,
+      bounds: 'stretch' as const,
+      bounds_alignment: 5,
+      bounds_width: 1920,
+      bounds_height: 1080,
+      crop_left: 0,
+      crop_top: 0,
+      crop_right: 0,
+      crop_bottom: 0,
+      width: 1920,
+      height: 1080,
+    }))
+    const editItem = vi.fn(async () => undefined)
+    const sourcePicture = vi.fn(async () => ({
+      image: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      width: 1280,
+      height: 720,
+    }))
+
+    const desk = {
+      api: {
+        transform,
+        editItem,
+        sourcePicture,
+        sources: vi.fn(async () => []),
+      },
+      items: {
+        data: [
+          {
+            id: 1,
+            name: 'Cam',
+            kind: 'av_capture_input_v2',
+            visible: true,
+            locked: false,
+            audio: false,
+            group: false,
+            frame: [1920, 0, 0, 1080, 0, 0],
+            children: [],
+          },
+          {
+            id: 2,
+            name: 'Cam',
+            kind: 'av_capture_input_v2',
+            visible: true,
+            locked: false,
+            audio: false,
+            group: false,
+            frame: [-1920, 0, 0, 1080, 1920, 0],
+            children: [],
+          },
+        ],
+        set: vi.fn(),
+        reload: vi.fn(),
+      },
+      audio: { data: [], set: vi.fn(), reload: vi.fn() },
+      scene: 'Main',
+      selected: 2,
+      refresh: vi.fn(),
+      undone: 0,
+    } as unknown as Desk
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk}>
+          <RowLook.Provider value="lined">
+            <KindSettings
+              name="Cam"
+              kind="av_capture_input_v2"
+              opts={[]}
+              values={{}}
+              onChange={() => {}}
+            />
+          </RowLook.Provider>
+        </DeskProvider>,
+      )
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(transform).toHaveBeenCalledWith('Main', 2)
+    const mirror = host.querySelector(
+      'button[role="switch"][aria-label="Mirror"]',
+    ) as HTMLButtonElement
+    expect(mirror).not.toBeNull()
+    expect(mirror.getAttribute('aria-checked')).toBe('true')
+
+    const img = host.querySelector('img[alt="Cam now"]') as HTMLImageElement
+    expect(img).not.toBeNull()
+    expect(img.style.transform).toBe('scale(-1, 1)')
+
+    await act(async () => {
+      mirror.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(editItem).toHaveBeenCalledWith('Main', 2, 'flip_h')
   })
 })

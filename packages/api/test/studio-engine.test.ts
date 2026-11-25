@@ -191,6 +191,13 @@ describe('the Studio engine in the demo (no desktop app)', () => {
     ).resolves.toEqual({
       image: 'data:image/jpeg;base64,abc',
     })
+    await expect(
+      client.sourceStill('av_capture_input_v2', 'device', 'usb/cam:1', 240, ac.signal, {
+        fresh: true,
+      }),
+    ).resolves.toEqual({
+      image: 'data:image/jpeg;base64,abc',
+    })
     expect(calls[0]?.url).toBe(
       'http://127.0.0.1:47820/api/v1/studio/engine/screens/42/still?w=240&window=true',
     )
@@ -199,6 +206,9 @@ describe('the Studio engine in the demo (no desktop app)', () => {
       'http://127.0.0.1:47820/api/v1/studio/engine/still?kind=av_capture_input_v2&key=device&value=usb%2Fcam%3A1&w=240',
     )
     expect(calls[1]?.signal).toBe(ac.signal)
+    expect(calls[2]?.url).toBe(
+      'http://127.0.0.1:47820/api/v1/studio/engine/still?kind=av_capture_input_v2&key=device&value=usb%2Fcam%3A1&w=240&fresh=1',
+    )
   })
 
   it('returns waiting:true when cameraSleeping in DemoStudioEngine and error only when cameraDenied', async () => {
@@ -1151,6 +1161,180 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('accepts optional scene and item in body or query on POST sources/{name}/screenshot', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const scene = 'Main'
+        const items = await api.items(scene)
+        const webcam = items.find((i) => i.name === 'Webcam')!
+
+        const fromBody = await client.request<{ file: string }>(
+          'POST',
+          `/api/v1/studio/engine/sources/${encodeURIComponent(webcam.name)}/screenshot`,
+          { scene, item: webcam.id },
+        )
+        expect(fromBody.file).toMatch(/Webcam screenshot\.png$/)
+
+        const fromQuery = await client.request<{ file: string }>(
+          'POST',
+          `/api/v1/studio/engine/sources/${encodeURIComponent(webcam.name)}/screenshot?scene=${encodeURIComponent(scene)}&item=${webcam.id}`,
+        )
+        expect(fromQuery.file).toMatch(/Webcam screenshot\.png$/)
+
+        await expect(
+          client.request(
+            'POST',
+            `/api/v1/studio/engine/sources/${encodeURIComponent(webcam.name)}/screenshot`,
+            { scene },
+          ),
+        ).rejects.toMatchObject({ status: 400, code: 'invalid' })
+
+        await expect(
+          client.request(
+            'POST',
+            `/api/v1/studio/engine/sources/${encodeURIComponent(webcam.name)}/screenshot?scene=${encodeURIComponent(scene)}&item=${webcam.id}`,
+            { scene: 'Gameplay', item: webcam.id },
+          ),
+        ).rejects.toMatchObject({ status: 400, code: 'invalid' })
+
+        await expect(
+          client.request(
+            'POST',
+            `/api/v1/studio/engine/sources/${encodeURIComponent(webcam.name)}/screenshot`,
+            { scene, item: 999_999 },
+          ),
+        ).rejects.toMatchObject({ status: 404 })
+      } finally {
+        engine.dispose()
+      }
+    })
+  })
+
+  describe('demo engine transform, drag undo, and flip/turn parity', () => {
+    it('keeps flip and rotate edits centred in place and syncs parent group frames', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        const scene = 'Main'
+        const added = await api.addSource(scene, {
+          kind: 'color_source_v3',
+          name: 'Box',
+          settings: { color: 0xffff0000, width: 400, height: 200 },
+        })
+        const id = added.item.id
+        await api.setTransform(scene, id, {
+          x: 500,
+          y: 300,
+          rotation: 0,
+          scale_x: 1,
+          scale_y: 1,
+          alignment: 5,
+          bounds: 'stretch',
+          bounds_alignment: 5,
+          bounds_width: 400,
+          bounds_height: 200,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 400,
+          height: 200,
+        })
+        const centreOf = (f: [number, number, number, number, number, number]) => ({
+          x: f[4] + (f[0] + f[2]) * 0.5,
+          y: f[5] + (f[1] + f[3]) * 0.5,
+        })
+        const find = async (targetId: number) => {
+          const list = await api.items(scene)
+          return list.flatMap((i) => [i, ...i.children]).find((i) => i.id === targetId)!
+        }
+
+        for (const edit of ['flip_h', 'flip_v', 'rotate_cw', 'rotate_ccw', 'rotate180'] as const) {
+          await api.editItem(scene, id, edit)
+          const item = await find(id)
+          const c = centreOf(item.frame!)
+          expect(c.x).toBeCloseTo(700, 2)
+          expect(c.y).toBeCloseTo(400, 2)
+        }
+
+        // Grouped child: rotating 90 deg updates the parent group bounding box.
+        const grp = await api.groupItems(scene, [id], 'Turn Group')
+        await api.editItem(scene, id, 'rotate_cw')
+        const grpNow = (await api.items(scene)).find((i) => i.id === grp.id)!
+        const childNow = grpNow.children.find((c) => c.id === id)!
+        expect(centreOf(childNow.frame!).x).toBeCloseTo(700, 2)
+        expect(centreOf(childNow.frame!).y).toBeCloseTo(400, 2)
+        // 400x200 rotated 90 deg around (700, 400) spans x=[600..800], y=[200..600].
+        expect(grpNow.frame).toEqual([200, 0, 0, 400, 600, 200])
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('skips no-op crop undo entries and reverts an open drag when undo is called mid-drag', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        const scene = 'Main'
+        const webcam = (await api.items(scene)).find((i) => i.name === 'Webcam')!
+        await api.addScene('Prior Scene')
+        const baselineUndoCount = (await api.history()).undo.length
+
+        // 1. Direct no-op save:true and round-trip save:false -> back to start save:true push nothing.
+        await api.setItemCrop(scene, webcam.id, {
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        expect((await api.history()).undo.length).toBe(baselineUndoCount)
+
+        await api.setItemCrop(scene, webcam.id, {
+          left: 40,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        await api.setItemCrop(scene, webcam.id, {
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: true,
+        })
+        expect((await api.history()).undo.length).toBe(baselineUndoCount)
+
+        // 2. Calling POST /undo while a drag (save:false) is open reverts that drag without popping Prior Scene.
+        await api.setItemCrop(scene, webcam.id, {
+          left: 60,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          save: false,
+        })
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(60)
+        const undone = await api.undo()
+        expect(undone.done).toContain('Crop')
+        expect((await api.transform(scene, webcam.id)).crop_left).toBe(0)
+        expect((await api.scenes()).scenes.map((s) => s.name)).toContain('Prior Scene')
+        expect((await api.history()).undo.length).toBe(baselineUndoCount)
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 
   describe('setItemCrop anchoring, group sync, clamping, and undo coalescing', () => {
@@ -1500,6 +1684,33 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
 
         await api.redo()
         expect((await api.transform(scene, webcam.id)).crop_left).toBe(150)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('handles fresh stills and macos-avcapture camera options in DemoStudioEngine', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        const spy = vi.spyOn(engine.studioEngine!, 'stillForDevice')
+        const res = await api.sourceStill(
+          'macos-avcapture',
+          'device',
+          'cam-facetime',
+          480,
+          undefined,
+          {
+            fresh: true,
+          },
+        )
+        expect(res.image).toMatch(/^data:image\/svg\+xml/)
+        expect(spy).toHaveBeenCalledWith('cam-facetime', { fresh: true })
+
+        const optsFast = await api.options('macos-avcapture-fast')
+        expect(optsFast.some((o) => o.key === 'device' && (o.choices?.length ?? 0) > 0)).toBe(true)
       } finally {
         engine.dispose()
       }

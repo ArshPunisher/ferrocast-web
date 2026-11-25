@@ -931,22 +931,9 @@ function RuleEditor({
           aria-label="Live preview"
           className="fc-scroll order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
         >
-          <div className="relative mx-auto w-full shrink-0 lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
-            <AlertStage
-              alert={preview}
-              theme="molten"
-              controls={false}
-              sound={sound}
-              replay={replay}
-              className="shadow-1"
-              {...(customPreviewError
-                ? {
-                    emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
-                  }
-                : {})}
-            />
-            {/* On the stage: which platform's sample to preview, replay and sound, what it is. */}
-            <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start justify-between gap-1.5">
+          <div className="mx-auto flex w-full shrink-0 flex-col gap-2 md:relative md:block lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
+            {/* Above the stage on narrow screens so wrapped controls never cover it; overlaid from md up. */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 md:pointer-events-none md:absolute md:inset-x-2 md:top-2 md:z-10 md:items-start">
               <div
                 role="group"
                 aria-label="Preview"
@@ -1018,11 +1005,28 @@ function RuleEditor({
                 )}
               </div>
             </div>
-            <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
-              <PlatformMark platform={previewPlatform} size={12} />
-              Simulated {previewPlatform === 'tips' ? 'Tips' : PLATFORM_LABEL[previewPlatform]}{' '}
-              sample
-            </p>
+            <div className="relative">
+              <AlertStage
+                alert={preview}
+                theme="molten"
+                controls={false}
+                sound={sound}
+                replay={replay}
+                className="shadow-1"
+                {...(customPreviewError
+                  ? {
+                      emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
+                    }
+                  : {})}
+              />
+              <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
+                <PlatformMark platform={previewPlatform} size={12} />
+                Simulated {previewPlatform === 'tips'
+                  ? 'Tips'
+                  : PLATFORM_LABEL[previewPlatform]}{' '}
+                sample
+              </p>
+            </div>
             <span className="sr-only" aria-live="polite">
               {previewStatus}
             </span>

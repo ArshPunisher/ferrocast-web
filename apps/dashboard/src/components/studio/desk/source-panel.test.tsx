@@ -252,3 +252,135 @@ describe('instant filter toggle (no reload)', () => {
     expect(deskSwitch.getAttribute('aria-checked')).toBe('true')
   })
 })
+
+describe('PositionTab grouped child frame sync', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('updates cached frame inside group children when setTransform resolves', async () => {
+    vi.useFakeTimers()
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    useLive.setState({ conn: { client: {} } as never })
+
+    let cachedItems = [
+      {
+        id: 10,
+        name: 'Cam Group',
+        kind: 'group',
+        visible: true,
+        locked: false,
+        audio: false,
+        group: true,
+        frame: [400, 0, 0, 300, 100, 100],
+        children: [
+          {
+            id: 20,
+            name: 'Cam',
+            kind: 'av_capture_input_v2',
+            visible: true,
+            locked: false,
+            audio: false,
+            group: false,
+            frame: [400, 0, 0, 300, 100, 100],
+            children: [],
+          },
+        ],
+      },
+    ]
+
+    const setTransform = vi.fn(async () => ({
+      ...cachedItems[0]!.children[0]!,
+      frame: [400, 0, 0, 300, 250, 100],
+    }))
+
+    const itemsResource = {
+      get data() {
+        return cachedItems
+      },
+      set: vi.fn((updater: (prev: typeof cachedItems | undefined) => typeof cachedItems) => {
+        cachedItems = updater(cachedItems)
+      }),
+      reload: vi.fn(),
+    }
+
+    const desk = {
+      api: {
+        filters: vi.fn(async () => []),
+        transform: vi.fn(async () => ({
+          x: 100,
+          y: 100,
+          rotation: 0,
+          scale_x: 1,
+          scale_y: 1,
+          alignment: 5,
+          bounds: 'stretch',
+          bounds_alignment: 5,
+          bounds_width: 400,
+          bounds_height: 300,
+          crop_left: 0,
+          crop_top: 0,
+          crop_right: 0,
+          crop_bottom: 0,
+          width: 1920,
+          height: 1080,
+        })),
+        setTransform,
+        levels: vi.fn(async () => ({})),
+      },
+      audio: { data: [], set: vi.fn(), reload: vi.fn() },
+      items: itemsResource,
+      kinds: {
+        data: {
+          inputs: [{ id: 'av_capture_input_v2', name: 'Camera' }],
+          filters: [],
+          transitions: [],
+          encoders: [],
+          outputs: [],
+        },
+      },
+      scene: 'Main',
+      canvas: 'main',
+      editing: 'Cam',
+      edit: vi.fn(),
+      editTab: 'position',
+      selected: 20,
+      size: { width: 1920, height: 1080 },
+      refresh: vi.fn(),
+      undone: 0,
+    } as unknown as Desk
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk}>
+          <SourcePanel />
+        </DeskProvider>,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const xInput = host.querySelector('input[aria-label="X"]') as HTMLInputElement
+    expect(xInput).not.toBeNull()
+    const setNativeValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!
+    await act(async () => {
+      setNativeValue.call(xInput, '250')
+      xInput.dispatchEvent(new Event('input', { bubbles: true }))
+      xInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(setTransform).toHaveBeenCalledTimes(1)
+    expect(itemsResource.set).toHaveBeenCalledTimes(1)
+    expect(cachedItems[0]!.children[0]!.frame).toEqual([400, 0, 0, 300, 250, 100])
+  })
+})

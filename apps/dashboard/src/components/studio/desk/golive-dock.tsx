@@ -183,7 +183,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         label={`Go live on ${d.name}`}
         hideLabel
         checked={d.enabled}
-        disabled={busy !== null || !!d.blocked}
+        disabled={busy !== null || (!!d.blocked && !d.enabled)}
         onChange={(on) => toggle(d, on)}
       />
     </li>

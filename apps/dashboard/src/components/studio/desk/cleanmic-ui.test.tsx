@@ -90,7 +90,13 @@ describe('Clean up my mic', () => {
 
   it('offers a retry when the filters could not be read, instead of no button', async () => {
     const { onReload } = await mount({}, { filters: null })
-    await press(/try again|retry/i)
+    const btn = [...host.querySelectorAll('button')].find((b) =>
+      /try again|retry/i.test(b.textContent ?? ''),
+    )
+    expect(btn).toBeDefined()
+    expect(btn?.textContent?.trim()).toBe('Try again')
+    expect(host.textContent).toContain('Couldn’t read your mic’s filters.')
+    await press(/Try again/)
     expect(onReload).toHaveBeenCalled()
   })
 

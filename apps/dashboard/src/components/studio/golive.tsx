@@ -129,23 +129,25 @@ export function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
 export function useMerged(view: GoLiveView | null): GoLiveView | null {
   const frame = useLive((s) => s.studio.golive)
   const health = useObsHealth()
-  if (!view) return null
-  const obs = health ? { ...view.obs, streaming: health.streaming } : view.obs
-  if (!frame) return { ...view, obs }
-  return {
-    ...view,
-    obs,
-    live: frame.live,
-    stats: frame.stats,
-    vertical_live: frame.vertical_live ?? view.vertical_live,
-    vertical_stats: frame.vertical_stats ?? view.vertical_stats,
-    destinations: frame.destinations,
-    cut: {
-      ...view.cut,
-      state: frame.cut_state === undefined ? view.cut.state : frame.cut_state,
-      ffmpeg: frame.ffmpeg ?? view.cut.ffmpeg,
-    },
-  }
+  return useMemo(() => {
+    if (!view) return null
+    const obs = health ? { ...view.obs, streaming: health.streaming } : view.obs
+    if (!frame) return { ...view, obs }
+    return {
+      ...view,
+      obs,
+      live: frame.live,
+      stats: frame.stats,
+      vertical_live: frame.vertical_live ?? view.vertical_live,
+      vertical_stats: frame.vertical_stats ?? view.vertical_stats,
+      destinations: frame.destinations,
+      cut: {
+        ...view.cut,
+        state: frame.cut_state === undefined ? view.cut.state : frame.cut_state,
+        ffmpeg: frame.ffmpeg ?? view.cut.ffmpeg,
+      },
+    }
+  }, [view, frame, health])
 }
 
 export function GoLiveTab() {
@@ -695,7 +697,7 @@ export function Platforms({
   onProtect,
   canvas = 'main',
   videoKbps,
-  audioKbps = 160,
+  audioKbps,
   inDialog = false,
 }: {
   view: GoLiveView
@@ -786,25 +788,41 @@ export function Platforms({
   const [mode] = useMode('studio')
   const usesObs = useUsesObs()
   const conn = useLive((s) => s.conn)
+  const resyncs = useLive((s) => s.resyncs)
   const [fetchedSettings, setFetchedSettings] = useState<{
-    video_kbps: number
-    audio_kbps: number
+    conn: typeof conn
+    video_kbps: number | null
+    audio_kbps: number | null
   } | null>(null)
   useEffect(() => {
     if (usesObs || videoKbps !== undefined || !conn) return
     let alive = true
-    void studioEngineApi(conn.client)
-      .studioSettings()
-      .then(
-        (s) => alive && setFetchedSettings({ video_kbps: s.video_kbps, audio_kbps: s.audio_kbps }),
-      )
-      .catch(() => undefined)
+    const load = () => {
+      void studioEngineApi(conn.client)
+        .studioSettings()
+        .then((s) => {
+          if (!alive) return
+          setFetchedSettings({
+            conn,
+            video_kbps: typeof s?.video_kbps === 'number' ? s.video_kbps : null,
+            audio_kbps: typeof s?.audio_kbps === 'number' ? s.audio_kbps : null,
+          })
+        })
+        .catch(() => undefined)
+    }
+    load()
+    const onFocus = () => {
+      if (!document.hidden) load()
+    }
+    window.addEventListener('focus', onFocus)
     return () => {
       alive = false
+      window.removeEventListener('focus', onFocus)
     }
-  }, [usesObs, videoKbps, conn])
-  const chosenVideoKbps = videoKbps ?? fetchedSettings?.video_kbps ?? null
-  const chosenAudioKbps = fetchedSettings?.audio_kbps ?? audioKbps
+  }, [usesObs, videoKbps, conn, view, resyncs])
+  const currentFetched = fetchedSettings && fetchedSettings.conn === conn ? fetchedSettings : null
+  const chosenVideoKbps = videoKbps ?? currentFetched?.video_kbps ?? null
+  const chosenAudioKbps = audioKbps ?? currentFetched?.audio_kbps ?? 160
   const capSummary = useMemo(
     () =>
       describeStreamCapFromView(merged, chosenVideoKbps, {

@@ -112,26 +112,35 @@ export function CleanMicControl({
           <div
             className={cx(
               'text-[12.5px] leading-snug',
-              verdict === 'good'
-                ? 'font-medium text-ok'
-                : verdict
-                  ? 'font-medium text-warn'
-                  : 'text-text-2',
+              !have
+                ? 'font-medium text-warn'
+                : verdict === 'good'
+                  ? 'font-medium text-ok'
+                  : verdict
+                    ? 'font-medium text-warn'
+                    : 'text-text-2',
             )}
             aria-live="polite"
           >
-            {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
-            {gainStep && usual !== null && (
+            {!have ? (
+              'Couldn’t read your mic’s filters.'
+            ) : (
               <>
-                {' '}
-                <span className="font-normal text-text-2">
-                  Cleaning up will also raise it by {gainDb} dB.
-                </span>
-                <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
-                  Your voice peaks around {Math.round(usual)} dB. A {MIC_LEVEL_FILTER.toLowerCase()}{' '}
-                  step adds {gainDb} dB first, so it peaks near -12 dB and the rest of the chain has
-                  something to work on. Change it in Filters.
-                </InfoTip>
+                {verdict ? VERDICT_WORDS[verdict] : 'Talk for a few seconds to check your level.'}
+                {gainStep && usual !== null && (
+                  <>
+                    {' '}
+                    <span className="font-normal text-text-2">
+                      Cleaning up will also raise it by {gainDb} dB.
+                    </span>
+                    <InfoTip label={`About ${MIC_LEVEL_FILTER}`}>
+                      Your voice peaks around {Math.round(usual)} dB. A{' '}
+                      {MIC_LEVEL_FILTER.toLowerCase()} step adds {gainDb} dB first, so it peaks near
+                      -12 dB and the rest of the chain has something to work on. Change it in
+                      Filters.
+                    </InfoTip>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -139,7 +148,7 @@ export function CleanMicControl({
         <div className="flex shrink-0 sm:justify-end">
           {!have ? (
             <Button size="sm" variant="secondary" onClick={onReload} className="w-full sm:w-auto">
-              Couldn’t read your mic’s filters. Try again
+              Try again
             </Button>
           ) : plan.length > 0 ? (
             <Button

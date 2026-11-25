@@ -275,4 +275,51 @@ describe('U2 bitrate cap wording and math', () => {
     const none = describeUploadNeed([], { planKbps: 6160, vertical: false })
     expect(none).toBeNull()
   })
+
+  it('gives Direct WHIP/SRT sharing a capped main encode a heldBackNote without treating them as cap limiters', () => {
+    const whip = dest({
+      id: 'whip_1',
+      kind: 'custom',
+      name: 'Studio WHIP',
+      direct: 'whip',
+      capped: {
+        kbps: 6000,
+        separate_encode: false,
+        summary: 'B-frames off for WebRTC',
+        detail: 'Low-latency WebRTC sends no B-frames.',
+      },
+    })
+    const srt = dest({
+      id: 'srt_1',
+      kind: 'custom',
+      name: 'Studio SRT',
+      direct: 'srt',
+    })
+    const summary = describeStreamCap(12000, [twitch, whip, srt])
+    expect(summary.capped).toBe(true)
+    expect(summary.limiter?.id).toBe('twitch')
+    expect(summary.heldBackIds).toContain('whip_1')
+    expect(summary.heldBackIds).toContain('srt_1')
+
+    const whipRate = describeDestinationRate(whip, summary, { videoKbps: 12000 })
+    expect(whipRate.rateLabel).toBe('6.2 Mbps')
+    expect(whipRate.heldBackNote?.summary).toBe('Same stream as Twitch: 6.2 Mbps')
+
+    const srtRate = describeDestinationRate(srt, summary, { videoKbps: 12000 })
+    expect(srtRate.rateLabel).toBe('6.2 Mbps')
+    expect(srtRate.heldBackNote?.summary).toBe('Same stream as Twitch: 6.2 Mbps')
+  })
+
+  it('gives each tied lowest-cap main destination its own cap note when offline without engine d.capped', () => {
+    const twitchTwo = dest({ id: 'twitch_2', kind: 'twitch', name: 'Twitch Alt' })
+    const summary = describeStreamCap(12000, [twitch, twitchTwo, youtube])
+    expect(summary.capped).toBe(true)
+    expect(summary.heldBackIds).toEqual(['youtube'])
+
+    const first = describeDestinationRate(twitch, summary, { videoKbps: 12000 })
+    const second = describeDestinationRate(twitchTwo, summary, { videoKbps: 12000 })
+    expect(first.ownCapNote?.summary).toBe('Capped at 6,000 kbps for Twitch')
+    expect(second.ownCapNote?.summary).toBe('Capped at 6,000 kbps for Twitch Alt')
+    expect(second.heldBackNote).toBeNull()
+  })
 })

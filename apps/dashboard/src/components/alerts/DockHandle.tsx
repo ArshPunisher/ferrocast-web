@@ -12,6 +12,7 @@ export function useDockWidth(spec: DockSpec): {
   const [width, setWidth] = useState(() => readDock(spec))
   const set = useCallback(
     (w: number, other: number) => {
+      if (window.innerWidth < 1024) return
       const next = clampDock({ key, def, min, max }, w, other, window.innerWidth - navWidth())
       setWidth(next)
       saveDock({ key, def, min, max }, next)
@@ -62,6 +63,7 @@ export function DockHandle({
   // A window that shrinks (or a sidebar that unfolds) under a wide dock pulls it in.
   useEffect(() => {
     const onWin = () => {
+      if (window.innerWidth < 1024) return
       const fit = clampDock(spec, width, otherWidth, window.innerWidth - navWidth())
       if (fit !== width) onResize(fit, otherWidth)
     }

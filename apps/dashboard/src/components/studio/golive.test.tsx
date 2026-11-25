@@ -3,9 +3,12 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
+import { setPictureSource } from '../../lib/picture'
 import { AllFailedBanner, GoLiveTab, LiveCard, Platforms, RowText, liveStatus } from './golive'
 import { describeDestinationRate, describeStreamCap } from './bitrate-summary'
-import { LiveLine } from './desk/golive-dock'
+import { GoLiveDock, LiveLine } from './desk/golive-dock'
+import { DeskProvider, type Desk } from './desk/common'
+import { DockWorkspace } from './desk/layout'
 
 let root: Root | null = null
 
@@ -888,5 +891,291 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     expect(reach!.className).toContain('pl-0')
     expect(reach!.className).toContain('sm:pl-[92px]')
     expect(reach!.className).not.toContain('pl-[86px]')
+  })
+
+  it('GoLiveDock allows turning off a destination that is enabled and blocked, while keeping off+blocked disabled', async () => {
+    const tw = baseDest({
+      id: 'twitch',
+      kind: 'twitch',
+      name: 'Twitch',
+      enabled: true,
+      connected: false,
+      health: null,
+      blocked: 'Connect Twitch first.',
+    })
+    const kick = baseDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      enabled: false,
+      connected: false,
+      health: null,
+      blocked: 'Connect Kick first.',
+    })
+    const view: GoLiveView = {
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [tw, kick],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+    }
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (method === 'PUT' && path === '/api/v1/golive/destinations') {
+        return { ok: true, destinations: (body as { destinations: unknown[] }).destinations }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const desk = {
+      api: { studioSettings: vi.fn(), setStudioSettings: vi.fn() },
+      scenes: { data: { current: 'Main', vertical: null }, reload: vi.fn() },
+      prefs: { data: { video_kbps: 6000, audio_kbps: 160 }, set: vi.fn() },
+      stats: null,
+    } as unknown as Desk
+    const res = {
+      data: view,
+      loading: false,
+      error: null,
+      reload: vi.fn(),
+      set: vi.fn(),
+    }
+
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({
+        matches: false,
+        media: q,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+
+    try {
+      const el = await renderNode(
+        <DeskProvider value={desk}>
+          <DockWorkspace
+            stage={null}
+            docks={(id) => (id === 'golive' ? <GoLiveDock res={res} view={view} /> : null)}
+          />
+        </DeskProvider>,
+      )
+
+      const twSwitch = el.querySelector(
+        'button[role="switch"][aria-label="Go live on Twitch"]',
+      ) as HTMLButtonElement
+      const kickSwitch = el.querySelector(
+        'button[role="switch"][aria-label="Go live on Kick"]',
+      ) as HTMLButtonElement
+      expect(twSwitch.disabled).toBe(false)
+      expect(kickSwitch.disabled).toBe(true)
+
+      await act(async () => {
+        twSwitch.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(request).toHaveBeenCalledWith('PUT', '/api/v1/golive/destinations', {
+        destinations: [
+          { id: 'twitch', enabled: false },
+          { id: 'kick', enabled: false },
+        ],
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('Platforms tags fetchedSettings with conn, refetches on view change, and prefers explicit audioKbps', async () => {
+    setPictureSource('ferrocast')
+    const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
+    const makeView = (override: Partial<GoLiveView> = {}): GoLiveView => ({
+      ingest: 'rtmp://127.0.0.1:1935/live',
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      vertical_live: false,
+      vertical_stats: {
+        kbps: 0,
+        keyframe_interval_ms: null,
+        video_codec: null,
+        width: null,
+        height: null,
+        fps: null,
+      },
+      destinations: [yt],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      auto_quality: true,
+      cut: {
+        source: 'canvas',
+        config: {
+          layout: 'camera_top',
+          camera: { x: 0, y: 0, w: 0.3, h: 0.3 },
+          game: { x: 0, y: 0, w: 1, h: 1 },
+          camera_share: 35,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          kbps: 4500,
+          encoder: 'auto',
+        },
+        state: null,
+        ffmpeg: { state: 'ready' },
+      },
+      advanced: {
+        rules: {
+          slow_pct: 70,
+          trouble_s: 4,
+          calm_s: 10,
+          first_pause_s: 60,
+          max_pause_s: 600,
+          first_to_pause: null,
+        },
+        keep_free_pct: 20,
+        port: 1935,
+        per: {},
+      },
+      ...override,
+    })
+
+    let settingsA = { video_kbps: 8000, audio_kbps: 128 }
+    const connA = {
+      client: {
+        request: vi.fn(async (_method: string, path: string) =>
+          path.includes('/studio/engine/settings') ? settingsA : {},
+        ),
+      },
+    }
+    const connB = {
+      client: {
+        request: vi.fn(async () => new Promise(() => {})),
+      },
+    }
+
+    useLive.setState({ conn: connA as never })
+    const el = await renderNode(<Platforms view={makeView()} onSaved={() => {}} />)
+    await act(async () => {
+      setPictureSource('ferrocast')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    // 8000 + 128 = 8128 kbps -> 8.1 Mbps
+    expect(el.textContent).toContain('8.1 Mbps')
+
+    // Explicit audioKbps prop must beat fetchedSettings.audio_kbps even after initial fetch.
+    await act(async () => {
+      root!.render(
+        <Platforms view={makeView()} onSaved={() => {}} videoKbps={6000} audioKbps={320} />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    // 6000 + 320 = 6320 kbps -> 6.3 Mbps (NOT stale fetched audio_kbps 128 -> 6.1 Mbps)
+    expect(el.textContent).toContain('6.3 Mbps')
+
+    // Returning to unmanaged videoKbps refetches when view updates.
+    settingsA = { video_kbps: 7000, audio_kbps: 160 }
+    await act(async () => {
+      root!.render(<Platforms view={makeView()} onSaved={() => {}} />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(el.textContent).toContain('7.2 Mbps')
+
+    // Switching conn must drop connA's tagged fetchedSettings immediately instead of leaking 7.2 Mbps.
+    await act(async () => {
+      useLive.setState({ conn: connB as never })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(el.textContent).not.toContain('7.2 Mbps')
+    expect(el.textContent).toContain('6.2 Mbps')
   })
 })

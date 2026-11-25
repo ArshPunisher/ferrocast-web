@@ -604,4 +604,205 @@ describe('MediaCheckStep microphone meter & connection states (W4)', () => {
       'No sound from Mic C yet. Say something, or check the mic is not muted.',
     )
   })
+
+  it('discovers macos-avcapture and macos-avcapture-fast camera kinds', async () => {
+    for (const camKind of ['macos-avcapture', 'macos-avcapture-fast'] as const) {
+      const engine = makeEngine({
+        kinds: vi.fn(async () => ({
+          inputs: [
+            { id: camKind, name: 'macOS Video Capture' },
+            { id: 'coreaudio_input_capture', name: 'Mic' },
+          ],
+          filters: [],
+        })),
+        options: vi.fn(async (kind: string) =>
+          kind === camKind
+            ? [
+                {
+                  key: 'device',
+                  label: 'Device',
+                  type: 'list',
+                  choices: ['Studio Camera'],
+                  values: ['studio-cam'],
+                },
+              ]
+            : [
+                {
+                  key: 'device_id',
+                  label: 'Device',
+                  type: 'list',
+                  choices: ['Built-in Mic'],
+                  values: ['builtin-mic'],
+                },
+              ],
+        ),
+      })
+
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(
+          <MediaCheckStep
+            engine={engine as never}
+            headingId="h"
+            headingRef={{ current: null }}
+            onBack={() => {}}
+            onContinue={() => {}}
+          />,
+        )
+        await flush()
+      })
+
+      expect(engine.sourceStill).toHaveBeenCalledWith(
+        camKind,
+        'device',
+        'studio-cam',
+        480,
+        expect.any(AbortSignal),
+      )
+      await act(async () => root?.unmount())
+      root = null
+    }
+  })
+
+  it('passes fresh: true only on manual Refresh frame clicks, not automatic polls', async () => {
+    const sourceStill = vi.fn<
+      (
+        kind: string,
+        key: string,
+        value: string,
+        w: number,
+        signal?: AbortSignal,
+        opts?: { fresh?: boolean },
+      ) => Promise<{ image: string }>
+    >(async (_k, _key, _val, _w, _sig, opts) => ({
+      image: opts?.fresh ? FRAME_B : FRAME_A,
+    }))
+    const engine = makeEngine({ sourceStill })
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+
+    expect(sourceStill).toHaveBeenCalledTimes(1)
+    expect(sourceStill.mock.calls[0]?.[5]).toBeUndefined()
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_A)
+
+    const refreshFrameBtn = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Refresh frame'),
+    )
+    expect(refreshFrameBtn).toBeDefined()
+
+    await act(async () => {
+      refreshFrameBtn!.click()
+      await flush()
+    })
+
+    expect(sourceStill).toHaveBeenCalledTimes(2)
+    expect(sourceStill.mock.calls[1]?.[5]).toEqual({ fresh: true })
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_B)
+  })
+
+  it('offers Refresh devices buttons when devices exist and re-probes quietly on click and window focus', async () => {
+    let camChoices = ['Built-in FaceTime']
+    let camValues = ['facetime']
+    let micChoices = ['Built-in Mic']
+    let micValues = ['builtin-mic']
+
+    const engine = makeEngine({
+      options: vi.fn(async (kind: string) =>
+        kind === 'av_capture_input_v2'
+          ? [
+              {
+                key: 'device',
+                label: 'Device',
+                type: 'list',
+                choices: camChoices,
+                values: camValues,
+              },
+            ]
+          : [
+              {
+                key: 'device_id',
+                label: 'Device',
+                type: 'list',
+                choices: micChoices,
+                values: micValues,
+              },
+            ],
+      ),
+      settings: vi.fn(async () => ({ device_id: 'builtin-mic' })),
+    })
+
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MediaCheckStep
+          engine={engine as never}
+          headingId="h"
+          headingRef={{ current: null }}
+          onBack={() => {}}
+          onContinue={() => {}}
+        />,
+      )
+      await flush()
+    })
+
+    const refreshButtons = () =>
+      [...host.querySelectorAll('button')].filter(
+        (b) =>
+          b.getAttribute('aria-label') === 'Refresh devices' ||
+          b.textContent?.includes('Refresh devices'),
+      )
+
+    // Both Camera preview and Microphone sections expose Refresh devices even when only 1 device exists.
+    expect(refreshButtons().length).toBe(2)
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_A)
+
+    // Plug in an iPhone camera and focus the window -> discovers iPhone without wiping preview.
+    camChoices = ['Built-in FaceTime', 'iPhone Camera']
+    camValues = ['facetime', 'iphone']
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await flush()
+    })
+
+    const camSelect = host.querySelector<HTMLSelectElement>('select[aria-label="Choose camera"]')
+    expect(camSelect).not.toBeNull()
+    expect([...camSelect!.options].map((o) => o.textContent)).toEqual([
+      'Built-in FaceTime',
+      'iPhone Camera',
+    ])
+    expect(camSelect!.value).toBe('facetime')
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(FRAME_A)
+
+    // Plug in a USB mic and click Refresh devices -> mic dropdown appears and active session stays intact.
+    micChoices = ['Built-in Mic', 'USB Podcast Mic']
+    micValues = ['builtin-mic', 'usb-mic']
+
+    await act(async () => {
+      refreshButtons()[1]!.click()
+      await flush()
+    })
+
+    const micSelect = host.querySelector<HTMLSelectElement>(
+      'select[aria-label="Choose microphone"]',
+    )
+    expect(micSelect).not.toBeNull()
+    expect([...micSelect!.options].map((o) => o.textContent)).toEqual([
+      'Built-in Mic',
+      'USB Podcast Mic',
+    ])
+    expect(micSelect!.value).toBe('builtin-mic')
+  })
 })

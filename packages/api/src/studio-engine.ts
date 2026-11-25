@@ -1428,10 +1428,11 @@ export function studioEngineApi(c: FerroClient) {
       value: string | number,
       w = 240,
       signal?: AbortSignal,
+      opts?: { fresh?: boolean | undefined },
     ) =>
       c.request<StillResult>(
         'GET',
-        `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
+        `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}${opts?.fresh ? '&fresh=1' : ''}`,
         undefined,
         undefined,
         signal ? { signal } : undefined,

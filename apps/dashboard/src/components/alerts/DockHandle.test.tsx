@@ -2,7 +2,7 @@
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LEFT_DOCK } from '../../lib/dock-size'
+import { LEFT_DOCK, RIGHT_DOCK } from '../../lib/dock-size'
 import { DockHandle, useDockWidth } from './DockHandle'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -81,5 +81,55 @@ describe('useDockWidth & DockHandle stability', () => {
     expect(seenReset[2]).toBe(seenReset[0])
     expect(observe).toHaveBeenCalledTimes(1)
     expect(disconnect).not.toHaveBeenCalled()
+  })
+
+  it('does not run viewport clamp or overwrite saved dock widths below lg (< 1024 px)', async () => {
+    localStorage.setItem(LEFT_DOCK.key, '340')
+    localStorage.setItem(RIGHT_DOCK.key, '480')
+    vi.stubGlobal('innerWidth', 375)
+
+    const onResize = vi.fn()
+    function Harness() {
+      const left = useDockWidth(LEFT_DOCK)
+      const right = useDockWidth(RIGHT_DOCK)
+      return (
+        <>
+          <DockHandle
+            spec={LEFT_DOCK}
+            label="Left"
+            width={left.width}
+            otherWidth={right.width}
+            growsRight={1}
+            onResize={(w, other) => {
+              onResize(w, other)
+              left.set(w, other)
+            }}
+            onReset={left.reset}
+          />
+          <DockHandle
+            spec={RIGHT_DOCK}
+            label="Right"
+            width={right.width}
+            otherWidth={left.width}
+            growsRight={-1}
+            onResize={(w, other) => {
+              onResize(w, other)
+              right.set(w, other)
+            }}
+            onReset={right.reset}
+          />
+        </>
+      )
+    }
+
+    await act(async () => root!.render(<Harness />))
+    await act(async () => {
+      vi.stubGlobal('innerWidth', 768)
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(onResize).not.toHaveBeenCalled()
+    expect(localStorage.getItem(LEFT_DOCK.key)).toBe('340')
+    expect(localStorage.getItem(RIGHT_DOCK.key)).toBe('480')
   })
 })

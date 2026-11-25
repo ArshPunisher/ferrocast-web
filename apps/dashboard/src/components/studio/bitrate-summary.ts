@@ -91,7 +91,6 @@ function sharesMainEncode(d: DestinationCapInput): boolean {
   return (
     d.enabled &&
     (d.canvas ?? 'main') === 'main' &&
-    !d.direct &&
     !d.light &&
     !d.lighter_for_route &&
     !d.blocked &&
@@ -335,8 +334,8 @@ export function describeDestinationRate(
     capActive &&
     !d.capped &&
     limiter &&
-    d.id === limiter.id &&
     ownCap !== null &&
+    ownCap === limiter.kbps &&
     summary.chosenVideoKbps !== null &&
     summary.chosenVideoKbps > ownCap
       ? {

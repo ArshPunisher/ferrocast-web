@@ -42,6 +42,7 @@ import { pairedSound } from './add-source'
 import { SOUND_ONLY, useDesk, useEngine } from './common'
 import { Band, NumBox, Pad, Prop } from './drawer-kit'
 import { OptionsForm, valueOf } from './options'
+import { itemFor } from './shown-in'
 
 /** `@` entries are drawn by hand: the countdown's length, a video's file and player, a key
  *  layout picker. */
@@ -543,9 +544,9 @@ function ItsSound({
 /** A camera seen as in a mirror: its picture flipped sideways in this scene (the Position
  *  tab's Flip across, here where people look for it). */
 function Mirror({ name }: { name: string }) {
-  const { api, scene, items, refresh, undone } = useDesk()
+  const { api, scene, items, refresh, undone, selected } = useDesk()
   const { run, busy } = useAction()
-  const item = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)
+  const item = itemFor(items.data ?? [], name, selected)
   const [on, setOn] = useState<boolean | null>(null)
   const id = item?.id
   useEffect(() => {
@@ -1033,8 +1034,8 @@ export function SourcePreview({
   const api = useEngine()
   const fapi = useFilterApi(name)
   // The still is the source's own picture; a flip (Mirror) is the scene's, shown here too.
-  const { items } = useDesk()
-  const frame = items.data?.flatMap((i) => [i, ...i.children]).find((i) => i.name === name)?.frame
+  const { items, selected } = useDesk()
+  const frame = itemFor(items.data ?? [], name, selected)?.frame
   const flip = frame ? `scale(${frame[0] < 0 ? -1 : 1}, ${frame[3] < 0 ? -1 : 1})` : undefined
   type Pic = { image: string | null; width?: number; height?: number }
   const [pic, setPic] = useState<Pic | null>(null)
