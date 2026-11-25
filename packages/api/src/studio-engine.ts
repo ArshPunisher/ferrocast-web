@@ -1025,6 +1025,13 @@ export interface EngineCaptureProblem {
   problem: 'permission' | 'no_picture' | 'black'
 }
 
+/** One-shot still frame answer for a capture device or window in setup/pickers. */
+export interface StillResult {
+  image: string | null
+  waiting?: boolean
+  error?: string | null
+}
+
 export interface EngineStats {
   engine: {
     cpu: number
@@ -1422,7 +1429,7 @@ export function studioEngineApi(c: FerroClient) {
       w = 240,
       signal?: AbortSignal,
     ) =>
-      c.request<{ image: string | null; error?: string | null }>(
+      c.request<StillResult>(
         'GET',
         `/api/v1/studio/engine/still?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(String(value))}&w=${w}`,
         undefined,

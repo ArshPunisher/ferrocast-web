@@ -471,6 +471,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
             streamlabsPreset: colPreset(params.get('sl')) ?? 'normal',
             hasCamera: params.get('cam') !== 'none',
             cameraDenied: params.get('cam') === 'denied',
+            cameraSleeping: params.get('cam') === 'sleeping',
             hasMic: params.get('mic') !== 'none',
             micPreset: micPresetParam(params.get('mic')) ?? 'quiet',
           },

@@ -39,6 +39,7 @@ import {
   type LimitedBy,
   type NewEngineSource,
   type RollbackTrigger,
+  type StillResult,
 } from '../../studio-engine'
 import type { Service, UploadCheck } from '../../golive'
 import { HttpError } from '../http-error'
@@ -3714,7 +3715,7 @@ export class DemoStudioEngine {
     }
   }
 
-  stillForDevice(device: string | null): { image: string | null; error?: string | null } {
+  stillForDevice(device: string | null): StillResult {
     if (!this.opts.hasCamera) {
       throw new HttpError(404, 'studio_no_source', 'No camera is available on this computer.')
     }
@@ -3724,7 +3725,7 @@ export class DemoStudioEngine {
         error:
           'The camera is turned off for Ferrocast. Open System Settings, Privacy & Security, Camera, turn Ferrocast on, then press Retry.',
       }
-    if (this.opts.cameraSleeping) return { image: null }
+    if (this.opts.cameraSleeping) return { image: null, waiting: true, error: null }
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
   }
 

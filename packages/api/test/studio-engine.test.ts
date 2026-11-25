@@ -200,6 +200,43 @@ describe('the Studio engine in the demo (no desktop app)', () => {
     )
     expect(calls[1]?.signal).toBe(ac.signal)
   })
+
+  it('returns waiting:true when cameraSleeping in DemoStudioEngine and error only when cameraDenied', async () => {
+    const sleeping = new DemoEngine({
+      autoplay: false,
+      latencyMs: 0,
+      studioEngine: { cameraSleeping: true },
+    })
+    const denied = new DemoEngine({
+      autoplay: false,
+      latencyMs: 0,
+      studioEngine: { cameraDenied: true },
+    })
+    try {
+      const sleepApi = studioEngineApi(
+        new FerroClient({ base: sleeping.base, token: DEMO_TOKEN, fetch: sleeping.fetch }),
+      )
+      const deniedApi = studioEngineApi(
+        new FerroClient({ base: denied.base, token: DEMO_TOKEN, fetch: denied.fetch }),
+      )
+      await expect(
+        sleepApi.sourceStill('av_capture_input_v2', 'device', 'cam-facetime', 240),
+      ).resolves.toEqual({ image: null, waiting: true, error: null })
+
+      const errRes = await deniedApi.sourceStill(
+        'av_capture_input_v2',
+        'device',
+        'cam-facetime',
+        240,
+      )
+      expect(errRes.image).toBeNull()
+      expect(errRes.waiting).toBeFalsy()
+      expect(errRes.error).toContain('turned off for Ferrocast')
+    } finally {
+      sleeping.dispose()
+      denied.dispose()
+    }
+  })
 })
 
 describe('simulated Studio engine in demo mode (studioEngine option)', () => {
