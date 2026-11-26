@@ -173,7 +173,7 @@ function pointerEvt(type: string, init: PointerEventInit & { clientX?: number; c
 }
 
 describe('ScenesDock Studio Mode footer actions (Extra bug #3)', () => {
-  it('moves, copies, and removes the selected preview scene instead of the on-air scene', async () => {
+  it('moves, copies, and removes the selected preview scene instead of the on-air scene and marks on-air overlap', async () => {
     const data: EngineScenes = {
       current: 'Main',
       preview: 'Chatting',
@@ -189,18 +189,10 @@ describe('ScenesDock Studio Mode footer actions (Extra bug #3)', () => {
     }
     const { host, api } = await mountScenes(data)
 
-    const up = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Move the preview scene up"]',
-    )
-    const down = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Move the preview scene down"]',
-    )
-    const copy = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Copy the preview scene"]',
-    )
-    const remove = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove the preview scene"]',
-    )
+    const up = host.querySelector<HTMLButtonElement>('button[aria-label="Move Chatting up"]')
+    const down = host.querySelector<HTMLButtonElement>('button[aria-label="Move Chatting down"]')
+    const copy = host.querySelector<HTMLButtonElement>('button[aria-label="Copy Chatting"]')
+    const remove = host.querySelector<HTMLButtonElement>('button[aria-label="Remove Chatting"]')
     expect(up).toBeTruthy()
     expect(down).toBeTruthy()
     expect(copy).toBeTruthy()
@@ -211,6 +203,9 @@ describe('ScenesDock Studio Mode footer actions (Extra bug #3)', () => {
     await act(async () => up!.click())
     await flush()
     expect(api.moveScene).toHaveBeenCalledWith('Chatting', 1)
+    expect(host.querySelector('[role="status"][aria-live="polite"]')?.textContent).toContain(
+      'Moved Chatting to position 2 of 4',
+    )
 
     await act(async () => down!.click())
     await flush()
@@ -229,6 +224,24 @@ describe('ScenesDock Studio Mode footer actions (Extra bug #3)', () => {
     await flush()
     expect(api.removeScene).toHaveBeenCalledWith('Chatting')
     expect(api.setPreview).toHaveBeenCalledWith('Main')
+
+    // When preview === current, Remove label explicitly notes that the scene is also on air.
+    const samePreview: EngineScenes = {
+      ...data,
+      preview: 'Main',
+      scenes: [
+        makeScene('Main', { current: true, preview: true }),
+        makeScene('Gameplay'),
+        makeScene('Chatting'),
+        makeScene('BRB'),
+      ],
+    }
+    const mountedSame = await mountScenes(samePreview)
+    expect(
+      mountedSame.host.querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove Main (on air)"]',
+      ),
+    ).toBeTruthy()
   })
 })
 
@@ -654,12 +667,103 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
 
     // Alt+ArrowUp at index 0 is a no-op with zero moveScene calls.
     const mainBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Main"] button')!
+    expect(mainBtn.getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowUp Alt+ArrowDown')
     mainBtn.focus()
     await act(async () => {
       mainBtn.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }),
       )
     })
+    expect(api.moveScene).toHaveBeenCalledTimes(1)
+
+    // Modifier conflicts (Option+Shift+Arrow, Cmd+Ctrl+Shift+Arrow) do not reorder.
+    await act(async () => {
+      movedBtn.focus()
+      movedBtn.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowUp',
+          altKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      )
+      movedBtn.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowUp',
+          ctrlKey: true,
+          shiftKey: true,
+          metaKey: true,
+          bubbles: true,
+        }),
+      )
+    })
+    expect(api.moveScene).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not announce failed moves, clears pendingFocus on failure/blur, and supports Alt+ArrowLeft/Right in grid mode', async () => {
+    const { desk, host, api } = await mountScenes(sample, {
+      moveScene: vi.fn(async () => {
+        throw new Error('engine busy')
+      }),
+    })
+    const chatBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Chatting"] button')!
+    const otherBtn = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add a scene"]',
+    ) as HTMLButtonElement | null
+    const focusTarget =
+      otherBtn ?? host.querySelector<HTMLButtonElement>('button[aria-label="Move Main down"]')!
+    chatBtn.focus()
+
+    await act(async () => {
+      chatBtn.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    // Failed moveScene must not lie in aria-live.
+    expect(host.querySelector('[role="status"][aria-live="polite"]')?.textContent ?? '').toBe('')
+
+    // Move focus elsewhere, then simulate background poll list update: focus must NOT be yanked back to Chatting.
+    focusTarget.focus()
+    expect(document.activeElement).toBe(focusTarget)
+    await act(async () => {
+      root!.render(
+        <DeskProvider
+          value={{
+            ...desk,
+            scenes: {
+              ...desk.scenes,
+              data: {
+                ...sample,
+                scenes: [...sample.scenes],
+              },
+            },
+          }}
+        >
+          <ScenesDock />
+        </DeskProvider>,
+      )
+    })
+    expect(document.activeElement).toBe(focusTarget)
+
+    // Grid mode supports Alt+ArrowLeft/Right and exposes arrow shortcuts in aria-keyshortcuts.
+    localStorage.setItem('fc-studio-scenes-grid', '1')
+    const gridMount = await mountScenes(sample)
+    const gridMain = gridMount.host.querySelector<HTMLButtonElement>(
+      '[data-scene-name="Main"] button',
+    )!
+    expect(gridMain.getAttribute('aria-keyshortcuts')).toBe(
+      'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight',
+    )
+    gridMain.focus()
+    await act(async () => {
+      gridMain.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+    expect(gridMount.api.moveScene).toHaveBeenCalledWith('Main', 1)
     expect(api.moveScene).toHaveBeenCalledTimes(1)
   })
 })

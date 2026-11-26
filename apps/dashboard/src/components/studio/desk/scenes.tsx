@@ -137,7 +137,8 @@ export function ScenesDock() {
   const current = (tall ? tall.current : scenes.data?.current) ?? ''
   const preview = (studio ? scenes.data?.preview : null) ?? ''
   const selected = studio && preview ? preview : current
-  const targetNoun = studio ? 'preview scene' : 'scene on air'
+  const targetLabel = selected || (studio ? 'preview scene' : 'scene on air')
+  const onAirNote = selected && selected === current ? ' (on air)' : ''
   // The top layer is the main picture's (not the vertical one's).
   const top = tall ? null : (scenes.data?.top_layer ?? null)
   const names = list?.map((s) => s.name) ?? []
@@ -157,7 +158,28 @@ export function ScenesDock() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const btnRefs = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocus = useRef<string | null>(null)
-  const [liveMsg, setLiveMsg] = useState('')
+  const [liveMsg, setLiveMsg] = useState<{ text: string; seq: number } | null>(null)
+
+  const announceMove = useCallback((name: string, to: number, total: number) => {
+    setLiveMsg((prev) => ({
+      text: `Moved ${name} to position ${to + 1} of ${total}`,
+      seq: (prev?.seq ?? 0) + 1,
+    }))
+  }, [])
+
+  const moveSceneTo = useCallback(
+    (name: string, to: number, total: number, keepFocus = false) => {
+      if (keepFocus) pendingFocus.current = name
+      void act(`move:${name}`, () => api.moveScene(name, to)).then((ok) => {
+        if (ok) {
+          announceMove(name, to, total)
+        } else if (keepFocus && pendingFocus.current === name) {
+          pendingFocus.current = null
+        }
+      })
+    },
+    [act, announceMove, api],
+  )
 
   type SceneDrop = { name: string; after: boolean; to: number }
   const dragged = useRef<{
@@ -469,8 +491,7 @@ export function ScenesDock() {
       setGhost(null)
       setDrop(null)
       if (!next) return
-      setLiveMsg(`Moved ${d.name} to position ${next.to + 1} of ${names.length}`)
-      void act(`move:${d.name}`, () => api.moveScene(d.name, next.to))
+      moveSceneTo(d.name, next.to, names.length)
     },
     cancel: (releasedNow = true) => {
       cancelDrag(releasedNow)
@@ -600,25 +621,25 @@ export function ScenesDock() {
             label: 'Up',
             icon: CaretUp,
             disabled: i <= 0,
-            onSelect: () => void act('up', () => api.moveScene(name, i - 1)),
+            onSelect: () => moveSceneTo(name, i - 1, names.length),
           },
           {
             label: 'Down',
             icon: CaretDown,
             disabled: i >= names.length - 1,
-            onSelect: () => void act('down', () => api.moveScene(name, i + 1)),
+            onSelect: () => moveSceneTo(name, i + 1, names.length),
           },
           {
             label: 'To the top',
             icon: CaretDoubleUp,
             disabled: i <= 0,
-            onSelect: () => void act('top', () => api.moveScene(name, 0)),
+            onSelect: () => moveSceneTo(name, 0, names.length),
           },
           {
             label: 'To the bottom',
             icon: CaretDoubleDown,
             disabled: i >= names.length - 1,
-            onSelect: () => void act('bottom', () => api.moveScene(name, names.length - 1)),
+            onSelect: () => moveSceneTo(name, names.length - 1, names.length),
           },
         ],
       },
@@ -748,7 +769,7 @@ export function ScenesDock() {
         </div>
       )}
       <p role="status" aria-live="polite" className="sr-only">
-        {liveMsg}
+        {liveMsg ? <span key={liveMsg.seq}>{liveMsg.text}</span> : null}
       </p>
       <DockHeader
         id="scenes"
@@ -833,6 +854,11 @@ export function ScenesDock() {
                 : // Narrow (owner's pick N1): the extras go first, the name keeps its room.
                   '@container flex flex-col',
             )}
+            onBlur={(e) => {
+              if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node)) {
+                pendingFocus.current = null
+              }
+            }}
             aria-label={
               studio ? 'Scenes, click to show in the preview' : 'Scenes, click to go on air'
             }
@@ -885,6 +911,13 @@ export function ScenesDock() {
                       }}
                       type="button"
                       aria-current={s.current ? 'true' : undefined}
+                      aria-keyshortcuts={
+                        canDrag
+                          ? grid
+                            ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight'
+                            : 'Alt+ArrowUp Alt+ArrowDown'
+                          : undefined
+                      }
                       title={grid ? s.name : undefined}
                       onClick={() => {
                         if (suppressRef.current) return
@@ -914,20 +947,21 @@ export function ScenesDock() {
                           setNaming({ from: s.name, value: s.name })
                           return
                         }
-                        const dir = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+                        const dir =
+                          e.key === 'ArrowUp' || (grid && e.key === 'ArrowLeft')
+                            ? -1
+                            : e.key === 'ArrowDown' || (grid && e.key === 'ArrowRight')
+                              ? 1
+                              : 0
                         if (
                           dir !== 0 &&
-                          ((e.altKey && !e.ctrlKey && !e.metaKey) ||
-                            (e.ctrlKey && e.shiftKey && !e.altKey))
+                          ((e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) ||
+                            (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey))
                         ) {
                           e.preventDefault()
                           const nextIdx = i + dir
                           if (!canDrag || nextIdx < 0 || nextIdx >= names.length) return
-                          pendingFocus.current = s.name
-                          setLiveMsg(
-                            `Moved ${s.name} to position ${nextIdx + 1} of ${names.length}`,
-                          )
-                          void act(`move:${s.name}`, () => api.moveScene(s.name, nextIdx))
+                          moveSceneTo(s.name, nextIdx, names.length, true)
                         }
                       }}
                       className={cx(
@@ -1066,23 +1100,23 @@ export function ScenesDock() {
       <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
         <IconButton
           size="sm"
-          label={`Move the ${targetNoun} up`}
+          label={`Move ${targetLabel} up`}
           disabled={at <= 0 || busy !== null}
-          onClick={() => void act('up', () => api.moveScene(selected, at - 1))}
+          onClick={() => moveSceneTo(selected, at - 1, names.length)}
         >
           <CaretUp size={15} />
         </IconButton>
         <IconButton
           size="sm"
-          label={`Move the ${targetNoun} down`}
+          label={`Move ${targetLabel} down`}
           disabled={at < 0 || at >= names.length - 1 || busy !== null}
-          onClick={() => void act('down', () => api.moveScene(selected, at + 1))}
+          onClick={() => moveSceneTo(selected, at + 1, names.length)}
         >
           <CaretDown size={15} />
         </IconButton>
         <IconButton
           size="sm"
-          label={`Copy the ${targetNoun}`}
+          label={`Copy ${targetLabel}`}
           disabled={!selected || busy !== null}
           onClick={() =>
             void act('copy', () => api.duplicateScene(selected, freeName(selected, names)))
@@ -1095,7 +1129,7 @@ export function ScenesDock() {
           size="sm"
           variant="ghost"
           className="hover:bg-danger-soft hover:text-danger"
-          label={`Remove the ${targetNoun}`}
+          label={`Remove ${targetLabel}${onAirNote}`}
           disabled={names.length < 2 || !selected || busy !== null}
           onClick={() => setRemoving(selected)}
         >
