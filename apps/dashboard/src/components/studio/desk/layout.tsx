@@ -16,6 +16,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import {
   ArrowDown,
@@ -26,7 +27,15 @@ import {
   DotsSixVertical,
   DotsThree,
 } from '@phosphor-icons/react'
-import { IconButton, PopoverSurface, Segmented, cx, usePreviewHole } from '@ferrocast/ui'
+import {
+  IconButton,
+  PopoverSurface,
+  Segmented,
+  cx,
+  dispatchDividerDrag,
+  notifyPreviewOverlays,
+  usePreviewHole,
+} from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
 import { ReadyPlacementContext } from './ready-check'
 import { useReadyCheckState } from './ready-check-state'
@@ -127,8 +136,43 @@ export function fresh(p: Preset): Layout {
 
 const KEY = 'fc-studio-layout'
 
+const MIN_FLOAT_W = 224
+const MIN_FLOAT_H = 160
+const FLOAT_EDGE = 8
+
+const dockVar = (id: DockId) => `--fc-dock-${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+
+export function clampFloat(
+  f: Float,
+  vw = typeof window !== 'undefined' ? window.innerWidth : 0,
+  vh = typeof window !== 'undefined' ? window.innerHeight : 0,
+): Float {
+  const rawW = Number.isFinite(f.w) ? Math.round(f.w) : 320
+  const rawH = Number.isFinite(f.h) ? Math.round(f.h) : 240
+  const rawX = Number.isFinite(f.x) ? Math.round(f.x) : FLOAT_EDGE
+  const rawY = Number.isFinite(f.y) ? Math.round(f.y) : FLOAT_EDGE
+  if (vw <= 0 || vh <= 0) {
+    return {
+      x: Math.max(0, rawX),
+      y: Math.max(0, rawY),
+      w: Math.max(MIN_FLOAT_W, rawW),
+      h: Math.max(MIN_FLOAT_H, rawH),
+    }
+  }
+  const maxW = Math.max(MIN_FLOAT_W, vw - FLOAT_EDGE * 2)
+  const maxH = Math.max(MIN_FLOAT_H, vh - FLOAT_EDGE * 2)
+  const w = clamp(rawW, MIN_FLOAT_W, maxW)
+  const h = clamp(rawH, MIN_FLOAT_H, maxH)
+  const x = clamp(rawX, FLOAT_EDGE, Math.max(FLOAT_EDGE, vw - w - FLOAT_EDGE))
+  const y = clamp(rawY, FLOAT_EDGE, Math.max(FLOAT_EDGE, vh - h - FLOAT_EDGE))
+  return { x, y, w, h }
+}
+
 /** A saved layout, cleaned: panels it doesn't know start hidden, ones gone are dropped. */
-export function revive(v: Partial<Layout> | null): Layout {
+export function revive(
+  v: Partial<Layout> | null,
+  viewport?: { vw?: number; vh?: number },
+): Layout {
   if (!v || !Array.isArray(v.left) || !Array.isArray(v.right) || !Array.isArray(v.bottom))
     return fresh('side')
   const webs = (Array.isArray(v.webs) ? v.webs : []).filter(
@@ -137,7 +181,12 @@ export function revive(v: Partial<Layout> | null): Layout {
   const known = new Set<string>([...BUILT_INS, ...webs.map((d) => d.id)])
   const keep = (ids: DockId[] | undefined) => (ids ?? []).filter((d) => known.has(d))
   const float = Object.fromEntries(
-    Object.entries(v.float ?? {}).filter(([d]) => known.has(d)),
+    Object.entries(v.float ?? {})
+      .filter((entry): entry is [string, Float] => {
+        const [d, rect] = entry
+        return known.has(d) && Boolean(rect && typeof rect === 'object')
+      })
+      .map(([d, rect]) => [d, clampFloat(rect, viewport?.vw, viewport?.vh)]),
   ) as Layout['float']
   const l: Layout = {
     ...fresh('side'),
@@ -350,6 +399,8 @@ interface LayoutApi {
   /** Starts dragging a panel by its title bar. */
   grab: (id: DockId, e: ReactPointerEvent) => void
   narrow: boolean
+  phone: boolean
+  wsRef: RefObject<HTMLDivElement | null>
 }
 
 const Ctx = createContext<LayoutApi | null>(null)
@@ -366,12 +417,12 @@ export function moveTo(l: Layout, id: DockId, region: Region): Layout {
 }
 
 export function popOut(l: Layout, id: DockId, at: { x: number; y: number }): Layout {
-  // Kept inside the window, whole.
-  const w = 320
-  const h = Math.min(380, window.innerHeight - 16)
-  const x = Math.max(8, Math.min(at.x, window.innerWidth - w - 8))
-  const y = Math.max(8, Math.min(at.y, window.innerHeight - h - 8))
-  return { ...without(l, id), float: { ...l.float, [id]: { x, y, w, h } }, preset: null }
+  const h =
+    typeof window !== 'undefined' && window.innerHeight > 0
+      ? Math.min(380, Math.max(MIN_FLOAT_H, window.innerHeight - 16))
+      : 380
+  const next = clampFloat({ x: at.x, y: at.y, w: 320, h })
+  return { ...without(l, id), float: { ...l.float, [id]: next }, preset: null }
 }
 
 export function toggle(l: Layout, id: DockId): Layout {
@@ -403,44 +454,77 @@ export function DockWorkspace({
   corner?: ReactNode
 }) {
   const [layout, setRaw] = useState<Layout>(load)
-  const narrow = useMediaQuery('(max-width: 899px)')
+  const compact = useMediaQuery('(max-width: 899px)')
+  const phone = useMediaQuery('(max-width: 639px)')
   const readyState = useReadyCheckState()
   const hasFloatingReady = Boolean(readyState?.active && !readyState.dismissed)
   const ws = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState<number | null>(null)
   const setLayout = useCallback((f: (l: Layout) => Layout) => {
     setRaw((l) => {
       const n = f(l)
+      if (n === l) return l
       save(n)
       return n
     })
   }, [])
 
-  // Fills the window below where it starts, down to the page's own gap at the bottom: the
-  // page doesn't scroll and no space is left over. Followed when the bar above changes height.
+  // Keep layout panel sizes in CSS custom properties so divider drags run without React renders.
   useLayoutEffect(() => {
     const el = ws.current
-    if (!el || narrow) return
-    const fit = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY
-      const main = el.closest('main')
-      const gap = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 20
-      setHeight(Math.max(420, Math.floor(window.innerHeight - top - gap)))
+    if (!el) return
+    el.style.setProperty('--fc-lw', `${layout.lw}px`)
+    el.style.setProperty('--fc-rw', `${layout.rw}px`)
+    el.style.setProperty('--fc-bh', `${layout.bh}px`)
+    for (const [id, weight] of Object.entries(layout.w)) {
+      if (typeof weight === 'number' && Number.isFinite(weight)) {
+        el.style.setProperty(dockVar(id as DockId), String(weight))
+      }
     }
-    fit()
-    window.addEventListener('resize', fit)
-    const ro = new ResizeObserver(fit)
-    if (el.parentElement) ro.observe(el.parentElement)
-    for (const s of [...(el.parentElement?.children ?? [])]) if (s !== el) ro.observe(s)
-    // The window's status bar coming or going changes the room below (--fc-statusbar).
-    const mo = new MutationObserver(fit)
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
+  }, [layout.lw, layout.rw, layout.bh, layout.w])
+
+  // Re-clamp floating docks whenever the viewport shrinks.
+  useEffect(() => {
+    if (Object.keys(layout.float).length === 0) return
+    let raf = 0
+    const clampAll = () => {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      setLayout((l) => {
+        let changed = false
+        const nextFloat: Layout['float'] = { ...l.float }
+        for (const [k, rect] of Object.entries(l.float) as [DockId, Float][]) {
+          if (!rect) continue
+          const clamped = clampFloat(rect, vw, vh)
+          if (
+            clamped.x !== rect.x ||
+            clamped.y !== rect.y ||
+            clamped.w !== rect.w ||
+            clamped.h !== rect.h
+          ) {
+            nextFloat[k] = clamped
+            changed = true
+          }
+        }
+        return changed ? { ...l, float: nextFloat } : l
+      })
+    }
+    const onResize = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        clampAll()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        clampAll()
+      })
+    }
+    window.addEventListener('resize', onResize)
     return () => {
-      window.removeEventListener('resize', fit)
-      ro.disconnect()
-      mo.disconnect()
+      if (raf) cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
     }
-  }, [narrow])
+  }, [layout.float, setLayout])
 
   const [drag, setDrag] = useState<{ id: DockId; x: number; y: number; t: Target | null } | null>(
     null,
@@ -543,12 +627,39 @@ export function DockWorkspace({
 
   const grab = useCallback(
     (id: DockId, e: ReactPointerEvent) => {
-      if (layout.locked || narrow || e.button !== 0) return
+      if (layout.locked || compact || e.button !== 0) return
       const x0 = e.clientX
       const y0 = e.clientY
       const floating = layout.float[id]
       let going = false
       let t: Target | null = null
+      let nextFloat: Float | null = floating ? clampFloat(floating) : null
+      let dragRaf = 0
+      let latestX = x0
+      let latestY = y0
+      const floatEl = floating
+        ? document.querySelector<HTMLElement>(`[data-dock="${CSS.escape(id)}"][data-over-preview]`)
+        : null
+
+      const flushMove = () => {
+        dragRaf = 0
+        t = targetAt(latestX, latestY, id)
+        if (floating) {
+          const clamped = clampFloat({
+            ...floating,
+            x: floating.x + latestX - x0,
+            y: floating.y + latestY - y0,
+          })
+          nextFloat = clamped
+          if (floatEl) {
+            floatEl.style.left = `${clamped.x}px`
+            floatEl.style.top = `${clamped.y}px`
+            floatEl.dataset.pos = `${clamped.x},${clamped.y},${clamped.w},${clamped.h}`
+          }
+        }
+        setDrag({ id, x: latestX, y: latestY, t })
+      }
+
       const move = (m: PointerEvent) => {
         if (!going && Math.hypot(m.clientX - x0, m.clientY - y0) < 5) return
         if (!going) {
@@ -558,19 +669,20 @@ export function DockWorkspace({
           // No text gets selected while dragging.
           document.body.style.userSelect = 'none'
         }
-        t = targetAt(m.clientX, m.clientY, id)
-        if (floating) {
-          setRaw((l) => ({
-            ...l,
-            float: {
-              ...l.float,
-              [id]: { ...floating, x: floating.x + m.clientX - x0, y: floating.y + m.clientY - y0 },
-            },
-          }))
+        latestX = m.clientX
+        latestY = m.clientY
+        if (dragRaf) return
+        if (typeof requestAnimationFrame !== 'function') {
+          flushMove()
+          return
         }
-        setDrag({ id, x: m.clientX, y: m.clientY, t })
+        dragRaf = requestAnimationFrame(flushMove)
       }
       const end = () => {
+        if (dragRaf) {
+          cancelAnimationFrame(dragRaf)
+          dragRaf = 0
+        }
         document.removeEventListener('pointermove', move)
         document.removeEventListener('pointerup', up)
         document.removeEventListener('pointercancel', end)
@@ -580,12 +692,26 @@ export function DockWorkspace({
       }
       // The system took the pointer (a touch turned into a scroll): nothing moves.
       const up = (u: PointerEvent) => {
+        if (going) {
+          latestX = u.clientX
+          latestY = u.clientY
+          t = targetAt(latestX, latestY, id)
+          if (floating) {
+            nextFloat = clampFloat({
+              ...floating,
+              x: floating.x + latestX - x0,
+              y: floating.y + latestY - y0,
+            })
+          }
+        }
         end()
         if (!going) return
         setLayout((l) => {
           const target = t
           if (!target) {
-            if (l.float[id]) return l
+            if (l.float[id]) {
+              return nextFloat ? { ...l, float: { ...l.float, [id]: nextFloat } } : l
+            }
             return popOut(l, id, { x: Math.max(8, u.clientX - 60), y: Math.max(8, u.clientY - 16) })
           }
           if (target.at === id) return l
@@ -603,52 +729,17 @@ export function DockWorkspace({
       document.addEventListener('pointerup', up)
       document.addEventListener('pointercancel', end)
     },
-    [layout.float, layout.locked, narrow, setLayout, targetAt],
+    [compact, layout.float, layout.locked, setLayout, targetAt],
   )
 
-  const api: LayoutApi = { layout, setLayout, grab, narrow }
+  const api: LayoutApi = { layout, setLayout, grab, narrow: compact, phone, wsRef: ws }
 
-  if (narrow) {
-    const shown = showing(layout)
-    const cur = shown.includes(layout.mob) ? layout.mob : (shown[0] ?? 'scenes')
-    return (
-      <Ctx.Provider value={api}>
-        {top}
-        <div
-          ref={ws}
-          className="fc-desk flex flex-col overflow-x-clip border border-line-strong bg-surface-1"
-        >
-          {/* The picture keeps its 16:9 shape here (on wide screens it fits the space). */}
-          <div
-            data-stage
-            className="flex flex-col [&>:first-child]:aspect-video [&>:first-child]:flex-none [&>:first-child]:[container-type:inline-size]"
-          >
-            {stage}
-          </div>
-          {shown.length > 1 && (
-            <Segmented
-              label="Panel"
-              className="mx-3 my-2.5 max-w-[calc(100%-24px)] flex-wrap"
-              value={cur}
-              options={shown.map((d) => ({ value: d, label: dockName(layout, d) }))}
-              onChange={(d) => setLayout((l) => ({ ...l, mob: d }))}
-            />
-          )}
-          <div
-            className={cx(
-              'flex min-h-[320px] flex-col border-t border-line',
-              hasFloatingReady && 'pb-14',
-            )}
-          >
-            {docks(cur)}
-          </div>
-        </div>
-        {corner && (
-          <ReadyPlacementContext.Provider value="mobile">{corner}</ReadyPlacementContext.Provider>
-        )}
-      </Ctx.Provider>
-    )
-  }
+  const shown = showing(layout)
+  const cur = shown.includes(layout.mob) ? layout.mob : (shown[0] ?? 'scenes')
+  const floats = (Object.entries(layout.float) as [DockId, Float][]).filter(([id]) =>
+    groupOf(layout, id).some((x) => !layout.hidden.includes(x)),
+  )
+  const phoneFloat = phone ? floats.find(([id]) => groupOf(layout, id).includes(cur)) : undefined
 
   const column = (region: Region) => {
     // A spot shows while any of its tabs isn't hidden.
@@ -657,10 +748,11 @@ export function DockWorkspace({
     )
     if (ids.length === 0) return null
     const vertical = region !== 'bottom'
+    const activeSlot = phone ? ids.find((id) => groupOf(layout, id).includes(cur)) : undefined
     const out: ReactNode[] = []
     ids.forEach((id, i) => {
       const prev = ids[i - 1]
-      if (prev)
+      if (prev && !compact) {
         out.push(
           <Divider
             key={`split-${prev}-${id}`}
@@ -669,41 +761,72 @@ export function DockWorkspace({
             between={[prev, id]}
           />,
         )
+      }
+      const dockVisibleOnPhone = phone && groupOf(layout, id).includes(cur)
+      const renderedDockId = phone
+        ? dockVisibleOnPhone
+          ? cur
+          : activeOf(layout, id)
+        : activeOf(layout, id)
+      const hiddenOnPhone = phone && !dockVisibleOnPhone
+      const noLayoutContain = id === 'scenes' || id === 'sources'
       out.push(
         <div
           key={id}
           data-dock={id}
           className={cx(
+            noLayoutContain ? 'fc-contain-style' : 'fc-contain-dock',
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
+            hiddenOnPhone && 'hidden',
+            compact && !phone && 'min-h-[200px] sm:min-w-0 sm:flex-1',
+            phone && dockVisibleOnPhone && 'min-h-[320px] flex-1',
             drag?.id === activeOf(layout, id) && 'opacity-40',
           )}
-          style={{ flex: `${layout.w[id] ?? 1} 1 0` }}
+          style={
+            compact ? undefined : { flex: `var(${dockVar(id)}, ${layout.w[id] ?? 1}) 1 0` }
+          }
         >
-          {docks(activeOf(layout, id))}
+          {docks(renderedDockId)}
         </div>,
       )
     })
+    const regionHiddenOnPhone = phone && !activeSlot
     // The size dragged to; when the window is too small for it, the panels give way (they
     // shrink, the picture and its bar keep their minimum) without forgetting it.
-    const size: CSSProperties =
-      region === 'bottom'
-        ? { height: layout.bh, flex: '0 1 auto', minHeight: MIN_PANEL_H }
+    const size: CSSProperties | undefined = compact
+      ? undefined
+      : region === 'bottom'
+        ? { height: `var(--fc-bh, ${layout.bh}px)`, flex: '0 1 auto', minHeight: MIN_PANEL_H }
         : {
-            width: region === 'left' ? layout.lw : layout.rw,
+            width:
+              region === 'left'
+                ? `var(--fc-lw, ${layout.lw}px)`
+                : `var(--fc-rw, ${layout.rw}px)`,
             flex: '0 1 auto',
             minWidth: MIN_PANEL_W,
           }
     return (
       <div
+        data-dock-region={region}
         className={cx(
           'flex min-h-0 min-w-0',
-          vertical ? 'flex-col' : 'flex-row',
+          compact
+            ? region === 'left'
+              ? 'order-2 w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
+              : region === 'right'
+                ? 'order-3 w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
+                : 'w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
+            : vertical
+              ? 'flex-col'
+              : 'flex-row',
           region === 'right' && 'relative',
+          regionHiddenOnPhone && 'hidden',
+          phone && activeSlot && hasFloatingReady && 'pb-14',
         )}
         style={size}
       >
         {out}
-        {region === 'right' && corner && (
+        {!compact && region === 'right' && corner && (
           <ReadyPlacementContext.Provider value="right">{corner}</ReadyPlacementContext.Provider>
         )}
       </div>
@@ -712,44 +835,80 @@ export function DockWorkspace({
   const left = column('left')
   const right = column('right')
   const bottom = column('bottom')
-  const floats = (Object.entries(layout.float) as [DockId, Float][]).filter(([id]) =>
-    groupOf(layout, id).some((x) => !layout.hidden.includes(x)),
-  )
 
   return (
     <Ctx.Provider value={api}>
       {top}
       <div
         ref={ws}
+        data-dock-ws
         aria-label="Studio layout"
         // Square, as OBS's: the live picture is a square native view over the stage, and a
         // rounded corner beside it looked broken (owner, 28 Oct).
-        className="fc-desk relative flex overflow-hidden border border-line-strong bg-surface-1"
-        style={height ? { height } : undefined}
+        className={cx(
+          'fc-desk relative flex border border-line-strong bg-surface-1',
+          compact ? 'flex-col overflow-x-clip' : 'overflow-hidden',
+        )}
       >
         {left}
-        {left && <Divider dir="col" edge="left" label="Resize the left panels" />}
-        <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: MIN_STAGE_W }}>
+        {left && !compact && <Divider dir="col" edge="left" label="Resize the left panels" />}
+        <div
+          data-desk-center
+          className={cx('flex min-h-0 flex-col', compact ? 'order-1 w-full' : 'flex-1')}
+          style={compact ? undefined : { minWidth: MIN_STAGE_W }}
+        >
           {/* Its least height is the picture's minimum plus its bar (min-height: auto). */}
-          <div data-stage className="flex min-w-0 flex-1 flex-col">
+          <div
+            data-stage
+            className={cx(
+              'fc-contain-stage flex min-w-0 flex-col',
+              compact
+                ? '[&>:first-child]:aspect-video [&>:first-child]:flex-none [&>:first-child]:[container-type:inline-size]'
+                : 'flex-1',
+            )}
+          >
             {stage}
           </div>
-          {bottom && (
+          {phone && shown.length > 1 && (
+            <Segmented
+              label="Panel"
+              className="mx-3 my-2.5 max-w-[calc(100%-24px)] flex-wrap"
+              value={cur}
+              options={shown.map((d) => ({ value: d, label: dockName(layout, d) }))}
+              onChange={(d) => setLayout((l) => ({ ...l, mob: d }))}
+            />
+          )}
+          {bottom && !compact && (
             <Divider dir="row" edge="bottom" label="Resize the preview and the panels below" />
           )}
           {bottom}
         </div>
-        {right && <Divider dir="col" edge="right" label="Resize the right panels" />}
+        {right && !compact && <Divider dir="col" edge="right" label="Resize the right panels" />}
         {right}
-        {!right && corner && (
+        {phone && phoneFloat && (
+          <div
+            data-dock={cur}
+            className={cx(
+              'flex min-h-[320px] flex-col border-t border-line',
+              hasFloatingReady && 'pb-14',
+            )}
+          >
+            {docks(cur)}
+          </div>
+        )}
+        {!compact && !right && corner && (
           <ReadyPlacementContext.Provider value="desk">{corner}</ReadyPlacementContext.Provider>
         )}
       </div>
-      {floats.map(([id, f]) => (
-        <FloatingDock key={id} id={id} f={f}>
-          {docks(activeOf(layout, id))}
-        </FloatingDock>
-      ))}
+      {compact && corner && (
+        <ReadyPlacementContext.Provider value="mobile">{corner}</ReadyPlacementContext.Provider>
+      )}
+      {!phone &&
+        floats.map(([id, f]) => (
+          <FloatingDock key={id} id={id} f={f}>
+            {docks(activeOf(layout, id))}
+          </FloatingDock>
+        ))}
       {drag && (
         <>
           {drag.t && (
@@ -826,32 +985,80 @@ function DropPad({ rect, ways, lit }: Target['pad']) {
 function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: ReactNode }) {
   const { setLayout, layout } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
-  usePreviewHole(ref, { active: true, deps: [f.x, f.y, f.w, f.h] })
-  useEffect(() => {
+  const resizingRef = useRef(false)
+  const rect = clampFloat(f)
+  usePreviewHole(ref, { active: true, deps: [rect.x, rect.y, rect.w, rect.h] })
+
+  const commitSize = useCallback(() => {
     const el = ref.current
     if (!el) return
-    const ro = new ResizeObserver(() => {
+    const w = Math.round(el.offsetWidth)
+    const h = Math.round(el.offsetHeight)
+    if (w <= 0 || h <= 0) return
+    setLayout((l) => {
+      const cur = l.float[id]
+      if (!cur) return l
+      const clamped = clampFloat({ ...cur, w, h })
+      if (
+        clamped.x === cur.x &&
+        clamped.y === cur.y &&
+        clamped.w === cur.w &&
+        clamped.h === cur.h
+      ) {
+        return l
+      }
+      return { ...l, float: { ...l.float, [id]: clamped } }
+    })
+  }, [id, setLayout])
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let raf = 0
+    const flush = () => {
+      raf = 0
       const w = Math.round(el.offsetWidth)
       const h = Math.round(el.offsetHeight)
-      setLayout((l) => {
-        const cur = l.float[id]
-        if (!cur || (cur.w === w && cur.h === h)) return l
-        return { ...l, float: { ...l.float, [id]: { ...cur, w, h } } }
-      })
+      if (w <= 0 || h <= 0) return
+      el.dataset.pos = `${rect.x},${rect.y},${w},${h}`
+      notifyPreviewOverlays()
+      if (!resizingRef.current) commitSize()
+    }
+    const ro = new ResizeObserver(() => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        flush()
+        return
+      }
+      raf = requestAnimationFrame(flush)
     })
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [id, setLayout])
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [commitSize, rect.x, rect.y])
+
   return (
     <div
       ref={ref}
       data-dock={id}
       data-over-preview
-      data-pos={`${f.x},${f.y},${f.w},${f.h}`}
+      data-pos={`${rect.x},${rect.y},${rect.w},${rect.h}`}
       role="region"
       aria-label={`${dockName(layout, id)} (floating)`}
+      onPointerDownCapture={(e) => {
+        if (e.target !== ref.current) return
+        resizingRef.current = true
+        const finish = () => {
+          resizingRef.current = false
+          commitSize()
+        }
+        window.addEventListener('pointerup', finish, { once: true })
+        window.addEventListener('pointercancel', finish, { once: true })
+      }}
       className="fc-desk fixed z-30 flex min-h-40 min-w-56 resize flex-col overflow-hidden rounded-[7px] border border-line-strong bg-surface-1 shadow-pop"
-      style={{ left: f.x, top: f.y, width: f.w, height: f.h }}
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       {children}
     </div>
@@ -870,13 +1077,10 @@ function Divider({
   between?: [DockId, DockId]
   label: string
 }) {
-  const { layout, setLayout } = useLayout()
+  const { layout, setLayout, wsRef } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
-  const [active, setActive] = useState(false)
   // The sizes on screen either side (fractional pixels), taken when a drag starts: the
   // divider is then placed from the total distance moved, so it stays under the pointer.
-  // (Sizes re-read and rounded at every step lagged it a few pixels; saved sizes the window
-  // couldn't fit made a dead zone at the start of a drag.)
   const measure = useCallback((): Sizes | null => {
     const prev = ref.current?.previousElementSibling as HTMLElement | null
     const next = ref.current?.nextElementSibling as HTMLElement | null
@@ -886,50 +1090,133 @@ function Divider({
     const bar = (prev.lastElementChild as HTMLElement | null)?.getBoundingClientRect().height ?? 0
     return { a: dir === 'col' ? a.width : a.height, b: dir === 'col' ? b.width : b.height, bar }
   }, [dir])
-  const place = useCallback(
-    (dx: number, dy: number, m: Sizes) => {
+
+  const compute = useCallback(
+    (
+      dx: number,
+      dy: number,
+      m: Sizes,
+      weights: [number, number] | null,
+    ):
+      | { kind: 'lw'; value: number }
+      | { kind: 'rw'; value: number }
+      | { kind: 'bh'; value: number }
+      | { kind: 'between'; a: DockId; b: DockId; wa: number; wb: number }
+      | null => {
       const d = dir === 'col' ? dx : dy
+      // The other side keeps its minimum: the stage 240 px wide, the picture a strip
+      // above its bar.
+      if (edge === 'left')
+        return { kind: 'lw', value: clamp(m.a + d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W) }
+      if (edge === 'right')
+        return { kind: 'rw', value: clamp(m.b - d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W) }
+      if (edge === 'bottom') {
+        return {
+          kind: 'bh',
+          value: clamp(m.b - d, MIN_PANEL_H, m.b + (m.a - m.bar) - MIN_PICTURE),
+        }
+      }
+      if (!between || !weights) return null
+      const [a, b] = between
+      const na = clamp(m.a + d, 110, m.a + m.b - 110)
+      const tot = weights[0] + weights[1]
+      const wa = (tot * na) / (m.a + m.b)
+      return { kind: 'between', a, b, wa, wb: tot - wa }
+    },
+    [between, dir, edge],
+  )
+
+  const applyVars = useCallback(
+    (dx: number, dy: number, m: Sizes, weights: [number, number] | null) => {
+      const target = wsRef.current
+      const res = compute(dx, dy, m, weights)
+      if (!target || !res) return
+      if (res.kind === 'lw') target.style.setProperty('--fc-lw', `${res.value}px`)
+      else if (res.kind === 'rw') target.style.setProperty('--fc-rw', `${res.value}px`)
+      else if (res.kind === 'bh') target.style.setProperty('--fc-bh', `${res.value}px`)
+      else {
+        target.style.setProperty(dockVar(res.a), String(res.wa))
+        target.style.setProperty(dockVar(res.b), String(res.wb))
+      }
+    },
+    [compute, wsRef],
+  )
+
+  const commit = useCallback(
+    (dx: number, dy: number, m: Sizes) => {
       setLayout((l) => {
-        // The other side keeps its minimum: the stage 240 px wide, the picture a strip
-        // above its bar.
-        if (edge === 'left')
-          return { ...l, lw: clamp(m.a + d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W), preset: null }
-        if (edge === 'right')
-          return { ...l, rw: clamp(m.b - d, MIN_PANEL_W, m.a + m.b - MIN_STAGE_W), preset: null }
-        if (edge === 'bottom')
-          return {
-            ...l,
-            bh: clamp(m.b - d, MIN_PANEL_H, m.b + (m.a - m.bar) - MIN_PICTURE),
-            preset: null,
-          }
-        if (!between) return l
-        const [a, b] = between
-        const na = clamp(m.a + d, 110, m.a + m.b - 110)
-        const tot = (l.w[a] ?? 1) + (l.w[b] ?? 1)
-        const wa = (tot * na) / (m.a + m.b)
-        return { ...l, w: { ...l.w, [a]: wa, [b]: tot - wa } }
+        const weights: [number, number] | null = between
+          ? [l.w[between[0]] ?? 1, l.w[between[1]] ?? 1]
+          : null
+        const res = compute(dx, dy, m, weights)
+        if (!res) return l
+        if (res.kind === 'lw') return { ...l, lw: res.value, preset: null }
+        if (res.kind === 'rw') return { ...l, rw: res.value, preset: null }
+        if (res.kind === 'bh') return { ...l, bh: res.value, preset: null }
+        return { ...l, w: { ...l.w, [res.a]: res.wa, [res.b]: res.wb } }
       })
     },
-    [between, dir, edge, setLayout],
+    [between, compute, setLayout],
   )
+
   const by = (dx: number, dy: number) => {
     const m = measure()
-    if (m) place(dx, dy, m)
+    if (m) commit(dx, dy, m)
   }
+
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (layout.locked) return
     const start = measure()
     if (!start) return
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
-    setActive(true)
     const x0 = e.clientX
     const y0 = e.clientY
     const el = e.currentTarget
-    const move = (m: PointerEvent) => place(m.clientX - x0, m.clientY - y0, start)
-    const up = () => {
-      setActive(false)
+    const axis: 'x' | 'y' = dir === 'col' ? 'x' : 'y'
+    const startWeights: [number, number] | null = between
+      ? [layout.w[between[0]] ?? 1, layout.w[between[1]] ?? 1]
+      : null
+    let dragging = false
+    let latestDx = 0
+    let latestDy = 0
+    let raf = 0
+
+    const flush = () => {
+      raf = 0
+      applyVars(latestDx, latestDy, start, startWeights)
+    }
+    const move = (m: PointerEvent) => {
+      if (!dragging) {
+        dragging = true
+        el.dataset.active = '1'
+        document.body.style.userSelect = 'none'
+        dispatchDividerDrag({ active: true, axis })
+      }
+      latestDx = m.clientX - x0
+      latestDy = m.clientY - y0
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        flush()
+        return
+      }
+      raf = requestAnimationFrame(flush)
+    }
+    const up = (u?: PointerEvent) => {
+      if (raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+      delete el.dataset.active
       el.removeEventListener('pointermove', move)
+      if (dragging) {
+        document.body.style.userSelect = ''
+        const dx = u ? u.clientX - x0 : latestDx
+        const dy = u ? u.clientY - y0 : latestDy
+        applyVars(dx, dy, start, startWeights)
+        commit(dx, dy, start)
+        dispatchDividerDrag({ active: false, axis })
+      }
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up, { once: true })
@@ -958,9 +1245,8 @@ function Divider({
       onPointerDown={down}
       onKeyDown={key}
       className={cx(
-        'relative z-10 flex-none touch-none bg-line-strong outline-none after:absolute after:-inset-1 hover:bg-arc focus-visible:bg-arc',
+        'relative z-10 flex-none touch-none bg-line-strong outline-none after:absolute after:-inset-1 hover:bg-arc focus-visible:bg-arc data-[active=1]:bg-arc',
         dir === 'col' ? 'w-px cursor-col-resize' : 'h-px cursor-row-resize',
-        active && 'bg-arc',
         layout.locked && 'pointer-events-none',
       )}
     />
@@ -1000,11 +1286,11 @@ export function DockHeader({
   actions?: ReactNode
   info?: ReactNode
 }) {
-  const { grab, layout, setLayout, narrow } = useLayout()
-  const movable = !layout.locked && !narrow
+  const { grab, layout, setLayout, narrow: compact, phone } = useLayout()
+  const movable = !layout.locked && !compact
   const host = hostOf(layout, id)
   // On a phone one panel shows at a time, picked below the picture: no tabs there.
-  const group = narrow ? [id] : groupOf(layout, host).filter((d) => !layout.hidden.includes(d))
+  const group = phone ? [id] : groupOf(layout, host).filter((d) => !layout.hidden.includes(d))
   return (
     <header
       onPointerDown={(e) => {
@@ -1058,7 +1344,7 @@ export function DockHeader({
       <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
         {actions}
       </div>
-      {!narrow && <DockMenu id={id} />}
+      {!phone && <DockMenu id={id} />}
     </header>
   )
 }
