@@ -7,7 +7,11 @@
 // tiled and particle patterns, frame variants, text effects, per-letter entrances, a
 // rotator (lines shown in turn) and a countdown. Unknown values are ignored, never passed on.
 
-import { resolveLayerItems, resolveLayerText } from '@ferrocast/api'
+import {
+  hasLinkToken as isTokenizedText,
+  resolveLayerItems,
+  resolveLayerText,
+} from '@ferrocast/api'
 import {
   COUNTDOWN_LOOKS,
   FRAME_VARIANTS,
@@ -332,15 +336,8 @@ export class LayerWidget implements WidgetView {
     if (from !== this.countFrom) this.endsAt = 0
     this.countFrom = from
     if (this.items.length > 1) t.classList.add('is-rotator')
-    const hasToken =
-      /\{(?:link:(?:twitch|youtube|kick|facebook|discord|instagram|x|tiktok|website)|socials|channel_name|next_stream)\}|yourname|Next stream:\s*Friday,\s*8\s*PM/i.test(
-        [rawBase, ...extra].join('\n'),
-      )
-    if (
-      this.countFrom <= 0 &&
-      (this.items.length > 1 || hasToken) &&
-      !base.includes('\n')
-    ) {
+    const hasToken = isTokenizedText([rawBase, ...extra].join('\n'))
+    if (this.countFrom <= 0 && (this.items.length > 1 || hasToken) && !base.includes('\n')) {
       t.dataset.ellipsis = '1'
     }
     const inner = el('span', 'fc-lt')

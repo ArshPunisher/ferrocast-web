@@ -27,15 +27,7 @@ export const SAMPLE_LINKS: ResolvedLinks = {
 }
 
 type LinkFieldKey =
-  | 'twitch'
-  | 'youtube'
-  | 'kick'
-  | 'facebook'
-  | 'discord'
-  | 'instagram'
-  | 'x'
-  | 'tiktok'
-  | 'website'
+  'twitch' | 'youtube' | 'kick' | 'facebook' | 'discord' | 'instagram' | 'x' | 'tiktok' | 'website'
 
 function hasControlChar(raw: string): boolean {
   for (let i = 0; i < raw.length; i++) {
@@ -231,9 +223,7 @@ export function resolveLinks(
   }
 
   const next_stream =
-    nextStreamAt != null
-      ? formatScheduleTime(nextStreamAt)
-      : links.schedule_text?.trim() || null
+    nextStreamAt != null ? formatScheduleTime(nextStreamAt) : links.schedule_text?.trim() || null
 
   return {
     twitch,
@@ -257,9 +247,9 @@ export function hasConfiguredLinks(links: ResolvedLinks | null | undefined): boo
   if (!links) return false
   return Boolean(
     links.socials.length > 0 ||
-      links.channel_name ||
-      links.next_stream ||
-      links.next_stream_at != null,
+    links.channel_name ||
+    links.next_stream ||
+    links.next_stream_at != null,
   )
 }
 
@@ -274,6 +264,11 @@ export function resolveNextStream(links: ResolvedLinks | null | undefined): stri
 
 const TOKEN_OR_PLACEHOLDER_RE =
   /\{(?:link:(?:twitch|youtube|kick|facebook|discord|instagram|x|tiktok|website)|socials|channel_name|next_stream)\}|yourname|Next stream:\s*Friday,\s*8\s*PM/i
+
+/** True when a layer string contains a dynamic link/schedule token or legacy placeholder. */
+export function hasLinkToken(text: string): boolean {
+  return TOKEN_OR_PLACEHOLDER_RE.test(text)
+}
 
 function handleFromLink(url: string): string {
   const clean = stripUrlNoise(url)
@@ -302,10 +297,7 @@ function legacyReplacement(urlOrName: string, before: string, upper: boolean): s
   return upper ? out.toUpperCase() : out
 }
 
-function resolveSource(
-  links: ResolvedLinks | null | undefined,
-  preview: boolean,
-): ResolvedLinks {
+function resolveSource(links: ResolvedLinks | null | undefined, preview: boolean): ResolvedLinks {
   if (!links || (preview && !hasConfiguredLinks(links))) return preview ? SAMPLE_LINKS : EMPTY_LINKS
   return links
 }
@@ -391,30 +383,37 @@ export function resolveLayerText(
     },
   )
 
-  out = out.replace(/(?:youtube(?:\.com)?\s*\/?\s*@?)?yourname/gi, (match, offset: number, full: string) => {
-    if (match.toLowerCase() === 'yourname') {
-      const before = full.slice(0, offset)
-      const key = inferLegacyKey(before)
-      const raw = key === 'channel_name' ? (src.channel_name ?? src.socials[0] ?? '') : (src[key] ?? '')
+  out = out.replace(
+    /(?:youtube(?:\.com)?\s*\/?\s*@?)?yourname/gi,
+    (match, offset: number, full: string) => {
+      if (match.toLowerCase() === 'yourname') {
+        const before = full.slice(0, offset)
+        const key = inferLegacyKey(before)
+        const raw =
+          key === 'channel_name' ? (src.channel_name ?? src.socials[0] ?? '') : (src[key] ?? '')
+        if (!raw) {
+          hadMissing = true
+          return ''
+        }
+        if (/youtube(?:\.com)?\/@$/i.test(before) && raw.includes('/channel/'))
+          return raw.replace(/^youtube(?:\.com)?\//i, '')
+        return legacyReplacement(raw, before, match === 'YOURNAME')
+      }
+      const raw = src.youtube?.trim() ?? ''
       if (!raw) {
         hadMissing = true
         return ''
       }
-      if (/youtube(?:\.com)?\/@$/i.test(before) && raw.includes('/channel/')) return raw.replace(/^youtube(?:\.com)?\//i, '')
-      return legacyReplacement(raw, before, match === 'YOURNAME')
-    }
-    const raw = src.youtube?.trim() ?? ''
-    if (!raw) {
-      hadMissing = true
-      return ''
-    }
-    if (raw.includes('/channel/')) return raw
-    const before = full.slice(0, offset)
-    const upper = match.endsWith('YOURNAME')
-    const handle = legacyReplacement(raw, match.slice(0, -'yourname'.length), upper)
-    const prefix = match.slice(0, -'yourname'.length)
-    return prefix.endsWith('@') || prefix.endsWith('/') || !prefix ? `${before ? '' : ''}${prefix}${handle}` : `${prefix}@${handle}`
-  })
+      if (raw.includes('/channel/')) return raw
+      const before = full.slice(0, offset)
+      const upper = match.endsWith('YOURNAME')
+      const handle = legacyReplacement(raw, match.slice(0, -'yourname'.length), upper)
+      const prefix = match.slice(0, -'yourname'.length)
+      return prefix.endsWith('@') || prefix.endsWith('/') || !prefix
+        ? `${before ? '' : ''}${prefix}${handle}`
+        : `${prefix}@${handle}`
+    },
+  )
 
   if (hadMissing) return ''
   return out

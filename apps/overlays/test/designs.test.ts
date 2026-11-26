@@ -222,10 +222,10 @@ describe('classic alerts and branding', () => {
 
 function scenePage(layers: Widget[], withLinks = false): void {
   rt.apply(
-    snapshot(
-      withLinks ? { links: SAMPLE_LINKS } : {},
-      { ...overlay(layers), design: { id: 'x', scene: 'in_game', branded: true } },
-    ),
+    snapshot(withLinks ? { links: SAMPLE_LINKS } : {}, {
+      ...overlay(layers),
+      design: { id: 'x', scene: 'in_game', branded: true },
+    }),
   )
   rt.apply(
     frame('state', {
@@ -244,7 +244,9 @@ describe('built-in themes', () => {
         const layers = s.layers.filter((l) => l.kind === 'layer')
         expect(deepAll(root, '.fc-w-layer')).toHaveLength(layers.length)
         expect(deepAll(root, '.fc-brand')).toHaveLength(s.layers.filter(isBrandLayer).length)
-        expect(deepText(root)).not.toMatch(/\{(?:link:|socials|next_stream|channel_name)\}|yourname/i)
+        expect(deepText(root)).not.toMatch(
+          /\{(?:link:|socials|next_stream|channel_name)\}|yourname/i,
+        )
         for (const l of layers)
           if (l.kind === 'layer' && l.config.type === 'text') {
             if (typeof l.config.countdown === 'number')

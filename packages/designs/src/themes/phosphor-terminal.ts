@@ -25,11 +25,7 @@ const GLASS = '#04140a'
 const GREEN = '#39ff6a'
 const DIM = '#1f9a45'
 const AMBER = '#ffb000'
-const SOCIALS = [
-  '> ping {link:twitch}',
-  '> ping {link:youtube}',
-  '> ping {link:discord}',
-] as const
+const SOCIALS = ['> ping {link:twitch}', '> ping {link:youtube}', '> ping {link:discord}'] as const
 
 const bracketLabel = {
   variant: 'bracket',

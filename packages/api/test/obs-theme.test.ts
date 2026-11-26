@@ -323,7 +323,12 @@ describe('make it yours', () => {
             y: 0,
             w: 400,
             h: 40,
-            config: { type: 'text', text: '{link:twitch}', rotate: ['{socials}'], color: '#eef0f4' },
+            config: {
+              type: 'text',
+              text: '{link:twitch}',
+              rotate: ['{socials}'],
+              color: '#eef0f4',
+            },
           },
         ] as never,
       },

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  DemoEngine,
-  DEMO_TOKEN,
-} from '../src/demo'
+import { DemoEngine, DEMO_TOKEN } from '../src/demo'
 import {
   FerroClient,
   accountUrl,
@@ -19,9 +16,9 @@ describe('links validation, normalization, and overlay tokens', () => {
   it('validates lengths, control chars, schemes, and custom rows', () => {
     expect(() => validateCreatorLinks({ discord: 'ok\nline', custom: [] })).toThrow(/discord/)
     expect(() => validateCreatorLinks({ website: 'a\0b', custom: [] })).toThrow(/website/)
-    expect(() =>
-      validateCreatorLinks({ discord: '  JaVaScRiPt:alert(1)', custom: [] }),
-    ).toThrow(/discord/)
+    expect(() => validateCreatorLinks({ discord: '  JaVaScRiPt:alert(1)', custom: [] })).toThrow(
+      /discord/,
+    )
     expect(() =>
       validateCreatorLinks({ instagram: 'https://javascript:alert(1)', custom: [] }),
     ).toThrow(/instagram/)
@@ -31,9 +28,9 @@ describe('links validation, normalization, and overlay tokens', () => {
         custom: Array.from({ length: 7 }, (_, i) => ({ label: `L${i}`, value: 'nova.gg' })),
       }),
     ).toThrow(/custom/)
-    expect(() =>
-      validateCreatorLinks({ custom: [{ label: '', value: 'nova.gg' }] }),
-    ).toThrow(/custom\.0\.label/)
+    expect(() => validateCreatorLinks({ custom: [{ label: '', value: 'nova.gg' }] })).toThrow(
+      /custom\.0\.label/,
+    )
 
     const clean = validateCreatorLinks({
       discord: '  ',
