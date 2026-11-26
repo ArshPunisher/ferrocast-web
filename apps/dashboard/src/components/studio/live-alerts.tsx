@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react'
 import { toast, type ToastTone } from '@ferrocast/ui'
 import { studioEngineApi, type FerroClient, type LiveAlert } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
+import { MAX_MIC_GAIN_DB, MIC_LEVEL_FILTER, freeName } from './desk/cleanmic'
 
 /** Long enough to stay until fixed (each alert is cleared by its own "back" toast). */
 const UNTIL_FIXED_MS = 30 * 60 * 1000
@@ -14,8 +15,10 @@ const UNTIL_FIXED_MS = 30 * 60 * 1000
 /** The toast's key: every live alert shares one place. */
 const KEY = 'live:alerts'
 
-/** How far "+6 dB" goes at most (the fader's top). */
-const MAX_DB = 26
+/** Cap total digital boost (positive fader + gain_filter + compressor output_gain) at +20 dB. */
+const MAX_TOTAL_BOOST_DB = 20
+
+const round1 = (n: number) => Math.round(n * 10) / 10
 
 /**
  * The one-tap fix an alert offers (`unmute`, `+6 dB`), or none. It runs against the Studio's
@@ -43,21 +46,95 @@ export function alertFix(
         const scene = (await api.scenes()).current
         const row = (await api.audio(scene)).find((a) => a.name === name)
         if (!row) throw new Error(`${name} isn't in the scene on air.`)
-        const to = Math.min(MAX_DB, Math.round((row.volume_db + 6) * 10) / 10)
-        await api.setAudio(name, { volume_db: to })
-        return `${name} is at ${to} dB.`
+        // Step 1: raise a turned-down fader toward 0 dB before adding filter gain; never exceed 0 dB.
+        if (row.volume_db < -0.5) {
+          const to = Math.min(0, round1(row.volume_db + 6))
+          await api.setAudio(name, { volume_db: to })
+          return `${name} is at ${to} dB.`
+        }
+        // Step 2: inspect existing gain_filter and compressor output_gain so total boost stays <= 20 dB.
+        const filters = (await api.filters(name)) ?? []
+        const boostFilters = filters.filter(
+          (f) => f.enabled && (f.kind === 'gain_filter' || f.kind === 'compressor_filter'),
+        )
+        const settingsList = await Promise.all(
+          boostFilters.map(async (f) => {
+            const s =
+              typeof api.filterSettings === 'function'
+                ? await api.filterSettings(name, f.name)
+                : undefined
+            return [f, s ?? {}] as const
+          }),
+        )
+        let gainBoost = 0
+        let compBoost = 0
+        let targetGain: { name: string; settings: Record<string, unknown>; db: number } | null =
+          null
+        for (const [f, s] of settingsList) {
+          if (f.kind === 'gain_filter') {
+            const rawDb = Number(s.db ?? 0)
+            const db = Number.isFinite(rawDb) ? Math.max(0, rawDb) : 0
+            gainBoost += db
+            if (f.name === MIC_LEVEL_FILTER && targetGain === null) {
+              targetGain = { name: f.name, settings: s, db }
+            }
+          } else if (f.kind === 'compressor_filter') {
+            const rawOut = Number(s.output_gain ?? 0)
+            if (Number.isFinite(rawOut) && rawOut > 0) compBoost += rawOut
+          }
+        }
+        const faderBoost = Math.max(0, row.volume_db)
+        const existingBoost = faderBoost + gainBoost + compBoost
+        const headroom = Math.max(0, MAX_TOTAL_BOOST_DB - existingBoost)
+        const oldGainDb = targetGain?.db ?? 0
+        const gainCapLeft = Math.max(0, MAX_MIC_GAIN_DB - oldGainDb)
+        const add = Math.min(6, Math.floor(headroom), Math.floor(gainCapLeft))
+        if (add < 1) {
+          await api.silenceLiveAlert(alert.id)
+          return `${name} already has +${Math.round(existingBoost)} dB of boost. Raise your mic's hardware gain or move closer.`
+        }
+        if (row.volume_db < 0) {
+          await api.setAudio(name, { volume_db: 0 })
+        }
+        if (targetGain) {
+          await api.updateFilter(name, targetGain.name, {
+            ...targetGain.settings,
+            db: round1(oldGainDb + add),
+          })
+        } else {
+          const filterName = freeName(
+            MIC_LEVEL_FILTER,
+            filters.map((f) => f.name),
+          )
+          await api.addFilter(name, {
+            kind: 'gain_filter',
+            name: filterName,
+            settings: { db: add },
+          })
+          await api.editFilter(name, filterName, 'top')
+        }
+        const total = round1(existingBoost + add)
+        return `Raised ${name} by +${add} dB (now +${total} dB total).`
       },
     }
   return undefined
 }
 
-/** The "this is on purpose" button an alert offers (a muted mic), or none: it silences the alert for the stream. */
+/** The dismiss button an alert offers (`muted_on_purpose` or `quiet_ok`), silencing it for the stream. */
 export function alertDismiss(
   alert: LiveAlert,
   client: FerroClient,
 ): { label: string; run: () => Promise<string> } | undefined {
-  if (alert.dismiss !== 'muted_on_purpose') return undefined
+  if (alert.dismiss !== 'muted_on_purpose' && alert.dismiss !== 'quiet_ok') return undefined
   const api = studioEngineApi(client)
+  if (alert.dismiss === 'quiet_ok')
+    return {
+      label: 'Dismiss',
+      run: async () => {
+        await api.silenceLiveAlert(alert.id)
+        return 'Won’t ask again this stream.'
+      },
+    }
   return {
     label: 'Muted on purpose',
     run: async () => {
@@ -111,23 +188,53 @@ export function LiveAlertToasts() {
   const alert = useLive((s) => s.studio.alert)
   const client = useLive((s) => s.conn?.client)
   const active = useRef<LiveAlert[]>([])
+  const silencedByUser = useRef(new Set<string>())
   useEffect(() => {
     if (!alert) return
+    if (!alert.cleared) silencedByUser.current.delete(alert.id)
     const r = foldAlerts(active.current, alert)
     active.current = r.active
-    const fix = r.shown.alert && client ? alertFix(r.shown.alert, client) : undefined
-    const dismiss = r.shown.alert && client ? alertDismiss(r.shown.alert, client) : undefined
-    const said = (run: () => Promise<string>) => () => {
+    if (alert.cleared && silencedByUser.current.has(alert.id)) {
+      silencedByUser.current.delete(alert.id)
+      if (r.shown.fixed) return
+    }
+    const shownAlert = r.shown.alert
+    const fix = shownAlert && client ? alertFix(shownAlert, client) : undefined
+    const dismiss = shownAlert && client ? alertDismiss(shownAlert, client) : undefined
+    const silenceFromUser = (id: string) => {
+      silencedByUser.current.add(id)
+      active.current = active.current.filter((a) => a.id !== id)
+    }
+    const runAction = (run: () => Promise<string>, markSilencedId?: string) => () => {
+      if (markSilencedId) silenceFromUser(markSilencedId)
       run().then(
         (m) => toast({ tone: 'ok', message: m }),
-        (e: unknown) =>
-          toast({ tone: 'error', message: e instanceof Error ? e.message : 'That didn’t work.' }),
+        (e: unknown) => {
+          if (markSilencedId) silencedByUser.current.delete(markSilencedId)
+          toast({ tone: 'error', message: e instanceof Error ? e.message : 'That didn’t work.' })
+        },
       )
     }
+    const onDismiss =
+      shownAlert &&
+      client &&
+      (shownAlert.dismiss === 'quiet_ok' || shownAlert.id.startsWith('mic:quiet:'))
+        ? () => {
+            silenceFromUser(shownAlert.id)
+            void studioEngineApi(client)
+              .silenceLiveAlert(shownAlert.id)
+              .catch(() => {
+                silencedByUser.current.delete(shownAlert.id)
+              })
+          }
+        : undefined
     toast({
       key: KEY,
-      ...(fix ? { action: { label: fix.label, run: said(fix.run) } } : {}),
-      ...(dismiss ? { action2: { label: dismiss.label, run: said(dismiss.run) } } : {}),
+      ...(fix ? { action: { label: fix.label, run: runAction(fix.run) } } : {}),
+      ...(dismiss
+        ? { action2: { label: dismiss.label, run: runAction(dismiss.run, shownAlert?.id) } }
+        : {}),
+      ...(onDismiss ? { onDismiss } : {}),
       tone: r.shown.tone,
       message: r.shown.message,
       detail: r.shown.detail,

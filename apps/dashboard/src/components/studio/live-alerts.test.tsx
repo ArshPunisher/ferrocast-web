@@ -107,9 +107,17 @@ describe('LiveAlertToasts', () => {
   })
 })
 
-// A fake client: records each request and answers the Studio's mixer calls.
-function fakeClient(volume = -10) {
+// A fake client: records each request and answers the Studio's mixer and filter calls.
+function fakeClient(
+  volume = -10,
+  opts: {
+    filters?: Array<{ name: string; kind: string; enabled: boolean }>
+    filterSettings?: Record<string, Record<string, unknown>>
+  } = {},
+) {
   const calls: Array<{ method: string; path: string; body?: unknown }> = []
+  const filters = opts.filters ?? []
+  const filterSettings = opts.filterSettings ?? {}
   const request = (method: string, path: string, body?: unknown) => {
     calls.push({ method, path, body })
     if (path.endsWith('/engine/scenes')) return Promise.resolve({ current: 'Live', scenes: [] })
@@ -117,6 +125,12 @@ function fakeClient(volume = -10) {
       return Promise.resolve([
         { name: 'KREO', kind: 'coreaudio_input_capture', volume_db: volume, muted: false },
       ])
+    if (path.endsWith('/filters') && method === 'GET') return Promise.resolve(filters)
+    const settingsMatch = path.match(/\/filters\/([^/]+)\/settings$/)
+    if (settingsMatch && method === 'GET') {
+      const fName = decodeURIComponent(settingsMatch[1] ?? '')
+      return Promise.resolve(filterSettings[fName] ?? {})
+    }
     return Promise.resolve(undefined)
   }
   return { client: { request } as unknown as FerroClient, calls }
@@ -150,13 +164,93 @@ describe('alertFix', () => {
     ])
   })
 
-  it('raises the gain 6 dB from where the fader is now, never past the top', async () => {
+  it('raises the fader up to 0 dB first and never pushes it positive', async () => {
     const a = fakeClient(-10)
     await alertFix(fixable('gain_up'), a.client)!.run()
-    expect(a.calls.at(-1)?.body).toEqual({ volume_db: -4 })
-    const b = fakeClient(24)
+    expect(a.calls.at(-1)).toEqual({
+      method: 'PUT',
+      path: '/api/v1/studio/engine/sources/KREO/audio',
+      body: { volume_db: -4 },
+    })
+    const b = fakeClient(-2)
     await alertFix(fixable('gain_up'), b.client)!.run()
-    expect(b.calls.at(-1)?.body).toEqual({ volume_db: 26 })
+    expect(b.calls.at(-1)).toEqual({
+      method: 'PUT',
+      path: '/api/v1/studio/engine/sources/KREO/audio',
+      body: { volume_db: 0 },
+    })
+  })
+
+  it('adds Raise a quiet mic at top when fader is at 0 dB with no filters', async () => {
+    const { client, calls } = fakeClient(0)
+    const msg = await alertFix(fixable('gain_up'), client)!.run()
+    expect(msg).toContain('+6 dB')
+    expect(calls.some((c) => c.method === 'PUT' && c.path.endsWith('/audio'))).toBe(false)
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/sources/KREO/filters',
+      body: { kind: 'gain_filter', name: 'Raise a quiet mic', settings: { db: 6 } },
+    })
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/sources/KREO/filters/Raise%20a%20quiet%20mic/edit',
+      body: { do: 'top' },
+    })
+  })
+
+  it('caps boost at +20 dB total across existing gain_filter and compressor output_gain', async () => {
+    const { client, calls } = fakeClient(0, {
+      filters: [
+        { name: 'Raise a quiet mic', kind: 'gain_filter', enabled: true },
+        { name: 'Even out loud moments', kind: 'compressor_filter', enabled: true },
+      ],
+      filterSettings: {
+        'Raise a quiet mic': { db: 8 },
+        'Even out loud moments': { output_gain: 9 },
+      },
+    })
+    const msg = await alertFix(fixable('gain_up'), client)!.run()
+    expect(msg).toBe('Raised KREO by +3 dB (now +20 dB total).')
+    expect(calls).toContainEqual({
+      method: 'PUT',
+      path: '/api/v1/studio/engine/sources/KREO/filters/Raise%20a%20quiet%20mic/settings',
+      body: { settings: { db: 11 } },
+    })
+  })
+
+  it('refuses further digital boost at >= 20 dB or max mic gain and silences the alert', async () => {
+    const atTwenty = fakeClient(0, {
+      filters: [
+        { name: 'Raise a quiet mic', kind: 'gain_filter', enabled: true },
+        { name: 'Even out loud moments', kind: 'compressor_filter', enabled: true },
+      ],
+      filterSettings: {
+        'Raise a quiet mic': { db: 11 },
+        'Even out loud moments': { output_gain: 9 },
+      },
+    })
+    const msg = await alertFix(fixable('gain_up'), atTwenty.client)!.run()
+    expect(msg).toContain('already has +20 dB of boost')
+    expect(msg).toContain('hardware gain')
+    expect(atTwenty.calls.some((c) => c.method === 'PUT')).toBe(false)
+    expect(atTwenty.calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/live-alerts/silence',
+      body: { id: 'mic:x:KREO' },
+    })
+
+    const atGainCap = fakeClient(0, {
+      filters: [{ name: 'Raise a quiet mic', kind: 'gain_filter', enabled: true }],
+      filterSettings: { 'Raise a quiet mic': { db: 15 } },
+    })
+    const capMsg = await alertFix(fixable('gain_up'), atGainCap.client)!.run()
+    expect(capMsg).toContain('already has +15 dB of boost')
+    expect(atGainCap.calls.some((c) => c.method === 'PUT')).toBe(false)
+    expect(atGainCap.calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/live-alerts/silence',
+      body: { id: 'mic:x:KREO' },
+    })
   })
 
   it('says so when the mic is not in the scene on air', async () => {
@@ -288,5 +382,85 @@ describe('alertDismiss: "Muted on purpose"', () => {
     await act(async () => root.unmount())
     useLive.setState((st) => ({ conn: null, studio: { ...st.studio, alert: null } }))
     for (let i = 1; i < 50; i++) dismissToast(i)
+  })
+})
+
+describe('alertDismiss: "quiet_ok" and toast close', () => {
+  const quiet: LiveAlert = {
+    id: 'mic:quiet:KREO',
+    level: 'warn',
+    message: 'KREO sounds quiet.',
+    detail: 'No gain was changed. Tap +6 dB to boost it, or move closer to the mic.',
+    cleared: false,
+    source: 'KREO',
+    action: 'gain_up',
+    dismiss: 'quiet_ok',
+  }
+
+  it('offers Dismiss for quiet_ok and silences the alert on click or toast ×', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.matchMedia = ((q: string) => ({
+      matches: false,
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia
+    const { client, calls } = fakeClient(0)
+    expect(alertDismiss(quiet, client)?.label).toBe('Dismiss')
+    useLive.setState({ conn: { client } as never })
+    const el = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(el)
+    await act(async () =>
+      root.render(
+        <>
+          <LiveAlertToasts />
+          <Toaster />
+        </>,
+      ),
+    )
+
+    // 1. Clicking explicit "Dismiss" button calls silenceLiveAlert.
+    await act(async () => useLive.setState((s) => ({ studio: { ...s.studio, alert: quiet } })))
+    const buttons = [
+      ...document.querySelectorAll<HTMLButtonElement>('section[aria-label="Notifications"] button'),
+    ]
+    expect(buttons.map((b) => b.textContent)).toContain('+6 dB')
+    expect(buttons.map((b) => b.textContent)).toContain('Dismiss')
+    await act(async () => buttons.find((b) => b.textContent === 'Dismiss')!.click())
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/live-alerts/silence',
+      body: { id: 'mic:quiet:KREO' },
+    })
+
+    // 2. Clicking the toast × close button also calls silenceLiveAlert for mic:quiet alerts.
+    calls.length = 0
+    await act(async () =>
+      useLive.setState((s) => ({
+        studio: { ...s.studio, alert: { ...quiet, message: 'KREO sounds quiet again.' } },
+      })),
+    )
+    const quietToast = [
+      ...document.querySelectorAll('section[aria-label="Notifications"] [role]'),
+    ].find((n) => n.textContent?.includes('KREO sounds quiet again.'))!
+    expect(quietToast).toBeDefined()
+    const closeBtn = quietToast.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close notification"]',
+    )!
+    expect(closeBtn).not.toBeNull()
+    await act(async () => closeBtn.click())
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/v1/studio/engine/live-alerts/silence',
+      body: { id: 'mic:quiet:KREO' },
+    })
+
+    await act(async () => root.unmount())
+    useLive.setState((st) => ({ conn: null, studio: { ...st.studio, alert: null } }))
+    for (let i = 1; i < 80; i++) dismissToast(i)
   })
 })
