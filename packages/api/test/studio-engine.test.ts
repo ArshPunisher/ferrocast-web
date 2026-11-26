@@ -1715,5 +1715,317 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('guards moveScene against no-ops and rejects negative/non-integer indices like Rust usize', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const client = new FerroClient({
+          base: engine.base,
+          token: DEMO_TOKEN,
+          fetch: engine.fetch,
+        })
+        const api = studioEngineApi(client)
+        const initial = (await api.scenes()).scenes.map((s) => s.name)
+        const baselineUndoCount = (await api.history()).undo.length
+        const first = initial[0]!
+        const last = initial[initial.length - 1]!
+
+        // Negative or fractional `to` is rejected (matching MoveBody { to: usize } in Rust).
+        await expect(api.moveScene(first, -3)).rejects.toBeTruthy()
+        await expect(
+          client.request('POST', `/api/v1/studio/engine/scenes/${encodeURIComponent(first)}/move`, {
+            to: 1.5,
+          }),
+        ).rejects.toBeTruthy()
+
+        // Exact current position and clamped upper edge push no undo.
+        await api.moveScene(first, 0)
+        await api.moveScene(last, 999)
+        expect((await api.history()).undo.length).toBe(baselineUndoCount)
+        expect((await api.scenes()).scenes.map((s) => s.name)).toEqual(initial)
+
+        // An actual move pushes one undo entry and undo restores the prior order.
+        await api.moveScene(last, 0)
+        expect((await api.history()).undo.length).toBe(baselineUndoCount + 1)
+        expect((await api.scenes()).scenes[0]!.name).toBe(last)
+
+        await api.undo()
+        expect((await api.scenes()).scenes.map((s) => s.name)).toEqual(initial)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('supports vertical-canvas scenes lifecycle, moveScene reorder, undo/redo, collisions, screenshots, and nested-scene addExisting', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        expect((await api.scenes()).vertical).toBeNull()
+
+        const undoBeforeVertical = (await api.history()).undo.length
+        await api.startVertical('Tall 1')
+        expect((await api.history()).undo.length).toBe(undoBeforeVertical)
+        await api.addScene('Tall 2', true)
+        await api.addScene('Tall 3', true)
+
+        // Source names and group renames cannot collide with vertical scene names.
+        await expect(
+          api.addSource('Main', { kind: 'color_source_v3', name: 'Tall 2' }),
+        ).rejects.toBeTruthy()
+        await api.addSource('Main', { kind: 'color_source_v3', name: 'Box' })
+        await api.addScene('Box 2', true)
+        const copied = await api.pasteCopy('Gameplay', 'Box')
+        expect(copied.name).toBe('Box 3')
+        const grpBox = await api.groupItems('Main', [], 'Group A')
+        expect(grpBox.name).toBe('Group A')
+        await expect(api.rename('Group A', 'Tall 2')).rejects.toBeTruthy()
+
+        // Active vertical scenes can be screenshotted.
+        const shot = await api.screenshot('Tall 2')
+        expect(shot.file).toContain('Tall 2')
+
+        const before = await api.scenes()
+        expect(before.vertical?.width).toBe(1080)
+        expect(before.vertical?.height).toBe(1920)
+        expect(before.vertical?.current).toBe('Tall 1')
+        expect(before.vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+          'Tall 3',
+          'Box 2',
+        ])
+        expect(before.scenes.some((s) => s.name.startsWith('Tall '))).toBe(false)
+
+        // No-op move on vertical scene pushes no undo.
+        const undoCountBeforeNoop = (await api.history()).undo.length
+        await api.moveScene('Tall 1', 0)
+        await api.moveScene('Box 2', 99)
+        expect((await api.history()).undo.length).toBe(undoCountBeforeNoop)
+
+        // Real move on vertical scene updates vertical.scenes without switching main or vertical current.
+        await api.moveScene('Tall 3', 0)
+        const afterMove = await api.scenes()
+        expect(afterMove.vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+          'Box 2',
+        ])
+        expect(afterMove.vertical?.current).toBe('Tall 1')
+        expect((await api.history()).undo.length).toBe(undoCountBeforeNoop + 1)
+
+        await api.undo()
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+          'Tall 3',
+          'Box 2',
+        ])
+        await api.redo()
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+          'Box 2',
+        ])
+
+        // setCurrent switches vertical scene when vertical is active, then stopVertical hides it without pushing undo.
+        await api.setCurrent('Tall 2')
+        expect((await api.scenes()).vertical?.current).toBe('Tall 2')
+        const undoBeforeStop = (await api.history()).undo.length
+        await api.stopVertical()
+        expect((await api.history()).undo.length).toBe(undoBeforeStop)
+        expect((await api.scenes()).vertical).toBeNull()
+        await expect(api.moveScene('Tall 2', 0)).rejects.toBeTruthy()
+        await expect(api.screenshot('Tall 2')).rejects.toBeTruthy()
+
+        // Re-starting restores previous vertical scenes without pushing undo.
+        await api.startVertical('Ignored')
+        expect((await api.history()).undo.length).toBe(undoBeforeStop)
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+          'Box 2',
+        ])
+
+        // Nested scene addExisting mirrors Rust stage.rs (allows another scene, blocks self).
+        await api.addScene('Sub Scene')
+        const nested = await api.addExisting('Gameplay', 'Sub Scene')
+        expect(nested.item.name).toBe('Sub Scene')
+        expect(nested.item.kind).toBe('scene')
+        await expect(api.addExisting('Main', 'Main')).rejects.toBeTruthy()
+
+        // Group the nested scene item, then rename and remove the referenced scene recursively.
+        await api.groupItems('Gameplay', [nested.item.id], 'Nested Group')
+        await api.rename('Sub Scene', 'Sub Scene Renamed')
+        const afterRename = await api.items('Gameplay')
+        const grp = afterRename.find((it) => it.group && it.name === 'Nested Group')!
+        expect(grp.children.some((c) => c.kind === 'scene' && c.name === 'Sub Scene Renamed')).toBe(
+          true,
+        )
+
+        await api.removeScene('Sub Scene Renamed')
+        const afterRemove = await api.items('Gameplay')
+        const grpAfter = afterRemove.find((it) => it.group && it.name === 'Nested Group')!
+        expect(grpAfter.children.some((c) => c.name === 'Sub Scene Renamed')).toBe(false)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('keeps vertical mode unchanged and preserves initial vertical scene across unrelated undo/redo while isolating collections', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+
+        // 1. Main-canvas edit before first startVertical, then startVertical, then undo main edit.
+        await api.addScene('Main Extra')
+        await api.startVertical('Tall 1')
+        await api.undo()
+        const afterMainUndo = await api.scenes()
+        expect(afterMainUndo.scenes.some((s) => s.name === 'Main Extra')).toBe(false)
+        expect(afterMainUndo.vertical).not.toBeNull()
+        expect(afterMainUndo.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+        expect(afterMainUndo.vertical?.current).toBe('Tall 1')
+
+        // Redo restores Main Extra without dropping Tall 1 or toggling Vertical off.
+        await api.redo()
+        const afterMainRedo = await api.scenes()
+        expect(afterMainRedo.scenes.some((s) => s.name === 'Main Extra')).toBe(true)
+        expect(afterMainRedo.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+
+        // 2. Add Tall 2, select it, stop Vertical, then undo the add: Vertical must stay off.
+        await api.addScene('Tall 2', true)
+        await api.setCurrent('Tall 2')
+        await api.stopVertical()
+        expect((await api.scenes()).vertical).toBeNull()
+
+        await api.undo()
+        expect((await api.scenes()).vertical).toBeNull()
+
+        // Re-enabling Vertical shows Tall 2 was undone and current fell back safely to Tall 1.
+        await api.startVertical('Ignored')
+        const reEnabled = await api.scenes()
+        expect(reEnabled.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+        expect(reEnabled.vertical?.current).toBe('Tall 1')
+
+        // Stopping Vertical then redoing Add Tall 2 keeps Vertical off and restores Tall 2.
+        await api.stopVertical()
+        await api.redo()
+        expect((await api.scenes()).vertical).toBeNull()
+        await api.startVertical('Ignored')
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+        ])
+
+        // 3. Collection switching still restores each collection's own vertical state.
+        const colA = (await api.shelf('collections')).current
+        const { id: colB } = await api.newShelf('collections', 'Collection B', false)
+        expect((await api.scenes()).vertical).toBeNull()
+        await api.switchShelf('collections', colA)
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+        ])
+        await api.switchShelf('collections', colB)
+        expect((await api.scenes()).vertical).toBeNull()
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('prunes grouped orphan sources when deleting a vertical scene while retaining shared sources', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.startVertical('Tall 1')
+        await api.addScene('Tall 2', true)
+        const onlyTall = await api.addSource('Tall 2', {
+          kind: 'color_source_v3',
+          name: 'Tall Only Color',
+        })
+        await api.addSource('Main', {
+          kind: 'color_source_v3',
+          name: 'Shared Color',
+        })
+        const sharedInTall = await api.addExisting('Tall 2', 'Shared Color')
+        await api.groupItems('Tall 2', [onlyTall.item.id, sharedInTall.item.id], 'Tall Group')
+        await api.removeScene('Tall 2')
+        await expect(
+          api.addSource('Main', { kind: 'color_source_v3', name: 'Tall Only Color' }),
+        ).resolves.toBeTruthy()
+        await expect(
+          api.addSource('Gameplay', { kind: 'color_source_v3', name: 'Shared Color' }),
+        ).rejects.toMatchObject({ status: 409, code: 'studio_name_taken' })
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('allows stopping an active vertical source recording after vertical is turned off', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.startVertical('Tall 1')
+        await api.recordSource('Tall 1', true)
+        expect((await api.stats()).source_records?.map((r) => r.name)).toContain('Tall 1')
+        await api.stopVertical()
+        await expect(api.recordSource('Tall 1', false)).resolves.toEqual({ file: null })
+        expect((await api.stats()).source_records ?? []).toEqual([])
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('updates group bounds and transform when deleting a nested scene reference inside a group', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.addScene('Full Nested')
+        const nestedRef = await api.addExisting('Gameplay', 'Full Nested')
+        const small = await api.addSource('Gameplay', {
+          kind: 'color_source_v3',
+          name: 'Small Box',
+        })
+        await api.setItemBox('Gameplay', small.item.id, {
+          x: 200,
+          y: 150,
+          w: 120,
+          h: 80,
+          save: true,
+        })
+        const grp = await api.groupItems(
+          'Gameplay',
+          [nestedRef.item.id, small.item.id],
+          'Mixed Group',
+        )
+        expect(grp.frame).toEqual([1920, 0, 0, 1080, 0, 0])
+
+        await api.removeScene('Full Nested')
+        const grpAfter = (await api.items('Gameplay')).find((i) => i.id === grp.id)!
+        expect(grpAfter.frame).toEqual([120, 0, 0, 80, 200, 150])
+        const grpTransform = await api.transform('Gameplay', grp.id)
+        expect([
+          grpTransform.x,
+          grpTransform.y,
+          grpTransform.bounds_width,
+          grpTransform.bounds_height,
+        ]).toEqual([200, 150, 120, 80])
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })

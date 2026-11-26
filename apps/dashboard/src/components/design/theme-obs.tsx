@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowCounterClockwise,
+  Check,
   ImageSquare,
   MonitorPlay,
   PaintBrush,
@@ -14,6 +15,7 @@ import {
   UploadSimple,
 } from '@phosphor-icons/react'
 import {
+  MAX_OVERLAY_WIDGETS,
   ROLE_LABEL,
   checkThemePlan,
   obsThemeApi,
@@ -44,6 +46,7 @@ import {
   cx,
 } from '@ferrocast/ui'
 import { ScenePreview } from './previews'
+import { addPartToOverlay, extractThemeParts, partFitError } from './theme-parts'
 import { LoadError, Panel } from '../Panel'
 import { ModeSwitch } from '../ModeSwitch'
 import { StatusIcon } from '../studio/common'
@@ -75,69 +78,376 @@ export function ThemeUseDialog({
   design,
   onClose,
   onClassic,
+  initialScenes,
+  onAlertApplied,
 }: {
   design: ThemeDesign
   onClose: () => void
   /** Use without OBS (today's dialog: new overlays, or one screen on an overlay); `true`
    * also makes them scenes in the Studio. */
-  onClassic: (intoStudio: boolean) => void
+  onClassic: (intoStudio: boolean, scenes: string[]) => void
+  initialScenes?: string[] | undefined
+  onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
 }) {
   const api = useThemeObs()
+  const client = useClient()
+  const { run, busy } = useAction()
   const reach = useObsReach()
   // With Ferrocast's Studio the theme goes there (OBS only for those who use OBS).
   const usesObs = useUsesObs()
+  const overlays = useResource((c) => c.overlays(), [design.id])
+  const allKeys = useMemo(() => design.content.scenes.map((s) => s.key), [design])
+  const parts = useMemo(() => extractThemeParts(design), [design])
   const [intoObs, setIntoObs] = useState(reach.ok && usesObs)
   const [intoStudio, setIntoStudio] = useState(!usesObs)
+  const [importTab, setImportTab] = useState<'screens' | 'part'>('screens')
+  const [alertOnly, setAlertOnly] = useState(true)
+  const [partKey, setPartKey] = useState(() => parts[0]?.key ?? '')
+  const [targetOverlayId, setTargetOverlayId] = useState('')
   const [result, setResult] = useState<{ steps: ShowStep[]; applied: ObsTheme | null } | null>(null)
   const [styling, setStyling] = useState(false)
-  if (styling) return <MakeItYoursDialog design={design} onClose={onClose} />
+
+  const alreadyAdded = useMemo(() => {
+    const keys = new Set<string>()
+    for (const o of overlays.data ?? []) {
+      if (o.design?.id === design.id && o.design.scene) keys.add(o.design.scene)
+    }
+    return keys
+  }, [overlays.data, design.id])
+
+  const defaultPicked = useMemo(
+    () =>
+      initialScenes
+        ? allKeys.filter((k) => initialScenes.includes(k))
+        : overlays.data && alreadyAdded.size > 0 && alreadyAdded.size < allKeys.length
+          ? allKeys.filter((k) => !alreadyAdded.has(k))
+          : allKeys,
+    [initialScenes, overlays.data, alreadyAdded, allKeys],
+  )
+  const [pickedState, setPickedState] = useState<{ touched: boolean; list: string[] }>({
+    touched: false,
+    list: [],
+  })
+  const [retryingOverlays, setRetryingOverlays] = useState(false)
+  const aliveRef = useRef(true)
+  const opRef = useRef(0)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
+  useEffect(() => {
+    if (!overlays.loading) setRetryingOverlays(false)
+  }, [overlays.loading])
+  const retryOverlays = () => {
+    setRetryingOverlays(true)
+    overlays.reload()
+  }
+  const userTouched = pickedState.touched
+  const effectivePicked = userTouched ? pickedState.list : defaultPicked
+  const loadingOverlays = !overlays.data && (overlays.loading || retryingOverlays)
+  const resolvingOverlays =
+    !userTouched &&
+    initialScenes === undefined &&
+    !overlays.data &&
+    ((overlays.loading && !overlays.error) || retryingOverlays)
+  const closeDialog = () => {
+    opRef.current += 1
+    onClose()
+  }
+
+  if (styling) return <MakeItYoursDialog design={design} onClose={closeDialog} />
   if (result)
     return (
       <ResultDialog
         design={design}
         steps={result.steps}
         applied={result.applied}
-        onClose={onClose}
+        onClose={closeDialog}
         onStyle={() => setStyling(true)}
-        onUndone={onClose}
+        onUndone={closeDialog}
       />
     )
-  return intoObs && reach.ok ? (
-    <IntoObsDialog
-      design={design}
-      onClose={onClose}
-      onOff={() => setIntoObs(false)}
-      onDone={setResult}
-      api={api}
-    />
-  ) : (
+  if (intoObs && reach.ok) {
+    const obsSelection = userTouched || initialScenes !== undefined ? effectivePicked : undefined
+    return (
+      <IntoObsDialog
+        design={design}
+        initialScenes={obsSelection}
+        mergeApplied={!userTouched && initialScenes !== undefined}
+        onClose={closeDialog}
+        onOff={(selection) => {
+          if (selection !== undefined) {
+            setPickedState({ touched: true, list: selection })
+          }
+          opRef.current += 1
+          setIntoObs(false)
+        }}
+        onDone={setResult}
+        api={api}
+      />
+    )
+  }
+
+  const toggle = (key: string) => {
+    if (resolvingOverlays) return
+    setPickedState((prev) => {
+      const base = prev.touched ? prev.list : defaultPicked
+      const next = base.includes(key)
+        ? base.filter((k) => k !== key)
+        : allKeys.filter((k) => k === key || base.includes(k))
+      return { touched: true, list: next }
+    })
+  }
+  const setAll = (on: boolean) => {
+    if (resolvingOverlays) return
+    setPickedState({ touched: true, list: on ? allKeys : [] })
+  }
+  const selectedPart = parts.find((p) => p.key === partKey) ?? parts[0] ?? null
+  const overlayList = overlays.data ?? []
+  const targetOverlay = overlayList.find((o) => o.id === targetOverlayId) ?? null
+  const partFull = !!targetOverlay && targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS
+  const partFitProblem =
+    selectedPart && targetOverlay && !partFull ? partFitError(targetOverlay, selectedPart) : null
+  const alertOnlyPath = importTab === 'screens' && effectivePicked.length === 0
+  const hasReimportPick = effectivePicked.some((k) => alreadyAdded.has(k))
+
+  const submitAlertOnly = () => {
+    const alertId = design.content.alert_design
+    if (!alertId || !alertOnly || busy !== null) return
+    const seq = ++opRef.current
+    void run('alert', () => client.useDesign(alertId), {
+      once: true,
+      success: `${design.name}’s alert style now plays your alerts.`,
+    }).then((r) => {
+      if (!r || !aliveRef.current || opRef.current !== seq) return
+      onAlertApplied?.(r.alert_design)
+      closeDialog()
+    })
+  }
+
+  const submitPart = () => {
+    if (!selectedPart || !targetOverlay || partFull || partFitProblem || busy !== null) return
+    const seq = ++opRef.current
+    void run(
+      'part',
+      () => client.saveOverlay(addPartToOverlay(targetOverlay, selectedPart, design)),
+      {
+        once: true,
+        success: `${selectedPart.label} added to ${targetOverlay.name}.`,
+      },
+    ).then((saved) => {
+      if (!saved || !aliveRef.current || opRef.current !== seq) return
+      closeDialog()
+      go({ name: 'overlay', id: saved.id })
+    })
+  }
+
+  return (
     <Dialog
       open
-      onClose={onClose}
-      size="sm"
+      onClose={closeDialog}
+      size="md"
       title={`Use ${design.name}`}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={closeDialog}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => onClassic(intoStudio && !usesObs)}>
-            Next
-          </Button>
+          {importTab === 'part' ? (
+            <Button
+              variant="primary"
+              busy={busy === 'part'}
+              disabled={
+                !selectedPart || !targetOverlay || partFull || !!partFitProblem || busy !== null
+              }
+              onClick={submitPart}
+            >
+              Add part
+            </Button>
+          ) : alertOnlyPath && design.content.alert_design ? (
+            <Button
+              variant="primary"
+              busy={busy === 'alert'}
+              disabled={!alertOnly || busy !== null}
+              onClick={submitAlertOnly}
+            >
+              Use alert style
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              busy={resolvingOverlays}
+              disabled={effectivePicked.length === 0 || resolvingOverlays || busy !== null}
+              onClick={() => {
+                if (busy !== null) return
+                opRef.current += 1
+                onClassic(intoStudio && !usesObs, effectivePicked)
+              }}
+            >
+              Next
+            </Button>
+          )}
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <Screens design={design} />
-        {usesObs ? (
-          <ObsSwitch reach={reach} checked={false} onChange={setIntoObs} />
-        ) : (
-          <Switch
-            label="Set it up in the Studio"
-            description="A scene per screen with its overlay; your game and camera go under the gameplay screens."
-            checked={intoStudio}
-            onChange={setIntoStudio}
+        {parts.length > 0 && initialScenes === undefined && (
+          <Segmented<'screens' | 'part'>
+            label="What to import"
+            even
+            disabled={busy !== null}
+            value={importTab}
+            onChange={(v) => {
+              if (busy !== null) return
+              opRef.current += 1
+              setImportTab(v)
+            }}
+            options={[
+              { value: 'screens', label: 'Screens' },
+              { value: 'part', label: 'One part' },
+            ]}
           />
+        )}
+        {importTab === 'part' ? (
+          <div className="flex flex-col gap-3">
+            <p className="m-0 text-[13.5px] text-text-2">
+              Copy a single widget from this theme into an existing overlay without changing the
+              rest of its layout.
+            </p>
+            <Field label="Part">
+              {(p) => (
+                <Select
+                  {...p}
+                  value={selectedPart?.key ?? ''}
+                  disabled={busy !== null}
+                  onChange={(e) => setPartKey(e.target.value)}
+                >
+                  {parts.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.label} ({item.sceneName})
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Add to overlay">
+              {(p) => (
+                <Select
+                  {...p}
+                  value={targetOverlayId}
+                  onChange={(e) => setTargetOverlayId(e.target.value)}
+                  disabled={busy !== null || loadingOverlays || overlayList.length === 0}
+                >
+                  <option value="">
+                    {loadingOverlays
+                      ? 'Loading overlays…'
+                      : overlayList.length === 0
+                        ? 'No overlays yet'
+                        : 'Choose an overlay…'}
+                  </option>
+                  {overlayList.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} ({o.widgets.length}/{MAX_OVERLAY_WIDGETS})
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {overlays.error && !overlays.data && !retryingOverlays ? (
+              <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
+                <span>Couldn’t load existing overlays.</span>
+                <button
+                  type="button"
+                  onClick={retryOverlays}
+                  className="font-semibold text-accent-text hover:underline"
+                >
+                  Retry
+                </button>
+              </p>
+            ) : (
+              overlayList.length === 0 &&
+              !loadingOverlays && (
+                <p className="m-0 text-[13px] text-text-3">
+                  Create an overlay first in Overlays before adding a single part.
+                </p>
+              )
+            )}
+            {partFull && (
+              <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+                That overlay already has {MAX_OVERLAY_WIDGETS} widgets. Pick another or remove one
+                first.
+              </p>
+            )}
+            {partFitProblem && (
+              <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+                {partFitProblem}
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <Screens
+              design={design}
+              picked={effectivePicked}
+              onToggle={toggle}
+              onSetAll={setAll}
+              alreadyAdded={alreadyAdded}
+              disabled={resolvingOverlays}
+            />
+            {overlays.error &&
+              !userTouched &&
+              initialScenes === undefined &&
+              !overlays.data &&
+              !retryingOverlays && (
+                <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
+                  <span>
+                    Couldn’t check existing overlays. Continuing uses your selection below.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={retryOverlays}
+                    className="font-semibold text-accent-text hover:underline"
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
+            {hasReimportPick && (
+              <p className="m-0 text-[13px] text-text-3">
+                Already-added screens will be created as new overlays.
+              </p>
+            )}
+            {effectivePicked.length === 0 ? (
+              design.content.alert_design ? (
+                <>
+                  <Switch
+                    label="Use its alert style"
+                    description="Applies this theme’s alert style without creating screen overlays."
+                    checked={alertOnly}
+                    onChange={setAlertOnly}
+                  />
+                  {!alertOnly && (
+                    <p className="m-0 text-[13px] text-text-3">
+                      Tick at least one screen or turn on its alert style.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="m-0 text-[13px] text-text-3">Tick at least one screen to continue.</p>
+              )
+            ) : usesObs ? (
+              <ObsSwitch reach={reach} checked={false} onChange={setIntoObs} />
+            ) : (
+              <Switch
+                label="Set it up in the Studio"
+                description="A scene per screen with its overlay; your game and camera go under the gameplay screens."
+                checked={intoStudio}
+                onChange={setIntoStudio}
+              />
+            )}
+          </>
         )}
       </div>
     </Dialog>
@@ -172,67 +482,127 @@ function Screens({
   design,
   picked,
   onToggle,
+  onSetAll,
+  alreadyAdded,
+  disabled,
 }: {
   design: ThemeDesign
   picked?: string[]
   onToggle?: (key: string) => void
+  onSetAll?: (on: boolean) => void
+  alreadyAdded?: ReadonlySet<string>
+  disabled?: boolean
 }) {
+  const allPicked = !!picked && picked.length >= design.content.scenes.length
   return (
-    <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0 sm:grid-cols-5" aria-label="Screens">
-      {design.content.scenes.map((s) => {
-        const on = !picked || picked.includes(s.key)
-        const body = (
-          <>
-            <span
-              className={cx(
-                'relative block overflow-hidden rounded-[8px] border',
-                on ? 'border-line' : 'border-line opacity-45',
-                picked && on && 'border-arc shadow-[0_0_0_1px_var(--fc-arc)]',
-              )}
+    <div className="flex flex-col gap-2">
+      {picked && onToggle && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-text-2">
+            Screens ({picked.length} of {design.content.scenes.length})
+          </span>
+          {onSetAll && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onSetAll(!allPicked)}
+              className="fc-press -my-1.5 min-h-[44px] rounded-control px-2 text-[13px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50 disabled:no-underline sm:min-h-[32px]"
             >
-              <ScenePreview design={design} sceneKey={s.key} lazy />
-            </span>
-            <span
-              className={cx(
-                'truncate text-[13px] font-semibold',
-                on ? 'text-text-2' : 'text-text-3',
-              )}
-            >
-              {s.name}
-            </span>
-          </>
-        )
-        return (
-          <li key={s.key} className="min-w-0">
-            {onToggle ? (
-              <button
-                type="button"
-                aria-pressed={on}
-                onClick={() => onToggle(s.key)}
-                className="fc-press flex w-full min-w-0 flex-col gap-1 rounded-[10px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              {allPicked ? 'Select none' : 'Select all'}
+            </button>
+          )}
+        </div>
+      )}
+      <ul
+        className="m-0 grid list-none grid-cols-3 gap-2 p-0 sm:grid-cols-5"
+        aria-label="Screens"
+        aria-busy={disabled || undefined}
+      >
+        {design.content.scenes.map((s) => {
+          const on = !picked || picked.includes(s.key)
+          const added = alreadyAdded?.has(s.key) ?? false
+          const addedId = added ? `screen-added-${s.key}` : undefined
+          const body = (
+            <>
+              <span
+                className={cx(
+                  'relative block overflow-hidden rounded-[8px] border',
+                  on ? 'border-line' : 'border-line opacity-45',
+                  picked && on && 'border-arc shadow-[0_0_0_1px_var(--fc-arc)]',
+                )}
               >
-                {body}
-              </button>
-            ) : (
-              <div className="flex min-w-0 flex-col gap-1">{body}</div>
-            )}
-          </li>
-        )
-      })}
-    </ul>
+                <ScenePreview design={design} sceneKey={s.key} lazy />
+                {picked && (
+                  <span
+                    aria-hidden="true"
+                    data-screen-check
+                    className={cx(
+                      'absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-[5px] border transition-colors',
+                      on ? 'border-arc bg-arc text-white shadow-sm' : 'border-white/75 bg-black/55',
+                    )}
+                  >
+                    {on && <Check size={12} weight="bold" />}
+                  </span>
+                )}
+              </span>
+              <span
+                title={s.name}
+                className={cx(
+                  'truncate text-[13px] font-semibold',
+                  on ? 'text-text-2' : 'text-text-3',
+                )}
+              >
+                {s.name}
+              </span>
+            </>
+          )
+          return (
+            <li key={s.key} className="min-w-0">
+              {onToggle ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={on}
+                  aria-describedby={addedId}
+                  onClick={() => onToggle(s.key)}
+                  className="fc-press flex w-full min-w-0 flex-col gap-1 rounded-[10px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-wait"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className="flex min-w-0 flex-col gap-1">{body}</div>
+              )}
+              {added && (
+                <span
+                  id={addedId}
+                  title="Already added"
+                  className="mt-0.5 block truncate text-[11px] font-medium text-accent-text"
+                >
+                  Already added
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
 function IntoObsDialog({
   design,
+  initialScenes,
+  mergeApplied,
   onClose,
   onOff,
   onDone,
   api,
 }: {
   design: ThemeDesign
+  initialScenes?: string[] | undefined
+  mergeApplied?: boolean
   onClose: () => void
-  onOff: () => void
+  onOff: (selection?: string[]) => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
   api: ReturnType<typeof obsThemeApi>
 }) {
@@ -248,6 +618,8 @@ function IntoObsDialog({
           key={design.id}
           design={design}
           data={guess.data}
+          initialScenes={initialScenes}
+          mergeApplied={!!mergeApplied}
           onClose={onClose}
           onOff={onOff}
           onDone={onDone}
@@ -258,9 +630,24 @@ function IntoObsDialog({
   )
 }
 
+function enableObsScreen(s: ScreenPlan, guessed: ScreenPlan | undefined): ScreenPlan {
+  if (s.place.kind !== 'skip') return s
+  if (guessed && guessed.place.kind !== 'skip') {
+    return {
+      ...s,
+      place: guessed.place,
+      under: guessed.under ?? null,
+      role: guessed.role ?? null,
+    }
+  }
+  return { ...s, place: { kind: 'new' }, under: null, role: null }
+}
+
 function PlanForm({
   design,
   data,
+  initialScenes,
+  mergeApplied,
   onClose,
   onOff,
   onDone,
@@ -268,13 +655,30 @@ function PlanForm({
 }: {
   design: ThemeDesign
   data: ThemeObsPlan
+  initialScenes?: string[] | undefined
+  mergeApplied?: boolean
   onClose: () => void
-  onOff: () => void
+  onOff: (selection?: string[]) => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
   api: ReturnType<typeof obsThemeApi>
 }) {
   const [mode] = useMode('theme-obs')
-  const [plan, setPlan] = useState<ThemePlan>(data.plan)
+  const [selectionEdited, setSelectionEdited] = useState(false)
+  const [plan, setPlan] = useState<ThemePlan>(() => {
+    if (!initialScenes) return data.plan
+    const keepApplied =
+      mergeApplied && data.applied?.design_id === design.id
+        ? new Set(data.applied.screens.map((a) => a.key))
+        : null
+    return {
+      ...data.plan,
+      screens: data.plan.screens.map((s) =>
+        initialScenes.includes(s.key) || keepApplied?.has(s.key)
+          ? enableObsScreen(s, s)
+          : { ...s, place: { kind: 'skip' }, under: null, role: null },
+      ),
+    }
+  })
   const { run, busy } = useAction()
   const sources = data.obs_cameras
   const problem = checkThemePlan(plan, data.screens, data.obs_scenes, [
@@ -283,21 +687,42 @@ function PlanForm({
   ])
   const counts = planCounts(plan, data.obs_scenes, data.screens, data.applied)
   const picked = plan.screens.filter((s) => s.place.kind !== 'skip').map((s) => s.key)
-  const setScreen = (key: string, patch: Partial<ScreenPlan>) =>
+  const setScreen = (key: string, patch: Partial<ScreenPlan>) => {
+    const cur = plan.screens.find((x) => x.key === key)
+    if (
+      cur &&
+      patch.place !== undefined &&
+      (patch.place.kind === 'skip') !== (cur.place.kind === 'skip')
+    ) {
+      setSelectionEdited(true)
+    }
     setPlan({
       ...plan,
       screens: plan.screens.map((s) => (s.key === key ? { ...s, ...patch } : s)),
     })
+  }
   const toggle = (key: string) => {
     const s = plan.screens.find((x) => x.key === key)
     const guessed = data.plan.screens.find((x) => x.key === key)
     if (!s || !guessed) return
+    setSelectionEdited(true)
     setScreen(
       key,
       s.place.kind === 'skip'
-        ? { place: guessed.place, under: guessed.under ?? null, role: guessed.role ?? null }
+        ? enableObsScreen(s, guessed)
         : { place: { kind: 'skip' }, under: null, role: null },
     )
+  }
+  const setAll = (on: boolean) => {
+    setSelectionEdited(true)
+    setPlan({
+      ...plan,
+      screens: plan.screens.map((s) => {
+        if (!on) return { ...s, place: { kind: 'skip' }, under: null, role: null }
+        const guessed = data.plan.screens.find((x) => x.key === s.key)
+        return enableObsScreen(s, guessed)
+      }),
+    })
   }
   const switching = data.applied && data.applied.design_id !== design.id
   const same = data.applied?.design_id === design.id
@@ -317,7 +742,11 @@ function PlanForm({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <ObsSwitch reach={{ ok: true, why: null }} checked onChange={(v) => !v && onOff()} />
+        <ObsSwitch
+          reach={{ ok: true, why: null }}
+          checked
+          onChange={(v) => !v && onOff(selectionEdited ? picked : undefined)}
+        />
         <ModeSwitch screen="theme-obs" />
       </div>
       {switching && (
@@ -330,7 +759,7 @@ function PlanForm({
         <Table design={design} data={data} plan={plan} setPlan={setPlan} setScreen={setScreen} />
       ) : (
         <>
-          <Screens design={design} picked={picked} onToggle={toggle} />
+          <Screens design={design} picked={picked} onToggle={toggle} onSetAll={setAll} />
           <Under plan={plan} />
         </>
       )}

@@ -33,35 +33,69 @@ export function fileName(d: Design): string {
 }
 
 /** "Use" for designs that need a target: a theme, a scene, or a widget design. */
-export function UseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
-  const [classic, setClassic] = useState<{ intoStudio: boolean } | null>(null)
+export function UseDialog(props: {
+  design: Design | null
+  onClose: () => void
+  initialScenes?: string[] | undefined
+  onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
+}) {
+  const key = `${props.design?.id ?? 'none'}:${props.initialScenes?.join(',') ?? 'all'}`
+  return <UseDialogBody key={key} {...props} />
+}
+
+function UseDialogBody({
+  design,
+  onClose,
+  initialScenes,
+  onAlertApplied,
+}: {
+  design: Design | null
+  onClose: () => void
+  initialScenes?: string[] | undefined
+  onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
+}) {
+  const [classic, setClassic] = useState<{ intoStudio: boolean; scenes: string[] } | null>(null)
+  if (!design || design.kind === 'alert') return null
   // A theme can go into the Studio or OBS as well (24 Oct pick 1A); "Next" without OBS is
   // today's dialog, which then makes the Studio's scenes when asked.
-  if (design?.kind === 'theme' && !classic)
+  if (design.kind === 'theme' && !classic)
     return (
       <ThemeUseDialog
         design={design}
+        initialScenes={initialScenes}
+        onAlertApplied={onAlertApplied}
         onClose={onClose}
-        onClassic={(intoStudio) => setClassic({ intoStudio })}
+        onClassic={(intoStudio, scenes) => setClassic({ intoStudio, scenes })}
       />
     )
-  return <ClassicUseDialog design={design} onClose={onClose} intoStudio={!!classic?.intoStudio} />
+  return (
+    <ClassicUseDialog
+      design={design}
+      onClose={onClose}
+      intoStudio={!!classic?.intoStudio}
+      selectedScenes={classic?.scenes}
+    />
+  )
 }
 
 function ClassicUseDialog({
   design,
   onClose,
   intoStudio,
+  selectedScenes,
 }: {
   design: Design | null
   onClose: () => void
   /** A theme's new overlays also become scenes in the Studio. */
   intoStudio: boolean
+  selectedScenes?: string[] | undefined
 }) {
   const client = useClient()
   const engine = useMemo(() => studioEngineApi(client), [client])
   const { run, busy } = useAction()
-  const overlays = useResource((c) => c.overlays(), [design?.id])
+  const overlays = useResource((c) => c.overlays(), [design?.id], {
+    enabled: !!design && design.kind !== 'alert',
+  })
   const [target, setTarget] = useState<'new' | string>('new')
   const [scene, setScene] = useState('')
   const [alertStyle, setAlertStyle] = useState(true)
@@ -69,15 +103,26 @@ function ClassicUseDialog({
   const theme = design.kind === 'theme' ? design : null
   const list = overlays.data ?? []
   const needsOverlay = design.kind === 'widget'
-  const pickedScene = theme ? scene || theme.content.scenes[0]?.key || '' : ''
+  const pickedThemes = theme
+    ? selectedScenes
+      ? theme.content.scenes.filter((s) => selectedScenes.includes(s.key))
+      : theme.content.scenes
+    : []
+  const pickedKeys = pickedThemes.map((s) => s.key)
+  const defaultScene = pickedThemes[0]?.key || theme?.content.scenes[0]?.key || ''
+  const pickedScene = theme ? scene || defaultScene : ''
   const submit = () =>
     void run(
       'use',
       () =>
         client.useDesign(design.id, {
           ...(target !== 'new' ? { overlay_id: target } : {}),
-          ...(theme && target !== 'new' ? { scenes: [pickedScene] } : {}),
-          ...(theme ? { alert_style: alertStyle } : {}),
+          ...(theme
+            ? {
+                scenes: target !== 'new' ? [pickedScene] : pickedKeys,
+                alert_style: alertStyle,
+              }
+            : {}),
         }),
       {
         success: (r) =>
@@ -94,18 +139,26 @@ function ClassicUseDialog({
       if (theme && intoStudio && target === 'new') {
         try {
           const made = await themeIntoStudio(engine, theme, r.overlays)
-          toast(
-            made.skipped
-              ? { tone: 'warn', message: 'Overlays made; the Studio is off.', hint: made.skipped }
-              : {
-                  tone: 'ok',
-                  message: `${made.scenes.length} scenes made in the Studio.`,
-                  hint: made.scenes.join(', '),
-                },
-          )
-          onClose()
-          go({ name: 'studio', section: 'golive' })
-          return
+          if (made.skipped) {
+            toast({
+              tone: 'warn',
+              message: 'Overlays made; the Studio is off.',
+              hint: made.skipped,
+            })
+            onClose()
+            go({ name: 'studio', section: 'golive' })
+            return
+          }
+          if (made.scenes.length > 0) {
+            toast({
+              tone: 'ok',
+              message: `${made.scenes.length} scene${made.scenes.length === 1 ? '' : 's'} made in the Studio.`,
+              hint: made.scenes.join(', '),
+            })
+            onClose()
+            go({ name: 'studio', section: 'golive' })
+            return
+          }
         } catch (e) {
           const d = describeError(e)
           toast({
@@ -120,6 +173,7 @@ function ClassicUseDialog({
       if (first)
         go(r.overlays.length > 1 ? { name: 'overlays' } : { name: 'overlay', id: first.id })
     })
+  const emptyThemeSelection = !!theme && target === 'new' && pickedKeys.length === 0
   return (
     <Dialog
       open
@@ -130,7 +184,7 @@ function ClassicUseDialog({
         needsOverlay
           ? 'Adds this widget, styled, to an overlay. Move it where you want in the layout editor.'
           : theme
-            ? 'Each scene becomes an overlay: one Browser source per scene. Or put one scene on an overlay you already use; its URL stays the same.'
+            ? 'Each picked screen becomes an overlay: one Browser source per scene. Or put one screen on an overlay you already use; its URL stays the same.'
             : 'Makes a new overlay from this scene, or replaces the layout of one you already use (its URL stays the same, so OBS keeps working).'
       }
       footer={
@@ -141,14 +195,14 @@ function ClassicUseDialog({
           <Button
             variant="primary"
             busy={busy === 'use'}
-            disabled={needsOverlay && target === 'new'}
+            disabled={(needsOverlay && target === 'new') || emptyThemeSelection}
             onClick={submit}
           >
             {needsOverlay
               ? 'Add widget'
               : target === 'new'
                 ? theme
-                  ? `Make ${theme.content.scenes.length} overlays`
+                  ? `Make ${pickedThemes.length} overlay${pickedThemes.length === 1 ? '' : 's'}`
                   : 'Make the overlay'
                 : 'Replace the layout'}
           </Button>
@@ -161,7 +215,13 @@ function ClassicUseDialog({
             <Select {...p} value={target} onChange={(e) => setTarget(e.target.value)}>
               {!needsOverlay && (
                 <option value="new">
-                  {theme ? 'New overlays, one per scene' : 'A new overlay'}
+                  {theme
+                    ? pickedThemes.length === 1
+                      ? 'A new overlay'
+                      : pickedThemes.length < theme.content.scenes.length
+                        ? 'New overlays, one per picked screen'
+                        : 'New overlays, one per scene'
+                    : 'A new overlay'}
                 </option>
               )}
               {needsOverlay && <option value="new">Choose an overlay…</option>}
@@ -198,6 +258,11 @@ function ClassicUseDialog({
           <p className="text-[14.5px] text-warn">
             The overlay’s current widgets are replaced. You can undo it by using your old design
             again.
+          </p>
+        )}
+        {theme && intoStudio && target !== 'new' && (
+          <p className="m-0 text-[13px] text-text-3">
+            Replacing an existing overlay updates it in place without making a new Studio scene.
           </p>
         )}
       </div>
