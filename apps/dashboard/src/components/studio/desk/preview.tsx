@@ -54,19 +54,27 @@ import {
   Badge,
   Button,
   Dialog,
+  DIVIDER_DRAG_EVENT,
+  type DividerDragPayload,
   IconButton,
   InfoTip,
   Input,
+  PREVIEW_LIVE_RESIZE_EVENT,
+  type PreviewLiveResizePayload,
+  SCALE_CHANGED_EVENT,
   Select,
   Skeleton,
   collectPreviewHoles,
   cx,
   findUnregisteredPreviewOverlays,
+  isValidPreviewLiveResizePayload,
+  isValidScaleChangedPayload,
   subscribePreviewOverlays,
 } from '@ferrocast/ui'
 import { isSafeModeLocked } from '../../safe-mode'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { THEME_APPLIED_EVENT } from '../../../lib/themes'
 import { shortcut } from '../../../lib/os'
 import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-input'
 import { done, useAction, useResource } from '../../../lib/hooks'
@@ -668,75 +676,129 @@ function PreviewBoxes({ running }: { running: boolean }) {
     }
     let again = 0
     let alive = true
-    // Resizing the window: the web page lays out and paints a beat after the window itself,
-    // and nothing native can follow what it paints (the owner's recording: a picture that
-    // follows the window spills over the panels while the page catches up; one that trails
-    // the page stutters; a hidden one leaves a black box). So for the resize the page shows a
-    // still of the picture in the canvas's own box, part of the page and so always in step
-    // with it, and the live picture comes back where things ended up once it settles.
-    let resizing = 0
     let frozen = 0
-    // On a Mac the app's view of the whole stage follows the window by itself, in the same
-    // step as the window (as OBS's preview, a native widget in its window's layout), and the
-    // app fits the picture in it: no still is shown for a window resize, the live picture
-    // stays. The page's place for it, a beat behind, is sent when the resize settles.
-    // (Studio Mode's two boxes and the vertical picture beside the main one are the page's
-    // own and still take the still.)
-    const follows = /Mac/.test(navigator.userAgent) && !studio && !tall
-    let settle = 0
+    let freezeSeq = 0
+    let hidNative = false
+    let nativeResize = false
+    let lastResizeSeq = -Infinity
+    let dividerResize = false
+    let dockDragging = false
+    let windowFallbackUntil = 0
+    let scale =
+      typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1
     let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
+    const stillCache = new Map<string, string>()
+    const stillInFlight = new Set<string>()
     const boxes = () =>
       [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
+    const slotNames = () =>
+      studio
+        ? [shown.current.preview, shown.current.current, null]
+        : [shown.current.current, null, shown.current.vertical]
+    const targetWidth = (b: HTMLElement) =>
+      Math.min(640, Math.max(64, Math.round(b.clientWidth * scale)))
+    const stillKey = (name: string, w: number) => `${name}:${w}:${Math.round(scale * 100)}`
+    const paintStill = (b: HTMLElement, image: string) => {
+      // Paint cached or fresh still immediately in the box so native/CSS resize stays synchronized.
+      b.style.backgroundColor = '#000'
+      b.style.backgroundImage = `url("${image}")`
+      b.style.backgroundSize = '100% 100%'
+    }
+    const decodeImage = async (image: string) => {
+      if (typeof Image === 'undefined') return
+      const img = new Image()
+      img.src = image
+      if (typeof img.decode === 'function') await img.decode().catch(() => undefined)
+    }
+    const warmStill = () => {
+      if (!alive || nativeResize || dividerResize || dockDragging) return
+      const names = slotNames()
+      boxes().forEach((b, i) => {
+        const name = names[i]
+        if (!b || !name || typeof apiRef.current.thumbnail !== 'function') return
+        const w = targetWidth(b)
+        const key = stillKey(name, w)
+        if (stillCache.has(key) || stillInFlight.has(key)) return
+        stillInFlight.add(key)
+        void Promise.resolve(apiRef.current.thumbnail(name, w))
+          .then(async (res) => {
+            if (!res || typeof res.image !== 'string' || !alive) return
+            await decodeImage(res.image)
+            if (!alive) return
+            if (stillCache.size >= 8) {
+              const first = stillCache.keys().next().value
+              if (first !== undefined) stillCache.delete(first)
+            }
+            stillCache.set(key, res.image)
+          })
+          .catch(() => undefined)
+          .finally(() => stillInFlight.delete(key))
+      })
+    }
     const unfreeze = () => {
       frozen = 0
+      hidNative = false
       for (const b of boxes()) {
         if (!b) continue
         b.style.backgroundImage = ''
         b.style.backgroundColor = ''
+        b.style.backgroundSize = ''
         b.style.opacity = ''
       }
     }
-    const freeze = () => {
-      const token = (frozen = performance.now())
-      const names = studio
-        ? [shown.current.preview, shown.current.current, null]
-        : [shown.current.current, null, shown.current.vertical]
-      const hide = () => {
-        // Only while still resizing: once it settled the live picture is placed again, and
-        // a still that came late must not hide it (CodeRabbit).
-        if (frozen !== token || !alive || performance.now() >= resizing) return
+    const freeze = (hideNative: boolean, hints?: PreviewLiveResizePayload['still']) => {
+      const token = (frozen = ++freezeSeq)
+      const names = slotNames()
+      const hintFor = (index: number) =>
+        index === 0 ? hints?.main : index === 1 ? hints?.program : hints?.vertical
+
+      if (hideNative && !hidNative) {
+        hidNative = true
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
         void put(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
       }
-      void Promise.all(
-        boxes().map(async (b, i) => {
-          const name = names[i]
-          if (!b || !name) return
-          const w = Math.min(640, Math.max(64, Math.round(b.clientWidth * devicePixelRatio)))
-          const { image } = await api.thumbnail(name, w)
-          const img = new Image()
-          img.src = image
-          await img.decode()
-          if (frozen !== token) return
-          // A scene's picture is clear where nothing is (the vertical one's bars above and
-          // below a wide source): black under it, as the canvas draws.
-          b.style.backgroundColor = '#000'
-          b.style.backgroundImage = `url("${image}")`
-          b.style.backgroundSize = '100% 100%'
-        }),
-      )
-        .catch(() => undefined)
-        // Hidden once the still is painted (or without one, if it couldn't be made).
-        .then(() => requestAnimationFrame(hide))
+
+      boxes().forEach((b, i) => {
+        if (!b) return
+        const hint = hintFor(i)
+        const name = names[i]
+        if (hint) {
+          paintStill(b, hint)
+          return
+        }
+        if (!name) return
+        const w = targetWidth(b)
+        const cached = stillCache.get(stillKey(name, w))
+        if (cached) {
+          paintStill(b, cached)
+          return
+        }
+        for (const [k, url] of stillCache) {
+          if (k.startsWith(`${name}:`)) {
+            paintStill(b, url)
+            return
+          }
+        }
+        if (typeof apiRef.current.thumbnail !== 'function') return
+        void Promise.resolve(apiRef.current.thumbnail(name, w))
+          .then(async (res) => {
+            if (!res || typeof res.image !== 'string' || !alive || frozen !== token) return
+            await decodeImage(res.image)
+            if (!alive || frozen !== token) return
+            stillCache.set(stillKey(name, w), res.image)
+            paintStill(b, res.image)
+          })
+          .catch(() => undefined)
+      })
     }
     const send = () => {
       raf = 0
       if (!alive) return
       window.clearTimeout(again)
-      // The window is hidden or minimised (plan item 10, lighter): no live picture is drawn
-      // for nobody to see, which saves the graphics card for the game; the stream and the
-      // recording go on as before. It's placed again when the window shows.
+      // The window is hidden or minimised: suppress GPU preview placement while offscreen.
       if (document.hidden) {
         if (last !== 'hidden') {
           last = 'hidden'
@@ -744,15 +806,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
         }
         return
       }
-      if (performance.now() < resizing) {
-        // A panel is being dragged: placed again when it lands.
-        if (resizing === Infinity) return
+      if (nativeResize || dividerResize || dockDragging) return
+      const now = performance.now()
+      if (now < windowFallbackUntil) {
         again = window.setTimeout(
           () => {
             last = ''
             schedule()
           },
-          resizing - performance.now() + 16,
+          Math.max(16, windowFallbackUntil - now + 16),
         )
         return
       }
@@ -789,19 +851,24 @@ function PreviewBoxes({ running }: { running: boolean }) {
         }
       }
       // The window's height is part of it: the native side places the view from the bottom.
-      const key = JSON.stringify([rect, program, tallRect, window.innerHeight])
+      const key = JSON.stringify([rect, program, tallRect, window.innerHeight, scale])
       still = [rect, program, tallRect]
       if (key === last) {
         if (frozen) unfreeze()
+        warmStill()
         return
       }
       last = key
       const thawing = frozen
       void put(rect, program, tallRect)
         .then((placed) => {
-          // The live picture is back in place: the still goes a moment later, under it. One
-          // replaced before it was sent leaves that to the one that replaced it.
-          if (placed && thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
+          warmStill()
+          // Keep the still briefly underneath until the live frame takes over cleanly.
+          if (placed && thawing && frozen === thawing) {
+            window.setTimeout(() => {
+              if (frozen === thawing) unfreeze()
+            }, 120)
+          }
         })
         .catch(() => {
           // Not placed: try again shortly, and on the next change.
@@ -812,33 +879,34 @@ function PreviewBoxes({ running }: { running: boolean }) {
         })
     }
     const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(send)
+      if (!raf && alive) raf = requestAnimationFrame(send)
     }
     schedule()
-    // The stage resized (a divider between panels dragged, a panel's edge, a bar above it):
-    // the live picture follows it every frame. Ferrocast's own engine draws each frame at the
-    // view's new size, so the picture keeps playing and the vertical one stays beside it
-    // (owner's recording, 10 Nov: a still stood in during the drag, the timer stopped and the
-    // vertical picture vanished; that still was for libobs, which left black strips).
+
     const ro = new ResizeObserver(schedule)
     ro.observe(el)
     if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
     if (vStageRef.current) ro.observe(vStageRef.current)
     if (vRef.current) ro.observe(vRef.current)
-    const mo = new MutationObserver(schedule)
-    // Dialogs open by an attribute; floating panels say where they are in data-pos.
-    mo.observe(document.body, {
-      childList: true,
-      subtree: true,
+    const ws = el.closest('[data-dock-ws]')
+    if (ws) {
+      ro.observe(ws)
+      if (ws.parentElement) ro.observe(ws.parentElement)
+    }
+    const appHeader = document.querySelector('header')
+    if (appHeader) ro.observe(appHeader)
+    const appBanners = document.querySelector('[data-banners-wrap]')
+    if (appBanners) ro.observe(appBanners)
+
+    // Watch theme toggles via class/data-theme and explicit events (never html inline styles).
+    const themeMo = new MutationObserver(schedule)
+    themeMo.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['open', 'data-dock-drag', 'data-pos'],
+      attributeFilter: ['class', 'data-theme'],
     })
-    // A theme change repaints the stage round the canvas.
-    mo.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'data-theme', 'style'],
-    })
+    window.addEventListener('fc-theme-change', schedule)
+    window.addEventListener(THEME_APPLIED_EVENT, schedule)
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     // The edit overlays (marquee, group box, guides) move by style alone.
     window.addEventListener(HOLES_CHANGED, schedule)
@@ -846,55 +914,141 @@ function PreviewBoxes({ running }: { running: boolean }) {
     // Straight away when hidden: a hidden page gets no animation frames.
     const onVisible = () => (document.hidden ? send() : schedule())
     document.addEventListener('visibilitychange', onVisible)
-    // A moved stage that changed no size and fired nothing above (a panel landing elsewhere,
-    // a bar above it growing) would leave the picture where it was, over the panels (owner,
-    // 29 Oct): looked at again now and then. Unchanged, nothing is sent.
-    const watch = window.setInterval(() => !document.hidden && schedule(), 500)
-    // While a panel is dragged the live picture can't stay (the drop zones are drawn over the
-    // stage): a still of it shows in its place, as for a window resize, rather than a grey box
-    // (owner's recording, 29 Oct). The live one comes back where the stage ends up.
-    let dragging = false
+
+    // Watch body attribute only (non-subtree) while dragging a panel out of the workspace.
     const dockWatch = new MutationObserver(() => {
       const on = !!document.body.dataset.dockDrag
-      if (on && !dragging) {
-        dragging = true
-        resizing = Infinity
-        if (!frozen) freeze()
-      } else if (!on && dragging) {
-        dragging = false
-        resizing = 0
-        last = ''
-        schedule()
+      if (on && !dockDragging) {
+        dockDragging = true
+        window.clearTimeout(again)
+        if (!nativeResize) freeze(true)
+        else if (!frozen) freeze(false)
+      } else if (!on && dockDragging) {
+        dockDragging = false
+        if (!nativeResize && !dividerResize) {
+          last = ''
+          schedule()
+        }
       }
     })
     dockWatch.observe(document.body, { attributes: true, attributeFilter: ['data-dock-drag'] })
-    const resize = () => {
-      if (!frozen) freeze()
-      resizing = performance.now() + 180
+
+    const onLiveResize = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidPreviewLiveResizePayload(detail)) return
+      if (typeof detail.seq === 'number' && Number.isFinite(detail.seq)) {
+        if (detail.seq <= lastResizeSeq) return
+        lastResizeSeq = detail.seq
+      }
+      if (typeof detail.scale === 'number' && Number.isFinite(detail.scale) && detail.scale > 0) {
+        if (detail.scale !== scale) {
+          scale = detail.scale
+          stillCache.clear()
+        }
+      }
+      if (detail.active) {
+        nativeResize = true
+        windowFallbackUntil = 0
+        window.clearTimeout(again)
+        if (raf) {
+          cancelAnimationFrame(raf)
+          raf = 0
+        }
+        freeze(false, detail.still)
+        return
+      }
+      nativeResize = false
+      windowFallbackUntil = 0
+      window.clearTimeout(again)
+      last = ''
       schedule()
     }
-    const onResize = () => {
-      if (!follows) return resize()
-      window.clearTimeout(settle)
-      // Placed exactly once the window stops (the app leaves the page's boxes out meanwhile).
-      settle = window.setTimeout(() => {
+
+    const onScaleChanged = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidScaleChangedPayload(detail)) return
+      scale = detail.scale
+      stillCache.clear()
+      if (!nativeResize && !dividerResize && !dockDragging) {
         last = ''
         schedule()
-      }, 320)
+      }
+    }
+
+    const onDividerDrag = (e: Event) => {
+      const detail = (e as CustomEvent<DividerDragPayload | undefined>).detail
+      if (!detail) return
+      if (detail.active) {
+        dividerResize = true
+        window.clearTimeout(again)
+        if (!nativeResize) freeze(true)
+        else if (!frozen) freeze(false)
+        return
+      }
+      dividerResize = false
+      if (!nativeResize && !dockDragging) {
+        last = ''
+        schedule()
+      }
+    }
+
+    const onResize = () => {
+      if (nativeResize || dividerResize || dockDragging) return
+      if (!frozen) freeze(true)
+      windowFallbackUntil = performance.now() + 180
       schedule()
     }
+
+    let cleanupDpr: (() => void) | undefined
+    const bindDprWatcher = () => {
+      cleanupDpr?.()
+      cleanupDpr = undefined
+      if (!alive || typeof window.matchMedia !== 'function') return
+      const curDpr =
+        typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+          ? window.devicePixelRatio
+          : 1
+      const mql = window.matchMedia(`(resolution: ${curDpr}dppx)`)
+      const onDprChange = () => {
+        if (!alive) return
+        const nextDpr =
+          typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+            ? window.devicePixelRatio
+            : 1
+        if (nextDpr !== scale) {
+          scale = nextDpr
+          stillCache.clear()
+          if (!nativeResize && !dividerResize && !dockDragging) {
+            last = ''
+            schedule()
+          }
+        }
+        bindDprWatcher()
+      }
+      mql?.addEventListener?.('change', onDprChange)
+      cleanupDpr = () => mql?.removeEventListener?.('change', onDprChange)
+    }
+    bindDprWatcher()
+
+    window.addEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLiveResize)
+    window.addEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
+    window.addEventListener(DIVIDER_DRAG_EVENT, onDividerDrag)
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
-      window.clearTimeout(settle)
-      window.clearInterval(watch)
       dockWatch.disconnect()
       ro.disconnect()
-      mo.disconnect()
+      themeMo.disconnect()
+      cleanupDpr?.()
+      window.removeEventListener('fc-theme-change', schedule)
+      window.removeEventListener(THEME_APPLIED_EVENT, schedule)
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener(HOLES_CHANGED, schedule)
+      window.removeEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLiveResize)
+      window.removeEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
+      window.removeEventListener(DIVIDER_DRAG_EVENT, onDividerDrag)
       unsubOverlays()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
