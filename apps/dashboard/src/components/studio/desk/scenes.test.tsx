@@ -154,10 +154,17 @@ async function flush() {
 }
 
 function pointerEvt(type: string, init: PointerEventInit & { clientX?: number; clientY?: number }) {
+  const buttons =
+    init.buttons !== undefined
+      ? init.buttons
+      : type === 'pointerup' || type === 'pointercancel'
+        ? 0
+        : 1
   const ev = new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
     button: 0,
+    buttons,
     pointerId: 1,
     pointerType: 'mouse',
     ...init,
@@ -235,39 +242,69 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     scenes: [makeScene('Main', { current: true }), makeScene('Gameplay'), makeScene('Chatting')],
   }
 
-  it('drags in list mode (>5 px threshold), shows drop line and ghost, suppresses switch click', async () => {
+  it('drags inactive scene in list mode (>5 px threshold), shows drop line and ghost, suppresses delayed synthetic switch click', async () => {
     const { host, api } = await mountScenes(sample)
     setRowBoxes(host, true)
 
-    const mainBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Main"] button')!
-    await act(async () => {
-      mainBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 18 }))
+    const gameLi = host.querySelector<HTMLElement>('[data-scene-name="Gameplay"]')!
+    const gameBtn = gameLi.querySelector<HTMLButtonElement>('button')!
+    const captureSpy = vi.fn()
+    const releaseSpy = vi.fn()
+    let hasCap = false
+    Object.defineProperty(gameLi, 'setPointerCapture', {
+      configurable: true,
+      value: (id: number) => {
+        hasCap = true
+        captureSpy(id)
+      },
     })
-    // Below 5 px threshold: no drop line or ghost yet.
+    Object.defineProperty(gameLi, 'hasPointerCapture', {
+      configurable: true,
+      value: () => hasCap,
+    })
+    Object.defineProperty(gameLi, 'releasePointerCapture', {
+      configurable: true,
+      value: (id: number) => {
+        hasCap = false
+        releaseSpy(id)
+      },
+    })
+
     await act(async () => {
-      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 21 }))
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 54 }))
+    })
+    // Below 5 px threshold: no drop line, ghost, or capture yet.
+    await act(async () => {
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 57 }))
     })
     expect(host.querySelector('[data-drop-line]')).toBeNull()
     expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+    expect(captureSpy).not.toHaveBeenCalled()
 
     // Move past 5 px onto bottom half of Chatting (y: 96 is inside index 2 [72..108]).
     await act(async () => {
       window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 96 }))
     })
+    expect(captureSpy).toHaveBeenCalledWith(1)
+    expect(document.body.dataset.sceneDrag).toBe('1')
     expect(host.querySelector('[data-drop-line]')).not.toBeNull()
-    expect(host.querySelector('[data-scene-ghost]')?.textContent).toContain('Main')
+    expect(host.querySelector('[data-scene-ghost]')?.textContent).toContain('Gameplay')
 
     await act(async () => {
       window.dispatchEvent(pointerEvt('pointerup', { clientX: 20, clientY: 96 }))
     })
-    // Browser click fired immediately after pointerup must NOT switch scenes.
+    expect(releaseSpy).toHaveBeenCalledWith(1)
+    expect(document.body.dataset.sceneDrag).toBeUndefined()
+
+    // Delayed compatibility click (touch/WebKit macrotask after setTimeout 0) must NOT switch scenes.
     await act(async () => {
-      mainBtn.click()
+      vi.advanceTimersByTime(120)
+      gameBtn.click()
       vi.runAllTimers()
     })
     await flush()
 
-    expect(api.moveScene).toHaveBeenCalledWith('Main', 2)
+    expect(api.moveScene).toHaveBeenCalledWith('Gameplay', 2)
     expect(api.setCurrent).not.toHaveBeenCalled()
     expect(api.setPreview).not.toHaveBeenCalled()
   })
@@ -292,24 +329,211 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     expect(api.moveScene).not.toHaveBeenCalled()
   })
 
-  it('cancels active drag on Escape with zero API calls', async () => {
+  it('cancels active drag on Escape on an inactive scene and suppresses post-Escape release click even after holding', async () => {
     const { host, api } = await mountScenes(sample)
     setRowBoxes(host, true)
 
-    const mainBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Main"] button')!
+    const chatBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Chatting"] button')!
     await act(async () => {
-      mainBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 18 }))
-      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 96 }))
+      chatBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 90 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 18 }))
     })
     expect(host.querySelector('[data-scene-ghost]')).not.toBeNull()
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-      window.dispatchEvent(pointerEvt('pointerup', { clientX: 20, clientY: 96 }))
+    })
+    expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+
+    // User keeps holding pointer for >1s after Escape, then releases and browser emits click.
+    await act(async () => {
+      vi.advanceTimersByTime(1200)
+      window.dispatchEvent(pointerEvt('pointerup', { clientX: 20, clientY: 90 }))
+      chatBtn.click()
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).not.toHaveBeenCalled()
+    expect(api.setCurrent).not.toHaveBeenCalled()
+  })
+
+  it('suppresses click after pointercancel or blur, and allows a subsequent fresh click on another scene', async () => {
+    const { host, api } = await mountScenes(sample)
+    setRowBoxes(host, true)
+
+    const gameBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Gameplay"] button')!
+    const chatBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Chatting"] button')!
+
+    // pointercancel after active drag must swallow click.
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 90 }))
+      window.dispatchEvent(pointerEvt('pointercancel', { clientX: 20, clientY: 90 }))
+      gameBtn.click()
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).not.toHaveBeenCalled()
+    expect(api.setCurrent).not.toHaveBeenCalled()
+
+    // window blur after active drag must swallow click too.
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 90 }))
+      window.dispatchEvent(new Event('blur'))
+      gameBtn.click()
+    })
+    await flush()
+    expect(api.setCurrent).not.toHaveBeenCalled()
+
+    // A fresh user pointerdown + pointerup + click immediately after on Chatting still switches normally.
+    await act(async () => {
+      chatBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 90 }))
+      window.dispatchEvent(pointerEvt('pointerup', { clientX: 20, clientY: 90 }))
+      chatBtn.click()
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.setCurrent).toHaveBeenCalledWith('Chatting')
+  })
+
+  it('cancels stuck drag when mouse buttons===0 or lostpointercapture fires', async () => {
+    const { host, api } = await mountScenes(sample)
+    setRowBoxes(host, true)
+
+    const gameLi = host.querySelector<HTMLElement>('[data-scene-name="Gameplay"]')!
+    const gameBtn = gameLi.querySelector<HTMLButtonElement>('button')!
+
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 90 }))
+    })
+    expect(host.querySelector('[data-scene-ghost]')).not.toBeNull()
+
+    // Releasing mouse outside window returns with buttons: 0.
+    await act(async () => {
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 85, buttons: 0 }))
+      gameBtn.click()
+      vi.runAllTimers()
     })
     await flush()
     expect(host.querySelector('[data-scene-ghost]')).toBeNull()
     expect(api.moveScene).not.toHaveBeenCalled()
+    expect(api.setCurrent).not.toHaveBeenCalled()
+
+    // lostpointercapture also cleans up drag and suppresses release click.
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 90 }))
+      gameLi.dispatchEvent(pointerEvt('lostpointercapture', { clientX: 20, clientY: 90 }))
+      gameBtn.click()
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+    expect(api.moveScene).not.toHaveBeenCalled()
+    expect(api.setCurrent).not.toHaveBeenCalled()
+  })
+
+  it('supports touch drag on [data-drag-handle] only (preserving scroll on label) and vertical canvas reorder', async () => {
+    const verticalData: EngineScenes = {
+      current: 'Main',
+      preview: null,
+      transition: { kind: 'cut', ms: 0 },
+      top_layer: null,
+      vertical: {
+        width: 1080,
+        height: 1920,
+        current: 'Tall 1',
+        scenes: [makeScene('Tall 1', { current: true }), makeScene('Tall 2'), makeScene('Tall 3')],
+      },
+      scenes: [makeScene('Main', { current: true }), makeScene('Gameplay')],
+    }
+    const { desk, api } = makeDesk(verticalData)
+    desk.canvas = 'vertical'
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk}>
+          <ScenesDock />
+        </DeskProvider>,
+      )
+    })
+    setRowBoxes(host, true)
+
+    const tall2Btn = host.querySelector<HTMLButtonElement>('[data-scene-name="Tall 2"] button')!
+    const tall2Handle = host.querySelector<HTMLElement>(
+      '[data-scene-name="Tall 2"] [data-drag-handle]',
+    )!
+
+    // Touch on button label outside handle does NOT start a drag.
+    await act(async () => {
+      tall2Btn.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 2, clientX: 80, clientY: 54 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointermove', { pointerType: 'touch', pointerId: 2, clientX: 80, clientY: 96 }),
+      )
+    })
+    expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+    await act(async () => {
+      window.dispatchEvent(
+        pointerEvt('pointerup', { pointerType: 'touch', pointerId: 2, clientX: 80, clientY: 96 }),
+      )
+    })
+
+    // Touch on [data-drag-handle] drags Tall 2 onto bottom half of Tall 3 without calling setCurrent.
+    await act(async () => {
+      tall2Handle.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 3, clientX: 12, clientY: 54 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointermove', { pointerType: 'touch', pointerId: 3, clientX: 12, clientY: 96 }),
+      )
+    })
+    expect(host.querySelector('[data-scene-ghost]')?.textContent).toContain('Tall 2')
+    await act(async () => {
+      window.dispatchEvent(
+        pointerEvt('pointerup', { pointerType: 'touch', pointerId: 3, clientX: 12, clientY: 96 }),
+      )
+      vi.advanceTimersByTime(150)
+      tall2Btn.click()
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).toHaveBeenCalledWith('Tall 2', 2)
+    expect(api.setCurrent).not.toHaveBeenCalled()
+  })
+
+  it('auto-scrolls continuously via rAF when holding near the scroll edge', async () => {
+    const { host } = await mountScenes(sample)
+    setRowBoxes(host, true)
+    const scrollEl = host.querySelector<HTMLDivElement>('ul')!.parentElement as HTMLDivElement
+    Object.defineProperty(scrollEl, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 200, left: 0, right: 260, width: 260, height: 200 }),
+    })
+    Object.defineProperty(scrollEl, 'scrollHeight', { configurable: true, value: 600 })
+    Object.defineProperty(scrollEl, 'clientHeight', { configurable: true, value: 200 })
+    scrollEl.scrollTop = 0
+
+    const gameBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Gameplay"] button')!
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
+      // Hold pointer in bottom 32px edge zone (y=190 in 0..200) with no subsequent pointermove.
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 190 }))
+    })
+    const scrollAfterMove = scrollEl.scrollTop
+    await act(async () => {
+      vi.advanceTimersByTime(80)
+    })
+    expect(scrollEl.scrollTop).toBeGreaterThan(scrollAfterMove)
+
+    await act(async () => {
+      window.dispatchEvent(pointerEvt('pointerup', { clientX: 20, clientY: 190 }))
+      vi.runAllTimers()
+    })
   })
 
   it('does not start drag for <5 px clicks and allows normal scene switch', async () => {

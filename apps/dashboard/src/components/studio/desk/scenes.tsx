@@ -163,15 +163,87 @@ export function ScenesDock() {
   const dragged = useRef<{
     name: string
     pointerId: number
+    el: HTMLElement | null
     x: number
     y: number
     on: boolean
   } | null>(null)
-  const justDragged = useRef(false)
-  const clickResetTimer = useRef<number | null>(null)
+  const pointerPos = useRef<{ x: number; y: number } | null>(null)
+  const scrollRaf = useRef<number | null>(null)
+  const suppressRef = useRef<{
+    pointerId: number
+    released: boolean
+    timer: number | null
+    cleanup: () => void
+  } | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
   const [drop, setDrop] = useState<SceneDrop | null>(null)
+
+  const clearSuppress = useCallback(() => {
+    const s = suppressRef.current
+    if (!s) return
+    suppressRef.current = null
+    if (s.timer !== null) window.clearTimeout(s.timer)
+    s.cleanup()
+  }, [])
+
+  const armSuppressClick = useCallback(
+    (pointerId: number, releasedNow: boolean) => {
+      clearSuppress()
+      const entry = {
+        pointerId,
+        released: releasedNow,
+        timer: null as number | null,
+        cleanup: () => undefined,
+      }
+      const startExpiry = () => {
+        if (entry.timer !== null) window.clearTimeout(entry.timer)
+        entry.released = true
+        entry.timer = window.setTimeout(() => {
+          if (suppressRef.current === entry) clearSuppress()
+        }, 400)
+      }
+      const onClick = (ev: MouseEvent) => {
+        if (suppressRef.current !== entry) return
+        ev.preventDefault()
+        ev.stopPropagation()
+        ev.stopImmediatePropagation()
+        clearSuppress()
+      }
+      const onPointerDown = (ev: PointerEvent) => {
+        if (suppressRef.current !== entry) return
+        if (entry.released || ev.pointerType === 'mouse' || ev.isPrimary) {
+          clearSuppress()
+        }
+      }
+      const onKeyDown = (ev: KeyboardEvent) => {
+        if (suppressRef.current !== entry) return
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          clearSuppress()
+        }
+      }
+      const onRelease = (ev: PointerEvent) => {
+        if (suppressRef.current !== entry || ev.pointerId !== entry.pointerId) return
+        if (!entry.released) startExpiry()
+      }
+      entry.cleanup = () => {
+        window.removeEventListener('click', onClick, true)
+        window.removeEventListener('pointerdown', onPointerDown, true)
+        window.removeEventListener('keydown', onKeyDown, true)
+        window.removeEventListener('pointerup', onRelease, true)
+        window.removeEventListener('pointercancel', onRelease, true)
+      }
+      suppressRef.current = entry
+      window.addEventListener('click', onClick, true)
+      window.addEventListener('pointerdown', onPointerDown, true)
+      window.addEventListener('keydown', onKeyDown, true)
+      window.addEventListener('pointerup', onRelease, true)
+      window.addEventListener('pointercancel', onRelease, true)
+      if (releasedNow) startExpiry()
+    },
+    [clearSuppress],
+  )
 
   useEffect(() => {
     const name = pendingFocus.current
@@ -245,10 +317,13 @@ export function ScenesDock() {
     return { name: targetName, after, to }
   }
 
+  const computeDropRef = useRef(computeDrop)
+  computeDropRef.current = computeDrop
+
   const dragHandlers = useRef<{
     move: (e: PointerEvent) => void
     up: (e: PointerEvent) => void
-    cancel: () => void
+    cancel: (releasedNow?: boolean) => void
   } | null>(null)
   const windowListeners = useRef<{
     move: (e: PointerEvent) => void
@@ -257,7 +332,16 @@ export function ScenesDock() {
     key: (e: KeyboardEvent) => void
   } | null>(null)
 
+  const stopScrollLoop = useCallback(() => {
+    if (scrollRaf.current !== null) {
+      window.cancelAnimationFrame(scrollRaf.current)
+      scrollRaf.current = null
+    }
+    pointerPos.current = null
+  }, [])
+
   const detachDragListeners = useCallback(() => {
+    stopScrollLoop()
     const wl = windowListeners.current
     if (!wl) return
     windowListeners.current = null
@@ -266,30 +350,102 @@ export function ScenesDock() {
     window.removeEventListener('pointercancel', wl.cancel)
     window.removeEventListener('blur', wl.cancel)
     window.removeEventListener('keydown', wl.key, true)
+  }, [stopScrollLoop])
+
+  const endDragSession = useCallback((d: NonNullable<typeof dragged.current>) => {
+    delete document.body.dataset.sceneDrag
+    try {
+      if (d.el?.hasPointerCapture?.(d.pointerId)) {
+        d.el.releasePointerCapture(d.pointerId)
+      }
+    } catch {
+      // Ignore if capture was already released.
+    }
   }, [])
 
-  const cancelDrag = useCallback(() => {
-    dragged.current = null
-    detachDragListeners()
-    setDragging(null)
-    setGhost(null)
-    setDrop(null)
-  }, [detachDragListeners])
+  const cancelDrag = useCallback(
+    (releasedNow = true) => {
+      const d = dragged.current
+      dragged.current = null
+      detachDragListeners()
+      if (d) {
+        endDragSession(d)
+        if (d.on) armSuppressClick(d.pointerId, releasedNow)
+      }
+      setDragging(null)
+      setGhost(null)
+      setDrop(null)
+    },
+    [armSuppressClick, detachDragListeners, endDragSession],
+  )
+
+  const stepAutoScroll = useCallback(() => {
+    scrollRaf.current = null
+    const d = dragged.current
+    const boxEl = scrollRef.current
+    const pos = pointerPos.current
+    if (!d || !d.on || !boxEl || !pos) return
+    const box = boxEl.getBoundingClientRect()
+    let delta = 0
+    if (box.height > 0) {
+      if (pos.y < box.top + 32 && boxEl.scrollTop > 0) delta = -8
+      else if (pos.y > box.bottom - 32 && boxEl.scrollTop + boxEl.clientHeight < boxEl.scrollHeight)
+        delta = 8
+    }
+    if (delta !== 0) {
+      boxEl.scrollTop += delta
+      const next = computeDropRef.current(pos.x, pos.y, d.name)
+      setDrop((prev) =>
+        prev?.name === next?.name && prev?.after === next?.after && prev?.to === next?.to
+          ? prev
+          : next,
+      )
+      scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
+    }
+  }, [])
 
   dragHandlers.current = {
     move: (e: PointerEvent) => {
       const d = dragged.current
       if (!d || e.pointerId !== d.pointerId) return
+      if (e.pointerType === 'mouse' && e.buttons === 0) {
+        cancelDrag(true)
+        return
+      }
       if (!d.on) {
         if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return
         d.on = true
+        document.body.dataset.sceneDrag = '1'
+        try {
+          d.el?.setPointerCapture?.(e.pointerId)
+        } catch {
+          // Synthetic events without an active browser pointer cannot capture.
+        }
         setDragging(d.name)
       }
+      pointerPos.current = { x: e.clientX, y: e.clientY }
       if (scrollRef.current) {
-        const box = scrollRef.current.getBoundingClientRect()
+        const boxEl = scrollRef.current
+        const box = boxEl.getBoundingClientRect()
         if (box.height > 0) {
-          if (e.clientY < box.top + 32) scrollRef.current.scrollTop -= 8
-          else if (e.clientY > box.bottom - 32) scrollRef.current.scrollTop += 8
+          if (e.clientY < box.top + 32) {
+            boxEl.scrollTop -= 8
+            if (scrollRaf.current === null && boxEl.scrollTop > 0)
+              scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
+          } else if (e.clientY > box.bottom - 32) {
+            boxEl.scrollTop += 8
+            if (
+              scrollRaf.current === null &&
+              boxEl.scrollTop + boxEl.clientHeight < boxEl.scrollHeight
+            ) {
+              scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
+            }
+          } else {
+            if (scrollRaf.current !== null) {
+              window.cancelAnimationFrame(scrollRaf.current)
+              scrollRaf.current = null
+            }
+          }
         }
       }
       setGhost({ x: e.clientX, y: e.clientY })
@@ -305,13 +461,9 @@ export function ScenesDock() {
       if (!d || e.pointerId !== d.pointerId) return
       dragged.current = null
       detachDragListeners()
+      endDragSession(d)
       if (!d.on) return
-      justDragged.current = true
-      if (clickResetTimer.current !== null) window.clearTimeout(clickResetTimer.current)
-      clickResetTimer.current = window.setTimeout(() => {
-        justDragged.current = false
-        clickResetTimer.current = null
-      }, 0)
+      armSuppressClick(d.pointerId, true)
       const next = computeDrop(e.clientX, e.clientY, d.name)
       setDragging(null)
       setGhost(null)
@@ -320,21 +472,22 @@ export function ScenesDock() {
       setLiveMsg(`Moved ${d.name} to position ${next.to + 1} of ${names.length}`)
       void act(`move:${d.name}`, () => api.moveScene(d.name, next.to))
     },
-    cancel: () => {
-      cancelDrag()
+    cancel: (releasedNow = true) => {
+      cancelDrag(releasedNow)
     },
   }
 
   useEffect(() => {
-    if (!canDrag && dragged.current) cancelDrag()
+    if (!canDrag && dragged.current) cancelDrag(true)
   }, [canDrag, cancelDrag])
 
   useEffect(
     () => () => {
+      delete document.body.dataset.sceneDrag
       detachDragListeners()
-      if (clickResetTimer.current !== null) window.clearTimeout(clickResetTimer.current)
+      clearSuppress()
     },
-    [detachDragListeners],
+    [clearSuppress, detachDragListeners],
   )
 
   const pressScene = (e: ReactPointerEvent<HTMLElement>, sceneName: string) => {
@@ -342,10 +495,12 @@ export function ScenesDock() {
       return
     if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-drag-handle]'))
       return
+    clearSuppress()
     detachDragListeners()
     dragged.current = {
       name: sceneName,
       pointerId: e.pointerId,
+      el: e.currentTarget,
       x: e.clientX,
       y: e.clientY,
       on: false,
@@ -353,12 +508,13 @@ export function ScenesDock() {
     const wl = {
       move: (ev: PointerEvent) => dragHandlers.current?.move(ev),
       up: (ev: PointerEvent) => dragHandlers.current?.up(ev),
-      cancel: () => dragHandlers.current?.cancel(),
+      cancel: () => dragHandlers.current?.cancel(true),
       key: (ev: KeyboardEvent) => {
         if (ev.key === 'Escape' && dragged.current) {
           ev.preventDefault()
           ev.stopPropagation()
-          dragHandlers.current?.cancel()
+          // Pointer button may still be held after Escape; hold suppression until release.
+          dragHandlers.current?.cancel(false)
         }
       },
     }
@@ -688,10 +844,15 @@ export function ScenesDock() {
                   key={s.name}
                   data-scene-name={s.name}
                   onPointerDown={(e) => pressScene(e, s.name)}
+                  onLostPointerCapture={(e) => {
+                    const d = dragged.current
+                    if (d && d.on && e.pointerId === d.pointerId) cancelDrag(true)
+                  }}
                   onClickCapture={(e) => {
-                    if (justDragged.current) {
+                    if (suppressRef.current) {
                       e.preventDefault()
                       e.stopPropagation()
+                      clearSuppress()
                     }
                   }}
                   className="relative min-w-0 select-none"
@@ -726,7 +887,7 @@ export function ScenesDock() {
                       aria-current={s.current ? 'true' : undefined}
                       title={grid ? s.name : undefined}
                       onClick={() => {
-                        if (justDragged.current) return
+                        if (suppressRef.current) return
                         // Studio Mode: a click shows it in the preview; Transition sends it on air.
                         if (studio) {
                           if (!s.preview) void act(`pv:${s.name}`, () => api.setPreview(s.name))
@@ -774,7 +935,7 @@ export function ScenesDock() {
                         grid
                           ? 'grid gap-1 rounded-control border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
                           : cx(
-                              'flex min-h-8 items-center gap-2 border-b border-line pr-2 text-[13.5px] hover:bg-surface-2',
+                              'flex min-h-8 items-center gap-2 border-b border-line pr-2 text-[13.5px] hover:bg-surface-2 [@media(pointer:coarse)]:min-h-[44px]',
                               canDrag ? 'pl-2' : 'pl-3',
                             ),
                         dragging === s.name &&
@@ -830,7 +991,7 @@ export function ScenesDock() {
                               <span
                                 aria-hidden
                                 data-drag-handle
-                                className="flex shrink-0 touch-none items-center justify-center rounded-[4px] text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                                className="flex shrink-0 touch-none items-center justify-center rounded-[4px] text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:-ml-1 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                               >
                                 <DotsSixVertical size={13} weight="bold" />
                               </span>
@@ -850,7 +1011,7 @@ export function ScenesDock() {
                             <span
                               aria-hidden
                               data-drag-handle
-                              className="flex shrink-0 touch-none items-center justify-center rounded-[4px] py-1 text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                              className="flex shrink-0 touch-none items-center justify-center rounded-[4px] py-1 text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:-ml-1 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
                             >
                               <DotsSixVertical size={14} weight="bold" />
                             </span>
