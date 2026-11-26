@@ -389,27 +389,26 @@ function useSeamDraw(): boolean {
 }
 
 /**
- * The sticky header's real height as `--fc-top` on the page (the phone's strip and the top
- * bar together, safe area included), so full-height screens like Chat fit the viewport
- * whatever the strip says or how it wraps.
+ * Measures a layout chrome element (`--fc-top` for the sticky header, `--fc-banners` for
+ * top banners) so viewport-locked screens fit cleanly without outer page scrollbars.
  */
-function useHeaderHeight() {
-  const ref = useRef<HTMLElement>(null)
+function useElementHeight<T extends HTMLElement>(cssVar: string) {
+  const ref = useRef<T>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const root = document.documentElement
     const set = () =>
-      root.style.setProperty('--fc-top', `${Math.ceil(el.getBoundingClientRect().height)}px`)
+      root.style.setProperty(cssVar, `${Math.ceil(el.getBoundingClientRect().height)}px`)
     set()
-    if (typeof ResizeObserver !== 'function') return () => root.style.removeProperty('--fc-top')
+    if (typeof ResizeObserver !== 'function') return () => root.style.removeProperty(cssVar)
     const ro = new ResizeObserver(set)
     ro.observe(el)
     return () => {
       ro.disconnect()
-      root.style.removeProperty('--fc-top')
+      root.style.removeProperty(cssVar)
     }
-  }, [])
+  }, [cssVar])
   return ref
 }
 
@@ -477,7 +476,8 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       (!remote || remoteScreenAllowed(remote.role, i.route.name, limited)),
   )
   const main = cloud ? CLOUD_MAIN : limited ? [...MOBILE_MAIN, 'history'] : MOBILE_MAIN
-  const headerRef = useHeaderHeight()
+  const headerRef = useElementHeight<HTMLElement>('--fc-top')
+  const bannersRef = useElementHeight<HTMLDivElement>('--fc-banners')
   const tabs = nav.filter((i) => main.includes(i.route.name))
   const ThemeIcon = theme === 'dark' ? Sun : Moon
 
@@ -675,8 +675,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           </div>
         </header>
 
-        {!remote && !cloud && safeMode?.active && <SafeModeBanner safeMode={safeMode} />}
-        <NoticeBanners notices={notices} dismiss={dismiss} />
+        <div ref={bannersRef} data-banners-wrap="true">
+          {!remote && !cloud && safeMode?.active && <SafeModeBanner safeMode={safeMode} />}
+          <NoticeBanners notices={notices} dismiss={dismiss} />
+        </div>
 
         <main
           id="main"

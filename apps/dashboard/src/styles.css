@@ -59,6 +59,37 @@ textarea:not([data-keep-placeholder])::placeholder {
   scrollbar-width: thin;
   scrollbar-color: var(--fc-line-strong) transparent;
 }
+.fc-scroll-stable {
+  scrollbar-gutter: stable;
+}
+/* Desktop viewport lock for the overlay layout editor; dropped on narrow or short windows
+   (including 150-200% zoom) so the canvas stays readable in normal page scroll. */
+@media (min-width: 1024px) and (min-height: 541px) {
+  .fc-overlay-workspace {
+    height: calc(
+      100dvh - var(--fc-top, 56px) - var(--fc-banners, 0px) - 24px - var(--fc-statusbar, 0px)
+    );
+    overflow: hidden;
+  }
+  .fc-overlay-grid {
+    min-height: 0;
+    flex: 1 1 0%;
+    overflow: hidden;
+  }
+  .fc-overlay-stage {
+    flex: 1 1 0%;
+    min-height: 200px;
+  }
+  .fc-overlay-stage-inner {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+  .fc-overlay-inspector {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+  }
+}
 
 input[type='range'] {
   accent-color: var(--fc-accent);

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowArcLeft, ArrowArcRight, CaretLeft, Eye, EyeSlash } from '@phosphor-icons/react'
 import { DEFAULT_THEME, renderSafeTemplate, type Overlay, type OverlayState } from '@ferrocast/api'
-import { Button, Dialog, IconButton, Skeleton } from '@ferrocast/ui'
+import { Button, Dialog, IconButton, Skeleton, cx } from '@ferrocast/ui'
 import { LoadError } from '../components/Panel'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
 import { TestAlertMenu } from '../components/alerts-live'
@@ -14,6 +13,7 @@ import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
 import { useLive } from '../lib/store'
 import { useLeaveGuard } from '../lib/unsaved'
+import { useFlushPage, useWidePage } from '../lib/wide'
 import {
   SAMPLE_CREDITS,
   SAMPLE_GIVEAWAY,
@@ -23,6 +23,8 @@ import {
 } from '../components/community/preview'
 
 export function OverlayEditor({ id }: { id: string }) {
+  useWidePage()
+  useFlushPage()
   const client = useClient()
   const ov = useResource((c) => c.overlay(id), [id])
   const themes = useResource((c) => c.themes())
@@ -45,7 +47,6 @@ export function OverlayEditor({ id }: { id: string }) {
   useUndoKeys(history)
   const media = useResource((c) => c.media())
   const [preview, setPreview] = useState(true)
-  const reduce = useReducedMotion()
   useEffect(() => {
     if (ov.data) history.reset(ov.data)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,20 +198,56 @@ export function OverlayEditor({ id }: { id: string }) {
       return o
     })
   const save = () => void saveNow()
+  const statusFooter = (
+    <div
+      data-testid="overlay-status-bar"
+      className={cx(
+        'flex items-center gap-3 rounded-panel border px-3.5 transition-colors duration-150 lg:h-12 lg:min-h-[48px] lg:flex-nowrap',
+        dirty
+          ? 'flex-wrap border-line-strong bg-surface-1 py-2.5 shadow-pop lg:py-0 lg:shadow-none'
+          : 'hidden border-line bg-surface-1/70 lg:flex',
+      )}
+    >
+      {dirty ? (
+        <>
+          <p className="min-w-0 flex-1 text-[13.5px] font-medium text-text-2 lg:truncate">
+            Unsaved layout. Your stream keeps the old one until you save.
+          </p>
+          <Button size="sm" variant="ghost" onClick={() => ov.data && setDraft(ov.data)}>
+            Discard
+          </Button>
+          <Button size="sm" variant="primary" busy={busy === 'save'} onClick={save}>
+            Save
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="min-w-0 flex-1 truncate text-[13.5px] text-text-3 tabular-nums">
+            {draft.width} × {draft.height} · {draft.widgets.length}{' '}
+            {draft.widgets.length === 1 ? 'layer' : 'layers'} · Saved
+          </p>
+          <span className="hidden shrink-0 text-[12.5px] text-text-3 xl:inline">
+            Arrows nudge · Del removes
+          </span>
+        </>
+      )}
+    </div>
+  )
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="fc-overlay-workspace flex flex-col gap-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <a
           href={href({ name: 'overlays' })}
-          className="fc-press inline-flex size-10 items-center justify-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text"
+          className="fc-press inline-flex size-9 items-center justify-center rounded-control text-text-3 hover:bg-surface-2 hover:text-text sm:size-10"
           aria-label="Back to overlays"
         >
           <CaretLeft size={18} />
         </a>
-        <h1 className="mr-auto min-w-0 truncate font-display text-2xl font-extrabold tracking-tight">
+        <h1 className="mr-auto min-w-0 truncate font-display text-xl font-extrabold tracking-tight sm:text-2xl">
           {draft.name}
         </h1>
+        <SecretUrl url={draft.url} className="max-w-xl basis-full lg:w-56 lg:basis-auto xl:w-72" />
         <IconButton size="sm" label="Undo" disabled={!history.canUndo} onClick={history.undo}>
           <ArrowArcLeft size={16} />
         </IconButton>
@@ -243,14 +280,17 @@ export function OverlayEditor({ id }: { id: string }) {
           </Button>
         )}
       </div>
-      <SecretUrl url={draft.url} className="max-w-xl" />
       {brandLocked && (
-        <p className="text-[14px] text-text-3">
+        <p
+          className="shrink-0 text-[13px] text-text-3 lg:truncate"
+          title="Made from a built-in design: it keeps a small Ferrocast mark. Duplicate the design in Designs to make an unbranded copy."
+        >
           Made from a built-in design: it keeps a small Ferrocast mark. Duplicate the design in
           Designs to make an unbranded copy.
         </p>
       )}
       <LayoutEditor
+        fitViewport
         layout={draft}
         onWidgets={(widgets, opts) => history.set((d) => (d ? { ...d, widgets } : d), opts)}
         brandLocked={brandLocked}
@@ -261,27 +301,8 @@ export function OverlayEditor({ id }: { id: string }) {
         preview={preview}
         media={media.data ?? []}
         onUploaded={(m) => media.set((prev) => [...(prev ?? []), m])}
+        footer={statusFooter}
       />
-      <AnimatePresence>
-        {dirty && (
-          <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-4 py-3 shadow-pop lg:bottom-[calc(1rem+var(--fc-statusbar,0px))] xl:w-[calc(100%-21rem)]"
-          >
-            <p className="min-w-0 flex-1 text-[14px] text-text-2">
-              Unsaved layout. Your stream keeps the old one until you save.
-            </p>
-            <Button size="sm" variant="ghost" onClick={() => ov.data && setDraft(ov.data)}>
-              Discard
-            </Button>
-            <Button size="sm" variant="primary" busy={busy === 'save'} onClick={save}>
-              Save
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
       {guide}
       <AddToStudioDialog overlay={toStudio ? draft : null} onClose={() => setToStudio(false)} />
       <Dialog
