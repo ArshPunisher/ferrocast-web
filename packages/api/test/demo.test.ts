@@ -691,4 +691,28 @@ describe('demo engine: viewer counts and stream_offline sync', () => {
     expect(offlineState).toBeDefined()
     sock.close()
   })
+
+  it('does not re-emit viewer_count: 0 for offline platforms during driftViewers', async () => {
+    vi.useFakeTimers()
+    try {
+      const autoEngine = new DemoEngine({ autoplay: true, latencyMs: 0, setupDone: true })
+      const autoClient = new FerroClient({
+        base: autoEngine.base,
+        token: DEMO_TOKEN,
+        fetch: autoEngine.fetch,
+        sleep: async () => {},
+      })
+      autoEngine.inject({ type: 'stream_offline' }, 'youtube')
+      let s = await autoClient.sessionStats()
+      expect(s.viewers.youtube).toBeUndefined()
+
+      await vi.advanceTimersByTimeAsync(10_500)
+      s = await autoClient.sessionStats()
+      expect(s.viewers.youtube).toBeUndefined()
+      expect(s.viewers.twitch).toBeGreaterThan(0)
+      autoEngine.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

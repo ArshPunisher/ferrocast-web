@@ -3938,6 +3938,7 @@ export class DemoEngine {
 
   private driftViewers(): void {
     for (const p of this.connectedChat()) {
+      if (!this.isLiveOn(p)) continue
       const cur = this.viewers[p] ?? 0
       const next = Math.max(0, Math.round(cur + (this.rand() - 0.45) * cur * 0.04))
       this.ingest({ type: 'viewer_count', count: next }, p, 'live')
