@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { open, openSidebar } from './helpers'
+import { demo, open, openSidebar, settled } from './helpers'
 
 interface PreviewReqLog {
   method: string
@@ -219,5 +219,314 @@ test.describe('Studio CSS layout and resize stability', () => {
       return w.__previewPuts?.length ?? 0
     })
     expect(afterScale).toBe(1)
+  })
+})
+
+const WHOLE_APP_VIEWPORTS = [
+  { width: 1280, height: 800 },
+  { width: 1024, height: 600 },
+  { width: 900, height: 700 },
+  { width: 375, height: 812 },
+] as const
+
+const SCREEN_GROUP_CORE = [
+  'home',
+  'studio/golive',
+  'studio/vertical',
+  'chat',
+  'alerts',
+  'alerts/sub',
+  'overlays',
+  'overlays/ov-main',
+] as const
+
+const SCREEN_GROUP_SECONDARY = [
+  'designs',
+  'designer/builtin.neon-sign',
+  'store',
+  'moderation',
+  'bot',
+  'community',
+  'recap',
+  'tips',
+  'history',
+  'plans',
+  'account',
+  'settings/appearance',
+  'import',
+] as const
+
+async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
+  const errors: string[] = []
+  page.on('pageerror', (err) => errors.push(err.message))
+
+  await openSidebar(page)
+  await page.setViewportSize(WHOLE_APP_VIEWPORTS[0])
+  await open(page, routes[0]!, 'autoplay=0&latency=0&studioEngine=1')
+
+  for (const route of routes) {
+    await page.evaluate((r) => {
+      location.hash = `#/${r}`
+    }, route)
+    await expect(page.locator('#main')).toBeVisible()
+    // Allow lazy route chunk & initial data fetch to settle cleanly before sizing assertions.
+    await expect(page.locator('#main')).not.toHaveText(/^\s*$/)
+    await settled(page)
+
+    for (const vp of WHOLE_APP_VIEWPORTS) {
+      await page.setViewportSize(vp)
+      await page.waitForTimeout(50)
+
+      const metrics = await page.evaluate(() => ({
+        scrollW: document.documentElement.scrollWidth,
+        innerW: window.innerWidth,
+        scrollH: document.documentElement.scrollHeight,
+        innerH: window.innerHeight,
+        mainText: (document.getElementById('main')?.textContent ?? '').trim().length,
+      }))
+
+      expect(
+        metrics.mainText,
+        `${route} at ${vp.width}x${vp.height} rendered empty`,
+      ).toBeGreaterThan(0)
+      expect(
+        metrics.scrollW,
+        `${route} horizontal overflow at ${vp.width}x${vp.height}`,
+      ).toBeLessThanOrEqual(metrics.innerW + 1)
+
+      if (
+        vp.width >= 1024 &&
+        (route === 'alerts/sub' || route === 'chat' || route === 'overlays/ov-main')
+      ) {
+        expect(
+          metrics.scrollH,
+          `${route} outer vertical overflow at ${vp.width}x${vp.height}`,
+        ).toBeLessThanOrEqual(metrics.innerH + 2)
+      }
+    }
+  }
+
+  expect(errors, 'unexpected pageerror during screen resize sweep').toEqual([])
+}
+
+test.describe('Whole-app S3 stability sweep across main screens', () => {
+  test.skip(({ isMobile }) => !!isMobile, 'Desktop resize sweep tests desktop + phone breakpoints.')
+
+  test('core & editor screens remain overflow-free at 1280x800, 1024x600, 900x700, 375x812', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000)
+    await sweepScreensAtViewports(page, SCREEN_GROUP_CORE)
+  })
+
+  test('creation, community, plans, settings & import screens remain overflow-free at all 4 viewports', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000)
+    await sweepScreensAtViewports(page, SCREEN_GROUP_SECONDARY)
+  })
+
+  test('banners, sticky headers, StageView width, Chat 1024px continuity, DockHandle drag & dialog scroll-lock', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000)
+    await openSidebar(page)
+    await page.addInitScript(() => localStorage.setItem('fc-golive-picture', 'ferrocast'))
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await open(page, 'studio/golive', 'autoplay=0&latency=0&studioEngine=1')
+    await page.getByRole('button', { name: 'Start the Studio' }).click()
+    await expect(page.locator('footer[aria-label="Studio status"]')).toBeVisible()
+
+    // Inject a persistent warning banner so --fc-banners is active alongside StudioStatusBar (--fc-statusbar).
+    await demo(
+      page,
+      "(d) => d.broadcastLive({ v: 1, type: 'notice', data: { key: 's3-banner', level: 'warn', message: 'Encoder bandwidth notice for viewport check.' } })",
+    )
+    await expect(page.locator('[data-banners-wrap="true"]')).toContainText(
+      'Encoder bandwidth notice',
+    )
+
+    // 1. Alerts, Chat, OverlayEditor clear both banner and bottom Studio statusbar.
+    for (const r of ['alerts/sub', 'chat', 'overlays/ov-main'] as const) {
+      await page.evaluate((hash) => {
+        location.hash = `#/${hash}`
+      }, r)
+      await settled(page)
+      const fit = await page.evaluate(() => {
+        const sb = document.querySelector('footer[aria-label="Studio status"]')
+        const ed =
+          document.querySelector('[data-testid="alert-editor"]') ??
+          document.querySelector('[data-testid="chat-pane-header"]')?.parentElement
+            ?.parentElement ??
+          document.querySelector('#main > div')
+        return {
+          scrollH: document.documentElement.scrollHeight,
+          innerH: window.innerHeight,
+          sbTop: sb ? sb.getBoundingClientRect().top : window.innerHeight,
+          edBottom: ed ? ed.getBoundingClientRect().bottom : 0,
+        }
+      })
+      expect(fit.scrollH, `${r} with banner+statusbar fits 1280x800`).toBeLessThanOrEqual(
+        fit.innerH + 2,
+      )
+      expect(fit.edBottom, `${r} clears Studio statusbar`).toBeLessThanOrEqual(fit.sbTop + 2)
+    }
+
+    // 2. Settings, Designs, Store sticky chrome clears sticky <header> on scroll and Studio statusbar at rest.
+    await page.evaluate(() => {
+      location.hash = '#/settings/appearance'
+    })
+    await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible()
+    const settingsAtRest = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Settings sections"]')!
+      const sb = document.querySelector('footer[aria-label="Studio status"]')!
+      return {
+        navBottom: nav.getBoundingClientRect().bottom,
+        sbTop: sb.getBoundingClientRect().top,
+      }
+    })
+    expect(settingsAtRest.navBottom).toBeLessThanOrEqual(settingsAtRest.sbTop + 1)
+
+    await page.evaluate(() => window.scrollTo(0, 600))
+    const settingsSticky = await page.evaluate(() => {
+      const hdr = document.querySelector('header')!
+      const nav = document.querySelector('nav[aria-label="Settings sections"]')!
+      return {
+        headerBottom: hdr.getBoundingClientRect().bottom,
+        navTop: nav.getBoundingClientRect().top,
+      }
+    })
+    expect(settingsSticky.navTop).toBeGreaterThanOrEqual(settingsSticky.headerBottom - 1)
+
+    for (const [route, selector] of [
+      ['designs', 'aside[aria-label="Filters"]'],
+      ['store', 'aside[aria-label="Store filters"]'],
+    ] as const) {
+      await page.evaluate((r) => {
+        location.hash = `#/${r}`
+      }, route)
+      await expect(page.locator(selector)).toBeVisible()
+      await page.evaluate(() => window.scrollTo(0, 500))
+      const stickyCheck = await page.evaluate((sel) => {
+        const hdr = document.querySelector('header')!
+        const side = document.querySelector(sel)!
+        return {
+          headerBottom: hdr.getBoundingClientRect().bottom,
+          sideTop: side.getBoundingClientRect().top,
+        }
+      }, selector)
+      expect(stickyCheck.sideTop, `${route} sticky filter clears header`).toBeGreaterThanOrEqual(
+        stickyCheck.headerBottom - 1,
+      )
+    }
+
+    // 3. Designer StageView keeps healthy preview width at 1024x600 with unfolded sidebar; GuidedView clears header at 375px.
+    await page.evaluate(() => {
+      localStorage.setItem('fc.designer.view', 'stage')
+      location.hash = '#/designer/builtin.neon-sign'
+    })
+    await page.setViewportSize({ width: 1024, height: 600 })
+    await expect(page.locator('figure[aria-label*="alert preview"]')).toBeVisible()
+    const stageWidth = await page
+      .locator('figure[aria-label*="alert preview"]')
+      .evaluate((el) => el.getBoundingClientRect().width)
+    expect(stageWidth).toBeGreaterThanOrEqual(360)
+
+    await page.evaluate(() => {
+      localStorage.setItem('fc.designer.view', 'guided')
+      location.hash = '#/designer/builtin.neon-sign'
+    })
+    await page.reload()
+    await page.setViewportSize({ width: 375, height: 812 })
+    await expect(page.locator('aside[aria-label="Preview"]')).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 320))
+    const guidedPos = await page.evaluate(() => {
+      const hdr = document.querySelector('header')!
+      const aside = document.querySelector('aside[aria-label="Preview"]')!
+      return {
+        headerBottom: hdr.getBoundingClientRect().bottom,
+        asideTop: aside.getBoundingClientRect().top,
+      }
+    })
+    expect(guidedPos.asideTop).toBeGreaterThanOrEqual(guidedPos.headerBottom - 1)
+
+    // 4. Chat stays mounted (preserves composer DOM node, typed text & focus) across 1024px.
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.evaluate(() => {
+      location.hash = '#/chat'
+    })
+    const composer = page.getByRole('textbox', { name: 'Message' })
+    await expect(composer).toBeVisible()
+    await composer.focus()
+    await composer.fill('persist across 1024px resize')
+    await page.evaluate(() => {
+      ;(window as unknown as { __composerEl?: Element | null }).__composerEl =
+        document.activeElement
+    })
+    for (const vp of [
+      { width: 900, height: 700 },
+      { width: 1024, height: 600 },
+      { width: 1280, height: 800 },
+    ]) {
+      await page.setViewportSize(vp)
+      await page.waitForTimeout(40)
+      const preserved = await page.evaluate(() => {
+        const w = window as unknown as { __composerEl?: HTMLInputElement | null }
+        return {
+          sameNode: document.activeElement === w.__composerEl,
+          value: w.__composerEl?.value ?? '',
+        }
+      })
+      expect(preserved.sameNode, `composer remounted at ${vp.width}px`).toBe(true)
+      expect(preserved.value).toBe('persist across 1024px resize')
+    }
+
+    // 5. Alerts DockHandle writes localStorage once on mouseup, not mid-drag.
+    await page.evaluate(() => {
+      location.hash = '#/alerts/sub'
+    })
+    await expect(page.getByTestId('alert-editor')).toBeVisible()
+    await page.evaluate(() => {
+      const w = window as unknown as { __dockWrites?: number }
+      w.__dockWrites = 0
+      const orig = Storage.prototype.setItem
+      Storage.prototype.setItem = function (k: string, v: string) {
+        if (k === 'fc-alerts-dock-left') w.__dockWrites = (w.__dockWrites ?? 0) + 1
+        return orig.call(this, k, v)
+      }
+    })
+    const leftHandle = page.locator('[data-dock-handle="left"]')
+    const hBox = (await leftHandle.boundingBox())!
+    await page.mouse.move(hBox.x + hBox.width / 2, hBox.y + hBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(hBox.x + 50, hBox.y + hBox.height / 2, { steps: 8 })
+    await page.waitForTimeout(40)
+    const midDockWrites = await page.evaluate(
+      () => (window as unknown as { __dockWrites?: number }).__dockWrites ?? 0,
+    )
+    expect(midDockWrites).toBe(0)
+    await page.mouse.up()
+    await page.waitForTimeout(40)
+    const endDockWrites = await page.evaluate(
+      () => (window as unknown as { __dockWrites?: number }).__dockWrites ?? 0,
+    )
+    expect(endDockWrites).toBe(1)
+
+    // 6. Opening a Dialog uses data-scroll-lock without mutating html.style.
+    await page.evaluate(() => {
+      location.hash = '#/overlays'
+    })
+    await page.getByRole('button', { name: 'New overlay' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    const scrollLock = await page.evaluate(() => ({
+      lock: document.documentElement.dataset.scrollLock,
+      inlineOverflow: document.documentElement.style.overflow,
+      inlineGutter: document.documentElement.style.scrollbarGutter,
+    }))
+    expect(scrollLock.lock).toBe('true')
+    expect(scrollLock.inlineOverflow).toBe('')
+    expect(scrollLock.inlineGutter).toBe('')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toBeHidden()
   })
 })
