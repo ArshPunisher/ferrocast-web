@@ -165,7 +165,12 @@ export function ThemeUseDialog({
         initialScenes={obsSelection}
         mergeApplied={!userTouched && initialScenes !== undefined}
         onClose={onClose}
-        onOff={() => setIntoObs(false)}
+        onOff={(selection) => {
+          if (selection !== undefined) {
+            setPickedState({ touched: true, list: selection })
+          }
+          setIntoObs(false)
+        }}
         onDone={setResult}
         api={api}
       />
@@ -564,7 +569,7 @@ function IntoObsDialog({
   initialScenes?: string[] | undefined
   mergeApplied?: boolean
   onClose: () => void
-  onOff: () => void
+  onOff: (selection?: string[]) => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
   api: ReturnType<typeof obsThemeApi>
 }) {
@@ -620,11 +625,12 @@ function PlanForm({
   initialScenes?: string[] | undefined
   mergeApplied?: boolean
   onClose: () => void
-  onOff: () => void
+  onOff: (selection?: string[]) => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
   api: ReturnType<typeof obsThemeApi>
 }) {
   const [mode] = useMode('theme-obs')
+  const [selectionEdited, setSelectionEdited] = useState(false)
   const [plan, setPlan] = useState<ThemePlan>(() => {
     if (!initialScenes) return data.plan
     const keepApplied =
@@ -648,15 +654,25 @@ function PlanForm({
   ])
   const counts = planCounts(plan, data.obs_scenes, data.screens, data.applied)
   const picked = plan.screens.filter((s) => s.place.kind !== 'skip').map((s) => s.key)
-  const setScreen = (key: string, patch: Partial<ScreenPlan>) =>
+  const setScreen = (key: string, patch: Partial<ScreenPlan>) => {
+    const cur = plan.screens.find((x) => x.key === key)
+    if (
+      cur &&
+      patch.place !== undefined &&
+      (patch.place.kind === 'skip') !== (cur.place.kind === 'skip')
+    ) {
+      setSelectionEdited(true)
+    }
     setPlan({
       ...plan,
       screens: plan.screens.map((s) => (s.key === key ? { ...s, ...patch } : s)),
     })
+  }
   const toggle = (key: string) => {
     const s = plan.screens.find((x) => x.key === key)
     const guessed = data.plan.screens.find((x) => x.key === key)
     if (!s || !guessed) return
+    setSelectionEdited(true)
     setScreen(
       key,
       s.place.kind === 'skip'
@@ -664,7 +680,8 @@ function PlanForm({
         : { place: { kind: 'skip' }, under: null, role: null },
     )
   }
-  const setAll = (on: boolean) =>
+  const setAll = (on: boolean) => {
+    setSelectionEdited(true)
     setPlan({
       ...plan,
       screens: plan.screens.map((s) => {
@@ -673,6 +690,7 @@ function PlanForm({
         return enableObsScreen(s, guessed)
       }),
     })
+  }
   const switching = data.applied && data.applied.design_id !== design.id
   const same = data.applied?.design_id === design.id
   const out = counts.removed ? `, take out ${counts.removed}` : ''
@@ -691,7 +709,11 @@ function PlanForm({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <ObsSwitch reach={{ ok: true, why: null }} checked onChange={(v) => !v && onOff()} />
+        <ObsSwitch
+          reach={{ ok: true, why: null }}
+          checked
+          onChange={(v) => !v && onOff(selectionEdited ? picked : undefined)}
+        />
         <ModeSwitch screen="theme-obs" />
       </div>
       {switching && (

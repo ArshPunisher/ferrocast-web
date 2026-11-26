@@ -476,6 +476,79 @@ describe('ThemeSheet Use just this screen', () => {
     expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('preserves OBS PlanForm screen exclusions when turning Set it up in OBS too off and back on, while keeping original proposal when unedited', async () => {
+    mockUsesObs = true
+    const obsPlan = {
+      plan: {
+        prefix: lofi.name,
+        screens: lofi.content.scenes.map((s) =>
+          s.key === 'starting_soon'
+            ? { key: s.key, place: { kind: 'skip' as const }, under: null, role: null }
+            : { key: s.key, place: { kind: 'new' as const }, under: null, role: null },
+        ),
+      },
+      screens: lofi.content.scenes.map((s) => ({ key: s.key, name: s.name })),
+      obs_scenes: ['Main'],
+      obs_cameras: ['Camera'],
+      old_widgets: [],
+      applied: null,
+    }
+    const { host } = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
+      request: vi.fn(async (method: string, path: string) => {
+        if (method === 'GET' && path === `/api/v1/designs/${encodeURIComponent(lofi.id)}/obs`) {
+          return obsPlan
+        }
+        return undefined
+      }),
+    })
+    await act(async () => {
+      useLive.setState({
+        connectors: {
+          obs: { state: 'connected', account: null, detail: null, last_event_at: null },
+        } as never,
+      })
+    })
+    await flushMicrotasks()
+
+    // Proposal starts with Starting soon skipped (4 of 5).
+    expect(host.textContent).toContain('Screens (4 of 5)')
+    expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('false')
+
+    // Toggling OBS off and back on without edits keeps the original proposal.
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+    })
+    expect(host.textContent).toContain('Screens (5 of 5)')
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+    })
+    await flushMicrotasks()
+    expect(host.textContent).toContain('Screens (4 of 5)')
+    expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('false')
+
+    // Now explicitly untick Ending inside PlanForm, turn OBS off, then turn OBS back on.
+    await act(async () => {
+      byText(host, 'button', 'Ending').click()
+    })
+    expect(host.textContent).toContain('Screens (3 of 5)')
+    expect(byText(host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+    })
+    expect(host.textContent).toContain('Screens (3 of 5)')
+    expect(byText(host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+    })
+    await flushMicrotasks()
+    expect(host.textContent).toContain('Screens (3 of 5)')
+    expect(byText(host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('false')
+    expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('false')
+    expect(byText(host, 'button', 'In game').getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('waits for overlay discovery, ignores mid-load tile clicks, and re-engages guard on Retry and One part', async () => {
     let resolveFirst!: (v: Overlay[]) => void
     const first = new Promise<Overlay[]>((r) => {
