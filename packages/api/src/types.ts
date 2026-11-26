@@ -1917,6 +1917,7 @@ export type OverlayServerFrame =
           | 'credits'
           | 'chat_highlight'
           | 'show'
+          | 'links'
         >
       >
     }
