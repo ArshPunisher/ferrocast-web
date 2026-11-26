@@ -245,12 +245,16 @@ export function ThemeSheet({
   alertDesign,
   onClose,
   onUse,
+  onUseScreen,
+  onUseAlert,
   onDuplicate,
 }: {
   theme: Theme | null
   alertDesign: Design | null
   onClose: () => void
   onUse: (t: Theme) => void
+  onUseScreen?: (t: Theme, sceneKey: string) => void
+  onUseAlert?: (a: Design) => void
   onDuplicate: (t: Theme) => void
 }) {
   const [view, setView] = useState<string>('')
@@ -318,6 +322,38 @@ export function ThemeSheet({
             <ScenePreview key={current} design={theme} sceneKey={current} live />
           )}
         </div>
+        {((current === '__alert' && alertDesign && onUseAlert) ||
+          (current !== '__alert' && scenes.length > 1 && onUseScreen)) && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[13.5px] font-medium text-text-2">
+              {current === '__alert'
+                ? 'Alert style preview'
+                : `Screen: ${views.find((v) => v.key === current)?.label ?? current}`}
+            </span>
+            {current === '__alert' && alertDesign && onUseAlert ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="min-h-[44px] sm:min-h-[32px]"
+                onClick={() => onUseAlert(alertDesign)}
+              >
+                Use just this alert style
+              </Button>
+            ) : (
+              scenes.length > 1 &&
+              onUseScreen && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-[44px] sm:min-h-[32px]"
+                  onClick={() => onUseScreen(theme, current)}
+                >
+                  Use just this screen
+                </Button>
+              )
+            )}
+          </div>
+        )}
         <div
           role="tablist"
           aria-label={`${theme.name} scenes`}

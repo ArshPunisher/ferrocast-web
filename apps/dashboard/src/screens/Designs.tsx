@@ -282,7 +282,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
   const [style, setStyle] = useState<StyleTag | ''>('')
   const [motion, setMotion] = useState<'' | 'calm' | 'lively'>('')
   const [q, setQ] = useState('')
-  const [using, setUsing] = useState<Design | null>(null)
+  const [using, setUsing] = useState<{ design: Design; scenes?: string[] } | null>(null)
   const [sheet, setSheet] = useState<Design | null>(null)
   const [deleting, setDeleting] = useState<Design | null>(null)
   const [dialog, setDialog] = useState<'file' | 'pack' | 'obs' | null>(null)
@@ -311,7 +311,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
     setQ('')
   }
   const use = (d: Design) => {
-    if (d.kind !== 'alert') return setUsing(d)
+    if (d.kind !== 'alert') return setUsing({ design: d })
     void run('use', () => client.useDesign(d.id), {
       success: `${d.name} now plays your alerts.${d.built_in ? ' It is a built-in, so it keeps the small Ferrocast mark.' : ''}`,
     }).then((r) => r && active.set({ design_id: r.alert_design }))
@@ -559,7 +559,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
                   themes={featured}
                   paused={!!sheet || !!using}
                   onOpen={setSheet}
-                  onUse={setUsing}
+                  onUse={(t) => setUsing({ design: t })}
                 />
               )}
               {tab === 'themes' && (
@@ -578,7 +578,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
                       theme={d}
                       isNew={d.built_in && newIds.has(d.id)}
                       onOpen={() => setSheet(d)}
-                      onUse={() => setUsing(d)}
+                      onUse={() => setUsing({ design: d })}
                     />
                   ) : (
                     <Tile
@@ -604,14 +604,28 @@ export function Designs({ tab }: { tab: GalleryTab }) {
         onClose={() => setSheet(null)}
         onUse={(t) => {
           setSheet(null)
-          setUsing(t)
+          setUsing({ design: t })
+        }}
+        onUseScreen={(t, key) => {
+          setSheet(null)
+          setUsing({ design: t, scenes: [key] })
+        }}
+        onUseAlert={(a) => {
+          setSheet(null)
+          use(a)
         }}
         onDuplicate={(t) => {
           setSheet(null)
           duplicate(t)
         }}
       />
-      <UseDialog key={`use-${using?.id ?? 'none'}`} design={using} onClose={() => setUsing(null)} />
+      <UseDialog
+        key={`use-${using?.design.id ?? 'none'}-${using?.scenes?.join(',') ?? 'all'}`}
+        design={using?.design ?? null}
+        {...(using?.scenes ? { initialScenes: using.scenes } : {})}
+        onAlertApplied={(id) => active.set({ design_id: id })}
+        onClose={() => setUsing(null)}
+      />
       <ImportDesignDialog
         open={dialog === 'file'}
         onClose={() => setDialog(null)}

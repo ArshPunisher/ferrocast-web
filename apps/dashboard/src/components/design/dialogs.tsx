@@ -33,30 +33,51 @@ export function fileName(d: Design): string {
 }
 
 /** "Use" for designs that need a target: a theme, a scene, or a widget design. */
-export function UseDialog({ design, onClose }: { design: Design | null; onClose: () => void }) {
-  const [classic, setClassic] = useState<{ intoStudio: boolean } | null>(null)
+export function UseDialog({
+  design,
+  onClose,
+  initialScenes,
+  onAlertApplied,
+}: {
+  design: Design | null
+  onClose: () => void
+  initialScenes?: string[] | undefined
+  onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
+}) {
+  const [classic, setClassic] = useState<{ intoStudio: boolean; scenes: string[] } | null>(null)
   // A theme can go into the Studio or OBS as well (24 Oct pick 1A); "Next" without OBS is
   // today's dialog, which then makes the Studio's scenes when asked.
   if (design?.kind === 'theme' && !classic)
     return (
       <ThemeUseDialog
         design={design}
+        initialScenes={initialScenes}
+        onAlertApplied={onAlertApplied}
         onClose={onClose}
-        onClassic={(intoStudio) => setClassic({ intoStudio })}
+        onClassic={(intoStudio, scenes) => setClassic({ intoStudio, scenes })}
       />
     )
-  return <ClassicUseDialog design={design} onClose={onClose} intoStudio={!!classic?.intoStudio} />
+  return (
+    <ClassicUseDialog
+      design={design}
+      onClose={onClose}
+      intoStudio={!!classic?.intoStudio}
+      selectedScenes={classic?.scenes}
+    />
+  )
 }
 
 function ClassicUseDialog({
   design,
   onClose,
   intoStudio,
+  selectedScenes,
 }: {
   design: Design | null
   onClose: () => void
   /** A theme's new overlays also become scenes in the Studio. */
   intoStudio: boolean
+  selectedScenes?: string[] | undefined
 }) {
   const client = useClient()
   const engine = useMemo(() => studioEngineApi(client), [client])
@@ -69,15 +90,26 @@ function ClassicUseDialog({
   const theme = design.kind === 'theme' ? design : null
   const list = overlays.data ?? []
   const needsOverlay = design.kind === 'widget'
-  const pickedScene = theme ? scene || theme.content.scenes[0]?.key || '' : ''
+  const pickedThemes = theme
+    ? selectedScenes
+      ? theme.content.scenes.filter((s) => selectedScenes.includes(s.key))
+      : theme.content.scenes
+    : []
+  const pickedKeys = pickedThemes.map((s) => s.key)
+  const defaultScene = pickedThemes[0]?.key || theme?.content.scenes[0]?.key || ''
+  const pickedScene = theme ? scene || defaultScene : ''
   const submit = () =>
     void run(
       'use',
       () =>
         client.useDesign(design.id, {
           ...(target !== 'new' ? { overlay_id: target } : {}),
-          ...(theme && target !== 'new' ? { scenes: [pickedScene] } : {}),
-          ...(theme ? { alert_style: alertStyle } : {}),
+          ...(theme
+            ? {
+                scenes: target !== 'new' ? [pickedScene] : pickedKeys,
+                alert_style: alertStyle,
+              }
+            : {}),
         }),
       {
         success: (r) =>
@@ -99,7 +131,7 @@ function ClassicUseDialog({
               ? { tone: 'warn', message: 'Overlays made; the Studio is off.', hint: made.skipped }
               : {
                   tone: 'ok',
-                  message: `${made.scenes.length} scenes made in the Studio.`,
+                  message: `${made.scenes.length} scene${made.scenes.length === 1 ? '' : 's'} made in the Studio.`,
                   hint: made.scenes.join(', '),
                 },
           )
@@ -120,6 +152,7 @@ function ClassicUseDialog({
       if (first)
         go(r.overlays.length > 1 ? { name: 'overlays' } : { name: 'overlay', id: first.id })
     })
+  const emptyThemeSelection = !!theme && target === 'new' && pickedKeys.length === 0
   return (
     <Dialog
       open
@@ -130,7 +163,7 @@ function ClassicUseDialog({
         needsOverlay
           ? 'Adds this widget, styled, to an overlay. Move it where you want in the layout editor.'
           : theme
-            ? 'Each scene becomes an overlay: one Browser source per scene. Or put one scene on an overlay you already use; its URL stays the same.'
+            ? 'Each picked screen becomes an overlay: one Browser source per scene. Or put one screen on an overlay you already use; its URL stays the same.'
             : 'Makes a new overlay from this scene, or replaces the layout of one you already use (its URL stays the same, so OBS keeps working).'
       }
       footer={
@@ -141,14 +174,14 @@ function ClassicUseDialog({
           <Button
             variant="primary"
             busy={busy === 'use'}
-            disabled={needsOverlay && target === 'new'}
+            disabled={(needsOverlay && target === 'new') || emptyThemeSelection}
             onClick={submit}
           >
             {needsOverlay
               ? 'Add widget'
               : target === 'new'
                 ? theme
-                  ? `Make ${theme.content.scenes.length} overlays`
+                  ? `Make ${pickedThemes.length} overlay${pickedThemes.length === 1 ? '' : 's'}`
                   : 'Make the overlay'
                 : 'Replace the layout'}
           </Button>
@@ -161,7 +194,13 @@ function ClassicUseDialog({
             <Select {...p} value={target} onChange={(e) => setTarget(e.target.value)}>
               {!needsOverlay && (
                 <option value="new">
-                  {theme ? 'New overlays, one per scene' : 'A new overlay'}
+                  {theme
+                    ? pickedThemes.length === 1
+                      ? 'A new overlay'
+                      : pickedThemes.length < theme.content.scenes.length
+                        ? 'New overlays, one per picked screen'
+                        : 'New overlays, one per scene'
+                    : 'A new overlay'}
                 </option>
               )}
               {needsOverlay && <option value="new">Choose an overlay…</option>}
