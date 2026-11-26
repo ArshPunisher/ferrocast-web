@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowArcLeft, ArrowArcRight, CaretLeft, Eye, EyeSlash } from '@phosphor-icons/react'
 import { DEFAULT_THEME, renderSafeTemplate, type Overlay, type OverlayState } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Skeleton, cx } from '@ferrocast/ui'
@@ -21,6 +21,16 @@ import {
   SAMPLE_POLL,
   giveawayCard,
 } from '../components/community/preview'
+
+function layoutDirty(draft: Overlay | null, saved: Overlay | null): boolean {
+  if (!draft || !saved) return false
+  return (
+    draft.name !== saved.name ||
+    draft.width !== saved.width ||
+    draft.height !== saved.height ||
+    JSON.stringify(draft.widgets) !== JSON.stringify(saved.widgets)
+  )
+}
 
 export function OverlayEditor({ id }: { id: string }) {
   useWidePage()
@@ -47,11 +57,19 @@ export function OverlayEditor({ id }: { id: string }) {
   useUndoKeys(history)
   const media = useResource((c) => c.media())
   const [preview, setPreview] = useState(true)
+  const loadedId = useRef<string | null>(null)
   useEffect(() => {
-    if (ov.data) history.reset(ov.data)
+    if (!ov.data || ov.data.id !== id) {
+      loadedId.current = null
+      return
+    }
+    if (loadedId.current === id) return
+    loadedId.current = id
+    history.reset(ov.data)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ov.data])
-  const leaving = useLeaveGuard(draft !== null && JSON.stringify(draft) !== JSON.stringify(ov.data))
+  }, [id, ov.data])
+  const dirty = layoutDirty(draft, ov.data)
+  const leaving = useLeaveGuard(dirty)
 
   // Labels depend only on label widgets' source/template, not on where widgets sit, so dragging
   // doesn't rebuild the preview state.
@@ -188,7 +206,6 @@ export function OverlayEditor({ id }: { id: string }) {
         <Skeleton className="aspect-video w-full" />
       </div>
     )
-  const dirty = JSON.stringify(draft) !== JSON.stringify(ov.data)
   const brandLocked = draft.design?.branded === true
   const saveNow = () =>
     run('save', () => client.saveOverlay(draft), {
