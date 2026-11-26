@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Badge, BrandIcon, PlatformMark, Skeleton, cx } from '@ferrocast/ui'
+import { Badge, BrandIcon, PlatformMark, PopoverSurface, Skeleton, cx } from '@ferrocast/ui'
 import {
   buildStatusChips,
   computeStatusStripLayout,
@@ -77,7 +76,6 @@ export function StatusStrip({
   const [minWidths, setMinWidths] = useState<Partial<Record<StripCandidateKey, number>>>({})
   const [overflowStep, setOverflowStep] = useState<0 | 1 | 2>(0)
   const [open, setOpen] = useState(false)
-  const [popPos, setPopPos] = useState<{ left: number; top: number } | null>(null)
 
   // Reset measured step-downs when chip contents change or container widens noticeably.
   const prevSig = useRef(itemSig)
@@ -188,60 +186,16 @@ export function StatusStrip({
     if (open && layout.overflowItems.length === 0) setOpen(false)
   }, [open, layout.overflowItems.length])
 
-  const measurePopoverPos = useCallback(() => {
-    const trig = triggerRef.current
-    if (!trig) return { left: 8, top: 56 }
-    const b = trig.getBoundingClientRect()
-    const vw = document.documentElement.clientWidth
-    const gap = 8
-    const pw = popRef.current?.offsetWidth || Math.min(280, Math.max(160, vw - gap * 2))
-    const left = Math.max(gap, Math.min(b.left, vw - gap - pw))
-    const top = b.bottom + 6
-    return { left, top }
-  }, [])
-
-  // Position the portal popover cleanly inside viewport edges.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPopPos(null)
-      return
-    }
-    setPopPos(measurePopoverPos())
-  }, [open, layout.overflowItems.length, availableWidth, measurePopoverPos])
-
   useEffect(() => {
     if (!open) return
-    const onDown = (e: PointerEvent) => {
-      const target = e.target as Node
-      if (!triggerRef.current?.contains(target) && !popRef.current?.contains(target)) {
-        closePopover(false)
-      }
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closePopover(true)
-      }
-    }
-    const onScrollOrResize = (e: Event) => {
-      if (e.type === 'scroll' && popRef.current?.contains(e.target as Node)) return
-      closePopover(false)
-    }
-    document.addEventListener('pointerdown', onDown)
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('resize', onScrollOrResize)
-    window.addEventListener('hashchange', onScrollOrResize)
-    window.addEventListener('scroll', onScrollOrResize, true)
+    const onHash = () => closePopover(false)
+    window.addEventListener('hashchange', onHash)
     const raf = requestAnimationFrame(() =>
       popRef.current?.querySelector<HTMLAnchorElement>('a')?.focus({ preventScroll: true }),
     )
     return () => {
       cancelAnimationFrame(raf)
-      document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('resize', onScrollOrResize)
-      window.removeEventListener('hashchange', onScrollOrResize)
-      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('hashchange', onHash)
     }
   }, [open, closePopover])
 
@@ -399,14 +353,7 @@ export function StatusStrip({
                   ? `Connections: ${summaryText}${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`
                   : `${layout.overflowItems.length} other connections${layout.overflowAttention !== 'none' ? ', attention needed' : ''}`
               }
-              onClick={() => {
-                if (open) {
-                  setOpen(false)
-                } else {
-                  setPopPos(measurePopoverPos())
-                  setOpen(true)
-                }
-              }}
+              onClick={() => setOpen((v) => !v)}
               className={cx(
                 'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 font-mono text-[13px] font-bold whitespace-nowrap transition-colors',
                 'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
@@ -447,76 +394,77 @@ export function StatusStrip({
         )}
       </ul>
 
-      {open &&
-        layout.overflowItems.length > 0 &&
-        createPortal(
-          <div
-            ref={popRef}
-            id={popoverId}
-            role="region"
-            aria-label={summary ? 'Connections' : 'Other connections'}
-            data-over-preview
-            data-testid="connections-overflow-popover"
-            onKeyDown={onPopoverKeyDown}
-            style={popPos ?? measurePopoverPos()}
-            className="fixed z-[70] w-[min(280px,calc(100vw-16px))] rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-pop"
-          >
-            <ul className="flex flex-col gap-0.5">
-              {layout.overflowItems.map((it) => {
-                const badgeTone =
-                  it.streamIssue?.danger || it.tone === 'danger'
-                    ? 'danger'
-                    : it.streamIssue || it.late || it.tone === 'warn'
-                      ? 'warn'
-                      : it.tone === 'ok'
-                        ? 'ok'
-                        : 'neutral'
-                const badgeLabel = it.streamIssue
-                  ? it.streamIssue.text
-                  : it.late
-                    ? 'Delayed'
-                    : it.viewersCompact !== undefined
-                      ? `${it.viewersCompact} ${it.viewers === 1 ? 'viewer' : 'viewers'}`
-                      : it.stateLabel
-                return (
-                  <li key={it.name}>
-                    <a
-                      href={it.href}
-                      title={it.title}
-                      onClick={() => closePopover(false)}
-                      className="flex items-center justify-between gap-2.5 rounded-[8px] px-2.5 py-2 text-[13.5px] transition-colors hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-                    >
-                      <span className="sr-only">{it.title}</span>
+      <PopoverSurface
+        open={open && layout.overflowItems.length > 0}
+        onClose={(reason) => closePopover(reason === 'escape')}
+        anchorRef={triggerRef}
+        surfaceRef={popRef}
+        placement="bottom"
+        align="start"
+        gap={6}
+        edgePadding={8}
+        closeOnTab
+        id={popoverId}
+        role="region"
+        aria-label={summary ? 'Connections' : 'Other connections'}
+        data-testid="connections-overflow-popover"
+        onKeyDown={onPopoverKeyDown}
+        className="z-[70] w-[min(280px,calc(100vw-16px))] rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-pop [&>*]:shrink-0"
+      >
+        <ul className="flex flex-col gap-0.5">
+          {layout.overflowItems.map((it) => {
+            const badgeTone =
+              it.streamIssue?.danger || it.tone === 'danger'
+                ? 'danger'
+                : it.streamIssue || it.late || it.tone === 'warn'
+                  ? 'warn'
+                  : it.tone === 'ok'
+                    ? 'ok'
+                    : 'neutral'
+            const badgeLabel = it.streamIssue
+              ? it.streamIssue.text
+              : it.late
+                ? 'Delayed'
+                : it.viewersCompact !== undefined
+                  ? `${it.viewersCompact} ${it.viewers === 1 ? 'viewer' : 'viewers'}`
+                  : it.stateLabel
+            return (
+              <li key={it.name}>
+                <a
+                  href={it.href}
+                  title={it.title}
+                  onClick={() => closePopover(false)}
+                  className="flex items-center justify-between gap-2.5 rounded-[8px] px-2.5 py-2 text-[13.5px] transition-colors hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                >
+                  <span className="sr-only">{it.title}</span>
+                  <span
+                    aria-hidden="true"
+                    className="flex min-w-0 items-center gap-2 font-semibold text-text"
+                  >
+                    <ConnectorIcon name={it.name} size={14} />
+                    <span className="truncate">{it.label}</span>
+                  </span>
+                  <span aria-hidden="true" className="shrink-0">
+                    <Badge tone={badgeTone}>
                       <span
-                        aria-hidden="true"
-                        className="flex min-w-0 items-center gap-2 font-semibold text-text"
-                      >
-                        <ConnectorIcon name={it.name} size={14} />
-                        <span className="truncate">{it.label}</span>
-                      </span>
-                      <span aria-hidden="true" className="shrink-0">
-                        <Badge tone={badgeTone}>
-                          <span
-                            className={cx(
-                              'size-1.5 rounded-full',
-                              it.streamIssue
-                                ? it.streamIssue.danger
-                                  ? 'bg-danger'
-                                  : 'bg-warn'
-                                : DOT[it.tone],
-                            )}
-                          />
-                          {badgeLabel}
-                        </Badge>
-                      </span>
-                    </a>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>,
-          document.body,
-        )}
+                        className={cx(
+                          'size-1.5 rounded-full',
+                          it.streamIssue
+                            ? it.streamIssue.danger
+                              ? 'bg-danger'
+                              : 'bg-warn'
+                            : DOT[it.tone],
+                        )}
+                      />
+                      {badgeLabel}
+                    </Badge>
+                  </span>
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      </PopoverSurface>
     </div>
   )
 }

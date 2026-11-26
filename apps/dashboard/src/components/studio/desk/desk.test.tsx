@@ -499,6 +499,22 @@ describe('what lies over the preview', () => {
     expect(overPreview(new DOMRect(0, 0, 100, 100))).toBeNull()
     delete document.body.dataset.dockDrag
   })
+  it('ignores visibility:hidden overlays and collapses >85% cover into one full-stage hole', () => {
+    document.body.innerHTML = ''
+    const hidden = document.createElement('div')
+    hidden.setAttribute('role', 'menu')
+    hidden.style.visibility = 'hidden'
+    place(hidden, 20, 20, 120, 120)
+    expect(overPreview(new DOMRect(0, 0, 1000, 500), 0)).toEqual([])
+
+    document.body.innerHTML = ''
+    const huge = document.createElement('aside')
+    huge.dataset.overPreview = ''
+    place(huge, 40, 20, 950, 480)
+    expect(overPreview(new DOMRect(0, 0, 1000, 500), 10)).toEqual([
+      { x: -10, y: -10, w: 1020, h: 520, r: 0 },
+    ])
+  })
 })
 
 describe('files dropped on the Studio', () => {

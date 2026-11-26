@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ChartLineUp, Robot, ShieldCheck, YoutubeLogo, type Icon } from '@phosphor-icons/react'
 import type { ProView } from '@ferrocast/api'
-import { Button, SparkMark } from '@ferrocast/ui'
+import { Button, SparkMark, notifyPreviewOverlays, usePreviewHole } from '@ferrocast/ui'
 import { playBuiltin } from '@ferrocast/overlays'
 import { href } from '../../lib/router'
 import { PRO_UNLOCKED_EVENT, markUnlockShown, unlockShown } from '../../lib/pro-status'
@@ -27,7 +27,9 @@ export function shouldUnlock(p: ProView | null): p is ProView {
 export function ProUnlock({ pro }: { pro: ProView | null }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDialogElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
+  usePreviewHole(panelRef, open && !!pro)
 
   useEffect(() => {
     if (!shouldUnlock(pro)) return
@@ -70,9 +72,12 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
       data-testid="pro-unlock"
     >
       <motion.div
+        ref={panelRef}
+        data-over-preview
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: reduce ? 0.16 : 0.28, ease }}
+        onAnimationComplete={() => notifyPreviewOverlays()}
         className="grid justify-items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-6 pt-6 pb-5 text-center shadow-pop"
       >
         <SparkMark size={76} />

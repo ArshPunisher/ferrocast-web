@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import type { ConnectorState, Connectors, GoLiveFrame } from '@ferrocast/api'
 import {
   buildStatusChips,
@@ -263,6 +264,7 @@ describe('StatusStrip component states', () => {
     host?.remove()
     root = null
     host = null
+    resetPreviewOverlayRegistry()
   })
 
   it('renders loading skeletons when loading and connectors are not yet ready', () => {
@@ -273,5 +275,32 @@ describe('StatusStrip component states', () => {
     act(() => root?.render(createElement(StatusStrip, { loading: true })))
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull()
     expect(host.querySelectorAll('.fc-skeleton')).toHaveLength(3)
+  })
+
+  it('portals summary overflow popover via PopoverSurface and registers in PreviewOverlayRegistry', async () => {
+    resetPreviewOverlayRegistry()
+    useLive.setState({
+      conn: null,
+      connectors: makeConnectors(),
+      socket: 'open',
+      viewers: { twitch: 12, youtube: 8, kick: 3 },
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root?.render(createElement(StatusStrip, { summary: true })))
+
+    const btn = host.querySelector('[data-testid="connections-overflow"]') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    btn.getBoundingClientRect = () =>
+      ({ left: 20, top: 8, right: 140, bottom: 40, width: 120, height: 32 }) as DOMRect
+
+    await act(async () => btn.click())
+
+    const pop = document.body.querySelector(
+      '[data-testid="connections-overflow-popover"]',
+    ) as HTMLElement
+    expect(pop).toBeTruthy()
+    expect(getPreviewOverlays().some((e) => e.target === pop)).toBe(true)
   })
 })

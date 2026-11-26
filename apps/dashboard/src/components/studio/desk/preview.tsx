@@ -59,7 +59,10 @@ import {
   Input,
   Select,
   Skeleton,
+  collectPreviewHoles,
   cx,
+  findUnregisteredPreviewOverlays,
+  subscribePreviewOverlays,
 } from '@ferrocast/ui'
 import { isSafeModeLocked } from '../../safe-mode'
 import { LoadError } from '../../Panel'
@@ -429,41 +432,17 @@ const MAX_HOLES = 16
  * picture would keep the last holes it had, painting over menus and guides. */
 export const MAX_SENT_HOLES = 64
 
-/** The guides' lines, the group box and the overflow mask are holes too, but not the kind of
- * crowd that hides the picture: they aren't counted against `MAX_HOLES`. They are against the
- * engine's limit, so when there are too many the ones that matter least (these) go first. */
-const isGuide = (el: Element): boolean => el.hasAttribute('data-guide-hole')
-
-/** The holes to send: menus and panels first and all of them, then as many guide holes as fit.
- * Null: too many menus and panels (hide the picture). */
-function capHoles(first: Hole[], guides: Hole[]): Hole[] | null {
-  if (first.length > MAX_HOLES) return null
-  return [...first, ...guides.slice(0, Math.max(0, MAX_SENT_HOLES - first.length))]
-}
-
 /**
  * What lies over the box: the app's view can't be drawn under the page, so it leaves its
  * picture out where menus and panels are (`holes`, from the box's top left) and they show
  * there. Null: hide it all (a panel being dragged, or too much over it).
  */
 export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
-  const r = new DOMRect(box.x - edge, box.y - edge, box.width + 2 * edge, box.height + 2 * edge)
-  if (document.body.dataset.dockDrag) return null
-  const holes: Hole[] = []
-  const guides: Hole[] = []
-  for (const el of document.querySelectorAll(OVER)) {
-    // A modal dialog's own box is the whole window; its panel says it's over the preview.
-    if (el instanceof HTMLDialogElement) continue
-    const b = el.getBoundingClientRect()
-    if (b.width < 1 || b.height < 1) continue
-    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) {
-      // Its rounded corners too, so the picture shows round them, not a square of the page.
-      const rad = Math.min(200, parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0)
-      const hole = { x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad }
-      ;(isGuide(el) ? guides : holes).push(hole)
-    }
-  }
-  return capHoles(holes, guides)
+  return collectPreviewHoles(box, edge, {
+    maxOverlays: MAX_HOLES,
+    maxHoles: MAX_SENT_HOLES,
+    extraDomSelector: OVER,
+  })
 }
 
 /** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
@@ -641,6 +620,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
     if (!running || !desktop || !el) return
     let raf = 0
     let last = ''
+    const warned = new WeakSet<Element>()
     // One placement at a time, in order, the newest waiting one winning (see `placer`).
     const put = placer.current
     const place = (box: HTMLElement | null): PreviewRect | null => {
@@ -786,13 +766,28 @@ function PreviewBoxes({ running }: { running: boolean }) {
         program = program && { ...program, shade: 0.62 }
         tallRect = tallRect && { ...tallRect, shade: 0.62 }
       }
-      // While an overlay menu or floating panel is animating, follow it smoothly; stop at rest
-      // instead of spinning at 60 fps while idle.
+      // While a non-infinite overlay animation (e.g. Dialog/Sheet/Toast entrance) is running,
+      // keep following it until settled; ignore infinite animations like fc-rec-dot.
       if (
         document.querySelector(OVER) &&
-        document.getAnimations().some((a) => a.playState === 'running')
-      )
+        document
+          .getAnimations()
+          .some(
+            (a) =>
+              a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity,
+          )
+      ) {
         schedule()
+      }
+      if (import.meta.env.DEV) {
+        const missing = findUnregisteredPreviewOverlays(stageRef.current ?? el)
+        for (const node of missing) {
+          if (!warned.has(node)) {
+            warned.add(node)
+            console.warn('[preview] overlay overlaps stage without PreviewOverlayRegistry', node)
+          }
+        }
+      }
       // The window's height is part of it: the native side places the view from the bottom.
       const key = JSON.stringify([rect, program, tallRect, window.innerHeight])
       still = [rect, program, tallRect]
@@ -847,6 +842,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     // The edit overlays (marquee, group box, guides) move by style alone.
     window.addEventListener(HOLES_CHANGED, schedule)
+    const unsubOverlays = subscribePreviewOverlays(schedule)
     // Straight away when hidden: a hidden page gets no animation frames.
     const onVisible = () => (document.hidden ? send() : schedule())
     document.addEventListener('visibilitychange', onVisible)
@@ -899,12 +895,17 @@ function PreviewBoxes({ running }: { running: boolean }) {
       mo.disconnect()
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener(HOLES_CHANGED, schedule)
+      unsubOverlays()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
       unfreeze()
       void put(null, null, null).catch(() => undefined)
     }
   }, [api, running, desktop, studio, tall])
+  // Keep edited canvas synced when only one picture is shown even if PictureViewPick is collapsed in OverflowRow.
+  useEffect(() => {
+    if (tall && pv.view !== 'both') setCanvas(pv.view === 'wide' ? 'main' : 'vertical')
+  }, [tall, pv.view, setCanvas])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
   // The zoom, and where the zoomed canvas sits against the stage's centre (clamped so Fit stays

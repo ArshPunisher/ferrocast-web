@@ -1,7 +1,7 @@
 // The account's pieces shared by the sidebar, the plans page and the Account page
 // (design board 2026-10-21-accounts: sidebar and Get Pro from option B).
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import {
   ArrowSquareOut,
   ArrowUpRight,
@@ -16,7 +16,7 @@ import {
   UserCircle,
 } from '@phosphor-icons/react'
 import { accountName, accountPlanLine, describeError, type AccountView } from '@ferrocast/api'
-import { LogoMark, toast } from '@ferrocast/ui'
+import { LogoMark, PopoverSurface, toast } from '@ferrocast/ui'
 import { accountApi, publishAccount, reloadAccount } from '../../lib/account-status'
 import { accountInitials } from '../../lib/pro-status'
 import { href } from '../../lib/router'
@@ -257,41 +257,42 @@ function UtilStack({ utils }: { utils: Utils }) {
 }
 
 function Menu({
+  open,
   view,
   utils,
+  anchorRef,
   onClose,
 }: {
+  open: boolean
   view: AccountView
   utils: Utils
+  anchorRef: RefObject<HTMLButtonElement | null>
   onClose: (focusBar: boolean) => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLElement>(null)
   useEffect(() => {
-    const items = () => [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-    items()[0]?.focus()
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose(true)
-        return
-      }
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-      e.preventDefault()
-      const list = items()
-      const i = list.indexOf(document.activeElement as HTMLElement)
-      const n = (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length
-      list[n]?.focus()
+    if (!open) return
+    ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true })
+  }, [open])
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    const list = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    if (list.length === 0) return
+    if (e.key === 'Home') {
+      list[0]?.focus()
+      return
     }
-    const outside = (e: PointerEvent) => {
-      if (!ref.current?.parentElement?.contains(e.target as Node)) onClose(false)
+    if (e.key === 'End') {
+      list[list.length - 1]?.focus()
+      return
     }
-    document.addEventListener('keydown', key)
-    document.addEventListener('pointerdown', outside)
-    return () => {
-      document.removeEventListener('keydown', key)
-      document.removeEventListener('pointerdown', outside)
-    }
-  }, [onClose])
+    const i = list.indexOf(document.activeElement as HTMLElement)
+    const n = (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length
+    list[n]?.focus()
+  }
+
   const item =
     'flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[14.5px] text-text-2 hover:bg-surface-2 hover:text-text focus-visible:bg-surface-2 focus-visible:text-text focus-visible:outline-none'
   const ThemeIcon = utils.theme === 'dark' ? Sun : Moon
@@ -300,11 +301,21 @@ function Menu({
     location.hash = h
   }
   return (
-    <div
-      ref={ref}
+    <PopoverSurface
+      open={open}
+      onClose={(reason) => onClose(reason === 'escape')}
+      anchorRef={anchorRef}
+      surfaceRef={ref}
+      placement="top"
+      align="start"
+      gap={6}
+      edgePadding={8}
+      matchAnchorWidth
+      closeOnTab
       role="menu"
       aria-label="Account"
-      className="absolute inset-x-0 bottom-[calc(100%+6px)] z-40 rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-[var(--fc-shadow-pop)]"
+      onKeyDown={onKey}
+      className="z-[75] w-max min-w-[200px] max-w-[calc(100vw-16px)] rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-[var(--fc-shadow-pop)] [&>*]:shrink-0"
     >
       <div className="mb-1 border-b border-line px-2 pt-2 pb-2.5">
         <b className="block truncate text-[14.5px] font-semibold text-text">
@@ -370,7 +381,7 @@ function Menu({
         <SignOut size={16} aria-hidden />
         Sign out
       </button>
-    </div>
+    </PopoverSurface>
   )
 }
 
@@ -485,7 +496,7 @@ export function SidebarAccount({
     >
       {!pro && <GetProButton />}
       <div className="relative">
-        {open && <Menu view={view} utils={utils} onClose={close} />}
+        <Menu open={open} view={view} utils={utils} anchorRef={barRef} onClose={close} />
         <button
           ref={barRef}
           type="button"
