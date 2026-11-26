@@ -735,4 +735,9 @@ describe('ThemeSheet Use just this screen', () => {
     expect(client.useDesign).toHaveBeenCalledTimes(1)
     expect(currentToasts().some((t) => /0 scenes made/.test(t.message))).toBe(false)
   })
+
+  it('does not fetch overlays while UseDialog is closed (design=null)', async () => {
+    const { client } = await mountNode(<UseDialog design={null} onClose={vi.fn()} />)
+    expect(client.overlays).not.toHaveBeenCalled()
+  })
 })

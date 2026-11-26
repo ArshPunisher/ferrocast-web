@@ -497,6 +497,7 @@ function Screens({
                 {picked && (
                   <span
                     aria-hidden="true"
+                    data-screen-check
                     className={cx(
                       'absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-[5px] border transition-colors',
                       on ? 'border-arc bg-arc text-white shadow-sm' : 'border-white/75 bg-black/55',

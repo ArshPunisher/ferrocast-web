@@ -55,9 +55,10 @@ function UseDialogBody({
   onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
 }) {
   const [classic, setClassic] = useState<{ intoStudio: boolean; scenes: string[] } | null>(null)
+  if (!design || design.kind === 'alert') return null
   // A theme can go into the Studio or OBS as well (24 Oct pick 1A); "Next" without OBS is
   // today's dialog, which then makes the Studio's scenes when asked.
-  if (design?.kind === 'theme' && !classic)
+  if (design.kind === 'theme' && !classic)
     return (
       <ThemeUseDialog
         design={design}
@@ -92,7 +93,9 @@ function ClassicUseDialog({
   const client = useClient()
   const engine = useMemo(() => studioEngineApi(client), [client])
   const { run, busy } = useAction()
-  const overlays = useResource((c) => c.overlays(), [design?.id])
+  const overlays = useResource((c) => c.overlays(), [design?.id], {
+    enabled: !!design && design.kind !== 'alert',
+  })
   const [target, setTarget] = useState<'new' | string>('new')
   const [scene, setScene] = useState('')
   const [alertStyle, setAlertStyle] = useState(true)

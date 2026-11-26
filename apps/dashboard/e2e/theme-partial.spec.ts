@@ -38,10 +38,10 @@ test.describe('partial theme import (Group D)', () => {
     await expect(dialog.getByText('Screens (2 of 5)')).toBeVisible()
     // Unticked tiles keep zero <svg> checkmark nodes; ticked tile keeps 1.
     await expect(
-      dialog.getByRole('button', { name: 'Just chatting' }).locator('[aria-hidden="true"] svg'),
+      dialog.getByRole('button', { name: 'Just chatting' }).locator('[data-screen-check] svg'),
     ).toHaveCount(0)
     await expect(
-      dialog.getByRole('button', { name: 'In game' }).locator('[aria-hidden="true"] svg'),
+      dialog.getByRole('button', { name: 'In game' }).locator('[data-screen-check] svg'),
     ).toHaveCount(1)
 
     await dialog.getByRole('button', { name: 'Next' }).click()
