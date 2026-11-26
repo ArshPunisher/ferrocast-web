@@ -229,6 +229,22 @@ function panicToast(n: Notice): void {
   })
 }
 
+function pruneDisconnectedViewers(
+  viewers: Partial<Record<Platform, number>>,
+  connectors: Connectors | null,
+): Partial<Record<Platform, number>> {
+  if (!connectors) return viewers
+  let next: Partial<Record<Platform, number>> | null = null
+  for (const p of ['twitch', 'youtube', 'kick', 'facebook'] as const) {
+    const st = connectors[p]?.state
+    if (st !== 'connected' && st !== 'reconnecting' && p in viewers) {
+      next ??= { ...viewers }
+      delete next[p]
+    }
+  }
+  return next ?? viewers
+}
+
 function accountSig(c: Connectors | null): string {
   if (!c) return ''
   return (['twitch', 'youtube', 'kick', 'facebook'] as const)
@@ -262,9 +278,15 @@ export const useLive = create<LiveStore>((set, get) => ({
       const nextStarted = stats.started_at ?? null
       const isNewStream =
         nextStarted !== null && s.streamStartedAt !== null && nextStarted > s.streamStartedAt
+      const anyLiveNow = Object.values(s.status?.live ?? {}).some(Boolean)
+      if (!stats.live && anyLiveNow && !isNewStream && !opts?.hydrateViewers) {
+        return s
+      }
       const serverPeak = stats.peak_viewers ?? 0
       const basePeak = isNewStream ? serverPeak : Math.max(s.peakViewers, serverPeak)
-      const viewers = opts?.hydrateViewers ? stats.viewers : s.viewers
+      const offlineCleared = !stats.live && sumViewers(stats.viewers) === 0
+      const viewers =
+        opts?.hydrateViewers || isNewStream || offlineCleared ? stats.viewers : s.viewers
       return {
         viewers,
         peakViewers: Math.max(basePeak, sumViewers(viewers)),
@@ -312,7 +334,12 @@ export const useLive = create<LiveStore>((set, get) => ({
       return { goliveView: view, goliveViewAt: Date.now() }
     }),
   setConn: (conn) => set({ conn, remote: conn.remote ?? null }),
-  setStatus: (status) => set({ status, connectors: status.connectors }),
+  setStatus: (status) =>
+    set((s) => ({
+      status,
+      connectors: status.connectors,
+      viewers: pruneDisconnectedViewers(s.viewers, status.connectors),
+    })),
   markSafeModeChosen: () => set({ safeModeChosenAt: Date.now() }),
   setSafeMode: (safeMode, askedAt) =>
     set((s) => {
@@ -454,6 +481,7 @@ export const useLive = create<LiveStore>((set, get) => ({
             needLinksRefresh = true
           }
           connectors = f.data.connectors
+          viewers = pruneDisconnectedViewers(viewers, connectors)
           break
         case 'links':
           links = f.data.resolved
@@ -691,16 +719,20 @@ async function resync(): Promise<void> {
       useLive.getState().seed({ chat, events: useLive.getState().events })
       return
     }
-    const [status, queue, chat, page] = await Promise.all([
+    const [status, queue, chat, page, stats] = await Promise.all([
       conn.client.status(),
       conn.client.queue(),
       conn.client.chat(200),
       conn.client.events({ limit: 60 }),
+      typeof conn.client.sessionStats === 'function'
+        ? conn.client.sessionStats().catch(() => null)
+        : Promise.resolve(null),
     ])
     const st = useLive.getState()
     st.setStatus(status)
     st.setQueue(queue)
     st.seed({ chat, events: page.events })
+    if (stats) st.syncSessionStats(stats, { hydrateViewers: true })
   } catch {
     useLive.getState().pushNotice({
       level: 'warn',

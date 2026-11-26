@@ -20,7 +20,8 @@ afterEach(async () => {
     connectors: null,
     viewers: {},
     resyncs: 0,
-    ...({ peakViewers: 0, streamStartedAt: null } as Record<string, unknown>),
+    peakViewers: 0,
+    streamStartedAt: null,
   })
 })
 
@@ -155,5 +156,78 @@ describe('Home live viewer and monotonic peak cards', () => {
     })
     expect(statValue(host, 'Watching now')).toBe('60')
     expect(statValue(host, 'Peak')).toBe('150')
+  })
+
+  it('drops old stream peak immediately on stream_online and reloads stats without waiting 20s', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0, setupDone: true })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const statsSpy = vi
+      .spyOn(client, 'sessionStats')
+      .mockResolvedValueOnce({
+        live: false,
+        started_at: 1_000_000,
+        messages: 0,
+        follows: 0,
+        subs: 0,
+        tips: [],
+        bits: 0,
+        peak_viewers: 200,
+        viewers: {},
+      })
+      .mockResolvedValue({
+        live: true,
+        started_at: 2_000_000,
+        messages: 0,
+        follows: 0,
+        subs: 0,
+        tips: [],
+        bits: 0,
+        peak_viewers: 0,
+        viewers: {},
+      })
+    const status = await client.status()
+    useLive.setState({
+      conn: { mode: 'local', client, socket: () => null } as never,
+      connectors: status.connectors,
+      status: {
+        ...status,
+        live: { twitch: false, youtube: false, kick: false },
+      },
+      viewers: {},
+      resyncs: 0,
+      peakViewers: 0,
+      streamStartedAt: null,
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<Home />)
+    })
+    await waitFor(() => statValue(host, 'Peak') === '200')
+
+    await act(async () => {
+      useLive.getState().apply([
+        {
+          v: 1,
+          type: 'event',
+          data: {
+            id: 'on-2',
+            seq: 10,
+            channel: null,
+            source_id: null,
+            occurred_at: 2_000_000,
+            received_at: 2_000_000,
+            origin: 'live',
+            platform: 'twitch',
+            kind: { type: 'stream_online', title: 'Stream 2' },
+          },
+        } as LiveFrame,
+      ])
+    })
+
+    expect(statValue(host, 'Peak')).toBe('0')
+    await waitFor(() => statsSpy.mock.calls.length >= 2)
   })
 })

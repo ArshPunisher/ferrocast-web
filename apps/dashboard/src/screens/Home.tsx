@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChartLineUp,
   CopySimple,
@@ -43,7 +43,7 @@ function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
   const viewers = useLive((s) => s.viewers)
   const peakViewers = useLive((s) => s.peakViewers)
   const total = (viewers.twitch ?? 0) + (viewers.youtube ?? 0) + (viewers.kick ?? 0)
-  const peak = Math.max(peakViewers, stats?.peak_viewers ?? 0, total)
+  const peak = Math.max(peakViewers, total)
   // Each number has its own colour and icon, so the eye finds it without reading.
   const tiles: [string, string, Icon, string][] = stats
     ? [
@@ -113,10 +113,13 @@ export function Home() {
   const queue = useLive((s) => s.queue)
   const setQueue = useLive((s) => s.setQueue)
   const resyncs = useLive((s) => s.resyncs)
+  const liveOnAir = useLive((s) => Object.values(s.status?.live ?? {}).some(Boolean))
   const syncSessionStats = useLive((s) => s.syncSessionStats)
   const stats = useResource((c) => c.sessionStats())
   const statsData = stats.data
   const reloadStats = stats.reload
+  const hydrateNextRef = useRef(false)
+  const prevLiveRef = useRef(liveOnAir)
   const overlays = useResource((c) => c.overlays())
   const { run, busy } = useAction()
   const [reply, setReply] = useState<ReplyTarget | null>(null)
@@ -127,12 +130,27 @@ export function Home() {
   const { items: peek, hold } = useFocusHeldTail(chat, 30)
 
   useEffect(() => {
-    if (statsData) syncSessionStats(statsData)
+    if (!statsData) return
+    const hydrate = hydrateNextRef.current
+    hydrateNextRef.current = false
+    syncSessionStats(statsData, hydrate ? { hydrateViewers: true } : undefined)
   }, [statsData, syncSessionStats])
 
   useEffect(() => {
-    if (resyncs > 0) void reloadStats()
+    if (resyncs > 0) {
+      hydrateNextRef.current = true
+      void reloadStats()
+    }
   }, [resyncs, reloadStats])
+
+  useEffect(() => {
+    const was = prevLiveRef.current
+    prevLiveRef.current = liveOnAir
+    if (!was && liveOnAir) {
+      hydrateNextRef.current = true
+      void reloadStats()
+    }
+  }, [liveOnAir, reloadStats])
 
   useEffect(() => {
     const t = setInterval(reloadStats, 20_000)

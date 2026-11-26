@@ -498,7 +498,8 @@ describe('viewer count and monotonic peak tracking', () => {
     useLive.setState({
       viewers: {},
       connectors: null,
-      ...({ peakViewers: 0, streamStartedAt: null } as Record<string, unknown>),
+      peakViewers: 0,
+      streamStartedAt: null,
     })
 
     const baseEvent = (
@@ -584,5 +585,99 @@ describe('viewer count and monotonic peak tracking', () => {
     )
     expect(useLive.getState().peakViewers).toBe(12)
     expect(useLive.getState().viewers).toEqual({ kick: 12 })
+  })
+
+  it('hydrates viewers on a new stream without explicit opt-in, clears stale viewers when offline, and prunes disconnected platforms on status', async () => {
+    useLive.setState({
+      viewers: { twitch: 200 },
+      peakViewers: 200,
+      streamStartedAt: 1000,
+      connectors: {
+        twitch: { state: 'connected', account: null, detail: null, last_event_at: 1 },
+        youtube: { state: 'connected', account: null, detail: null, last_event_at: 1 },
+        kick: { state: 'off', account: null, detail: null, last_event_at: null },
+        facebook: { state: 'off', account: null, detail: null, last_event_at: null },
+        obs: { state: 'off', account: null, detail: null, last_event_at: null },
+      } as never,
+    })
+
+    // Stream 2 starts while Home's syncSessionStats runs without hydrateViewers.
+    useLive.getState().syncSessionStats({
+      live: true,
+      started_at: 2000,
+      messages: 0,
+      follows: 0,
+      subs: 0,
+      tips: [],
+      bits: 0,
+      peak_viewers: 5,
+      viewers: { twitch: 5 },
+    })
+    expect(useLive.getState().viewers).toEqual({ twitch: 5 })
+    expect(useLive.getState().peakViewers).toBe(5)
+
+    // Disconnecting a live platform via status frame removes its stale viewer count.
+    useLive.getState().apply([
+      {
+        v: 1,
+        type: 'status',
+        data: {
+          connectors: {
+            twitch: { state: 'off', account: null, detail: null, last_event_at: null },
+            youtube: { state: 'connected', account: null, detail: null, last_event_at: 1 },
+            kick: { state: 'off', account: null, detail: null, last_event_at: null },
+            facebook: { state: 'off', account: null, detail: null, last_event_at: null },
+            obs: { state: 'off', account: null, detail: null, last_event_at: null },
+          },
+        },
+      } as LiveFrame,
+    ])
+    expect(useLive.getState().viewers).toEqual({})
+
+    // Missed stream_offline: offline sessionStats clears lingering ghost viewers.
+    useLive.setState({ viewers: { youtube: 44 }, peakViewers: 44, streamStartedAt: 2000 })
+    useLive.getState().syncSessionStats({
+      live: false,
+      started_at: 2000,
+      messages: 0,
+      follows: 0,
+      subs: 0,
+      tips: [],
+      bits: 0,
+      peak_viewers: 44,
+      viewers: {},
+    })
+    expect(useLive.getState().viewers).toEqual({})
+
+    // Plain resync hydrates/clears viewers from sessionStats.
+    useLive.setState({
+      viewers: { twitch: 99 },
+      peakViewers: 99,
+      streamStartedAt: 2000,
+      remote: null,
+      conn: {
+        mode: 'local',
+        socket: () => null,
+        client: {
+          status: vi.fn().mockResolvedValue({ setup_done: true, connectors: {} }),
+          queue: vi.fn().mockResolvedValue(null),
+          chat: vi.fn().mockResolvedValue([]),
+          events: vi.fn().mockResolvedValue({ events: [], next_before: null }),
+          sessionStats: vi.fn().mockResolvedValue({
+            live: false,
+            started_at: 2000,
+            messages: 0,
+            follows: 0,
+            subs: 0,
+            tips: [],
+            bits: 0,
+            peak_viewers: 99,
+            viewers: {},
+          }),
+        },
+      } as never,
+    })
+    useLive.getState().apply([{ v: 1, type: 'resync', data: { missed: 2 } } as LiveFrame])
+    await vi.waitFor(() => expect(useLive.getState().viewers).toEqual({}))
   })
 })
