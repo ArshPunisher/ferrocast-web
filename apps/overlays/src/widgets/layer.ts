@@ -572,7 +572,11 @@ export class LayerWidget implements WidgetView {
 
   /** The layer's entrance (once, when the page shows it), honouring low motion. */
   onSnapshot(): void {
-    if (this.shown) return
+    if (this.shown) {
+      // Replacement snapshots with unchanged config/dimensions still carry fresh links/show state.
+      this.onState()
+      return
+    }
     this.shown = true
     const c = this.config()
     this.startTicking()

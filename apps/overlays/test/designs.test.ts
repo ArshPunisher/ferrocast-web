@@ -236,7 +236,14 @@ function scenePage(layers: Widget[], withLinks = false): void {
   )
 }
 
+const UNRESOLVED_LINK_OR_PLACEHOLDER_RE =
+  /\{(?:link:[^}]+|socials|next_stream|channel_name)\}|yourname/i
+
 describe('built-in themes', () => {
+  it('detects unresolved link:{platform} tokens in the guard pattern', () => {
+    expect('{link:twitch}').toMatch(UNRESOLVED_LINK_OR_PLACEHOLDER_RE)
+  })
+
   for (const t of themes)
     for (const s of t.content.scenes) {
       it(`${t.name}: ${s.name} renders every layer and its mark`, () => {
@@ -244,9 +251,7 @@ describe('built-in themes', () => {
         const layers = s.layers.filter((l) => l.kind === 'layer')
         expect(deepAll(root, '.fc-w-layer')).toHaveLength(layers.length)
         expect(deepAll(root, '.fc-brand')).toHaveLength(s.layers.filter(isBrandLayer).length)
-        expect(deepText(root)).not.toMatch(
-          /\{(?:link:|socials|next_stream|channel_name)\}|yourname/i,
-        )
+        expect(deepText(root)).not.toMatch(UNRESOLVED_LINK_OR_PLACEHOLDER_RE)
         for (const l of layers)
           if (l.kind === 'layer' && l.config.type === 'text') {
             if (typeof l.config.countdown === 'number')

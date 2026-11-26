@@ -1555,4 +1555,108 @@ describe('review fixes', () => {
     expect(cdText()).toBe('04:35')
     expect(rotText()).toBe('Slide 2')
   })
+
+  it('refreshes tokenized layers on replacement snapshots without replaying entrance animations or resetting running timers', () => {
+    const layerW = (id: string, config: Record<string, unknown>) =>
+      ({ id, kind: 'layer', x: 40, y: 40, w: 400, h: 60, config }) as never
+    const ov = overlay([
+      layerW('tok', {
+        type: 'text',
+        text: '{link:twitch}',
+        anim: { in: 'rise', delay_ms: 0, loop: 'none' },
+      }),
+      layerW('cd', { type: 'text', text: '{time}', countdown: 300 }),
+      layerW('lit', { type: 'text', text: 'Literal copy' }),
+    ])
+
+    const animateCalls: Element[] = []
+    const origAnimate = Element.prototype.animate
+    ;(Element.prototype as unknown as { animate: unknown }).animate = function (this: Element) {
+      animateCalls.push(this)
+      return {
+        cancel() {},
+        pause() {},
+        play() {},
+        playState: 'running',
+        effect: { getTiming: () => ({ iterations: 1 }) },
+      } as unknown as Animation
+    }
+
+    try {
+      rt.apply(
+        snapshot(
+          {
+            links: {
+              twitch: 'twitch.tv/first',
+              youtube: null,
+              kick: null,
+              facebook: null,
+              discord: null,
+              instagram: null,
+              x: null,
+              tiktok: null,
+              website: null,
+              custom: [],
+              socials: ['twitch.tv/first'],
+              channel_name: 'First',
+              next_stream: null,
+              next_stream_at: null,
+            },
+          },
+          ov,
+        ),
+      )
+
+      const layers = deepAll(root, '.fc-w-layer') as HTMLElement[]
+      const [tokWrap, cdWrap, litWrap] = layers
+      const tokText = () =>
+        (tokWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+      const cdText = () =>
+        (cdWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+
+      expect(tokText()).toBe('twitch.tv/first')
+      expect(animateCalls.filter((el) => el === tokWrap)).toHaveLength(1)
+
+      vi.advanceTimersByTime(15_000)
+      expect(cdText()).toBe('04:45')
+
+      const litInnerBefore = litWrap!.querySelector('.fc-layer-text')
+      const cdReplace = vi.spyOn(cdWrap!, 'replaceChildren')
+      const litReplace = vi.spyOn(litWrap!, 'replaceChildren')
+
+      // Replacement snapshot with identical layer config/box but updated links.
+      rt.apply(
+        snapshot(
+          {
+            links: {
+              twitch: 'twitch.tv/second',
+              youtube: null,
+              kick: null,
+              facebook: null,
+              discord: null,
+              instagram: null,
+              x: null,
+              tiktok: null,
+              website: null,
+              custom: [],
+              socials: ['twitch.tv/second'],
+              channel_name: 'Second',
+              next_stream: null,
+              next_stream_at: null,
+            },
+          },
+          ov,
+        ),
+      )
+
+      expect(tokText()).toBe('twitch.tv/second')
+      expect(cdText()).toBe('04:45')
+      expect(litWrap!.querySelector('.fc-layer-text')).toBe(litInnerBefore)
+      expect(cdReplace).not.toHaveBeenCalled()
+      expect(litReplace).not.toHaveBeenCalled()
+      expect(animateCalls.filter((el) => el === tokWrap)).toHaveLength(1)
+    } finally {
+      ;(Element.prototype as unknown as { animate: unknown }).animate = origAnimate
+    }
+  })
 })
