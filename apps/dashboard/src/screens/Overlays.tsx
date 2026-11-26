@@ -81,6 +81,7 @@ export function Overlays() {
   const [regen, setRegen] = useState<Overlay | null>(null)
   const [removing, setRemoving] = useState<Overlay | null>(null)
   const [renaming, setRenaming] = useState<{ o: Overlay; name: string } | null>(null)
+  const [renameError, setRenameError] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
   const create = async () => {
@@ -98,6 +99,30 @@ export function Overlays() {
     } catch (e) {
       setNameError(describeError(e).message.replace(/^\w+: /, ''))
     }
+  }
+
+  const closeRename = () => {
+    setRenaming(null)
+    setRenameError(null)
+  }
+
+  const renameTrimmed = renaming?.name.trim() ?? ''
+
+  const submitRename = () => {
+    if (!renaming) return
+    if (!renameTrimmed) {
+      setRenameError('Give it a name, like “Starting soon”.')
+      return
+    }
+    setRenameError(null)
+    void run('rename', () => client.saveOverlay({ ...renaming.o, name: renameTrimmed }), {
+      success: 'Renamed.',
+    }).then((o) => {
+      if (o) {
+        overlays.set((p) => (p ?? []).map((x) => (x.id === o.id ? o : x)))
+        setRenaming(null)
+      }
+    })
   }
 
   const needle = q.trim().toLowerCase()
@@ -235,7 +260,10 @@ export function Overlays() {
                       key: 'rename',
                       label: 'Rename',
                       icon: <PencilSimple size={15} />,
-                      onSelect: () => setRenaming({ o, name: o.name }),
+                      onSelect: () => {
+                        setRenaming({ o, name: o.name })
+                        setRenameError(null)
+                      },
                     },
                     {
                       key: 'regen',
@@ -423,30 +451,19 @@ export function Overlays() {
 
       <Dialog
         open={renaming !== null}
-        onClose={() => setRenaming(null)}
+        onClose={closeRename}
         size="sm"
         title="Rename overlay"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setRenaming(null)}>
+            <Button variant="ghost" onClick={closeRename}>
               Cancel
             </Button>
             <Button
               variant="primary"
               busy={busy === 'rename'}
-              onClick={() =>
-                renaming &&
-                void run(
-                  'rename',
-                  () => client.saveOverlay({ ...renaming.o, name: renaming.name.trim() }),
-                  { success: 'Renamed.' },
-                ).then((o) => {
-                  if (o) {
-                    overlays.set((p) => (p ?? []).map((x) => (x.id === o.id ? o : x)))
-                    setRenaming(null)
-                  }
-                })
-              }
+              disabled={!renameTrimmed}
+              onClick={submitRename}
             >
               Save
             </Button>
@@ -454,18 +471,28 @@ export function Overlays() {
         }
       >
         {renaming && (
-          <Field label="Name">
-            {(p) => (
-              <Input
-                {...p}
-                autoFocus
-                data-autofocus
-                value={renaming.name}
-                maxLength={60}
-                onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
-              />
-            )}
-          </Field>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              submitRename()
+            }}
+          >
+            <Field label="Name" error={renameError}>
+              {(p) => (
+                <Input
+                  {...p}
+                  autoFocus
+                  data-autofocus
+                  value={renaming.name}
+                  maxLength={60}
+                  onChange={(e) => {
+                    setRenaming({ ...renaming, name: e.target.value })
+                    setRenameError(null)
+                  }}
+                />
+              )}
+            </Field>
+          </form>
         )}
       </Dialog>
       {guide}
