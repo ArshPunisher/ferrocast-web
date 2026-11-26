@@ -136,7 +136,118 @@ describe('Shell --fc-top and --fc-banners measurement', () => {
     })
     await act(async () => {
       for (const cb of roCallbacks) cb()
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     })
     expect(document.documentElement.style.getPropertyValue('--fc-banners')).toBe('0px')
+  })
+
+  it('coalesces ResizeObserver bursts into one rAF and skips redundant setProperty writes', async () => {
+    let bannerHeight = 44
+    const client = {
+      request: vi.fn(async () => null),
+      settings: vi.fn(async () => ({ theme: 'dark' })),
+      account: vi.fn(async () => ({ state: 'off' })),
+      proStatus: vi.fn(async () => null),
+      updates: vi.fn(async () => null),
+    }
+    useLive.setState({
+      conn: { client, mode: 'demo' } as never,
+      notices: [{ id: 1, at: 0, level: 'warn', message: 'Test banner' }],
+    })
+    const origRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.tagName === 'HEADER') {
+        return { height: 57, width: 1280, top: 0, left: 0, right: 1280, bottom: 57 } as DOMRect
+      }
+      if (this.dataset.bannersWrap === 'true') {
+        return {
+          height: bannerHeight,
+          width: 1280,
+          top: 57,
+          left: 0,
+          right: 1280,
+          bottom: 57 + bannerHeight,
+        } as DOMRect
+      }
+      return origRect.call(this)
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <Shell demo={true}>
+          <div>Child</div>
+        </Shell>,
+      )
+    })
+
+    const setProp = vi.spyOn(document.documentElement.style, 'setProperty')
+
+    // Unchanged height across repeated ResizeObserver notifications writes zero CSS vars.
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        for (const cb of roCallbacks) cb()
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    const unchangedCalls = setProp.mock.calls.filter(([name]) => name === '--fc-banners')
+    expect(unchangedCalls).toHaveLength(0)
+
+    // Multiple callbacks in a single frame with a changed height coalesce to one write.
+    bannerHeight = 64
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        for (const cb of roCallbacks) cb()
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    const changedCalls = setProp.mock.calls.filter(([name]) => name === '--fc-banners')
+    expect(changedCalls).toEqual([['--fc-banners', '64px']])
+  })
+
+  it('disables sidebar width and padding transitions on Studio while preserving slide elsewhere', async () => {
+    const client = {
+      request: vi.fn(async () => null),
+      settings: vi.fn(async () => ({ theme: 'dark' })),
+      account: vi.fn(async () => ({ state: 'off' })),
+      proStatus: vi.fn(async () => null),
+      updates: vi.fn(async () => null),
+    }
+    useLive.setState({
+      conn: { client, mode: 'demo' } as never,
+      notices: [],
+    })
+    window.location.hash = '#/studio'
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <Shell demo={true}>
+          <div>Child</div>
+        </Shell>,
+      )
+    })
+
+    const aside = () => host.querySelector<HTMLElement>('aside[aria-label="Sidebar"]')!
+    const col = () => host.querySelector<HTMLElement>('.fc-shell-col')!
+    expect(aside().className).not.toContain('duration-300')
+    expect(aside().className).not.toContain('transition-[width]')
+    expect(col()).not.toBeNull()
+    expect(col().className).not.toContain('duration-300')
+    expect(col().className).not.toContain('transition-[padding]')
+
+    await act(async () => {
+      window.location.hash = '#/'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(aside().className).toContain('duration-300')
+    expect(aside().className).toContain('transition-[width]')
+    expect(col().className).toContain('duration-300')
+    expect(col().className).toContain('transition-[padding]')
+
+    window.location.hash = ''
   })
 })

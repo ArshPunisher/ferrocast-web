@@ -394,17 +394,35 @@ function useSeamDraw(): boolean {
  */
 function useElementHeight<T extends HTMLElement>(cssVar: string) {
   const ref = useRef<T>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const root = document.documentElement
-    const set = () =>
-      root.style.setProperty(cssVar, `${Math.ceil(el.getBoundingClientRect().height)}px`)
-    set()
+    let last = ''
+    let raf = 0
+    const apply = () => {
+      const next = `${Math.ceil(el.getBoundingClientRect().height)}px`
+      if (next === last) return
+      last = next
+      root.style.setProperty(cssVar, next)
+    }
+    apply()
     if (typeof ResizeObserver !== 'function') return () => root.style.removeProperty(cssVar)
-    const ro = new ResizeObserver(set)
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        apply()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        apply()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
     ro.observe(el)
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       ro.disconnect()
       root.style.removeProperty(cssVar)
     }
@@ -499,7 +517,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
       <aside
         aria-label="Sidebar"
         className={cx(
-          'fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden border-r border-line bg-bg pt-3 pb-3 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none lg:flex',
+          'fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden border-r border-line bg-bg pt-3 pb-3 lg:flex',
+          !studio &&
+            'transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
           // From state, not the page variable: right on the first paint, no slide on load.
           folded ? 'w-[60px] px-2.5' : 'w-60 px-3',
         )}
@@ -619,7 +639,9 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
 
       <div
         className={cx(
-          'transition-[padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
+          'fc-shell-col',
+          !studio &&
+            'transition-[padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
           folded ? 'lg:pl-[60px]' : 'lg:pl-60',
         )}
       >
