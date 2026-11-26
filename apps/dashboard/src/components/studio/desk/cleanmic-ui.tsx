@@ -247,7 +247,8 @@ export function CleanMicControl({
           await api.updateFilter(name, compFilter.name, nextSettings)
           return { nextSettings, message: `Auto boost on (+${targetDb} dB).` }
         } catch (e) {
-          if (wasDisabled) await api.editFilter(name, compFilter.name, 'disable').catch(() => undefined)
+          if (wasDisabled)
+            await api.editFilter(name, compFilter.name, 'disable').catch(() => undefined)
           if (addedExp) await api.removeFilter(name, addedExp).catch(() => undefined)
           throw e
         }

@@ -118,7 +118,9 @@ describe('ChatLine inline pin button', () => {
     await renderLine({ event: ev, actions })
 
     const li = host.querySelector('li.fc-row') as HTMLElement
-    const pinBtn = li.querySelector('button[aria-label="Pin message to stream"]') as HTMLButtonElement
+    const pinBtn = li.querySelector(
+      'button[aria-label="Pin message to stream"]',
+    ) as HTMLButtonElement
     expect(pinBtn).not.toBeNull()
     expect(pinBtn.getAttribute('title')).toBe('Pin')
     expect(pinBtn.getAttribute('aria-pressed')).toBe('false')
@@ -165,7 +167,9 @@ describe('ChatLine inline pin button', () => {
     await renderLine({ event: ev, actions: makeActions(), dense: true })
     const li = host.querySelector('li.fc-row') as HTMLElement
     expect(li.querySelector('time')).toBeNull()
-    const pinBtn = li.querySelector('button[aria-label="Pin message to stream"]') as HTMLButtonElement
+    const pinBtn = li.querySelector(
+      'button[aria-label="Pin message to stream"]',
+    ) as HTMLButtonElement
     expect(pinBtn).not.toBeNull()
     expect(pinBtn.className).toContain('size-[26px]')
 
@@ -186,7 +190,9 @@ describe('ChatLine inline pin button', () => {
     await renderLine({ event: ev, actions })
 
     const li = host.querySelector('li.fc-row') as HTMLElement
-    const pinBtn = li.querySelector('button[aria-label="Pin message to stream"]') as HTMLButtonElement
+    const pinBtn = li.querySelector(
+      'button[aria-label="Pin message to stream"]',
+    ) as HTMLButtonElement
     const timeEl = li.querySelector('time') as HTMLElement
     expect(pinBtn).not.toBeNull()
     expect(pinBtn.getAttribute('title')).toBe('Pin')

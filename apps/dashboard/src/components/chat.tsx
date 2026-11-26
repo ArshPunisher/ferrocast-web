@@ -254,7 +254,9 @@ export const ChatLine = memo(function ChatLine({
   const pinned = !deleted && actions?.highlightedId === event.id
   const can = actions && !deleted ? lineActions(actions, event, !!held) : null
   const canHighlight = Boolean(can?.highlight && actions?.highlight)
-  const hasMod = Boolean(!mine && can && (can.reply || can.remove || can.timeout || can.ban || can.card))
+  const hasMod = Boolean(
+    !mine && can && (can.reply || can.remove || can.timeout || can.ban || can.card),
+  )
   const fallback = mine ? 'var(--color-accent-text)' : 'var(--color-text)'
   return (
     <li

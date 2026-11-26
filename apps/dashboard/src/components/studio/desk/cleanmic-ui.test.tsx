@@ -227,9 +227,9 @@ describe('Clean up my mic', () => {
     compSettings = { ratio: 3, output_gain: 0 }
     await mount(api, { filters, undone: 1 })
     await flush()
-    expect((host.querySelector('[role="switch"]') as HTMLButtonElement).getAttribute('aria-checked')).toBe(
-      'false',
-    )
+    expect(
+      (host.querySelector('[role="switch"]') as HTMLButtonElement).getAttribute('aria-checked'),
+    ).toBe('false')
 
     // Un-migrated chain (no expander, disabled 0 dB compressor) on fresh mount: toggling ON inserts expander first and enables compressor.
     act(() => root.unmount())

@@ -167,7 +167,9 @@ export function needsCleanMicUpdate(
 /** Reads whether the user dismissed the safe cleanup expander update offer. */
 export function readCleanMicUpdateSkipped(): boolean {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY) === '1'
+    return (
+      typeof localStorage !== 'undefined' && localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY) === '1'
+    )
   } catch {
     return false
   }

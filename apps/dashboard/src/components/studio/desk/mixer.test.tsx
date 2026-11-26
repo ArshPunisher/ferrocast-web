@@ -284,7 +284,13 @@ describe('AudioDock row and strip Remove', () => {
   it('places danger Remove at the bottom of the row menu and strip menu, and confirms + undoes global device removal', async () => {
     localStorage.setItem(
       'fc-studio-mixer',
-      JSON.stringify({ vertical: false, locked: ['Mic'], hidden: [], decay: 'fast', activeOnly: false }),
+      JSON.stringify({
+        vertical: false,
+        locked: ['Mic'],
+        hidden: [],
+        decay: 'fast',
+        activeOnly: false,
+      }),
     )
     const mic = makeAudio({ name: 'Mic', channel: 3 })
     const { desk, api, edit, refresh, statsStore } = makeDesk({
@@ -380,7 +386,9 @@ describe('AudioDock row and strip Remove', () => {
       items: [],
       api: {
         audio: vi.fn(async (sc: string) => (sc === 'Main' ? [] : [bgm])),
-        sources: vi.fn(async () => [{ name: 'BGM', kind: 'ffmpeg_source', scenes: ['Gameplay', 'BRB'] }]),
+        sources: vi.fn(async () => [
+          { name: 'BGM', kind: 'ffmpeg_source', scenes: ['Gameplay', 'BRB'] },
+        ]),
       },
     })
     await mountAudio(desk, statsStore)
@@ -421,7 +429,9 @@ describe('AudioDock row and strip Remove', () => {
     )
     await flush()
 
-    const failMore = host.querySelector('button[aria-label="More for FailMic"]') as HTMLButtonElement
+    const failMore = host.querySelector(
+      'button[aria-label="More for FailMic"]',
+    ) as HTMLButtonElement
     await act(async () => failMore.click())
     const failMenu = document.querySelector('[role="menu"][aria-label="FailMic"]') as HTMLElement
     const failRm = [...failMenu.querySelectorAll('[role="menuitem"]')].find((el) =>
