@@ -3085,6 +3085,18 @@ export class DemoStudioEngine {
       }))
     }
 
+    if (method === 'DELETE' && rest[2] === 'channels' && rest.length === 4) {
+      const ch = Number(rest[3])
+      if (!Number.isInteger(ch) || ch < 1 || ch > 6) {
+        throw new HttpError(400, 'invalid_channel', 'Choose a global audio slot from 1 to 6.')
+      }
+      const match = [...this.sources.values()].find((s) => s.channel === ch)
+      if (!match) return undefined
+      this.pushUndo(`Remove ${match.name}`)
+      this.removeSourceEverywhere(match.name)
+      return undefined
+    }
+
     if (method === 'PUT' && rest[2] === 'channels' && rest.length === 4) {
       const ch = Number(rest[3])
       const b = requireObj(body)

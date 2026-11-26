@@ -21,13 +21,26 @@ import {
   SlidersHorizontal,
   SpeakerHigh,
   SpeakerSlash,
+  Trash,
   Globe,
 } from '@phosphor-icons/react'
-import { type EngineAudio, type EngineLevel, type EngineMonitor } from '@ferrocast/api'
-import { Button, Dialog, IconButton, InfoTip, Input, Segmented, Skeleton, cx } from '@ferrocast/ui'
+import { type EngineAudio, type EngineItem, type EngineLevel, type EngineMonitor } from '@ferrocast/api'
+import {
+  Button,
+  ConfirmDialog,
+  Dialog,
+  IconButton,
+  InfoTip,
+  Input,
+  Segmented,
+  Skeleton,
+  cx,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource } from '../../../lib/hooks'
-import { KindTile, useDesk, type EngineApi } from './common'
+import { KindTile, SOUND_ONLY, useDesk, useDeskStats, type EngineApi } from './common'
+import { itemFor } from './shown-in'
 import { DockHeader } from './layout'
 import { filterItems, useContextMenu, type MenuItem } from './menu'
 import { AdvancedAudio } from './advanced-audio'
@@ -717,25 +730,103 @@ function DeskScale() {
   )
 }
 
+export type RemoveTarget =
+  | { mode: 'global'; audio: EngineAudio }
+  | { mode: 'scene'; audio: EngineAudio; scene: string; itemId: number }
+  | { mode: 'lookup_scene'; audio: EngineAudio; scene: string }
+  | { mode: 'drawer'; audio: EngineAudio; scenes: string[] }
+
+export type ConfirmRemoveTarget = Extract<RemoveTarget, { mode: 'global' | 'scene' }>
+
+/** Resolves how a mixer row/strip Remove action should remove or hand off a sound source. */
+export function resolveRemoveTarget(args: {
+  audio: EngineAudio
+  scene: string
+  items: EngineItem[]
+  selected: number | null
+  ownerScenes: string[]
+  otherItems?: EngineItem[]
+  otherSelected?: number | null
+}): RemoveTarget {
+  const { audio, scene, items, selected, ownerScenes, otherItems, otherSelected = null } = args
+  if (audio.channel !== null) {
+    return { mode: 'global', audio }
+  }
+  const hit = itemFor(items, audio.name, selected)
+  if (hit) {
+    return { mode: 'scene', audio, scene, itemId: hit.id }
+  }
+  if (ownerScenes.length === 1) {
+    const targetScene = ownerScenes[0]!
+    if (otherItems) {
+      const otherHit = itemFor(otherItems, audio.name, otherSelected)
+      if (otherHit) {
+        return { mode: 'scene', audio, scene: targetScene, itemId: otherHit.id }
+      }
+      return { mode: 'drawer', audio, scenes: ownerScenes }
+    }
+    return { mode: 'lookup_scene', audio, scene: targetScene }
+  }
+  return { mode: 'drawer', audio, scenes: ownerScenes }
+}
+
+/** Confirmation copy shown before removing a global device or scene source from the mixer. */
+export function removeConfirmCopy(
+  target: ConfirmRemoveTarget,
+  live: boolean,
+): { title: string; description: string } {
+  if (target.mode === 'global') {
+    return {
+      title: `Remove ${target.audio.name} from every scene?`,
+      description: `It plays in every scene. Press Undo to bring it back with its volume and filters.${live ? ' Viewers will stop hearing it right away.' : ''}`,
+    }
+  }
+  if (SOUND_ONLY.has(target.audio.kind)) {
+    return {
+      title: `Remove ${target.audio.name} from ${target.scene}?`,
+      description: 'Other scenes keep it. Press Undo to bring it back.',
+    }
+  }
+  return {
+    title: `Remove ${target.audio.name} from ${target.scene}?`,
+    description: `This removes both its picture and sound from ${target.scene}. Use Hide to keep it in the scene.`,
+  }
+}
+
 export function AudioDock() {
   const desk = useDesk()
   const { api, audio, pictureScenes, setAdding, openSettings, edit, refresh } = desk
+  const live = Boolean(useDeskStats()?.stream?.active)
   const { run } = useAction()
   const [all, setAll] = useState(false)
   const [prefs, setPrefs] = usePrefs()
   const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
+  const [removing, setRemoving] = useState<ConfirmRemoveTarget | null>(null)
   // Advanced audio: open on one sound's name, or '' for all.
   const [advanced, setAdvanced] = useState<string | null>(null)
   const { open, menu } = useContextMenu()
   const names = pictureScenes.map((x) => x.name).join('\n')
-  // Every scene's sounds, each once: the global devices first, then in scene order.
+  // Every scene's sounds, each once, plus which scenes contain each sound for All-view removal.
   const every = useResource(async () => {
     if (!all || !names) return null
-    const lists = await Promise.all(names.split('\n').map((n) => api.audio(n)))
+    const sceneNames = names.split('\n')
+    const lists = await Promise.all(sceneNames.map(async (n) => [n, await api.audio(n)] as const))
+    const scenesByName: Record<string, string[]> = {}
     const seen = new Set<string>()
-    return lists.flat().filter((a) => !seen.has(a.name) && seen.add(a.name))
+    const list: EngineAudio[] = []
+    for (const [sc, items] of lists) {
+      for (const a of items) {
+        const owners = (scenesByName[a.name] ??= [])
+        if (!owners.includes(sc)) owners.push(sc)
+        if (!seen.has(a.name)) {
+          seen.add(a.name)
+          list.push(a)
+        }
+      }
+    }
+    return { list, scenesByName }
   }, [api, all, names, audio.data])
-  const list = all ? every.data : audio.data
+  const list = all ? (every.data?.list ?? null) : audio.data
   const shown = list?.filter(
     (a) => !prefs.hidden.includes(a.name) && (!prefs.activeOnly || a.active !== false),
   )
@@ -745,8 +836,97 @@ export function AudioDock() {
   const setAudio = (name: string, patch: AudioPatch) => {
     // Shown at once; the engine follows.
     audio.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
-    every.set((l) => (l ?? []).map((x) => (x.name === name ? { ...x, ...patch } : x)))
+    every.set(
+      (prev) =>
+        prev && { ...prev, list: prev.list.map((x) => (x.name === name ? { ...x, ...patch } : x)) },
+    )
     void run(`audio:${name}`, () => api.setAudio(name, patch), { quiet: false })
+  }
+
+  const requestRemove = async (a: EngineAudio) => {
+    let target = resolveRemoveTarget({
+      audio: a,
+      scene: desk.scene,
+      items: desk.items.data ?? [],
+      selected: desk.selected,
+      ownerScenes: [],
+    })
+    if (target.mode === 'global' || target.mode === 'scene') {
+      setRemoving(target)
+      return
+    }
+    let ownerScenes = every.data?.scenesByName[a.name] ?? []
+    try {
+      const srcs = await api.sources()
+      const match = srcs.find((s) => s.name === a.name)
+      if (match?.scenes.length) ownerScenes = match.scenes
+    } catch {
+      // Fall back to All-view scene ownership if sources() fails.
+    }
+    target = resolveRemoveTarget({
+      audio: a,
+      scene: desk.scene,
+      items: desk.items.data ?? [],
+      selected: desk.selected,
+      ownerScenes,
+    })
+    if (target.mode === 'lookup_scene') {
+      const lookupScene = target.scene
+      const otherItems = await run('remove', () => api.items(lookupScene), { once: true })
+      if (!otherItems) return
+      target = resolveRemoveTarget({
+        audio: a,
+        scene: desk.scene,
+        items: desk.items.data ?? [],
+        selected: desk.selected,
+        ownerScenes,
+        otherItems,
+      })
+    }
+    if (target.mode === 'drawer') {
+      edit(a.name, 'sound')
+      return
+    }
+    if (target.mode === 'scene') {
+      setRemoving(target)
+    }
+  }
+
+  const confirmRemove = async () => {
+    const target = removing
+    if (!target) return
+    setRemoving(null)
+    const ok = await run(
+      'remove',
+      () =>
+        target.mode === 'global'
+          ? done(api.setChannel(target.audio.channel!, null))
+          : done(api.editItem(target.scene, target.itemId, 'remove')),
+      { once: true },
+    )
+    if (!ok) return
+    if (desk.editing === target.audio.name) edit(null)
+    refresh()
+    if (all) every.reload()
+    toast({
+      tone: 'info',
+      key: `audio-removed:${target.audio.name}`,
+      message: `${target.audio.name} removed.`,
+      duration: 6000,
+      action: {
+        label: 'Undo',
+        run: () =>
+          run(
+            'undo',
+            async () => {
+              await api.undo()
+              refresh()
+              if (all) every.reload()
+            },
+            { once: true },
+          ),
+      },
+    })
   }
   const rename = async () => {
     if (!naming) return
@@ -820,6 +1000,13 @@ export function AudioDock() {
             success: `Filters pasted onto ${a.name}.`,
           }),
       }),
+      { sep: true },
+      {
+        label: 'Remove',
+        icon: Trash,
+        danger: true,
+        onSelect: () => void requestRemove(a),
+      },
     ]
   }
   const props = (a: EngineAudio): ChannelProps => ({
@@ -994,6 +1181,14 @@ export function AudioDock() {
           />
         </form>
       </Dialog>
+      <ConfirmDialog
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        {...(removing ? removeConfirmCopy(removing, live) : { title: '' })}
+        confirm="Remove"
+        danger
+        onConfirm={() => void confirmRemove()}
+      />
     </section>
   )
 }

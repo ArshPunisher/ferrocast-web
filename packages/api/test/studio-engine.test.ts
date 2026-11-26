@@ -2027,5 +2027,41 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('removes global audio devices via setChannel(ch, null) and restores volume and filters on undo', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.start()
+        await api.setAudio('Desktop Audio', { volume_db: -8.5, monitor: 'only_me' })
+        await api.addFilter('Desktop Audio', {
+          kind: 'gain_filter',
+          name: 'Desk Boost',
+          settings: { db: 4 },
+        })
+
+        await api.setChannel(1, null)
+        expect((await api.audio('Main')).some((a) => a.name === 'Desktop Audio')).toBe(false)
+
+        await api.undo()
+        const restored = (await api.audio('Main')).find((a) => a.name === 'Desktop Audio')
+        expect(restored).toMatchObject({
+          channel: 1,
+          volume_db: -8.5,
+          monitor: 'only_me',
+        })
+        expect((await api.filters('Desktop Audio')).map((f) => f.name)).toEqual(['Desk Boost'])
+
+        // Also works for Mic on channel 3
+        await api.setChannel(3, null)
+        expect((await api.audio('Main')).some((a) => a.name === 'Mic')).toBe(false)
+        await api.undo()
+        expect((await api.audio('Main')).some((a) => a.name === 'Mic')).toBe(true)
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })
