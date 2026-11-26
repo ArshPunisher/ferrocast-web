@@ -58,7 +58,8 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
       },
       addEventListener: (_: string, cb: () => void) => mqlListeners.add({ q, cb }),
       removeEventListener: (_: string, cb: () => void) => {
-        for (const item of mqlListeners) if (item.q === q && item.cb === cb) mqlListeners.delete(item)
+        for (const item of mqlListeners)
+          if (item.q === q && item.cb === cb) mqlListeners.delete(item)
       },
       addListener: () => {},
       removeListener: () => {},
@@ -202,7 +203,9 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
     const ws = host.querySelector<HTMLElement>('[data-dock-ws]')!
     const leftRegion = host.querySelector<HTMLElement>('[data-dock-region="left"]')!
     const center = host.querySelector<HTMLElement>('[data-desk-center]')!
-    const divider = host.querySelector<HTMLElement>('[role="separator"][aria-label="Resize the left panels"]')!
+    const divider = host.querySelector<HTMLElement>(
+      '[role="separator"][aria-label="Resize the left panels"]',
+    )!
 
     leftRegion.getBoundingClientRect = () =>
       ({ left: 0, top: 0, width: 300, height: 700, right: 300, bottom: 700 }) as DOMRect
@@ -211,7 +214,8 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
 
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     const dragEvents: boolean[] = []
-    const onDrag = (e: Event) => dragEvents.push((e as CustomEvent<{ active: boolean }>).detail.active)
+    const onDrag = (e: Event) =>
+      dragEvents.push((e as CustomEvent<{ active: boolean }>).detail.active)
     window.addEventListener('fc:divider-drag', onDrag)
 
     await act(async () => {
@@ -268,7 +272,9 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
     await act(async () => {
       floatHeader.dispatchEvent(pointerEvt('pointerdown', { clientX: 720, clientY: 470 }))
       for (const step of [10, 20, 30, 40]) {
-        document.dispatchEvent(pointerEvt('pointermove', { clientX: 720 + step, clientY: 470 + step }))
+        document.dispatchEvent(
+          pointerEvt('pointermove', { clientX: 720 + step, clientY: 470 + step }),
+        )
       }
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     })

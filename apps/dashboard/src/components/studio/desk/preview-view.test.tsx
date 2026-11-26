@@ -3,11 +3,7 @@ import { act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DIVIDER_DRAG_EVENT,
-  PREVIEW_LIVE_RESIZE_EVENT,
-  SCALE_CHANGED_EVENT,
-} from '@ferrocast/ui'
+import { DIVIDER_DRAG_EVENT, PREVIEW_LIVE_RESIZE_EVENT, SCALE_CHANGED_EVENT } from '@ferrocast/ui'
 import { DeskProvider } from './common'
 import { useLive } from '../../../lib/store'
 import { HOLES_CHANGED } from './snap-overlay'
@@ -2062,7 +2058,8 @@ describe('Studio preview live-resize and scale sync', () => {
 
     const putCalls = () =>
       req.mock.calls.filter(([m, p]) => m === 'PUT' && p === '/api/v1/studio/engine/preview')
-    const thumbCalls = () => req.mock.calls.filter(([m, p]) => m === 'GET' && p.includes('/thumbnail'))
+    const thumbCalls = () =>
+      req.mock.calls.filter(([m, p]) => m === 'GET' && p.includes('/thumbnail'))
 
     return { req, desk, roCallbacks, putCalls, thumbCalls }
   }
@@ -2249,8 +2246,7 @@ describe('Studio preview live-resize and scale sync', () => {
 
       expect(
         observations.some(
-          (o) =>
-            o.target === document.body && Boolean(o.options?.subtree || o.options?.childList),
+          (o) => o.target === document.body && Boolean(o.options?.subtree || o.options?.childList),
         ),
       ).toBe(false)
       expect(

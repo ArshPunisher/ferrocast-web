@@ -37,16 +37,16 @@ export function isValidScaleChangedPayload(value: unknown): value is ScaleChange
   return typeof scale === 'number' && Number.isFinite(scale) && scale > 0
 }
 
-export function isValidPreviewLiveResizePayload(
-  value: unknown,
-): value is PreviewLiveResizePayload {
+export function isValidPreviewLiveResizePayload(value: unknown): value is PreviewLiveResizePayload {
   if (!value || typeof value !== 'object') return false
   return typeof (value as { active?: unknown }).active === 'boolean'
 }
 
 export function dispatchPreviewLiveResize(detail: PreviewLiveResizePayload) {
   if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent<PreviewLiveResizePayload>(PREVIEW_LIVE_RESIZE_EVENT, { detail }))
+  window.dispatchEvent(
+    new CustomEvent<PreviewLiveResizePayload>(PREVIEW_LIVE_RESIZE_EVENT, { detail }),
+  )
 }
 
 export function dispatchScaleChanged(detail: ScaleChangedPayload) {

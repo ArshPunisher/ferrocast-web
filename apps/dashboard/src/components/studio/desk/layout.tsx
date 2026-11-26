@@ -169,10 +169,7 @@ export function clampFloat(
 }
 
 /** A saved layout, cleaned: panels it doesn't know start hidden, ones gone are dropped. */
-export function revive(
-  v: Partial<Layout> | null,
-  viewport?: { vw?: number; vh?: number },
-): Layout {
+export function revive(v: Partial<Layout> | null, viewport?: { vw?: number; vh?: number }): Layout {
   if (!v || !Array.isArray(v.left) || !Array.isArray(v.right) || !Array.isArray(v.bottom))
     return fresh('side')
   const webs = (Array.isArray(v.webs) ? v.webs : []).filter(
@@ -777,9 +774,7 @@ export function DockWorkspace({
             phone && 'min-h-[320px] flex-1',
             drag?.id === activeOf(layout, id) && 'opacity-40',
           )}
-          style={
-            compact ? undefined : { flex: `var(${dockVar(id)}, ${layout.w[id] ?? 1}) 1 0` }
-          }
+          style={compact ? undefined : { flex: `var(${dockVar(id)}, ${layout.w[id] ?? 1}) 1 0` }}
         >
           {docks(renderedDockId)}
         </div>,
@@ -793,9 +788,7 @@ export function DockWorkspace({
         ? { height: `var(--fc-bh, ${layout.bh}px)`, flex: '0 1 auto', minHeight: MIN_PANEL_H }
         : {
             width:
-              region === 'left'
-                ? `var(--fc-lw, ${layout.lw}px)`
-                : `var(--fc-rw, ${layout.rw}px)`,
+              region === 'left' ? `var(--fc-lw, ${layout.lw}px)` : `var(--fc-rw, ${layout.rw}px)`,
             flex: '0 1 auto',
             minWidth: MIN_PANEL_W,
           }
