@@ -362,4 +362,87 @@ describe('OverlayEditor save preserves undo stack (Extra bug #9)', () => {
     expect(findButton(host, 'Undo').disabled).toBe(true)
     expect(maybeButton(host, 'Save')).toBeUndefined()
   })
+
+  it('shows skeleton instead of stale overlay while switching IDs and clears selection across shared widget IDs', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const list = await client.overlays()
+    const base = list[0]!
+
+    const ovA: Overlay = {
+      ...base,
+      id: 'ov-a',
+      name: 'First Overlay',
+      widgets: [
+        {
+          id: 'w-shared',
+          kind: 'goal',
+          x: 40,
+          y: 40,
+          w: 440,
+          h: 112,
+          config: { goal_id: 'g1', theme: 'molten' },
+        },
+      ],
+    }
+    const ovB: Overlay = {
+      ...base,
+      id: 'ov-b',
+      name: 'Second Overlay',
+      widgets: [
+        {
+          id: 'w-shared',
+          kind: 'goal',
+          x: 120,
+          y: 120,
+          w: 440,
+          h: 112,
+          config: { goal_id: 'g1', theme: 'molten' },
+        },
+      ],
+    }
+
+    let resolveB!: (o: Overlay) => void
+    vi.spyOn(client, 'overlay').mockImplementation(async (id) => {
+      if (id === 'ov-a') return structuredClone(ovA)
+      if (id === 'ov-b') {
+        return new Promise<Overlay>((resolve) => {
+          resolveB = resolve
+        })
+      }
+      throw new Error(`Unexpected overlay ${id}`)
+    })
+
+    const host = await mountEditor('ov-a', client)
+    expect(host.querySelector('h1')?.textContent?.trim()).toBe('First Overlay')
+
+    // Select the shared-ID widget in ov-a.
+    const widgetA = host.querySelector<HTMLElement>('[role="button"][aria-label^="Goal widget"]')!
+    await act(async () => {
+      widgetA.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    expect(widgetA.getAttribute('aria-pressed')).toBe('true')
+
+    // Switch to ov-b while its fetch is still pending: ov-a must NOT stay visible/editable.
+    await act(async () => {
+      root!.render(
+        <>
+          <OverlayEditor id="ov-b" />
+          <Toaster />
+        </>,
+      )
+    })
+    expect(host.querySelector('h1')).toBeNull()
+    expect(host.querySelector('[data-testid="overlay-status-bar"]')).toBeNull()
+
+    // Resolve ov-b: Second Overlay mounts cleanly without leaking selection from ov-a.
+    await act(async () => {
+      resolveB(structuredClone(ovB))
+    })
+    await flushTicks(20, () => host.querySelector('h1')?.textContent?.trim() === 'Second Overlay')
+    expect(host.querySelector('h1')?.textContent?.trim()).toBe('Second Overlay')
+    const widgetB = host.querySelector<HTMLElement>('[role="button"][aria-label^="Goal widget"]')!
+    expect(widgetB.getAttribute('aria-pressed')).toBe('false')
+    expect(findButton(host, 'Undo').disabled).toBe(true)
+  })
 })

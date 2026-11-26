@@ -85,6 +85,9 @@ export function OverlayEditor({ id }: { id: string }) {
   useEffect(() => {
     if (!ov.data || ov.data.id !== id) {
       loadedId.current = null
+      history.reset(null)
+      setSavedBaseline(null)
+      setToStudio(false)
       return
     }
     if (loadedId.current === id) return
@@ -93,7 +96,8 @@ export function OverlayEditor({ id }: { id: string }) {
     setSavedBaseline(ov.data)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, ov.data])
-  const dirty = layoutDirty(draft, savedBaseline ?? ov.data)
+  const currentDraft = draft && draft.id === id && ov.data?.id === id ? draft : null
+  const dirty = layoutDirty(currentDraft, savedBaseline ?? ov.data)
   const leaving = useLeaveGuard(dirty)
 
   // Labels depend only on label widgets' source/template, not on where widgets sit, so dragging
@@ -224,7 +228,7 @@ export function OverlayEditor({ id }: { id: string }) {
   )
 
   if (ov.error) return <LoadError error={ov.error} onRetry={ov.reload} />
-  if (!draft)
+  if (!draft || draft.id !== id || ov.data?.id !== id)
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-10 w-64" />
@@ -359,6 +363,7 @@ export function OverlayEditor({ id }: { id: string }) {
         </p>
       )}
       <LayoutEditor
+        key={draft.id}
         fitViewport
         layout={draft}
         onWidgets={(widgets, opts) => history.set((d) => (d ? { ...d, widgets } : d), opts)}
