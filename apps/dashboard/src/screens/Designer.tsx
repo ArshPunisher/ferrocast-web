@@ -919,15 +919,15 @@ function StageView({
           {variationTabs}
         </div>
       </div>
-      <div className="relative min-h-0 bg-inset p-3 min-[900px]:h-[min(64dvh,620px)] min-[900px]:p-5">
-        <div className="relative aspect-video w-full min-[900px]:absolute min-[900px]:top-5 min-[900px]:bottom-5 min-[900px]:left-5 min-[900px]:right-[392px] min-[900px]:aspect-auto min-[900px]:w-auto">
+      <div className="relative min-h-0 bg-inset p-3 min-[900px]:grid min-[900px]:h-[min(64dvh,620px)] min-[900px]:grid-cols-[minmax(0,1fr)_clamp(268px,27vw,356px)] min-[900px]:gap-5 min-[900px]:p-5">
+        <div className="relative aspect-video w-full min-[900px]:aspect-auto min-[900px]:h-full min-[900px]:min-h-0">
           {preview}
         </div>
         <section
           aria-label="Inspector"
           className={cx(
             'flex flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop',
-            'min-[900px]:absolute min-[900px]:top-5 min-[900px]:right-5 min-[900px]:bottom-5 min-[900px]:w-[356px] min-[900px]:rounded-panel',
+            'min-[900px]:h-full min-[900px]:min-h-0 min-[900px]:rounded-panel',
             'max-[899px]:fixed max-[899px]:inset-x-0 max-[899px]:bottom-[calc(64px+env(safe-area-inset-bottom))] max-[899px]:z-40 max-[899px]:rounded-t-[18px]',
             phone && sheetOpen ? 'max-[899px]:h-[62dvh]' : '',
           )}
@@ -1164,7 +1164,7 @@ function GuidedView({
         </div>
         <aside
           aria-label="Preview"
-          className="flex flex-col gap-2.5 lg:sticky lg:top-4 max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-b max-lg:border-line max-lg:bg-bg max-lg:px-4 max-lg:py-2.5"
+          className="flex flex-col gap-2.5 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] max-lg:sticky max-lg:top-[var(--fc-top,56px)] max-lg:z-10 max-lg:-mx-4 max-lg:border-b max-lg:border-line max-lg:bg-bg max-lg:px-4 max-lg:py-2.5"
         >
           <div className="mx-auto w-full max-lg:max-w-[calc(32dvh*16/9)]">{preview}</div>
           <div className="max-lg:hidden">{testBar}</div>

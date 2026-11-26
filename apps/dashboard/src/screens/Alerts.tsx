@@ -801,7 +801,7 @@ function RuleEditor({
   return (
     <div
       data-testid="alert-editor"
-      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
+      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
     >
       {/* Top bar: where I am, what is unsaved, and the ways out. */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">

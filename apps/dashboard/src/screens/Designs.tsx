@@ -417,7 +417,7 @@ export function Designs({ tab }: { tab: GalleryTab }) {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <aside
           aria-label="Filters"
-          className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-3 lg:w-[190px] min-[1400px]:w-[214px]"
+          className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:w-[190px] min-[1400px]:w-[214px]"
         >
           <label className="relative block">
             <span className="sr-only">{searchLabel}</span>
