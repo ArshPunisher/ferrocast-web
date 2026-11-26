@@ -218,71 +218,68 @@ export function OverlayEditor({ id }: { id: string }) {
   const resolvedHighlight =
     (liveHighlight !== undefined ? liveHighlight : initialHighlight.data) ?? SAMPLE_HIGHLIGHT
 
-  const state: OverlayState = useMemo(
-    () => {
-      const labelWidgets = (JSON.parse(labelKey) as [string, string, string][]).map(
-        ([id, source, template]) =>
-          ({
-            id,
-            kind: 'label',
-            x: 0,
-            y: 0,
-            w: 1,
-            h: 1,
-            config: { source, template },
-          }) as Overlay['widgets'][number],
-      )
-      return {
-        goals: goals.data ?? [],
-        labels: resolvePreviewLabelMap(labelWidgets, effectiveLabels),
-        ...(hasTrain
-          ? {
-              label_trains: Object.fromEntries(
-                (JSON.parse(labelKey) as [string, string, string][])
-                  .filter(([, source]) => source === 'hype_train')
-                  .map(([id]) => [
-                    id,
-                    {
-                      active: true,
-                      level: 2,
-                      events: 8,
-                      contributors: 5,
-                      latest_actor: 'NeelaMoth',
-                      remaining_ms: 105_000,
-                      ends_at: Date.now() + 105_000,
-                      warmup_count: 8,
-                      threshold: 3,
-                    },
-                  ]),
-              ),
-            }
-          : {}),
-        viewers,
-        events: recentEvents,
-        chat: recentChat,
-        // The real poll, giveaway, credits and highlight when present, else samples to place them by.
-        poll: livePoll ?? SAMPLE_POLL,
-        giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
-        credits: resolvedCredits,
-        chat_highlight: resolvedHighlight,
-        links: effectiveLinks,
-      }
-    },
-    [
-      goals.data,
-      labelKey,
-      hasTrain,
+  const state: OverlayState = useMemo(() => {
+    const labelWidgets = (JSON.parse(labelKey) as [string, string, string][]).map(
+      ([id, source, template]) =>
+        ({
+          id,
+          kind: 'label',
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 1,
+          config: { source, template },
+        }) as Overlay['widgets'][number],
+    )
+    return {
+      goals: goals.data ?? [],
+      labels: resolvePreviewLabelMap(labelWidgets, effectiveLabels),
+      ...(hasTrain
+        ? {
+            label_trains: Object.fromEntries(
+              (JSON.parse(labelKey) as [string, string, string][])
+                .filter(([, source]) => source === 'hype_train')
+                .map(([id]) => [
+                  id,
+                  {
+                    active: true,
+                    level: 2,
+                    events: 8,
+                    contributors: 5,
+                    latest_actor: 'NeelaMoth',
+                    remaining_ms: 105_000,
+                    ends_at: Date.now() + 105_000,
+                    warmup_count: 8,
+                    threshold: 3,
+                  },
+                ]),
+            ),
+          }
+        : {}),
       viewers,
-      recentChat,
-      recentEvents,
-      livePoll,
-      liveGiveaway,
-      resolvedCredits,
-      resolvedHighlight,
-      effectiveLabels,
-      effectiveLinks,
-    ],
-  )
+      events: recentEvents,
+      chat: recentChat,
+      // The real poll, giveaway, credits and highlight when present, else samples to place them by.
+      poll: livePoll ?? SAMPLE_POLL,
+      giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
+      credits: resolvedCredits,
+      chat_highlight: resolvedHighlight,
+      links: effectiveLinks,
+    }
+  }, [
+    goals.data,
+    labelKey,
+    hasTrain,
+    viewers,
+    recentChat,
+    recentEvents,
+    livePoll,
+    liveGiveaway,
+    resolvedCredits,
+    resolvedHighlight,
+    effectiveLabels,
+    effectiveLinks,
+  ])
 
   if (ov.error) return <LoadError error={ov.error} onRetry={ov.reload} />
   if (!draft || draft.id !== id || ov.data?.id !== id)
