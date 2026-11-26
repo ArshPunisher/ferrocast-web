@@ -170,6 +170,153 @@ describe('OverlayEditor save preserves undo stack (Extra bug #9)', () => {
     expect(maybeButton(host, 'Save')).toBeUndefined()
   })
 
+  it('clears Unsaved state after Save when server reorders widget keys and omits default fields, while keeping Undo', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const list = await client.overlays()
+    const base = list.find((o) => !o.design?.branded) ?? list[0]
+    if (!base) throw new Error('No overlay in demo seed')
+
+    const initialOverlay: Overlay = {
+      ...base,
+      updated_at: 1000,
+      design: { id: 'molten', scene: 'main', follows: true, branded: false },
+      widgets: [
+        {
+          id: 'l-locked',
+          kind: 'layer',
+          x: 40,
+          y: 40,
+          w: 400,
+          h: 100,
+          locked: true,
+          hidden: true,
+          rotation: 0,
+          opacity: 1,
+          config: { type: 'text', text: 'Alpha' },
+        },
+      ],
+    }
+
+    const rustNormalizeWidget = (w: Overlay['widgets'][number]) => {
+      const cfgEntries = Object.entries(w.config as unknown as Record<string, unknown>).sort(
+        ([a], [b]) => a.localeCompare(b),
+      )
+      const out: Record<string, unknown> = {
+        config: Object.fromEntries(cfgEntries),
+        h: w.h,
+        id: w.id,
+        kind: w.kind,
+        w: w.w,
+        x: w.x,
+        y: w.y,
+      }
+      if (w.locked) out.locked = true
+      if (w.hidden) out.hidden = true
+      if (w.rotation && w.rotation !== 0) out.rotation = w.rotation
+      if (w.opacity !== undefined && w.opacity !== 1) out.opacity = w.opacity
+      return out as unknown as Overlay['widgets'][number]
+    }
+
+    let currentServer: Overlay = initialOverlay
+    vi.spyOn(client, 'overlay').mockImplementation(async () => structuredClone(currentServer))
+    const saveSpy = vi.spyOn(client, 'saveOverlay').mockImplementation(async (o) => {
+      currentServer = {
+        ...structuredClone(o),
+        updated_at: 99999,
+        design: o.design ? { ...o.design, follows: false } : null,
+        widgets: o.widgets.map(rustNormalizeWidget),
+      }
+      return structuredClone(currentServer)
+    })
+
+    const host = await mountEditor(initialOverlay.id, client)
+    const toolbar = host.querySelector<HTMLElement>('[role="toolbar"][aria-label="Canvas"]')!
+
+    // Unlock and unhide the layer (writes explicit locked: false / hidden: false) and duplicate (writes locked: false).
+    await act(async () => {
+      findButton(host, 'Unlock Text: Alpha').click()
+    })
+    await act(async () => {
+      findButton(host, 'Show Text: Alpha').click()
+    })
+    await act(async () => {
+      findButton(toolbar, 'Text').click()
+    })
+    const textLayerBtn = host.querySelector<HTMLElement>(
+      '[role="button"][aria-label^="Text: Alpha"]',
+    )!
+    await act(async () => {
+      textLayerBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    await act(async () => {
+      findButton(host, 'Duplicate').click()
+    })
+    expect(maybeButton(host, 'Save')).toBeTruthy()
+
+    // Save: server returns reordered widget keys and omits locked: false / hidden: false / rotation: 0 / opacity: 1.
+    await act(async () => {
+      findButton(host, 'Save').click()
+    })
+    await flushTicks(20, () => saveSpy.mock.calls.length === 1 && !maybeButton(host, 'Save'))
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+    expect(maybeButton(host, 'Save')).toBeUndefined()
+    expect(host.querySelector('[data-testid="overlay-status-bar"]')?.textContent).toContain('Saved')
+    expect(findButton(host, 'Undo').disabled).toBe(false)
+
+    // Undo makes layout dirty again; Redo restores the exact saved layout and clears Unsaved.
+    await act(async () => {
+      findButton(host, 'Undo').click()
+    })
+    expect(maybeButton(host, 'Save')).toBeTruthy()
+    await act(async () => {
+      findButton(host, 'Redo').click()
+    })
+    expect(maybeButton(host, 'Save')).toBeUndefined()
+  })
+
+  it('keeps Unsaved state if an edit happens while Save is in flight', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const list = await client.overlays()
+    const base = list[0]!
+
+    let resolveSave!: (o: Overlay) => void
+    vi.spyOn(client, 'saveOverlay').mockImplementation(
+      () =>
+        new Promise<Overlay>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+
+    const host = await mountEditor(base.id, client)
+    const toolbar = host.querySelector<HTMLElement>('[role="toolbar"][aria-label="Canvas"]')!
+    await act(async () => {
+      findButton(toolbar, 'Text').click()
+    })
+    const startCount = layerCount(host)
+
+    await act(async () => {
+      findButton(host, 'Save').click()
+    })
+
+    // Edit again while Save is still in flight.
+    await act(async () => {
+      findButton(toolbar, 'Text').click()
+    })
+    expect(layerCount(host)).toBe(startCount + 1)
+
+    await act(async () => {
+      resolveSave({
+        ...base,
+        widgets: base.widgets,
+        updated_at: 99999,
+      })
+    })
+    await flushTicks(10)
+    expect(maybeButton(host, 'Save')).toBeTruthy()
+  })
+
   it('Discard reverts changes and resets undo; switching overlay id loads the new overlay cleanly', async () => {
     engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
     const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })

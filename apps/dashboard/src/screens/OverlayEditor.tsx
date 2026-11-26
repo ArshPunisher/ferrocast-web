@@ -22,13 +22,36 @@ import {
   giveawayCard,
 } from '../components/community/preview'
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => (item === undefined ? 'null' : canonicalJson(item))).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function normalizeWidget(w: Overlay['widgets'][number]): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...w }
+  if (!out.locked) delete out.locked
+  if (!out.hidden) delete out.hidden
+  if (out.rotation === undefined || out.rotation === 0) delete out.rotation
+  if (out.opacity === undefined || out.opacity === 1) delete out.opacity
+  return out
+}
+
 function layoutDirty(draft: Overlay | null, saved: Overlay | null): boolean {
   if (!draft || !saved) return false
   return (
     draft.name !== saved.name ||
     draft.width !== saved.width ||
     draft.height !== saved.height ||
-    JSON.stringify(draft.widgets) !== JSON.stringify(saved.widgets)
+    canonicalJson(draft.widgets.map(normalizeWidget)) !==
+      canonicalJson(saved.widgets.map(normalizeWidget))
   )
 }
 
@@ -53,6 +76,7 @@ export function OverlayEditor({ id }: { id: string }) {
   const [toStudio, setToStudio] = useState(false)
   const history = useHistory<Overlay | null>(null)
   const draft = history.value
+  const [savedBaseline, setSavedBaseline] = useState<Overlay | null>(null)
   const setDraft = (o: Overlay) => history.reset(o)
   useUndoKeys(history)
   const media = useResource((c) => c.media())
@@ -66,9 +90,10 @@ export function OverlayEditor({ id }: { id: string }) {
     if (loadedId.current === id) return
     loadedId.current = id
     history.reset(ov.data)
+    setSavedBaseline(ov.data)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, ov.data])
-  const dirty = layoutDirty(draft, ov.data)
+  const dirty = layoutDirty(draft, savedBaseline ?? ov.data)
   const leaving = useLeaveGuard(dirty)
 
   // Labels depend only on label widgets' source/template, not on where widgets sit, so dragging
@@ -207,14 +232,41 @@ export function OverlayEditor({ id }: { id: string }) {
       </div>
     )
   const brandLocked = draft.design?.branded === true
-  const saveNow = () =>
-    run('save', () => client.saveOverlay(draft), {
+  const saveNow = () => {
+    const sent = draft
+    const payload: Overlay = {
+      ...(ov.data ?? sent),
+      name: sent.name,
+      width: sent.width,
+      height: sent.height,
+      widgets: sent.widgets,
+    }
+    return run('save', () => client.saveOverlay(payload), {
+      once: true,
       success: 'Overlay saved. Your stream updates by itself.',
     }).then((o) => {
-      if (o) ov.set(o)
+      if (o) {
+        ov.set(o)
+        setSavedBaseline(sent)
+      }
       return o
     })
+  }
   const save = () => void saveNow()
+  const discardChanges = () => {
+    if (!ov.data) return
+    setSavedBaseline(ov.data)
+    setDraft(ov.data)
+  }
+  const studioOverlay: Overlay = ov.data
+    ? {
+        ...ov.data,
+        name: draft.name,
+        width: draft.width,
+        height: draft.height,
+        widgets: draft.widgets,
+      }
+    : draft
   const statusFooter = (
     <div
       data-testid="overlay-status-bar"
@@ -230,7 +282,7 @@ export function OverlayEditor({ id }: { id: string }) {
           <p className="min-w-0 flex-1 text-[13.5px] font-medium text-text-2 lg:truncate">
             Unsaved layout. Your stream keeps the old one until you save.
           </p>
-          <Button size="sm" variant="ghost" onClick={() => ov.data && setDraft(ov.data)}>
+          <Button size="sm" variant="ghost" onClick={discardChanges}>
             Discard
           </Button>
           <Button size="sm" variant="primary" busy={busy === 'save'} onClick={save}>
@@ -321,7 +373,10 @@ export function OverlayEditor({ id }: { id: string }) {
         footer={statusFooter}
       />
       {guide}
-      <AddToStudioDialog overlay={toStudio ? draft : null} onClose={() => setToStudio(false)} />
+      <AddToStudioDialog
+        overlay={toStudio ? studioOverlay : null}
+        onClose={() => setToStudio(false)}
+      />
       <Dialog
         open={leaving.pending !== null}
         onClose={leaving.stay}
@@ -336,7 +391,7 @@ export function OverlayEditor({ id }: { id: string }) {
             <Button
               variant="secondary"
               onClick={() => {
-                setDraft(ov.data ?? draft)
+                discardChanges()
                 leaving.leave()
               }}
             >
