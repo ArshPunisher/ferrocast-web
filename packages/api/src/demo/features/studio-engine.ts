@@ -42,6 +42,7 @@ import {
   type StillResult,
 } from '../../studio-engine'
 import type { Service, UploadCheck } from '../../golive'
+import type { LiveAlert } from '../../studio'
 import { HttpError } from '../http-error'
 import { clone, requireObj, type DemoHost } from './host'
 
@@ -924,6 +925,7 @@ export class DemoStudioEngine {
   private simDropped = 0
   private simLagged = 0
   private simSkipped = 0
+  private silencedAlerts = new Set<string>()
   private benchJobSeq = 0
   private benchCancelToken = 0
   private applyWatchToken = 0
@@ -1229,8 +1231,19 @@ export class DemoStudioEngine {
     }
     this.streamActive = on
     this.streamStartedAt = on ? Date.now() : 0
+    this.silencedAlerts.clear()
     this.onStreamChange?.(on)
     return this.currentStreamStats()
+  }
+
+  emitLiveAlert(alert: LiveAlert): boolean {
+    if (!alert.cleared && this.silencedAlerts.has(alert.id)) return false
+    this.host?.broadcastLive({ v: 1, type: 'live_alert', data: alert })
+    return true
+  }
+
+  isLiveAlertSilenced(id: string): boolean {
+    return this.silencedAlerts.has(id)
   }
 
   setAutoConfigDeps(deps: DemoAutoConfigDeps): void {
@@ -2084,12 +2097,14 @@ export class DemoStudioEngine {
           peak: [-38, -38],
           magnitude: [-42, -42],
           input_peak: [-38, -38],
+          speech: false,
         }
       }
       return {
         peak: [-100, -100],
         magnitude: [-100, -100],
         input_peak: [-100, -100],
+        speech: false,
       }
     }
     const muted = src?.muted ?? false
@@ -2099,10 +2114,28 @@ export class DemoStudioEngine {
     const rawBase =
       this.opts.micPreset === 'quiet' ? -27 : this.opts.micPreset === 'loud' ? -1.8 : -15
     const raw = Math.min(-0.2, Math.max(-46, rawBase + ripple))
-    if (muted) {
-      return { peak: [-100, -100], magnitude: [-100, -100], input_peak: [raw, raw] }
+    if (muted || volDb <= -60) {
+      return {
+        peak: [-100, -100],
+        magnitude: [-100, -100],
+        input_peak: [raw, raw],
+        speech: false,
+      }
     }
     const chain = (src?.filters ?? []).filter((f) => f.enabled)
+    const gateClosed = chain.some((f) => {
+      if (f.kind !== 'noise_gate_filter') return false
+      const open = Number(src?.filterSettings[f.name]?.open_threshold ?? -26)
+      return Number.isFinite(open) && raw < open
+    })
+    if (gateClosed) {
+      return {
+        peak: [-100, -100],
+        magnitude: [-100, -100],
+        input_peak: [raw, raw],
+        speech: false,
+      }
+    }
     const hasGain = chain.find((f) => f.kind === 'gain_filter')
     const hasComp = chain.some((f) => f.kind === 'compressor_filter' || f.kind === 'limiter_filter')
     let out = raw + volDb
@@ -2118,6 +2151,7 @@ export class DemoStudioEngine {
       peak: [out, out - 0.6],
       magnitude: [Math.max(-99, out - 5.2), Math.max(-99, out - 5.6)],
       input_peak: [raw, raw - 0.5],
+      speech: raw > -52,
     }
   }
 
@@ -3296,6 +3330,20 @@ export class DemoStudioEngine {
       return undefined
     }
     if (is('POST', 'studio/engine/keys/capture')) return undefined
+    if (is('POST', 'studio/engine/live-alerts/silence')) {
+      const b = requireObj(body)
+      const id = typeof b.id === 'string' ? b.id : ''
+      if (!id.startsWith('mic:')) {
+        throw new HttpError(400, 'invalid', 'id: a mic alert (mic:muted:… or mic:quiet:…).')
+      }
+      this.silencedAlerts.add(id)
+      this.host?.broadcastLive({
+        v: 1,
+        type: 'live_alert',
+        data: { id, level: 'warn', message: 'Silenced for this stream.', cleared: true },
+      })
+      return undefined
+    }
     if (is('GET', 'studio/engine/preview/pause')) return { paused: this.previewPaused }
     if (is('PUT', 'studio/engine/preview/pause')) {
       this.previewPaused = Boolean(requireObj(body).paused)

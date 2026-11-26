@@ -433,6 +433,8 @@ export interface Toast {
   action?: { label: string; run: () => void }
   /** A second button beside it ("Muted on purpose" next to "Unmute"). */
   action2?: { label: string; run: () => void }
+  /** Called only when the user closes the toast via its `×` button. */
+  onDismiss?: () => void
   /**
    * Toasts about the same thing share a key (`panic`, `obs`, `account:twitch`): a new one
    * replaces the old one instead of stacking, so switching panic on then off shows only
@@ -585,8 +587,11 @@ export function Toaster() {
             </div>
             <button
               type="button"
-              aria-label="Dismiss"
-              onClick={() => dismissToast(t.id)}
+              aria-label="Close notification"
+              onClick={() => {
+                t.onDismiss?.()
+                dismissToast(t.id)
+              }}
               className="inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-text-3 hover:bg-surface-3 hover:text-text"
             >
               <X size={14} />

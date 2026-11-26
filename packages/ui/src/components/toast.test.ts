@@ -50,4 +50,12 @@ describe('toasts', () => {
     for (let i = 0; i < 6; i++) toast({ tone: 'info', message: `n${i}` })
     expect(currentToasts().map((t) => t.message)).toEqual(['n2', 'n3', 'n4', 'n5'])
   })
+
+  it('retains onDismiss callback without firing on programmatic dismissToast', () => {
+    const onDismiss = vi.fn()
+    const id = toast({ tone: 'warn', message: 'Mic sounds quiet.', onDismiss })
+    expect(currentToasts()[0]?.onDismiss).toBe(onDismiss)
+    dismissToast(id)
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
 })

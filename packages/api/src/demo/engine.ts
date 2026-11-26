@@ -108,6 +108,7 @@ import { DemoHistory } from './features/history'
 import { DemoSmart } from './features/smart'
 import { DemoCloudBackups, type DemoCloudMode } from './features/cloud-backups'
 import type { ProView } from '../pro'
+import type { LiveAlert } from '../studio'
 import { DemoTipBrand } from './features/tip-brand'
 import { DemoTtsVoices } from './features/tts-voices'
 import { DemoTipDomain, type DemoTipDomainState } from './features/tip-domain'
@@ -3071,6 +3072,13 @@ export class DemoEngine {
   private broadcastLive(frame: unknown): void {
     const text = JSON.stringify(frame)
     for (const s of this.liveSubs) s.sock.deliver(text)
+  }
+
+  /** Pushes a live watch alert frame through the demo socket, respecting stream silence state. */
+  emitLiveAlert(alert: LiveAlert): boolean {
+    if (this.studioEngine) return this.studioEngine.emitLiveAlert(alert)
+    this.broadcastLive({ v: 1, type: 'live_alert', data: alert })
+    return true
   }
 
   private setConnector(name: ConnectorName, state: ConnectorState): void {

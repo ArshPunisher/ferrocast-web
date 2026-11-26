@@ -2090,5 +2090,61 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('reports speech in levels and silences mic:quiet alerts for the stream', async () => {
+      const silent = new DemoEngine({
+        autoplay: false,
+        latencyMs: 0,
+        studioEngine: { micPreset: 'silent' },
+      })
+      const active = new DemoEngine({
+        autoplay: false,
+        latencyMs: 0,
+        studioEngine: { micPreset: 'quiet' },
+      })
+      try {
+        const apiSilent = studioEngineApi(
+          new FerroClient({ base: silent.base, token: DEMO_TOKEN, fetch: silent.fetch }),
+        )
+        const apiActive = studioEngineApi(
+          new FerroClient({ base: active.base, token: DEMO_TOKEN, fetch: active.fetch }),
+        )
+        await apiSilent.start()
+        await apiActive.start()
+
+        const sLevels = await apiSilent.levels(['Mic', 'Desktop Audio'])
+        expect(sLevels.Mic?.speech).toBe(false)
+        expect(sLevels['Desktop Audio']?.speech).toBe(false)
+
+        const aLevels = await apiActive.levels(['Mic', 'Desktop Audio'])
+        expect(aLevels.Mic?.speech).toBe(true)
+        expect(aLevels['Desktop Audio']?.speech).toBe(false)
+
+        await apiActive.setAudio('Mic', { muted: true })
+        expect((await apiActive.levels(['Mic'])).Mic?.speech).toBe(false)
+        await apiActive.setAudio('Mic', { muted: false })
+
+        const alert = {
+          id: 'mic:quiet:Mic',
+          level: 'warn' as const,
+          message: 'Mic sounds quiet.',
+          cleared: false,
+          source: 'Mic',
+          action: 'gain_up' as const,
+          dismiss: 'quiet_ok' as const,
+        }
+        expect(active.emitLiveAlert(alert)).toBe(true)
+        await apiActive.silenceLiveAlert('mic:quiet:Mic')
+        expect(active.emitLiveAlert(alert)).toBe(false)
+        await expect(apiActive.silenceLiveAlert('camera:Cam:black')).rejects.toThrow()
+
+        // Starting a new stream clears silenced alerts.
+        await apiActive.stream(true)
+        expect(active.emitLiveAlert(alert)).toBe(true)
+      } finally {
+        silent.dispose()
+        active.dispose()
+      }
+    })
   })
 })

@@ -565,9 +565,10 @@ export interface LiveAlert {
   source?: string
   /** The fix the page may offer: `unmute`, `gain_up` (+6 dB) or `pick_scene`. */
   action?: 'unmute' | 'gain_up' | 'pick_scene'
-  /** A second button that says "this is on purpose": `muted_on_purpose` silences the alert for
-   * the rest of the stream (`silenceLiveAlert`). Older engines send none. */
-  dismiss?: 'muted_on_purpose'
+  /** A second button that says "this is on purpose" or "dismiss": `muted_on_purpose` or
+   * `quiet_ok` silences the alert for the rest of the stream (`silenceLiveAlert`). Older
+   * engines send none. */
+  dismiss?: 'muted_on_purpose' | 'quiet_ok'
 }
 
 /** "01:02:03" from milliseconds into the stream. */

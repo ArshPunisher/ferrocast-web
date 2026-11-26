@@ -736,6 +736,8 @@ export interface EngineLevel {
   input_peak?: [number, number]
   /** Muted by a push-to-talk or push-to-mute key right now (a meter shows it dim). */
   gated?: boolean
+  /** Real speech detected (RNNoise VAD / gate state / sustained energy). Missing on older engines. */
+  speech?: boolean
 }
 
 /** How the Studio's stream into Go live is going (null: not streaming). */
