@@ -345,6 +345,11 @@ describe('make it yours', () => {
     expect((kept.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate).toEqual([
       '{socials}',
     ])
+    const literalHandle = restyleTheme(tok, { handle: '$&$' })
+    if (literalHandle.kind !== 'theme') throw new Error('theme')
+    expect(
+      (literalHandle.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate,
+    ).toEqual(['twitch.tv/$&$', 'youtube.com/@$&$', 'kick.com/$&$'])
     const noDup = restyleTheme(tok, { handle: 'yourname123' })
     if (noDup.kind !== 'theme') throw new Error('theme')
     expect((noDup.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate).toEqual([

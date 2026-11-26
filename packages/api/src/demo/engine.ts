@@ -414,6 +414,7 @@ export class DemoEngine {
   }
   private settings: Settings = clone(SETTINGS)
   private creatorLinks: CreatorLinks = { custom: [] }
+  private creatorLinksExtra: Record<string, unknown> = {}
   private backups: Backup[]
   /** LAN access as the "server" started with (it only changes at a restart). */
   private readonly lanAtStart = false
@@ -2171,7 +2172,11 @@ export class DemoEngine {
   }
 
   private linksView(): LinksResponse {
-    return { ...clone(this.creatorLinks), resolved: this.resolvedLinks() }
+    return {
+      ...clone(this.creatorLinksExtra),
+      ...clone(this.creatorLinks),
+      resolved: this.resolvedLinks(),
+    }
   }
 
   private pushOverlayLinks(): void {
@@ -2180,12 +2185,36 @@ export class DemoEngine {
   }
 
   private saveLinks(body: unknown): LinksResponse {
-    const raw = requireObj(body) as Partial<CreatorLinks>
+    const raw = requireObj(body) as Record<string, unknown>
+    const knownKeys = [
+      'twitch',
+      'youtube',
+      'kick',
+      'facebook',
+      'discord',
+      'instagram',
+      'x',
+      'tiktok',
+      'website',
+      'schedule_text',
+    ] as const
+    const merged: Record<string, unknown> = { ...clone(this.creatorLinks) }
+    for (const k of knownKeys) {
+      if (Object.prototype.hasOwnProperty.call(raw, k)) merged[k] = raw[k]
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'custom')) {
+      merged.custom = raw.custom === null ? [] : raw.custom
+    }
+    const nextExtra = clone(this.creatorLinksExtra)
+    const knownSet = new Set<string>([...knownKeys, 'custom', 'resolved'])
+    for (const [k, v] of Object.entries(raw)) {
+      if (knownSet.has(k)) continue
+      if (v === null || v === undefined) delete nextExtra[k]
+      else nextExtra[k] = clone(v)
+    }
     try {
-      this.creatorLinks = validateCreatorLinks({
-        ...raw,
-        custom: Array.isArray(raw.custom) ? raw.custom : [],
-      })
+      this.creatorLinks = validateCreatorLinks(merged as Partial<CreatorLinks>)
+      this.creatorLinksExtra = nextExtra
     } catch (e) {
       throw new HttpError(400, 'invalid', e instanceof Error ? e.message : 'Invalid link.')
     }

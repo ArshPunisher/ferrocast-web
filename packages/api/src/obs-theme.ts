@@ -431,18 +431,18 @@ export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
     }
     if (handle) {
       out = out
-        .replace(/yourname/gi, handle)
-        .replace(/\{link:twitch\}/g, `twitch.tv/${handle.toLowerCase()}`)
-        .replace(/\{link:youtube\}/g, `youtube.com/@${handle}`)
-        .replace(/\{link:kick\}/g, `kick.com/${handle}`)
-        .replace(/\{link:facebook\}/g, `facebook.com/${handle}`)
-        .replace(/\{link:discord\}/g, `discord.gg/${handle}`)
-        .replace(/\{link:instagram\}/g, `instagram.com/${handle}`)
-        .replace(/\{link:x\}/g, `x.com/${handle}`)
-        .replace(/\{link:tiktok\}/g, `tiktok.com/@${handle}`)
-        .replace(/\{link:website\}/g, `${handle.toLowerCase()}.gg`)
-        .replace(/\{channel_name\}/g, handle)
-        .replace(/\{socials\}/g, `twitch.tv/${handle.toLowerCase()} · youtube.com/@${handle}`)
+        .replace(/yourname/gi, () => handle)
+        .replace(/\{link:twitch\}/g, () => `twitch.tv/${handle.toLowerCase()}`)
+        .replace(/\{link:youtube\}/g, () => `youtube.com/@${handle}`)
+        .replace(/\{link:kick\}/g, () => `kick.com/${handle}`)
+        .replace(/\{link:facebook\}/g, () => `facebook.com/${handle}`)
+        .replace(/\{link:discord\}/g, () => `discord.gg/${handle}`)
+        .replace(/\{link:instagram\}/g, () => `instagram.com/${handle}`)
+        .replace(/\{link:x\}/g, () => `x.com/${handle}`)
+        .replace(/\{link:tiktok\}/g, () => `tiktok.com/@${handle}`)
+        .replace(/\{link:website\}/g, () => `${handle.toLowerCase()}.gg`)
+        .replace(/\{channel_name\}/g, () => handle)
+        .replace(/\{socials\}/g, () => `twitch.tv/${handle.toLowerCase()} · youtube.com/@${handle}`)
     }
     return out
   }

@@ -38,63 +38,94 @@ function hasControlChar(raw: string): boolean {
 }
 
 function hasUnsafeScheme(raw: string): boolean {
-  const compact = raw.replace(/\s+/g, '').toLowerCase()
-  const stripped = compact.replace(/^https?:\/\//i, '')
+  const compact = raw.replace(/[\s\u200B-\u200D\uFEFF]+/g, '').toLowerCase()
+  let stripped = compact
+  while (stripped.startsWith('http://') || stripped.startsWith('https://')) {
+    stripped = stripped.startsWith('http://') ? stripped.slice(7) : stripped.slice(8)
+  }
   for (const candidate of [compact, stripped]) {
     if (
       candidate.startsWith('javascript:') ||
       candidate.startsWith('vbscript:') ||
-      candidate.startsWith('data:')
+      candidate.startsWith('data:') ||
+      candidate.startsWith('file:') ||
+      candidate.startsWith('blob:') ||
+      candidate.startsWith('about:')
     )
       return true
   }
   const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\//i.exec(compact)
   if (schemeMatch && schemeMatch[1] !== 'http' && schemeMatch[1] !== 'https') return true
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(stripped)) return true
   return false
 }
 
-function checkField(field: string, raw: string, maxChars: number): string | null {
+function checkField(
+  field: string,
+  raw: string,
+  maxChars: number,
+  linkKind: LinkFieldKey | 'custom' | null = null,
+): string | null {
   if (hasControlChar(raw)) throw new Error(`${field}: control characters are not allowed.`)
   const trimmed = raw.trim()
   if (!trimmed) return null
   if (Array.from(trimmed).length > maxChars)
     throw new Error(`${field}: must be at most ${maxChars} characters.`)
-  if (hasUnsafeScheme(trimmed))
-    throw new Error(`${field}: javascript: and unsafe link schemes are not allowed.`)
+  if (linkKind !== null) {
+    if (hasUnsafeScheme(trimmed))
+      throw new Error(`${field}: javascript: and unsafe link schemes are not allowed.`)
+    if (normalizeDisplayLink(linkKind, trimmed) === null)
+      throw new Error(`${field}: enter a valid handle or link.`)
+  }
   return trimmed
 }
 
-function checkOpt(field: string, raw: string | null | undefined, maxChars: number): string | null {
+function checkOpt(
+  field: string,
+  raw: unknown,
+  maxChars: number,
+  linkKind: LinkFieldKey | 'custom' | null = null,
+): string | null {
   if (raw == null) return null
-  return checkField(field, String(raw), maxChars)
+  if (typeof raw !== 'string') throw new Error(`${field}: must be a string.`)
+  return checkField(field, raw, maxChars, linkKind)
 }
 
 /** Validates writable "My links" fields identically to `crates/core/src/links.rs`. */
-export function validateCreatorLinks(input: CreatorLinks): CreatorLinks {
+export function validateCreatorLinks(input: Partial<CreatorLinks>): CreatorLinks {
+  if (input.custom != null && !Array.isArray(input.custom))
+    throw new Error('custom: must be a list of custom links.')
   const rawCustom = Array.isArray(input.custom) ? input.custom : []
   if (rawCustom.length > MAX_CUSTOM_LINKS)
     throw new Error(`custom: add at most ${MAX_CUSTOM_LINKS} custom links.`)
   const custom: CustomLink[] = []
   for (let i = 0; i < rawCustom.length; i++) {
-    const row = rawCustom[i]!
-    const label = checkField(`custom.${i}.label`, String(row.label ?? ''), MAX_LABEL_CHARS)
-    const value = checkField(`custom.${i}.value`, String(row.value ?? ''), MAX_LINK_CHARS)
+    const row = rawCustom[i] as unknown
+    if (row == null || typeof row !== 'object' || Array.isArray(row))
+      throw new Error(`custom.${i}: must be an object.`)
+    const obj = row as { label?: unknown; value?: unknown }
+    if (obj.label != null && typeof obj.label !== 'string')
+      throw new Error(`custom.${i}.label: must be a string.`)
+    if (obj.value != null && typeof obj.value !== 'string')
+      throw new Error(`custom.${i}.value: must be a string.`)
+    const label = checkField(`custom.${i}.label`, obj.label ?? '', MAX_LABEL_CHARS, null)
+    const value = checkField(`custom.${i}.value`, obj.value ?? '', MAX_LINK_CHARS, 'custom')
     if (label === null && value === null) continue
     if (label === null) throw new Error(`custom.${i}.label: enter a label.`)
     if (value === null) throw new Error(`custom.${i}.value: enter a link or handle.`)
     custom.push({ label, value })
   }
   return {
-    twitch: checkOpt('twitch', input.twitch, MAX_LINK_CHARS),
-    youtube: checkOpt('youtube', input.youtube, MAX_LINK_CHARS),
-    kick: checkOpt('kick', input.kick, MAX_LINK_CHARS),
-    facebook: checkOpt('facebook', input.facebook, MAX_LINK_CHARS),
-    discord: checkOpt('discord', input.discord, MAX_LINK_CHARS),
-    instagram: checkOpt('instagram', input.instagram, MAX_LINK_CHARS),
-    x: checkOpt('x', input.x, MAX_LINK_CHARS),
-    tiktok: checkOpt('tiktok', input.tiktok, MAX_LINK_CHARS),
-    website: checkOpt('website', input.website, MAX_LINK_CHARS),
-    schedule_text: checkOpt('schedule_text', input.schedule_text, MAX_LINK_CHARS),
+    twitch: checkOpt('twitch', input.twitch, MAX_LINK_CHARS, 'twitch'),
+    youtube: checkOpt('youtube', input.youtube, MAX_LINK_CHARS, 'youtube'),
+    kick: checkOpt('kick', input.kick, MAX_LINK_CHARS, 'kick'),
+    facebook: checkOpt('facebook', input.facebook, MAX_LINK_CHARS, 'facebook'),
+    discord: checkOpt('discord', input.discord, MAX_LINK_CHARS, 'discord'),
+    instagram: checkOpt('instagram', input.instagram, MAX_LINK_CHARS, 'instagram'),
+    x: checkOpt('x', input.x, MAX_LINK_CHARS, 'x'),
+    tiktok: checkOpt('tiktok', input.tiktok, MAX_LINK_CHARS, 'tiktok'),
+    website: checkOpt('website', input.website, MAX_LINK_CHARS, 'website'),
+    schedule_text: checkOpt('schedule_text', input.schedule_text, MAX_LINK_CHARS, null),
     custom,
   }
 }
@@ -123,11 +154,11 @@ export function accountUrl(platform: string, login: string, userId = ''): string
 }
 
 function stripUrlNoise(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^https?:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/+$/, '')
+  let out = raw.trim()
+  while (/^https?:\/\//i.test(out)) {
+    out = out.replace(/^https?:\/\//i, '')
+  }
+  return out.replace(/^www\./i, '').replace(/\/+$/, '')
 }
 
 export function normalizeDisplayLink(kind: LinkFieldKey | 'custom', raw: string): string | null {
@@ -140,7 +171,7 @@ export function normalizeDisplayLink(kind: LinkFieldKey | 'custom', raw: string)
     case 'twitch':
       return bare ? `twitch.tv/${bare.toLowerCase()}` : null
     case 'youtube':
-      return clean.startsWith('@') ? `youtube.com/${clean}` : `youtube.com/@${clean}`
+      return bare ? `youtube.com/@${bare}` : null
     case 'kick':
       return bare ? `kick.com/${bare}` : null
     case 'facebook':
@@ -205,11 +236,24 @@ export function resolveLinks(
     if (label && value) custom.push({ label, value })
   }
 
+  const seenSocials = new Set<string>()
   const socials: string[] = []
   for (const v of [twitch, youtube, kick, facebook, discord, instagram, x, tiktok, website]) {
-    if (v) socials.push(v)
+    if (!v) continue
+    const key = v.toLowerCase()
+    if (!seenSocials.has(key)) {
+      seenSocials.add(key)
+      socials.push(v)
+    }
   }
-  for (const c of custom) socials.push(`${c.label}: ${c.value}`)
+  for (const c of custom) {
+    const entry = `${c.label}: ${c.value}`
+    const key = entry.toLowerCase()
+    if (!seenSocials.has(key)) {
+      seenSocials.add(key)
+      socials.push(entry)
+    }
+  }
 
   const priority = ['twitch', 'youtube', 'kick', 'facebook'] as const
   let channel_name: string | null = null
@@ -337,15 +381,13 @@ export function resolveLayerText(
     return /^next stream:/i.test(nextVal) ? nextVal : `${prefix.trimStart()} ${nextVal}`
   }
 
+  // Guaranteed non-colliding printable PUA sentinel for unset tokens before separator cleanup.
+  let missing = '\uE000'
+  while (text.includes(missing))
+    missing = String.fromCodePoint((missing.codePointAt(0) ?? 0xe000) + 1)
   let out = text
-  let hadMissing = false
-
-  // Handle `{socials}` token.
-  if (out.includes('{socials}')) {
-    const joined = src.socials.join(' · ')
-    if (!joined) hadMissing = true
-    out = out.replaceAll('{socials}', joined)
-  }
+  let resolvedCount = 0
+  let missingCount = 0
 
   // Handle `{next_stream}` token, avoiding "Next stream: " dangling or double-prefixed output.
   if (/^\s*next stream:\s*\{next_stream\}\s*$/i.test(out)) {
@@ -354,20 +396,34 @@ export function resolveLayerText(
     const prefix = out.slice(0, colon + 1).trimStart()
     return /^next stream:/i.test(nextVal) ? nextVal : `${prefix} ${nextVal}`
   }
+
+  if (out.includes('{socials}')) {
+    const joined = src.socials.join(' · ')
+    if (!joined) {
+      missingCount++
+      out = out.replaceAll('{socials}', missing)
+    } else {
+      resolvedCount++
+      out = out.replaceAll('{socials}', joined)
+    }
+  }
+
   out = out.replace(/\{next_stream\}/g, () => {
     if (!nextVal) {
-      hadMissing = true
-      return ''
+      missingCount++
+      return missing
     }
+    resolvedCount++
     return nextVal
   })
 
   out = out.replace(/\{channel_name\}/g, () => {
     const name = src.channel_name?.trim() ?? ''
     if (!name) {
-      hadMissing = true
-      return ''
+      missingCount++
+      return missing
     }
+    resolvedCount++
     return name
   })
 
@@ -376,46 +432,103 @@ export function resolveLayerText(
     (_, k: LinkFieldKey) => {
       const v = src[k]?.trim() ?? ''
       if (!v) {
-        hadMissing = true
-        return ''
+        missingCount++
+        return missing
       }
+      resolvedCount++
       return v
     },
   )
 
   out = out.replace(
-    /(?:youtube(?:\.com)?\s*\/?\s*@?)?yourname/gi,
+    /(?:https?:\/\/)?(?:www\.)?discord\.gg\/@?yourname|(?:https?:\/\/)?(?:www\.)?youtube(?:\.com)?\s*(?:\/|\/\/|:)\s*@?yourname|@?yourname/gi,
     (match, offset: number, full: string) => {
-      if (match.toLowerCase() === 'yourname') {
-        const before = full.slice(0, offset)
-        const key = inferLegacyKey(before)
-        const raw =
-          key === 'channel_name' ? (src.channel_name ?? src.socials[0] ?? '') : (src[key] ?? '')
-        if (!raw) {
-          hadMissing = true
-          return ''
-        }
-        if (/youtube(?:\.com)?\/@$/i.test(before) && raw.includes('/channel/'))
-          return raw.replace(/^youtube(?:\.com)?\//i, '')
-        return legacyReplacement(raw, before, match === 'YOURNAME')
-      }
-      const raw = src.youtube?.trim() ?? ''
-      if (!raw) {
-        hadMissing = true
-        return ''
-      }
-      if (raw.includes('/channel/')) return raw
-      const before = full.slice(0, offset)
+      const lower = match.toLowerCase()
+      const idx = lower.lastIndexOf('yourname')
+      const tokenPrefix = match.slice(0, idx)
       const upper = match.endsWith('YOURNAME')
-      const handle = legacyReplacement(raw, match.slice(0, -'yourname'.length), upper)
-      const prefix = match.slice(0, -'yourname'.length)
-      return prefix.endsWith('@') || prefix.endsWith('/') || !prefix
-        ? `${before ? '' : ''}${prefix}${handle}`
-        : `${prefix}@${handle}`
+
+      if (/^(?:https?:\/\/)?(?:www\.)?discord\.gg\//i.test(match)) {
+        const raw = src.discord?.trim() ?? ''
+        if (!raw) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        const clean = stripUrlNoise(raw)
+        if (!/^discord\.gg\/[^/]+$/i.test(clean)) return clean
+        const code = clean.slice('discord.gg/'.length)
+        // Preserve Discord invite code casing (codes are case-sensitive).
+        return `${tokenPrefix}${code}`
+      }
+
+      if (/^(?:https?:\/\/)?(?:www\.)?youtube/i.test(match)) {
+        const raw = src.youtube?.trim() ?? ''
+        if (!raw) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        const clean = stripUrlNoise(raw)
+        if (!/^youtube\.com\/@[^/]+$/i.test(clean)) return clean
+        const handle = clean.slice('youtube.com/@'.length)
+        const formatted = upper ? handle.toUpperCase() : handle
+        return tokenPrefix.endsWith('@')
+          ? `${tokenPrefix}${formatted}`
+          : `${tokenPrefix}@${formatted}`
+      }
+
+      const before = full.slice(0, offset)
+      const key = inferLegacyKey(before)
+      const raw =
+        key === 'channel_name' ? (src.channel_name ?? src.socials[0] ?? '') : (src[key] ?? '')
+      if (!raw) {
+        missingCount++
+        return missing
+      }
+      resolvedCount++
+      const clean = stripUrlNoise(raw)
+      const isFullPath =
+        key === 'discord'
+          ? !/^discord\.gg\/[^/]+$/i.test(clean) && clean.includes('/')
+          : key === 'youtube'
+            ? !/^youtube\.com\/@[^/]+$/i.test(clean) && clean.includes('/')
+            : clean.includes('/channel/') || clean.includes('/c/') || clean.includes('/invite/')
+      if (isFullPath) {
+        if (/youtube(?:\.com)?\/@$/i.test(before) && clean.startsWith('youtube.com/')) {
+          return clean.slice('youtube.com/'.length)
+        }
+        return clean
+      }
+      const handle = legacyReplacement(
+        raw,
+        before,
+        upper && key !== 'discord' && !clean.includes('/channel/'),
+      )
+      if (match.startsWith('@') && !before.endsWith('@')) return `@${handle}`
+      return handle
     },
   )
 
-  if (hadMissing) return ''
+  if (resolvedCount === 0 && missingCount > 0) return ''
+  if (missingCount === 0) return out
+
+  const m = missing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  out = out
+    .replace(
+      new RegExp(`\\s+(?:[·|•—–-]|\\/\\/)\\s+${m}(?=\\s+(?:[·|•—–-]|\\/\\/)\\s+|\\s*$)`, 'g'),
+      '',
+    )
+    .replace(new RegExp(`${m}\\s+(?:[·|•—–-]|\\/\\/)\\s+`, 'g'), '')
+    .replace(
+      new RegExp(`(?:^|([·|•—–]\\s*))[^·|•—–${m}]*?:\\s*${m}\\s*(?:[·|•—–]\\s*|$)`, 'g'),
+      '$1',
+    )
+    .replace(new RegExp(`\\s*[·|•—–,/]\\s*${m}`, 'g'), '')
+    .replace(new RegExp(`${m}\\s*[·|•—–,/]\\s*`, 'g'), '')
+    .replaceAll(missing, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
   return out
 }
 

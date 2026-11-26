@@ -173,9 +173,28 @@ describe('DemoEngine links, labels, and account URLs', () => {
         discord: 'https://discord.gg/novahub/',
         schedule_text: 'Fridays, 8 PM',
         custom: [{ label: 'Merch', value: 'https://shop.nova.gg/' }],
-      })
+        bluesky: 'bsky.app/profile/novaplays.bsky.social',
+      } as never)
       expect(updated.resolved.discord).toBe('discord.gg/novahub')
       expect(updated.resolved.next_stream).toBe('Fridays, 8 PM')
+      expect((updated as unknown as Record<string, unknown>).bluesky).toBe(
+        'bsky.app/profile/novaplays.bsky.social',
+      )
+
+      // Partial "old client" PUT preserves omitted known fields AND unknown future keys, while "" clears.
+      const patched = await client.saveLinks({ twitch: 'twitch.tv/novaalt' })
+      expect(patched.twitch).toBe('twitch.tv/novaalt')
+      expect(patched.discord).toBe('https://discord.gg/novahub/')
+      expect(patched.schedule_text).toBe('Fridays, 8 PM')
+      expect(patched.custom).toEqual([{ label: 'Merch', value: 'https://shop.nova.gg/' }])
+      expect((patched as unknown as Record<string, unknown>).bluesky).toBe(
+        'bsky.app/profile/novaplays.bsky.social',
+      )
+      const clearedField = await client.saveLinks({ twitch: '' })
+      expect(clearedField.twitch).toBeNull()
+      expect(clearedField.discord).toBe('https://discord.gg/novahub/')
+      await expect(client.saveLinks({ discord: 123 as never })).rejects.toThrow()
+      await expect(client.saveLinks({ custom: 'bad' as never })).rejects.toThrow()
       const stateFrame = frames.find(
         (f) =>
           f.type === 'state' &&
@@ -267,5 +286,89 @@ describe('DemoEngine links, labels, and account URLs', () => {
       engine.dispose()
       vi.useRealTimers()
     }
+  })
+
+  it('guards schemes, free text, empty handles, legacy paths, partial token lines, and socials dedup', () => {
+    // Scheme bypasses, non-http schemes, Unicode whitespace, bare "@" / "https://", and non-strings fail.
+    for (const bad of [
+      'https://https://javascript:alert(1)',
+      'blob:https://evil.example/1',
+      'file:/etc/passwd',
+      'about:blank',
+      'javascript\u00A0:alert(1)',
+      '@',
+      'https://',
+    ]) {
+      expect(() => validateCreatorLinks({ discord: bad, custom: [] }), bad).toThrow(/discord/)
+    }
+    expect(() => validateCreatorLinks({ discord: 123 as never, custom: [] })).toThrow(/discord/)
+    expect(() =>
+      validateCreatorLinks({ custom: [{ label: 'Shop', value: 123 as never }] }),
+    ).toThrow(/custom\.0\.value/)
+    expect(normalizeDisplayLink('youtube', '@')).toBeNull()
+
+    // Text-only schedule_text and custom labels allow "Data:" and mixed text/URLs.
+    const freeText = validateCreatorLinks({
+      schedule_text: 'Data: Friday 8 PM — https://twitch.tv/arsh',
+      custom: [{ label: 'Data: Schedule', value: 'arsh.gg' }],
+    })
+    expect(freeText.schedule_text).toBe('Data: Friday 8 PM — https://twitch.tv/arsh')
+    expect(freeText.custom).toEqual([{ label: 'Data: Schedule', value: 'arsh.gg' }])
+
+    // Deduplicate identical socials (e.g. website matching twitch).
+    const deduped = resolveLinks(
+      {
+        twitch: 'twitch.tv/arsh',
+        website: 'https://twitch.tv/arsh',
+        discord: 'discord.com/invite/xK9mPq2',
+        youtube: 'youtube.com/c/MyChannel',
+        custom: [],
+      },
+      [{ platform: 'twitch', name: 'Arsh', login: 'arsh', url: 'twitch.tv/arsh' }],
+      null,
+    )
+    expect(deduped.socials.filter((s) => s === 'twitch.tv/arsh')).toHaveLength(1)
+
+    // Legacy placeholders never corrupt invite links, /c/, /channel/UC..., or case-sensitive codes.
+    expect(resolveLayerText('DISCORD.GG/YOURNAME', deduped, false)).toBe(
+      'discord.com/invite/xK9mPq2',
+    )
+    expect(
+      resolveLayerText(
+        'DISCORD.GG/YOURNAME',
+        resolveLinks({ discord: 'discord.gg/xK9mPq2', custom: [] }, [], null),
+        false,
+      ),
+    ).toBe('DISCORD.GG/xK9mPq2')
+    expect(resolveLayerText('youtube.com/@yourname', deduped, false)).toBe(
+      'youtube.com/c/MyChannel',
+    )
+    const ytLegacy = resolveLinks(
+      { custom: [] },
+      [{ platform: 'youtube', name: 'Chan', login: 'Chan', url: 'youtube.com/channel/UCaBc123' }],
+      null,
+    )
+    expect(resolveLayerText('youtube: @yourname', ytLegacy, false)).toBe(
+      'youtube.com/channel/UCaBc123',
+    )
+    expect(resolveLayerText('YOUTUBE // @YOURNAME', ytLegacy, false)).toBe(
+      'youtube.com/channel/UCaBc123',
+    )
+
+    // Multi-token lines drop only unset tokens + separators instead of vanishing completely.
+    const partial = resolveLinks(
+      { custom: [] },
+      [{ platform: 'twitch', name: 'Arsh', login: 'arsh', url: 'twitch.tv/arsh' }],
+      null,
+    )
+    expect(resolveLayerText('{link:twitch} · {link:discord}', partial, false)).toBe(
+      'twitch.tv/arsh',
+    )
+    expect(resolveLayerText('Welcome to {channel_name} — {next_stream}', partial, false)).toBe(
+      'Welcome to Arsh',
+    )
+    expect(
+      resolveLayerText('{link:twitch} · {link:discord} · {link:youtube}', deduped, false),
+    ).toBe('twitch.tv/arsh · discord.com/invite/xK9mPq2 · youtube.com/c/MyChannel')
   })
 })
