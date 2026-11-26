@@ -315,4 +315,104 @@ describe('MyLinksCard, LayoutEditor links preview, and real label fallback', () 
     expect(schedInput.disabled).toBe(false)
     expect(useLive.getState().links?.discord).toBe('discord.gg/inflight')
   })
+
+  it('disables editing until hydrated, shows auto URLs in transient connector states, keeps custom row identity, and avoids double Next stream prefix', async () => {
+    const baseClient = new FerroClient({
+      base: engine!.base,
+      token: DEMO_TOKEN,
+      fetch: engine!.fetch,
+    })
+    await baseClient.saveLinks({
+      instagram: 'instagram.com/existing',
+      schedule_text: 'Next stream: Fridays 8 PM',
+      custom: [
+        { label: 'Row A', value: 'a.example.gg' },
+        { label: 'Row B', value: 'b.example.gg' },
+      ],
+    })
+
+    let releaseLinks!: () => void
+    const linksGate = new Promise<void>((resolve) => {
+      releaseLinks = resolve
+    })
+    let gatedOnce = false
+    const client = new Proxy(baseClient, {
+      get(target, prop, receiver) {
+        if (prop === 'links' && !gatedOnce) {
+          gatedOnce = true
+          return async () => {
+            await linksGate
+            return target.links()
+          }
+        }
+        const value = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+
+    const status = await baseClient.status()
+    useLive.setState({
+      conn: { client, base: engine!.base } as never,
+      status,
+      connectors: {
+        ...status.connectors,
+        twitch: {
+          ...status.connectors.twitch,
+          state: 'reconnecting',
+        },
+        youtube: {
+          ...status.connectors.youtube,
+          state: 'scopes_missing',
+        },
+      },
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <>
+          <MyLinksCard />
+          <Toaster />
+        </>,
+      )
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    const discordBefore = host.querySelector<HTMLInputElement>(
+      'input[placeholder="discord.gg/yourserver"]',
+    )!
+    const addBefore = Array.from(host.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add custom link'),
+    )!
+    expect(discordBefore.disabled).toBe(true)
+    expect(addBefore.disabled).toBe(true)
+
+    await act(async () => {
+      releaseLinks()
+      await vi.advanceTimersByTimeAsync(10)
+    })
+
+    expect(discordBefore.disabled).toBe(false)
+    expect(host.textContent).toContain('Auto: twitch.tv/novaplays')
+    expect(host.textContent).toContain('Auto: youtube.com/@NovaPlays')
+    expect(host.textContent).not.toContain('Next stream: Next stream:')
+    expect(host.textContent).toContain('Next stream: Fridays 8 PM')
+    const preview = host.querySelector('[data-testid="my-links-preview"]') as HTMLElement
+    expect(preview.textContent).toContain('twitch.tv/novaplays')
+
+    // Removing custom row 0 preserves the actual DOM input element of row 1 (stable React key).
+    const labelInputsBefore = host.querySelectorAll<HTMLInputElement>('input[placeholder="Merch"]')
+    expect(labelInputsBefore).toHaveLength(2)
+    const rowBInput = labelInputsBefore[1]!
+    const removeBtn0 = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove custom link 1"]',
+    )!
+    await act(async () => {
+      removeBtn0.click()
+    })
+    const labelInputsAfter = host.querySelectorAll<HTMLInputElement>('input[placeholder="Merch"]')
+    expect(labelInputsAfter).toHaveLength(1)
+    expect(labelInputsAfter[0]).toBe(rowBInput)
+  })
 })

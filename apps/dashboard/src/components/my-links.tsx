@@ -10,7 +10,6 @@ import {
   validateCreatorLinks,
   type AccountPlatform,
   type CreatorLinks,
-  type CustomLink,
   type LinksResponse,
 } from '@ferrocast/api'
 import { Badge, Button, Field, IconButton, Input, cx, toast } from '@ferrocast/ui'
@@ -45,6 +44,12 @@ const OTHER_FIELDS: {
   },
 ]
 
+interface DraftCustomRow {
+  id: string
+  label: string
+  value: string
+}
+
 interface DraftLinks {
   twitch: string
   youtube: string
@@ -56,7 +61,7 @@ interface DraftLinks {
   tiktok: string
   website: string
   schedule_text: string
-  custom: CustomLink[]
+  custom: DraftCustomRow[]
 }
 
 function emptyDraft(): DraftLinks {
@@ -75,7 +80,14 @@ function emptyDraft(): DraftLinks {
   }
 }
 
-function draftFromResponse(r: LinksResponse | CreatorLinks): DraftLinks {
+function draftSig(d: DraftLinks): string {
+  return JSON.stringify({
+    ...d,
+    custom: d.custom.map(({ label, value }) => ({ label, value })),
+  })
+}
+
+function draftFromResponse(r: LinksResponse | CreatorLinks, nextId: () => string): DraftLinks {
   return {
     twitch: r.twitch ?? '',
     youtube: r.youtube ?? '',
@@ -87,7 +99,7 @@ function draftFromResponse(r: LinksResponse | CreatorLinks): DraftLinks {
     tiktok: r.tiktok ?? '',
     website: r.website ?? '',
     schedule_text: r.schedule_text ?? '',
-    custom: (r.custom ?? []).map((c) => ({ label: c.label, value: c.value })),
+    custom: (r.custom ?? []).map((c) => ({ id: nextId(), label: c.label, value: c.value })),
   }
 }
 
@@ -136,8 +148,11 @@ export function MyLinksCard() {
     [connectorKey],
   )
 
+  const rowKeyRef = useRef(0)
+  const allocRowId = () => `custom-${++rowKeyRef.current}`
   const [draft, setDraft] = useState<DraftLinks>(() => emptyDraft())
-  const [savedSig, setSavedSig] = useState(() => JSON.stringify(emptyDraft()))
+  const [savedSig, setSavedSig] = useState(() => draftSig(emptyDraft()))
+  const [hydrated, setHydrated] = useState(false)
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState<{ field: string; text: string } | null>(null)
   const livePreviewId = useId()
@@ -147,13 +162,14 @@ export function MyLinksCard() {
   useEffect(() => {
     if (!res.data) return
     useLive.getState().setLinks(res.data.resolved, linksLoadGenRef.current)
-    // Preserve in-flight submission or unsaved local edits if a connector update reloads links.
-    if (savingRef.current || dirtyRef.current) return
-    const next = draftFromResponse(res.data)
+    // Preserve in-flight submission or unsaved local edits if a connector update reloads links after hydration.
+    if (hydrated && (savingRef.current || dirtyRef.current)) return
+    const next = draftFromResponse(res.data, allocRowId)
     setDraft(next)
-    setSavedSig(JSON.stringify(next))
+    setSavedSig(draftSig(next))
     setServerError(null)
-  }, [res.data])
+    if (!hydrated) setHydrated(true)
+  }, [res.data, hydrated])
 
   const validation = useMemo(() => {
     try {
@@ -172,7 +188,7 @@ export function MyLinksCard() {
       []
     for (const p of ['twitch', 'youtube', 'kick', 'facebook'] as const) {
       const c = connectors?.[p]
-      if (c?.state !== 'connected' || !c.account) continue
+      if (!c?.account) continue
       const derivedUrl =
         c.account.url !== undefined
           ? c.account.url
@@ -193,19 +209,20 @@ export function MyLinksCard() {
     return resolveLinks(source, accountsForPreview, nextAt)
   }, [validation.clean, draft, accountsForPreview, res.data?.resolved.next_stream_at])
 
-  const dirty = JSON.stringify(draft) !== savedSig
+  const locked = !hydrated || saving
+  const dirty = hydrated && draftSig(draft) !== savedSig
   dirtyRef.current = dirty
   const activeError = serverError ?? (dirty ? validation.error : null)
   const fieldError = (name: string) => (activeError?.field === name ? activeError.text : null)
 
   const updateField = (key: Exclude<keyof DraftLinks, 'custom'>, value: string) => {
-    if (saving) return
+    if (locked) return
     setServerError(null)
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
   const updateCustom = (idx: number, part: 'label' | 'value', val: string) => {
-    if (saving) return
+    if (locked) return
     setServerError(null)
     setDraft((prev) => ({
       ...prev,
@@ -214,7 +231,7 @@ export function MyLinksCard() {
   }
 
   const removeCustom = (idx: number) => {
-    if (saving) return
+    if (locked) return
     setServerError(null)
     setDraft((prev) => ({
       ...prev,
@@ -223,16 +240,16 @@ export function MyLinksCard() {
   }
 
   const addCustom = () => {
-    if (saving || draft.custom.length >= MAX_CUSTOM_LINKS) return
+    if (locked || draft.custom.length >= MAX_CUSTOM_LINKS) return
     setServerError(null)
     setDraft((prev) => ({
       ...prev,
-      custom: [...prev.custom, { label: '', value: '' }],
+      custom: [...prev.custom, { id: allocRowId(), label: '', value: '' }],
     }))
   }
 
   const save = async () => {
-    if (saving) return
+    if (locked) return
     if (validation.error) {
       setServerError(validation.error)
       return
@@ -243,9 +260,9 @@ export function MyLinksCard() {
     try {
       const saved = await client.saveLinks(draftToPayload(draft))
       res.set(saved)
-      const next = draftFromResponse(saved)
+      const next = draftFromResponse(saved, allocRowId)
       setDraft(next)
-      setSavedSig(JSON.stringify(next))
+      setSavedSig(draftSig(next))
       useLive.getState().setLinks(saved.resolved)
       toast({ key: 'my-links', tone: 'ok', message: 'My links saved. Overlays updated.' })
     } catch (e) {
@@ -276,17 +293,19 @@ export function MyLinksCard() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(['twitch', 'youtube', 'kick', 'facebook'] as const).map((p) => {
                 const c = connectors?.[p]
-                const connected = c?.state === 'connected' && c.account
-                const autoUrl = connected
-                  ? (c.account?.url ??
-                    (c.account?.login ? accountUrl(p, c.account.login, '') : null))
+                const linked = Boolean(c?.account)
+                const autoUrl = linked
+                  ? (c?.account?.url ??
+                    (c?.account?.login ? accountUrl(p, c.account.login, '') : null))
                   : null
-                const hint = connected
+                const statusNote =
+                  c?.state && c.state !== 'connected' ? ` (${c.state.replace(/_/g, ' ')})` : ''
+                const hint = linked
                   ? autoUrl
-                    ? `Auto: ${autoUrl}`
+                    ? `Auto: ${autoUrl}${statusNote}`
                     : p === 'facebook'
-                      ? 'Facebook gives no public URL. Enter a link below if you want one.'
-                      : 'Connected'
+                      ? `Facebook gives no public URL. Enter a link below if you want one.${statusNote}`
+                      : `Connected${statusNote}`
                   : 'Not connected'
                 return (
                   <Field
@@ -300,7 +319,7 @@ export function MyLinksCard() {
                       <Input
                         {...props}
                         dir="auto"
-                        disabled={saving}
+                        disabled={locked}
                         maxLength={MAX_LINK_CHARS}
                         value={draft[p]}
                         placeholder={autoUrl ?? `Optional ${PLATFORM_LABELS[p]} URL`}
@@ -330,7 +349,7 @@ export function MyLinksCard() {
                     <Input
                       {...props}
                       dir="auto"
-                      disabled={saving}
+                      disabled={locked}
                       maxLength={MAX_LINK_CHARS}
                       value={draft[f.key]}
                       placeholder={f.placeholder}
@@ -356,7 +375,7 @@ export function MyLinksCard() {
             <div className="flex flex-col gap-3">
               {draft.custom.map((row, idx) => (
                 <div
-                  key={idx}
+                  key={row.id}
                   className="grid grid-cols-1 gap-2 rounded-[10px] border border-line bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:items-end"
                 >
                   <Field label={`Label ${idx + 1}`} error={fieldError(`custom.${idx}.label`)}>
@@ -364,7 +383,7 @@ export function MyLinksCard() {
                       <Input
                         {...props}
                         dir="auto"
-                        disabled={saving}
+                        disabled={locked}
                         maxLength={MAX_LABEL_CHARS}
                         value={row.label}
                         placeholder="Merch"
@@ -377,7 +396,7 @@ export function MyLinksCard() {
                       <Input
                         {...props}
                         dir="auto"
-                        disabled={saving}
+                        disabled={locked}
                         maxLength={MAX_LINK_CHARS}
                         value={row.value}
                         placeholder="https://shop.example.gg"
@@ -389,7 +408,7 @@ export function MyLinksCard() {
                     <IconButton
                       size="sm"
                       variant="ghost"
-                      disabled={saving}
+                      disabled={locked}
                       label={`Remove custom link ${idx + 1}`}
                       onClick={() => removeCustom(idx)}
                     >
@@ -403,7 +422,7 @@ export function MyLinksCard() {
                   size="sm"
                   variant="outline"
                   icon={<Plus size={14} weight="bold" />}
-                  disabled={saving || draft.custom.length >= MAX_CUSTOM_LINKS}
+                  disabled={locked || draft.custom.length >= MAX_CUSTOM_LINKS}
                   onClick={addCustom}
                 >
                   Add custom link
@@ -440,7 +459,9 @@ export function MyLinksCard() {
                 </p>
                 {liveResolved.next_stream && (
                   <p dir="auto" className="mt-0.5 truncate text-[13.5px] text-text-2">
-                    Next stream: {liveResolved.next_stream}
+                    {/^next stream:/i.test(liveResolved.next_stream)
+                      ? liveResolved.next_stream
+                      : `Next stream: ${liveResolved.next_stream}`}
                   </p>
                 )}
                 {activeError?.field === '_form' && (
@@ -454,9 +475,10 @@ export function MyLinksCard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    disabled={saving}
+                    disabled={locked}
                     onClick={() => {
-                      setDraft(JSON.parse(savedSig) as DraftLinks)
+                      const savedPayload = JSON.parse(savedSig) as CreatorLinks
+                      setDraft(draftFromResponse(savedPayload, allocRowId))
                       setServerError(null)
                     }}
                   >
@@ -467,7 +489,7 @@ export function MyLinksCard() {
                   size="sm"
                   variant="primary"
                   busy={saving}
-                  disabled={!res.data || (!dirty && !serverError) || Boolean(validation.error)}
+                  disabled={!hydrated || (!dirty && !serverError) || Boolean(validation.error)}
                   onClick={() => void save()}
                 >
                   Save links
