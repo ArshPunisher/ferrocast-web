@@ -6,7 +6,10 @@ import { addPartToOverlay, extractThemeParts } from './theme-parts'
 const lofi = BUILTINS.find(
   (d): d is ThemeDesign => d.kind === 'theme' && d.id === 'builtin.lofi-loft',
 )
-if (!lofi) throw new Error('expected builtin.lofi-loft')
+const tokyo = BUILTINS.find(
+  (d): d is ThemeDesign => d.kind === 'theme' && d.id === 'builtin.tokyo-neon',
+)
+if (!lofi || !tokyo) throw new Error('expected builtin.lofi-loft and builtin.tokyo-neon')
 
 function makeOverlay(overrides: Partial<Overlay> = {}): Overlay {
   return {
@@ -23,7 +26,7 @@ function makeOverlay(overrides: Partial<Overlay> = {}): Overlay {
 }
 
 describe('extractThemeParts', () => {
-  it('extracts deduplicated functional widgets and skips decorative artwork layers', () => {
+  it('extracts deduplicated functional widgets, excludes generic alert boxes, and keeps distinct layout geometries', () => {
     const parts = extractThemeParts(lofi)
     expect(parts.length).toBeGreaterThan(0)
     expect(parts.every((p) => (p.widget as { kind: string }).kind !== 'layer')).toBe(true)
@@ -31,16 +34,20 @@ describe('extractThemeParts', () => {
     const labels = parts.map((p) => p.label)
     expect(labels).toContain('Chat box')
     expect(labels).toContain('Goal bar')
-    expect(labels).toContain('Alert box')
+    expect(labels).not.toContain('Alert box')
     expect(labels).toContain('Latest follower')
     expect(labels).toContain('Latest sub')
     // Duplicate label presets across screens are collapsed once.
     expect(labels.filter((l) => l === 'Latest follower')).toHaveLength(1)
+
+    // Distinct widget aspect ratios (e.g. Tokyo neon HUD events vs wide banner events) stay separate.
+    const tokyoEvents = extractThemeParts(tokyo).filter((p) => p.widget.kind === 'events')
+    expect(tokyoEvents).toHaveLength(2)
   })
 })
 
 describe('addPartToOverlay', () => {
-  it('scales coordinates proportionally to smaller or vertical overlays cleanly within validateLayout', () => {
+  it('scales coordinates uniformly to preserve aspect ratio on vertical overlays within validateLayout', () => {
     const parts = extractThemeParts(lofi)
     const chatPart = parts.find((p) => p.widget.kind === 'chat')!
     const vertical = makeOverlay({ id: 'ov-vert', name: 'Vertical', width: 720, height: 1280 })
@@ -53,7 +60,28 @@ describe('addPartToOverlay', () => {
     expect(added.y).toBeGreaterThanOrEqual(0)
     expect(added.x + added.w).toBeLessThanOrEqual(720)
     expect(added.y + added.h).toBeLessThanOrEqual(1280)
+    const origRatio = chatPart.widget.w / chatPart.widget.h
+    const scaledRatio = added.w / added.h
+    expect(Math.abs(scaledRatio - origRatio)).toBeLessThan(0.05)
     expect(validateLayout(updated.name, updated.width, updated.height, updated.widgets)).toBeNull()
+  })
+
+  it('sets branded on built-in themes and strips stale branded flag on unbranded themes', () => {
+    const parts = extractThemeParts(lofi)
+    const chatPart = parts.find((p) => p.widget.kind === 'chat')!
+    const withStaleBrand = structuredClone(chatPart)
+    ;(withStaleBrand.widget.config as { branded?: boolean }).branded = true
+    const brandedOut = addPartToOverlay(makeOverlay(), withStaleBrand, lofi)
+    expect((brandedOut.widgets[0]!.config as { branded?: boolean }).branded).toBe(true)
+
+    const unbrandedTheme: ThemeDesign = {
+      ...structuredClone(lofi),
+      id: 'custom.mine',
+      built_in: false,
+      branded: false,
+    }
+    const unbrandedOut = addPartToOverlay(makeOverlay(), withStaleBrand, unbrandedTheme)
+    expect('branded' in unbrandedOut.widgets[0]!.config).toBe(false)
   })
 
   it('generates a collision-free widget id when the overlay already uses the base id', () => {

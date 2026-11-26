@@ -61,12 +61,14 @@ function widgetLabel(w: FunctionalWidget): string {
 function dedupeSignature(w: FunctionalWidget): string {
   const cfg = w.config as { source?: unknown; style?: { variant?: unknown } }
   if (w.kind === 'label') return `label:${String(cfg.source ?? w.id)}`
-  return `${w.kind}:${String(cfg.style?.variant ?? 'default')}`
+  const shape = w.w >= w.h * 2 ? 'wide' : w.h >= w.w * 2 ? 'tall' : 'box'
+  return `${w.kind}:${String(cfg.style?.variant ?? 'default')}:${shape}`
 }
 
 /**
  * Collects distinct functional widgets across a theme's screens so one can be copied into an
- * existing overlay without importing whole screens or decorative artwork layers.
+ * existing overlay without importing whole screens or decorative artwork layers. Alert widgets
+ * are excluded because a theme's alert styling lives in its separate alert design, not here.
  */
 export function extractThemeParts(theme: ThemeDesign): ThemePart[] {
   const seen = new Set<string>()
@@ -74,7 +76,7 @@ export function extractThemeParts(theme: ThemeDesign): ThemePart[] {
   for (const screen of theme.content.scenes) {
     const sceneName = screen.name || SCENE_LABEL[screen.key] || screen.key
     for (const layer of screen.layers) {
-      if (layer.kind === 'layer') continue
+      if (layer.kind === 'layer' || layer.kind === 'alerts') continue
       const sig = dedupeSignature(layer)
       if (seen.has(sig)) continue
       seen.add(sig)
@@ -113,32 +115,29 @@ export function addPartToOverlay(overlay: Overlay, part: ThemePart, theme: Theme
   }
   const sx = overlay.width / Math.max(1, part.sceneWidth)
   const sy = overlay.height / Math.max(1, part.sceneHeight)
+  const scale = Math.min(sx, sy)
   const minW = Math.min(20, overlay.width)
   const minH = Math.min(20, overlay.height)
-  const w = Math.max(minW, Math.min(overlay.width, Math.round(part.widget.w * sx)))
-  const h = Math.max(minH, Math.min(overlay.height, Math.round(part.widget.h * sy)))
+  const w = Math.max(minW, Math.min(overlay.width, Math.round(part.widget.w * scale)))
+  const h = Math.max(minH, Math.min(overlay.height, Math.round(part.widget.h * scale)))
   const x = Math.max(0, Math.min(overlay.width - w, Math.round(part.widget.x * sx)))
   const y = Math.max(0, Math.min(overlay.height - h, Math.round(part.widget.y * sy)))
 
   const existingIds = new Set(overlay.widgets.map((item) => item.id))
   const id = uniqueWidgetId(part.widget.id || part.widget.kind, existingIds)
   const cloned = structuredClone(part.widget)
-  const nextWidget = {
-    ...cloned,
-    id,
-    x,
-    y,
-    w,
-    h,
-    config: {
-      ...cloned.config,
-      design_id: theme.id,
-      ...(theme.branded ? { branded: true } : {}),
-    },
-  } as Widget
+  cloned.id = id
+  cloned.x = x
+  cloned.y = y
+  cloned.w = w
+  cloned.h = h
+  const cfg = cloned.config as { design_id?: string; branded?: boolean }
+  cfg.design_id = theme.id
+  if (theme.branded) cfg.branded = true
+  else delete cfg.branded
 
   return {
     ...overlay,
-    widgets: [...overlay.widgets, nextWidget],
+    widgets: [...overlay.widgets, cloned],
   }
 }
