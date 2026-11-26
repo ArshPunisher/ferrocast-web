@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { open, settled } from './helpers'
+import { fault, open, settled } from './helpers'
 
 const tile = (page: Page, name: string) =>
   page.locator('[aria-live="polite"]').getByRole('article', { name, exact: true })
@@ -36,6 +36,13 @@ test.describe('partial theme import (Group D)', () => {
     await dialog.getByRole('button', { name: 'Starting soon', pressed: true }).click()
     await dialog.getByRole('button', { name: 'Be right back', pressed: true }).click()
     await expect(dialog.getByText('Screens (2 of 5)')).toBeVisible()
+    // Unticked tiles keep zero <svg> checkmark nodes; ticked tile keeps 1.
+    await expect(
+      dialog.getByRole('button', { name: 'Just chatting' }).locator('[aria-hidden="true"] svg'),
+    ).toHaveCount(0)
+    await expect(
+      dialog.getByRole('button', { name: 'In game' }).locator('[aria-hidden="true"] svg'),
+    ).toHaveCount(1)
 
     await dialog.getByRole('button', { name: 'Next' }).click()
     await expect(dialog.getByRole('button', { name: 'Make 2 overlays' })).toBeVisible()
@@ -57,6 +64,12 @@ test.describe('partial theme import (Group D)', () => {
     await tile(page, 'Lo-fi loft').getByRole('button', { name: 'Use theme' }).click()
     const dialog2 = page.getByRole('dialog', { name: 'Use Lo-fi loft' })
     await expect(dialog2.getByText('Already added')).toHaveCount(2)
+    // "Already added" fits cleanly without horizontal text truncation at desktop width.
+    expect(
+      await dialog2
+        .getByText('Already added')
+        .evaluateAll((els) => els.every((e) => e.scrollWidth <= e.clientWidth + 1)),
+    ).toBe(true)
     await expect(dialog2.getByText('Screens (3 of 5)')).toBeVisible()
     await expect(dialog2.getByRole('button', { name: 'In game' })).toHaveAttribute(
       'aria-pressed',
@@ -142,10 +155,41 @@ test.describe('partial theme import (Group D)', () => {
     const partDialog = page.getByRole('dialog', { name: 'Use Lo-fi loft' })
     await settled(page)
     await partDialog.getByText('One part', { exact: true }).click()
+    const partOptions = await partDialog.getByLabel('Part').locator('option').allTextContents()
+    expect(partOptions.some((o) => o.includes('Alert box'))).toBe(false)
     await partDialog.getByLabel('Add to overlay').selectOption({ index: 1 })
     await partDialog.getByRole('button', { name: 'Add part' }).click()
     await expect(page).toHaveURL(/#\/overlays\//)
     await expect(page.getByText(/added to/)).toBeVisible()
+  })
+
+  test('handles overlay discovery failure and Retry cleanly in Screens and One part tabs', async ({
+    page,
+  }) => {
+    await useFerrocastStudio(page)
+    await open(page, 'designs')
+    await fault(page, {
+      path: '/api/v1/overlays',
+      method: 'GET',
+      status: 503,
+      code: 'unavailable',
+      message: 'Overlay store unavailable.',
+      times: 1,
+    })
+
+    await tile(page, 'Lo-fi loft').getByRole('button', { name: 'Use theme' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Use Lo-fi loft' })
+    await expect(dialog.getByRole('button', { name: 'Retry' })).toBeVisible()
+
+    // One part tab shows error + Retry instead of falsely telling the user to create an overlay first.
+    await dialog.getByText('One part', { exact: true }).click()
+    await expect(dialog.getByRole('button', { name: 'Retry' })).toBeVisible()
+    await expect(dialog.getByText(/Create an overlay first/)).toHaveCount(0)
+
+    // Clicking Retry recovers and populates the overlay picker.
+    await dialog.getByRole('button', { name: 'Retry' }).click()
+    await expect(dialog.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+    await expect(dialog.getByLabel('Add to overlay')).toBeEnabled()
   })
 
   test('layout stays fit without horizontal overflow at 375 px viewport', async ({ page }) => {

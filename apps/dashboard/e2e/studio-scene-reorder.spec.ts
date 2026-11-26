@@ -39,56 +39,89 @@ test.describe('Studio scene reorder and Studio Mode footer (Group E & Extra #3)'
     expect(initial).toEqual(['Main', 'Gameplay', 'Chatting', 'BRB', 'Starting Soon', 'Ending'])
     const baseUndo = await undoCount(page)
 
-    // Drag 'Main' (index 0, currently On air) past 5 px onto bottom half of 'Chatting' (index 2).
-    const mainRow = page.locator('[data-scene-name="Main"]')
+    // Drag an INACTIVE scene ('Gameplay', index 1) past 5 px onto bottom half of 'Chatting' (index 2).
+    const gameRow = page.locator('[data-scene-name="Gameplay"]')
     const chattingRow = page.locator('[data-scene-name="Chatting"]')
-    const mainBox = (await mainRow.boundingBox())!
+    const gameBox = (await gameRow.boundingBox())!
     const chatBox = (await chattingRow.boundingBox())!
 
-    await page.mouse.move(mainBox.x + 12, mainBox.y + mainBox.height / 2)
+    await page.mouse.move(gameBox.x + 12, gameBox.y + gameBox.height / 2)
     await page.mouse.down()
-    await page.mouse.move(mainBox.x + 12, chatBox.y + chatBox.height * 0.8, { steps: 6 })
-    await expect(page.locator('[data-scene-ghost]')).toContainText('Main')
+    await page.mouse.move(gameBox.x + 12, chatBox.y + chatBox.height * 0.8, { steps: 6 })
+    await expect(page.locator('[data-scene-ghost]')).toContainText('Gameplay')
     await expect(page.locator('[data-drop-line]')).toBeVisible()
     await page.mouse.up()
 
     await expect
       .poll(() => sceneNames(page))
-      .toEqual(['Gameplay', 'Chatting', 'Main', 'BRB', 'Starting Soon', 'Ending'])
-    // Release never cut away from Main.
+      .toEqual(['Main', 'Chatting', 'Gameplay', 'BRB', 'Starting Soon', 'Ending'])
+    // Release never cut Gameplay live on air; Main remains active.
     await expect(page.locator('[data-scene-name="Main"] button')).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    await expect(page.locator('[data-scene-name="Gameplay"] button')).not.toHaveAttribute(
       'aria-current',
       'true',
     )
     const afterMoveUndo = await undoCount(page)
     expect(afterMoveUndo).toBe(baseUndo + 1)
 
-    // Escape cancels mid-drag without changing order or pushing undo.
+    // Same-row >5 px horizontal drag on inactive Chatting never switches it on air.
+    const movedChatBox = (await page.locator('[data-scene-name="Chatting"]').boundingBox())!
+    await page.mouse.move(movedChatBox.x + 12, movedChatBox.y + movedChatBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(movedChatBox.x + 48, movedChatBox.y + movedChatBox.height / 2, {
+      steps: 4,
+    })
+    await expect(page.locator('[data-scene-ghost]')).toContainText('Chatting')
+    await page.mouse.up()
+    await expect(page.locator('[data-scene-name="Main"] button')).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    await expect(page.locator('[data-scene-name="Chatting"] button')).not.toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+
+    // Escape cancels mid-drag on inactive BRB and releasing right on BRB never cuts it live on air.
     const brbBox = (await page.locator('[data-scene-name="BRB"]').boundingBox())!
     await page.mouse.move(brbBox.x + 12, brbBox.y + brbBox.height / 2)
     await page.mouse.down()
-    await page.mouse.move(brbBox.x + 12, brbBox.y - 60, { steps: 4 })
+    await page.mouse.move(brbBox.x + 12, brbBox.y - 40, { steps: 4 })
     await expect(page.locator('[data-scene-ghost]')).toContainText('BRB')
     await page.keyboard.press('Escape')
+    await page.mouse.move(brbBox.x + 24, brbBox.y + brbBox.height / 2, { steps: 2 })
     await page.mouse.up()
     await expect(page.locator('[data-scene-ghost]')).toHaveCount(0)
     expect(await sceneNames(page)).toEqual([
-      'Gameplay',
-      'Chatting',
       'Main',
+      'Chatting',
+      'Gameplay',
       'BRB',
       'Starting Soon',
       'Ending',
     ])
+    await expect(page.locator('[data-scene-name="Main"] button')).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    await expect(page.locator('[data-scene-name="BRB"] button')).not.toHaveAttribute(
+      'aria-current',
+      'true',
+    )
     expect(await undoCount(page)).toBe(afterMoveUndo)
 
     // Adjacent-seam no-op drop pushes zero undo steps.
-    const gameBox = (await page.locator('[data-scene-name="Gameplay"]').boundingBox())!
+    const movedGameBox = (await page.locator('[data-scene-name="Gameplay"]').boundingBox())!
     const nextChatBox = (await page.locator('[data-scene-name="Chatting"]').boundingBox())!
-    await page.mouse.move(gameBox.x + 12, gameBox.y + gameBox.height / 2)
+    await page.mouse.move(movedGameBox.x + 12, movedGameBox.y + movedGameBox.height / 2)
     await page.mouse.down()
-    // Top half of Chatting resolves to index 0 (Gameplay's existing slot).
-    await page.mouse.move(gameBox.x + 12, nextChatBox.y + nextChatBox.height * 0.2, { steps: 4 })
+    // Bottom half of Chatting resolves to index 2 (Gameplay's current slot).
+    await page.mouse.move(movedGameBox.x + 12, nextChatBox.y + nextChatBox.height * 0.8, {
+      steps: 4,
+    })
     await expect(page.locator('[data-drop-line]')).toHaveCount(0)
     await page.mouse.up()
     expect(await undoCount(page)).toBe(afterMoveUndo)
@@ -140,13 +173,16 @@ test.describe('Studio scene reorder and Studio Mode footer (Group E & Extra #3)'
     await page.setViewportSize({ width: 1280, height: 800 })
     await openRunningStudio(page)
 
-    // Enter Studio Mode and pick Chatting in Preview (while Main stays On air).
+    // Enter Studio Mode: while Main is both Preview and On air, Remove notes "(on air)".
     await page.getByRole('button', { name: /Studio Mode/ }).click()
+    await expect(page.getByRole('button', { name: 'Remove Main (on air)' })).toBeVisible()
+
+    // Pick Chatting in Preview (while Main stays On air).
     await page.locator('[data-scene-name="Chatting"] button').click()
 
-    const up = page.getByRole('button', { name: 'Move the preview scene up' })
-    const copy = page.getByRole('button', { name: 'Copy the preview scene' })
-    const remove = page.getByRole('button', { name: 'Remove the preview scene' })
+    const up = page.getByRole('button', { name: 'Move Chatting up' })
+    const copy = page.getByRole('button', { name: 'Copy Chatting' })
+    const remove = page.getByRole('button', { name: 'Remove Chatting' })
     await expect(up).toBeEnabled()
     await up.click()
 
@@ -211,5 +247,57 @@ test.describe('Studio scene reorder and Studio Mode footer (Group E & Extra #3)'
     await expect
       .poll(() => sceneNames(page))
       .toEqual(['Main', 'Chatting', 'Gameplay', 'BRB', 'Starting Soon', 'Ending'])
+  })
+
+  test.describe('375 px touch drag reorder', () => {
+    test.use({ viewport: { width: 375, height: 812 }, hasTouch: true })
+
+    test('provides >=44 px touch drag handles and touch-reorders inactive scene without cutting on air', async ({
+      page,
+      browserName,
+    }) => {
+      test.skip(browserName !== 'chromium', 'CDP touch emulation runs in Chromium')
+      await openRunningStudio(page)
+
+      const chatHandle = page.locator('[data-scene-name="Chatting"] [data-drag-handle]')
+      const handleBox = (await chatHandle.boundingBox())!
+      expect(handleBox.width).toBeGreaterThanOrEqual(44)
+      expect(handleBox.height).toBeGreaterThanOrEqual(44)
+
+      const mainBox = (await page.locator('[data-scene-name="Main"]').boundingBox())!
+      const cdp = await page.context().newCDPSession(page)
+      const send = (
+        type: 'touchStart' | 'touchMove' | 'touchEnd',
+        p: { x: number; y: number } | null,
+      ) =>
+        cdp.send('Input.dispatchTouchEvent', {
+          type,
+          touchPoints: p ? [{ ...p, id: 1 }] : [],
+        })
+      const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 }
+      const end = { x: start.x, y: mainBox.y + mainBox.height * 0.25 }
+      await send('touchStart', start)
+      for (let k = 1; k <= 6; k++) {
+        await send('touchMove', {
+          x: start.x,
+          y: start.y + ((end.y - start.y) * k) / 6,
+        })
+      }
+      await expect(page.locator('[data-scene-ghost]')).toContainText('Chatting')
+      await send('touchEnd', null)
+      await cdp.detach()
+
+      await expect
+        .poll(() => sceneNames(page))
+        .toEqual(['Chatting', 'Main', 'Gameplay', 'BRB', 'Starting Soon', 'Ending'])
+      await expect(page.locator('[data-scene-name="Main"] button')).toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+      await expect(page.locator('[data-scene-name="Chatting"] button')).not.toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+    })
   })
 })
