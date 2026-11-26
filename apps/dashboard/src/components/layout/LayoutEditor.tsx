@@ -369,9 +369,24 @@ function Canvas({
     }
     syncStage()
     if (typeof ResizeObserver !== 'function') return
-    const ro = new ResizeObserver(syncStage)
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        syncStage()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        syncStage()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
     ro.observe(stage)
-    return () => ro.disconnect()
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [lockedDesktop])
 
   const frame = lockedDesktop
@@ -379,17 +394,35 @@ function Canvas({
     : null
 
   useLayoutEffect(() => {
+    if (lockedDesktop) return
     const el = box.current
     if (!el) return
     const syncScale = () => {
-      if (el.clientWidth > 0) setMeasuredScale(el.clientWidth / layout.width)
+      if (el.clientWidth <= 0) return
+      const next = el.clientWidth / layout.width
+      setMeasuredScale((prev) => (Math.abs(next - prev) > 1e-4 ? next : prev))
     }
     syncScale()
     if (typeof ResizeObserver !== 'function') return
-    const ro = new ResizeObserver(syncScale)
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        syncScale()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        syncScale()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [box, layout.width, frame?.width, frame?.height])
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [lockedDesktop, box, layout.width])
 
   const scale = frame ? frame.scale : measuredScale
 
@@ -1877,7 +1910,7 @@ export function LayoutEditor({
           'fc-scroll fc-scroll-stable flex flex-col gap-4 rounded-panel border border-line bg-surface-1 shadow-1',
           fitViewport
             ? 'fc-overlay-inspector order-3 p-3.5 lg:order-none'
-            : 'self-start p-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto',
+            : 'self-start p-4 xl:sticky xl:top-[calc(var(--fc-top,56px)+16px)] xl:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto',
         )}
         aria-label="Inspector"
       >
