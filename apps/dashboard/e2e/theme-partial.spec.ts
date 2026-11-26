@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { open } from './helpers'
+import { open, settled } from './helpers'
 
 const tile = (page: Page, name: string) =>
   page.locator('[aria-live="polite"]').getByRole('article', { name, exact: true })
@@ -31,9 +31,9 @@ test.describe('partial theme import (Group D)', () => {
     await expect(dialog.getByText('Screens (5 of 5)')).toBeVisible()
     await expect(dialog.getByRole('switch', { name: 'Set it up in the Studio' })).toBeChecked()
 
-    // Untick three screens, leaving Starting soon and Ending.
-    await dialog.getByRole('button', { name: 'In game', pressed: true }).click()
+    // Untick three screens, leaving In game (gameplay with addExisting) and Ending.
     await dialog.getByRole('button', { name: 'Just chatting', pressed: true }).click()
+    await dialog.getByRole('button', { name: 'Starting soon', pressed: true }).click()
     await dialog.getByRole('button', { name: 'Be right back', pressed: true }).click()
     await expect(dialog.getByText('Screens (2 of 5)')).toBeVisible()
 
@@ -48,17 +48,17 @@ test.describe('partial theme import (Group D)', () => {
     if (await scenesTab.isVisible()) await scenesTab.click()
 
     // Only the two ticked scenes were added to Studio (and matched to the right overlays).
-    await expect(page.getByRole('button', { name: /Lo-fi loft · Starting soon/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Lo-fi loft · In game/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Lo-fi loft · Ending/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Lo-fi loft · Just chatting/ })).toHaveCount(0)
 
-    // Re-open Lo-fi loft: Starting soon and Ending now show "Already added" and default unticked.
+    // Re-open Lo-fi loft: In game and Ending now show "Already added" and default unticked.
     await page.evaluate(() => (location.hash = '#/designs/themes'))
     await tile(page, 'Lo-fi loft').getByRole('button', { name: 'Use theme' }).click()
     const dialog2 = page.getByRole('dialog', { name: 'Use Lo-fi loft' })
     await expect(dialog2.getByText('Already added')).toHaveCount(2)
     await expect(dialog2.getByText('Screens (3 of 5)')).toBeVisible()
-    await expect(dialog2.getByRole('button', { name: 'Starting soon' })).toHaveAttribute(
+    await expect(dialog2.getByRole('button', { name: 'In game' })).toHaveAttribute(
       'aria-pressed',
       'false',
     )
@@ -82,6 +82,7 @@ test.describe('partial theme import (Group D)', () => {
 
     await expect(page).toHaveURL(/#\/overlays$/)
     await expect(page.getByText('In game (Lo-fi loft)')).toHaveCount(1)
+    await expect(page.getByText('Just chatting (Lo-fi loft)')).toHaveCount(1)
     await expect(page.getByText('Starting soon (Lo-fi loft)')).toHaveCount(1)
     await expect(page.getByText('Ending (Lo-fi loft)')).toHaveCount(1)
   })
@@ -139,7 +140,8 @@ test.describe('partial theme import (Group D)', () => {
     await page.evaluate(() => (location.hash = '#/designs/themes'))
     await tile(page, 'Lo-fi loft').getByRole('button', { name: 'Use theme' }).click()
     const partDialog = page.getByRole('dialog', { name: 'Use Lo-fi loft' })
-    await partDialog.getByRole('radio', { name: 'One part' }).check({ force: true })
+    await settled(page)
+    await partDialog.getByText('One part', { exact: true }).click()
     await partDialog.getByLabel('Add to overlay').selectOption({ index: 1 })
     await partDialog.getByRole('button', { name: 'Add part' }).click()
     await expect(page).toHaveURL(/#\/overlays\//)
