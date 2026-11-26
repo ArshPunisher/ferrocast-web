@@ -109,6 +109,11 @@ test.describe('Overlay editor layout, single scroller, Unsaved bar and steady ca
       expect(Math.abs(curCanvas.x - beforeCanvas.x)).toBeLessThanOrEqual(1)
       expect(Math.abs(curCanvas.y - beforeCanvas.y)).toBeLessThanOrEqual(1)
       expect(Math.abs(curBar.height - beforeBar.height)).toBeLessThanOrEqual(1)
+      const doc = await page.evaluate(() => ({
+        scrollH: document.documentElement.scrollHeight,
+        innerH: window.innerHeight,
+      }))
+      expect(doc.scrollH).toBeLessThanOrEqual(doc.innerH + 1)
     }
 
     // Add a Text layer (first edit brings up Unsaved layout bar).
