@@ -1,3 +1,4 @@
+import { SCALE_CHANGED_EVENT, isValidScaleChangedPayload } from '../components/preview-events'
 import { FRAG, VERT } from './shader'
 
 export interface FerroColors {
@@ -185,12 +186,16 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   } catch {
     return () => {}
   }
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-  let scale = (opts.scale ?? 0.75) * dpr
+  let dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  const baseScale = opts.scale ?? 0.75
+  let quality = 1
+  const currentScale = () => baseScale * quality * dpr
   const target: Magnet = { x: 0, z: -0.05, strength: 0.85 }
   const mag: Magnet = { ...target }
   let visible = true
   let raf = 0
+  let resizeRaf = 0
+  let needsSize = false
   let last = performance.now()
   let slow = 0
   let fast = 0
@@ -201,11 +206,13 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
   let clock = 1.2
 
   const size = () => {
+    needsSize = false
     const r = canvas.getBoundingClientRect()
-    ff.resize(r.width, r.height, scale)
+    ff.resize(r.width, r.height, currentScale())
   }
   const frame = (now: number) => {
     raf = 0
+    if (needsSize) size()
     const dt = Math.min(0.05, (now - last) / 1000)
     const ms = now - last
     last = now
@@ -222,13 +229,13 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
     }
     if (ms > 24) slow++
     else if (ms < 14) fast++
-    if (slow > 20 && scale > 0.35) {
-      scale *= 0.8
+    if (slow > 20 && currentScale() > 0.35) {
+      quality = Math.max(0.35 / (baseScale * dpr), quality * 0.8)
       slow = fast = 0
       size()
       ff.render(clock, mag)
-    } else if (fast > 240 && scale < 0.75 * dpr) {
-      scale = Math.min(0.75 * dpr, scale * 1.1)
+    } else if (fast > 240 && quality < 1) {
+      quality = Math.min(1, quality * 1.1)
       slow = fast = 0
       size()
       ff.render(clock, mag)
@@ -241,6 +248,20 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
       last = performance.now()
       raf = requestAnimationFrame(frame)
     }
+  }
+  const scheduleResize = () => {
+    needsSize = true
+    if (visible && !opts.reducedMotion) {
+      kick()
+      return
+    }
+    if (resizeRaf) return
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0
+      if (!needsSize) return
+      size()
+      ff.render(clock, mag)
+    })
   }
   size()
   if (opts.reducedMotion) {
@@ -270,19 +291,38 @@ export function mountFerrofluid(canvas: HTMLCanvasElement, opts: InteractiveOpti
     visible = document.visibilityState === 'visible'
     if (visible && !opts.reducedMotion) kick()
   }
-  const ro = new ResizeObserver(() => {
-    size()
-    // Resizing clears the canvas: redraw now unless a frame is already on its way.
-    if (!raf) ff.render(clock, mag)
-  })
+  const ro = new ResizeObserver(scheduleResize)
   ro.observe(canvas)
+  let dprMq: MediaQueryList | null = null
+  const onDprChange = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+    watchDpr()
+    scheduleResize()
+  }
+  const watchDpr = () => {
+    dprMq?.removeEventListener('change', onDprChange)
+    if (typeof window.matchMedia !== 'function') return
+    dprMq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+    dprMq.addEventListener('change', onDprChange)
+  }
+  const onScaleChanged = (ev: Event) => {
+    const detail = (ev as CustomEvent).detail
+    const next = isValidScaleChangedPayload(detail) ? detail.scale : window.devicePixelRatio || 1
+    dpr = Math.min(next, 1.5)
+    scheduleResize()
+  }
+  watchDpr()
+  window.addEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
   window.addEventListener('pointermove', onMove, { passive: true })
   document.documentElement.addEventListener('pointerleave', onLeave)
   document.addEventListener('visibilitychange', onVis)
   return () => {
     if (raf) cancelAnimationFrame(raf)
+    if (resizeRaf) cancelAnimationFrame(resizeRaf)
     io.disconnect()
     ro.disconnect()
+    dprMq?.removeEventListener('change', onDprChange)
+    window.removeEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
     window.removeEventListener('pointermove', onMove)
     document.documentElement.removeEventListener('pointerleave', onLeave)
     document.removeEventListener('visibilitychange', onVis)

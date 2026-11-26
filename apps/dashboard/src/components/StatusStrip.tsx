@@ -3,6 +3,7 @@ import { Badge, BrandIcon, PlatformMark, PopoverSurface, Skeleton, cx } from '@f
 import {
   buildStatusChips,
   computeStatusStripLayout,
+  estimateStatusStripCandidates,
   type StatusChipItem,
   type StripCandidateKey,
 } from '../lib/status-strip'
@@ -90,7 +91,7 @@ export function StatusStrip({
   }, [itemSig])
 
   const hasConnectors = connectors !== null
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = wrapRef.current
     if (!el) return
     const updateWidth = () => {
@@ -104,10 +105,30 @@ export function StatusStrip({
     }
     updateWidth()
     if (typeof ResizeObserver !== 'function') return
-    const ro = new ResizeObserver(updateWidth)
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        updateWidth()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        updateWidth()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [hasConnectors])
+
+  const candidates = useMemo(
+    () => estimateStatusStripCandidates({ items, socket }),
+    [items, socket],
+  )
 
   const computed = useMemo(
     () =>
@@ -145,8 +166,8 @@ export function StatusStrip({
     }
   }, [computed, overflowStep, summary, items])
 
-  // Real-DOM safety guard: measure initial container width synchronously before paint and step
-  // down if font metrics make the chosen tier wider than the container.
+  // Single-pass DOM guard: scales narrower heuristic tiers from real rendered overflow so
+  // font metrics or zoom converge without stepping sequentially through every intermediate mode.
   useLayoutEffect(() => {
     const wrap = wrapRef.current
     const list = listRef.current
@@ -161,20 +182,38 @@ export function StatusStrip({
     if (needed <= wrapW + 0.5) return
 
     lastClampWidth.current = wrapW
-    if (layout.mode === 'full' && layout.showViewerUnit) {
-      setMinWidths((m) =>
-        m['full-unit'] && m['full-unit'] >= needed + 2 ? m : { ...m, 'full-unit': needed + 2 },
-      )
-    } else if (layout.mode === 'full') {
-      setMinWidths((m) =>
-        m['full-short'] && m['full-short'] >= needed + 2 ? m : { ...m, 'full-short': needed + 2 },
-      )
-    } else if (layout.mode === 'icons') {
-      setMinWidths((m) => (m.icons && m.icons >= needed + 2 ? m : { ...m, icons: needed + 2 }))
+    if (layout.mode === 'full' || layout.mode === 'icons') {
+      const currentKey: StripCandidateKey =
+        layout.mode === 'icons' ? 'icons' : layout.showViewerUnit ? 'full-unit' : 'full-short'
+      const currentEst = candidates[currentKey]
+      const ratio = currentEst > 0 ? (needed + 2) / currentEst : 1.2
+      setMinWidths((prev) => {
+        const next = { ...prev }
+        let changed = false
+        const bump = (k: StripCandidateKey, floor: number) => {
+          if ((next[k] ?? 0) < floor) {
+            next[k] = floor
+            changed = true
+          }
+        }
+        bump(currentKey, needed + 2)
+        if (currentKey === 'full-unit') {
+          const shortScaled = Math.ceil(candidates['full-short'] * ratio) + 2
+          if (shortScaled > wrapW) bump('full-short', shortScaled)
+          const iconsScaled = Math.ceil(candidates.icons * ratio) + 2
+          if (iconsScaled > wrapW) bump('icons', iconsScaled)
+        } else if (currentKey === 'full-short') {
+          const iconsScaled = Math.ceil(candidates.icons * ratio) + 2
+          if (iconsScaled > wrapW) bump('icons', iconsScaled)
+        }
+        return changed ? next : prev
+      })
     } else if (overflowStep < 2) {
-      setOverflowStep((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : s))
+      setOverflowStep((s) =>
+        s === 0 && needed - wrapW > 40 ? 2 : s < 2 ? ((s + 1) as 0 | 1 | 2) : s,
+      )
     }
-  }, [layout, availableWidth, overflowStep, itemSig])
+  }, [layout, availableWidth, overflowStep, itemSig, candidates])
 
   const closePopover = useCallback((restoreFocus = false) => {
     setOpen(false)
