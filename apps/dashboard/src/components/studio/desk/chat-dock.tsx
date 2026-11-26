@@ -74,7 +74,7 @@ export function ChatDock() {
         {lines.length === 0 ? (
           <EmptyState compact title="Chat is quiet" />
         ) : (
-          <ul className="flex min-w-0 flex-col px-1 py-1.5">
+          <ul className="@container flex min-w-0 flex-col px-1 py-1.5">
             {lines.map((e) => (
               <ChatLine
                 key={e.id}

@@ -85,7 +85,7 @@ for (const vp of [
         await page.getByRole('button', { name: 'Show on stream' }).click()
       } else {
         await longLine.getByRole('button').first().focus()
-        await longLine.getByRole('button', { name: 'Show on stream' }).click()
+        await longLine.getByRole('button', { name: 'Pin message to stream' }).click()
       }
 
       const banner = page.getByTestId('highlight-banner')

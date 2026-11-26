@@ -287,7 +287,7 @@ export function Chat() {
             </EmptyState>
           )
         ) : (
-          <ul className="flex min-w-0 flex-col px-1 py-1.5 sm:px-2">
+          <ul className="@container flex min-w-0 flex-col px-1 py-1.5 sm:px-2">
             {lines.map((e) => (
               <ChatLine
                 key={e.id}

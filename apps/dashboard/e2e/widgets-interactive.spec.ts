@@ -58,7 +58,7 @@ test.describe('interactive widgets on desktop (1280 px)', () => {
     const line = chatLog.getByRole('listitem').last()
     await expect(line).toBeVisible()
     await line.getByRole('button').first().focus()
-    await line.getByRole('button', { name: 'Show on stream' }).click()
+    await line.getByRole('button', { name: 'Pin message to stream' }).click()
 
     await expect(page.getByTestId('highlight-banner')).toBeVisible()
     await expect(chatLog.getByText('On stream')).toBeVisible()

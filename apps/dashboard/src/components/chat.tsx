@@ -15,6 +15,7 @@ import {
   ArrowDown,
   Check,
   Clock,
+  DotsThree,
   IdentificationCard,
   PaperPlaneRight,
   Prohibit,
@@ -251,8 +252,9 @@ export const ChatLine = memo(function ChatLine({
   const names = readableColors(a.color)
   const mine = (a.roles & Roles.BROADCASTER) !== 0
   const pinned = !deleted && actions?.highlightedId === event.id
-  const canHighlight = !!(actions && !deleted && lineActions(actions, event, !!held).highlight)
-  const showToolbar = !!(actions && !deleted && (!mine || canHighlight))
+  const can = actions && !deleted ? lineActions(actions, event, !!held) : null
+  const canHighlight = Boolean(can?.highlight && actions?.highlight)
+  const hasMod = Boolean(!mine && can && (can.reply || can.remove || can.timeout || can.ban || can.card))
   const fallback = mine ? 'var(--color-accent-text)' : 'var(--color-text)'
   return (
     <li
@@ -317,83 +319,122 @@ export const ChatLine = memo(function ChatLine({
           </span>
         )}
       </div>
-      {showToolbar && <LineToolbar actions={actions} event={event} mine={mine} held={!!held} />}
-      {!dense && (
-        <time className="mt-[3px] shrink-0 font-mono text-[13px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible">
-          {relativeTime(event.received_at, now)}
-        </time>
+      {(canHighlight || !dense || (hasMod && actions && !deleted)) && (
+        <div className="relative flex shrink-0 items-start self-start">
+          {actions && !deleted && hasMod && !coarse() && (
+            <LineToolbar actions={actions} event={event} held={!!held} />
+          )}
+          {(canHighlight || !dense) && (
+            <div className="grid items-center justify-items-end [grid-template-areas:'slot']">
+              {!dense && (
+                <time
+                  className={cx(
+                    '[grid-area:slot] mt-[3px] whitespace-nowrap font-mono text-[13px] text-text-3 tabular-nums',
+                    canHighlight &&
+                      (pinned
+                        ? 'pointer-events-none opacity-0'
+                        : 'pointer-events-none group-hover:opacity-0 group-focus-within:opacity-0'),
+                  )}
+                >
+                  {relativeTime(event.received_at, now)}
+                </time>
+              )}
+              {canHighlight && actions?.highlight && (
+                <IconButton
+                  size="xs"
+                  variant={pinned ? 'secondary' : 'ghost'}
+                  aria-pressed={pinned}
+                  label={pinned ? 'Unpin message from stream' : 'Pin message to stream'}
+                  title={pinned ? 'Unpin' : 'Pin'}
+                  onClick={() => actions.highlight?.(event)}
+                  className={cx(
+                    '[grid-area:slot] -my-[2px]',
+                    pinned
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:hidden',
+                  )}
+                >
+                  <PushPin size={14} weight={pinned ? 'fill' : 'regular'} />
+                </IconButton>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </li>
   )
 })
 
-/** The hover toolbar on a chat line: only what works for this line right now. */
+/** Hover moderation controls for viewer chat rows, aligned left of the inline Pin/time slot. */
 function LineToolbar({
   actions,
   event,
-  mine,
   held = false,
 }: {
   actions: ChatActions
   event: FerroEvent
-  mine?: boolean
   held?: boolean
 }) {
   const can = lineActions(actions, event, held)
-  if (event.kind.type !== 'chat_message' || !Object.values(can).some(Boolean)) return null
+  if (event.kind.type !== 'chat_message') return null
   const a = event.kind.actor
-  const pinned = actions.highlightedId === event.id
+  const hasAny = can.reply || can.remove || can.timeout || can.ban || can.card
+  if (!hasAny) return null
   return (
-    <div className="absolute top-0.5 right-1 hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 group-hover:flex group-focus-within:flex">
-      {can.highlight && actions.highlight && (
+    <div className="absolute -top-0.5 right-full z-10 mr-1.5 hidden items-center group-hover:flex group-focus-within:flex">
+      <div className="hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 @[360px]:flex">
+        {can.reply && (
+          <IconButton
+            size="sm"
+            label="Reply on the same platform"
+            onClick={() => actions.reply(event)}
+          >
+            <ArrowBendUpLeft size={15} />
+          </IconButton>
+        )}
+        {can.remove && (
+          <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
+            <Trash size={15} />
+          </IconButton>
+        )}
+        {can.timeout && (
+          <IconButton
+            size="sm"
+            label="Time out for 10 minutes"
+            onClick={() => actions.timeout(event, 600)}
+          >
+            <Clock size={15} />
+          </IconButton>
+        )}
+        {can.ban && (
+          <IconButton
+            size="sm"
+            label={actions.offline ? `Ban on ${PLATFORM_LABEL[event.platform]}` : 'Ban everywhere'}
+            variant="danger-ghost"
+            onClick={() => actions.ban(event)}
+          >
+            <Prohibit size={15} />
+          </IconButton>
+        )}
+        {can.card && (
+          <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
+            <IdentificationCard size={15} />
+          </IconButton>
+        )}
+      </div>
+      <div className="flex items-center rounded-control border border-line bg-surface-1 p-0.5 shadow-2 @[360px]:hidden">
         <IconButton
-          size="sm"
-          variant={pinned ? 'secondary' : 'ghost'}
-          aria-pressed={pinned}
-          label={pinned ? 'Remove from stream' : 'Show on stream'}
-          onClick={() => actions.highlight?.(event)}
+          size="xs"
+          label="Message actions"
+          title="More actions"
+          onClick={(e) => {
+            e.stopPropagation()
+            actions.sheet(event)
+          }}
         >
-          <PushPin size={15} weight={pinned ? 'fill' : 'regular'} />
+          <DotsThree size={15} weight="bold" />
         </IconButton>
-      )}
-      {!mine && can.reply && (
-        <IconButton
-          size="sm"
-          label="Reply on the same platform"
-          onClick={() => actions.reply(event)}
-        >
-          <ArrowBendUpLeft size={15} />
-        </IconButton>
-      )}
-      {!mine && can.remove && (
-        <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
-          <Trash size={15} />
-        </IconButton>
-      )}
-      {!mine && can.timeout && (
-        <IconButton
-          size="sm"
-          label="Time out for 10 minutes"
-          onClick={() => actions.timeout(event, 600)}
-        >
-          <Clock size={15} />
-        </IconButton>
-      )}
-      {!mine && can.ban && (
-        <IconButton
-          size="sm"
-          label={actions.offline ? `Ban on ${PLATFORM_LABEL[event.platform]}` : 'Ban everywhere'}
-          variant="danger-ghost"
-          onClick={() => actions.ban(event)}
-        >
-          <Prohibit size={15} />
-        </IconButton>
-      )}
-      {!mine && can.card && (
-        <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
-          <IdentificationCard size={15} />
-        </IconButton>
-      )}
+      </div>
     </div>
   )
 }
