@@ -260,6 +260,7 @@ test.describe('Studio scene reorder and Studio Mode footer (Group E & Extra #3)'
       await openRunningStudio(page)
 
       const chatHandle = page.locator('[data-scene-name="Chatting"] [data-drag-handle]')
+      await chatHandle.scrollIntoViewIfNeeded()
       const handleBox = (await chatHandle.boundingBox())!
       expect(handleBox.width).toBeGreaterThanOrEqual(44)
       expect(handleBox.height).toBeGreaterThanOrEqual(44)

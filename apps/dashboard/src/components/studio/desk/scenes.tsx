@@ -871,6 +871,9 @@ export function ScenesDock() {
                   data-scene-name={s.name}
                   onPointerDown={(e) => pressScene(e, s.name)}
                   onLostPointerCapture={(e) => {
+                    // Implicit touch capture transfers from child handle/svg to <li> and bubbles;
+                    // only cancel if this <li> itself lost pointer capture.
+                    if (e.target !== e.currentTarget) return
                     const d = dragged.current
                     if (d && d.on && e.pointerId === d.pointerId) cancelDrag(true)
                   }}

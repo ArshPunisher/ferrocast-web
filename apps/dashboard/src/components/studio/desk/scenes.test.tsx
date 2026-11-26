@@ -434,10 +434,19 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     expect(api.moveScene).not.toHaveBeenCalled()
     expect(api.setCurrent).not.toHaveBeenCalled()
 
-    // lostpointercapture also cleans up drag and suppresses release click.
+    // Descendant implicit touch capture handoff bubbles lostpointercapture and must NOT cancel drag.
+    const gameHandle = gameLi.querySelector<HTMLElement>('[data-drag-handle]')!
     await act(async () => {
       gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 50 }))
       window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 90 }))
+      gameHandle.dispatchEvent(
+        pointerEvt('lostpointercapture', { pointerType: 'touch', clientX: 20, clientY: 90 }),
+      )
+    })
+    expect(host.querySelector('[data-scene-ghost]')).not.toBeNull()
+
+    // lostpointercapture on the <li> itself also cleans up drag and suppresses release click.
+    await act(async () => {
       gameLi.dispatchEvent(pointerEvt('lostpointercapture', { clientX: 20, clientY: 90 }))
       gameBtn.click()
       vi.runAllTimers()
