@@ -5,14 +5,12 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
-import { createPortal } from 'react-dom'
 import {
   AppWindow,
   CaretRight,
@@ -24,7 +22,7 @@ import {
   type Icon,
 } from '@phosphor-icons/react'
 import { type EngineScreen } from '@ferrocast/api'
-import { cx } from '@ferrocast/ui'
+import { PopoverSurface, cx, type RectBox } from '@ferrocast/ui'
 
 export type MenuItem =
   | { sep: true }
@@ -61,14 +59,16 @@ export interface MenuHead {
 }
 
 interface Open {
-  x: number
-  y: number
+  anchorEl: HTMLElement
+  anchorRect: RectBox
+  align: 'start' | 'end'
+  gap: number
   items: MenuItem[]
   label: string
   head?: MenuHead | undefined
 }
 
-/** A menu to open from onContextMenu, and the node to render once. */
+/** A menu to open from onContextMenu or a trigger click, and the node to render once. */
 export function useContextMenu(): {
   open: (e: ReactMouseEvent, label: string, items: MenuItem[], head?: MenuHead) => void
   menu: ReactNode
@@ -81,14 +81,44 @@ export function useContextMenu(): {
       e.stopPropagation()
       const el = e.currentTarget as HTMLElement
       back.current = el
-      // From the keyboard (menu key, Shift+F10) there's no pointer: open under the row.
-      let { clientX: x, clientY: y } = e
-      if (x === 0 && y === 0) {
+      const vw = document.documentElement.clientWidth || window.innerWidth
+      let anchorRect: RectBox
+      let align: 'start' | 'end' = 'start'
+      let gap = 0
+      if (e.type === 'click') {
         const r = el.getBoundingClientRect()
-        x = r.left + 12
-        y = r.bottom
+        anchorRect = {
+          left: r.left,
+          top: r.top,
+          right: r.right,
+          bottom: r.bottom,
+          width: r.width,
+          height: r.height,
+        }
+        align = r.left + r.width / 2 > vw / 2 ? 'end' : 'start'
+        gap = 6
+      } else if (e.clientX === 0 && e.clientY === 0) {
+        // From the keyboard (menu key, Shift+F10) there's no pointer: open under the row.
+        const r = el.getBoundingClientRect()
+        anchorRect = {
+          left: r.left + 12,
+          top: r.top,
+          right: r.left + 12,
+          bottom: r.bottom,
+          width: 0,
+          height: r.height,
+        }
+      } else {
+        anchorRect = {
+          left: e.clientX,
+          top: e.clientY,
+          right: e.clientX,
+          bottom: e.clientY,
+          width: 0,
+          height: 0,
+        }
       }
-      setAt({ x, y, items, label, head })
+      setAt({ anchorEl: el, anchorRect, align, gap, items, label, head })
     },
     [],
   )
@@ -96,20 +126,19 @@ export function useContextMenu(): {
     setAt(null)
     back.current?.focus?.()
   }, [])
-  const menu = at
-    ? createPortal(
-        <MenuList
-          items={at.items}
-          label={at.label}
-          head={at.head}
-          x={at.x}
-          y={at.y}
-          onClose={close}
-          root
-        />,
-        document.body,
-      )
-    : null
+  const menu = at ? (
+    <MenuList
+      items={at.items}
+      label={at.label}
+      head={at.head}
+      anchorEl={at.anchorEl}
+      anchorRect={at.anchorRect}
+      align={at.align}
+      gap={at.gap}
+      onClose={close}
+      root
+    />
+  ) : null
   return { open, menu }
 }
 
@@ -117,8 +146,11 @@ function MenuList({
   items,
   label,
   head,
-  x,
-  y,
+  anchorEl,
+  anchorRect,
+  parentMenuRect,
+  align = 'start',
+  gap = 0,
   onClose,
   onBack,
   root,
@@ -126,32 +158,24 @@ function MenuList({
   items: MenuItem[]
   label: string
   head?: MenuHead | undefined
-  x: number
-  y: number
+  anchorEl: HTMLElement | null
+  anchorRect: RectBox
+  parentMenuRect?: RectBox | undefined
+  align?: 'start' | 'end' | undefined
+  gap?: number | undefined
   onClose: () => void
   /** A sub-menu: ArrowLeft goes back to its parent. */
   onBack?: () => void
   root?: boolean
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ left: x, top: y })
-  const [sub, setSub] = useState<{ i: number; x: number; y: number } | null>(null)
+  const ref = useRef<HTMLElement>(null)
+  const [sub, setSub] = useState<{
+    i: number
+    itemEl: HTMLElement
+    itemRect: RectBox
+    parentRect: RectBox
+  } | null>(null)
   const timer = useRef(0)
-
-  // Kept inside the window: flipped left or up when it would run off.
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const pad = 6
-    let left = x
-    let top = y
-    if (left + r.width > window.innerWidth - pad)
-      left = root ? Math.max(pad, x - r.width) : Math.max(pad, x - r.width - 220)
-    if (top + r.height > window.innerHeight - pad)
-      top = Math.max(pad, window.innerHeight - r.height - pad)
-    setPos({ left, top })
-  }, [x, y, root])
 
   useEffect(() => {
     ref.current
@@ -159,36 +183,38 @@ function MenuList({
       ?.focus()
   }, [])
 
-  // The top menu closes on a click elsewhere, scrolling, resizing or leaving the window.
+  // Close the root menu when the OS/browser window loses focus.
   useEffect(() => {
     if (!root) return
-    const away = (e: PointerEvent) => {
-      const t = e.target as HTMLElement
-      if (!t.closest('[data-fc-menu]')) onClose()
-    }
-    const gone = () => onClose()
-    // Scrolling the page closes it; scrolling a menu itself (a long one in a short window) doesn't.
-    const scrolled = (e: Event) => {
-      if (e.target instanceof Element && e.target.closest('[data-fc-menu]')) return
-      onClose()
-    }
-    document.addEventListener('pointerdown', away, true)
-    window.addEventListener('resize', gone)
-    window.addEventListener('blur', gone)
-    document.addEventListener('scroll', scrolled, true)
-    return () => {
-      document.removeEventListener('pointerdown', away, true)
-      window.removeEventListener('resize', gone)
-      window.removeEventListener('blur', gone)
-      document.removeEventListener('scroll', scrolled, true)
-    }
+    window.addEventListener('blur', onClose)
+    return () => window.removeEventListener('blur', onClose)
   }, [root, onClose])
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const openSub = (i: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
-    setSub({ i, x: r.right - 4, y: r.top - 6 })
+    const pr = ref.current?.getBoundingClientRect() ?? r
+    setSub({
+      i,
+      itemEl: el,
+      itemRect: {
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom,
+        width: r.width,
+        height: r.height,
+      },
+      parentRect: {
+        left: pr.left,
+        top: pr.top,
+        right: pr.right,
+        bottom: pr.bottom,
+        width: pr.width,
+        height: pr.height,
+      },
+    })
   }
 
   const onKey = (e: ReactKeyboardEvent) => {
@@ -225,11 +251,24 @@ function MenuList({
   }
 
   return (
-    <div
-      ref={ref}
+    <PopoverSurface
+      open
+      onClose={onClose}
+      anchorEl={anchorEl}
+      anchorRect={anchorRect}
+      parentMenuRect={parentMenuRect}
+      surfaceRef={ref}
+      placement={root ? 'bottom' : 'right'}
+      align={root ? align : 'start'}
+      gap={gap}
+      edgePadding={6}
+      dismissible={!!root}
+      ignoreOutsideSelector="[data-fc-menu]"
+      closeOnEscape={false}
+      closeOnTab={false}
       role="menu"
       aria-label={label}
-      data-fc-menu
+      data-fc-menu=""
       tabIndex={-1}
       onKeyDown={onKey}
       onContextMenu={(e) => e.preventDefault()}
@@ -240,8 +279,10 @@ function MenuList({
         clearTimeout(timer.current)
         setSub(null)
       }}
-      className="fixed z-[80] flex max-h-[calc(100vh-12px)] min-w-[210px] flex-col overflow-y-auto overscroll-contain rounded-control border border-line-strong bg-surface-1 p-1 shadow-pop [&>*]:shrink-0"
-      style={pos}
+      className={cx(
+        'flex min-w-[210px] max-w-[calc(100vw-12px)] flex-col rounded-control border border-line-strong bg-surface-1 p-1 shadow-pop outline-none [&>*]:shrink-0',
+        root ? 'z-[80]' : 'z-[81]',
+      )}
     >
       {head && (
         <div
@@ -369,8 +410,10 @@ function MenuList({
         <MenuList
           items={(items[sub.i] as Entry).items ?? []}
           label={(items[sub.i] as Entry).label}
-          x={sub.x}
-          y={sub.y}
+          anchorEl={sub.itemEl}
+          anchorRect={sub.itemRect}
+          parentMenuRect={sub.parentRect}
+          gap={-4}
           onClose={onClose}
           onBack={() => {
             const i = sub.i
@@ -380,7 +423,7 @@ function MenuList({
           }}
         />
       )}
-    </div>
+    </PopoverSurface>
   )
 }
 

@@ -281,11 +281,11 @@ function isElementRegistered(el: Element): boolean {
 }
 
 const UNREGISTERED_OVERLAY_SELECTOR =
-  '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"]'
+  '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], [data-over-preview]'
 
 /**
- * Dev/test invariant: returns any visible menu/listbox/dialog/tooltip overlapping `[data-stage-bg]`
- * (or `stageEl`) that has no registered entry on itself or an ancestor.
+ * Dev/test invariant: returns any visible menu/listbox/dialog/tooltip or `[data-over-preview]`
+ * overlapping `[data-stage-bg]` (or `stageEl`) that has no registered entry on itself or an ancestor.
  */
 export function findUnregisteredPreviewOverlays(stageEl?: Element | null): Element[] {
   if (typeof document === 'undefined') return []
@@ -297,6 +297,7 @@ export function findUnregisteredPreviewOverlays(stageEl?: Element | null): Eleme
 
   const bad: Element[] = []
   for (const el of document.querySelectorAll(UNREGISTERED_OVERLAY_SELECTOR)) {
+    if (typeof HTMLDialogElement !== 'undefined' && el instanceof HTMLDialogElement) continue
     if (!isOverlayElementVisible(el)) continue
     const b = el.getBoundingClientRect()
     if (b.width < 1 || b.height < 1) continue

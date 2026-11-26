@@ -3,9 +3,9 @@
 // The state belongs to the app (a shortcut can flip it while the page is behind), so the page
 // asks for it now and then, and every control reads the same copy.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Gauge, Play } from '@phosphor-icons/react'
-import { Button, IconButton, cx } from '@ferrocast/ui'
+import { Button, IconButton, cx, usePreviewHole } from '@ferrocast/ui'
 import { create } from 'zustand'
 import { useAction } from '../../../lib/hooks'
 import { useDesk } from './common'
@@ -125,9 +125,12 @@ export function PerformanceToggle({ panel = false }: { panel?: boolean } = {}) {
  * app leaves its picture out under it (`data-over-preview`). `compact` for the small boxes. */
 export function PausedCard({ compact }: { compact?: boolean }) {
   const { paused, busy, toggle } = usePausePreview()
+  const cardRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(cardRef, paused)
   if (!paused) return null
   return (
     <div
+      ref={cardRef}
       role="status"
       data-over-preview
       // The card is not the stage: a press on it never picks or moves the source under it.

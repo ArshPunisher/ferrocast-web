@@ -3,9 +3,21 @@
 // several, and the one box round several picked sources with its handles. Like the safe areas,
 // each is marked `data-over-preview` so the app leaves its native picture out under it and the
 // page's own pixels show through.
-import { useEffect, useSyncExternalStore, type CSSProperties } from 'react'
-import { cx } from '@ferrocast/ui'
+import {
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type HTMLAttributes,
+} from 'react'
+import { cx, notifyPreviewOverlays, usePreviewHole } from '@ferrocast/ui'
 import type { Gap, Guide, Rect } from './snap'
+
+function GuideSpan({ depKey, ...rest }: HTMLAttributes<HTMLSpanElement> & { depKey: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  usePreviewHole(ref, { kind: 'guide', deps: [depKey] })
+  return <span ref={ref} {...rest} />
+}
 
 /** What is on show, and in which canvas box (a stage can hold two: the wide and the tall). */
 export interface Hints {
@@ -52,6 +64,7 @@ export const HOLES_CHANGED = 'fc:preview-holes'
 function useTellHoles(): void {
   useEffect(() => {
     window.dispatchEvent(new Event(HOLES_CHANGED))
+    notifyPreviewOverlays()
   })
 }
 
@@ -83,8 +96,9 @@ function Edges({
           ['right', left + w, top, 0, h],
         ] as const
       ).map(([side, x, y, ew, eh]) => (
-        <span
+        <GuideSpan
           key={side}
+          depKey={`${side}:${x}:${y}:${ew}:${eh}`}
           data-over-preview
           data-guide-hole
           {...(tag ? { [tag]: side } : {})}
@@ -148,8 +162,9 @@ export function SnapOverlay({
                 marginTop: -LINE / 2,
               }
         return (
-          <span
+          <GuideSpan
             key={`${g.axis}-${g.at}-${g.from}-${g.to}`}
+            depKey={`${g.axis}:${g.at}:${g.from}:${g.to}`}
             data-over-preview
             data-guide-hole
             data-snap-guide={g.axis}
@@ -181,14 +196,16 @@ export function SnapOverlay({
           : { left: pct(g.at, W), top: pct((g.from + g.to) / 2, H) }
         return (
           <span key={`gap-${g.axis}-${g.from}-${g.to}-${g.at}`}>
-            <span
+            <GuideSpan
+              depKey={`gap:${g.axis}:${g.from}:${g.to}:${g.at}`}
               data-over-preview
               data-guide-hole
               data-snap-gap={g.axis}
               style={{ ...line, boxShadow: edge }}
               className="absolute bg-[var(--fc-arc)]"
             />
-            <span
+            <GuideSpan
+              depKey={`gap-label:${g.axis}:${g.from}:${g.to}:${g.at}:${g.px}`}
               data-over-preview
               data-guide-hole
               data-snap-gap-label={g.axis}
@@ -196,7 +213,7 @@ export function SnapOverlay({
               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-surface-1 px-1.5 py-px font-mono text-[11px] leading-none font-bold text-text tabular-nums shadow-[var(--fc-shadow-1)]"
             >
               {Math.round(g.px)}
-            </span>
+            </GuideSpan>
           </span>
         )
       })}
@@ -258,8 +275,9 @@ export function GroupBox({
     >
       <Edges rect={rect} canvas={canvas} />
       {HANDLES.map(([u, v]) => (
-        <span
+        <GuideSpan
           key={`${u}-${v}`}
+          depKey={`${u}:${v}:${rect.left}:${rect.top}:${w}:${h}`}
           data-over-preview
           data-guide-hole
           data-group-handle={`${u},${v}`}

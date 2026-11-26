@@ -43,6 +43,7 @@ import {
   Switch,
   cx,
   toast,
+  usePreviewHole,
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
@@ -203,6 +204,7 @@ function Panel({
   const fapi = useFilterApi(name)
   const filters = useResource(() => fapi.filters(name), [fapi, name, undone])
   const panel = useRef<HTMLElement>(null)
+  usePreviewHole(panel, { active: true, deps: [name] })
   // A click anywhere outside closes it (owner, 28 Oct): what's in it is applied as it's
   // changed, so nothing is lost. Not for what it opened over the page (a list, a menu, a
   // dialog, a toast or an info bubble), nor a pick in the Sources list, which opens another.

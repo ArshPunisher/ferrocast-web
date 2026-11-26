@@ -3,7 +3,7 @@
 // with its own effects (or an open input) keeps working while it is in the panel.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { DotsThree } from '@phosphor-icons/react'
-import { IconButton, cx } from '@ferrocast/ui'
+import { IconButton, PopoverSurface, cx } from '@ferrocast/ui'
 
 export interface OverflowItem {
   key: string
@@ -37,6 +37,9 @@ export function OverflowRow({
   const rowRef = useRef<HTMLDivElement>(null)
   const spacerRef = useRef<HTMLSpanElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
+  const moreBtnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const pressedInPanelRef = useRef(false)
   const widths = useRef(new Map<string, number>())
   const blockedAt = useRef(0)
   const moved = new Set(order.slice(0, Math.min(n, order.length)))
@@ -71,35 +74,32 @@ export function OverflowRow({
     ro.observe(row)
     return () => ro.disconnect()
   }, [fit])
-  // The panel closes on Escape or a press outside it.
+  // Track panel activation so opening a child portal menu doesn't treat that menu as outside click.
   useEffect(() => {
-    if (!open) return
-    // Whether the last press or activation was in the panel: a menu opened by it is drawn on the
-    // body, outside it, and a press in that menu is not a press outside the panel. A menu
-    // nothing in the panel opened is outside.
-    let pressedInPanel = false
+    if (!open) {
+      pressedInPanelRef.current = false
+      return
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') return setOpen(false)
       // A menu opened with the keyboard (Enter or Space on a button in the panel).
-      if ((e.key === 'Enter' || e.key === ' ') && moreRef.current?.contains(e.target as Node)) {
-        pressedInPanel = true
+      if ((e.key === 'Enter' || e.key === ' ') && panelRef.current?.contains(e.target as Node)) {
+        pressedInPanelRef.current = true
       }
     }
-    const onDown = (e: PointerEvent) => {
+    const onDown = (e: Event) => {
       const t = e.target as Element | null
-      if (moreRef.current?.contains(t as Node)) {
-        pressedInPanel = true
+      if (panelRef.current?.contains(t as Node)) {
+        pressedInPanelRef.current = true
         return
       }
-      if (pressedInPanel && t?.closest?.('[role="menu"]')) return
-      pressedInPanel = false
-      setOpen(false)
+      if (pressedInPanelRef.current && t?.closest?.('[role="menu"]')) return
+      pressedInPanelRef.current = false
     }
     document.addEventListener('keydown', onKey)
-    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('pointerdown', onDown, true)
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('pointerdown', onDown, true)
     }
   }, [open])
   useEffect(() => {
@@ -127,6 +127,7 @@ export function OverflowRow({
       )}
       <div ref={moreRef} data-more className={cx('relative flex-none', nMoved === 0 && 'hidden')}>
         <IconButton
+          ref={moreBtnRef}
           size="sm"
           label={label}
           aria-expanded={open}
@@ -136,14 +137,33 @@ export function OverflowRow({
         >
           <DotsThree size={18} weight="bold" />
         </IconButton>
-        {/* Always mounted, so a moved control keeps its effects; shown only when opened. */}
-        <div
+        <PopoverSurface
+          open={open && nMoved > 0}
+          onClose={(reason) => {
+            pressedInPanelRef.current = false
+            setOpen(false)
+            if (reason === 'escape') moreBtnRef.current?.focus()
+          }}
+          anchorRef={moreBtnRef}
+          surfaceRef={panelRef}
+          placement="top"
+          align="end"
+          gap={6}
+          edgePadding={8}
+          closeOnResize={false}
           role="group"
           aria-label={label}
-          className={cx(
-            open ? 'flex' : 'hidden',
-            'absolute right-0 bottom-full z-50 mb-1.5 max-h-[min(60dvh,420px)] w-max max-w-[min(92vw,320px)] flex-col items-start gap-2 overflow-y-auto rounded-[10px] border border-line-strong bg-surface-1 p-2 text-[13px] text-text-2 shadow-lg',
-          )}
+          shouldIgnoreOutsidePointerDown={(e) => {
+            const t = e.target as Element | null
+            if (panelRef.current?.contains(t as Node)) {
+              pressedInPanelRef.current = true
+              return true
+            }
+            if (pressedInPanelRef.current && t?.closest?.('[role="menu"]')) return true
+            pressedInPanelRef.current = false
+            return false
+          }}
+          className="z-[75] flex w-max max-w-[min(calc(100vw-16px),320px)] flex-col items-start gap-2 rounded-[10px] border border-line-strong bg-surface-1 p-2 text-[13px] text-text-2 shadow-pop [&>*]:shrink-0"
         >
           {items
             .filter((i) => moved.has(i.key))
@@ -156,7 +176,7 @@ export function OverflowRow({
                 {it.render(true)}
               </div>
             ))}
-        </div>
+        </PopoverSurface>
       </div>
     </div>
   )

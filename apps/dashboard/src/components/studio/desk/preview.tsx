@@ -3018,7 +3018,14 @@ export function StageBar() {
     const { clientX, clientY } = e
     const list = await api.history().catch(() => null)
     if (!list) return
-    const at = { preventDefault() {}, stopPropagation() {}, currentTarget: el, clientX, clientY }
+    const at = {
+      type: 'click',
+      preventDefault() {},
+      stopPropagation() {},
+      currentTarget: el,
+      clientX,
+      clientY,
+    }
     open(at as unknown as React.MouseEvent, 'History', historyMenu(list, steps))
   }
   const show = (what: 'program' | 'multiview', screen: number | undefined, onTop?: boolean) =>

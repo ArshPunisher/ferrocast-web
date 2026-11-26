@@ -2,7 +2,14 @@
 // hides what runs past the canvas. In the app the live picture is a native view over the page,
 // so each line and the mask is marked `data-over-preview`: the app leaves the picture out under
 // it and the page's own pixels show through (the same way menus lie over the picture).
-import type { CSSProperties } from 'react'
+import { useRef, type CSSProperties, type HTMLAttributes } from 'react'
+import { usePreviewHole } from '@ferrocast/ui'
+
+function GuideSpan({ depKey, ...rest }: HTMLAttributes<HTMLSpanElement> & { depKey: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  usePreviewHole(ref, { kind: 'guide', deps: [depKey] })
+  return <span ref={ref} {...rest} />
+}
 
 export interface Safe {
   action: boolean
@@ -75,8 +82,9 @@ export function GuideOverlay({ safe }: { safe: Safe }) {
           boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
         }
         return (
-          <span
+          <GuideSpan
             key={l.key}
+            depKey={`${l.key}:${l.left}:${l.top}:${l.width}:${l.height}`}
             data-over-preview
             data-guide-hole
             data-guide={l.kind}
@@ -98,25 +106,29 @@ export function OverflowMask({ on }: { on: boolean }) {
   const base = 'pointer-events-none absolute bg-[var(--fc-stage)]'
   return (
     <div aria-hidden data-overflow-mask className="pointer-events-none absolute inset-0">
-      <span
+      <GuideSpan
+        depKey="mask-top"
         data-over-preview
         data-guide-hole
         className={base}
         style={{ left: -REACH, right: -REACH, bottom: '100%', height: REACH }}
       />
-      <span
+      <GuideSpan
+        depKey="mask-bottom"
         data-over-preview
         data-guide-hole
         className={base}
         style={{ left: -REACH, right: -REACH, top: '100%', height: REACH }}
       />
-      <span
+      <GuideSpan
+        depKey="mask-left"
         data-over-preview
         data-guide-hole
         className={base}
         style={{ top: 0, bottom: 0, right: '100%', width: REACH }}
       />
-      <span
+      <GuideSpan
+        depKey="mask-right"
         data-over-preview
         data-guide-hole
         className={base}

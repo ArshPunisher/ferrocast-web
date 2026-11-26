@@ -26,7 +26,7 @@ import {
   DotsSixVertical,
   DotsThree,
 } from '@phosphor-icons/react'
-import { IconButton, Segmented, cx } from '@ferrocast/ui'
+import { IconButton, PopoverSurface, Segmented, cx, usePreviewHole } from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
 import { ReadyPlacementContext } from './ready-check'
 import { useReadyCheckState } from './ready-check-state'
@@ -826,6 +826,7 @@ function DropPad({ rect, ways, lit }: Target['pad']) {
 function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: ReactNode }) {
   const { setLayout, layout } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
+  usePreviewHole(ref, { active: true, deps: [f.x, f.y, f.w, f.h] })
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -1067,32 +1068,26 @@ function DockMenu({ id }: { id: DockId }) {
   const { layout, setLayout } = useLayout()
   const [open, setOpen] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
-  const menu = useRef<HTMLDivElement>(null)
+  const menu = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!open) return
-    const away = (e: PointerEvent) => {
-      if (!menu.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node))
-        setOpen(false)
-    }
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        btn.current?.focus()
-      }
-    }
-    document.addEventListener('pointerdown', away)
-    document.addEventListener('keydown', key)
-    menu.current?.querySelector<HTMLElement>('button')?.focus()
-    return () => {
-      document.removeEventListener('pointerdown', away)
-      document.removeEventListener('keydown', key)
-    }
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true })
   }, [open])
   const where = spotOf(layout, id)
   const pick = (f: (l: Layout) => Layout) => {
     setLayout(f)
     setOpen(false)
     btn.current?.focus()
+  }
+  const onKey = (e: ReactKeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    if (items.length === 0) return
+    if (e.key === 'Home') return items[0]?.focus()
+    if (e.key === 'End') return items[items.length - 1]?.focus()
+    const i = items.indexOf(document.activeElement as HTMLElement)
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
   }
   const item =
     'flex h-9 w-full items-center rounded-[8px] px-2.5 text-left text-[14.5px] hover:bg-pick hover:text-on-pick focus-visible:bg-pick focus-visible:text-on-pick focus-visible:outline-none'
@@ -1114,64 +1109,74 @@ function DockMenu({ id }: { id: DockId }) {
       >
         <DotsThree size={16} weight="bold" />
       </IconButton>
-      {open && (
-        <div
-          ref={menu}
-          role="menu"
-          aria-label={`${dockName(layout, id)} panel`}
-          className="absolute right-0 z-50 mt-1 flex w-52 flex-col gap-px rounded-control border border-line-strong bg-surface-2 p-1.5 shadow-pop"
-        >
-          {moves
-            .filter(([r]) => r !== where)
-            .map(([r, label]) => (
-              <button
-                key={r}
-                type="button"
-                role="menuitem"
-                className={item}
-                onClick={() => pick((l) => moveTo(l, id, r))}
-              >
-                {label}
-              </button>
-            ))}
-          {!layout.float[id] && (
+      <PopoverSurface
+        open={open}
+        onClose={(reason) => {
+          setOpen(false)
+          if (reason === 'escape') btn.current?.focus()
+        }}
+        anchorRef={btn}
+        surfaceRef={menu}
+        placement="bottom"
+        align="end"
+        gap={4}
+        edgePadding={8}
+        closeOnTab
+        role="menu"
+        aria-label={`${dockName(layout, id)} panel`}
+        onKeyDown={onKey}
+        className="z-[70] flex w-[min(13rem,calc(100vw-16px))] flex-col gap-px rounded-control border border-line-strong bg-surface-2 p-1.5 shadow-pop [&>*]:shrink-0"
+      >
+        {moves
+          .filter(([r]) => r !== where)
+          .map(([r, label]) => (
             <button
+              key={r}
               type="button"
               role="menuitem"
               className={item}
-              onClick={() => {
-                const r = btn.current?.getBoundingClientRect()
-                pick((l) =>
-                  popOut(l, id, {
-                    x: Math.max(8, (r?.left ?? 200) - 260),
-                    y: (r?.bottom ?? 120) + 8,
-                  }),
-                )
-              }}
+              onClick={() => pick((l) => moveTo(l, id, r))}
             >
-              Pop out
+              {label}
             </button>
-          )}
+          ))}
+        {!layout.float[id] && (
           <button
             type="button"
             role="menuitem"
             className={item}
-            onClick={() => pick((l) => toggle(l, id))}
+            onClick={() => {
+              const r = btn.current?.getBoundingClientRect()
+              pick((l) =>
+                popOut(l, id, {
+                  x: Math.max(8, (r?.left ?? 200) - 260),
+                  y: (r?.bottom ?? 120) + 8,
+                }),
+              )
+            }}
           >
-            Hide this panel
+            Pop out
           </button>
-          {isWeb(id) && (
-            <button
-              type="button"
-              role="menuitem"
-              className={cx(item, 'text-danger')}
-              onClick={() => pick((l) => removeWeb(l, id))}
-            >
-              Remove this web panel
-            </button>
-          )}
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          className={item}
+          onClick={() => pick((l) => toggle(l, id))}
+        >
+          Hide this panel
+        </button>
+        {isWeb(id) && (
+          <button
+            type="button"
+            role="menuitem"
+            className={cx(item, 'text-danger')}
+            onClick={() => pick((l) => removeWeb(l, id))}
+          >
+            Remove this web panel
+          </button>
+        )}
+      </PopoverSurface>
     </div>
   )
 }

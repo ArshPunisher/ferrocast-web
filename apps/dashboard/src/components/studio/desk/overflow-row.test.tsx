@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import { OverflowRow, type OverflowItem } from './overflow-row'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -20,6 +21,7 @@ describe('OverflowRow', () => {
   let root: Root
   let host: HTMLDivElement
   beforeEach(() => {
+    resetPreviewOverlayRegistry()
     host = document.createElement('div')
     document.body.appendChild(host)
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
@@ -48,6 +50,7 @@ describe('OverflowRow', () => {
   afterEach(() => {
     act(() => root.unmount())
     host.remove()
+    resetPreviewOverlayRegistry()
     // @ts-expect-error restore jsdom's own accessors
     delete HTMLElement.prototype.clientWidth
     // @ts-expect-error restore jsdom's own accessors
@@ -89,14 +92,27 @@ describe('OverflowRow', () => {
     expect(onRow()).toContain('fixed')
     const more = host.querySelector<HTMLElement>('button[aria-label="More tools"]')!
     expect(more.closest('.hidden')).toBeNull()
-    // The panel lists what moved.
-    expect(host.querySelector('[data-ov-panel="a"]')).not.toBeNull()
+    // Not mounted while closed (M1): no inline hidden DOM or phantom hole.
+    expect(document.body.querySelector('[data-ov-panel]')).toBeNull()
+    expect(getPreviewOverlays()).toHaveLength(0)
+
+    more.getBoundingClientRect = () =>
+      ({ left: 260, top: 700, right: 286, bottom: 726, width: 26, height: 26 }) as DOMRect
+    await act(async () => more.click())
+    // Portals to document.body outside host and registers in PreviewOverlayRegistry.
+    const movedItem = document.body.querySelector('[data-ov-panel="a"]') as HTMLElement
+    expect(movedItem).not.toBeNull()
+    expect(host.contains(movedItem)).toBe(false)
+    const panelGroup = document.body.querySelector('[role="group"][aria-label="More tools"]')!
+    expect(panelGroup.hasAttribute('data-over-preview')).toBe(true)
+    expect(getPreviewOverlays().some((entry) => entry.target === panelGroup)).toBe(true)
+
     rowWidth = 1280
     await act(async () => {
       root.render(<OverflowRow items={[...items]} />)
     })
     expect(onRow()).toContain('a')
-    expect(host.querySelector('[data-ov-panel]')).toBeNull()
+    expect(document.body.querySelector('[data-ov-panel]')).toBeNull()
   })
 
   it('stays open for a menu a button in the panel opened, not for any other menu', async () => {
@@ -115,7 +131,9 @@ describe('OverflowRow', () => {
     expect(more.getAttribute('aria-expanded')).toBe('false')
     // Opened again; a press on a button in the panel, then a press in the menu it opens: stays.
     await act(async () => more.click())
-    const panelButton = host.querySelector<HTMLElement>('[data-ov-panel] button, [data-ov-panel]')!
+    const panelButton = document.body.querySelector<HTMLElement>(
+      '[data-ov-panel] button, [data-ov-panel]',
+    )!
     await act(async () => {
       panelButton.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     })
@@ -135,7 +153,9 @@ describe('OverflowRow', () => {
     await mount(300)
     const more = host.querySelector<HTMLElement>('button[aria-label="More tools"]')!
     await act(async () => more.click())
-    const panelButton = host.querySelector<HTMLElement>('[data-ov-panel] button, [data-ov-panel]')!
+    const panelButton = document.body.querySelector<HTMLElement>(
+      '[data-ov-panel] button, [data-ov-panel]',
+    )!
     await act(async () => {
       panelButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
