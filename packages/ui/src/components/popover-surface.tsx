@@ -458,11 +458,21 @@ export function PopoverSurface({
       e.stopPropagation()
       onClose('escape')
     }
+    const ancestorScrolls = new Map<Element, { top: number; left: number }>()
+    let curScrollEl: Element | null = anchorRef?.current ?? anchorEl ?? null
+    while (curScrollEl) {
+      ancestorScrolls.set(curScrollEl, { top: curScrollEl.scrollTop, left: curScrollEl.scrollLeft })
+      curScrollEl = curScrollEl.parentElement
+    }
     const onScroll = (e: Event) => {
       if (!closeOnScroll) return
       const t = e.target
       if (t instanceof Node && localRef.current?.contains(t)) return
       if (ignoreOutsideSelector && t instanceof Element && t.closest(ignoreOutsideSelector)) return
+      if (t instanceof Element) {
+        const prev = ancestorScrolls.get(t)
+        if (prev && prev.top === t.scrollTop && prev.left === t.scrollLeft) return
+      }
       onClose('scroll')
     }
     document.addEventListener('pointerdown', onDown, true)

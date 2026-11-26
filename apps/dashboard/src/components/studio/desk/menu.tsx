@@ -151,6 +151,7 @@ function MenuList({
   parentMenuRect,
   align = 'start',
   gap = 0,
+  focusSeq = 0,
   onClose,
   onBack,
   root,
@@ -163,6 +164,7 @@ function MenuList({
   parentMenuRect?: RectBox | undefined
   align?: 'start' | 'end' | undefined
   gap?: number | undefined
+  focusSeq?: number | undefined
   onClose: () => void
   /** A sub-menu: ArrowLeft goes back to its parent. */
   onBack?: () => void
@@ -171,6 +173,7 @@ function MenuList({
   const ref = useRef<HTMLElement>(null)
   const [sub, setSub] = useState<{
     i: number
+    focusSeq: number
     itemEl: HTMLElement
     itemRect: RectBox
     parentRect: RectBox
@@ -178,10 +181,14 @@ function MenuList({
   const timer = useRef(0)
 
   useEffect(() => {
-    ref.current
-      ?.querySelector<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])')
-      ?.focus()
-  }, [])
+    const focusFirst = () =>
+      ref.current
+        ?.querySelector<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])')
+        ?.focus({ preventScroll: true })
+    focusFirst()
+    const raf = requestAnimationFrame(focusFirst)
+    return () => cancelAnimationFrame(raf)
+  }, [focusSeq])
 
   // Close the root menu when the OS/browser window loses focus.
   useEffect(() => {
@@ -192,11 +199,13 @@ function MenuList({
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  const openSub = (i: number, el: HTMLElement) => {
+  const openSub = (i: number, el: HTMLElement, focusItem = false) => {
+    if (focusItem) clearTimeout(timer.current)
     const r = el.getBoundingClientRect()
     const pr = ref.current?.getBoundingClientRect() ?? r
-    setSub({
+    setSub((prev) => ({
       i,
+      focusSeq: focusItem ? (prev?.focusSeq ?? 0) + 1 : (prev?.focusSeq ?? 0),
       itemEl: el,
       itemRect: {
         left: r.left,
@@ -214,7 +223,7 @@ function MenuList({
         width: pr.width,
         height: pr.height,
       },
-    })
+    }))
   }
 
   const onKey = (e: ReactKeyboardEvent) => {
@@ -328,7 +337,7 @@ function MenuList({
             tabIndex={-1}
             onPointerEnter={(ev) => {
               if (e.disabled) return
-              ;(ev.currentTarget as HTMLElement).focus()
+              ;(ev.currentTarget as HTMLElement).focus({ preventScroll: true })
               clearTimeout(timer.current)
               const el = ev.currentTarget as HTMLElement
               timer.current = window.setTimeout(() => {
@@ -338,7 +347,7 @@ function MenuList({
             }}
             onClick={(ev) => {
               if (e.disabled) return
-              if (hasSub) return openSub(i, ev.currentTarget as HTMLElement)
+              if (hasSub) return openSub(i, ev.currentTarget as HTMLElement, true)
               onClose()
               e.onSelect?.()
             }}
@@ -347,7 +356,7 @@ function MenuList({
               if (ev.key === 'Enter' || ev.key === ' ' || (ev.key === 'ArrowRight' && hasSub)) {
                 ev.preventDefault()
                 ev.stopPropagation()
-                if (hasSub) return openSub(i, ev.currentTarget as HTMLElement)
+                if (hasSub) return openSub(i, ev.currentTarget as HTMLElement, true)
                 onClose()
                 e.onSelect?.()
               }
@@ -414,12 +423,15 @@ function MenuList({
           anchorRect={sub.itemRect}
           parentMenuRect={sub.parentRect}
           gap={-4}
+          focusSeq={sub.focusSeq}
           onClose={onClose}
           onBack={() => {
             const i = sub.i
             setSub(null)
             const rows = ref.current?.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"]')
-            rows?.[items.slice(0, i).filter((m) => !isSep(m)).length]?.focus()
+            rows?.[items.slice(0, i).filter((m) => !isSep(m)).length]?.focus({
+              preventScroll: true,
+            })
           }}
         />
       )}

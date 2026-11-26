@@ -182,4 +182,57 @@ describe('submenu flipping, safe bounds, and button anchoring (M4)', () => {
     // Below the button bottom (112 + 6 = 118), never covering button at clientY=96.
     expect(parseFloat(menu.style.top)).toBe(118)
   })
+
+  it('moves focus into opened submenu on click even if hover opened it first, so ArrowLeft returns cleanly', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1280)
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800)
+
+    const el = document.body.appendChild(document.createElement('div'))
+    root = createRoot(el)
+    await act(async () => root!.render(<Host />))
+    const btn = document.body.appendChild(document.createElement('button'))
+
+    await act(async () =>
+      opener!(
+        {
+          type: 'click',
+          preventDefault() {},
+          stopPropagation() {},
+          currentTarget: btn,
+          clientX: 40,
+          clientY: 40,
+        } as unknown as ReactMouseEvent,
+        'Test',
+        many,
+      ),
+    )
+
+    const rootMenu = menus()[0] as HTMLElement
+    const row = [...rootMenu.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((r) =>
+      r.textContent?.includes('Has more'),
+    )!
+
+    // Simulate hover timer opening submenu, then pointer focus moving onto parent row before click.
+    await act(async () => row.dispatchEvent(new PointerEvent('pointerover', { bubbles: true })))
+    await act(async () => vi.advanceTimersByTime(150))
+    expect(menus().length).toBe(2)
+
+    await act(async () => row.focus())
+    expect(document.activeElement).toBe(row)
+
+    await act(async () => row.click())
+    const subMenu = menus()[1] as HTMLElement
+    expect(subMenu).toBeTruthy()
+    expect(subMenu.contains(document.activeElement)).toBe(true)
+
+    // ArrowLeft inside submenu closes it and returns focus to parent row.
+    await act(async () => {
+      ;(document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }),
+      )
+    })
+    expect(menus().length).toBe(1)
+    expect(document.activeElement).toBe(row)
+  })
 })

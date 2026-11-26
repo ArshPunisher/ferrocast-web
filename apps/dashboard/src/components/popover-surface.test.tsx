@@ -122,4 +122,67 @@ describe('PopoverSurface', () => {
     expect(dlg.hasAttribute('open')).toBe(true)
     expect(onClose).toHaveBeenCalled()
   })
+
+  it('ignores stale pre-open scroll events on anchor ancestors when scrollTop has not changed', async () => {
+    const onClose = vi.fn()
+    function Host() {
+      const [open, setOpen] = useState(false)
+      const btn = useRef<HTMLButtonElement>(null)
+      return (
+        <div data-testid="scroller" className="overflow-y-auto">
+          <button ref={btn} type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <PopoverSurface
+            open={open}
+            onClose={() => {
+              onClose()
+              setOpen(false)
+            }}
+            anchorRef={btn}
+            role="menu"
+            aria-label="Scroll test"
+          >
+            <button type="button" role="menuitem">
+              Item
+            </button>
+          </PopoverSurface>
+        </div>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host />))
+
+    const scroller = container.querySelector('[data-testid="scroller"]') as HTMLElement
+    const btn = container.querySelector('button')!
+    btn.getBoundingClientRect = () => rect(40, 200, 60, 28)
+    let scrollY = 120
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollY,
+      set: (v: number) => {
+        scrollY = v
+      },
+    })
+
+    await act(async () => btn.click())
+    expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
+
+    // Deferred scroll event from pre-open scrollIntoView has same scrollTop -> ignored.
+    await act(async () => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: false }))
+    })
+    expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // Actual user scroll after open changes scrollTop -> closes cleanly.
+    scrollY = 150
+    await act(async () => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: false }))
+    })
+    expect(document.body.querySelector('[role="menu"]')).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })
