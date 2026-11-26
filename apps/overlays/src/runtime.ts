@@ -182,34 +182,47 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     }
     canvas.style.width = `${overlay.width}px`
     canvas.style.height = `${overlay.height}px`
-    const keep = new Set<string>()
+    const byId = new Map<string, Widget>()
     for (const w of overlay.widgets.slice(0, MAX_WIDGETS)) {
       if (!obj(w) || typeof w.id !== 'string') continue
-      keep.add(w.id)
-      const cur = views.get(w.id)
-      const kind = viewKind(w)
-      if (cur && cur.kind === kind) {
-        cur.view.update(w)
-        dress(cur.view.el, w)
-        canvas.appendChild(cur.view.el) // keeps the stacking order of the list
-        continue
-      }
-      cur?.view.destroy()
-      const v = build(w, ctx, !opts.send)
-      if (!v) {
-        views.delete(w.id)
-        continue
-      }
-      views.set(w.id, { kind, view: v })
-      dress(v.el, w)
-      canvas.appendChild(v.el)
-      if (!fresh) v.onSnapshot?.()
+      byId.delete(w.id)
+      byId.set(w.id, w)
     }
-    for (const [id, { view }] of views)
-      if (!keep.has(id)) {
+    for (const [id, { view }] of views) {
+      if (!byId.has(id)) {
         view.destroy()
         views.delete(id)
       }
+    }
+    let idx = 0
+    for (const w of byId.values()) {
+      const cur = views.get(w.id)
+      const kind = viewKind(w)
+      let node: HTMLElement
+      let built = false
+      if (cur && cur.kind === kind) {
+        cur.view.update(w)
+        dress(cur.view.el, w)
+        node = cur.view.el
+      } else {
+        cur?.view.destroy()
+        const v = build(w, ctx, !opts.send)
+        if (!v) {
+          views.delete(w.id)
+          continue
+        }
+        views.set(w.id, { kind, view: v })
+        dress(v.el, w)
+        node = v.el
+        built = true
+      }
+      const expected = canvas.children[idx] ?? null
+      if (node !== expected) {
+        canvas.insertBefore(node, expected)
+      }
+      if (built && !fresh) views.get(w.id)?.view.onSnapshot?.()
+      idx += 1
+    }
     fit()
   }
 
