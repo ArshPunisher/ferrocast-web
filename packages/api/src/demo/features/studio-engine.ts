@@ -1595,11 +1595,10 @@ export class DemoStudioEngine {
   }
 
   private uniqueSourceName(base: string): string {
-    const taken = new Set<string>([...this.sources.keys(), ...this.activeScenes])
-    if (!taken.has(base)) return base
+    if (!this.sceneNameTaken(base)) return base
     for (let n = 2; ; n++) {
       const candidate = `${base} ${n}`
-      if (!taken.has(candidate)) return candidate
+      if (!this.sceneNameTaken(candidate)) return candidate
     }
   }
 
@@ -2247,13 +2246,11 @@ export class DemoStudioEngine {
         if (this.sceneNameTaken(scene)) {
           throw new HttpError(409, 'studio_name_taken', `"${scene}" is taken: pick another name.`)
         }
-        this.pushUndo('Turn vertical picture on')
         this.verticalOn = true
         this.verticalScenes = [scene]
         this.verticalCurrent = scene
         this.sceneItems.set(scene, [])
       } else if (!this.verticalOn) {
-        this.pushUndo('Turn vertical picture on')
         this.verticalOn = true
         if (!this.verticalScenes.includes(this.verticalCurrent)) {
           this.verticalCurrent = this.verticalScenes[0]!
@@ -2263,7 +2260,6 @@ export class DemoStudioEngine {
     }
     if (is('DELETE', 'studio/engine/vertical')) {
       if (this.verticalOn) {
-        this.pushUndo('Turn vertical picture off')
         this.verticalOn = false
       }
       return undefined
@@ -2365,7 +2361,10 @@ export class DemoStudioEngine {
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'move') {
       const src = decodeURIComponent(rest[3]!)
-      const rawTo = Number(requireObj(body).to ?? 0)
+      const rawTo = requireObj(body).to
+      if (typeof rawTo !== 'number' || !Number.isInteger(rawTo) || rawTo < 0) {
+        throw new HttpError(400, 'invalid', 'to: non-negative whole number.')
+      }
       const isVertical = this.verticalOn && this.verticalScenes.includes(src)
       const list = isVertical
         ? this.verticalScenes
@@ -2374,10 +2373,7 @@ export class DemoStudioEngine {
           : null
       if (!list) throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
       const idx = list.indexOf(src)
-      const clamped = Math.max(
-        0,
-        Math.min(Math.trunc(Number.isFinite(rawTo) ? rawTo : idx), list.length - 1),
-      )
+      const clamped = Math.min(rawTo, list.length - 1)
       if (clamped === idx) return undefined
       this.pushUndo(`Move ${src}`)
       const [item] = list.splice(idx, 1)
@@ -2453,18 +2449,22 @@ export class DemoStudioEngine {
       const src = this.sources.get(from)
       if (!src) {
         // Group rename within current scene(s) if no source/scene matches.
-        let renamedGroup = false
+        const hasGroup = [...this.sceneItems.values()].some((list) =>
+          list.some((it) => it.group && it.name === from),
+        )
+        if (!hasGroup) {
+          throw new HttpError(404, 'studio_no_source', `There's no source called "${from}".`)
+        }
+        if (from !== to && this.sceneNameTaken(to)) {
+          throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
+        }
+        this.pushUndo(`Rename ${from}`)
         for (const list of this.sceneItems.values()) {
           for (const it of list) {
-            if (it.group && it.name === from) {
-              if (!renamedGroup) this.pushUndo(`Rename ${from}`)
-              it.name = to
-              renamedGroup = true
-            }
+            if (it.group && it.name === from) it.name = to
           }
         }
-        if (renamedGroup) return undefined
-        throw new HttpError(404, 'studio_no_source', `There's no source called "${from}".`)
+        return undefined
       }
       if (from !== to && this.sceneNameTaken(to)) {
         throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
@@ -3029,7 +3029,7 @@ export class DemoStudioEngine {
         const prev = this.sources.get(this.micSourceName)
         if (prev && prev.name !== nextName) {
           // The same checks and the same follow-through as renaming a source.
-          if (this.sources.has(nextName) || this.activeScenes.includes(nextName))
+          if (this.sceneNameTaken(nextName))
             throw new HttpError(
               409,
               'studio_name_taken',
@@ -3505,7 +3505,7 @@ export class DemoStudioEngine {
         }
       }
     }
-    if (this.sources.has(name) || this.activeScenes.includes(name)) {
+    if (this.sceneNameTaken(name)) {
       throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
     }
     this.pushUndo(`Add ${name}`)
@@ -3924,7 +3924,11 @@ export class DemoStudioEngine {
         throw new HttpError(400, 'invalid', "name: a scene or source's name.")
       }
       const on = Boolean(requireObj(body).on)
-      if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
+      if (
+        !this.sources.has(name) &&
+        !this.activeScenes.includes(name) &&
+        !(this.verticalOn && this.verticalScenes.includes(name))
+      ) {
         throw new HttpError(422, 'studio_failed', `There's no scene or source called "${name}".`)
       }
       if (!on) {
@@ -3981,7 +3985,11 @@ export class DemoStudioEngine {
           file: `${this.recordFolder()}/${loc.item.name.replace(/[/\\]/g, '-')} screenshot.png`,
         }
       }
-      if (!this.sources.has(name) && !this.activeScenes.includes(name)) {
+      if (
+        !this.sources.has(name) &&
+        !this.activeScenes.includes(name) &&
+        !(this.verticalOn && this.verticalScenes.includes(name))
+      ) {
         throw new HttpError(404, 'studio_no_source', `There’s no source called "${name}".`)
       }
       return { file: `${this.recordFolder()}/${name.replace(/[/\\]/g, '-')} screenshot.png` }
