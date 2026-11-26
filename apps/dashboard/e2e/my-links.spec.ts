@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { demo, open } from './helpers'
+import { demo, open, settled } from './helpers'
 
 async function seriousA11y(page: Page) {
   const r = await new AxeBuilder({ page })
@@ -132,6 +132,7 @@ test.describe('My links, real labels, and token resolution', () => {
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     )
     expect(overflow).toBe(false)
+    await settled(page)
     expect(await seriousA11y(page)).toEqual([])
   })
 })
