@@ -1,7 +1,13 @@
 // The Scenes panel: click one to put it on air (through the transition), double-click to
 // rename; add, copy, move up or down, remove.
 
-import { useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   ArrowsLeftRight,
   Broadcast,
@@ -11,6 +17,7 @@ import {
   CaretDown,
   CaretUp,
   Copy,
+  DotsSixVertical,
   DownloadSimple,
   Funnel,
   ListBullets,
@@ -128,15 +135,239 @@ export function ScenesDock() {
   const keys = desk.prefs.data?.hotkeys ?? {}
   const studio = !tall && !!scenes.data?.preview
   const current = (tall ? tall.current : scenes.data?.current) ?? ''
+  const preview = (studio ? scenes.data?.preview : null) ?? ''
+  const selected = studio && preview ? preview : current
+  const targetNoun = studio ? 'preview scene' : 'scene on air'
   // The top layer is the main picture's (not the vertical one's).
   const top = tall ? null : (scenes.data?.top_layer ?? null)
   const names = list?.map((s) => s.name) ?? []
-  const at = names.indexOf(current)
+  const at = names.indexOf(selected)
+  const canDrag = names.length >= 2 && naming === null && busy === null
 
-  const act = async (key: string, f: () => Promise<unknown>) => {
-    const ok = await run(key, () => done(f()))
-    if (ok) refresh()
-    return ok
+  const act = useCallback(
+    async (key: string, f: () => Promise<unknown>) => {
+      const ok = await run(key, () => done(f()))
+      if (ok) refresh()
+      return ok
+    },
+    [run, refresh],
+  )
+
+  // Keyboard and pointer reorder state.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const btnRefs = useRef(new Map<string, HTMLButtonElement>())
+  const pendingFocus = useRef<string | null>(null)
+  const [liveMsg, setLiveMsg] = useState('')
+
+  type SceneDrop = { name: string; after: boolean; to: number }
+  const dragged = useRef<{
+    name: string
+    pointerId: number
+    x: number
+    y: number
+    on: boolean
+  } | null>(null)
+  const justDragged = useRef(false)
+  const clickResetTimer = useRef<number | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
+  const [drop, setDrop] = useState<SceneDrop | null>(null)
+
+  useEffect(() => {
+    const name = pendingFocus.current
+    if (!name) return
+    const el = btnRefs.current.get(name)
+    if (el) {
+      pendingFocus.current = null
+      el.focus()
+    }
+  }, [list])
+
+  const computeDrop = (x: number, y: number, fromName: string): SceneDrop | null => {
+    const fromIdx = names.indexOf(fromName)
+    if (fromIdx < 0 || !scrollRef.current) return null
+    const els = Array.from(scrollRef.current.querySelectorAll<HTMLElement>('[data-scene-name]'))
+    if (!els.length) return null
+    let targetName: string | null = null
+    let after = false
+
+    if (!grid) {
+      for (const el of els) {
+        const name = el.dataset.sceneName
+        if (!name) continue
+        const r = el.getBoundingClientRect()
+        if (y < r.top) {
+          targetName = name
+          after = false
+          break
+        }
+        if (y <= r.bottom) {
+          targetName = name
+          after = y > r.top + r.height / 2
+          break
+        }
+      }
+      if (!targetName) {
+        const last = els[els.length - 1]?.dataset.sceneName
+        if (last) {
+          targetName = last
+          after = true
+        }
+      }
+    } else {
+      let bestDist = Infinity
+      for (const el of els) {
+        const name = el.dataset.sceneName
+        if (!name) continue
+        const r = el.getBoundingClientRect()
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+          targetName = name
+          after = x > r.left + r.width / 2
+          break
+        }
+        const cx = Math.max(r.left, Math.min(x, r.right))
+        const cy = Math.max(r.top, Math.min(y, r.bottom))
+        const dist = Math.hypot(x - cx, y - cy)
+        if (dist < bestDist) {
+          bestDist = dist
+          targetName = name
+          after = x > r.left + r.width / 2
+        }
+      }
+    }
+
+    if (!targetName) return null
+    const withoutFrom = names.filter((n) => n !== fromName)
+    const withoutIdx = withoutFrom.indexOf(targetName)
+    if (withoutIdx < 0) return null
+    const to = withoutIdx + (after ? 1 : 0)
+    if (to === fromIdx) return null
+    return { name: targetName, after, to }
+  }
+
+  const dragHandlers = useRef<{
+    move: (e: PointerEvent) => void
+    up: (e: PointerEvent) => void
+    cancel: () => void
+  } | null>(null)
+  const windowListeners = useRef<{
+    move: (e: PointerEvent) => void
+    up: (e: PointerEvent) => void
+    cancel: () => void
+    key: (e: KeyboardEvent) => void
+  } | null>(null)
+
+  const detachDragListeners = useCallback(() => {
+    const wl = windowListeners.current
+    if (!wl) return
+    windowListeners.current = null
+    window.removeEventListener('pointermove', wl.move)
+    window.removeEventListener('pointerup', wl.up)
+    window.removeEventListener('pointercancel', wl.cancel)
+    window.removeEventListener('blur', wl.cancel)
+    window.removeEventListener('keydown', wl.key, true)
+  }, [])
+
+  const cancelDrag = useCallback(() => {
+    dragged.current = null
+    detachDragListeners()
+    setDragging(null)
+    setGhost(null)
+    setDrop(null)
+  }, [detachDragListeners])
+
+  dragHandlers.current = {
+    move: (e: PointerEvent) => {
+      const d = dragged.current
+      if (!d || e.pointerId !== d.pointerId) return
+      if (!d.on) {
+        if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return
+        d.on = true
+        setDragging(d.name)
+      }
+      if (scrollRef.current) {
+        const box = scrollRef.current.getBoundingClientRect()
+        if (box.height > 0) {
+          if (e.clientY < box.top + 32) scrollRef.current.scrollTop -= 8
+          else if (e.clientY > box.bottom - 32) scrollRef.current.scrollTop += 8
+        }
+      }
+      setGhost({ x: e.clientX, y: e.clientY })
+      const next = computeDrop(e.clientX, e.clientY, d.name)
+      setDrop((prev) =>
+        prev?.name === next?.name && prev?.after === next?.after && prev?.to === next?.to
+          ? prev
+          : next,
+      )
+    },
+    up: (e: PointerEvent) => {
+      const d = dragged.current
+      if (!d || e.pointerId !== d.pointerId) return
+      dragged.current = null
+      detachDragListeners()
+      if (!d.on) return
+      justDragged.current = true
+      if (clickResetTimer.current !== null) window.clearTimeout(clickResetTimer.current)
+      clickResetTimer.current = window.setTimeout(() => {
+        justDragged.current = false
+        clickResetTimer.current = null
+      }, 0)
+      const next = computeDrop(e.clientX, e.clientY, d.name)
+      setDragging(null)
+      setGhost(null)
+      setDrop(null)
+      if (!next) return
+      setLiveMsg(`Moved ${d.name} to position ${next.to + 1} of ${names.length}`)
+      void act(`move:${d.name}`, () => api.moveScene(d.name, next.to))
+    },
+    cancel: () => {
+      cancelDrag()
+    },
+  }
+
+  useEffect(() => {
+    if (!canDrag && dragged.current) cancelDrag()
+  }, [canDrag, cancelDrag])
+
+  useEffect(
+    () => () => {
+      detachDragListeners()
+      if (clickResetTimer.current !== null) window.clearTimeout(clickResetTimer.current)
+    },
+    [detachDragListeners],
+  )
+
+  const pressScene = (e: ReactPointerEvent<HTMLElement>, sceneName: string) => {
+    if (!canDrag || e.button !== 0 || (e.target as HTMLElement).closest('[data-no-drag], input'))
+      return
+    if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-drag-handle]'))
+      return
+    detachDragListeners()
+    dragged.current = {
+      name: sceneName,
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      on: false,
+    }
+    const wl = {
+      move: (ev: PointerEvent) => dragHandlers.current?.move(ev),
+      up: (ev: PointerEvent) => dragHandlers.current?.up(ev),
+      cancel: () => dragHandlers.current?.cancel(),
+      key: (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape' && dragged.current) {
+          ev.preventDefault()
+          ev.stopPropagation()
+          dragHandlers.current?.cancel()
+        }
+      },
+    }
+    windowListeners.current = wl
+    window.addEventListener('pointermove', wl.move)
+    window.addEventListener('pointerup', wl.up)
+    window.addEventListener('pointercancel', wl.cancel)
+    window.addEventListener('blur', wl.cancel)
+    window.addEventListener('keydown', wl.key, true)
   }
   const commitName = async () => {
     if (!naming) return
@@ -349,6 +580,20 @@ export function ScenesDock() {
 
   return (
     <section aria-label="Scenes" className="flex min-h-0 flex-1 flex-col">
+      {ghost && dragging && (
+        <div
+          aria-hidden
+          data-scene-ghost
+          className="pointer-events-none fixed z-50 flex max-w-[260px] cursor-grabbing items-center gap-2 rounded-[10px] border border-[var(--fc-accent)] bg-surface-1 py-1.5 pr-3 pl-2 text-[13.5px] font-bold text-text shadow-pop"
+          style={{ left: ghost.x + 14, top: ghost.y - 18 }}
+        >
+          <KindTile kind="scene" size={20} />
+          <span className="truncate">{dragging}</span>
+        </div>
+      )}
+      <p role="status" aria-live="polite" className="sr-only">
+        {liveMsg}
+      </p>
       <DockHeader
         id="scenes"
         {...(tall
@@ -396,6 +641,7 @@ export function ScenesDock() {
         }
       />
       <div
+        ref={scrollRef}
         className={cx('min-h-0 flex-1 overflow-y-auto', grid && 'p-1.5')}
         onContextMenu={(e) =>
           open(e, 'Scenes', [
@@ -435,143 +681,223 @@ export function ScenesDock() {
               studio ? 'Scenes, click to show in the preview' : 'Scenes, click to go on air'
             }
           >
-            {list.map((s, i) => (
-              <li key={s.name} className="min-w-0">
-                {naming?.from === s.name ? (
-                  nameInput
-                ) : (
-                  <button
-                    type="button"
-                    aria-current={s.current ? 'true' : undefined}
-                    title={grid ? s.name : undefined}
-                    onClick={() =>
-                      // Studio Mode: a click shows it in the preview; Transition sends it on air.
-                      studio
-                        ? !s.preview && void act(`pv:${s.name}`, () => api.setPreview(s.name))
-                        : !s.current && void act(`go:${s.name}`, () => api.setCurrent(s.name))
+            {list.map((s, i) => {
+              const marker = drop?.name === s.name ? (drop.after ? 'after' : 'before') : null
+              return (
+                <li
+                  key={s.name}
+                  data-scene-name={s.name}
+                  onPointerDown={(e) => pressScene(e, s.name)}
+                  onClickCapture={(e) => {
+                    if (justDragged.current) {
+                      e.preventDefault()
+                      e.stopPropagation()
                     }
-                    onDoubleClick={() =>
-                      // Studio Mode with "Double-click to send on air": straight on air, as in
-                      // OBS; otherwise a double-click renames it.
-                      studio && scenes.data?.studio_options?.double_click
-                        ? void act(`go:${s.name}`, async () => {
-                            await api.setPreview(s.name)
-                            await api.transitionNow()
-                          })
-                        : setNaming({ from: s.name, value: s.name })
-                    }
-                    onContextMenu={(e) => {
-                      desk.screens.reload()
-                      open(e, s.name, sceneMenu(s, i))
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'F2') setNaming({ from: s.name, value: s.name })
-                    }}
-                    className={cx(
-                      'w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
-                      grid
-                        ? 'grid gap-1 rounded-control border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
-                        : 'flex min-h-8 items-center gap-2.5 border-b border-line pr-2 pl-3 text-[13.5px] hover:bg-surface-2',
-                      // What's picked: on air, or Studio Mode's preview being edited.
-                      (studio ? s.preview : s.current) && 'fc-picked border-transparent',
-                      // Studio Mode's preview in the list: the accent ring (on air keeps its red).
-                      !grid &&
-                        s.preview &&
-                        !s.current &&
-                        'shadow-[inset_0_0_0_1.5px_var(--fc-accent-text)]',
-                    )}
-                  >
-                    {grid ? (
-                      <>
-                        {/* The scene's picture, as OBS's multiview: red ring and LIVE on air,
-                            Arc and PREVIEW for Studio Mode's preview. */}
-                        <span
-                          className={cx(
-                            'relative block overflow-hidden rounded-[calc(var(--fc-radius-control)-3px)] bg-inset',
-                            tall ? 'mx-auto aspect-[9/16] h-24' : 'aspect-video',
-                            s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
-                            s.preview &&
-                              !s.current &&
-                              'shadow-[inset_0_0_0_2px_var(--fc-accent-text)]',
-                          )}
-                        >
-                          {thumbs[s.name] ? (
-                            <img
-                              src={thumbs[s.name]}
-                              alt=""
-                              className="size-full object-cover"
-                              draggable={false}
-                            />
-                          ) : (
-                            <span className="grid size-full place-items-center">
-                              <KindTile kind="scene" size={26} />
-                            </span>
-                          )}
-                          {(s.current || s.preview) && (
-                            <span
-                              className={cx(
-                                'absolute top-1.5 left-1.5 rounded-[4px] px-1.5 py-[3px] font-mono text-[10px] leading-none font-extrabold tracking-[0.06em]',
-                                s.current ? 'bg-danger-fill text-white' : 'bg-pick text-on-pick',
-                              )}
-                            >
-                              {s.current ? 'LIVE' : 'PREVIEW'}
-                            </span>
-                          )}
-                        </span>
-                        <span className="flex min-w-0 items-center gap-1.5 px-1 pb-0.5">
-                          <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                          {overrideBadge(s, true)}
-                          {keys[`scene:${s.name}`] && (
-                            <kbd className="shrink-0 rounded-[5px] border border-current/25 px-1 py-px font-mono text-[11px] font-bold opacity-80">
-                              {pretty(keys[`scene:${s.name}`] as string)}
-                            </kbd>
-                          )}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <KindTile
-                          kind="scene"
-                          size={20}
-                          tone={s.current ? 'var(--fc-danger)' : undefined}
-                        />
-                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                        {overrideBadge(s, false)}
-                        {top === s.name && (
+                  }}
+                  className="relative min-w-0 select-none"
+                >
+                  {marker && (
+                    <span
+                      aria-hidden
+                      data-drop-line
+                      className={cx(
+                        'pointer-events-none absolute z-10 rounded-full bg-accent',
+                        grid
+                          ? cx(
+                              'top-1 bottom-1 w-[3px]',
+                              marker === 'before' ? '-left-[4px]' : '-right-[4px]',
+                            )
+                          : cx(
+                              'right-1 left-1 h-[3px]',
+                              marker === 'before' ? '-top-[2px]' : '-bottom-[2px]',
+                            ),
+                      )}
+                    />
+                  )}
+                  {naming?.from === s.name ? (
+                    nameInput
+                  ) : (
+                    <button
+                      ref={(el) => {
+                        if (el) btnRefs.current.set(s.name, el)
+                        else btnRefs.current.delete(s.name)
+                      }}
+                      type="button"
+                      aria-current={s.current ? 'true' : undefined}
+                      title={grid ? s.name : undefined}
+                      onClick={() => {
+                        if (justDragged.current) return
+                        // Studio Mode: a click shows it in the preview; Transition sends it on air.
+                        if (studio) {
+                          if (!s.preview) void act(`pv:${s.name}`, () => api.setPreview(s.name))
+                        } else if (!s.current) {
+                          void act(`go:${s.name}`, () => api.setCurrent(s.name))
+                        }
+                      }}
+                      onDoubleClick={() =>
+                        // Studio Mode with "Double-click to send on air": straight on air, as in
+                        // OBS; otherwise a double-click renames it.
+                        studio && scenes.data?.studio_options?.double_click
+                          ? void act(`go:${s.name}`, async () => {
+                              await api.setPreview(s.name)
+                              await api.transitionNow()
+                            })
+                          : setNaming({ from: s.name, value: s.name })
+                      }
+                      onContextMenu={(e) => {
+                        desk.screens.reload()
+                        open(e, s.name, sceneMenu(s, i))
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'F2') {
+                          setNaming({ from: s.name, value: s.name })
+                          return
+                        }
+                        const dir = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+                        if (
+                          dir !== 0 &&
+                          ((e.altKey && !e.ctrlKey && !e.metaKey) ||
+                            (e.ctrlKey && e.shiftKey && !e.altKey))
+                        ) {
+                          e.preventDefault()
+                          const nextIdx = i + dir
+                          if (!canDrag || nextIdx < 0 || nextIdx >= names.length) return
+                          pendingFocus.current = s.name
+                          setLiveMsg(
+                            `Moved ${s.name} to position ${nextIdx + 1} of ${names.length}`,
+                          )
+                          void act(`move:${s.name}`, () => api.moveScene(s.name, nextIdx))
+                        }
+                      }}
+                      className={cx(
+                        'group w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
+                        grid
+                          ? 'grid gap-1 rounded-control border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
+                          : cx(
+                              'flex min-h-8 items-center gap-2 border-b border-line pr-2 text-[13.5px] hover:bg-surface-2',
+                              canDrag ? 'pl-2' : 'pl-3',
+                            ),
+                        dragging === s.name &&
+                          'opacity-50 outline-2 -outline-offset-2 outline-line-strong outline-dashed',
+                        // What's picked: on air, or Studio Mode's preview being edited.
+                        (studio ? s.preview : s.current) && 'fc-picked border-transparent',
+                        // Studio Mode's preview in the list: the accent ring (on air keeps its red).
+                        !grid &&
+                          s.preview &&
+                          !s.current &&
+                          'shadow-[inset_0_0_0_1.5px_var(--fc-accent-text)]',
+                      )}
+                    >
+                      {grid ? (
+                        <>
+                          {/* The scene's picture, as OBS's multiview: red ring and LIVE on air,
+                              Arc and PREVIEW for Studio Mode's preview. */}
                           <span
-                            title="Shown over every scene"
-                            className="shrink-0 text-accent-text"
+                            className={cx(
+                              'relative block overflow-hidden rounded-[calc(var(--fc-radius-control)-3px)] bg-inset',
+                              tall ? 'mx-auto aspect-[9/16] h-24' : 'aspect-video',
+                              s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
+                              s.preview &&
+                                !s.current &&
+                                'shadow-[inset_0_0_0_2px_var(--fc-accent-text)]',
+                            )}
                           >
-                            <StackPlus size={15} weight="bold" aria-hidden />
-                            <span className="sr-only">Shown over every scene</span>
+                            {thumbs[s.name] ? (
+                              <img
+                                src={thumbs[s.name]}
+                                alt=""
+                                className="size-full object-cover"
+                                draggable={false}
+                              />
+                            ) : (
+                              <span className="grid size-full place-items-center">
+                                <KindTile kind="scene" size={26} />
+                              </span>
+                            )}
+                            {(s.current || s.preview) && (
+                              <span
+                                className={cx(
+                                  'absolute top-1.5 left-1.5 rounded-[4px] px-1.5 py-[3px] font-mono text-[10px] leading-none font-extrabold tracking-[0.06em]',
+                                  s.current ? 'bg-danger-fill text-white' : 'bg-pick text-on-pick',
+                                )}
+                              >
+                                {s.current ? 'LIVE' : 'PREVIEW'}
+                              </span>
+                            )}
                           </span>
-                        )}
-                        {s.preview && !s.current && (
-                          <span className="hidden text-[12px] font-bold text-accent-text @[240px]:inline">
-                            Preview
+                          <span className="flex min-w-0 items-center gap-1.5 px-1 pb-0.5">
+                            {canDrag && (
+                              <span
+                                aria-hidden
+                                data-drag-handle
+                                className="flex shrink-0 touch-none items-center justify-center rounded-[4px] text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                              >
+                                <DotsSixVertical size={13} weight="bold" />
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                            {overrideBadge(s, true)}
+                            {keys[`scene:${s.name}`] && (
+                              <kbd className="shrink-0 rounded-[5px] border border-current/25 px-1 py-px font-mono text-[11px] font-bold opacity-80">
+                                {pretty(keys[`scene:${s.name}`] as string)}
+                              </kbd>
+                            )}
                           </span>
-                        )}
-                        {s.items > 0 && !s.current && (
-                          <span className="hidden font-mono text-[12.5px] font-semibold text-text-3 tabular-nums @[240px]:inline">
-                            {s.items}
-                          </span>
-                        )}
-                        {s.current && (
-                          <span className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-bold text-danger">
+                        </>
+                      ) : (
+                        <>
+                          {canDrag && (
                             <span
                               aria-hidden
-                              className="size-2 rounded-full bg-danger-fill shadow-[0_0_0_3px_rgb(239_59_82/0.25)]"
-                            />
-                            {/* Only the dot when narrow; the words stay for screen readers. */}
-                            <span className="sr-only @[240px]:not-sr-only">On air</span>
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </button>
-                )}
-              </li>
-            ))}
+                              data-drag-handle
+                              className="flex shrink-0 touch-none items-center justify-center rounded-[4px] py-1 text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+                            >
+                              <DotsSixVertical size={14} weight="bold" />
+                            </span>
+                          )}
+                          <KindTile
+                            kind="scene"
+                            size={20}
+                            tone={s.current ? 'var(--fc-danger)' : undefined}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                          {overrideBadge(s, false)}
+                          {top === s.name && (
+                            <span
+                              title="Shown over every scene"
+                              className="shrink-0 text-accent-text"
+                            >
+                              <StackPlus size={15} weight="bold" aria-hidden />
+                              <span className="sr-only">Shown over every scene</span>
+                            </span>
+                          )}
+                          {s.preview && !s.current && (
+                            <span className="hidden text-[12px] font-bold text-accent-text @[240px]:inline">
+                              Preview
+                            </span>
+                          )}
+                          {s.items > 0 && !s.current && (
+                            <span className="hidden font-mono text-[12.5px] font-semibold text-text-3 tabular-nums @[240px]:inline">
+                              {s.items}
+                            </span>
+                          )}
+                          {s.current && (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-bold text-danger">
+                              <span
+                                aria-hidden
+                                className="size-2 rounded-full bg-danger-fill shadow-[0_0_0_3px_rgb(239_59_82/0.25)]"
+                              />
+                              {/* Only the dot when narrow; the words stay for screen readers. */}
+                              <span className="sr-only @[240px]:not-sr-only">On air</span>
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
             {naming && naming.from === null && <li>{nameInput}</li>}
           </ul>
         )}
@@ -579,26 +905,26 @@ export function ScenesDock() {
       <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
         <IconButton
           size="sm"
-          label="Move the scene on air up"
+          label={`Move the ${targetNoun} up`}
           disabled={at <= 0 || busy !== null}
-          onClick={() => void act('up', () => api.moveScene(current, at - 1))}
+          onClick={() => void act('up', () => api.moveScene(selected, at - 1))}
         >
           <CaretUp size={15} />
         </IconButton>
         <IconButton
           size="sm"
-          label="Move the scene on air down"
+          label={`Move the ${targetNoun} down`}
           disabled={at < 0 || at >= names.length - 1 || busy !== null}
-          onClick={() => void act('down', () => api.moveScene(current, at + 1))}
+          onClick={() => void act('down', () => api.moveScene(selected, at + 1))}
         >
           <CaretDown size={15} />
         </IconButton>
         <IconButton
           size="sm"
-          label="Copy the scene on air"
-          disabled={!current || busy !== null}
+          label={`Copy the ${targetNoun}`}
+          disabled={!selected || busy !== null}
           onClick={() =>
-            void act('copy', () => api.duplicateScene(current, freeName(current, names)))
+            void act('copy', () => api.duplicateScene(selected, freeName(selected, names)))
           }
         >
           <Copy size={15} />
@@ -608,9 +934,9 @@ export function ScenesDock() {
           size="sm"
           variant="ghost"
           className="hover:bg-danger-soft hover:text-danger"
-          label="Remove the scene on air"
-          disabled={names.length < 2 || busy !== null}
-          onClick={() => setRemoving(current)}
+          label={`Remove the ${targetNoun}`}
+          disabled={names.length < 2 || !selected || busy !== null}
+          onClick={() => setRemoving(selected)}
         >
           <Trash size={15} />
         </IconButton>
@@ -625,7 +951,14 @@ export function ScenesDock() {
         confirm="Remove"
         onConfirm={() => {
           const s = removing
-          if (s) void act('remove', () => api.removeScene(s))
+          if (!s) return
+          void act('remove', async () => {
+            await api.removeScene(s)
+            if (studio && s === preview) {
+              const nextPreview = names.find((n) => n !== s)
+              if (nextPreview) await api.setPreview(nextPreview).catch(() => undefined)
+            }
+          })
         }}
       />
     </section>
