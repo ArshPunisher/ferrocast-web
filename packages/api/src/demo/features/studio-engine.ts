@@ -45,6 +45,262 @@ import type { Service, UploadCheck } from '../../golive'
 import { HttpError } from '../http-error'
 import { clone, requireObj, type DemoHost } from './host'
 
+type DemoOptIn = Pick<EngineOption, 'key' | 'label' | 'kind'> & {
+  help?: string
+  visible?: boolean
+  enabled?: boolean
+  min?: number | null
+  max?: number | null
+  step?: number | null
+  slider?: boolean
+  suffix?: string
+  default?: unknown
+  choices?: string[]
+  values?: (string | number | boolean)[]
+}
+
+function demoOpt(over: DemoOptIn): EngineOption {
+  const out: EngineOption = {
+    key: over.key,
+    label: over.label,
+    kind: over.kind,
+    help: over.help ?? '',
+    visible: over.visible ?? true,
+    enabled: over.enabled ?? true,
+    min: over.min ?? null,
+    max: over.max ?? null,
+    step: over.step ?? null,
+    slider: over.slider ?? false,
+    suffix: over.suffix ?? '',
+    choices: over.choices ?? [],
+    values: over.values ?? [],
+    group: [],
+  }
+  if (over.default !== undefined) out.default = over.default
+  return out
+}
+
+const DEMO_FILTER_OPTIONS: Record<string, EngineOption[]> = {
+  noise_suppress_filter_v2: [
+    demoOpt({
+      key: 'method',
+      label: 'Method',
+      kind: 'list',
+      choices: ['RNNoise (good)', 'Speex (light)'],
+      values: ['rnnoise', 'speex'],
+      default: 'rnnoise',
+    }),
+    demoOpt({
+      key: 'suppress_level',
+      label: 'Suppression level',
+      kind: 'int',
+      min: -60,
+      max: 0,
+      step: 1,
+      slider: true,
+      suffix: ' dB',
+      default: -30,
+    }),
+  ],
+  expander_filter: [
+    demoOpt({
+      key: 'presets',
+      label: 'Preset',
+      kind: 'list',
+      choices: ['Expander', 'Gate'],
+      values: ['expander', 'gate'],
+      default: 'expander',
+    }),
+    demoOpt({
+      key: 'ratio',
+      label: 'Ratio',
+      kind: 'float',
+      min: 1,
+      max: 20,
+      step: 0.1,
+      slider: true,
+      suffix: ':1',
+      default: 2,
+    }),
+    demoOpt({
+      key: 'threshold',
+      label: 'Threshold',
+      kind: 'float',
+      min: -60,
+      max: 0,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: -40,
+    }),
+    demoOpt({
+      key: 'attack_time',
+      label: 'Attack',
+      kind: 'int',
+      min: 1,
+      max: 100,
+      step: 1,
+      suffix: ' ms',
+      default: 10,
+    }),
+    demoOpt({
+      key: 'release_time',
+      label: 'Release',
+      kind: 'int',
+      min: 1,
+      max: 1000,
+      step: 1,
+      suffix: ' ms',
+      default: 50,
+    }),
+    demoOpt({
+      key: 'output_gain',
+      label: 'Output Gain',
+      kind: 'float',
+      min: -32,
+      max: 32,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: 0,
+    }),
+    demoOpt({
+      key: 'detector',
+      label: 'Detection',
+      kind: 'list',
+      choices: ['RMS', 'Peak'],
+      values: ['RMS', 'peak'],
+      default: 'RMS',
+    }),
+  ],
+  noise_gate_filter: [
+    demoOpt({
+      key: 'open_threshold',
+      label: 'Open threshold',
+      kind: 'float',
+      min: -96,
+      max: 0,
+      step: 0.5,
+      slider: true,
+      suffix: ' dB',
+      default: -26,
+    }),
+    demoOpt({
+      key: 'close_threshold',
+      label: 'Close threshold',
+      kind: 'float',
+      min: -96,
+      max: 0,
+      step: 0.5,
+      slider: true,
+      suffix: ' dB',
+      default: -32,
+    }),
+    demoOpt({ key: 'attack_time', label: 'Attack', kind: 'int', min: 1, max: 500, step: 1, suffix: ' ms', default: 25 }),
+    demoOpt({ key: 'hold_time', label: 'Hold', kind: 'int', min: 1, max: 1000, step: 1, suffix: ' ms', default: 200 }),
+    demoOpt({ key: 'release_time', label: 'Release', kind: 'int', min: 1, max: 1000, step: 1, suffix: ' ms', default: 150 }),
+  ],
+  compressor_filter: [
+    demoOpt({
+      key: 'ratio',
+      label: 'Ratio',
+      kind: 'float',
+      min: 1,
+      max: 32,
+      step: 0.5,
+      slider: true,
+      suffix: ':1',
+      default: 10,
+    }),
+    demoOpt({
+      key: 'threshold',
+      label: 'Threshold',
+      kind: 'float',
+      min: -60,
+      max: 0,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: -18,
+    }),
+    demoOpt({
+      key: 'attack_time',
+      label: 'Attack',
+      kind: 'int',
+      min: 1,
+      max: 500,
+      step: 1,
+      suffix: ' ms',
+      default: 6,
+    }),
+    demoOpt({
+      key: 'release_time',
+      label: 'Release',
+      kind: 'int',
+      min: 1,
+      max: 1000,
+      step: 1,
+      suffix: ' ms',
+      default: 60,
+    }),
+    demoOpt({
+      key: 'output_gain',
+      label: 'Output Gain',
+      kind: 'float',
+      min: -32,
+      max: 32,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: 0,
+    }),
+    demoOpt({
+      key: 'sidechain_source',
+      label: 'Sidechain/Ducking Source',
+      kind: 'list',
+      choices: ['None'],
+      values: ['none'],
+      default: 'none',
+    }),
+  ],
+  limiter_filter: [
+    demoOpt({
+      key: 'threshold',
+      label: 'Threshold',
+      kind: 'float',
+      min: -60,
+      max: 0,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: -6,
+    }),
+    demoOpt({
+      key: 'release_time',
+      label: 'Release',
+      kind: 'int',
+      min: 1,
+      max: 1000,
+      step: 1,
+      suffix: ' ms',
+      default: 60,
+    }),
+  ],
+  gain_filter: [
+    demoOpt({
+      key: 'db',
+      label: 'Gain',
+      kind: 'float',
+      min: -30,
+      max: 30,
+      step: 0.1,
+      slider: true,
+      suffix: ' dB',
+      default: 0,
+    }),
+  ],
+}
+
 export type DemoCollectionPreset = 'normal' | 'empty' | 'broken' | 'huge'
 export type DemoMicPreset = 'quiet' | 'good' | 'loud' | 'silent'
 export type DemoBenchProfile = 'apple_vt' | 'nvidia_nvenc' | 'weak_cpu' | 'qsv_stepdown'
@@ -3973,7 +4229,7 @@ export class DemoStudioEngine {
       return undefined
     }
     if (method === 'GET' && tail[1] === 'options' && tail.length === 2) {
-      return []
+      return clone(DEMO_FILTER_OPTIONS[list[idx]!.kind] ?? [])
     }
     throw new HttpError(404, 'not_found', 'Unknown filter route.')
   }

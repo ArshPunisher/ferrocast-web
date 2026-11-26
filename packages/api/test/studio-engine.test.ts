@@ -2063,5 +2063,32 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('returns realistic filterOptions metadata for clean-mic filters', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.start()
+        await api.addFilter('Mic', {
+          kind: 'compressor_filter',
+          name: 'Even out loud moments',
+          settings: { ratio: 3, threshold: -26, output_gain: 9 },
+        })
+        await api.addFilter('Mic', {
+          kind: 'expander_filter',
+          name: 'Quiet between words',
+          settings: { presets: 'expander', ratio: 3.5, threshold: -40, output_gain: 0 },
+        })
+        const compOpts = await api.filterOptions('Mic', 'Even out loud moments')
+        expect(compOpts.some((o) => o.key === 'output_gain')).toBe(true)
+        const expOpts = await api.filterOptions('Mic', 'Quiet between words')
+        expect(expOpts.map((o) => o.key)).toContain('presets')
+        expect(expOpts.map((o) => o.key)).toContain('threshold')
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })

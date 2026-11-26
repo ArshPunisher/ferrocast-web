@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Sparkle } from '@phosphor-icons/react'
 import type { EngineFilter, EngineLevel, studioEngineApi } from '@ferrocast/api'
-import { Button, InfoTip, cx, toast } from '@ferrocast/ui'
+import { Button, InfoTip, Switch, cx, toast } from '@ferrocast/ui'
 import { useAction } from '../../../lib/hooks'
 import {
   CLEAN_EXPANDER,
@@ -52,6 +52,7 @@ export function CleanMicControl({
   onCleaned,
   footer,
   className,
+  undone = 0,
   isLive = false,
 }: {
   api: EngineApi
@@ -62,16 +63,20 @@ export function CleanMicControl({
   onCleaned?: (() => void) | undefined
   footer?: ReactNode | undefined
   className?: string | undefined
+  undone?: number | undefined
   isLive?: boolean | undefined
 }) {
   const { run, busy } = useAction()
   const peaks = useRef<number[]>([])
+  const lastGainRef = useRef(9)
   const [failed, setFailed] = useState<string | null>(null)
+  const [preBoost, setPreBoost] = useState(true)
   const [compSettings, setCompSettings] = useState<Record<string, unknown> | null>(null)
   const [updateSkipped, setUpdateSkipped] = useState(readCleanMicUpdateSkipped)
 
   useEffect(() => {
     peaks.current = []
+    lastGainRef.current = 9
   }, [name])
 
   useEffect(() => {
@@ -97,7 +102,10 @@ export function CleanMicControl({
     let cancelled = false
     void api.filterSettings(name, compName).then(
       (s) => {
-        if (!cancelled) setCompSettings(s)
+        if (cancelled) return
+        setCompSettings(s)
+        const gain = Number(s.output_gain ?? 0)
+        if (gain > 0) lastGainRef.current = gain
       },
       () => {
         if (!cancelled) setCompSettings(null)
@@ -106,12 +114,18 @@ export function CleanMicControl({
     return () => {
       cancelled = true
     }
-  }, [api, name, compName, compEnabled, filterKey])
+  }, [api, name, compName, compEnabled, filterKey, undone])
+
+  const autoBoostOn = compFilter
+    ? compSettings === null
+      ? compFilter.enabled && preBoost
+      : compFilter.enabled && Number(compSettings.output_gain ?? 0) > 0
+    : preBoost
 
   const plan = have
     ? cleanMicPlan(
         have.map((f) => f.kind),
-        { gainDb },
+        { gainDb, autoBoost: preBoost },
       )
     : []
   const gainStep = plan.find((f) => f.kind === 'gain_filter')
@@ -198,6 +212,55 @@ export function CleanMicControl({
     setUpdateSkipped(true)
   }
 
+  const toggleAutoBoost = async (next: boolean) => {
+    if (!compFilter) {
+      setPreBoost(next)
+      return
+    }
+    const baseFilters = have ?? []
+    const res = await run(
+      'auto-boost',
+      async () => {
+        const current =
+          compSettings ??
+          (typeof api.filterSettings === 'function'
+            ? await api.filterSettings(name, compFilter.name)
+            : {})
+        if (!next) {
+          const curGain = Number(current.output_gain ?? 0)
+          if (curGain > 0) lastGainRef.current = curGain
+          const nextSettings = { ...current, output_gain: 0 }
+          await api.updateFilter(name, compFilter.name, nextSettings)
+          return { nextSettings, message: 'Auto boost off (0 dB).' }
+        }
+        const targetDb = lastGainRef.current > 0 ? lastGainRef.current : 9
+        const hasExpanderOrGate = baseFilters.some(
+          (f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter',
+        )
+        const addedExp = hasExpanderOrGate
+          ? null
+          : await insertExpanderBeforeComp(api, name, baseFilters)
+        const wasDisabled = !compFilter.enabled
+        try {
+          if (wasDisabled) await api.editFilter(name, compFilter.name, 'enable')
+          const nextSettings = { ...current, output_gain: targetDb }
+          await api.updateFilter(name, compFilter.name, nextSettings)
+          return { nextSettings, message: `Auto boost on (+${targetDb} dB).` }
+        } catch (e) {
+          if (wasDisabled) await api.editFilter(name, compFilter.name, 'disable').catch(() => undefined)
+          if (addedExp) await api.removeFilter(name, addedExp).catch(() => undefined)
+          throw e
+        }
+      },
+      { once: true },
+    )
+    if (res) {
+      setCompSettings(res.nextSettings)
+      onReload()
+      toast({ tone: 'ok', message: res.message })
+    }
+  }
+
   return (
     <div
       data-testid="clean-mic-tile"
@@ -267,6 +330,15 @@ export function CleanMicControl({
             </span>
           )}
         </div>
+      </div>
+      <div className="border-t border-line/60 pt-2">
+        <Switch
+          checked={autoBoostOn}
+          onChange={(next) => void toggleAutoBoost(next)}
+          disabled={busy !== null || !have}
+          label="Auto boost"
+          description="Raises uneven speech after cleanup (+9 dB by default). Turn off before or after cleanup to leave gain at 0 dB."
+        />
       </div>
       {showUpdateOffer && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] leading-snug text-text-2">

@@ -115,11 +115,19 @@ export function micGainDb(peaks: readonly number[]): number | null {
 /** The filters still to add, in order (the ones it has already stay as they are). */
 export function cleanMicPlan(
   has: readonly string[],
-  opts: { gainDb?: number | null } = {},
+  opts: { gainDb?: number | null; autoBoost?: boolean } = {},
 ): NewEngineSource[] {
-  const plan = CLEAN_MIC.filter((c) => !c.as.some((k) => has.includes(k))).map((c) => c.add)
+  const autoBoost = opts.autoBoost ?? true
+  const plan = CLEAN_MIC.filter((c) => !c.as.some((k) => has.includes(k))).map((c) =>
+    c.add.kind === 'compressor_filter'
+      ? {
+          ...c.add,
+          settings: { ...(c.add.settings ?? {}), output_gain: autoBoost ? 9 : 0 },
+        }
+      : c.add,
+  )
   const gain = opts.gainDb ?? 0
-  if (gain >= 1 && !has.includes('gain_filter')) {
+  if (autoBoost && gain >= 1 && !has.includes('gain_filter')) {
     // First in the chain (the caller moves it to the top): the level the rest works on.
     plan.unshift({ kind: 'gain_filter', name: MIC_LEVEL_FILTER, settings: { db: gain } })
   }

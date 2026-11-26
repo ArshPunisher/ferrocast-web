@@ -1501,7 +1501,7 @@ function CleanMic({
   list: Resource<EngineFilter[]>
   footer?: ReactNode
 }) {
-  const { api } = useDesk()
+  const { api, undone } = useDesk()
   const isLive = Boolean(useDeskStats()?.stream?.active)
   return (
     <CleanMicControl
@@ -1511,6 +1511,7 @@ function CleanMic({
       filters={list.data}
       onReload={list.reload}
       footer={footer}
+      undone={undone}
       isLive={isLive}
     />
   )

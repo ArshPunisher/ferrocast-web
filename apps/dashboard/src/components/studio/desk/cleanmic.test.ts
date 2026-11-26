@@ -64,6 +64,18 @@ describe('clean mic', () => {
     )
   })
 
+  it('sets output_gain to 0 and skips Raise a quiet mic when autoBoost is false', () => {
+    const plan = cleanMicPlan([], { gainDb: 12, autoBoost: false })
+    expect(plan.map((f) => f.kind)).toEqual([
+      'noise_suppress_filter_v2',
+      'expander_filter',
+      'compressor_filter',
+      'limiter_filter',
+    ])
+    const comp = plan.find((f) => f.kind === 'compressor_filter')
+    expect(comp?.settings).toMatchObject({ output_gain: 0 })
+  })
+
   it('counts Strong noise removal as the noise step while keeping expander before compressor', () => {
     expect(cleanMicPlan(['ferrocast_deepfilter']).map((f) => f.kind)).toEqual([
       'expander_filter',
