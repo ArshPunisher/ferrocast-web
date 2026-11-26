@@ -467,4 +467,44 @@ describe('ThemeSheet Use just this screen', () => {
     expect(byText(host, 'button', 'In game').getAttribute('aria-pressed')).toBe('false')
     expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('true')
   })
+
+  it('waits for overlay discovery before enabling Next or mounting PlanForm, then falls back cleanly on error', async () => {
+    let resolveOverlays!: (v: Overlay[]) => void
+    let rejectOverlays!: (e: unknown) => void
+    const first = new Promise<Overlay[]>((r) => {
+      resolveOverlays = r
+    })
+    const { host } = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
+      overlays: vi.fn(() => first),
+    })
+
+    const nextPending = byText(host, 'button', 'Next') as HTMLButtonElement
+    expect(nextPending.disabled).toBe(true)
+
+    await act(async () => {
+      resolveOverlays([overlayFor('in_game'), overlayFor('ending')])
+    })
+    await flushMicrotasks()
+
+    expect((byText(host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(false)
+    expect(host.textContent).toContain('Screens (3 of 5)')
+
+    // Discovery failure still unblocks Next with fallback Retry option.
+    const second = new Promise<Overlay[]>((_, rej) => {
+      rejectOverlays = rej
+    })
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+    const errMount = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
+      overlays: vi.fn(() => second),
+    })
+    await act(async () => {
+      rejectOverlays(new Error('network down'))
+    })
+    await flushMicrotasks()
+
+    expect((byText(errMount.host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(false)
+    expect(errMount.host.textContent).toContain('Retry')
+  })
 })

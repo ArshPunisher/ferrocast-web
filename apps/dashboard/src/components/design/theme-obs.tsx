@@ -100,10 +100,6 @@ export function ThemeUseDialog({
   const [intoObs, setIntoObs] = useState(reach.ok && usesObs)
   const [intoStudio, setIntoStudio] = useState(!usesObs)
   const [importTab, setImportTab] = useState<'screens' | 'part'>('screens')
-  const [picked, setPicked] = useState<string[]>(() =>
-    initialScenes ? allKeys.filter((k) => initialScenes.includes(k)) : allKeys,
-  )
-  const [touched, setTouched] = useState(initialScenes !== undefined)
   const [alertOnly, setAlertOnly] = useState(true)
   const [partKey, setPartKey] = useState(() => parts[0]?.key ?? '')
   const [targetOverlayId, setTargetOverlayId] = useState('')
@@ -118,12 +114,22 @@ export function ThemeUseDialog({
     return keys
   }, [overlays.data, design.id])
 
-  useEffect(() => {
-    if (touched || !overlays.data) return
-    if (alreadyAdded.size > 0 && alreadyAdded.size < allKeys.length) {
-      setPicked(allKeys.filter((k) => !alreadyAdded.has(k)))
-    }
-  }, [touched, overlays.data, alreadyAdded, allKeys])
+  const defaultPicked = useMemo(
+    () =>
+      initialScenes
+        ? allKeys.filter((k) => initialScenes.includes(k))
+        : overlays.data && alreadyAdded.size > 0 && alreadyAdded.size < allKeys.length
+          ? allKeys.filter((k) => !alreadyAdded.has(k))
+          : allKeys,
+    [initialScenes, overlays.data, alreadyAdded, allKeys],
+  )
+  const [pickedState, setPickedState] = useState<{ touched: boolean; list: string[] }>(() => ({
+    touched: initialScenes !== undefined,
+    list: defaultPicked,
+  }))
+  const touched = pickedState.touched
+  const effectivePicked = touched ? pickedState.list : defaultPicked
+  const resolvingOverlays = !touched && overlays.loading && !overlays.data && !overlays.error
 
   if (styling) return <MakeItYoursDialog design={design} onClose={onClose} />
   if (result)
@@ -141,7 +147,8 @@ export function ThemeUseDialog({
     return (
       <IntoObsDialog
         design={design}
-        initialScenes={picked}
+        waiting={resolvingOverlays}
+        initialScenes={resolvingOverlays ? undefined : effectivePicked}
         onClose={onClose}
         onOff={() => setIntoObs(false)}
         onDone={setResult}
@@ -150,22 +157,22 @@ export function ThemeUseDialog({
     )
 
   const toggle = (key: string) => {
-    setTouched(true)
-    setPicked((cur) =>
-      cur.includes(key)
-        ? cur.filter((k) => k !== key)
-        : allKeys.filter((k) => k === key || cur.includes(k)),
-    )
+    setPickedState((prev) => {
+      const base = prev.touched ? prev.list : defaultPicked
+      const next = base.includes(key)
+        ? base.filter((k) => k !== key)
+        : allKeys.filter((k) => k === key || base.includes(k))
+      return { touched: true, list: next }
+    })
   }
   const setAll = (on: boolean) => {
-    setTouched(true)
-    setPicked(on ? allKeys : [])
+    setPickedState({ touched: true, list: on ? allKeys : [] })
   }
   const selectedPart = parts.find((p) => p.key === partKey) ?? parts[0] ?? null
   const overlayList = overlays.data ?? []
   const targetOverlay = overlayList.find((o) => o.id === targetOverlayId) ?? null
-  const alertOnlyPath = importTab === 'screens' && picked.length === 0
-  const hasReimportPick = picked.some((k) => alreadyAdded.has(k))
+  const alertOnlyPath = importTab === 'screens' && effectivePicked.length === 0
+  const hasReimportPick = effectivePicked.some((k) => alreadyAdded.has(k))
 
   const submitAlertOnly = () => {
     const alertId = design.content.alert_design
@@ -229,8 +236,9 @@ export function ThemeUseDialog({
           ) : (
             <Button
               variant="primary"
-              disabled={picked.length === 0}
-              onClick={() => onClassic(intoStudio && !usesObs, picked)}
+              busy={resolvingOverlays}
+              disabled={effectivePicked.length === 0 || resolvingOverlays}
+              onClick={() => onClassic(intoStudio && !usesObs, effectivePicked)}
             >
               Next
             </Button>
@@ -306,17 +314,29 @@ export function ThemeUseDialog({
           <>
             <Screens
               design={design}
-              picked={picked}
+              picked={effectivePicked}
               onToggle={toggle}
               onSetAll={setAll}
               alreadyAdded={alreadyAdded}
             />
+            {overlays.error && !touched && !overlays.data && (
+              <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
+                <span>Couldn’t check existing overlays. Continuing uses your selection below.</span>
+                <button
+                  type="button"
+                  onClick={overlays.reload}
+                  className="font-semibold text-accent-text hover:underline"
+                >
+                  Retry
+                </button>
+              </p>
+            )}
             {hasReimportPick && (
               <p className="m-0 text-[13px] text-text-3">
                 Already-added screens will be created as new overlays.
               </p>
             )}
-            {picked.length === 0 ? (
+            {effectivePicked.length === 0 ? (
               design.content.alert_design ? (
                 <>
                   <Switch
@@ -479,6 +499,7 @@ function Screens({
 
 function IntoObsDialog({
   design,
+  waiting,
   initialScenes,
   onClose,
   onOff,
@@ -486,6 +507,7 @@ function IntoObsDialog({
   api,
 }: {
   design: ThemeDesign
+  waiting?: boolean
   initialScenes?: string[] | undefined
   onClose: () => void
   onOff: () => void
@@ -497,7 +519,7 @@ function IntoObsDialog({
     <Dialog open onClose={onClose} size="lg" title={`Use ${design.name}`} footer={null}>
       {guess.error && !guess.data ? (
         <LoadError error={guess.error} onRetry={guess.reload} />
-      ) : !guess.data ? (
+      ) : !guess.data || waiting ? (
         <Skeleton className="h-40 w-full" />
       ) : (
         <PlanForm
