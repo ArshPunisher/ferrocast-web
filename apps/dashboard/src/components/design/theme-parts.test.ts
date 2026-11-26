@@ -40,9 +40,29 @@ describe('extractThemeParts', () => {
     // Duplicate label presets across screens are collapsed once.
     expect(labels.filter((l) => l === 'Latest follower')).toHaveLength(1)
 
-    // Distinct widget aspect ratios (e.g. Tokyo neon HUD events vs wide banner events) stay separate.
+    // Distinct widget dimensions (e.g. Tokyo neon 380x360, 640x170, 640x116) stay separate.
     const tokyoEvents = extractThemeParts(tokyo).filter((p) => p.widget.kind === 'events')
-    expect(tokyoEvents).toHaveLength(2)
+    expect(tokyoEvents).toHaveLength(3)
+  })
+
+  it('keeps distinct wide geometries with the same variant while collapsing identical copies', () => {
+    const baseEvent = extractThemeParts(tokyo).find((p) => p.widget.kind === 'events')!.widget
+    const s0 = structuredClone(lofi.content.scenes[0]!)
+    const s1 = structuredClone(lofi.content.scenes[1]!)
+    const s2 = structuredClone(lofi.content.scenes[2]!)
+    s0.layers = [{ ...structuredClone(baseEvent), id: 'ev-a', x: 0, y: 0, w: 600, h: 60 }]
+    s1.layers = [{ ...structuredClone(baseEvent), id: 'ev-b', x: 0, y: 0, w: 300, h: 100 }]
+    s2.layers = [{ ...structuredClone(baseEvent), id: 'ev-dup', x: 40, y: 40, w: 600, h: 60 }]
+    const custom: ThemeDesign = {
+      ...structuredClone(lofi),
+      id: 'custom.wide-geometries',
+      content: { scenes: [s0, s1, s2], alert_design: null },
+    }
+    const parts = extractThemeParts(custom)
+    expect(parts.map((p) => [p.widget.w, p.widget.h])).toEqual([
+      [600, 60],
+      [300, 100],
+    ])
   })
 })
 
@@ -64,6 +84,32 @@ describe('addPartToOverlay', () => {
     const scaledRatio = added.w / added.h
     expect(Math.abs(scaledRatio - origRatio)).toBeLessThan(0.05)
     expect(validateLayout(updated.name, updated.width, updated.height, updated.widgets)).toBeNull()
+  })
+
+  it('applies one uniform scale for minimum dimensions when possible and refuses extreme aspect ratios instead of stretching', () => {
+    const parts = extractThemeParts(lofi)
+    const basePart = structuredClone(parts.find((p) => p.widget.kind === 'events')!)
+    const vertical = makeOverlay({ id: 'ov-vert', name: 'Vertical', width: 720, height: 1280 })
+
+    // 600x25 on 1920x1080 -> 720x1280: sx=0.375 would give h=9.375 (<20); uniform scale 0.8 gives 480x20.
+    const fitPart = structuredClone(basePart)
+    fitPart.sceneWidth = 1920
+    fitPart.sceneHeight = 1080
+    fitPart.widget.w = 600
+    fitPart.widget.h = 25
+    const fitted = addPartToOverlay(vertical, fitPart, lofi)
+    const added = fitted.widgets[0]!
+    expect([added.w, added.h]).toEqual([480, 20])
+    expect(Math.abs(added.w / added.h - 600 / 25)).toBeLessThan(0.01)
+    expect(validateLayout(fitted.name, fitted.width, fitted.height, fitted.widgets)).toBeNull()
+
+    // 1000x20 on 1920x1080 -> 720x1280 cannot satisfy w<=720 and h>=20 uniformly without stretching.
+    const extremePart = structuredClone(basePart)
+    extremePart.sceneWidth = 1920
+    extremePart.sceneHeight = 1080
+    extremePart.widget.w = 1000
+    extremePart.widget.h = 20
+    expect(() => addPartToOverlay(vertical, extremePart, lofi)).toThrow(/cannot fit/i)
   })
 
   it('sets branded on built-in themes and strips stale branded flag on unbranded themes', () => {

@@ -1,4 +1,5 @@
 import {
+  ApiError,
   MAX_OVERLAY_WIDGETS,
   SCENE_LABEL,
   type Overlay,
@@ -61,8 +62,7 @@ function widgetLabel(w: FunctionalWidget): string {
 function dedupeSignature(w: FunctionalWidget): string {
   const cfg = w.config as { source?: unknown; style?: { variant?: unknown } }
   if (w.kind === 'label') return `label:${String(cfg.source ?? w.id)}`
-  const shape = w.w >= w.h * 2 ? 'wide' : w.h >= w.w * 2 ? 'tall' : 'box'
-  return `${w.kind}:${String(cfg.style?.variant ?? 'default')}:${shape}`
+  return `${w.kind}:${String(cfg.style?.variant ?? 'default')}:${Math.round(w.w)}x${Math.round(w.h)}`
 }
 
 /**
@@ -103,23 +103,57 @@ function uniqueWidgetId(base: string, existingIds: ReadonlySet<string>): string 
   }
 }
 
+function fitPartSize(
+  overlay: Overlay,
+  part: ThemePart,
+): { ok: true; w: number; h: number; sx: number; sy: number } | { ok: false; error: string } {
+  const sx = overlay.width / Math.max(1, part.sceneWidth)
+  const sy = overlay.height / Math.max(1, part.sceneHeight)
+  const origW = Math.max(1, part.widget.w)
+  const origH = Math.max(1, part.widget.h)
+  const minW = Math.min(20, overlay.width)
+  const minH = Math.min(20, overlay.height)
+  const minScale = Math.max(minW / origW, minH / origH)
+  const maxScale = Math.min(overlay.width / origW, overlay.height / origH)
+  if (minScale > maxScale) {
+    return {
+      ok: false,
+      error: `${part.label} (${origW}×${origH}) cannot fit on ${overlay.name} (${overlay.width}×${overlay.height}) without stretching.`,
+    }
+  }
+  const scale = Math.max(minScale, Math.min(maxScale, Math.min(sx, sy)))
+  return {
+    ok: true,
+    w: Math.round(origW * scale),
+    h: Math.round(origH * scale),
+    sx,
+    sy,
+  }
+}
+
+/** Returns a plain message when `part` cannot be scaled uniformly to fit inside `overlay`. */
+export function partFitError(overlay: Overlay, part: ThemePart): string | null {
+  const fit = fitPartSize(overlay, part)
+  return fit.ok ? null : fit.error
+}
+
 /**
  * Returns an updated overlay with `part` scaled proportionally to the overlay's canvas and given
  * a unique widget id.
  */
 export function addPartToOverlay(overlay: Overlay, part: ThemePart, theme: ThemeDesign): Overlay {
   if (overlay.widgets.length >= MAX_OVERLAY_WIDGETS) {
-    throw new Error(
+    throw new ApiError(
+      400,
+      'invalid',
       `That overlay already has ${MAX_OVERLAY_WIDGETS} widgets, the most one can hold. Remove one first.`,
     )
   }
-  const sx = overlay.width / Math.max(1, part.sceneWidth)
-  const sy = overlay.height / Math.max(1, part.sceneHeight)
-  const scale = Math.min(sx, sy)
-  const minW = Math.min(20, overlay.width)
-  const minH = Math.min(20, overlay.height)
-  const w = Math.max(minW, Math.min(overlay.width, Math.round(part.widget.w * scale)))
-  const h = Math.max(minH, Math.min(overlay.height, Math.round(part.widget.h * scale)))
+  const fit = fitPartSize(overlay, part)
+  if (!fit.ok) {
+    throw new ApiError(400, 'invalid', fit.error)
+  }
+  const { w, h, sx, sy } = fit
   const x = Math.max(0, Math.min(overlay.width - w, Math.round(part.widget.x * sx)))
   const y = Math.max(0, Math.min(overlay.height - h, Math.round(part.widget.y * sy)))
 

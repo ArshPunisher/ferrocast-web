@@ -298,6 +298,7 @@ export interface SegmentedProps<T extends string> {
   size?: 'sm' | 'md'
   /** Stretch segments into equal-width columns across the container. */
   even?: boolean
+  disabled?: boolean
   className?: string
 }
 
@@ -309,6 +310,7 @@ export function Segmented<T extends string>({
   onChange,
   size = 'md',
   even = false,
+  disabled = false,
   className,
 }: SegmentedProps<T>) {
   const name = useId()
@@ -335,7 +337,7 @@ export function Segmented<T extends string>({
               even &&
                 'flex items-center justify-center text-center max-sm:leading-tight max-sm:whitespace-normal',
               'has-[:focus-visible]:shadow-[var(--fc-focus)]',
-              'has-[:disabled]:cursor-not-allowed',
+              'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60',
               size === 'sm' ? 'px-2.5 py-1 text-[13.5px]' : 'px-3.5 py-1.5 text-[14px]',
               // The picked one is plain to see: the solid pick colour, bold.
               on
@@ -348,6 +350,7 @@ export function Segmented<T extends string>({
               name={name}
               value={o.value}
               checked={on}
+              disabled={disabled}
               onChange={() => onChange(o.value)}
               className="sr-only"
             />

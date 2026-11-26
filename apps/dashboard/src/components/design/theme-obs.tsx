@@ -46,7 +46,7 @@ import {
   cx,
 } from '@ferrocast/ui'
 import { ScenePreview } from './previews'
-import { addPartToOverlay, extractThemeParts } from './theme-parts'
+import { addPartToOverlay, extractThemeParts, partFitError } from './theme-parts'
 import { LoadError, Panel } from '../Panel'
 import { ModeSwitch } from '../ModeSwitch'
 import { StatusIcon } from '../studio/common'
@@ -129,6 +129,14 @@ export function ThemeUseDialog({
     list: [],
   })
   const [retryingOverlays, setRetryingOverlays] = useState(false)
+  const aliveRef = useRef(true)
+  const opRef = useRef(0)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
   useEffect(() => {
     if (!overlays.loading) setRetryingOverlays(false)
   }, [overlays.loading])
@@ -144,17 +152,21 @@ export function ThemeUseDialog({
     initialScenes === undefined &&
     !overlays.data &&
     ((overlays.loading && !overlays.error) || retryingOverlays)
+  const closeDialog = () => {
+    opRef.current += 1
+    onClose()
+  }
 
-  if (styling) return <MakeItYoursDialog design={design} onClose={onClose} />
+  if (styling) return <MakeItYoursDialog design={design} onClose={closeDialog} />
   if (result)
     return (
       <ResultDialog
         design={design}
         steps={result.steps}
         applied={result.applied}
-        onClose={onClose}
+        onClose={closeDialog}
         onStyle={() => setStyling(true)}
-        onUndone={onClose}
+        onUndone={closeDialog}
       />
     )
   if (intoObs && reach.ok) {
@@ -164,11 +176,12 @@ export function ThemeUseDialog({
         design={design}
         initialScenes={obsSelection}
         mergeApplied={!userTouched && initialScenes !== undefined}
-        onClose={onClose}
+        onClose={closeDialog}
         onOff={(selection) => {
           if (selection !== undefined) {
             setPickedState({ touched: true, list: selection })
           }
+          opRef.current += 1
           setIntoObs(false)
         }}
         onDone={setResult}
@@ -194,31 +207,39 @@ export function ThemeUseDialog({
   const selectedPart = parts.find((p) => p.key === partKey) ?? parts[0] ?? null
   const overlayList = overlays.data ?? []
   const targetOverlay = overlayList.find((o) => o.id === targetOverlayId) ?? null
+  const partFull = !!targetOverlay && targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS
+  const partFitProblem =
+    selectedPart && targetOverlay && !partFull ? partFitError(targetOverlay, selectedPart) : null
   const alertOnlyPath = importTab === 'screens' && effectivePicked.length === 0
   const hasReimportPick = effectivePicked.some((k) => alreadyAdded.has(k))
 
   const submitAlertOnly = () => {
     const alertId = design.content.alert_design
-    if (!alertId || !alertOnly) return
+    if (!alertId || !alertOnly || busy !== null) return
+    const seq = ++opRef.current
     void run('alert', () => client.useDesign(alertId), {
+      once: true,
       success: `${design.name}’s alert style now plays your alerts.`,
     }).then((r) => {
-      if (!r) return
+      if (!r || !aliveRef.current || opRef.current !== seq) return
       onAlertApplied?.(r.alert_design)
-      onClose()
+      closeDialog()
     })
   }
 
   const submitPart = () => {
-    if (!selectedPart || !targetOverlay || targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS)
-      return
+    if (!selectedPart || !targetOverlay || partFull || partFitProblem || busy !== null) return
+    const seq = ++opRef.current
     void run(
       'part',
       () => client.saveOverlay(addPartToOverlay(targetOverlay, selectedPart, design)),
-      { success: `${selectedPart.label} added to ${targetOverlay.name}.` },
+      {
+        once: true,
+        success: `${selectedPart.label} added to ${targetOverlay.name}.`,
+      },
     ).then((saved) => {
-      if (!saved) return
-      onClose()
+      if (!saved || !aliveRef.current || opRef.current !== seq) return
+      closeDialog()
       go({ name: 'overlay', id: saved.id })
     })
   }
@@ -226,12 +247,12 @@ export function ThemeUseDialog({
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={closeDialog}
       size="md"
       title={`Use ${design.name}`}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={closeDialog}>
             Cancel
           </Button>
           {importTab === 'part' ? (
@@ -239,10 +260,7 @@ export function ThemeUseDialog({
               variant="primary"
               busy={busy === 'part'}
               disabled={
-                !selectedPart ||
-                !targetOverlay ||
-                targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS ||
-                busy === 'part'
+                !selectedPart || !targetOverlay || partFull || !!partFitProblem || busy !== null
               }
               onClick={submitPart}
             >
@@ -252,7 +270,7 @@ export function ThemeUseDialog({
             <Button
               variant="primary"
               busy={busy === 'alert'}
-              disabled={!alertOnly || busy === 'alert'}
+              disabled={!alertOnly || busy !== null}
               onClick={submitAlertOnly}
             >
               Use alert style
@@ -261,8 +279,12 @@ export function ThemeUseDialog({
             <Button
               variant="primary"
               busy={resolvingOverlays}
-              disabled={effectivePicked.length === 0 || resolvingOverlays}
-              onClick={() => onClassic(intoStudio && !usesObs, effectivePicked)}
+              disabled={effectivePicked.length === 0 || resolvingOverlays || busy !== null}
+              onClick={() => {
+                if (busy !== null) return
+                opRef.current += 1
+                onClassic(intoStudio && !usesObs, effectivePicked)
+              }}
             >
               Next
             </Button>
@@ -275,8 +297,13 @@ export function ThemeUseDialog({
           <Segmented<'screens' | 'part'>
             label="What to import"
             even
+            disabled={busy !== null}
             value={importTab}
-            onChange={(v) => setImportTab(v)}
+            onChange={(v) => {
+              if (busy !== null) return
+              opRef.current += 1
+              setImportTab(v)
+            }}
             options={[
               { value: 'screens', label: 'Screens' },
               { value: 'part', label: 'One part' },
@@ -294,6 +321,7 @@ export function ThemeUseDialog({
                 <Select
                   {...p}
                   value={selectedPart?.key ?? ''}
+                  disabled={busy !== null}
                   onChange={(e) => setPartKey(e.target.value)}
                 >
                   {parts.map((item) => (
@@ -310,7 +338,7 @@ export function ThemeUseDialog({
                   {...p}
                   value={targetOverlayId}
                   onChange={(e) => setTargetOverlayId(e.target.value)}
-                  disabled={loadingOverlays || overlayList.length === 0}
+                  disabled={busy !== null || loadingOverlays || overlayList.length === 0}
                 >
                   <option value="">
                     {loadingOverlays
@@ -346,10 +374,15 @@ export function ThemeUseDialog({
                 </p>
               )
             )}
-            {targetOverlay && targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS && (
+            {partFull && (
               <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
                 That overlay already has {MAX_OVERLAY_WIDGETS} widgets. Pick another or remove one
                 first.
+              </p>
+            )}
+            {partFitProblem && (
+              <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
+                {partFitProblem}
               </p>
             )}
           </div>

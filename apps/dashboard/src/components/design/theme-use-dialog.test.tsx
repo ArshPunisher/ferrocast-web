@@ -813,4 +813,60 @@ describe('ThemeSheet Use just this screen', () => {
     const { client } = await mountNode(<UseDialog design={null} onClose={vi.fn()} />)
     expect(client.overlays).not.toHaveBeenCalled()
   })
+
+  it('locks mode switching while Add part is saving and ignores stale completion after close', async () => {
+    const target: Overlay = {
+      id: 'ov-custom',
+      name: 'My Main Overlay',
+      url: 'http://127.0.0.1:4190/overlay/ov-custom',
+      width: 1280,
+      height: 720,
+      widgets: [],
+      updated_at: 1,
+      design: null,
+    }
+    let resolveSave!: (o: Overlay) => void
+    const onClose = vi.fn()
+    const { host } = await mountNode(<UseDialog design={lofi} onClose={onClose} />, {
+      overlays: vi.fn(async () => [target]),
+      saveOverlay: vi.fn(
+        () =>
+          new Promise<Overlay>((r) => {
+            resolveSave = r
+          }),
+      ),
+    })
+
+    await act(async () => {
+      byText(host, 'label', 'One part').click()
+    })
+    const selects = Array.from(host.querySelectorAll('select'))
+    await act(async () => {
+      selects[1]!.value = 'ov-custom'
+      selects[1]!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      byText(host, 'button', 'Add part').click()
+    })
+
+    // While Add part is pending, Screens segment is disabled and cannot start Next/ClassicUseDialog.
+    const screensRadio = host.querySelector<HTMLInputElement>(
+      'input[type="radio"][value="screens"]',
+    )!
+    expect(screensRadio.disabled).toBe(true)
+    await act(async () => {
+      byText(host, 'label', 'Screens').click()
+    })
+    expect(host.querySelector('button[aria-label]')?.textContent).not.toBe('Next')
+    expect(host.textContent).not.toContain('Make 5 overlays')
+
+    // If the dialog closes/unmounts before saveOverlay settles, late completion must not re-fire onClose.
+    await act(async () => root?.unmount())
+    root = null
+    await act(async () => {
+      resolveSave(target)
+    })
+    await flushMicrotasks()
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })
