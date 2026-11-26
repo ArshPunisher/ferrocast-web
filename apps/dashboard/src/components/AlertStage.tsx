@@ -244,6 +244,11 @@ export function OverlayPreview({
               : prev?.state.show
                 ? { show: { countdown_ends_at: null } }
                 : {}),
+            ...(st.links !== undefined
+              ? { links: st.links }
+              : prev?.state.links
+                ? { links: null }
+                : {}),
           },
         })
       }

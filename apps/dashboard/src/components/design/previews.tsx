@@ -103,20 +103,29 @@ export function useCreatorPreview(): {
   useEffect(() => {
     if (!conn) return
     const client = conn.client
-    if (links !== null && labels !== null) return
+    const cur = useLive.getState()
+    if (cur.links !== null && cur.labels !== null) return
     if (fetchedForClient.has(client)) return
     fetchedForClient.add(client)
     const lkGen = beginLinksLoad()
     const lbGen = beginLabelsLoad()
+    let failed = false
     void Promise.all([
-      client.links?.().catch(() => null) ?? Promise.resolve(null),
-      client.labels?.().catch(() => null) ?? Promise.resolve(null),
+      client.links?.().catch(() => {
+        failed = true
+        return null
+      }) ?? Promise.resolve(null),
+      client.labels?.().catch(() => {
+        failed = true
+        return null
+      }) ?? Promise.resolve(null),
     ]).then(([lk, lb]) => {
+      if (failed) fetchedForClient.delete(client)
       if (useLive.getState().conn?.client !== client) return
       if (lk) useLive.getState().setLinks(lk.resolved, lkGen)
       if (lb) useLive.getState().setLabels(lb, lbGen)
     })
-  }, [conn, links, labels])
+  }, [conn])
   return { links, labels }
 }
 
@@ -171,6 +180,8 @@ export function useSampleState(
       w.kind === 'label' ? [[w.id, w.config.source, w.config.template]] : [],
     ),
   )
+  const events = useMemo(() => sampleEvents(), [])
+  const chat = useMemo(() => sampleChat(), [])
   return useMemo(() => {
     const labelWidgets = (JSON.parse(labelKey) as [string, string, string][]).map(
       ([id, source, template]) =>
@@ -180,13 +191,13 @@ export function useSampleState(
       goals: [GOAL],
       labels: resolvePreviewLabelMap(labelWidgets, realLabels),
       viewers: { twitch: 412, youtube: 188 },
-      events: sampleEvents(),
-      chat: sampleChat(),
+      events,
+      chat,
       credits: SAMPLE_CREDITS,
       chat_highlight: SAMPLE_HIGHLIGHT,
       links: realLinks ?? null,
     }
-  }, [labelKey, realLabels, realLinks])
+  }, [labelKey, realLabels, realLinks, events, chat])
 }
 
 /**

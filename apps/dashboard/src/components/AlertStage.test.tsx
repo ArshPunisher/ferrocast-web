@@ -178,4 +178,130 @@ describe('OverlayPreview incremental state updates (Finding #6)', () => {
     })
     expect(shadow!.querySelectorAll('.fc-events > li')).toHaveLength(2)
   })
+
+  it('sends incremental state frames carrying links without resetting EventsWidget DOM nodes', async () => {
+    const events: FerroEvent[] = [
+      {
+        id: 'ev-1',
+        seq: 1,
+        platform: 'twitch',
+        channel: null,
+        source_id: 's1',
+        occurred_at: 1000,
+        received_at: 1000,
+        origin: 'live',
+        kind: {
+          type: 'follow',
+          actor: {
+            platform: 'twitch',
+            id: 'u1',
+            login: 'alice',
+            display_name: 'Alice',
+            avatar_url: null,
+            color: null,
+            badges: [],
+            roles: 0,
+            anonymous: false,
+          },
+        },
+      },
+    ]
+    const chat: FerroEvent[] = []
+    const baseOverlay: Overlay = {
+      id: 'ov-links',
+      name: 'Links',
+      url: '',
+      width: 1920,
+      height: 1080,
+      updated_at: 0,
+      widgets: [
+        {
+          id: 'w-events',
+          kind: 'events',
+          x: 40,
+          y: 40,
+          w: 400,
+          h: 300,
+          config: { kinds: ['follow'], max_items: 6, theme: 'molten' },
+        },
+        {
+          id: 'w-soc',
+          kind: 'layer',
+          x: 40,
+          y: 900,
+          w: 600,
+          h: 60,
+          config: { type: 'text', text: '{socials}', color: '#ffffff' },
+        },
+      ],
+    }
+    const baseState: OverlayState = {
+      goals: [],
+      labels: {},
+      viewers: {},
+      events,
+      chat,
+      poll: null,
+      giveaway: null,
+      links: null,
+    }
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<OverlayPreview overlay={baseOverlay} state={baseState} />)
+    })
+
+    const shadow = host.querySelector('[data-overlay-preview] > div')?.shadowRoot
+    expect(shadow).toBeTruthy()
+    const firstEventLi = shadow!.querySelector('.fc-events > li')
+    expect(firstEventLi).toBeTruthy()
+    expect(shadow!.querySelector('.fc-lt')?.textContent).toBe('twitch.tv/novaplays')
+
+    await act(async () => {
+      root!.render(
+        <OverlayPreview
+          overlay={baseOverlay}
+          state={{
+            ...baseState,
+            links: {
+              twitch: 'twitch.tv/realcreator',
+              youtube: null,
+              kick: null,
+              facebook: null,
+              discord: null,
+              instagram: null,
+              x: null,
+              tiktok: null,
+              website: null,
+              custom: [],
+              socials: ['twitch.tv/realcreator'],
+              channel_name: 'RealCreator',
+              next_stream: null,
+              next_stream_at: null,
+            },
+          }}
+        />,
+      )
+    })
+    await act(async () => {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+    })
+
+    expect(shadow!.querySelector('.fc-lt')?.textContent).toBe('twitch.tv/realcreator')
+    expect(shadow!.querySelector('.fc-events > li')).toBe(firstEventLi)
+
+    await act(async () => {
+      root!.render(<OverlayPreview overlay={baseOverlay} state={{ ...baseState, links: null }} />)
+    })
+    await act(async () => {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+    })
+    expect(shadow!.querySelector('.fc-lt')?.textContent).toBe('twitch.tv/novaplays')
+    expect(shadow!.querySelector('.fc-events > li')).toBe(firstEventLi)
+  })
 })
