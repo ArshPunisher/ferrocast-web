@@ -1939,5 +1939,93 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('prunes grouped orphan sources when deleting a vertical scene while retaining shared sources', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.startVertical('Tall 1')
+        await api.addScene('Tall 2', true)
+        const onlyTall = await api.addSource('Tall 2', {
+          kind: 'color_source_v3',
+          name: 'Tall Only Color',
+        })
+        await api.addSource('Main', {
+          kind: 'color_source_v3',
+          name: 'Shared Color',
+        })
+        const sharedInTall = await api.addExisting('Tall 2', 'Shared Color')
+        await api.groupItems('Tall 2', [onlyTall.item.id, sharedInTall.item.id], 'Tall Group')
+        await api.removeScene('Tall 2')
+        await expect(
+          api.addSource('Main', { kind: 'color_source_v3', name: 'Tall Only Color' }),
+        ).resolves.toBeTruthy()
+        await expect(
+          api.addSource('Gameplay', { kind: 'color_source_v3', name: 'Shared Color' }),
+        ).rejects.toMatchObject({ status: 409, code: 'studio_name_taken' })
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('allows stopping an active vertical source recording after vertical is turned off', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.startVertical('Tall 1')
+        await api.recordSource('Tall 1', true)
+        expect((await api.stats()).source_records?.map((r) => r.name)).toContain('Tall 1')
+        await api.stopVertical()
+        await expect(api.recordSource('Tall 1', false)).resolves.toEqual({ file: null })
+        expect((await api.stats()).source_records ?? []).toEqual([])
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('updates group bounds and transform when deleting a nested scene reference inside a group', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.addScene('Full Nested')
+        const nestedRef = await api.addExisting('Gameplay', 'Full Nested')
+        const small = await api.addSource('Gameplay', {
+          kind: 'color_source_v3',
+          name: 'Small Box',
+        })
+        await api.setItemBox('Gameplay', small.item.id, {
+          x: 200,
+          y: 150,
+          w: 120,
+          h: 80,
+          save: true,
+        })
+        const grp = await api.groupItems(
+          'Gameplay',
+          [nestedRef.item.id, small.item.id],
+          'Mixed Group',
+        )
+        expect(grp.frame).toEqual([1920, 0, 0, 1080, 0, 0])
+
+        await api.removeScene('Full Nested')
+        const grpAfter = (await api.items('Gameplay')).find((i) => i.id === grp.id)!
+        expect(grpAfter.frame).toEqual([120, 0, 0, 80, 200, 150])
+        const grpTransform = await api.transform('Gameplay', grp.id)
+        expect([
+          grpTransform.x,
+          grpTransform.y,
+          grpTransform.bounds_width,
+          grpTransform.bounds_height,
+        ]).toEqual([200, 150, 120, 80])
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })

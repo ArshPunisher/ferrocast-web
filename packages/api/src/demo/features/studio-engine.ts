@@ -1573,6 +1573,13 @@ export class DemoStudioEngine {
     this.sources.delete(sourceName)
   }
 
+  private pruneItemsOrphans(items: EngineItem[]): void {
+    for (const it of items) {
+      if (it.group) this.pruneItemsOrphans(it.children)
+      else this.pruneOrphanSource(it.name)
+    }
+  }
+
   private sceneNameTaken(name: string): boolean {
     return (
       this.activeScenes.includes(name) ||
@@ -2352,7 +2359,7 @@ export class DemoStudioEngine {
         this.sceneItems.delete(name)
         this.verticalScenes = this.verticalScenes.filter((s) => s !== name)
         if (this.verticalCurrent === name) this.verticalCurrent = this.verticalScenes[0]!
-        for (const it of oldItems) if (!it.group) this.pruneOrphanSource(it.name)
+        this.pruneItemsOrphans(oldItems)
         return undefined
       }
       if (this.activeScenes.length < 2) {
@@ -2369,9 +2376,16 @@ export class DemoStudioEngine {
       const dropSceneRefs = (items: EngineItem[]): EngineItem[] =>
         items
           .filter((it) => it.group || it.kind !== 'scene' || it.name !== name)
-          .map((it) => (it.children.length ? { ...it, children: dropSceneRefs(it.children) } : it))
+          .map((it) => {
+            if (!it.children.length) return it
+            const nextChildren = dropSceneRefs(it.children)
+            if (nextChildren.length === it.children.length) return it
+            const next = { ...it, children: nextChildren }
+            if (next.group) this.syncGroupFrame(next)
+            return next
+          })
       for (const [k, v] of this.sceneItems) this.sceneItems.set(k, dropSceneRefs(v))
-      for (const it of oldItems) if (!it.group) this.pruneOrphanSource(it.name)
+      this.pruneItemsOrphans(oldItems)
       return undefined
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'current') {
@@ -3589,11 +3603,7 @@ export class DemoStudioEngine {
       const [removed] = list.splice(index, 1)
       if (parent) this.syncGroupFrame(parent)
       if (removed) {
-        const pruneNames = (it: EngineItem) => {
-          if (it.group) it.children.forEach(pruneNames)
-          else this.pruneOrphanSource(it.name)
-        }
-        pruneNames(removed)
+        this.pruneItemsOrphans([removed])
       }
       return undefined
     }
@@ -3975,6 +3985,10 @@ export class DemoStudioEngine {
         throw new HttpError(400, 'invalid', "name: a scene or source's name.")
       }
       const on = Boolean(requireObj(body).on)
+      if (!on && this.sourceRecords.has(name)) {
+        this.sourceRecords.delete(name)
+        return { file: null }
+      }
       if (
         !this.sources.has(name) &&
         !this.activeScenes.includes(name) &&
@@ -3983,7 +3997,6 @@ export class DemoStudioEngine {
         throw new HttpError(422, 'studio_failed', `There's no scene or source called "${name}".`)
       }
       if (!on) {
-        this.sourceRecords.delete(name)
         return { file: null }
       }
       const safe = name.replace(/[/\\:*?"<>|]/g, '-')
