@@ -624,6 +624,23 @@
         },
         "type": "object"
       },
+      "CaptureProblem": {
+        "description": "Active capture source on air showing no usable picture.",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "problem": {
+            "enum": ["permission", "waiting", "no_picture", "black"],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": ["source", "kind", "problem"],
+        "type": "object"
+      },
       "ChatSendRequest": {
         "properties": {
           "platforms": {
@@ -659,6 +676,73 @@
         "required": ["text", "platforms"],
         "type": "object"
       },
+      "CreatorLinks": {
+        "description": "Creator \"My links\" configuration. On PUT /api/v1/links, omitted fields and unknown future keys are preserved; an explicit empty string or null clears that field.",
+        "properties": {
+          "custom": {
+            "items": {
+              "$ref": "#/components/schemas/CustomLink"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "discord": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "facebook": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "instagram": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "kick": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "schedule_text": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "tiktok": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "twitch": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "website": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "x": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "youtube": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          }
+        },
+        "type": "object"
+      },
+      "CustomLink": {
+        "properties": {
+          "label": {
+            "maxLength": 40,
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": ["label", "value"],
+        "type": "object"
+      },
       "GoLiveDestinationCreate": {
         "properties": {
           "brand": {
@@ -686,6 +770,69 @@
           }
         },
         "required": ["name", "url"],
+        "type": "object"
+      },
+      "LabelsMap": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "Evaluated stream label display strings keyed by LabelSource snake_case name.",
+        "type": "object"
+      },
+      "LinksResponse": {
+        "properties": {
+          "custom": {
+            "items": {
+              "$ref": "#/components/schemas/CustomLink"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "discord": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "facebook": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "instagram": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "kick": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "resolved": {
+            "$ref": "#/components/schemas/ResolvedLinks"
+          },
+          "schedule_text": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "tiktok": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "twitch": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "website": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "x": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "youtube": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["custom", "resolved"],
         "type": "object"
       },
       "ModBanRequest": {
@@ -815,6 +962,69 @@
           }
         },
         "required": ["token"],
+        "type": "object"
+      },
+      "ResolvedLinks": {
+        "properties": {
+          "channel_name": {
+            "type": ["string", "null"]
+          },
+          "custom": {
+            "items": {
+              "$ref": "#/components/schemas/CustomLink"
+            },
+            "type": "array"
+          },
+          "discord": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "facebook": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "instagram": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "kick": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "next_stream": {
+            "type": ["string", "null"]
+          },
+          "next_stream_at": {
+            "type": ["integer", "null"]
+          },
+          "socials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tiktok": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "twitch": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "website": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "x": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          },
+          "youtube": {
+            "maxLength": 120,
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["custom", "socials"],
         "type": "object"
       },
       "ScheduleCreate": {
@@ -1558,6 +1768,145 @@
         "required": ["token", "action", "item_id", "item_title", "created_at"],
         "type": "object"
       },
+      "StudioEngineStats": {
+        "description": "Compositor metrics, active capture issues, output status, and per-source frame load.",
+        "properties": {
+          "canvas": {
+            "properties": {
+              "fps": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "captures": {
+            "items": {
+              "$ref": "#/components/schemas/CaptureProblem"
+            },
+            "type": "array"
+          },
+          "disk_free_mb": {
+            "type": "integer"
+          },
+          "engine": {
+            "properties": {
+              "cpu": {
+                "type": "number"
+              },
+              "encode_ms": {
+                "type": "number"
+              },
+              "encoded": {
+                "type": "integer"
+              },
+              "encoding_ms": {
+                "type": "integer"
+              },
+              "fps": {
+                "type": "number"
+              },
+              "frame_ms": {
+                "type": "number"
+              },
+              "frames": {
+                "type": "integer"
+              },
+              "lagged": {
+                "type": "integer"
+              },
+              "memory_mb": {
+                "type": "integer"
+              },
+              "recovered": {
+                "type": "integer"
+              },
+              "restarts": {
+                "type": "integer"
+              },
+              "skipped": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "history": {
+            "properties": {
+              "redo": {
+                "type": ["string", "null"]
+              },
+              "undo": {
+                "type": ["string", "null"]
+              }
+            },
+            "type": "object"
+          },
+          "ndi": {
+            "type": ["object", "null"]
+          },
+          "record": {
+            "type": ["object", "null"]
+          },
+          "remux": {
+            "type": ["object", "null"]
+          },
+          "replay": {
+            "type": ["object", "null"]
+          },
+          "scene": {
+            "type": ["string", "null"]
+          },
+          "sidechain_cycles": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source_records": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "height": {
+                  "type": ["integer", "null"]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "integer"
+                },
+                "waiting": {
+                  "type": "boolean"
+                },
+                "width": {
+                  "type": ["integer", "null"]
+                }
+              },
+              "required": ["name", "sent", "waiting"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "stream": {
+            "type": ["object", "null"]
+          },
+          "virtualcam": {
+            "type": ["object", "null"]
+          }
+        },
+        "required": ["engine", "scene", "history", "canvas", "disk_free_mb", "captures", "sources"],
+        "type": "object"
+      },
       "StudioItemBox": {
         "properties": {
           "h": {
@@ -1583,6 +1932,105 @@
           }
         },
         "required": ["name"],
+        "type": "object"
+      },
+      "StudioScreenshotResponse": {
+        "description": "Saved screenshot file result.",
+        "properties": {
+          "file": {
+            "description": "Full local path of the saved PNG screenshot.",
+            "type": "string"
+          }
+        },
+        "required": ["file"],
+        "type": "object"
+      },
+      "StudioSourceScreenshotRequest": {
+        "description": "Optional scene-item target. Provide both `scene` and `item` (here or as query parameters; omit both to capture the raw source).",
+        "properties": {
+          "item": {
+            "description": "Scene item id in `scene`.",
+            "type": "integer"
+          },
+          "scene": {
+            "description": "Scene name holding `item`.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StudioSourceStatus": {
+        "description": "Live health/status details for a source (`{}` when the source kind reports no live status).",
+        "properties": {
+          "app_on": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "camera": {
+            "description": "Present for open camera/capture sources.",
+            "properties": {
+              "message": {
+                "type": ["string", "null"]
+              },
+              "state": {
+                "enum": ["live", "waiting"],
+                "type": "string"
+              },
+              "tries": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": ["state", "tries"],
+            "type": "object"
+          },
+          "page": {
+            "properties": {
+              "error": {
+                "type": ["string", "null"]
+              },
+              "ok": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ok"],
+            "type": "object"
+          },
+          "web_text": {
+            "properties": {
+              "at_ms": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "error": {
+                "type": ["string", "null"]
+              },
+              "value": {
+                "type": ["string", "null"]
+              }
+            },
+            "type": ["object", "null"]
+          }
+        },
+        "type": "object"
+      },
+      "StudioSourceStill": {
+        "description": "Picker thumbnail response for a display, window, or camera.",
+        "properties": {
+          "error": {
+            "type": ["string", "null"]
+          },
+          "image": {
+            "type": ["string", "null"]
+          },
+          "waiting": {
+            "description": "Present and true only when a camera is temporarily disconnected or waiting for its first frame.",
+            "type": "boolean"
+          }
+        },
+        "required": ["image"],
         "type": "object"
       },
       "TestAlertRequest": {
@@ -1620,7 +2068,7 @@
     "description": "Authenticate using a dashboard pairing token or a scoped local API key (`Authorization: Bearer fc_key_...`). Keys are hashed with SHA-256, rate-limited (120 req/min default), audited without storing the secret, and never permitted on PC-only secret, account, plugin, diagnostics, or key-management endpoints.",
     "summary": "Loopback HTTP API exposed by the local Ferrocast engine and desktop daemon.",
     "title": "Ferrocast Local REST API",
-    "version": "3.4.0"
+    "version": "3.6.1"
   },
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "openapi": "3.1.0",
@@ -1675,7 +2123,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Connected platform account statuses (PC only).",
+        "summary": "Connected platform account statuses, logins, and public channel URLs (PC only).",
         "tags": ["Accounts & Pro"],
         "x-ferrocast-scopes": [],
         "x-pc-only": true
@@ -9503,6 +9951,193 @@
         "summary": "Supporter trends across streams.",
         "tags": ["Core"],
         "x-ferrocast-scopes": ["read_only"]
+      }
+    },
+    "/api/v1/labels": {
+      "get": {
+        "operationId": "get_labels",
+        "parameters": [
+          {
+            "description": "Viewer timezone offset in minutes (`-720` to `840`, default `0` UTC) for monthly label calendar bounds.",
+            "in": "query",
+            "name": "tz_offset_min",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 840,
+              "minimum": -720,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelsMap"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Missing, invalid, revoked, or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Insufficient API key scope, forbidden origin, or PC-only endpoint."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Per-key rate limit exceeded (see Retry-After header)."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Current evaluated stream label values by source key.",
+        "tags": ["Alerts & Overlays"],
+        "x-ferrocast-scopes": ["read_only", "alerts"]
+      }
+    },
+    "/api/v1/links": {
+      "get": {
+        "operationId": "get_links",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinksResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Missing, invalid, revoked, or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Insufficient API key scope, forbidden origin, or PC-only endpoint."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Per-key rate limit exceeded (see Retry-After header)."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Creator \"My links\" configuration and resolved overlay links/schedule values.",
+        "tags": ["Accounts & Pro"],
+        "x-ferrocast-scopes": ["read_only", "alerts", "settings"]
+      },
+      "put": {
+        "operationId": "put_links",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatorLinks"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinksResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Missing, invalid, revoked, or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Insufficient API key scope, forbidden origin, or PC-only endpoint."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Per-key rate limit exceeded (see Retry-After header)."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Partially update \"My links\" overrides, non-streaming socials, and custom links; omitted fields and unknown keys are preserved, `\"\"` or `null` clears a field, and live overlays update.",
+        "tags": ["Accounts & Pro"],
+        "x-ferrocast-scopes": ["settings"]
       }
     },
     "/api/v1/loyalty": {
@@ -27372,6 +28007,89 @@
         "x-pc-only": true
       }
     },
+    "/api/v1/studio/engine/scenes/{scene}/items/{id}/screenshot": {
+      "post": {
+        "operationId": "post_studio_engine_scenes__scene__items__id__screenshot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scene",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": ["object", "array"]
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Missing, invalid, revoked, or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Insufficient API key scope, forbidden origin, or PC-only endpoint."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Per-key rate limit exceeded (see Retry-After header)."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Save a PNG screenshot of a scene item with its filters and transform.",
+        "tags": ["Studio Engine"],
+        "x-ferrocast-scopes": [],
+        "x-pc-only": true
+      }
+    },
     "/api/v1/studio/engine/scenes/{scene}/items/{id}/transform": {
       "get": {
         "operationId": "get_studio_engine_scenes__scene__items__id__transform",
@@ -28096,6 +28814,37 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "`true` treats `{id}` as a window id instead of a display id.",
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Requested thumbnail width in pixels (default 240, max 320).",
+            "in": "query",
+            "name": "w",
+            "required": false,
+            "schema": {
+              "default": 240,
+              "maximum": 320,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pass `1` (or `true`) to bypass the 15 s still cache and probe a fresh frame.",
+            "in": "query",
+            "name": "fresh",
+            "required": false,
+            "schema": {
+              "type": ["string", "integer", "boolean"]
+            }
           }
         ],
         "responses": {
@@ -28103,7 +28852,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": ["object", "array"]
+                  "$ref": "#/components/schemas/StudioSourceStill"
                 }
               }
             },
@@ -29652,23 +30401,42 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Scene name holding `item` when capturing a scene item with transforms and filters (must be paired with `item`).",
+            "in": "query",
+            "name": "scene",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Scene item id in `scene` to capture with transforms and filters (must be paired with `scene`).",
+            "in": "query",
+            "name": "item",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/StudioSourceScreenshotRequest"
               }
             }
-          }
+          },
+          "required": false
         },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "type": ["object", "array"]
+                  "$ref": "#/components/schemas/StudioScreenshotResponse"
                 }
               }
             },
@@ -29710,7 +30478,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Save a PNG screenshot of a source.",
+        "summary": "Save a PNG screenshot of a source, or a scene item when `scene` and `item` are given.",
         "tags": ["Studio Engine"],
         "x-ferrocast-scopes": [],
         "x-pc-only": true
@@ -29873,7 +30641,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": ["object", "array"]
+                  "$ref": "#/components/schemas/StudioSourceStatus"
                 }
               }
             },
@@ -30068,7 +30836,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": ["object", "array"]
+                  "$ref": "#/components/schemas/StudioEngineStats"
                 }
               }
             },
@@ -30118,12 +30886,62 @@
     "/api/v1/studio/engine/still": {
       "get": {
         "operationId": "get_studio_engine_still",
+        "parameters": [
+          {
+            "description": "Source input kind id (for example `av_capture_input_v2`).",
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Device setting key (for example `device`).",
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Selected device setting value.",
+            "in": "query",
+            "name": "value",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Requested thumbnail width in pixels (default 240, max 320).",
+            "in": "query",
+            "name": "w",
+            "required": false,
+            "schema": {
+              "default": 240,
+              "maximum": 320,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pass `1` (or `true`) to bypass the 15 s still cache and probe a fresh frame.",
+            "in": "query",
+            "name": "fresh",
+            "required": false,
+            "schema": {
+              "type": ["string", "integer", "boolean"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "type": ["object", "array"]
+                  "$ref": "#/components/schemas/StudioSourceStill"
                 }
               }
             },
