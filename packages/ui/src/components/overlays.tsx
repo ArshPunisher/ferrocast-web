@@ -531,7 +531,7 @@ export function Toaster() {
       ref={ref}
       popover="manual"
       aria-label="Notifications"
-      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] bottom-auto z-[70] m-0 flex h-fit w-full flex-col items-center gap-2 overflow-visible border-0 bg-transparent px-3 py-0 text-inherit sm:top-auto sm:right-0 sm:bottom-[calc(1rem+var(--fc-statusbar,0px))] sm:left-0 sm:w-full sm:items-center sm:pr-[min(var(--fc-drawer,0px),max(0px,100vw-25rem))]"
+      className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] bottom-auto z-[70] m-0 flex h-fit w-full flex-col items-center gap-2 overflow-visible border-0 bg-transparent px-3 py-0 text-inherit sm:top-auto sm:right-0 sm:bottom-[calc(1rem+var(--fc-statusbar,0px)+var(--fc-toast-offset,0px))] sm:left-0 sm:w-full sm:items-center sm:pr-[min(var(--fc-drawer,0px),max(0px,100vw-25rem))]"
     >
       <AnimatePresence initial={false}>
         {list.map((t) => (

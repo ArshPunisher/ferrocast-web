@@ -180,41 +180,102 @@ export function OverlayPreview({
   const rt = useRef<OverlayRuntime | null>(null)
   const latest = useRef({ overlay, state })
   latest.current = { overlay, state }
+  const applied = useRef<{ overlay: Overlay; state: OverlayState } | null>(null)
   const seq = useRef(0)
   const frame = useRef(0)
-  const pending = useRef<'config' | 'snapshot' | null>(null)
-  // Coalesce updates to one per animation frame; a drag only needs a `config` (layout)
-  // frame, while new chat or goals need a fresh `snapshot`.
-  const schedule = (kind: 'config' | 'snapshot') => {
-    pending.current = pending.current === 'snapshot' ? 'snapshot' : kind
+  const pending = useRef<{ config: boolean; state: boolean; snapshot: boolean }>({
+    config: false,
+    state: false,
+    snapshot: false,
+  })
+  // Coalesce updates to one per animation frame: layout edits send `config`, state-only edits
+  // (labels, goals, viewers, poll, giveaway, credits, highlight) send `state` so chat and event
+  // lists don't tear down and reset, and chat/event stream changes send `snapshot`.
+  const schedule = (kind: 'config' | 'state' | 'snapshot') => {
+    if (!rt.current) return
+    pending.current[kind] = true
     if (frame.current) return
     frame.current = requestAnimationFrame(() => {
       frame.current = 0
       const r = rt.current
-      const k = pending.current
-      pending.current = null
-      if (!r || !k) return
-      seq.current += 1
+      const p = pending.current
+      pending.current = { config: false, state: false, snapshot: false }
+      if (!r || (!p.config && !p.state && !p.snapshot)) return
+      const prev = applied.current
       const { overlay: o, state: st } = latest.current
-      if (k === 'config') r.apply({ v: 1, seq: seq.current, type: 'config', data: o })
-      else r.apply({ v: 1, seq: seq.current, type: 'snapshot', data: { overlay: o, state: st } })
+      applied.current = { overlay: o, state: st }
+      if (p.snapshot) {
+        seq.current += 1
+        r.apply({ v: 1, seq: seq.current, type: 'snapshot', data: { overlay: o, state: st } })
+        return
+      }
+      if (p.config) {
+        seq.current += 1
+        r.apply({ v: 1, seq: seq.current, type: 'config', data: o })
+      }
+      if (p.state) {
+        const prevTrains = prev?.state.label_trains
+        const clearedTrains: Record<string, null> = {}
+        if (prevTrains) {
+          for (const k of Object.keys(prevTrains)) {
+            if (!st.label_trains || !(k in st.label_trains)) clearedTrains[k] = null
+          }
+        }
+        const labelTrains =
+          st.label_trains || Object.keys(clearedTrains).length > 0
+            ? { ...clearedTrains, ...(st.label_trains ?? {}) }
+            : undefined
+        seq.current += 1
+        r.apply({
+          v: 1,
+          seq: seq.current,
+          type: 'state',
+          data: {
+            goals: st.goals,
+            labels: st.labels,
+            ...(labelTrains ? { label_trains: labelTrains } : {}),
+            viewers: st.viewers,
+            poll: st.poll ?? null,
+            giveaway: st.giveaway ?? null,
+            credits: st.credits ?? null,
+            chat_highlight: st.chat_highlight ?? null,
+            ...(st.show
+              ? { show: st.show }
+              : prev?.state.show
+                ? { show: { countdown_ends_at: null } }
+                : {}),
+          },
+        })
+      }
     })
   }
   useEffect(() => {
     if (!root) return
     const r = createOverlay(root, { audio: false, fit: 'contain', lowMotion: !live })
     rt.current = r
+    applied.current = { ...latest.current }
+    pending.current = { config: false, state: false, snapshot: false }
     seq.current += 1
     r.apply({ v: 1, seq: seq.current, type: 'snapshot', data: { ...latest.current } })
     return () => {
       cancelAnimationFrame(frame.current)
       frame.current = 0
+      pending.current = { config: false, state: false, snapshot: false }
+      applied.current = null
       r.destroy()
       rt.current = null
     }
   }, [root, live])
-  useEffect(() => schedule('config'), [overlay])
-  useEffect(() => schedule('snapshot'), [state])
+  useEffect(() => {
+    if (!rt.current || overlay === applied.current?.overlay) return
+    schedule('config')
+  }, [overlay])
+  useEffect(() => {
+    const prev = applied.current?.state
+    if (!rt.current || !prev || state === prev) return
+    const sameStreams = state.events === prev.events && state.chat === prev.chat
+    schedule(sameStreams ? 'state' : 'snapshot')
+  }, [state])
   return (
     // A picture of what viewers will see, not part of the dashboard: hidden from screen
     // readers (each card names it) and left out of the dashboard's contrast checks.

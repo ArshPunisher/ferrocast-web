@@ -5,6 +5,8 @@
 
 import {
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -25,7 +27,6 @@ import {
   EyeSlash,
   FrameCorners,
   ImageSquare,
-  Keyboard,
   Lock,
   LockOpen,
   Play,
@@ -77,6 +78,7 @@ import {
   Button,
   Field,
   IconButton,
+  InfoTip,
   Input,
   Segmented,
   Select,
@@ -95,9 +97,11 @@ import {
   clampWidget,
   kindInfo,
   newWidget,
+  nextWidgetId,
   snap,
 } from './widget-settings'
 import { useClient } from '../../lib/hooks'
+import { hasOpenDialog, isEditableElement, isTextEditingElement } from '../../lib/keys'
 
 export interface Layout {
   name: string
@@ -167,8 +171,9 @@ function newLayer(
   type: Exclude<LayerKind, 'brand'>,
   o: { width: number; height: number },
   media?: string,
+  existing: readonly { id: string }[] = [],
 ): Widget {
-  const id = `l-${Date.now().toString(36)}`
+  const id = nextWidgetId('l', existing)
   const box = (w: number, h: number) => ({
     x: snap((o.width - w) / 2),
     y: snap((o.height - h) / 2),
@@ -266,6 +271,53 @@ function newLayer(
   }
 }
 
+export function containSize(
+  boxW: number,
+  boxH: number,
+  layoutW: number,
+  layoutH: number,
+): { scale: number; width: number; height: number } | null {
+  if (
+    !Number.isFinite(boxW) ||
+    !Number.isFinite(boxH) ||
+    !Number.isFinite(layoutW) ||
+    !Number.isFinite(layoutH) ||
+    boxW <= 0 ||
+    boxH <= 0 ||
+    layoutW <= 0 ||
+    layoutH <= 0
+  ) {
+    return null
+  }
+  const scale = Math.min(boxW / layoutW, boxH / layoutH)
+  return {
+    scale,
+    width: Math.floor(layoutW * scale),
+    height: Math.floor(layoutH * scale),
+  }
+}
+
+function useViewportLockMedia(enabled: boolean): boolean {
+  const query = '(min-width: 1024px) and (min-height: 640px)'
+  const [matches, setMatches] = useState(() =>
+    enabled && typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(query).matches
+      : false,
+  )
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setMatches(false)
+      return
+    }
+    const mq = window.matchMedia(query)
+    const sync = () => setMatches(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [enabled])
+  return matches
+}
+
 function Canvas({
   layout,
   selected,
@@ -275,6 +327,8 @@ function Canvas({
   state,
   readOnly,
   brandLocked,
+  fitViewport = false,
+  canvasRef,
 }: {
   layout: Layout
   selected: string | null
@@ -284,11 +338,17 @@ function Canvas({
   state: OverlayState
   readOnly: boolean
   brandLocked: boolean
+  fitViewport?: boolean
+  canvasRef?: React.RefObject<HTMLDivElement | null>
 }) {
   /** The mark of a built-in can't be moved either (it's kept, as placed by the design). */
   const fixed = (w: Widget) => readOnly || !!w.locked || (brandLocked && isBrandLayer(w))
-  const box = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(0.5)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const localBox = useRef<HTMLDivElement>(null)
+  const box = canvasRef ?? localBox
+  const lockedDesktop = useViewportLockMedia(fitViewport)
+  const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
+  const [measuredScale, setMeasuredScale] = useState(0.5)
   const drag = useRef<{
     id: string
     mode: 'move' | 'resize'
@@ -297,13 +357,55 @@ function Canvas({
     start: Widget
   } | null>(null)
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] })
-  useEffect(() => {
+
+  useLayoutEffect(() => {
+    if (!lockedDesktop) return
+    const stage = stageRef.current
+    if (!stage) return
+    const syncStage = () => {
+      const w = stage.clientWidth
+      const h = stage.clientHeight
+      setStageSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }))
+    }
+    syncStage()
+    if (typeof ResizeObserver !== 'function') return
+    const ro = new ResizeObserver(syncStage)
+    ro.observe(stage)
+    return () => ro.disconnect()
+  }, [lockedDesktop])
+
+  const frame = lockedDesktop
+    ? containSize(stageSize.w, stageSize.h, layout.width, layout.height)
+    : null
+
+  useLayoutEffect(() => {
     const el = box.current
     if (!el) return
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / layout.width))
+    const syncScale = () => {
+      if (el.clientWidth > 0) setMeasuredScale(el.clientWidth / layout.width)
+    }
+    syncScale()
+    if (typeof ResizeObserver !== 'function') return
+    const ro = new ResizeObserver(syncScale)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [layout.width])
+  }, [box, layout.width, frame?.width, frame?.height])
+
+  const scale = frame ? frame.scale : measuredScale
+
+  const previewOverlay = useMemo(
+    () => ({
+      id: 'draft',
+      url: '',
+      updated_at: 0,
+      name: layout.name,
+      width: layout.width,
+      height: layout.height,
+      widgets: layout.widgets,
+      ...(layout.design !== undefined ? { design: layout.design } : {}),
+    }),
+    [layout.name, layout.width, layout.height, layout.widgets, layout.design],
+  )
 
   /** Lines a moving box can snap to: the canvas edges and centre, and every other layer's. */
   const lines = (except: string) => {
@@ -367,156 +469,173 @@ function Canvas({
 
   return (
     <div
-      ref={box}
-      className="relative aspect-video w-full touch-none overflow-hidden rounded-panel border border-line bg-[repeating-conic-gradient(var(--fc-surface-2)_0%_25%,var(--fc-surface-1)_0%_50%)] [background-size:24px_24px] select-none"
-      onPointerDown={() => onSelect(null)}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-      aria-label={`${layout.name} layout, ${layout.width} by ${layout.height}`}
-      role="group"
-    >
-      {preview && (
-        <OverlayPreview
-          overlay={{ id: 'draft', url: '', updated_at: 0, ...layout }}
-          state={state}
-          live
-          className="pointer-events-none absolute inset-0"
-        />
+      ref={stageRef}
+      className={cx(
+        'relative flex w-full items-center justify-center',
+        fitViewport && 'fc-overlay-stage-inner',
       )}
-      {guides.x.map((x) => (
-        <div
-          key={`x${x}`}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 w-px bg-accent-text/80"
-          style={{ left: x * scale }}
-        />
-      ))}
-      {guides.y.map((y) => (
-        <div
-          key={`y${y}`}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 h-px bg-accent-text/80"
-          style={{ top: y * scale }}
-        />
-      ))}
-      {layout.widgets.map((w) => {
-        const Icon = iconFor(w)
-        const sel = w.id === selected
-        const name = layerName(w)
-        const kind = w.kind === 'layer' ? 'layer' : 'widget'
-        const passthrough = w.kind === 'emote_wall'
-        return (
+    >
+      <div
+        ref={box}
+        tabIndex={-1}
+        className={cx(
+          'relative touch-none overflow-hidden rounded-panel bg-[repeating-conic-gradient(var(--fc-surface-2)_0%_25%,var(--fc-surface-1)_0%_50%)] [background-size:24px_24px] ring-1 ring-line select-none focus:outline-none',
+          !frame && 'w-full',
+        )}
+        style={
+          frame
+            ? { width: frame.width, height: frame.height }
+            : { aspectRatio: `${layout.width} / ${layout.height}` }
+        }
+        onPointerDown={() => onSelect(null)}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        aria-label={`${layout.name} layout, ${layout.width} by ${layout.height}`}
+        role="group"
+      >
+        {preview && (
+          <OverlayPreview
+            overlay={previewOverlay}
+            state={state}
+            live
+            className="pointer-events-none absolute inset-0"
+          />
+        )}
+        {guides.x.map((x) => (
           <div
-            key={w.id}
-            role="button"
-            tabIndex={0}
-            aria-pressed={sel}
-            aria-label={`${w.kind === 'layer' ? name : kindInfo(w.kind).label} ${kind} at ${w.x}, ${w.y}, ${w.w} by ${w.h}.${w.locked ? ' Locked.' : ' Arrow keys move it, Alt with arrows resizes.'}${w.hidden ? ' Hidden on stream.' : ''}`}
-            onPointerDown={passthrough ? undefined : (e) => onDown(e, w, 'move')}
-            onFocus={() => onSelect(w.id)}
-            onKeyDown={(e) => {
-              if (fixed(w)) return
-              const step = e.shiftKey ? GRID * 5 : GRID
-              const map: Record<string, [number, number]> = {
-                ArrowLeft: [-step, 0],
-                ArrowRight: [step, 0],
-                ArrowUp: [0, -step],
-                ArrowDown: [0, step],
-              }
-              const m = map[e.key]
-              if (!m) return
-              e.preventDefault()
-              onChange(
-                clampWidget(
-                  e.altKey
-                    ? { ...w, w: w.w + m[0], h: w.h + m[1] }
-                    : { ...w, x: w.x + m[0], y: w.y + m[1] },
-                  layout,
-                ),
-              )
-            }}
-            className={cx(
-              'group absolute rounded-[6px] border-2 transition-[border-color,background-color] duration-100 focus-visible:outline-none',
-              passthrough ? 'pointer-events-none' : fixed(w) ? 'cursor-default' : 'cursor-move',
-              sel
-                ? 'border-accent-text bg-accent-soft/40'
-                : preview
-                  ? 'border-dashed border-line-strong/70 hover:border-text-3'
-                  : 'border-line-strong bg-surface-1/70 hover:border-text-3',
-              w.hidden && 'opacity-40',
-            )}
-            style={{
-              left: w.x * scale,
-              top: w.y * scale,
-              width: w.w * scale,
-              height: w.h * scale,
-              rotate: w.rotation ? `${w.rotation}deg` : undefined,
-            }}
-          >
-            {passthrough && (
-              <>
+            key={`x${x}`}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 w-px bg-accent-text/80"
+            style={{ left: x * scale }}
+          />
+        ))}
+        {guides.y.map((y) => (
+          <div
+            key={`y${y}`}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 h-px bg-accent-text/80"
+            style={{ top: y * scale }}
+          />
+        ))}
+        {layout.widgets.map((w) => {
+          const Icon = iconFor(w)
+          const sel = w.id === selected
+          const name = layerName(w)
+          const kind = w.kind === 'layer' ? 'layer' : 'widget'
+          const passthrough = w.kind === 'emote_wall'
+          return (
+            <div
+              key={w.id}
+              role="button"
+              tabIndex={0}
+              aria-pressed={sel}
+              aria-label={`${w.kind === 'layer' ? name : kindInfo(w.kind).label} ${kind} at ${w.x}, ${w.y}, ${w.w} by ${w.h}.${w.locked ? ' Locked.' : brandLocked && isBrandLayer(w) ? ' Kept on built-in designs.' : ' Arrow keys move it, Alt with arrows resizes, Delete or Backspace removes it.'}${w.hidden ? ' Hidden on stream.' : ''}`}
+              onPointerDown={passthrough ? undefined : (e) => onDown(e, w, 'move')}
+              onFocus={() => onSelect(w.id)}
+              onKeyDown={(e) => {
+                if (fixed(w)) return
+                const step = e.shiftKey ? GRID * 5 : GRID
+                const map: Record<string, [number, number]> = {
+                  ArrowLeft: [-step, 0],
+                  ArrowRight: [step, 0],
+                  ArrowUp: [0, -step],
+                  ArrowDown: [0, step],
+                }
+                const m = map[e.key]
+                if (!m) return
+                e.preventDefault()
+                onChange(
+                  clampWidget(
+                    e.altKey
+                      ? { ...w, w: w.w + m[0], h: w.h + m[1] }
+                      : { ...w, x: w.x + m[0], y: w.y + m[1] },
+                    layout,
+                  ),
+                )
+              }}
+              className={cx(
+                'group absolute rounded-[6px] border-2 transition-[border-color,background-color] duration-100 focus-visible:outline-none',
+                passthrough ? 'pointer-events-none' : fixed(w) ? 'cursor-default' : 'cursor-move',
+                sel
+                  ? 'border-accent-text bg-accent-soft/40'
+                  : preview
+                    ? 'border-dashed border-line-strong/70 hover:border-text-3'
+                    : 'border-line-strong bg-surface-1/70 hover:border-text-3',
+                w.hidden && 'opacity-40',
+              )}
+              style={{
+                left: w.x * scale,
+                top: w.y * scale,
+                width: w.w * scale,
+                height: w.h * scale,
+                rotate: w.rotation ? `${w.rotation}deg` : undefined,
+              }}
+            >
+              {passthrough && (
+                <>
+                  <span
+                    data-emote-wall-edge="top"
+                    onPointerDown={(e) => onDown(e, w, 'move')}
+                    className={cx(
+                      'pointer-events-auto absolute inset-x-1.5 top-0 h-1.5',
+                      fixed(w) ? 'cursor-default' : 'cursor-move',
+                    )}
+                  />
+                  <span
+                    data-emote-wall-edge="bottom"
+                    onPointerDown={(e) => onDown(e, w, 'move')}
+                    className={cx(
+                      'pointer-events-auto absolute inset-x-1.5 bottom-0 h-1.5',
+                      fixed(w) ? 'cursor-default' : 'cursor-move',
+                    )}
+                  />
+                  <span
+                    data-emote-wall-edge="left"
+                    onPointerDown={(e) => onDown(e, w, 'move')}
+                    className={cx(
+                      'pointer-events-auto absolute inset-y-1.5 left-0 w-1.5',
+                      fixed(w) ? 'cursor-default' : 'cursor-move',
+                    )}
+                  />
+                  <span
+                    data-emote-wall-edge="right"
+                    onPointerDown={(e) => onDown(e, w, 'move')}
+                    className={cx(
+                      'pointer-events-auto absolute inset-y-1.5 right-0 w-1.5',
+                      fixed(w) ? 'cursor-default' : 'cursor-move',
+                    )}
+                  />
+                </>
+              )}
+              {(!preview || sel) && (
                 <span
-                  data-emote-wall-edge="top"
-                  onPointerDown={(e) => onDown(e, w, 'move')}
+                  data-widget-tag={w.id}
+                  onPointerDown={passthrough ? (e) => onDown(e, w, 'move') : undefined}
                   className={cx(
-                    'pointer-events-auto absolute inset-x-1.5 top-0 h-1.5',
-                    fixed(w) ? 'cursor-default' : 'cursor-move',
+                    'absolute z-10 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
+                    w.y * scale >= 26
+                      ? 'bottom-[calc(100%+4px)] left-0 whitespace-nowrap'
+                      : 'top-1 left-1 max-w-[calc(100%-8px)] truncate',
+                    passthrough && 'pointer-events-auto',
+                    sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
                   )}
-                />
+                >
+                  {w.locked ? <Lock size={12} weight="bold" /> : <Icon size={12} weight="bold" />}
+                  {name}
+                </span>
+              )}
+              {sel && !fixed(w) && (
                 <span
-                  data-emote-wall-edge="bottom"
-                  onPointerDown={(e) => onDown(e, w, 'move')}
-                  className={cx(
-                    'pointer-events-auto absolute inset-x-1.5 bottom-0 h-1.5',
-                    fixed(w) ? 'cursor-default' : 'cursor-move',
-                  )}
+                  role="presentation"
+                  onPointerDown={(e) => onDown(e, w, 'resize')}
+                  className="pointer-events-auto absolute -right-1.5 -bottom-1.5 size-4 cursor-nwse-resize rounded-[4px] border-2 border-accent-text bg-bg"
                 />
-                <span
-                  data-emote-wall-edge="left"
-                  onPointerDown={(e) => onDown(e, w, 'move')}
-                  className={cx(
-                    'pointer-events-auto absolute inset-y-1.5 left-0 w-1.5',
-                    fixed(w) ? 'cursor-default' : 'cursor-move',
-                  )}
-                />
-                <span
-                  data-emote-wall-edge="right"
-                  onPointerDown={(e) => onDown(e, w, 'move')}
-                  className={cx(
-                    'pointer-events-auto absolute inset-y-1.5 right-0 w-1.5',
-                    fixed(w) ? 'cursor-default' : 'cursor-move',
-                  )}
-                />
-              </>
-            )}
-            {(!preview || sel) && (
-              <span
-                data-widget-tag={w.id}
-                onPointerDown={passthrough ? (e) => onDown(e, w, 'move') : undefined}
-                className={cx(
-                  'absolute z-10 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[13px] font-semibold',
-                  w.y * scale >= 26
-                    ? 'bottom-[calc(100%+4px)] left-0 whitespace-nowrap'
-                    : 'top-1 left-1 max-w-[calc(100%-8px)] truncate',
-                  passthrough && 'pointer-events-auto',
-                  sel ? 'bg-btn-primary text-on-btn-primary' : 'bg-surface-3 text-text-2',
-                )}
-              >
-                {w.locked ? <Lock size={12} weight="bold" /> : <Icon size={12} weight="bold" />}
-                {name}
-              </span>
-            )}
-            {sel && !fixed(w) && (
-              <span
-                role="presentation"
-                onPointerDown={(e) => onDown(e, w, 'resize')}
-                className="pointer-events-auto absolute -right-1.5 -bottom-1.5 size-4 cursor-nwse-resize rounded-[4px] border-2 border-accent-text bg-bg"
-              />
-            )}
-          </div>
-        )
-      })}
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -589,7 +708,12 @@ function LayersPanel({
           >
             <button
               type="button"
-              onClick={() => onSelect(w.id)}
+              onClick={(e) => {
+                // In macOS WKWebView / Safari, clicking a button does not move focus off an active
+                // inspector textarea; move focus explicitly so Backspace removes the picked layer.
+                e.currentTarget.focus({ preventScroll: true })
+                onSelect(w.id)
+              }}
               aria-pressed={w.id === selected}
               className={cx(
                 'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-[15px] font-semibold',
@@ -1404,6 +1528,8 @@ export function LayoutEditor({
   onPreview,
   rail,
   extra,
+  fitViewport = false,
+  footer,
 }: {
   layout: Layout
   onWidgets: (widgets: Widget[], opts?: { merge?: boolean }) => void
@@ -1422,13 +1548,23 @@ export function LayoutEditor({
   rail?: ReactNode
   /** Shown under the layers when nothing is selected, e.g. a theme's settings. */
   extra?: ReactNode
+  /** Viewport-lock the desktop layout so canvas fills available stage height cleanly. */
+  fitViewport?: boolean
+  /** Status or unsaved bar anchored below the canvas toolbar on desktop. */
+  footer?: ReactNode
 }) {
   const client = useClient()
   const [selected, setSelected] = useState<string | null>(null)
+  const [announcement, setAnnouncement] = useState<{ seq: number; text: string } | null>(null)
   const file = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const layersRef = useRef<HTMLElement>(null)
+  const layersHeadingRef = useRef<HTMLHeadingElement>(null)
+  const onWidgetsRef = useRef(onWidgets)
+  onWidgetsRef.current = onWidgets
   const sel = layout.widgets.find((w) => w.id === selected) ?? null
   const update = (w: Widget, opts?: { merge?: boolean }) =>
-    onWidgets(
+    onWidgetsRef.current(
       layout.widgets.map((x) => (x.id === w.id ? clampWidget(w, layout) : x)),
       opts,
     )
@@ -1442,13 +1578,65 @@ export function LayoutEditor({
       })
       return
     }
-    onWidgets(opts.bottom ? [w, ...layout.widgets] : [...layout.widgets, w])
+    if (
+      typeof document !== 'undefined' &&
+      isEditableElement(document.activeElement) &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      document.activeElement.blur()
+    }
+    onWidgetsRef.current(opts.bottom ? [w, ...layout.widgets] : [...layout.widgets, w])
     setSelected(w.id)
   }
   const remove = (id: string) => {
-    onWidgets(layout.widgets.filter((x) => x.id !== id))
+    const target = layout.widgets.find((x) => x.id === id)
+    onWidgetsRef.current(layout.widgets.filter((x) => x.id !== id))
     setSelected(null)
+    if (target) {
+      setAnnouncement((prev) => ({
+        seq: (prev?.seq ?? 0) + 1,
+        text: `Removed ${layerName(target)}. Press Cmd or Ctrl + Z to undo.`,
+      }))
+    }
+    canvasRef.current?.focus({ preventScroll: true })
   }
+  const keyActionRef = useRef({ sel, brandLocked, remove })
+  keyActionRef.current = { sel, brandLocked, remove }
+  useEffect(() => {
+    if (readOnly) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (hasOpenDialog()) return
+      const target = e.target
+      const active = typeof document !== 'undefined' ? document.activeElement : null
+      if (isEditableElement(target) || isEditableElement(active)) {
+        if (
+          e.key === 'Backspace' &&
+          !isTextEditingElement(target) &&
+          !isTextEditingElement(active)
+        ) {
+          e.preventDefault()
+        }
+        return
+      }
+      e.preventDefault()
+      const { sel: current, brandLocked: lockedBrand, remove: removeLayer } = keyActionRef.current
+      if (!current) return
+      if (current.locked) {
+        toast({ tone: 'warn', message: 'Unlock this layer to remove it.' })
+        return
+      }
+      if (lockedBrand && isBrandLayer(current)) {
+        toast({ tone: 'warn', message: 'Built-in designs keep this Ferrocast mark.' })
+        return
+      }
+      removeLayer(current.id)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [readOnly])
   const align = (how: 'l' | 'c' | 'r' | 't' | 'm' | 'b') => {
     if (!sel) return
     const x =
@@ -1477,53 +1665,63 @@ export function LayoutEditor({
       key: k.kind,
       label: k.label,
       icon: <k.icon size={15} />,
-      onSelect: () => add(newWidget(k.kind, layout, goals)),
+      onSelect: () => add(newWidget(k.kind, layout, goals, layout.widgets)),
     })),
     {
       key: 'shape',
       label: 'Shape',
       icon: <Shapes size={15} />,
-      onSelect: () => add(newLayer('shape', layout)),
+      onSelect: () => add(newLayer('shape', layout, undefined, layout.widgets)),
     },
     {
       key: 'frame',
       label: 'Frame',
       icon: <FrameCorners size={15} />,
-      onSelect: () => add(newLayer('frame', layout)),
+      onSelect: () => add(newLayer('frame', layout, undefined, layout.widgets)),
     },
     {
       key: 'webcam',
       label: 'Webcam frame',
       icon: <VideoCamera size={15} />,
-      onSelect: () => add(newLayer('webcam', layout)),
+      onSelect: () => add(newLayer('webcam', layout, undefined, layout.widgets)),
     },
     {
       key: 'fx',
       label: 'Motion background',
       icon: <Sparkle size={15} />,
-      onSelect: () => add(newLayer('fx', layout), { bottom: true }),
+      onSelect: () => add(newLayer('fx', layout, undefined, layout.widgets), { bottom: true }),
     },
     {
       key: 'music',
       label: 'Music',
       icon: <Waveform size={15} />,
-      onSelect: () => add(newLayer('music', layout)),
+      onSelect: () => add(newLayer('music', layout, undefined, layout.widgets)),
     },
     {
       key: 'sound',
       label: 'Sound',
       icon: <SpeakerHigh size={15} />,
-      onSelect: () => add(newLayer('sound', layout)),
+      onSelect: () => add(newLayer('sound', layout, undefined, layout.widgets)),
     },
   ]
   const addPicture = () => {
     const first = media.find((m) => m.kind === 'image')
-    if (first) add(newLayer('image', layout, first.id))
+    if (first) add(newLayer('image', layout, first.id, layout.widgets))
     else file.current?.click()
   }
   const layers = (
-    <section aria-label="Layers" className="flex flex-col gap-2">
-      <h2 className="font-display text-[18px] font-extrabold">Layers</h2>
+    <section
+      ref={layersRef}
+      aria-label="Layers"
+      className={cx('flex flex-col gap-2', fitViewport && 'fc-overlay-layers')}
+    >
+      <h2
+        ref={layersHeadingRef}
+        tabIndex={-1}
+        className="font-display text-[18px] font-extrabold focus:outline-none"
+      >
+        Layers
+      </h2>
       <LayersPanel
         layout={layout}
         selected={selected}
@@ -1537,13 +1735,35 @@ export function LayoutEditor({
   return (
     <div
       className={cx(
-        'grid grid-cols-1 gap-4',
-        rail ? 'xl:grid-cols-[148px_minmax(0,1fr)_310px]' : 'xl:grid-cols-[minmax(0,1fr)_320px]',
+        fitViewport
+          ? 'fc-overlay-grid flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_336px]'
+          : cx(
+              'grid grid-cols-1 gap-4',
+              rail
+                ? 'xl:grid-cols-[148px_minmax(0,1fr)_310px]'
+                : 'xl:grid-cols-[minmax(0,1fr)_320px]',
+            ),
       )}
     >
       {rail}
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="rounded-panel bg-[#0d0f13] bg-[radial-gradient(rgb(255_255_255/0.06)_1px,transparent_1px)] [background-size:18px_18px] p-2.5 sm:p-5">
+      <div
+        className={cx(
+          fitViewport
+            ? 'contents lg:flex lg:min-h-0 lg:flex-col lg:gap-2.5'
+            : 'flex min-w-0 flex-col gap-3',
+        )}
+      >
+        <div
+          className={cx(
+            'relative flex flex-col rounded-panel bg-[#0d0f13] bg-[radial-gradient(rgb(255_255_255/0.06)_1px,transparent_1px)] [background-size:18px_18px]',
+            fitViewport
+              ? 'fc-overlay-stage order-1 items-center justify-center overflow-hidden p-2.5 sm:p-4 lg:order-none'
+              : 'p-2.5 sm:p-5',
+          )}
+        >
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {announcement ? <span key={announcement.seq}>{announcement.text}</span> : null}
+          </div>
           <Canvas
             layout={layout}
             selected={selected}
@@ -1553,15 +1773,24 @@ export function LayoutEditor({
             state={state}
             readOnly={readOnly}
             brandLocked={brandLocked}
+            fitViewport={fitViewport}
+            canvasRef={canvasRef}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Canvas">
+        <div
+          className={cx(
+            'relative flex flex-wrap items-center gap-1.5',
+            fitViewport && 'order-2 shrink-0 lg:order-none',
+          )}
+          role="toolbar"
+          aria-label="Canvas"
+        >
           {!readOnly && (
             <>
               <Button
                 size="sm"
                 icon={<TextT size={15} />}
-                onClick={() => add(newLayer('text', layout))}
+                onClick={() => add(newLayer('text', layout, undefined, layout.widgets))}
               >
                 Text
               </Button>
@@ -1575,7 +1804,7 @@ export function LayoutEditor({
                     key={k}
                     size="sm"
                     icon={<info.icon size={15} />}
-                    onClick={() => add(newWidget(k, layout, goals))}
+                    onClick={() => add(newWidget(k, layout, goals, layout.widgets))}
                   >
                     {info.label}
                   </Button>
@@ -1604,16 +1833,10 @@ export function LayoutEditor({
               {preview ? <Pause size={16} /> : <Play size={16} />}
             </IconButton>
           )}
-          <span
-            className="inline-flex size-8 items-center justify-center rounded-control text-text-3"
-            title="Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows resize, Shift for bigger steps. Cmd or Ctrl + Z undoes."
-          >
-            <Keyboard size={17} aria-hidden="true" />
-            <span className="sr-only">
-              Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
-              resize, Shift for bigger steps. Cmd or Ctrl + Z undoes.
-            </span>
-          </span>
+          <InfoTip label="Keyboard shortcuts" above>
+            Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
+            resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z undoes.
+          </InfoTip>
           <input
             ref={file}
             type="file"
@@ -1629,7 +1852,7 @@ export function LayoutEditor({
                 .upload(f, f.name)
                 .then((m) => {
                   onUploaded(m)
-                  add(newLayer('image', layout, m.id))
+                  add(newLayer('image', layout, m.id, layout.widgets))
                 })
                 .catch((err: unknown) => {
                   const d = describeError(err)
@@ -1638,13 +1861,54 @@ export function LayoutEditor({
             }}
           />
         </div>
+        {footer && (
+          <div
+            className={cx(
+              fitViewport &&
+                'sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 order-4 shrink-0 lg:static lg:order-none',
+            )}
+          >
+            {footer}
+          </div>
+        )}
       </div>
       <aside
-        className="flex flex-col gap-4 self-start rounded-panel border border-line bg-surface-1 p-4 shadow-1 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto"
+        className={cx(
+          'fc-scroll fc-scroll-stable flex flex-col gap-4 rounded-panel border border-line bg-surface-1 shadow-1',
+          fitViewport
+            ? 'fc-overlay-inspector order-3 p-3.5 lg:order-none'
+            : 'self-start p-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto',
+        )}
         aria-label="Inspector"
       >
         {sel ? (
           <div className="flex flex-col gap-4">
+            {fitViewport && layout.widgets.length > 0 && (
+              <div className="fc-overlay-inspector-head -mx-3.5 -mt-3.5 flex items-center justify-between gap-2 border-b border-line bg-surface-1 px-3.5 py-2">
+                <span className="min-w-0 truncate text-[12.5px] font-semibold text-text-3">
+                  Editing: {layerName(sel)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const reduceMotion =
+                      (typeof document !== 'undefined' &&
+                        document.documentElement.dataset.reduceMotion === 'true') ||
+                      (typeof window !== 'undefined' &&
+                        typeof window.matchMedia === 'function' &&
+                        window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                    layersRef.current?.scrollIntoView({
+                      behavior: reduceMotion ? 'auto' : 'smooth',
+                      block: 'start',
+                    })
+                    layersHeadingRef.current?.focus({ preventScroll: true })
+                  }}
+                  className="shrink-0 rounded-[6px] px-2 py-0.5 text-[12.5px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                >
+                  Layers ({layout.widgets.length})
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               {(() => {
                 const Icon = iconFor(sel)
@@ -1661,7 +1925,7 @@ export function LayoutEditor({
                     onClick={() =>
                       add({
                         ...sel,
-                        id: `${sel.kind === 'layer' ? 'l' : 'w'}-${Date.now().toString(36)}`,
+                        id: nextWidgetId(sel.kind === 'layer' ? 'l' : 'w', layout.widgets),
                         x: Math.min(sel.x + 24, layout.width - sel.w),
                         y: Math.min(sel.y + 24, layout.height - sel.h),
                         locked: false,
@@ -1757,9 +2021,7 @@ export function LayoutEditor({
                 />
               </div>
             )}
-            <div className="border-t border-line pt-4 [&_ul]:max-h-72 [&_ul]:overflow-y-auto">
-              {layers}
-            </div>
+            <div className="border-t border-line pt-4">{layers}</div>
           </div>
         ) : (
           <>

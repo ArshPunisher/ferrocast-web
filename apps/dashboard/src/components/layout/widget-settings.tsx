@@ -137,12 +137,27 @@ function resolveTimezoneValue(config: LabelConfig): string {
   return 'UTC'
 }
 
+let idSeq = 0
+
+/** Generates a collision-free widget or layer ID across rapid additions. */
+export function nextWidgetId(prefix: 'l' | 'w', existing: readonly { id: string }[] = []): string {
+  const taken = new Set(existing.map((w) => w.id))
+  const stamp = Date.now().toString(36)
+  let candidate: string
+  do {
+    idSeq += 1
+    candidate = `${prefix}-${stamp}-${idSeq.toString(36)}`
+  } while (taken.has(candidate))
+  return candidate
+}
+
 export function newWidget(
   kind: WidgetKind,
   o: { width: number; height: number },
   goals: Goal[],
+  existing: readonly { id: string }[] = [],
 ): Widget {
-  const id = `w-${Date.now().toString(36)}`
+  const id = nextWidgetId('w', existing)
   const center = (w: number, h: number) => ({
     x: Math.round((o.width - w) / 2 / GRID) * GRID,
     y: Math.round((o.height - h) / 2 / GRID) * GRID,

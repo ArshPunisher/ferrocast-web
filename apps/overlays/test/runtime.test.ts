@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Widget } from '@ferrocast/api/types'
 import { createOverlay, type OverlayRuntime } from '../src/runtime'
 import { playAlertPreview, THEME_IDS } from '../src/index'
 import { safeImageUrl, safeMediaUrl, readableColor, luminance, safeText } from '../src/dom'
@@ -1195,5 +1196,296 @@ describe('review fixes', () => {
     expect(pTextOf(0)).toBe('twitch.tv/arsh')
     expect(pTextOf(2)).toBe('')
     prt.destroy()
+  })
+
+  it('config update changing one widget does not detach or re-insert unchanged widgets', () => {
+    const ws: Widget[] = [
+      {
+        id: 't1',
+        kind: 'layer',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'First' },
+      },
+      {
+        id: 't2',
+        kind: 'layer',
+        x: 40,
+        y: 160,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Second' },
+      },
+      {
+        id: 't3',
+        kind: 'layer',
+        x: 40,
+        y: 280,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Third' },
+      },
+    ]
+    rt.apply(snapshot({}, overlay(ws)))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    const initialNodes = [...canvas.children]
+    expect(initialNodes).toHaveLength(3)
+
+    const appendSpy = vi.spyOn(canvas, 'appendChild')
+    const insertSpy = vi.spyOn(canvas, 'insertBefore')
+
+    const updated: Widget[] = ws.map((w) =>
+      w.id === 't1' && w.kind === 'layer'
+        ? { ...w, config: { type: 'text', text: 'First edited' } }
+        : w,
+    )
+    rt.apply(frame('config', overlay(updated)))
+
+    expect(appendSpy).not.toHaveBeenCalled()
+    expect(insertSpy).not.toHaveBeenCalled()
+    expect([...canvas.children]).toEqual(initialNodes)
+    expect(initialNodes[0]?.textContent).toContain('First edited')
+    expect(initialNodes[1]?.textContent).toContain('Second')
+    expect(initialNodes[2]?.textContent).toContain('Third')
+  })
+
+  it('config update reordering widgets moves only out-of-place nodes to the right index', () => {
+    const ws: Widget[] = [
+      {
+        id: 't1',
+        kind: 'layer',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'One' },
+      },
+      {
+        id: 't2',
+        kind: 'layer',
+        x: 40,
+        y: 160,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Two' },
+      },
+      {
+        id: 't3',
+        kind: 'layer',
+        x: 40,
+        y: 280,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Three' },
+      },
+    ]
+    rt.apply(snapshot({}, overlay(ws)))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    const [el1, el2, el3] = [...canvas.children]
+
+    const movedNodes: Node[] = []
+    const origInsertBefore = canvas.insertBefore.bind(canvas)
+    const origAppendChild = canvas.appendChild.bind(canvas)
+    vi.spyOn(canvas, 'insertBefore').mockImplementation((node, ref) => {
+      movedNodes.push(node)
+      return origInsertBefore(node, ref)
+    })
+    vi.spyOn(canvas, 'appendChild').mockImplementation((node) => {
+      movedNodes.push(node)
+      return origAppendChild(node)
+    })
+
+    // Swap t2 and t3; t1 stays first and should not be moved.
+    rt.apply(frame('config', overlay([ws[0]!, ws[2]!, ws[1]!])))
+
+    expect([...canvas.children]).toEqual([el1, el3, el2])
+    expect(movedNodes).not.toContain(el1)
+    expect(movedNodes).toEqual([el3])
+  })
+
+  it('config update removing a widget leaves remaining siblings in place without DOM moves', () => {
+    const ws: Widget[] = [
+      {
+        id: 't1',
+        kind: 'layer',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'One' },
+      },
+      {
+        id: 't2',
+        kind: 'layer',
+        x: 40,
+        y: 160,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Two' },
+      },
+      {
+        id: 't3',
+        kind: 'layer',
+        x: 40,
+        y: 280,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Three' },
+      },
+    ]
+    rt.apply(snapshot({}, overlay(ws)))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    const [, el2, el3] = [...canvas.children]
+
+    const appendSpy = vi.spyOn(canvas, 'appendChild')
+    const insertSpy = vi.spyOn(canvas, 'insertBefore')
+
+    rt.apply(frame('config', overlay([ws[1]!, ws[2]!])))
+
+    expect(appendSpy).not.toHaveBeenCalled()
+    expect(insertSpy).not.toHaveBeenCalled()
+    expect([...canvas.children]).toEqual([el2, el3])
+  })
+
+  it('config update changing widget kind on same ID rebuilds in-place and fires onSnapshot', () => {
+    const initial: Widget[] = [
+      {
+        id: 't1',
+        kind: 'layer',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'First' },
+      },
+      {
+        id: 't2',
+        kind: 'layer',
+        x: 40,
+        y: 160,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Second' },
+      },
+    ]
+    rt.apply(snapshot({}, overlay(initial)))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    const [oldFirst, second] = [...canvas.children]
+
+    const rebuilt: Widget[] = [
+      {
+        id: 't1',
+        kind: 'label',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { source: 'latest_follower', template: 'Hi {value}', theme: 'molten' },
+      },
+      initial[1]!,
+    ]
+    rt.apply(frame('config', overlay(rebuilt)))
+
+    expect(canvas.children).toHaveLength(2)
+    expect(canvas.children[0]).not.toBe(oldFirst)
+    expect(canvas.children[0]?.className).toContain('fc-w-label')
+    expect(canvas.children[1]).toBe(second)
+  })
+
+  it('config update inserting a bottom layer at index 0 leaves existing siblings unmoved', () => {
+    const ws: Widget[] = [
+      {
+        id: 't1',
+        kind: 'layer',
+        x: 40,
+        y: 40,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'One' },
+      },
+      {
+        id: 't2',
+        kind: 'layer',
+        x: 40,
+        y: 160,
+        w: 400,
+        h: 80,
+        config: { type: 'text', text: 'Two' },
+      },
+    ]
+    rt.apply(snapshot({}, overlay(ws)))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    const [el1, el2] = [...canvas.children]
+
+    const movedNodes: Node[] = []
+    const origInsertBefore = canvas.insertBefore.bind(canvas)
+    vi.spyOn(canvas, 'insertBefore').mockImplementation((node, ref) => {
+      movedNodes.push(node)
+      return origInsertBefore(node, ref)
+    })
+
+    const bg: Widget = {
+      id: 'bg-0',
+      kind: 'layer',
+      x: 0,
+      y: 0,
+      w: 1920,
+      h: 1080,
+      config: { type: 'shape', shape: 'rect', fill: '#111111' },
+    }
+    rt.apply(frame('config', overlay([bg, ...ws])))
+
+    expect([...canvas.children]).toHaveLength(3)
+    expect(canvas.children[1]).toBe(el1)
+    expect(canvas.children[2]).toBe(el2)
+    expect(movedNodes).toHaveLength(1)
+    expect(movedNodes[0]).toBe(canvas.children[0])
+  })
+
+  it('config update deduplicates duplicate widget IDs and skips unknown kinds cleanly', () => {
+    const valid: Widget = {
+      id: 't2',
+      kind: 'layer',
+      x: 40,
+      y: 160,
+      w: 400,
+      h: 80,
+      config: { type: 'text', text: 'Valid' },
+    }
+    const unknown = {
+      id: 'u1',
+      kind: 'future_widget',
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 100,
+      config: {},
+    } as unknown as Widget
+    const dupA: Widget = {
+      id: 'dup',
+      kind: 'layer',
+      x: 10,
+      y: 10,
+      w: 200,
+      h: 60,
+      config: { type: 'text', text: 'First dup' },
+    }
+    const dupB: Widget = {
+      id: 'dup',
+      kind: 'layer',
+      x: 10,
+      y: 10,
+      w: 200,
+      h: 60,
+      config: { type: 'text', text: 'Last dup' },
+    }
+
+    rt.apply(snapshot({}, overlay([unknown, dupA, valid, dupB])))
+    const canvas = root.querySelector('.fc-ov-canvas') as HTMLElement
+    expect(canvas.children).toHaveLength(2)
+    expect(canvas.children[0]?.textContent).toContain('Valid')
+    expect(canvas.children[1]?.textContent).toContain('Last dup')
   })
 })
