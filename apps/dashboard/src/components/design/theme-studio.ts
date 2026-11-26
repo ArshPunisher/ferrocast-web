@@ -37,26 +37,32 @@ export interface StudioThemeResult {
 }
 
 /**
- * Makes the theme's scenes in the Studio from the overlays the theme just made (`overlays`, in
- * the theme's screen order).
+ * Makes Studio scenes for whichever screens of `theme` have an overlay in `overlays`, matching
+ * each screen by `overlay.design?.scene` rather than array position.
  */
 export async function themeIntoStudio(
   api: Engine,
   theme: ThemeDesign,
   overlays: readonly Overlay[],
 ): Promise<StudioThemeResult> {
+  if (!overlays.length) return { scenes: [], skipped: null }
   const status = await api.status()
   if (!status.running)
     return { scenes: [], skipped: 'Start the Studio, then add the overlays with Add to Studio.' }
   const [kinds, list, sources] = await Promise.all([api.kinds(), api.scenes(), api.sources()])
   const kind = WEB_KINDS.find((k) => kinds.inputs.some((i) => i.id === k))
   if (!kind) return { scenes: [], skipped: 'This computer has no Browser source.' }
+  const byScene = new Map<string, Overlay>()
+  for (const overlay of overlays) {
+    const key = overlay.design?.scene
+    if (key && !byScene.has(key)) byScene.set(key, overlay)
+  }
   const taken = new Set([...list.scenes.map((s) => s.name), ...sources.map((s) => s.name)])
   // The scene on air before: what you play and your camera.
   const yours = list.current
   const made: string[] = []
-  for (const [i, screen] of theme.content.scenes.entries()) {
-    const overlay = overlays[i]
+  for (const screen of theme.content.scenes) {
+    const overlay = byScene.get(screen.key)
     if (!overlay) continue
     const label = screen.name || SCENE_LABEL[screen.key] || screen.key
     const scene = free(`${theme.name} · ${label}`, taken)
