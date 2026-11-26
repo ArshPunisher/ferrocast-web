@@ -1715,5 +1715,124 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('guards moveScene against no-ops (same index or out-of-bounds clamp) without pushing undo', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        const initial = (await api.scenes()).scenes.map((s) => s.name)
+        const baselineUndoCount = (await api.history()).undo.length
+        const first = initial[0]!
+        const last = initial[initial.length - 1]!
+
+        // Exact current position and clamped edge positions push no undo.
+        await api.moveScene(first, 0)
+        await api.moveScene(first, -3)
+        await api.moveScene(last, 999)
+        expect((await api.history()).undo.length).toBe(baselineUndoCount)
+        expect((await api.scenes()).scenes.map((s) => s.name)).toEqual(initial)
+
+        // An actual move pushes one undo entry and undo restores the prior order.
+        await api.moveScene(last, 0)
+        expect((await api.history()).undo.length).toBe(baselineUndoCount + 1)
+        expect((await api.scenes()).scenes[0]!.name).toBe(last)
+
+        await api.undo()
+        expect((await api.scenes()).scenes.map((s) => s.name)).toEqual(initial)
+      } finally {
+        engine.dispose()
+      }
+    })
+
+    it('supports vertical-canvas scenes lifecycle, moveScene reorder, undo/redo, and nested-scene addExisting', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        expect((await api.scenes()).vertical).toBeNull()
+
+        await api.startVertical('Tall 1')
+        await api.addScene('Tall 2', true)
+        await api.addScene('Tall 3', true)
+
+        const before = await api.scenes()
+        expect(before.vertical?.width).toBe(1080)
+        expect(before.vertical?.height).toBe(1920)
+        expect(before.vertical?.current).toBe('Tall 1')
+        expect(before.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1', 'Tall 2', 'Tall 3'])
+        expect(before.scenes.some((s) => s.name.startsWith('Tall '))).toBe(false)
+
+        // No-op move on vertical scene pushes no undo.
+        const undoCountBeforeNoop = (await api.history()).undo.length
+        await api.moveScene('Tall 1', 0)
+        await api.moveScene('Tall 3', 99)
+        expect((await api.history()).undo.length).toBe(undoCountBeforeNoop)
+
+        // Real move on vertical scene updates vertical.scenes without switching main or vertical current.
+        await api.moveScene('Tall 3', 0)
+        const afterMove = await api.scenes()
+        expect(afterMove.vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+        ])
+        expect(afterMove.vertical?.current).toBe('Tall 1')
+        expect((await api.history()).undo.length).toBe(undoCountBeforeNoop + 1)
+
+        await api.undo()
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+          'Tall 3',
+        ])
+        await api.redo()
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+        ])
+
+        // setCurrent switches vertical scene when vertical is active, then stopVertical hides it.
+        await api.setCurrent('Tall 2')
+        expect((await api.scenes()).vertical?.current).toBe('Tall 2')
+        await api.stopVertical()
+        expect((await api.scenes()).vertical).toBeNull()
+        await expect(api.moveScene('Tall 2', 0)).rejects.toBeTruthy()
+
+        // Re-starting restores previous vertical scenes.
+        await api.startVertical('Ignored')
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 3',
+          'Tall 1',
+          'Tall 2',
+        ])
+
+        // Nested scene addExisting mirrors Rust stage.rs (allows another scene, blocks self).
+        await api.addScene('Sub Scene')
+        const nested = await api.addExisting('Gameplay', 'Sub Scene')
+        expect(nested.item.name).toBe('Sub Scene')
+        expect(nested.item.kind).toBe('scene')
+        await expect(api.addExisting('Main', 'Main')).rejects.toBeTruthy()
+
+        // Group the nested scene item, then rename and remove the referenced scene recursively.
+        await api.groupItems('Gameplay', [nested.item.id], 'Nested Group')
+        await api.rename('Sub Scene', 'Sub Scene Renamed')
+        const afterRename = await api.items('Gameplay')
+        const grp = afterRename.find((it) => it.group && it.name === 'Nested Group')!
+        expect(grp.children.some((c) => c.kind === 'scene' && c.name === 'Sub Scene Renamed')).toBe(
+          true,
+        )
+
+        await api.removeScene('Sub Scene Renamed')
+        const afterRemove = await api.items('Gameplay')
+        const grpAfter = afterRemove.find((it) => it.group && it.name === 'Nested Group')!
+        expect(grpAfter.children.some((c) => c.name === 'Sub Scene Renamed')).toBe(false)
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })

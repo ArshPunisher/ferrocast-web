@@ -109,6 +109,9 @@ interface CollectionSnapshot {
   activeScenes: string[]
   currentScene: string
   previewScene: string | null
+  verticalOn: boolean
+  verticalScenes: string[]
+  verticalCurrent: string
   sceneItems: Record<string, EngineItem[]>
   sources: Record<string, StoredSource>
   transforms: Record<number, EngineTransform>
@@ -563,6 +566,9 @@ export class DemoStudioEngine {
   ]
   private currentScene = 'Main'
   private previewScene: string | null = null
+  private verticalOn = false
+  private verticalScenes: string[] = []
+  private verticalCurrent = ''
   /** The T-bar as it was last moved: active until it is released. */
   private tbarState: { active: boolean; at: number } = { active: false, at: 0 }
   private black = false
@@ -1177,6 +1183,9 @@ export class DemoStudioEngine {
     this.activeScenes = ['Main', 'Gameplay', 'Chatting', 'BRB', 'Starting Soon', 'Ending']
     this.currentScene = 'Main'
     this.previewScene = null
+    this.verticalOn = false
+    this.verticalScenes = []
+    this.verticalCurrent = ''
     this.sceneItems.clear()
     this.sources.clear()
     this.transforms.clear()
@@ -1244,6 +1253,9 @@ export class DemoStudioEngine {
       activeScenes: [...this.activeScenes],
       currentScene: this.currentScene,
       previewScene: this.previewScene,
+      verticalOn: this.verticalOn,
+      verticalScenes: [...this.verticalScenes],
+      verticalCurrent: this.verticalCurrent,
       sceneItems,
       sources,
       transforms,
@@ -1267,6 +1279,7 @@ export class DemoStudioEngine {
     const live = {
       currentScene: this.currentScene,
       previewScene: this.previewScene,
+      verticalCurrent: this.verticalCurrent,
       audio: new Map(
         [...this.sources].map(([k, v]) => [
           k,
@@ -1277,12 +1290,17 @@ export class DemoStudioEngine {
     this.activeScenes = [...snap.activeScenes]
     this.currentScene = snap.currentScene
     this.previewScene = snap.previewScene
+    this.verticalOn = snap.verticalOn
+    this.verticalScenes = [...snap.verticalScenes]
+    this.verticalCurrent = snap.verticalCurrent
     this.sceneItems = new Map(Object.entries(clone(snap.sceneItems)))
     this.sources = new Map(Object.entries(clone(snap.sources)))
     if (keepLive) {
       if (this.activeScenes.includes(live.currentScene)) this.currentScene = live.currentScene
       if (live.previewScene === null || this.activeScenes.includes(live.previewScene))
         this.previewScene = live.previewScene
+      if (this.verticalOn && this.verticalScenes.includes(live.verticalCurrent))
+        this.verticalCurrent = live.verticalCurrent
       for (const [name, a] of live.audio) {
         const src = this.sources.get(name)
         if (src) Object.assign(src, a)
@@ -1470,6 +1488,9 @@ export class DemoStudioEngine {
     this.activeScenes = [...sceneNames]
     this.currentScene = sceneNames[0] ?? 'Scene'
     this.previewScene = this.previewScene ? this.currentScene : null
+    this.verticalOn = false
+    this.verticalScenes = []
+    this.verticalCurrent = ''
     this.sceneItems.clear()
     if (clearAll) this.sources.clear()
     this.transforms.clear()
@@ -1501,8 +1522,19 @@ export class DemoStudioEngine {
     this.sources.delete(sourceName)
   }
 
+  private sceneNameTaken(name: string): boolean {
+    return (
+      this.activeScenes.includes(name) ||
+      this.verticalScenes.includes(name) ||
+      this.sources.has(name)
+    )
+  }
+
   private requireScene(scene: string): EngineItem[] {
-    if (!this.activeScenes.includes(scene)) {
+    if (
+      !this.activeScenes.includes(scene) &&
+      !(this.verticalOn && this.verticalScenes.includes(scene))
+    ) {
       throw new HttpError(404, 'studio_no_scene', `There's no scene called "${scene}".`)
     }
     let list = this.sceneItems.get(scene)
@@ -2205,24 +2237,76 @@ export class DemoStudioEngine {
     if (is('GET', 'studio/engine/scenes')) {
       return this.scenesPayload()
     }
+    if (is('POST', 'studio/engine/vertical')) {
+      const b = requireObj(body)
+      const scene = String(b.scene ?? '').trim() || 'Vertical'
+      if (scene.length > 100) {
+        throw new HttpError(400, 'invalid', 'scene: 1 to 100 letters on one line.')
+      }
+      if (this.verticalScenes.length === 0) {
+        if (this.sceneNameTaken(scene)) {
+          throw new HttpError(409, 'studio_name_taken', `"${scene}" is taken: pick another name.`)
+        }
+        this.pushUndo('Turn vertical picture on')
+        this.verticalOn = true
+        this.verticalScenes = [scene]
+        this.verticalCurrent = scene
+        this.sceneItems.set(scene, [])
+      } else if (!this.verticalOn) {
+        this.pushUndo('Turn vertical picture on')
+        this.verticalOn = true
+        if (!this.verticalScenes.includes(this.verticalCurrent)) {
+          this.verticalCurrent = this.verticalScenes[0]!
+        }
+      }
+      return undefined
+    }
+    if (is('DELETE', 'studio/engine/vertical')) {
+      if (this.verticalOn) {
+        this.pushUndo('Turn vertical picture off')
+        this.verticalOn = false
+      }
+      return undefined
+    }
     if (is('POST', 'studio/engine/scenes')) {
       const b = requireObj(body)
       const name = String(b.name ?? '').trim()
+      const vertical = Boolean(b.vertical)
       if (!name || name.length > 100) {
         throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
       }
-      if (this.activeScenes.includes(name) || this.sources.has(name)) {
+      if (vertical && !this.verticalOn) {
+        throw new HttpError(400, 'invalid', 'Turn the vertical picture on first.')
+      }
+      if (this.sceneNameTaken(name)) {
         throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
       }
       this.pushUndo(`Add ${name}`)
-      this.activeScenes.push(name)
+      if (vertical) {
+        this.verticalScenes.push(name)
+      } else {
+        this.activeScenes.push(name)
+      }
       this.sceneItems.set(name, [])
       return { name, items: 0, current: false, preview: false, transition: null }
     }
     if (method === 'DELETE' && rest[2] === 'scenes' && rest.length === 4) {
       const name = decodeURIComponent(rest[3]!)
-      if (!this.activeScenes.includes(name)) {
+      const isVertical = this.verticalOn && this.verticalScenes.includes(name)
+      if (!this.activeScenes.includes(name) && !isVertical) {
         throw new HttpError(404, 'studio_no_scene', `There's no scene called "${name}".`)
+      }
+      if (isVertical) {
+        if (this.verticalScenes.length < 2) {
+          throw new HttpError(409, 'studio_last_scene', 'A collection keeps at least one scene.')
+        }
+        this.pushUndo(`Delete ${name}`)
+        const oldItems = this.sceneItems.get(name) ?? []
+        this.sceneItems.delete(name)
+        this.verticalScenes = this.verticalScenes.filter((s) => s !== name)
+        if (this.verticalCurrent === name) this.verticalCurrent = this.verticalScenes[0]!
+        for (const it of oldItems) if (!it.group) this.pruneOrphanSource(it.name)
+        return undefined
       }
       if (this.activeScenes.length < 2) {
         throw new HttpError(409, 'studio_last_scene', 'A collection keeps at least one scene.')
@@ -2235,11 +2319,20 @@ export class DemoStudioEngine {
       this.legacySceneTransitions.delete(name)
       if (this.currentScene === name) this.currentScene = this.activeScenes[0]!
       if (this.previewScene === name) this.previewScene = this.activeScenes[0]!
+      const dropSceneRefs = (items: EngineItem[]): EngineItem[] =>
+        items
+          .filter((it) => it.group || it.kind !== 'scene' || it.name !== name)
+          .map((it) => (it.children.length ? { ...it, children: dropSceneRefs(it.children) } : it))
+      for (const [k, v] of this.sceneItems) this.sceneItems.set(k, dropSceneRefs(v))
       for (const it of oldItems) if (!it.group) this.pruneOrphanSource(it.name)
       return undefined
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'current') {
       const name = decodeURIComponent(rest[3]!)
+      if (this.verticalOn && this.verticalScenes.includes(name)) {
+        this.verticalCurrent = name
+        return undefined
+      }
       if (!this.activeScenes.includes(name)) {
         throw new HttpError(404, 'studio_no_scene', `There's no scene called "${name}".`)
       }
@@ -2255,34 +2348,48 @@ export class DemoStudioEngine {
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'duplicate') {
       const src = decodeURIComponent(rest[3]!)
       const name = String(requireObj(body).name ?? '').trim()
-      if (!this.activeScenes.includes(src)) {
+      const isVertical = this.verticalOn && this.verticalScenes.includes(src)
+      if (!this.activeScenes.includes(src) && !isVertical) {
         throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
       }
-      if (!name || this.activeScenes.includes(name) || this.sources.has(name)) {
+      if (!name || this.sceneNameTaken(name)) {
         throw new HttpError(409, 'studio_name_taken', `"${name}" is taken: pick another name.`)
       }
       this.pushUndo(`Duplicate ${src}`)
-      const idx = this.activeScenes.indexOf(src)
-      this.activeScenes.splice(idx + 1, 0, name)
+      const list = isVertical ? this.verticalScenes : this.activeScenes
+      const idx = list.indexOf(src)
+      list.splice(idx + 1, 0, name)
       const cloned = (this.sceneItems.get(src) ?? []).map((it) => this.cloneItemDeep(it, new Map()))
       this.sceneItems.set(name, cloned)
       return { name }
     }
     if (method === 'POST' && rest[2] === 'scenes' && rest[4] === 'move') {
       const src = decodeURIComponent(rest[3]!)
-      const to = Number(requireObj(body).to ?? 0)
-      const idx = this.activeScenes.indexOf(src)
-      if (idx < 0) throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
+      const rawTo = Number(requireObj(body).to ?? 0)
+      const isVertical = this.verticalOn && this.verticalScenes.includes(src)
+      const list = isVertical
+        ? this.verticalScenes
+        : this.activeScenes.includes(src)
+          ? this.activeScenes
+          : null
+      if (!list) throw new HttpError(404, 'studio_no_scene', `There's no scene called "${src}".`)
+      const idx = list.indexOf(src)
+      const clamped = Math.max(
+        0,
+        Math.min(Math.trunc(Number.isFinite(rawTo) ? rawTo : idx), list.length - 1),
+      )
+      if (clamped === idx) return undefined
       this.pushUndo(`Move ${src}`)
-      const [item] = this.activeScenes.splice(idx, 1)
-      this.activeScenes.splice(Math.max(0, Math.min(to, this.activeScenes.length)), 0, item!)
+      const [item] = list.splice(idx, 1)
+      list.splice(clamped, 0, item!)
       return undefined
     }
     if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'thumbnail' && rest.length === 5) {
       const scene = decodeURIComponent(rest[3]!)
       const list = this.requireScene(scene)
+      const isVertical = this.verticalOn && this.verticalScenes.includes(scene)
       const w = Math.max(64, Math.min(640, Number(url?.searchParams.get('w') ?? 256) || 256))
-      const h = Math.round((w * 9) / 16)
+      const h = isVertical ? Math.round((w * 16) / 9) : Math.round((w * 9) / 16)
       return {
         image: svgDataUrl(
           `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
@@ -2303,19 +2410,34 @@ export class DemoStudioEngine {
       if (!to || to.length > 100) {
         throw new HttpError(400, 'invalid', 'name: 1 to 100 letters on one line.')
       }
-      if (this.activeScenes.includes(from)) {
-        if (from !== to && (this.activeScenes.includes(to) || this.sources.has(to))) {
+      const inMain = this.activeScenes.includes(from)
+      const inVertical = this.verticalScenes.includes(from)
+      if (inMain || inVertical) {
+        if (from !== to && this.sceneNameTaken(to)) {
           throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
         }
         this.pushUndo(`Rename ${from}`)
-        this.activeScenes = this.activeScenes.map((s) => (s === from ? to : s))
+        if (inMain) {
+          this.activeScenes = this.activeScenes.map((s) => (s === from ? to : s))
+          if (this.currentScene === from) this.currentScene = to
+          if (this.previewScene === from) this.previewScene = to
+        }
+        if (inVertical) {
+          this.verticalScenes = this.verticalScenes.map((s) => (s === from ? to : s))
+          if (this.verticalCurrent === from) this.verticalCurrent = to
+        }
         const items = this.sceneItems.get(from)
         if (items) {
           this.sceneItems.delete(from)
           this.sceneItems.set(to, items)
         }
-        if (this.currentScene === from) this.currentScene = to
-        if (this.previewScene === from) this.previewScene = to
+        const renameSceneRefs = (list: EngineItem[]) => {
+          for (const it of list) {
+            if (!it.group && it.kind === 'scene' && it.name === from) it.name = to
+            if (it.children.length) renameSceneRefs(it.children)
+          }
+        }
+        for (const list of this.sceneItems.values()) renameSceneRefs(list)
         this.transitionMatrix = this.transitionMatrix.map((r) => ({
           ...r,
           from: r.from === from ? to : r.from,
@@ -2344,7 +2466,7 @@ export class DemoStudioEngine {
         if (renamedGroup) return undefined
         throw new HttpError(404, 'studio_no_source', `There's no source called "${from}".`)
       }
-      if (from !== to && (this.sources.has(to) || this.activeScenes.includes(to))) {
+      if (from !== to && this.sceneNameTaken(to)) {
         throw new HttpError(409, 'studio_name_taken', `"${to}" is taken: pick another name.`)
       }
       this.pushUndo(`Rename ${from}`)
@@ -3325,7 +3447,29 @@ export class DemoStudioEngine {
     }
 
     if (typeof b.existing === 'string') {
-      const src = this.requireSource(b.existing)
+      const existingName = b.existing
+      if (this.activeScenes.includes(existingName)) {
+        if (existingName === scene) {
+          throw new HttpError(400, 'invalid', "A scene can't show itself.")
+        }
+        const sceneSrc: StoredSource = {
+          name: existingName,
+          kind: 'scene',
+          channel: null,
+          audio: false,
+          muted: false,
+          volume_db: 0,
+          monitor: 'off',
+          settings: {},
+          filters: [],
+          filterSettings: {},
+        }
+        this.pushUndo(`Add ${existingName} to ${scene}`)
+        const item = this.createSceneItem(sceneSrc)
+        items.unshift(item)
+        return { item: clone(item) }
+      }
+      const src = this.requireSource(existingName)
       if (b.copy) {
         const newName = this.uniqueSourceName(src.name)
         this.pushUndo(`Paste copy of ${src.name}`)
@@ -3922,27 +4066,31 @@ export class DemoStudioEngine {
     )
   }
 
+  private sceneToInfo(name: string, currentName: string, previewName: string | null) {
+    const anyTo = this.transitionMatrix.find((r) => r.from === null && r.to === name)
+    const anyToT = anyTo
+      ? this.namedTransitions.find((t) => t.name === anyTo.transition)
+      : undefined
+    const leg = this.legacySceneTransitions.get(name)
+    return {
+      name,
+      items: this.sceneItems.get(name)?.length ?? 0,
+      current: name === currentName,
+      preview: previewName === name,
+      transition: anyToT
+        ? { kind: anyToT.kind, ms: anyToT.kind === 'cut_transition' ? 0 : anyToT.ms }
+        : (leg ?? null),
+      ...(anyToT ? { transition_name: anyToT.name } : {}),
+    }
+  }
+
   private scenesPayload() {
     const def = this.namedTransitions.find((t) => t.default) ?? this.namedTransitions[0]!
     return {
       current: this.currentScene,
-      scenes: this.activeScenes.map((name) => {
-        const anyTo = this.transitionMatrix.find((r) => r.from === null && r.to === name)
-        const anyToT = anyTo
-          ? this.namedTransitions.find((t) => t.name === anyTo.transition)
-          : undefined
-        const leg = this.legacySceneTransitions.get(name)
-        return {
-          name,
-          items: this.sceneItems.get(name)?.length ?? 0,
-          current: name === this.currentScene,
-          preview: this.previewScene === name,
-          transition: anyToT
-            ? { kind: anyToT.kind, ms: anyToT.kind === 'cut_transition' ? 0 : anyToT.ms }
-            : (leg ?? null),
-          ...(anyToT ? { transition_name: anyToT.name } : {}),
-        }
-      }),
+      scenes: this.activeScenes.map((name) =>
+        this.sceneToInfo(name, this.currentScene, this.previewScene),
+      ),
       transition: { kind: def.kind, ms: def.kind === 'cut_transition' ? 0 : def.ms },
       named_transitions: clone(this.namedTransitions),
       transition_matrix: clone(this.transitionMatrix),
@@ -3951,7 +4099,20 @@ export class DemoStudioEngine {
       studio_options: clone(this.studioModeOptions),
       tbar: clone(this.tbarState),
       black: this.black,
-      vertical: null,
+      vertical: this.verticalOn
+        ? {
+            width: 1080,
+            height: 1920,
+            current: this.verticalCurrent,
+            scenes: this.verticalScenes.map((name) => ({
+              name,
+              items: this.sceneItems.get(name)?.length ?? 0,
+              current: name === this.verticalCurrent,
+              preview: false,
+              transition: null,
+            })),
+          }
+        : null,
       top_layer: null,
     }
   }
