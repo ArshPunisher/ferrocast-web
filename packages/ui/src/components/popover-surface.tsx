@@ -508,6 +508,7 @@ export function PopoverSurface({
     }
   }
 
+  const hasZClass = /\bz-(?:\[|\d)/.test(className ?? '')
   const Tag = as
   return createPortal(
     <Tag
@@ -519,7 +520,8 @@ export function PopoverSurface({
       style={mergedStyle}
       onKeyDown={handleKeyDown}
       className={cx(
-        'fixed z-[80] overflow-y-auto overscroll-contain',
+        'fixed overflow-y-auto overscroll-contain',
+        !hasZClass && 'z-[80]',
         'motion-safe:animate-[fc-fade_140ms_var(--fc-ease-out)]',
         className,
       )}
