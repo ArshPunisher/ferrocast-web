@@ -187,7 +187,7 @@ describe('LayoutEditor steady containSize & single inspector scroller (Group A)'
     expect(portrait.scale).toBeCloseTo(600 / 1920, 5)
   })
 
-  it('renders no nested overflow-y-auto or max-h-72 inside the Inspector when a layer is selected', async () => {
+  it('renders fitViewport inspector with single scroller, guarded sticky mini-header, scroll-margin, and reduced-motion Layers jump', async () => {
     const textLayer: Widget = {
       id: 'l-text',
       kind: 'layer',
@@ -197,36 +197,98 @@ describe('LayoutEditor steady containSize & single inspector scroller (Group A)'
       h: 100,
       config: { type: 'text', text: 'Hello' },
     }
-    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
-    const host = document.body.appendChild(document.createElement('div'))
-    root = createRoot(host)
-    await act(async () =>
-      root!.render(
-        <LayoutEditor
-          layout={{ name: 'Main', width: 1920, height: 1080, widgets: [textLayer] }}
-          onWidgets={vi.fn()}
-          state={EMPTY_STATE}
-          themes={[]}
-          goals={[]}
-          onGoalCreated={vi.fn()}
-          preview={false}
-          media={[]}
-          onUploaded={vi.fn()}
-        />,
-      ),
-    )
-
-    const layerBtn = host.querySelector<HTMLElement>('[role="button"][aria-label^="Text: Hello"]')!
-    await act(async () => {
-      layerBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    const queries: string[] = []
+    const origMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn((query: string) => {
+      queries.push(query)
+      return {
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      } as unknown as MediaQueryList
     })
 
-    const inspector = host.querySelector('aside[aria-label="Inspector"]')!
-    expect(inspector).toBeTruthy()
-    const nestedScrollers = inspector.querySelectorAll(
-      '[class*="overflow-y-auto"], [class*="max-h-72"]',
-    )
-    expect(nestedScrollers).toHaveLength(0)
+    const origScrollIntoView = Element.prototype.scrollIntoView
+    const scrollCalls: ScrollIntoViewOptions[] = []
+    Element.prototype.scrollIntoView = vi.fn(function (
+      this: Element,
+      arg?: boolean | ScrollIntoViewOptions,
+    ) {
+      if (arg && typeof arg === 'object') scrollCalls.push(arg)
+    })
+
+    try {
+      useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+      const host = document.body.appendChild(document.createElement('div'))
+      root = createRoot(host)
+      await act(async () =>
+        root!.render(
+          <LayoutEditor
+            fitViewport
+            layout={{ name: 'Main', width: 1920, height: 1080, widgets: [textLayer] }}
+            onWidgets={vi.fn()}
+            state={EMPTY_STATE}
+            themes={[]}
+            goals={[]}
+            onGoalCreated={vi.fn()}
+            preview={false}
+            media={[]}
+            onUploaded={vi.fn()}
+          />,
+        ),
+      )
+
+      expect(queries).toContain('(min-width: 1024px) and (min-height: 640px)')
+
+      const layerBtn = host.querySelector<HTMLElement>(
+        '[role="button"][aria-label^="Text: Hello"]',
+      )!
+      await act(async () => {
+        layerBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      })
+
+      const inspector = host.querySelector('aside.fc-overlay-inspector[aria-label="Inspector"]')!
+      expect(inspector).toBeTruthy()
+      const nestedScrollers = inspector.querySelectorAll(
+        '[class*="overflow-y-auto"], [class*="max-h-72"]',
+      )
+      expect(nestedScrollers).toHaveLength(0)
+
+      const miniHead = inspector.querySelector('.fc-overlay-inspector-head')
+      expect(miniHead).toBeTruthy()
+      expect(miniHead!.className).not.toContain('lg:sticky')
+
+      const layersSection = inspector.querySelector(
+        'section.fc-overlay-layers[aria-label="Layers"]',
+      )
+      expect(layersSection).toBeTruthy()
+      const layersHeading = layersSection!.querySelector('h2')!
+
+      const jumpBtn = [...inspector.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Layers (1)'),
+      )!
+      await act(async () => {
+        jumpBtn.click()
+      })
+      expect(scrollCalls.at(-1)).toEqual({ behavior: 'smooth', block: 'start' })
+      expect(document.activeElement).toBe(layersHeading)
+
+      // App reduceMotion preference overrides smooth scrolling.
+      document.documentElement.dataset.reduceMotion = 'true'
+      await act(async () => {
+        jumpBtn.click()
+      })
+      expect(scrollCalls.at(-1)).toEqual({ behavior: 'auto', block: 'start' })
+    } finally {
+      delete document.documentElement.dataset.reduceMotion
+      Element.prototype.scrollIntoView = origScrollIntoView
+      window.matchMedia = origMatchMedia
+    }
   })
 })
 

@@ -64,7 +64,10 @@ textarea:not([data-keep-placeholder])::placeholder {
 }
 /* Desktop viewport lock for the overlay layout editor; dropped on narrow or short windows
    (including 150-200% zoom) so the canvas stays readable in normal page scroll. */
-@media (min-width: 1024px) and (min-height: 541px) {
+.fc-overlay-layers {
+  scroll-margin-top: calc(var(--fc-top, 56px) + 12px);
+}
+@media (min-width: 1024px) and (min-height: 640px) {
   .fc-overlay-workspace {
     position: relative;
     height: calc(
@@ -79,7 +82,7 @@ textarea:not([data-keep-placeholder])::placeholder {
   }
   .fc-overlay-stage {
     flex: 1 1 0%;
-    min-height: 200px;
+    min-height: 0;
   }
   .fc-overlay-stage-inner {
     flex: 1 1 0%;
@@ -90,6 +93,14 @@ textarea:not([data-keep-placeholder])::placeholder {
     min-height: 0;
     height: 100%;
     overflow-y: auto;
+  }
+  .fc-overlay-inspector-head {
+    position: sticky;
+    top: -0.875rem;
+    z-index: 10;
+  }
+  .fc-overlay-layers {
+    scroll-margin-top: 3.25rem;
   }
 }
 

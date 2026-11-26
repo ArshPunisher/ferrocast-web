@@ -293,7 +293,7 @@ export function containSize(
 }
 
 function useViewportLockMedia(enabled: boolean): boolean {
-  const query = '(min-width: 1024px) and (min-height: 541px)'
+  const query = '(min-width: 1024px) and (min-height: 640px)'
   const [matches, setMatches] = useState(() =>
     enabled && typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia(query).matches
@@ -1522,6 +1522,7 @@ export function LayoutEditor({
   const file = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const layersRef = useRef<HTMLElement>(null)
+  const layersHeadingRef = useRef<HTMLHeadingElement>(null)
   const sel = layout.widgets.find((w) => w.id === selected) ?? null
   const update = (w: Widget, opts?: { merge?: boolean }) =>
     onWidgets(
@@ -1654,8 +1655,18 @@ export function LayoutEditor({
     else file.current?.click()
   }
   const layers = (
-    <section ref={layersRef} aria-label="Layers" className="flex flex-col gap-2">
-      <h2 className="font-display text-[18px] font-extrabold">Layers</h2>
+    <section
+      ref={layersRef}
+      aria-label="Layers"
+      className={cx('flex flex-col gap-2', fitViewport && 'fc-overlay-layers')}
+    >
+      <h2
+        ref={layersHeadingRef}
+        tabIndex={-1}
+        className="font-display text-[18px] font-extrabold focus:outline-none"
+      >
+        Layers
+      </h2>
       <LayersPanel
         layout={layout}
         selected={selected}
@@ -1822,15 +1833,25 @@ export function LayoutEditor({
         {sel ? (
           <div className="flex flex-col gap-4">
             {fitViewport && layout.widgets.length > 0 && (
-              <div className="-mx-3.5 -mt-3.5 flex items-center justify-between gap-2 border-b border-line bg-surface-1 px-3.5 py-2 lg:sticky lg:-top-3.5 lg:z-10">
+              <div className="fc-overlay-inspector-head -mx-3.5 -mt-3.5 flex items-center justify-between gap-2 border-b border-line bg-surface-1 px-3.5 py-2">
                 <span className="min-w-0 truncate text-[12.5px] font-semibold text-text-3">
                   Editing: {layerName(sel)}
                 </span>
                 <button
                   type="button"
-                  onClick={() =>
-                    layersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
+                  onClick={() => {
+                    const reduceMotion =
+                      (typeof document !== 'undefined' &&
+                        document.documentElement.dataset.reduceMotion === 'true') ||
+                      (typeof window !== 'undefined' &&
+                        typeof window.matchMedia === 'function' &&
+                        window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                    layersRef.current?.scrollIntoView({
+                      behavior: reduceMotion ? 'auto' : 'smooth',
+                      block: 'start',
+                    })
+                    layersHeadingRef.current?.focus({ preventScroll: true })
+                  }}
                   className="shrink-0 rounded-[6px] px-2 py-0.5 text-[12.5px] font-semibold text-accent-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                 >
                   Layers ({layout.widgets.length})

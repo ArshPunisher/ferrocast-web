@@ -351,7 +351,12 @@ export function OverlayEditor({ id }: { id: string }) {
     >
       {dirty ? (
         <>
-          <p className="min-w-0 flex-1 text-[13.5px] font-medium text-text-2 lg:truncate">
+          <p
+            role="status"
+            aria-live="polite"
+            title="Unsaved layout. Your stream keeps the old one until you save."
+            className="min-w-0 flex-1 text-[13.5px] font-medium text-text-2 lg:truncate"
+          >
             Unsaved layout. Your stream keeps the old one until you save.
           </p>
           <Button size="sm" variant="ghost" onClick={discardChanges}>
@@ -363,7 +368,11 @@ export function OverlayEditor({ id }: { id: string }) {
         </>
       ) : (
         <>
-          <p className="min-w-0 flex-1 truncate text-[13.5px] text-text-3 tabular-nums">
+          <p
+            role="status"
+            aria-live="polite"
+            className="min-w-0 flex-1 truncate text-[13.5px] text-text-3 tabular-nums"
+          >
             {draft.width} × {draft.height} · {draft.widgets.length}{' '}
             {draft.widgets.length === 1 ? 'layer' : 'layers'} · Saved
           </p>
@@ -385,7 +394,10 @@ export function OverlayEditor({ id }: { id: string }) {
         >
           <CaretLeft size={18} />
         </a>
-        <h1 className="mr-auto min-w-0 truncate font-display text-xl font-extrabold tracking-tight sm:text-2xl">
+        <h1
+          title={draft.name}
+          className="mr-auto min-w-0 truncate font-display text-xl font-extrabold tracking-tight sm:text-2xl lg:mr-0 lg:min-w-[6rem] lg:flex-1"
+        >
           {draft.name}
         </h1>
         <SecretUrl url={draft.url} className="max-w-xl basis-full lg:w-56 lg:basis-auto xl:w-72" />

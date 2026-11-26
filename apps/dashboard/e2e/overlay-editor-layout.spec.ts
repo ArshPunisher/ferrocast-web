@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { demo, open, settled } from './helpers'
+import { demo, open, openSidebar, settled } from './helpers'
 
 test.describe('Overlay editor layout, single scroller, Unsaved bar and steady canvas', () => {
   for (const vp of [
@@ -163,7 +163,27 @@ test.describe('Overlay editor layout, single scroller, Unsaved bar and steady ca
       `(d) => d.broadcastLive({ v: 1, type: 'notice', data: { key: 'test-banner', level: 'warn', message: 'Studio encoder warning for layout check.' } })`,
     )
     await expect(page.getByText('Studio encoder warning for layout check.')).toBeVisible()
-    await settled(page)
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const scrollH = document.documentElement.scrollHeight
+          const innerH = window.innerHeight
+          const fcBanners = parseInt(
+            getComputedStyle(document.documentElement).getPropertyValue('--fc-banners') || '0',
+            10,
+          )
+          return {
+            ok: fcBanners > 20 && scrollH <= innerH + 1,
+            fcBanners,
+            scrollH,
+            innerH,
+          }
+        }),
+      )
+      .toMatchObject({
+        ok: true,
+      })
 
     const metrics = await page.evaluate(() => ({
       scrollH: document.documentElement.scrollHeight,
@@ -228,6 +248,119 @@ test.describe('Overlay editor layout, single scroller, Unsaved bar and steady ca
     await expect(canvas).toBeVisible()
     const box = (await canvas.boundingBox())!
     expect(box.height).toBeGreaterThan(280)
+
+    // Select a widget so the inspector mini-header renders, then jump to Layers and scroll.
+    await page
+      .getByRole('button', { name: /Goal widget/ })
+      .first()
+      .click()
+    const jumpBtn = page.locator('aside[aria-label="Inspector"] button', {
+      hasText: /^Layers \(/,
+    })
+    await jumpBtn.click()
+    const headerBox = (await page.locator('header').first().boundingBox())!
+    const layersHeadingBox = (await page
+      .locator('aside[aria-label="Inspector"]')
+      .getByRole('heading', { name: 'Layers', level: 2 })
+      .boundingBox())!
+    expect(layersHeadingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
+    const miniHeadPos = await page
+      .locator('.fc-overlay-inspector-head')
+      .evaluate((el) => getComputedStyle(el).position)
+    expect(miniHeadPos).toBe('static')
+  })
+
+  for (const vp of [
+    { width: 1024, height: 600 },
+    { width: 1024, height: 640 },
+  ]) {
+    test(`unfolded sidebar at ${vp.width}x${vp.height} with brand mark note and notice banner keeps Save and Discard visible and clickable`, async ({
+      page,
+    }) => {
+      await openSidebar(page)
+      await page.setViewportSize(vp)
+      await open(page, 'overlays')
+      await settled(page)
+
+      // Create an overlay from a built-in design in the live DemoEngine so the brandLocked notice is shown too.
+      const createdId = await page.evaluate(async () => {
+        const d = window.__ferrocastDemo!
+        const res = await d.fetch('/api/v1/designs/builtin.forge/use', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer demo-session',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        })
+        const json = (await res.json()) as { overlays?: { id: string }[] }
+        const id = json.overlays?.[0]?.id ?? ''
+        if (id) location.hash = `#/overlays/${id}`
+        return id
+      })
+      expect(createdId).toBeTruthy()
+      await expect(page.getByText(/Made from a built-in design/)).toBeVisible()
+      await demo(
+        page,
+        `(d) => d.broadcastLive({ v: 1, type: 'notice', data: { key: 'narrow-banner', level: 'warn', message: 'Encoder warning for narrow desktop check.' } })`,
+      )
+      await expect(page.getByText('Encoder warning for narrow desktop check.')).toBeVisible()
+
+      await page
+        .getByRole('toolbar', { name: 'Canvas' })
+        .getByRole('button', { name: 'Text', exact: true })
+        .click()
+
+      const statusBar = page.getByTestId('overlay-status-bar')
+      const saveBtn = statusBar.getByRole('button', { name: 'Save', exact: true })
+      const discardBtn = statusBar.getByRole('button', { name: 'Discard', exact: true })
+      await expect(saveBtn).toBeVisible()
+      await expect(discardBtn).toBeVisible()
+
+      await discardBtn.scrollIntoViewIfNeeded()
+      const box = (await discardBtn.boundingBox())!
+      expect(box.height).toBeGreaterThan(20)
+      expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
+      await discardBtn.click()
+      await expect(statusBar).toContainText('Saved')
+    })
+  }
+
+  test('clicking Discard while a toast is active succeeds at 1280x800 and 1024x600 unfolded sidebar', async ({
+    page,
+  }) => {
+    for (const cfg of [
+      { width: 1280, height: 800, sidebar: false },
+      { width: 1024, height: 600, sidebar: true },
+    ]) {
+      if (cfg.sidebar) await openSidebar(page)
+      await page.setViewportSize({ width: cfg.width, height: cfg.height })
+      await open(page, 'overlays/ov-main')
+      await settled(page)
+
+      await page
+        .getByRole('toolbar', { name: 'Canvas' })
+        .getByRole('button', { name: 'Text', exact: true })
+        .click()
+
+      const statusBar = page.getByTestId('overlay-status-bar')
+      await statusBar.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page.getByText('Overlay saved. Your stream updates by itself.')).toBeVisible()
+
+      // Immediately undo so Save/Discard return while the save toast is still on screen.
+      await page.keyboard.press('ControlOrMeta+z')
+      const discardBtn = statusBar.getByRole('button', { name: 'Discard', exact: true })
+      await expect(discardBtn).toBeVisible()
+
+      const toastEl = page.locator('section[aria-label="Notifications"] [role="status"]').first()
+      await expect(toastEl).toBeVisible()
+      const toastBox = (await toastEl.boundingBox())!
+      const discardBox = (await discardBtn.boundingBox())!
+      expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(discardBox.y + 1)
+
+      await discardBtn.click()
+      await expect(statusBar).toContainText('Saved')
+    }
   })
 
   test('SceneDesigner keeps working cleanly at 1280x800 and 375x812', async ({ page }) => {
