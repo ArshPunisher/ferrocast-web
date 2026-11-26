@@ -33,9 +33,20 @@ test('API reference renders OpenAPI 3.1 + AsyncAPI 3.0 specs, filters cleanly, a
   // Verify downloadable OpenAPI / AsyncAPI assets.
   const oaResp = await request.get('/specs/openapi.json')
   expect(oaResp.ok()).toBe(true)
-  const oaJson = (await oaResp.json()) as { openapi: string; paths: Record<string, unknown> }
+  const oaJson = (await oaResp.json()) as {
+    openapi: string
+    paths: Record<string, unknown>
+    components: {
+      schemas: {
+        CreatorLinks: { properties: { custom: { type: unknown } } }
+        LinksResponse: { properties: { custom: { type: unknown } } }
+      }
+    }
+  }
   expect(oaJson.openapi).toBe('3.1.0')
   expect(oaJson.paths['/api/v1/api-keys']).toBeTruthy()
+  expect(oaJson.components.schemas.CreatorLinks.properties.custom.type).toEqual(['array', 'null'])
+  expect(oaJson.components.schemas.LinksResponse.properties.custom.type).toBe('array')
 
   const aaResp = await request.get('/specs/asyncapi.json')
   expect(aaResp.ok()).toBe(true)
