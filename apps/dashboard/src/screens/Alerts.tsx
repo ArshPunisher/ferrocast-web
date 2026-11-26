@@ -68,7 +68,7 @@ import { AlertStage, alertHasSound } from '../components/AlertStage'
 import { AlertTimeline } from '../components/alerts/AlertTimeline'
 import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
 import { PropertyGroup } from '../components/alerts/PropertyGroup'
-import { DockHandle, useDockWidth } from '../components/alerts/DockHandle'
+import { DockHandle, useDockPair } from '../components/alerts/DockHandle'
 import { LEFT_DOCK, RIGHT_DOCK } from '../lib/dock-size'
 import { TokenChipField, tokensForAlert } from '../components/alerts/TokenChipField'
 import { VariationCards } from '../components/alerts/VariationCards'
@@ -665,8 +665,7 @@ function RuleEditor({
   const { run, busy } = useAction()
   const [draft, setDraft] = useState(rule)
   const [vi, setVi] = useState(0)
-  const leftDock = useDockWidth(LEFT_DOCK)
-  const rightDock = useDockWidth(RIGHT_DOCK)
+  const { left: leftDock, right: rightDock } = useDockPair(LEFT_DOCK, RIGHT_DOCK)
   const [previewPlatform, setPreviewPlatform] = useState<Platform>(() =>
     rule.kinds[0] === 'tip' ? 'tips' : (platformsFor(rule.kinds[0] ?? 'follow')[0] ?? 'twitch'),
   )
@@ -922,6 +921,7 @@ function RuleEditor({
             growsRight={1}
             onResize={leftDock.set}
             onReset={leftDock.reset}
+            autoFit={false}
             className="-right-1.5"
           />
         </div>
@@ -1069,6 +1069,7 @@ function RuleEditor({
             growsRight={-1}
             onResize={rightDock.set}
             onReset={rightDock.reset}
+            autoFit={false}
             className="-left-1.5"
           />
           <aside

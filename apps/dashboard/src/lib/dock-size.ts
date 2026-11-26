@@ -19,6 +19,31 @@ export function clampDock(spec: DockSpec, w: number, otherWidth: number, room: n
   return Math.round(Math.max(spec.min, Math.min(spec.max, fits, w)))
 }
 
+/** Clamps both docks together when room shrinks so neither stalls waiting on the other. */
+export function clampDockPair(
+  leftSpec: DockSpec,
+  rightSpec: DockSpec,
+  leftWidth: number,
+  rightWidth: number,
+  room: number,
+): [number, number] {
+  let l = Math.round(Math.max(leftSpec.min, Math.min(leftSpec.max, leftWidth)))
+  let r = Math.round(Math.max(rightSpec.min, Math.min(rightSpec.max, rightWidth)))
+  const excess = l + r - (room - MIN_STAGE)
+  if (excess <= 0) return [l, r]
+  const lSlack = l - leftSpec.min
+  const rSlack = r - rightSpec.min
+  const totalSlack = lSlack + rSlack
+  if (totalSlack <= 0 || excess >= totalSlack) return [leftSpec.min, rightSpec.min]
+  let lDrop = Math.min(lSlack, Math.round(excess * (lSlack / totalSlack)))
+  const rDrop = Math.min(rSlack, excess - lDrop)
+  const rem = excess - lDrop - rDrop
+  if (rem > 0) lDrop = Math.min(lSlack, lDrop + rem)
+  l -= lDrop
+  r -= rDrop
+  return [l, r]
+}
+
 export function readDock(spec: DockSpec): number {
   try {
     const raw = Number(localStorage.getItem(spec.key))
