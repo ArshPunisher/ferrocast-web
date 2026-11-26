@@ -17,6 +17,7 @@ HTMLDialogElement.prototype.close = function close() {
   this.removeAttribute('open')
 }
 
+const roots: Root[] = []
 let root: Root | null = null
 
 beforeEach(() => {
@@ -26,9 +27,8 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  if (root) {
-    const r = root
-    root = null
+  root = null
+  for (const r of roots.splice(0)) {
     await act(async () => r.unmount())
   }
   document.body.innerHTML = ''
@@ -105,9 +105,11 @@ function makeDesk(scenesData: EngineScenes, apiOverrides: Record<string, unknown
 async function mountScenes(scenesData: EngineScenes, apiOverrides: Record<string, unknown> = {}) {
   const { desk, api } = makeDesk(scenesData, apiOverrides)
   const host = document.body.appendChild(document.createElement('div'))
-  root = createRoot(host)
+  const created = createRoot(host)
+  roots.push(created)
+  root = created
   await act(async () => {
-    root!.render(
+    created.render(
       <DeskProvider value={desk}>
         <ScenesDock />
       </DeskProvider>,
@@ -774,5 +776,189 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     await flush()
     expect(gridMount.api.moveScene).toHaveBeenCalledWith('Main', 1)
     expect(api.moveScene).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores pointercancel from a different pointer while keeping window blur cancel', async () => {
+    const { host, api } = await mountScenes(sample)
+    setRowBoxes(host, true)
+
+    const gameHandle = host.querySelector<HTMLElement>(
+      '[data-scene-name="Gameplay"] [data-drag-handle]',
+    )!
+    await act(async () => {
+      gameHandle.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 54 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 96 }),
+      )
+    })
+    expect(document.body.dataset.sceneDrag).toBe('1')
+    expect(host.querySelector('[data-drop-line]')).not.toBeNull()
+
+    // Foreign pointercancel (second finger) must NOT abort the active drag.
+    await act(async () => {
+      window.dispatchEvent(
+        pointerEvt('pointercancel', {
+          pointerType: 'touch',
+          pointerId: 2,
+          clientX: 60,
+          clientY: 20,
+        }),
+      )
+    })
+    expect(document.body.dataset.sceneDrag).toBe('1')
+    expect(host.querySelector('[data-drop-line]')).not.toBeNull()
+
+    await act(async () => {
+      window.dispatchEvent(
+        pointerEvt('pointerup', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 96 }),
+      )
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).toHaveBeenCalledWith('Gameplay', 2)
+
+    // Window blur still cancels an active drag unconditionally.
+    const nextGameHandle = host.querySelector<HTMLElement>(
+      '[data-scene-name="Gameplay"] [data-drag-handle]',
+    )!
+    await act(async () => {
+      nextGameHandle.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 4, clientX: 12, clientY: 54 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointermove', { pointerType: 'touch', pointerId: 4, clientX: 12, clientY: 96 }),
+      )
+    })
+    expect(document.body.dataset.sceneDrag).toBe('1')
+    await act(async () => {
+      window.dispatchEvent(new Event('blur'))
+    })
+    expect(document.body.dataset.sceneDrag).toBeUndefined()
+    expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+  })
+
+  it('keeps the active drag when a second pointer presses another scene handle', async () => {
+    const { host, api } = await mountScenes(sample)
+    setRowBoxes(host, true)
+
+    const gameHandle = host.querySelector<HTMLElement>(
+      '[data-scene-name="Gameplay"] [data-drag-handle]',
+    )!
+    const mainHandle = host.querySelector<HTMLElement>(
+      '[data-scene-name="Main"] [data-drag-handle]',
+    )!
+
+    await act(async () => {
+      gameHandle.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 54 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 96 }),
+      )
+    })
+    expect(host.querySelector('[data-scene-ghost]')?.textContent).toContain('Gameplay')
+
+    // Second pointer presses and releases Main without moving: must not hijack or strand ghost/drop.
+    await act(async () => {
+      mainHandle.dispatchEvent(
+        pointerEvt('pointerdown', { pointerType: 'touch', pointerId: 2, clientX: 12, clientY: 18 }),
+      )
+      window.dispatchEvent(
+        pointerEvt('pointerup', { pointerType: 'touch', pointerId: 2, clientX: 12, clientY: 18 }),
+      )
+    })
+    expect(host.querySelector('[data-scene-ghost]')?.textContent).toContain('Gameplay')
+    expect(host.querySelector('[data-drop-line]')).not.toBeNull()
+
+    // Releasing the original pointer still completes Gameplay's reorder and clears drag visuals.
+    await act(async () => {
+      window.dispatchEvent(
+        pointerEvt('pointerup', { pointerType: 'touch', pointerId: 1, clientX: 12, clientY: 96 }),
+      )
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).toHaveBeenCalledWith('Gameplay', 2)
+    expect(host.querySelector('[data-scene-ghost]')).toBeNull()
+    expect(host.querySelector('[data-drop-line]')).toBeNull()
+    expect(document.body.dataset.sceneDrag).toBeUndefined()
+  })
+
+  it('does not steal focus back when the user focuses another scene row before refreshed list arrives', async () => {
+    const { desk, host, api } = await mountScenes(sample)
+    const chatBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Chatting"] button')!
+    const gameBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Gameplay"] button')!
+    chatBtn.focus()
+
+    await act(async () => {
+      chatBtn.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+    expect(api.moveScene).toHaveBeenCalledWith('Chatting', 1)
+
+    // User tabs to Gameplay before the refreshed list renders.
+    await act(async () => {
+      gameBtn.focus()
+    })
+    expect(document.activeElement).toBe(gameBtn)
+
+    const reordered: Desk = {
+      ...desk,
+      scenes: {
+        ...desk.scenes,
+        data: {
+          ...sample,
+          scenes: [
+            makeScene('Main', { current: true }),
+            makeScene('Chatting'),
+            makeScene('Gameplay'),
+          ],
+        },
+      },
+    }
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={reordered}>
+          <ScenesDock />
+        </DeskProvider>,
+      )
+    })
+    expect(document.activeElement).toBe(
+      host.querySelector<HTMLButtonElement>('[data-scene-name="Gameplay"] button'),
+    )
+  })
+
+  it('cancels drop marker and skips moveScene when released outside the dock bounds', async () => {
+    const { host, api } = await mountScenes(sample)
+    setRowBoxes(host, true)
+    const scrollEl = host.querySelector<HTMLDivElement>('ul')!.parentElement as HTMLDivElement
+    Object.defineProperty(scrollEl, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 160, left: 0, right: 260, width: 260, height: 160 }),
+    })
+
+    const gameBtn = host.querySelector<HTMLButtonElement>('[data-scene-name="Gameplay"] button')!
+    await act(async () => {
+      gameBtn.dispatchEvent(pointerEvt('pointerdown', { clientX: 20, clientY: 54 }))
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 20, clientY: 96 }))
+    })
+    expect(host.querySelector('[data-drop-line]')).not.toBeNull()
+
+    // Drag horizontally out of the dock into an adjacent pane at the same Y height.
+    await act(async () => {
+      window.dispatchEvent(pointerEvt('pointermove', { clientX: 420, clientY: 96 }))
+    })
+    expect(host.querySelector('[data-drop-line]')).toBeNull()
+
+    await act(async () => {
+      window.dispatchEvent(pointerEvt('pointerup', { clientX: 420, clientY: 96 }))
+      vi.runAllTimers()
+    })
+    await flush()
+    expect(api.moveScene).not.toHaveBeenCalled()
   })
 })

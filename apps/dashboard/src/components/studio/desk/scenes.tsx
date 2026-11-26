@@ -119,6 +119,19 @@ export function topLayerItem(
   }
 }
 
+function pointInDock(box: DOMRect, x: number, y: number): boolean {
+  if (y < box.top || y > box.bottom) return false
+  return box.width <= 0 || (x >= box.left && x <= box.right)
+}
+
+function edgeScrollDelta(el: HTMLElement, x: number, y: number): number {
+  const box = el.getBoundingClientRect()
+  if (box.height <= 0 || !pointInDock(box, x, y)) return 0
+  if (y < box.top + 32 && el.scrollTop > 0) return -8
+  if (y > box.bottom - 32 && el.scrollTop + el.clientHeight < el.scrollHeight) return 8
+  return 0
+}
+
 export function ScenesDock() {
   const desk = useDesk()
   const { api, scenes, refresh, edit, openTransitions } = desk
@@ -280,6 +293,8 @@ export function ScenesDock() {
   const computeDrop = (x: number, y: number, fromName: string): SceneDrop | null => {
     const fromIdx = names.indexOf(fromName)
     if (fromIdx < 0 || !scrollRef.current) return null
+    const box = scrollRef.current.getBoundingClientRect()
+    if (box.width > 0 && box.height > 0 && !pointInDock(box, x, y)) return null
     const els = Array.from(scrollRef.current.querySelectorAll<HTMLElement>('[data-scene-name]'))
     if (!els.length) return null
     let targetName: string | null = null
@@ -345,12 +360,13 @@ export function ScenesDock() {
   const dragHandlers = useRef<{
     move: (e: PointerEvent) => void
     up: (e: PointerEvent) => void
-    cancel: (releasedNow?: boolean) => void
+    cancel: (releasedNow?: boolean, pointerId?: number) => void
   } | null>(null)
   const windowListeners = useRef<{
     move: (e: PointerEvent) => void
     up: (e: PointerEvent) => void
-    cancel: () => void
+    pointerCancel: (e: PointerEvent) => void
+    blur: () => void
     key: (e: KeyboardEvent) => void
   } | null>(null)
 
@@ -369,8 +385,8 @@ export function ScenesDock() {
     windowListeners.current = null
     window.removeEventListener('pointermove', wl.move)
     window.removeEventListener('pointerup', wl.up)
-    window.removeEventListener('pointercancel', wl.cancel)
-    window.removeEventListener('blur', wl.cancel)
+    window.removeEventListener('pointercancel', wl.pointerCancel)
+    window.removeEventListener('blur', wl.blur)
     window.removeEventListener('keydown', wl.key, true)
   }, [stopScrollLoop])
 
@@ -407,13 +423,7 @@ export function ScenesDock() {
     const boxEl = scrollRef.current
     const pos = pointerPos.current
     if (!d || !d.on || !boxEl || !pos) return
-    const box = boxEl.getBoundingClientRect()
-    let delta = 0
-    if (box.height > 0) {
-      if (pos.y < box.top + 32 && boxEl.scrollTop > 0) delta = -8
-      else if (pos.y > box.bottom - 32 && boxEl.scrollTop + boxEl.clientHeight < boxEl.scrollHeight)
-        delta = 8
-    }
+    const delta = edgeScrollDelta(boxEl, pos.x, pos.y)
     if (delta !== 0) {
       boxEl.scrollTop += delta
       const next = computeDropRef.current(pos.x, pos.y, d.name)
@@ -448,26 +458,15 @@ export function ScenesDock() {
       pointerPos.current = { x: e.clientX, y: e.clientY }
       if (scrollRef.current) {
         const boxEl = scrollRef.current
-        const box = boxEl.getBoundingClientRect()
-        if (box.height > 0) {
-          if (e.clientY < box.top + 32) {
-            boxEl.scrollTop -= 8
-            if (scrollRaf.current === null && boxEl.scrollTop > 0)
-              scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
-          } else if (e.clientY > box.bottom - 32) {
-            boxEl.scrollTop += 8
-            if (
-              scrollRaf.current === null &&
-              boxEl.scrollTop + boxEl.clientHeight < boxEl.scrollHeight
-            ) {
-              scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
-            }
-          } else {
-            if (scrollRaf.current !== null) {
-              window.cancelAnimationFrame(scrollRaf.current)
-              scrollRaf.current = null
-            }
+        const delta = edgeScrollDelta(boxEl, e.clientX, e.clientY)
+        if (delta !== 0) {
+          boxEl.scrollTop += delta
+          if (scrollRaf.current === null && edgeScrollDelta(boxEl, e.clientX, e.clientY) !== 0) {
+            scrollRaf.current = window.requestAnimationFrame(stepAutoScroll)
           }
+        } else if (scrollRaf.current !== null) {
+          window.cancelAnimationFrame(scrollRaf.current)
+          scrollRaf.current = null
         }
       }
       setGhost({ x: e.clientX, y: e.clientY })
@@ -493,7 +492,9 @@ export function ScenesDock() {
       if (!next) return
       moveSceneTo(d.name, next.to, names.length)
     },
-    cancel: (releasedNow = true) => {
+    cancel: (releasedNow = true, pointerId?: number) => {
+      const d = dragged.current
+      if (pointerId !== undefined && (!d || pointerId !== d.pointerId)) return
       cancelDrag(releasedNow)
     },
   }
@@ -512,6 +513,7 @@ export function ScenesDock() {
   )
 
   const pressScene = (e: ReactPointerEvent<HTMLElement>, sceneName: string) => {
+    if (dragged.current) return
     if (!canDrag || e.button !== 0 || (e.target as HTMLElement).closest('[data-no-drag], input'))
       return
     if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-drag-handle]'))
@@ -529,7 +531,8 @@ export function ScenesDock() {
     const wl = {
       move: (ev: PointerEvent) => dragHandlers.current?.move(ev),
       up: (ev: PointerEvent) => dragHandlers.current?.up(ev),
-      cancel: () => dragHandlers.current?.cancel(true),
+      pointerCancel: (ev: PointerEvent) => dragHandlers.current?.cancel(true, ev.pointerId),
+      blur: () => dragHandlers.current?.cancel(true),
       key: (ev: KeyboardEvent) => {
         if (ev.key === 'Escape' && dragged.current) {
           ev.preventDefault()
@@ -542,8 +545,8 @@ export function ScenesDock() {
     windowListeners.current = wl
     window.addEventListener('pointermove', wl.move)
     window.addEventListener('pointerup', wl.up)
-    window.addEventListener('pointercancel', wl.cancel)
-    window.addEventListener('blur', wl.cancel)
+    window.addEventListener('pointercancel', wl.pointerCancel)
+    window.addEventListener('blur', wl.blur)
     window.addEventListener('keydown', wl.key, true)
   }
   const commitName = async () => {
@@ -856,6 +859,12 @@ export function ScenesDock() {
             )}
             onBlur={(e) => {
               if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node)) {
+                pendingFocus.current = null
+              }
+            }}
+            onFocus={(e) => {
+              const name = pendingFocus.current
+              if (name && (e.target as HTMLElement) !== btnRefs.current.get(name)) {
                 pendingFocus.current = null
               }
             }}
