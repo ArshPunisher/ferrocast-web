@@ -40,7 +40,7 @@ export default sceneDesign(
     rotator(
       'handles',
       [110, 62, 560, 56],
-      ['{link:twitch}', '{link:youtube}', '{link:instagram}', '{link:discord}'],
+      ['{socials}'],
       { font: 'Audiowide', size: 30, weight: 400, color: '#fdf6ff', shadow: 'glow' },
       4,
     ),

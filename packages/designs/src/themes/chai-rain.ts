@@ -27,11 +27,7 @@ const LAMP = '#ffb35c'
 const CREAM = '#fff3e0'
 const LEAF = '#6fbf8e'
 const LEAF2 = '#3f8f68'
-const SOCIALS = [
-  '{link:twitch}',
-  'Find me on YouTube {link:youtube}',
-  'Join the Discord: {link:discord}',
-] as const
+const SOCIALS = ['{socials}'] as const
 
 const softLabel = {
   variant: 'chip',

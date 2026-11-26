@@ -1488,4 +1488,71 @@ describe('review fixes', () => {
     expect(canvas.children[0]?.textContent).toContain('Valid')
     expect(canvas.children[1]?.textContent).toContain('Last dup')
   })
+
+  it('keeps running countdowns, literals, and plain rotators undisturbed across live state.links updates', () => {
+    const layerW = (id: string, config: Record<string, unknown>) =>
+      ({ id, kind: 'layer', x: 40, y: 40, w: 400, h: 60, config }) as never
+    const ov = overlay([
+      layerW('cd', { type: 'text', text: '{time}', countdown: 300 }),
+      layerW('lit', {
+        type: 'text',
+        text: 'Starting soon',
+        anim: { in: 'none', delay_ms: 0, loop: 'float' },
+      }),
+      layerW('rot', { type: 'text', text: 'Slide 1', rotate: ['Slide 2'], rotate_s: 5 }),
+      layerW('tok', { type: 'text', text: '{link:twitch}' }),
+      layerW('tok_cd', { type: 'text', text: '{time} · {next_stream}', countdown: 300 }),
+    ])
+    ;(Element.prototype as unknown as { animate: unknown }).animate = undefined
+    rt.apply(snapshot({}, ov))
+
+    vi.advanceTimersByTime(25_000)
+    const layers = deepAll(root, '.fc-w-layer') as HTMLElement[]
+    const [cdWrap, litWrap, rotWrap, tokWrap, tokCdWrap] = layers
+    const cdText = () => (cdWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+    const rotText = () =>
+      (rotWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+    const tokText = () =>
+      (tokWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+    const tokCdText = () =>
+      (tokCdWrap!.querySelector('.fc-lt') as HTMLElement | null)?.textContent ?? ''
+
+    expect(cdText()).toBe('04:35')
+    expect(rotText()).toBe('Slide 2')
+
+    const litInnerBefore = litWrap!.querySelector('.fc-layer-text')
+    const cdReplace = vi.spyOn(cdWrap!, 'replaceChildren')
+    const litReplace = vi.spyOn(litWrap!, 'replaceChildren')
+    const rotReplace = vi.spyOn(rotWrap!, 'replaceChildren')
+
+    rt.apply(
+      frame('state', {
+        links: {
+          twitch: 'twitch.tv/updated',
+          youtube: null,
+          kick: null,
+          facebook: null,
+          discord: null,
+          instagram: null,
+          x: null,
+          tiktok: null,
+          website: null,
+          custom: [],
+          socials: ['twitch.tv/updated'],
+          channel_name: 'Updated',
+          next_stream: 'Saturday, 9 PM',
+          next_stream_at: null,
+        },
+      }),
+    )
+
+    expect(tokText()).toBe('twitch.tv/updated')
+    expect(tokCdText()).toBe('04:35 · Saturday, 9 PM')
+    expect(litWrap!.querySelector('.fc-layer-text')).toBe(litInnerBefore)
+    expect(cdReplace).not.toHaveBeenCalled()
+    expect(litReplace).not.toHaveBeenCalled()
+    expect(rotReplace).not.toHaveBeenCalled()
+    expect(cdText()).toBe('04:35')
+    expect(rotText()).toBe('Slide 2')
+  })
 })

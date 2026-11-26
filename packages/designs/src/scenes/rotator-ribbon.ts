@@ -28,7 +28,7 @@ export default sceneDesign(
     rotator(
       'handles',
       [120, 44, 560, 76],
-      ['{link:twitch}', '{link:youtube}', '{link:x}', '{link:discord}'],
+      ['{socials}'],
       {
         font: 'Bebas Neue',
         size: 52,

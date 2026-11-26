@@ -605,4 +605,63 @@ describe('frames and layouts a design wasn’t drawn for', () => {
     expect(card.classList.contains('f-glass')).toBe(true)
     expect(card.classList.contains('plate-light')).toBe(true)
   })
+
+  it('updated social themes and rotators avoid duplicated platform prefixes and include custom links', () => {
+    const targetIds = new Set([
+      'builtin.vanguard',
+      'builtin.doodle-desk',
+      'builtin.overclock',
+      'builtin.chai-rain',
+      'builtin.synthwave-drive',
+      'builtin.phosphor-terminal',
+      'builtin.rotator-minimal',
+      'builtin.rotator-neon',
+      'builtin.rotator-ribbon',
+    ])
+    const targets = [...themes, ...sceneDesigns].filter((d) => targetIds.has(d.id))
+    expect(targets).toHaveLength(9)
+
+    const customLinks = {
+      twitch: 'twitch.tv/novaplays',
+      youtube: 'youtube.com/@NovaPlays',
+      kick: 'kick.com/novaplays',
+      facebook: null,
+      discord: 'discord.gg/novahub',
+      instagram: null,
+      x: null,
+      tiktok: 'tiktok.com/@novaplays',
+      website: 'nova.gg',
+      custom: [{ label: 'Merch', value: 'shop.nova.gg' }],
+      socials: [
+        'twitch.tv/novaplays',
+        'youtube.com/@NovaPlays',
+        'kick.com/novaplays',
+        'discord.gg/novahub',
+        'tiktok.com/@novaplays',
+        'nova.gg',
+        'Merch: shop.nova.gg',
+      ],
+      channel_name: 'NovaPlays',
+      next_stream: 'Friday, 8 PM',
+      next_stream_at: null,
+    }
+
+    for (const d of targets) {
+      const scenes = d.kind === 'theme' ? d.content.scenes : [d.content]
+      let foundCustom = false
+      for (const s of scenes) {
+        for (const l of s.layers) {
+          if (l.kind !== 'layer' || l.config.type !== 'text') continue
+          const resolved = resolveLayerItems(l.config.text, l.config.rotate, customLinks, false)
+          for (const line of resolved) {
+            expect(line, `${d.id}/${s.key}`).not.toMatch(
+              /YouTube \/ youtube\.com|TWITCH \/\/ twitch\.tv|youtube: youtube\.com|Find me on YouTube youtube\.com|Join the Discord: discord\.gg|Discord: discord\.gg|> ping twitch\.tv/,
+            )
+            if (line === 'Merch: shop.nova.gg') foundCustom = true
+          }
+        }
+      }
+      expect(foundCustom, `${d.id} renders custom links from My links`).toBe(true)
+    }
+  })
 })

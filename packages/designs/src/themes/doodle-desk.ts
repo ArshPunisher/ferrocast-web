@@ -26,12 +26,7 @@ const YELLOW = '#ffe14d'
 const PINK = '#ff7eb6'
 const MINT = '#7be0c3'
 const BLUE = '#6aa8ff'
-const SOCIALS = [
-  '{link:twitch}',
-  'youtube: {link:youtube}',
-  'insta: {link:instagram}',
-  '{link:discord}',
-] as const
+const SOCIALS = ['{socials}'] as const
 
 const noteLabel = {
   variant: 'sticker',

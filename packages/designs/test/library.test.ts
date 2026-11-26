@@ -48,7 +48,11 @@ describe('library size', () => {
         }),
       ).length
     expect(
-      has((c) => c.type === 'text' && Array.isArray(c.rotate) && c.rotate.length > 0),
+      has(
+        (c) =>
+          c.type === 'text' &&
+          ((Array.isArray(c.rotate) && c.rotate.length > 0) || c.text === '{socials}'),
+      ),
     ).toBeGreaterThanOrEqual(3)
     expect(has((c) => c.type === 'text' && typeof c.countdown === 'number')).toBeGreaterThanOrEqual(
       3,

@@ -30,7 +30,7 @@ export default sceneDesign(
     rotator(
       'handles',
       [30, 92, 590, 56],
-      ['{link:twitch}', '{link:youtube}', '{link:instagram}'],
+      ['{socials}'],
       {
         font: 'Space Grotesk',
         size: 38,

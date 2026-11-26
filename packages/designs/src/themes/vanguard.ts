@@ -25,12 +25,7 @@ const RED = '#e10600'
 const RED2 = '#ff2a1f'
 const WHITE = '#f5f5f5'
 const GREY = '#9aa0ab'
-const SOCIALS = [
-  '{link:twitch}',
-  'YouTube / {link:youtube}',
-  'X / {link:x}',
-  '{link:discord}',
-] as const
+const SOCIALS = ['{socials}'] as const
 
 const slabLabel = {
   variant: 'ticker',

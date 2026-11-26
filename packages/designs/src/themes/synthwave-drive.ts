@@ -25,12 +25,7 @@ const CYAN = '#2de2e6'
 const SUN1 = '#ffd319'
 const SUN2 = '#ff2975'
 const INK = '#fdf6ff'
-const SOCIALS = [
-  '{link:twitch}',
-  '{link:youtube}',
-  '{link:kick}',
-  'Discord: {link:discord}',
-] as const
+const SOCIALS = ['{socials}'] as const
 
 const neonLabel = {
   variant: 'neon',

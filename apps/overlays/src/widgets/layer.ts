@@ -116,6 +116,8 @@ export class LayerWidget implements WidgetView {
   private total = 0
   private totalFor = 0
   private linksSig = ''
+  private renderedSig = ''
+  private lastShowEnds: number | null = null
 
   constructor(
     w: Widget & { kind: 'layer' },
@@ -137,6 +139,7 @@ export class LayerWidget implements WidgetView {
     this.id = String(w.id)
     this.box = box
     this.linksSig = JSON.stringify(this.ctx.state.links ?? null)
+    this.lastShowEnds = this.showEnds()
     this.stopTicking()
     reportTimer(this.id, null)
     this.render(w.config)
@@ -328,6 +331,7 @@ export class LayerWidget implements WidgetView {
     )
       .map((x) => safeText(x, 500))
       .filter((x) => x.trim() !== '')
+    this.renderedSig = JSON.stringify(resolvedItems)
     const base = resolvedItems[0] ?? ''
     this.items = resolvedItems.length > 1 ? resolvedItems : []
     this.at = 0
@@ -629,16 +633,46 @@ export class LayerWidget implements WidgetView {
       const sig = JSON.stringify(this.ctx.state.links ?? null)
       if (sig !== this.linksSig) {
         this.linksSig = sig
-        this.stopTicking()
-        this.render(c)
-        if (this.shown) {
-          this.applyMotion()
-          if (this.visible) this.startTicking()
+        const extra = Array.isArray(c.rotate)
+          ? c.rotate
+              .slice(0, MAX_ROTATE)
+              .map((x) => safeText(x, 80))
+              .filter((x) => x.trim() !== '')
+          : []
+        const rawBase = safeText(c.text, 500)
+        if (isTokenizedText([rawBase, ...extra].join('\n'))) {
+          const resolved = resolveLayerItems(
+            rawBase,
+            extra.length ? extra : undefined,
+            this.ctx.state.links,
+            Boolean(this.ctx.preview),
+          )
+            .map((x) => safeText(x, 500))
+            .filter((x) => x.trim() !== '')
+          const nextSig = JSON.stringify(resolved)
+          if (nextSig !== this.renderedSig) {
+            if (this.countFrom > 0) {
+              // Repaint tokenized countdown text in-place so the running timer never resets or flashes.
+              this.renderedSig = nextSig
+              if (this.shown && this.visible) this.tick()
+            } else {
+              this.stopTicking()
+              this.render(c)
+              if (this.shown) {
+                this.applyMotion()
+                if (this.visible) this.startTicking()
+              }
+              this.lastShowEnds = this.showEnds()
+              return
+            }
+          }
         }
-        return
       }
     }
-    if (this.shown && this.countFrom > 0 && this.visible) this.startTicking()
+    const showEnds = this.showEnds()
+    const showChanged = showEnds !== this.lastShowEnds
+    this.lastShowEnds = showEnds
+    if (showChanged && this.shown && this.countFrom > 0 && this.visible) this.startTicking()
   }
 
   destroy(): void {
