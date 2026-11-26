@@ -33,7 +33,17 @@ export function fileName(d: Design): string {
 }
 
 /** "Use" for designs that need a target: a theme, a scene, or a widget design. */
-export function UseDialog({
+export function UseDialog(props: {
+  design: Design | null
+  onClose: () => void
+  initialScenes?: string[] | undefined
+  onAlertApplied?: ((alertDesignId: string | null) => void) | undefined
+}) {
+  const key = `${props.design?.id ?? 'none'}:${props.initialScenes?.join(',') ?? 'all'}`
+  return <UseDialogBody key={key} {...props} />
+}
+
+function UseDialogBody({
   design,
   onClose,
   initialScenes,
@@ -126,18 +136,26 @@ function ClassicUseDialog({
       if (theme && intoStudio && target === 'new') {
         try {
           const made = await themeIntoStudio(engine, theme, r.overlays)
-          toast(
-            made.skipped
-              ? { tone: 'warn', message: 'Overlays made; the Studio is off.', hint: made.skipped }
-              : {
-                  tone: 'ok',
-                  message: `${made.scenes.length} scene${made.scenes.length === 1 ? '' : 's'} made in the Studio.`,
-                  hint: made.scenes.join(', '),
-                },
-          )
-          onClose()
-          go({ name: 'studio', section: 'golive' })
-          return
+          if (made.skipped) {
+            toast({
+              tone: 'warn',
+              message: 'Overlays made; the Studio is off.',
+              hint: made.skipped,
+            })
+            onClose()
+            go({ name: 'studio', section: 'golive' })
+            return
+          }
+          if (made.scenes.length > 0) {
+            toast({
+              tone: 'ok',
+              message: `${made.scenes.length} scene${made.scenes.length === 1 ? '' : 's'} made in the Studio.`,
+              hint: made.scenes.join(', '),
+            })
+            onClose()
+            go({ name: 'studio', section: 'golive' })
+            return
+          }
         } catch (e) {
           const d = describeError(e)
           toast({
@@ -237,6 +255,11 @@ function ClassicUseDialog({
           <p className="text-[14.5px] text-warn">
             The overlay’s current widgets are replaced. You can undo it by using your old design
             again.
+          </p>
+        )}
+        {theme && intoStudio && target !== 'new' && (
+          <p className="m-0 text-[13px] text-text-3">
+            Replacing an existing overlay updates it in place without making a new Studio scene.
           </p>
         )}
       </div>

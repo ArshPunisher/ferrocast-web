@@ -34,10 +34,13 @@ HTMLDialogElement.prototype.close = function close() {
 const lofi = BUILTINS.find(
   (d): d is ThemeDesign => d.kind === 'theme' && d.id === 'builtin.lofi-loft',
 )!
+const forge = BUILTINS.find(
+  (d): d is ThemeDesign => d.kind === 'theme' && d.id === 'builtin.forge',
+)!
 const lofiAlert = BUILTINS.find(
   (d): d is AlertDesign => d.kind === 'alert' && d.id === lofi.content.alert_design,
 )!
-if (!lofi || !lofiAlert) throw new Error('expected lofi-loft theme and alert design')
+if (!lofi || !forge || !lofiAlert) throw new Error('expected lofi-loft, forge, and alert design')
 
 let root: Root | null = null
 
@@ -92,7 +95,7 @@ async function mountNode(node: React.ReactNode, clientOverrides: Record<string, 
       if (id === lofi.content.alert_design) {
         return { alert_design: id, overlays: [] }
       }
-      const picked = req?.scenes ?? lofi.content.scenes.map((s) => s.key)
+      const picked = req?.scenes?.length ? req.scenes : lofi.content.scenes.map((s) => s.key)
       return {
         alert_design: req?.alert_style === false ? null : lofi.content.alert_design,
         overlays: picked.map((k) => overlayFor(k)),
@@ -175,11 +178,16 @@ describe('UseDialog / ThemeUseDialog partial selection', () => {
     })
     expect(host.textContent).toContain('Screens (0 of 5)')
     expect(endingBtn.getAttribute('aria-pressed')).toBe('false')
+    // Unticked tiles must not keep an <svg> checkmark inside the checkbox badge.
+    expect(endingBtn.querySelector('[aria-hidden="true"] svg')).toBeNull()
+    // Dialog uses size="md" (max-w-xl) so 5 columns fit without truncating labels.
+    expect(host.querySelector('.sm\\:max-w-xl')).not.toBeNull()
 
     await act(async () => {
       byText(host, 'button', 'Select all').click()
     })
     expect(host.textContent).toContain('Screens (5 of 5)')
+    expect(endingBtn.querySelector('[aria-hidden="true"] svg')).not.toBeNull()
 
     // Keep only Starting soon and Ending ticked.
     for (const name of ['In game', 'Just chatting', 'Be right back']) {
@@ -468,11 +476,10 @@ describe('ThemeSheet Use just this screen', () => {
     expect(byText(host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('waits for overlay discovery before enabling Next or mounting PlanForm, then falls back cleanly on error', async () => {
-    let resolveOverlays!: (v: Overlay[]) => void
-    let rejectOverlays!: (e: unknown) => void
+  it('waits for overlay discovery, ignores mid-load tile clicks, and re-engages guard on Retry and One part', async () => {
+    let resolveFirst!: (v: Overlay[]) => void
     const first = new Promise<Overlay[]>((r) => {
-      resolveOverlays = r
+      resolveFirst = r
     })
     const { host } = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
       overlays: vi.fn(() => first),
@@ -481,30 +488,251 @@ describe('ThemeSheet Use just this screen', () => {
     const nextPending = byText(host, 'button', 'Next') as HTMLButtonElement
     expect(nextPending.disabled).toBe(true)
 
+    // Mid-load click while /overlays is pending must NOT lock in allKeys and defeat auto-exclusion.
     await act(async () => {
-      resolveOverlays([overlayFor('in_game'), overlayFor('ending')])
+      byText(host, 'button', 'Ending').click()
+    })
+    await act(async () => {
+      resolveFirst([overlayFor('in_game'), overlayFor('ending')])
     })
     await flushMicrotasks()
 
     expect((byText(host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(false)
     expect(host.textContent).toContain('Screens (3 of 5)')
+    expect(byText(host, 'button', 'In game').getAttribute('aria-pressed')).toBe('false')
+    expect(byText(host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('false')
 
-    // Discovery failure still unblocks Next with fallback Retry option.
-    const second = new Promise<Overlay[]>((_, rej) => {
-      rejectOverlays = rej
+    // Discovery failure: One part must NOT claim "Create an overlay first", and Retry must re-lock Next until settled.
+    let attempt = 0
+    let resolveRetry!: (v: Overlay[]) => void
+    let rejectFirst!: (e: unknown) => void
+    const overlaysMock = vi.fn(() => {
+      attempt += 1
+      if (attempt === 1) {
+        return new Promise<Overlay[]>((_, rej) => {
+          rejectFirst = rej
+        })
+      }
+      return new Promise<Overlay[]>((r) => {
+        resolveRetry = r
+      })
     })
     await act(async () => root?.unmount())
     root = null
     document.body.innerHTML = ''
     const errMount = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
-      overlays: vi.fn(() => second),
+      overlays: overlaysMock,
     })
     await act(async () => {
-      rejectOverlays(new Error('network down'))
+      rejectFirst(new Error('network down'))
     })
     await flushMicrotasks()
 
     expect((byText(errMount.host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(false)
     expect(errMount.host.textContent).toContain('Retry')
+
+    // Switch to One part while errored: shows Retry and error text, never "Create an overlay first".
+    await act(async () => {
+      byText(errMount.host, 'label', 'One part').click()
+    })
+    expect(errMount.host.textContent).not.toContain('Create an overlay first')
+    expect(errMount.host.textContent).toContain('Retry')
+
+    // Switch back to Screens, click Retry, verify Next is disabled+busy while retrying!
+    await act(async () => {
+      byText(errMount.host, 'label', 'Screens').click()
+    })
+    await act(async () => {
+      byText(errMount.host, 'button', 'Retry').click()
+    })
+    await flushMicrotasks()
+    expect((byText(errMount.host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => {
+      resolveRetry([overlayFor('in_game')])
+    })
+    await flushMicrotasks()
+    expect((byText(errMount.host, 'button', 'Next') as HTMLButtonElement).disabled).toBe(false)
+    expect(errMount.host.textContent).toContain('Screens (4 of 5)')
+  })
+
+  it('keeps existing OBS scenes when re-opening applied theme, allows re-ticking skipped screens, and merges Use just this screen', async () => {
+    mockUsesObs = true
+    const appliedPlan = {
+      plan: {
+        prefix: 'Lo-fi loft · ',
+        screens: lofi.content.scenes.map((s) =>
+          s.key === 'in_game' || s.key === 'ending'
+            ? { key: s.key, place: { kind: 'new' as const }, under: null, role: null }
+            : { key: s.key, place: { kind: 'skip' as const }, under: null, role: null },
+        ),
+      },
+      screens: lofi.content.scenes.map((s) => ({ key: s.key, name: s.name })),
+      obs_scenes: ['Main', 'Lo-fi loft · In game', 'Lo-fi loft · Ending'],
+      obs_cameras: [],
+      old_widgets: [],
+      applied: {
+        design_id: lofi.id,
+        design_name: lofi.name,
+        at: 1,
+        screens: [
+          {
+            key: 'in_game',
+            name: 'In game',
+            scene: 'Lo-fi loft · In game',
+            overlay_id: 'ov-in_game',
+            role: null,
+          },
+          {
+            key: 'ending',
+            name: 'Ending',
+            scene: 'Lo-fi loft · Ending',
+            overlay_id: 'ov-ending',
+            role: null,
+          },
+        ],
+      },
+    }
+    const postPlans: unknown[] = []
+    const { host } = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
+      overlays: vi.fn(async () => [overlayFor('in_game'), overlayFor('ending')]),
+      request: vi.fn(async (method: string, path: string, body?: unknown) => {
+        if (method === 'GET' && path === `/api/v1/designs/${encodeURIComponent(lofi.id)}/obs`) {
+          return appliedPlan
+        }
+        if (method === 'POST' && path === `/api/v1/designs/${encodeURIComponent(lofi.id)}/obs`) {
+          postPlans.push(body)
+          return { steps: [], applied: appliedPlan.applied }
+        }
+        return undefined
+      }),
+    })
+    await act(async () => {
+      useLive.setState({
+        connectors: {
+          obs: { state: 'connected', account: null, detail: null, last_event_at: null },
+        } as never,
+      })
+    })
+    await flushMicrotasks()
+
+    // Existing applied screens (In game, Ending) remain ticked; CTA does NOT threaten "take out 2".
+    expect(host.textContent).toContain('Screens (2 of 5)')
+    expect(host.textContent).not.toContain('take out 2')
+    expect(byText(host, 'button', 'In game').getAttribute('aria-pressed')).toBe('true')
+    expect(byText(host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('true')
+
+    // Previously skipped screen (Just chatting) can be re-ticked, and Select all ticks all 5.
+    await act(async () => {
+      byText(host, 'button', 'Just chatting').click()
+    })
+    expect(host.textContent).toContain('Screens (3 of 5)')
+    expect(byText(host, 'button', 'Just chatting').getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => {
+      byText(host, 'button', 'Select all').click()
+    })
+    expect(host.textContent).toContain('Screens (5 of 5)')
+
+    await act(async () => {
+      byText(host, 'button', 'Update OBS').click()
+    })
+    await flushMicrotasks()
+    expect(postPlans).toHaveLength(1)
+    const sent = postPlans[0] as { screens: { key: string; place: { kind: string } }[] }
+    expect(sent.screens.every((s) => s.place.kind === 'new')).toBe(true)
+
+    // "Use just this screen" (Starting soon) in OBS mode merges with existing applied screens instead of deleting In game/Ending.
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+    const singleMount = await mountNode(
+      <UseDialog design={lofi} initialScenes={['starting_soon']} onClose={vi.fn()} />,
+      {
+        overlays: vi.fn(async () => [overlayFor('in_game'), overlayFor('ending')]),
+        request: vi.fn(async (method: string, path: string) => {
+          if (method === 'GET' && path === `/api/v1/designs/${encodeURIComponent(lofi.id)}/obs`) {
+            return appliedPlan
+          }
+          return undefined
+        }),
+      },
+    )
+    await act(async () => {
+      useLive.setState({
+        connectors: {
+          obs: { state: 'connected', account: null, detail: null, last_event_at: null },
+        } as never,
+      })
+    })
+    await flushMicrotasks()
+    expect(singleMount.host.textContent).toContain('Screens (3 of 5)')
+    expect(singleMount.host.textContent).not.toContain('take out')
+    expect(byText(singleMount.host, 'button', 'Starting soon').getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(byText(singleMount.host, 'button', 'In game').getAttribute('aria-pressed')).toBe('true')
+    expect(byText(singleMount.host, 'button', 'Ending').getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('resets UseDialog state on design switch, skips zero-scene Studio toast, and notes in-place overlay replacement', async () => {
+    const ovNoScene = { ...overlayFor('in_game'), design: null }
+    const ovExisting: Overlay = {
+      id: 'ov-exist',
+      name: 'Existing Overlay',
+      url: 'http://127.0.0.1:4190/overlay/ov-exist',
+      width: 1920,
+      height: 1080,
+      widgets: [],
+      updated_at: 1,
+      design: null,
+    }
+    const { host, client } = await mountNode(<UseDialog design={lofi} onClose={vi.fn()} />, {
+      overlays: vi.fn(async () => [ovExisting]),
+      useDesign: vi.fn(async () => ({ alert_design: null, overlays: [ovNoScene] })),
+    })
+
+    // Switch to Forge without unmounting UseDialog: stale classic/selection must reset cleanly.
+    await act(async () => {
+      byText(host, 'button', 'Next').click()
+    })
+    await flushMicrotasks()
+    expect(host.textContent).toContain('Make 5 overlays')
+
+    await act(async () => {
+      root?.render(
+        <>
+          <Toaster />
+          <UseDialog design={forge} onClose={vi.fn()} />
+        </>,
+      )
+    })
+    await flushMicrotasks()
+    expect(host.textContent).toContain('Use Forge')
+    expect(byText(host, 'button', 'Next')).toBeTruthy()
+
+    // Go to ClassicUseDialog with Set it up in the Studio ON: switching target to existing notes in-place update.
+    await act(async () => {
+      byText(host, 'button', 'Next').click()
+    })
+    await flushMicrotasks()
+    const targetSelect = host.querySelector('select')!
+    await act(async () => {
+      targetSelect.value = 'ov-exist'
+      targetSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(host.textContent).toContain('without making a new Studio scene')
+
+    // Returning target to "new" and submitting with zero matching design.scene must not toast "0 scenes made".
+    await act(async () => {
+      targetSelect.value = 'new'
+      targetSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      byText(host, 'button', 'Make 5 overlays').click()
+    })
+    await flushMicrotasks()
+    expect(client.useDesign).toHaveBeenCalledTimes(1)
+    expect(currentToasts().some((t) => /0 scenes made/.test(t.message))).toBe(false)
   })
 })

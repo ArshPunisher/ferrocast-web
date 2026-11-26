@@ -15,6 +15,7 @@ import {
   UploadSimple,
 } from '@phosphor-icons/react'
 import {
+  MAX_OVERLAY_WIDGETS,
   ROLE_LABEL,
   checkThemePlan,
   obsThemeApi,
@@ -123,13 +124,26 @@ export function ThemeUseDialog({
           : allKeys,
     [initialScenes, overlays.data, alreadyAdded, allKeys],
   )
-  const [pickedState, setPickedState] = useState<{ touched: boolean; list: string[] }>(() => ({
-    touched: initialScenes !== undefined,
-    list: defaultPicked,
-  }))
-  const touched = pickedState.touched
-  const effectivePicked = touched ? pickedState.list : defaultPicked
-  const resolvingOverlays = !touched && overlays.loading && !overlays.data && !overlays.error
+  const [pickedState, setPickedState] = useState<{ touched: boolean; list: string[] }>({
+    touched: false,
+    list: [],
+  })
+  const [retryingOverlays, setRetryingOverlays] = useState(false)
+  useEffect(() => {
+    if (!overlays.loading) setRetryingOverlays(false)
+  }, [overlays.loading])
+  const retryOverlays = () => {
+    setRetryingOverlays(true)
+    overlays.reload()
+  }
+  const userTouched = pickedState.touched
+  const effectivePicked = userTouched ? pickedState.list : defaultPicked
+  const loadingOverlays = !overlays.data && (overlays.loading || retryingOverlays)
+  const resolvingOverlays =
+    !userTouched &&
+    initialScenes === undefined &&
+    !overlays.data &&
+    ((overlays.loading && !overlays.error) || retryingOverlays)
 
   if (styling) return <MakeItYoursDialog design={design} onClose={onClose} />
   if (result)
@@ -143,20 +157,23 @@ export function ThemeUseDialog({
         onUndone={onClose}
       />
     )
-  if (intoObs && reach.ok)
+  if (intoObs && reach.ok) {
+    const obsSelection = userTouched || initialScenes !== undefined ? effectivePicked : undefined
     return (
       <IntoObsDialog
         design={design}
-        waiting={resolvingOverlays}
-        initialScenes={resolvingOverlays ? undefined : effectivePicked}
+        initialScenes={obsSelection}
+        mergeApplied={!userTouched && initialScenes !== undefined}
         onClose={onClose}
         onOff={() => setIntoObs(false)}
         onDone={setResult}
         api={api}
       />
     )
+  }
 
   const toggle = (key: string) => {
+    if (resolvingOverlays) return
     setPickedState((prev) => {
       const base = prev.touched ? prev.list : defaultPicked
       const next = base.includes(key)
@@ -166,6 +183,7 @@ export function ThemeUseDialog({
     })
   }
   const setAll = (on: boolean) => {
+    if (resolvingOverlays) return
     setPickedState({ touched: true, list: on ? allKeys : [] })
   }
   const selectedPart = parts.find((p) => p.key === partKey) ?? parts[0] ?? null
@@ -187,7 +205,8 @@ export function ThemeUseDialog({
   }
 
   const submitPart = () => {
-    if (!selectedPart || !targetOverlay || targetOverlay.widgets.length >= 40) return
+    if (!selectedPart || !targetOverlay || targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS)
+      return
     void run(
       'part',
       () => client.saveOverlay(addPartToOverlay(targetOverlay, selectedPart, design)),
@@ -203,7 +222,7 @@ export function ThemeUseDialog({
     <Dialog
       open
       onClose={onClose}
-      size="sm"
+      size="md"
       title={`Use ${design.name}`}
       footer={
         <>
@@ -217,7 +236,7 @@ export function ThemeUseDialog({
               disabled={
                 !selectedPart ||
                 !targetOverlay ||
-                targetOverlay.widgets.length >= 40 ||
+                targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS ||
                 busy === 'part'
               }
               onClick={submitPart}
@@ -286,27 +305,46 @@ export function ThemeUseDialog({
                   {...p}
                   value={targetOverlayId}
                   onChange={(e) => setTargetOverlayId(e.target.value)}
-                  disabled={overlayList.length === 0}
+                  disabled={loadingOverlays || overlayList.length === 0}
                 >
                   <option value="">
-                    {overlayList.length === 0 ? 'No overlays yet' : 'Choose an overlay…'}
+                    {loadingOverlays
+                      ? 'Loading overlays…'
+                      : overlayList.length === 0
+                        ? 'No overlays yet'
+                        : 'Choose an overlay…'}
                   </option>
                   {overlayList.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.name} ({o.widgets.length}/40)
+                      {o.name} ({o.widgets.length}/{MAX_OVERLAY_WIDGETS})
                     </option>
                   ))}
                 </Select>
               )}
             </Field>
-            {overlayList.length === 0 && !overlays.loading && (
-              <p className="m-0 text-[13px] text-text-3">
-                Create an overlay first in Overlays before adding a single part.
+            {overlays.error && !overlays.data && !retryingOverlays ? (
+              <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
+                <span>Couldn’t load existing overlays.</span>
+                <button
+                  type="button"
+                  onClick={retryOverlays}
+                  className="font-semibold text-accent-text hover:underline"
+                >
+                  Retry
+                </button>
               </p>
+            ) : (
+              overlayList.length === 0 &&
+              !loadingOverlays && (
+                <p className="m-0 text-[13px] text-text-3">
+                  Create an overlay first in Overlays before adding a single part.
+                </p>
+              )
             )}
-            {targetOverlay && targetOverlay.widgets.length >= 40 && (
+            {targetOverlay && targetOverlay.widgets.length >= MAX_OVERLAY_WIDGETS && (
               <p role="alert" className="m-0 text-[13px] font-semibold text-danger">
-                That overlay already has 40 widgets. Pick another or remove one first.
+                That overlay already has {MAX_OVERLAY_WIDGETS} widgets. Pick another or remove one
+                first.
               </p>
             )}
           </div>
@@ -318,19 +356,26 @@ export function ThemeUseDialog({
               onToggle={toggle}
               onSetAll={setAll}
               alreadyAdded={alreadyAdded}
+              disabled={resolvingOverlays}
             />
-            {overlays.error && !touched && !overlays.data && (
-              <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
-                <span>Couldn’t check existing overlays. Continuing uses your selection below.</span>
-                <button
-                  type="button"
-                  onClick={overlays.reload}
-                  className="font-semibold text-accent-text hover:underline"
-                >
-                  Retry
-                </button>
-              </p>
-            )}
+            {overlays.error &&
+              !userTouched &&
+              initialScenes === undefined &&
+              !overlays.data &&
+              !retryingOverlays && (
+                <p className="m-0 flex items-center gap-2 text-[13px] text-text-3">
+                  <span>
+                    Couldn’t check existing overlays. Continuing uses your selection below.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={retryOverlays}
+                    className="font-semibold text-accent-text hover:underline"
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
             {hasReimportPick && (
               <p className="m-0 text-[13px] text-text-3">
                 Already-added screens will be created as new overlays.
@@ -401,12 +446,14 @@ function Screens({
   onToggle,
   onSetAll,
   alreadyAdded,
+  disabled,
 }: {
   design: ThemeDesign
   picked?: string[]
   onToggle?: (key: string) => void
   onSetAll?: (on: boolean) => void
   alreadyAdded?: ReadonlySet<string>
+  disabled?: boolean
 }) {
   const allPicked = !!picked && picked.length >= design.content.scenes.length
   return (
@@ -419,15 +466,20 @@ function Screens({
           {onSetAll && (
             <button
               type="button"
+              disabled={disabled}
               onClick={() => onSetAll(!allPicked)}
-              className="fc-press -my-1.5 min-h-[44px] rounded-control px-2 text-[13px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:min-h-[32px]"
+              className="fc-press -my-1.5 min-h-[44px] rounded-control px-2 text-[13px] font-semibold text-accent-text hover:underline focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50 disabled:no-underline sm:min-h-[32px]"
             >
               {allPicked ? 'Select none' : 'Select all'}
             </button>
           )}
         </div>
       )}
-      <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0 sm:grid-cols-5" aria-label="Screens">
+      <ul
+        className="m-0 grid list-none grid-cols-3 gap-2 p-0 sm:grid-cols-5"
+        aria-label="Screens"
+        aria-busy={disabled || undefined}
+      >
         {design.content.scenes.map((s) => {
           const on = !picked || picked.includes(s.key)
           const added = alreadyAdded?.has(s.key) ?? false
@@ -447,16 +499,15 @@ function Screens({
                     aria-hidden="true"
                     className={cx(
                       'absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-[5px] border transition-colors',
-                      on
-                        ? 'border-arc bg-arc text-white shadow-sm'
-                        : 'border-white/45 bg-black/55 text-transparent',
+                      on ? 'border-arc bg-arc text-white shadow-sm' : 'border-white/75 bg-black/55',
                     )}
                   >
-                    <Check size={12} weight="bold" />
+                    {on && <Check size={12} weight="bold" />}
                   </span>
                 )}
               </span>
               <span
+                title={s.name}
                 className={cx(
                   'truncate text-[13px] font-semibold',
                   on ? 'text-text-2' : 'text-text-3',
@@ -471,10 +522,11 @@ function Screens({
               {onToggle ? (
                 <button
                   type="button"
+                  disabled={disabled}
                   aria-pressed={on}
                   aria-describedby={addedId}
                   onClick={() => onToggle(s.key)}
-                  className="fc-press flex w-full min-w-0 flex-col gap-1 rounded-[10px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                  className="fc-press flex w-full min-w-0 flex-col gap-1 rounded-[10px] text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-wait"
                 >
                   {body}
                 </button>
@@ -484,6 +536,7 @@ function Screens({
               {added && (
                 <span
                   id={addedId}
+                  title="Already added"
                   className="mt-0.5 block truncate text-[11px] font-medium text-accent-text"
                 >
                   Already added
@@ -499,16 +552,16 @@ function Screens({
 
 function IntoObsDialog({
   design,
-  waiting,
   initialScenes,
+  mergeApplied,
   onClose,
   onOff,
   onDone,
   api,
 }: {
   design: ThemeDesign
-  waiting?: boolean
   initialScenes?: string[] | undefined
+  mergeApplied?: boolean
   onClose: () => void
   onOff: () => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
@@ -519,7 +572,7 @@ function IntoObsDialog({
     <Dialog open onClose={onClose} size="lg" title={`Use ${design.name}`} footer={null}>
       {guess.error && !guess.data ? (
         <LoadError error={guess.error} onRetry={guess.reload} />
-      ) : !guess.data || waiting ? (
+      ) : !guess.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
         <PlanForm
@@ -527,6 +580,7 @@ function IntoObsDialog({
           design={design}
           data={guess.data}
           initialScenes={initialScenes}
+          mergeApplied={!!mergeApplied}
           onClose={onClose}
           onOff={onOff}
           onDone={onDone}
@@ -537,10 +591,24 @@ function IntoObsDialog({
   )
 }
 
+function enableObsScreen(s: ScreenPlan, guessed: ScreenPlan | undefined): ScreenPlan {
+  if (s.place.kind !== 'skip') return s
+  if (guessed && guessed.place.kind !== 'skip') {
+    return {
+      ...s,
+      place: guessed.place,
+      under: guessed.under ?? null,
+      role: guessed.role ?? null,
+    }
+  }
+  return { ...s, place: { kind: 'new' }, under: null, role: null }
+}
+
 function PlanForm({
   design,
   data,
   initialScenes,
+  mergeApplied,
   onClose,
   onOff,
   onDone,
@@ -549,24 +617,28 @@ function PlanForm({
   design: ThemeDesign
   data: ThemeObsPlan
   initialScenes?: string[] | undefined
+  mergeApplied?: boolean
   onClose: () => void
   onOff: () => void
   onDone: (r: { steps: ShowStep[]; applied: ObsTheme | null }) => void
   api: ReturnType<typeof obsThemeApi>
 }) {
   const [mode] = useMode('theme-obs')
-  const [plan, setPlan] = useState<ThemePlan>(() =>
-    initialScenes
-      ? {
-          ...data.plan,
-          screens: data.plan.screens.map((s) =>
-            initialScenes.includes(s.key)
-              ? s
-              : { ...s, place: { kind: 'skip' }, under: null, role: null },
-          ),
-        }
-      : data.plan,
-  )
+  const [plan, setPlan] = useState<ThemePlan>(() => {
+    if (!initialScenes) return data.plan
+    const keepApplied =
+      mergeApplied && data.applied?.design_id === design.id
+        ? new Set(data.applied.screens.map((a) => a.key))
+        : null
+    return {
+      ...data.plan,
+      screens: data.plan.screens.map((s) =>
+        initialScenes.includes(s.key) || keepApplied?.has(s.key)
+          ? enableObsScreen(s, s)
+          : { ...s, place: { kind: 'skip' }, under: null, role: null },
+      ),
+    }
+  })
   const { run, busy } = useAction()
   const sources = data.obs_cameras
   const problem = checkThemePlan(plan, data.screens, data.obs_scenes, [
@@ -587,7 +659,7 @@ function PlanForm({
     setScreen(
       key,
       s.place.kind === 'skip'
-        ? { place: guessed.place, under: guessed.under ?? null, role: guessed.role ?? null }
+        ? enableObsScreen(s, guessed)
         : { place: { kind: 'skip' }, under: null, role: null },
     )
   }
@@ -595,10 +667,9 @@ function PlanForm({
     setPlan({
       ...plan,
       screens: plan.screens.map((s) => {
+        if (!on) return { ...s, place: { kind: 'skip' }, under: null, role: null }
         const guessed = data.plan.screens.find((x) => x.key === s.key)
-        return on && guessed
-          ? { ...s, place: guessed.place, under: guessed.under ?? null, role: guessed.role ?? null }
-          : { ...s, place: { kind: 'skip' }, under: null, role: null }
+        return enableObsScreen(s, guessed)
       }),
     })
   const switching = data.applied && data.applied.design_id !== design.id
