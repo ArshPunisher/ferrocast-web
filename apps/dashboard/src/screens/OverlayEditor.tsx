@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowArcLeft, ArrowArcRight, CaretLeft, Eye, EyeSlash } from '@phosphor-icons/react'
 import { DEFAULT_THEME, renderSafeTemplate, type Overlay, type OverlayState } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Skeleton, cx } from '@ferrocast/ui'
@@ -82,6 +82,8 @@ export function OverlayEditor({ id }: { id: string }) {
   const media = useResource((c) => c.media())
   const [preview, setPreview] = useState(true)
   const loadedId = useRef<string | null>(null)
+  const workspaceRef = useRef<HTMLDivElement>(null)
+  const footerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!ov.data || ov.data.id !== id) {
       loadedId.current = null
@@ -99,6 +101,71 @@ export function OverlayEditor({ id }: { id: string }) {
   const currentDraft = draft && draft.id === id && ov.data?.id === id ? draft : null
   const dirty = layoutDirty(currentDraft, savedBaseline ?? ov.data)
   const leaving = useLeaveGuard(dirty)
+
+  // Keep bottom-center desktop/tablet toasts clear of the status / Unsaved bar without shifting
+  // toasts on any other screen.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const setOffset = (next: string) => {
+      const cur = root.style.getPropertyValue('--fc-toast-offset')
+      if (next) {
+        if (cur !== next) root.style.setProperty('--fc-toast-offset', next)
+      } else if (cur) {
+        root.style.removeProperty('--fc-toast-offset')
+      }
+    }
+    const sync = () => {
+      const el = footerRef.current
+      if (!el) {
+        setOffset('')
+        return
+      }
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight
+      if (
+        window.innerWidth < 640 ||
+        rect.height <= 0 ||
+        rect.top >= vh ||
+        rect.bottom <= vh - 240
+      ) {
+        setOffset('')
+        return
+      }
+      const cs = getComputedStyle(root)
+      const rem = parseFloat(cs.fontSize) || 16
+      const statusbar = parseFloat(cs.getPropertyValue('--fc-statusbar') || '0') || 0
+      const needed = Math.ceil(vh - rect.top - statusbar - rem + 8)
+      const maxOffset = Math.max(0, vh - statusbar - rem - 140)
+      const offset = Math.max(0, Math.min(needed, maxOffset))
+      setOffset(offset > 0 ? `${offset}px` : '')
+    }
+    sync()
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(sync) : null
+    if (ro) {
+      if (workspaceRef.current) ro.observe(workspaceRef.current)
+      if (footerRef.current) ro.observe(footerRef.current)
+    }
+    let lastStatusbar = root.style.getPropertyValue('--fc-statusbar')
+    const mo =
+      typeof MutationObserver === 'function'
+        ? new MutationObserver(() => {
+            const nextStatus = root.style.getPropertyValue('--fc-statusbar')
+            if (nextStatus === lastStatusbar) return
+            lastStatusbar = nextStatus
+            sync()
+          })
+        : null
+    mo?.observe(root, { attributes: true, attributeFilter: ['style'] })
+    window.addEventListener('resize', sync)
+    window.addEventListener('scroll', sync, { passive: true })
+    return () => {
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', sync)
+      window.removeEventListener('scroll', sync)
+      root.style.removeProperty('--fc-toast-offset')
+    }
+  }, [dirty, currentDraft?.id])
 
   // Labels depend only on label widgets' source/template, not on where widgets sit, so dragging
   // doesn't rebuild the preview state.
@@ -273,6 +340,7 @@ export function OverlayEditor({ id }: { id: string }) {
     : draft
   const statusFooter = (
     <div
+      ref={footerRef}
       data-testid="overlay-status-bar"
       className={cx(
         'flex items-center gap-3 rounded-panel border px-3.5 transition-colors duration-150 lg:h-12 lg:min-h-[48px] lg:flex-nowrap',
@@ -308,7 +376,7 @@ export function OverlayEditor({ id }: { id: string }) {
   )
 
   return (
-    <div className="fc-overlay-workspace flex flex-col gap-2.5">
+    <div ref={workspaceRef} className="fc-overlay-workspace flex flex-col gap-2.5">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <a
           href={href({ name: 'overlays' })}
