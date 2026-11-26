@@ -29,7 +29,7 @@ const CREAM = '#f6e7d0'
 const SAGE = '#8fb39a'
 const ROSE = '#e8a3a0'
 const INK = '#1a1526'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const chipLabel = {
   variant: 'chip',

@@ -25,7 +25,7 @@ const TEAL = '#1fd1c1'
 const PLANET = '#ff9f5a'
 const WHITE = '#eef6ff'
 const MUTED = '#bcd2ff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const orbitLabel = {
   variant: 'chip',

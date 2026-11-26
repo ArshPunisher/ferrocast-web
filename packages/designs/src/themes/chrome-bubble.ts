@@ -26,7 +26,7 @@ const MAGENTA = '#ff3fc8'
 const BLUE = '#3456ff'
 const INK = '#1d1546'
 const WHITE = '#ffffff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const pillLabel = {
   variant: 'chip',

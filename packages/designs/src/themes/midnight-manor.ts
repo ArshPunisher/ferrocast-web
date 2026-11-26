@@ -25,7 +25,7 @@ const PURPLE = '#5b2a86'
 const PUMPKIN = '#ff7a1a'
 const SLIME = '#8cff4a'
 const BONE = '#efe6d8'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const spookLabel = {
   variant: 'tag',

@@ -28,7 +28,7 @@ const BUTTER = '#fff1a8'
 const LILAC = '#c9b6ff'
 const INK = '#5a3d5c'
 const WHITE = '#ffffff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube @yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const stickerLabel = {
   variant: 'sticker',

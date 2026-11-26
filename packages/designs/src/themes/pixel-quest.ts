@@ -28,7 +28,7 @@ const DIRT = '#8a5a2b'
 const GOLD = '#ffd23f'
 const INK = '#14142b'
 const WHITE = '#ffffff'
-const SOCIALS = ['TWITCH.TV/YOURNAME', 'YOUTUBE @YOURNAME', 'DISCORD GG/YOURNAME'] as const
+const SOCIALS = ['{socials}'] as const
 
 const px = { font: 'Press Start 2P', weight: 400 } as const
 const pixLabel = {

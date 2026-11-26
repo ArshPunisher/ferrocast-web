@@ -33,7 +33,7 @@ const BRASS = '#c9a25a'
 const SAGE = '#7d9a7a'
 const ESPRESSO = '#3b2417'
 const KRAFT = '#dcbf94'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const kraftLabel = {
   variant: 'tag',

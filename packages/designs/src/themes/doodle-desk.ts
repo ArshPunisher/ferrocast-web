@@ -27,10 +27,10 @@ const PINK = '#ff7eb6'
 const MINT = '#7be0c3'
 const BLUE = '#6aa8ff'
 const SOCIALS = [
-  'twitch.tv/yourname',
-  'youtube: @yourname',
-  'insta: @yourname',
-  'discord.gg/yourname',
+  '{link:twitch}',
+  'youtube: {link:youtube}',
+  'insta: {link:instagram}',
+  '{link:discord}',
 ] as const
 
 const noteLabel = {

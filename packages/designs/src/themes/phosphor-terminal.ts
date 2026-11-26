@@ -26,9 +26,9 @@ const GREEN = '#39ff6a'
 const DIM = '#1f9a45'
 const AMBER = '#ffb000'
 const SOCIALS = [
-  '> ping twitch.tv/yourname',
-  '> ping youtube.com/@yourname',
-  '> ping discord.gg/yourname',
+  '> ping {link:twitch}',
+  '> ping {link:youtube}',
+  '> ping {link:discord}',
 ] as const
 
 const bracketLabel = {

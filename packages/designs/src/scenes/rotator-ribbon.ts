@@ -28,7 +28,7 @@ export default sceneDesign(
     rotator(
       'handles',
       [120, 44, 560, 76],
-      ['TWITCH.TV/YOURNAME', 'YOUTUBE @YOURNAME', 'X @YOURNAME', 'DISCORD.GG/YOURNAME'],
+      ['{link:twitch}', '{link:youtube}', '{link:x}', '{link:discord}'],
       {
         font: 'Bebas Neue',
         size: 52,

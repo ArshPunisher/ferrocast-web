@@ -26,10 +26,10 @@ const SUN1 = '#ffd319'
 const SUN2 = '#ff2975'
 const INK = '#fdf6ff'
 const SOCIALS = [
-  'twitch.tv/yourname',
-  'youtube.com/@yourname',
-  'kick.com/yourname',
-  'Discord: discord.gg/yourname',
+  '{link:twitch}',
+  '{link:youtube}',
+  '{link:kick}',
+  'Discord: {link:discord}',
 ] as const
 
 const neonLabel = {

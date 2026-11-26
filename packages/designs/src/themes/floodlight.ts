@@ -28,7 +28,7 @@ const LED = '#ffc21a'
 const LAMP = '#fff6d6'
 const WHITE = '#ffffff'
 const SKY = '#3ad1ff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const boardLabel = {
   variant: 'ticket',

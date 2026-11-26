@@ -28,7 +28,7 @@ const AQUA = '#5ef2e0'
 const JELLY = '#c69bff'
 const FOAM = '#e8fbff'
 const ROCK = '#03141f'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const glassLabel = {
   variant: 'chip',

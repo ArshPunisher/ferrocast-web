@@ -28,7 +28,7 @@ const SAFFRON = '#ff6b00'
 const MAGENTA = '#e0218a'
 const GOLD = '#ffd166'
 const CREAM = '#fff4e0'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const festLabel = { variant: 'ribbon', accent: MAGENTA, text: CREAM, font: 'Baloo 2' }
 const festGoal = {

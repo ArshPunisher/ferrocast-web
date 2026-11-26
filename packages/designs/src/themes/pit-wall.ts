@@ -26,7 +26,7 @@ const RED = '#e10600'
 const WHITE = '#f5f5f7'
 const TEAL = '#00d2be'
 const PURPLE = '#a855f7'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'kick.com/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const towerLabel = {
   variant: 'tag',

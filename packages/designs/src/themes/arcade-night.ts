@@ -27,7 +27,7 @@ const PINK = '#ff3fa4'
 const CYAN = '#33d4ff'
 const CREAM = '#fff7c2'
 const NIGHT = '#0d0618'
-const SOCIALS = ['TWITCH.TV/YOURNAME', 'YOUTUBE @YOURNAME', 'KICK.COM/YOURNAME'] as const
+const SOCIALS = ['{socials}'] as const
 const px = { font: 'Press Start 2P', weight: 400 } as const
 const goalStyle = {
   variant: 'segments',

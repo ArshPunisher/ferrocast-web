@@ -31,7 +31,7 @@ const RED = '#b3202f'
 const CREAM = '#f7eedf'
 const INK = '#2a1a14'
 const GOLD = '#ffc56b'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const ribbonLabel = {
   variant: 'ribbon',

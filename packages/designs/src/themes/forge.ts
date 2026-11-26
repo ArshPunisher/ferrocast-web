@@ -27,7 +27,7 @@ const ARC = '#33d4ff'
 const INK = '#eef0f4'
 const DIM = '#b3b9c4'
 const IRON = '#0a0b0d'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'kick.com/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 const goalStyle = {
   variant: 'bar',
   accent: MOLTEN,

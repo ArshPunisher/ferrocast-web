@@ -26,10 +26,10 @@ const CYAN = '#19f0ff'
 const ALERT = '#ff3b5c'
 const INK = '#e9fbe9'
 const SOCIALS = [
-  'TWITCH // yourname',
-  'YOUTUBE // @yourname',
-  'KICK // yourname',
-  'DISCORD // gg/yourname',
+  'TWITCH // {link:twitch}',
+  'YOUTUBE // {link:youtube}',
+  'KICK // {link:kick}',
+  'DISCORD // {link:discord}',
 ] as const
 
 const hudLabel = {

@@ -25,7 +25,7 @@ const EMERALD2 = '#0f3326'
 const GOLD = '#d9b45a'
 const GOLD2 = '#f6e3a1'
 const IVORY = '#f4efe3'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const goldLabel = {
   variant: 'underline',

@@ -27,7 +27,7 @@ const MUTED = '#77736b'
 const RULE = '#d3cec5'
 const RED = '#e0482f'
 const WHITE = '#ffffff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const lineLabel = {
   variant: 'underline',

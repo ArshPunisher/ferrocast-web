@@ -29,7 +29,7 @@ const CYAN = '#29e3ff'
 const AMBER = '#ffb547'
 const LANTERN = '#e8322f'
 const WHITE = '#f4f1ff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const neonLabel = {
   variant: 'neon',

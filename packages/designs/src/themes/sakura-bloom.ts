@@ -29,7 +29,7 @@ const VERMILION = '#e0483e'
 const PLUM = '#4a2342'
 const LILAC = '#c9b3e6'
 const WHITE = '#ffffff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const ribbonLabel = {
   variant: 'ribbon',

@@ -28,9 +28,9 @@ const CREAM = '#fff3e0'
 const LEAF = '#6fbf8e'
 const LEAF2 = '#3f8f68'
 const SOCIALS = [
-  'twitch.tv/yourname',
-  'Find me on YouTube @yourname',
-  'Join the Discord: gg/yourname',
+  '{link:twitch}',
+  'Find me on YouTube {link:youtube}',
+  'Join the Discord: {link:discord}',
 ] as const
 
 const softLabel = {

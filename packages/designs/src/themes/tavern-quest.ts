@@ -30,7 +30,7 @@ const INK = '#2b1d10'
 const WINE = '#7a1f1a'
 const GOLD = '#d4a94a'
 const CANDLE = '#ffb347'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'discord.gg/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const noticeLabel = {
   variant: 'ticket',

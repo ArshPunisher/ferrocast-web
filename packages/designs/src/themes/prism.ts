@@ -26,7 +26,7 @@ const ROSE = '#ffb8f0'
 const MINT = '#c8ffde'
 const BUTTER = '#fff3a8'
 const WHITE = '#ffffff'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const glassLabel = {
   variant: 'chip',

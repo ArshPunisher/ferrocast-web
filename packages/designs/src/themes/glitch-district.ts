@@ -27,7 +27,7 @@ const ACID = '#fcee0a'
 const RED = '#ff2a4d'
 const CYAN = '#00e5ff'
 const WHITE = '#f4f4f6'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'kick.com/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const tagLabel = {
   variant: 'tag',

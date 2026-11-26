@@ -26,10 +26,10 @@ const RED2 = '#ff2a1f'
 const WHITE = '#f5f5f5'
 const GREY = '#9aa0ab'
 const SOCIALS = [
-  'TWITCH.TV/YOURNAME',
-  'YOUTUBE / @YOURNAME',
-  'X / @YOURNAME',
-  'DISCORD.GG/YOURNAME',
+  '{link:twitch}',
+  'YouTube / {link:youtube}',
+  'X / {link:x}',
+  '{link:discord}',
 ] as const
 
 const slabLabel = {

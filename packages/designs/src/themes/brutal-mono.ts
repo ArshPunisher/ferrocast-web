@@ -23,7 +23,7 @@ import {
 const PAPER = '#f2f0eb'
 const INK = '#0a0a0a'
 const SIGNAL = '#ff3b00'
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 const inkLabel = {
   variant: 'underline',

@@ -71,7 +71,7 @@ export interface FxThemeSpec {
   alert: string
 }
 
-const SOCIALS = ['twitch.tv/yourname', 'youtube.com/@yourname', 'kick.com/yourname'] as const
+const SOCIALS = ['{socials}'] as const
 
 /** `#rrggbb` with an alpha byte. */
 const a8 = (hex: string, alpha: number) =>
@@ -423,7 +423,7 @@ export function fxTheme(t: FxThemeSpec) {
         world((t.speed ?? 1) * 0.5, false),
         shade,
         title('Offline', [160, 300, 1600, 170], 150),
-        sub('Next stream: Friday, 8 PM', 480),
+        sub('Next stream: {next_stream}', 480),
         socials(580),
         latest([730, 680, 460, 56]),
         mark(),

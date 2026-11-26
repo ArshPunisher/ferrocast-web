@@ -30,7 +30,7 @@ export default sceneDesign(
     rotator(
       'handles',
       [30, 92, 590, 56],
-      ['twitch.tv/yourname', 'youtube.com/@yourname', 'instagram @yourname'],
+      ['{link:twitch}', '{link:youtube}', '{link:instagram}'],
       {
         font: 'Space Grotesk',
         size: 38,
