@@ -18,6 +18,7 @@ import type {
   ChatPlatform,
   Command,
   ConnectFlow,
+  CreatorLinks,
   Credits,
   DiscordSettings,
   DiscordSettingsInput,
@@ -31,6 +32,8 @@ import type {
   ImportReport,
   PackImportReport,
   LeaderboardEntry,
+  LinksResponse,
+  LabelsMap,
   LoyaltyConfig,
   Media,
   ObsDetect,
@@ -332,6 +335,9 @@ export class FerroClient {
   accounts = () => this.get<Account[]>('/api/v1/accounts')
   connect = (p: AccountPlatform) => this.post<ConnectFlow>(`/api/v1/accounts/${p}/connect`)
   disconnect = (p: AccountPlatform) => this.del(`/api/v1/accounts/${p}`)
+  links = () => this.get<LinksResponse>('/api/v1/links')
+  saveLinks = (l: CreatorLinks) => this.put<LinksResponse>('/api/v1/links', l)
+  labels = () => this.get<LabelsMap>('/api/v1/labels')
 
   // Overlays
   overlays = () => this.get<Overlay[]>('/api/v1/overlays')

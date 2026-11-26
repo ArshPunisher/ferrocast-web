@@ -429,7 +429,21 @@ export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
             (m[2] ?? '')
       }
     }
-    if (handle) out = out.replace(/yourname/gi, handle)
+    if (handle) {
+      out = out
+        .replace(/yourname/gi, handle)
+        .replace(/\{link:twitch\}/g, `twitch.tv/${handle.toLowerCase()}`)
+        .replace(/\{link:youtube\}/g, `youtube.com/@${handle}`)
+        .replace(/\{link:kick\}/g, `kick.com/${handle}`)
+        .replace(/\{link:facebook\}/g, `facebook.com/${handle}`)
+        .replace(/\{link:discord\}/g, `discord.gg/${handle}`)
+        .replace(/\{link:instagram\}/g, `instagram.com/${handle}`)
+        .replace(/\{link:x\}/g, `x.com/${handle}`)
+        .replace(/\{link:tiktok\}/g, `tiktok.com/@${handle}`)
+        .replace(/\{link:website\}/g, `${handle.toLowerCase()}.gg`)
+        .replace(/\{channel_name\}/g, handle)
+        .replace(/\{socials\}/g, `twitch.tv/${handle.toLowerCase()} · youtube.com/@${handle}`)
+    }
     return out
   }
   const scenes = d.content.scenes.map((s) => {
@@ -444,7 +458,36 @@ export function restyleTheme(d: ThemeDesign, r: Restyle): ThemeDesign {
           } as Widget)
         continue
       }
-      const config = walk(l.config, paint) as Widget['config']
+      const rawCfg = l.config as {
+        type?: string
+        font?: string
+        text?: string
+        rotate?: string[]
+      }
+      let pre: unknown = l.config
+      if (handle && l.kind === 'layer' && rawCfg.type === 'text') {
+        if (
+          typeof rawCfg.text === 'string' &&
+          rawCfg.text.trim() === '{socials}' &&
+          (!rawCfg.rotate || rawCfg.rotate.length === 0)
+        ) {
+          pre = {
+            ...rawCfg,
+            text: '{link:twitch}',
+            rotate: ['{link:youtube}', '{link:kick}'],
+          }
+        } else if (Array.isArray(rawCfg.rotate)) {
+          pre = {
+            ...rawCfg,
+            rotate: rawCfg.rotate.flatMap((line) =>
+              line.trim() === '{socials}'
+                ? ['{link:twitch}', '{link:youtube}', '{link:kick}']
+                : [line],
+            ),
+          }
+        }
+      }
+      const config = walk(pre, paint) as Widget['config']
       const c = config as { type?: string; font?: string }
       if (
         font &&

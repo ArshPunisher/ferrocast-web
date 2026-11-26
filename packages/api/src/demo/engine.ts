@@ -14,6 +14,7 @@ import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { AlertQueue, type QueueAction } from '../queue'
+import { accountUrl, resolveLinks, validateCreatorLinks } from '../links'
 import { anySample, namedActor, sample } from '../samples'
 import { renderSafeTemplate } from '../template'
 import type { FetchLike } from '../client'
@@ -27,6 +28,7 @@ import type {
   Account,
   Actor,
   AlertRule,
+  CreatorLinks,
   Design,
   Backup,
   BanEntry,
@@ -40,6 +42,7 @@ import type {
   FerroEvent,
   Filters,
   Goal,
+  LinksResponse,
   Media,
   MediaKind,
   ObsState,
@@ -49,6 +52,7 @@ import type {
   PanicConfig,
   Platform,
   RenderedAlert,
+  ResolvedLinks,
   SessionStats,
   Settings,
   Timer,
@@ -268,10 +272,19 @@ function connector(
   state: ConnectorState['state'],
   name: string | null,
   detail: string | null = null,
+  login?: string,
+  url?: string | null,
 ): ConnectorState {
   return {
     state,
-    account: name ? { name, avatar_url: null } : null,
+    account: name
+      ? {
+          name,
+          avatar_url: null,
+          ...(login !== undefined ? { login } : {}),
+          ...(url !== undefined ? { url } : {}),
+        }
+      : null,
     detail,
     last_event_at: state === 'connected' ? Date.now() : null,
   }
@@ -400,6 +413,7 @@ export class DemoEngine {
     detail: null,
   }
   private settings: Settings = clone(SETTINGS)
+  private creatorLinks: CreatorLinks = { custom: [] }
   private backups: Backup[]
   /** LAN access as the "server" started with (it only changes at a restart). */
   private readonly lanAtStart = false
@@ -575,9 +589,15 @@ export class DemoEngine {
     const now = Date.now()
     const on = this.setupDone
     this.connectors = {
-      twitch: on ? connector('connected', 'NovaPlays') : connector('off', null),
-      youtube: on ? connector('connected', 'Nova Plays') : connector('off', null),
-      kick: on ? connector('connected', 'novaplays') : connector('off', null),
+      twitch: on
+        ? connector('connected', 'NovaPlays', null, 'novaplays', 'twitch.tv/novaplays')
+        : connector('off', null),
+      youtube: on
+        ? connector('connected', 'Nova Plays', null, '@NovaPlays', 'youtube.com/@NovaPlays')
+        : connector('off', null),
+      kick: on
+        ? connector('connected', 'novaplays', null, 'novaplays', 'kick.com/novaplays')
+        : connector('off', null),
       facebook: connector('off', null),
       obs: on
         ? connector('connected', 'OBS 31.1.2')
@@ -600,6 +620,8 @@ export class DemoEngine {
           {
             platform: 'twitch',
             name: 'NovaPlays',
+            login: 'novaplays',
+            url: 'twitch.tv/novaplays',
             avatar_url: null,
             connected_at: now - 40 * 86_400_000,
             scopes_ok: true,
@@ -607,6 +629,8 @@ export class DemoEngine {
           {
             platform: 'youtube',
             name: 'Nova Plays',
+            login: '@NovaPlays',
+            url: 'youtube.com/@NovaPlays',
             avatar_url: null,
             connected_at: now - 40 * 86_400_000,
             scopes_ok: true,
@@ -614,6 +638,8 @@ export class DemoEngine {
           {
             platform: 'kick',
             name: 'novaplays',
+            login: 'novaplays',
+            url: 'kick.com/novaplays',
             avatar_url: null,
             connected_at: now - 12 * 86_400_000,
             scopes_ok: true,
@@ -756,7 +782,11 @@ export class DemoEngine {
       isLive: () => this.golive.isCutRunning(),
       enabledPlatforms: () => this.golive.enabledMainDestinations(),
     })
-    this.schedule = new DemoSchedule(this.host, (p) => this.connectors[p].state === 'connected')
+    this.schedule = new DemoSchedule(
+      this.host,
+      (p) => this.connectors[p].state === 'connected',
+      () => this.pushOverlayLinks(),
+    )
     this.autoReplies = new DemoAutoReplies(this.host, {
       botOn: () =>
         (this.settings as { bot_enabled?: boolean }).bot_enabled !== false && !this.panicOn,
@@ -1443,10 +1473,13 @@ export class DemoEngine {
       return undefined
     }
 
-    // accounts
+    // accounts, creator links, and read-only labels
     if (is('GET', 'accounts')) return clone(this.accounts)
     if (is('POST', 'accounts', null, 'connect')) return this.connect(b ?? '')
     if (is('DELETE', 'accounts', null)) return this.disconnect(b ?? '')
+    if (is('GET', 'links')) return this.linksView()
+    if (is('PUT', 'links')) return this.saveLinks(body)
+    if (is('GET', 'labels')) return this.allLabels()
 
     // overlays and themes
     if (is('GET', 'themes')) return clone(THEMES)
@@ -2077,18 +2110,30 @@ export class DemoEngine {
           : p === 'facebook'
             ? 'Nova Plays Page'
             : 'novaplays'
+    const login =
+      p === 'twitch'
+        ? 'novaplays'
+        : p === 'youtube'
+          ? '@NovaPlays'
+          : p === 'facebook'
+            ? 'Nova Plays Page'
+            : 'novaplays'
+    const url = accountUrl(p, login, p === 'youtube' ? 'UC_DEMO' : '')
     this.later(
       () => {
         this.accounts = this.accounts.filter((x) => x.platform !== p)
         this.accounts.push({
           platform: p,
           name,
+          login,
+          url,
           avatar_url: null,
           connected_at: Date.now(),
           scopes_ok: true,
         })
-        this.setConnector(p, connector('connected', name))
+        this.setConnector(p, connector('connected', name, null, login, url))
         this.ingest({ type: 'connector', state: 'connected' }, p, 'live')
+        this.pushOverlayLinks()
       },
       p === 'twitch' ? 4500 : 2500,
     )
@@ -2117,7 +2162,34 @@ export class DemoEngine {
     const p = platform as AccountPlatform
     this.accounts = this.accounts.filter((x) => x.platform !== p)
     this.setConnector(p, connector('off', null))
+    this.pushOverlayLinks()
     return undefined
+  }
+
+  private resolvedLinks(): ResolvedLinks {
+    return resolveLinks(this.creatorLinks, this.accounts, this.schedule.upcomingMs())
+  }
+
+  private linksView(): LinksResponse {
+    return { ...clone(this.creatorLinks), resolved: this.resolvedLinks() }
+  }
+
+  private pushOverlayLinks(): void {
+    this.pushState({ links: this.resolvedLinks() })
+  }
+
+  private saveLinks(body: unknown): LinksResponse {
+    const raw = requireObj(body) as Partial<CreatorLinks>
+    try {
+      this.creatorLinks = validateCreatorLinks({
+        ...raw,
+        custom: Array.isArray(raw.custom) ? raw.custom : [],
+      })
+    } catch (e) {
+      throw new HttpError(400, 'invalid', e instanceof Error ? e.message : 'Invalid link.')
+    }
+    this.pushOverlayLinks()
+    return this.linksView()
   }
 
   private findOverlay(id: string): Overlay {
@@ -3031,6 +3103,7 @@ export class DemoEngine {
       credits: has('end_credits') ? buildCredits(this.creditLog, this.stats) : null,
       chat_highlight: has('chat_highlight') ? this.highlight.view() : null,
       music: this.music.now(),
+      links: this.resolvedLinks(),
     }
     s.seq += 1
     s.sock.deliver({ v: 1, seq: s.seq, type: 'snapshot', data: { overlay: clone(o), state } })
@@ -3075,106 +3148,126 @@ export class DemoEngine {
     return out
   }
 
+  private evalLabel(source: string): string {
+    const ex = this.labelExtras
+    switch (source) {
+      case 'session_follows':
+        return String(this.stats.follows)
+      case 'session_subs':
+        return String(this.stats.subs)
+      case 'session_bits':
+        return this.stats.bits.toLocaleString('en-US')
+      case 'session_tips':
+        return this.stats.tips.length === 0
+          ? '0'
+          : this.stats.tips.map((m) => formatMoney(m)).join(' · ')
+      case 'session_raids':
+        return String(ex.raids)
+      case 'top_tip_session':
+        return 'Asha ₹500'
+      case 'top_supporter_session':
+        return 'Asha (₹500, 2 subs)'
+      case 'monthly_follows':
+        return String(ex.monthlyFollows + this.stats.follows)
+      case 'monthly_subs':
+        return String(ex.monthlySubs + this.stats.subs)
+      case 'monthly_bits':
+        return (ex.monthlyBits + this.stats.bits).toLocaleString('en-US')
+      case 'monthly_tips':
+        return formatMoney({ currency: 'INR', minor: ex.monthlyTipsInr + ex.sessionTipsInr })
+      case 'monthly_raids':
+        return String(ex.monthlyRaids + ex.raids)
+      case 'top_tip_monthly':
+        return 'MeeraDraws ₹5,000'
+      case 'top_supporter_monthly':
+        return 'Devika (15 subs, ₹3,500)'
+      case 'alltime_follows':
+        return String(ex.alltimeFollows + this.stats.follows)
+      case 'alltime_subs':
+        return String(ex.alltimeSubs + this.stats.subs)
+      case 'alltime_bits':
+        return (ex.alltimeBits + this.stats.bits).toLocaleString('en-US')
+      case 'alltime_tips':
+        return formatMoney({ currency: 'INR', minor: ex.alltimeTipsInr + ex.sessionTipsInr })
+      case 'alltime_raids':
+        return String(ex.alltimeRaids + ex.raids)
+      case 'top_tip_alltime':
+        return 'AriaLive ₹12,000'
+      case 'top_supporter_alltime':
+        return 'Devika (45 subs, ₹8,000)'
+      default:
+        return this.labels.get(source) ?? ''
+    }
+  }
+
+  private allLabels(): Record<string, string> {
+    const keys = [
+      'latest_follower',
+      'latest_sub',
+      'latest_gifter',
+      'latest_tip',
+      'latest_bits',
+      'latest_raid',
+      'session_follows',
+      'session_subs',
+      'session_bits',
+      'session_tips',
+      'session_raids',
+      'top_tip_session',
+      'top_supporter_session',
+      'monthly_follows',
+      'monthly_subs',
+      'monthly_bits',
+      'monthly_tips',
+      'monthly_raids',
+      'top_tip_monthly',
+      'top_supporter_monthly',
+      'alltime_follows',
+      'alltime_subs',
+      'alltime_bits',
+      'alltime_tips',
+      'alltime_raids',
+      'top_tip_alltime',
+      'top_supporter_alltime',
+      ...this.labels.keys(),
+    ]
+    const out: Record<string, string> = {}
+    for (const k of keys) {
+      if (out[k] !== undefined) continue
+      const v = this.evalLabel(k)
+      if (v) out[k] = v
+    }
+    return out
+  }
+
   private labelsFor(o: Overlay): Record<string, string> {
     const out: Record<string, string> = {}
-    const ex = this.labelExtras
     for (const w of o.widgets) {
       if (w.kind !== 'label') continue
-      let value: string
-      switch (w.config.source) {
-        case 'session_follows':
-          value = String(this.stats.follows)
-          break
-        case 'session_subs':
-          value = String(this.stats.subs)
-          break
-        case 'session_bits':
-          value = this.stats.bits.toLocaleString('en-US')
-          break
-        case 'session_tips':
-          value =
-            this.stats.tips.length === 0
-              ? '0'
-              : this.stats.tips.map((m) => formatMoney(m)).join(' · ')
-          break
-        case 'session_raids':
-          value = String(ex.raids)
-          break
-        case 'top_tip_session':
-          value = 'Asha ₹500'
-          break
-        case 'top_supporter_session':
-          value = 'Asha (₹500, 2 subs)'
-          break
-        case 'monthly_follows':
-          value = String(ex.monthlyFollows + this.stats.follows)
-          break
-        case 'monthly_subs':
-          value = String(ex.monthlySubs + this.stats.subs)
-          break
-        case 'monthly_bits':
-          value = (ex.monthlyBits + this.stats.bits).toLocaleString('en-US')
-          break
-        case 'monthly_tips':
-          value = formatMoney({ currency: 'INR', minor: ex.monthlyTipsInr + ex.sessionTipsInr })
-          break
-        case 'monthly_raids':
-          value = String(ex.monthlyRaids + ex.raids)
-          break
-        case 'top_tip_monthly':
-          value = 'MeeraDraws ₹5,000'
-          break
-        case 'top_supporter_monthly':
-          value = 'Devika (15 subs, ₹3,500)'
-          break
-        case 'alltime_follows':
-          value = String(ex.alltimeFollows + this.stats.follows)
-          break
-        case 'alltime_subs':
-          value = String(ex.alltimeSubs + this.stats.subs)
-          break
-        case 'alltime_bits':
-          value = (ex.alltimeBits + this.stats.bits).toLocaleString('en-US')
-          break
-        case 'alltime_tips':
-          value = formatMoney({ currency: 'INR', minor: ex.alltimeTipsInr + ex.sessionTipsInr })
-          break
-        case 'alltime_raids':
-          value = String(ex.alltimeRaids + ex.raids)
-          break
-        case 'top_tip_alltime':
-          value = 'AriaLive ₹12,000'
-          break
-        case 'top_supporter_alltime':
-          value = 'Devika (45 subs, ₹8,000)'
-          break
-        case 'hype_train': {
-          const tv = this.demoTrainView(w.config.train_threshold ?? 3)
-          if (!tv.active) {
-            out[w.id] = ''
-            continue
-          }
-          const secs = Math.max(1, Math.ceil(tv.remaining_ms / 1000))
-          const mm = String(Math.floor(secs / 60)).padStart(2, '0')
-          const ss = String(secs % 60).padStart(2, '0')
-          const timer = `${mm}:${ss}`
-          const sum = `Lv.${tv.level} · ${tv.events} events · ${timer}`
-          out[w.id] = renderSafeTemplate(w.config.template, {
-            value: sum,
-            name: sum,
-            level: String(tv.level),
-            count: String(tv.events),
-            events: String(tv.events),
-            contributors: String(tv.contributors),
-            timer,
-            latest: tv.latest_actor ?? '',
-          })
+      if (w.config.source === 'hype_train') {
+        const tv = this.demoTrainView(w.config.train_threshold ?? 3)
+        if (!tv.active) {
+          out[w.id] = ''
           continue
         }
-        default:
-          value = this.labels.get(w.config.source) ?? ''
-          break
+        const secs = Math.max(1, Math.ceil(tv.remaining_ms / 1000))
+        const mm = String(Math.floor(secs / 60)).padStart(2, '0')
+        const ss = String(secs % 60).padStart(2, '0')
+        const timer = `${mm}:${ss}`
+        const sum = `Lv.${tv.level} · ${tv.events} events · ${timer}`
+        out[w.id] = renderSafeTemplate(w.config.template, {
+          value: sum,
+          name: sum,
+          level: String(tv.level),
+          count: String(tv.events),
+          events: String(tv.events),
+          contributors: String(tv.contributors),
+          timer,
+          latest: tv.latest_actor ?? '',
+        })
+        continue
       }
+      const value = this.evalLabel(w.config.source)
       out[w.id] = renderSafeTemplate(w.config.template, { value, name: value })
     }
     return out
@@ -3517,7 +3610,7 @@ export class DemoEngine {
     if (changed) this.pushState({ goals: this.goals })
   }
 
-  private pushState(partial: Partial<Pick<OverlayState, 'goals' | 'viewers'>>): void {
+  private pushState(partial: Partial<Pick<OverlayState, 'goals' | 'viewers' | 'links'>>): void {
     for (const s of this.overlaySubs) this.sendOverlay(s, 'state', clone(partial))
     if (partial.goals) this.broadcastLive({ v: 1, type: 'goals', data: clone(partial.goals) })
   }

@@ -33,7 +33,15 @@ export class DemoSchedule implements DemoFeature {
   constructor(
     private readonly host: Pick<DemoHost, 'later' | 'broadcastLive'>,
     private readonly connected: (p: SchedulePlatform) => boolean,
+    private readonly onChange?: () => void,
   ) {}
+
+  upcomingMs(now = Date.now()): number | null {
+    const valid = this.plans
+      .filter((p) => p.start_ms >= now)
+      .sort((a, b) => a.start_ms - b.start_ms)
+    return valid[0]?.start_ms ?? null
+  }
 
   route(method: string, seg: string[], body: unknown): Routed {
     if (seg[0] !== 'schedule') return NOT_MINE
@@ -44,7 +52,9 @@ export class DemoSchedule implements DemoFeature {
     }
     if (seg.length === 1 && method === 'POST') {
       // Created: 201, as the engine answers.
-      return new Response(JSON.stringify(this.create(body)), {
+      const created = this.create(body)
+      this.onChange?.()
+      return new Response(JSON.stringify(created), {
         status: 201,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -54,6 +64,7 @@ export class DemoSchedule implements DemoFeature {
       this.plans = this.plans.filter((p) => p.id !== seg[1])
       if (this.plans.length === before)
         throw new HttpError(404, 'not_found', 'scheduled stream not found')
+      this.onChange?.()
       return undefined
     }
     return NOT_MINE

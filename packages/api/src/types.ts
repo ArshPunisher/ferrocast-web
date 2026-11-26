@@ -310,7 +310,7 @@ export type ConnectorStateName =
 
 export interface ConnectorState {
   state: ConnectorStateName
-  account: { name: string; avatar_url: string | null } | null
+  account: { name: string; avatar_url: string | null; login?: string; url?: string | null } | null
   detail: string | null
   last_event_at: Millis | null
 }
@@ -352,10 +352,54 @@ export interface Status {
 export interface Account {
   platform: AccountPlatform
   name: string
+  login?: string
+  url?: string | null
   avatar_url: string | null
   connected_at: Millis
   scopes_ok: boolean
 }
+
+export interface CustomLink {
+  label: string
+  value: string
+}
+
+export interface CreatorLinks {
+  twitch?: string | null
+  youtube?: string | null
+  kick?: string | null
+  facebook?: string | null
+  discord?: string | null
+  instagram?: string | null
+  x?: string | null
+  tiktok?: string | null
+  website?: string | null
+  schedule_text?: string | null
+  custom: CustomLink[]
+}
+
+export interface ResolvedLinks {
+  twitch?: string | null
+  youtube?: string | null
+  kick?: string | null
+  facebook?: string | null
+  discord?: string | null
+  instagram?: string | null
+  x?: string | null
+  tiktok?: string | null
+  website?: string | null
+  custom: CustomLink[]
+  socials: string[]
+  channel_name?: string | null
+  next_stream?: string | null
+  next_stream_at?: number | null
+}
+
+export interface LinksResponse extends CreatorLinks {
+  resolved: ResolvedLinks
+}
+
+export type LabelsMap = Record<string, string>
 
 export type ConnectFlow =
   | { flow: 'device_code'; user_code: string; verification_url: string; expires_at: Millis }
@@ -1673,6 +1717,7 @@ export type LiveFrame =
   | { v: 1; type: 'tts_pending'; data: TtsPending[] }
   | { v: 1; type: 'notice'; data: Notice }
   | { v: 1; type: 'goals'; data: Goal[] }
+  | { v: 1; type: 'links'; data: LinksResponse }
   | { v: 1; type: 'held'; data: { event_id: string; reason: string } }
   /** A mod approved (`released`) or removed (`dropped`) a held message, from any dashboard. */
   | { v: 1; type: 'held_resolved'; data: { event_id: string; outcome: 'released' | 'dropped' } }
@@ -1724,6 +1769,8 @@ export interface OverlayState {
   show?: { countdown_ends_at: number | null }
   /** The music OBS hears (overlays with a music, motion or sound layer). */
   music?: MusicNow
+  /** Resolved creator links and next stream time (live-updated on links/account/schedule edits). */
+  links?: ResolvedLinks | null
 }
 
 /** What's playing (API.md §6 `music`): loudness 0 to 1 and the song, when known. */

@@ -308,6 +308,45 @@ describe('make it yours', () => {
     expect([timer!.font, timer!.color]).toEqual(['JetBrains Mono', '#2bb673'])
     expect(logo).toEqual({ type: 'image', media: 'm123', fit: 'contain' })
     expect(r.branded).toBe(false)
+
+    // Tokenized theme text ({socials}, {link:*}) expands when a handle is supplied and stays dynamic if blank.
+    const tok = theme('builtin.tok', 'Tokenized')
+    if (tok.kind !== 'theme') throw new Error('theme')
+    tok.content.scenes = [
+      {
+        ...t.content.scenes[0]!,
+        layers: [
+          {
+            id: 'rot',
+            kind: 'layer',
+            x: 0,
+            y: 0,
+            w: 400,
+            h: 40,
+            config: { type: 'text', text: '{link:twitch}', rotate: ['{socials}'], color: '#eef0f4' },
+          },
+        ] as never,
+      },
+    ]
+    const styled = restyleTheme(tok, { handle: '@novaplays' })
+    if (styled.kind !== 'theme') throw new Error('theme')
+    expect((styled.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate).toEqual([
+      'twitch.tv/novaplays',
+      'youtube.com/@novaplays',
+      'kick.com/novaplays',
+    ])
+    const kept = restyleTheme(tok, { accent: '#2bb673' })
+    if (kept.kind !== 'theme') throw new Error('theme')
+    expect((kept.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate).toEqual([
+      '{socials}',
+    ])
+    const noDup = restyleTheme(tok, { handle: 'yourname123' })
+    if (noDup.kind !== 'theme') throw new Error('theme')
+    expect((noDup.content.scenes[0]!.layers[0]!.config as { rotate?: string[] }).rotate).toEqual([
+      'twitch.tv/yourname123',
+      'youtube.com/@yourname123',
+      'kick.com/yourname123',
+    ])
     // Shades of the old colour (a title gradient's ends) move to the new colour's hue.
     const grad = restyleTheme(
       {
