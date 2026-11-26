@@ -7,6 +7,7 @@
 // tiled and particle patterns, frame variants, text effects, per-letter entrances, a
 // rotator (lines shown in turn) and a countdown. Unknown values are ignored, never passed on.
 
+import { resolveLayerItems, resolveLayerText } from '@ferrocast/api'
 import {
   COUNTDOWN_LOOKS,
   FRAME_VARIANTS,
@@ -110,6 +111,7 @@ export class LayerWidget implements WidgetView {
   /** The length the ring and bar measure against, and the end it was taken for. */
   private total = 0
   private totalFor = 0
+  private linksSig = ''
 
   constructor(
     w: Widget & { kind: 'layer' },
@@ -130,6 +132,7 @@ export class LayerWidget implements WidgetView {
     this.key = key
     this.id = String(w.id)
     this.box = box
+    this.linksSig = JSON.stringify(this.ctx.state.links ?? null)
     this.stopTicking()
     reportTimer(this.id, null)
     this.render(w.config)
@@ -304,22 +307,44 @@ export class LayerWidget implements WidgetView {
       ts.setProperty('--fx2', color(c.color2, null) ?? olc)
       ts.setProperty('--fx-ol', olc)
     }
-    // Rotator lines and the countdown: the streamer's own words, set as text.
+    // Rotator lines and the countdown: the streamer's own words, resolved against links at render time.
     const extra = Array.isArray(c.rotate)
       ? c.rotate
           .slice(0, MAX_ROTATE)
           .map((x) => safeText(x, 80))
           .filter((x) => x.trim() !== '')
       : []
-    const base = safeText(c.text, 500)
-    this.items = extra.length ? [base, ...extra].filter((x) => x.trim() !== '') : []
+    const rawBase = safeText(c.text, 500)
+    const preview = Boolean(this.ctx.preview)
+    const resolvedItems = resolveLayerItems(
+      rawBase,
+      extra.length ? extra : undefined,
+      this.ctx.state.links,
+      preview,
+    )
+      .map((x) => safeText(x, 500))
+      .filter((x) => x.trim() !== '')
+    const base = resolvedItems[0] ?? ''
+    this.items = resolvedItems.length > 1 ? resolvedItems : []
     this.at = 0
     const from = typeof c.countdown === 'number' ? num(c.countdown, 1, 86_400, 0) : 0
     // A new length starts the countdown again; any other edit keeps it running.
     if (from !== this.countFrom) this.endsAt = 0
     this.countFrom = from
     if (this.items.length > 1) t.classList.add('is-rotator')
+    const hasToken =
+      /\{(?:link:(?:twitch|youtube|kick|facebook|discord|instagram|x|tiktok|website)|socials|channel_name|next_stream)\}|yourname|Next stream:\s*Friday,\s*8\s*PM/i.test(
+        [rawBase, ...extra].join('\n'),
+      )
+    if (
+      this.countFrom <= 0 &&
+      (this.items.length > 1 || hasToken) &&
+      !base.includes('\n')
+    ) {
+      t.dataset.ellipsis = '1'
+    }
     const inner = el('span', 'fc-lt')
+    inner.dir = 'auto'
     t.appendChild(inner)
     this.textEl = inner
     const split = opt(c.split, ['letters', 'words'] as const)
@@ -340,6 +365,7 @@ export class LayerWidget implements WidgetView {
     } else if (this.items.length > 1) this.setText(this.items[0] ?? '')
     else if (
       split &&
+      base &&
       effect !== 'gradient' &&
       effect !== 'chrome' &&
       Array.from(base).length <= MAX_CHARS_SPLIT
@@ -455,7 +481,11 @@ export class LayerWidget implements WidgetView {
     if (left <= 0 && typeof c.countdown_done === 'string' && c.countdown_done.trim())
       return safeText(c.countdown_done, 80)
     const clock = this.look === 'words' ? wordsText(left) : clockText(left)
-    const src = safeText(c.text, 500)
+    const raw = safeText(c.text, 500)
+    const src = safeText(
+      resolveLayerText(raw, this.ctx.state.links, Boolean(this.ctx.preview)),
+      500,
+    )
     return src.includes('{time}') ? src.split('{time}').join(clock) : clock
   }
 
@@ -595,8 +625,22 @@ export class LayerWidget implements WidgetView {
     }
   }
 
-  /** Start show's countdown started, ended or was cancelled. */
+  /** Start show's countdown or resolved links/schedule updated. */
   onState(): void {
+    const c = this.config()
+    if (c?.type === 'text') {
+      const sig = JSON.stringify(this.ctx.state.links ?? null)
+      if (sig !== this.linksSig) {
+        this.linksSig = sig
+        this.stopTicking()
+        this.render(c)
+        if (this.shown) {
+          this.applyMotion()
+          if (this.visible) this.startTicking()
+        }
+        return
+      }
+    }
     if (this.shown && this.countFrom > 0 && this.visible) this.startTicking()
   }
 

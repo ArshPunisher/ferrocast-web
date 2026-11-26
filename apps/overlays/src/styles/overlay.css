@@ -581,6 +581,15 @@
   overflow-wrap: anywhere;
   paint-order: stroke fill;
 }
+.fc-ov .fc-layer-text[data-ellipsis='1'] > .fc-lt,
+.fc-ov .fc-layer-text.is-rotator > .fc-lt {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .fc-ov .fc-shape {
   width: 100%;
   height: 100%;

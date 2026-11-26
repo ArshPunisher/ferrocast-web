@@ -5,9 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EVENT_KEYS,
+  SAMPLE_LINKS,
   intoUser,
   isBrandLayer,
   previewAlert,
+  resolveLayerItems,
   type Design,
   type RenderedAlert,
   type Widget,
@@ -218,9 +220,12 @@ describe('classic alerts and branding', () => {
   })
 })
 
-function scenePage(layers: Widget[]): void {
+function scenePage(layers: Widget[], withLinks = false): void {
   rt.apply(
-    snapshot({}, { ...overlay(layers), design: { id: 'x', scene: 'in_game', branded: true } }),
+    snapshot(
+      withLinks ? { links: SAMPLE_LINKS } : {},
+      { ...overlay(layers), design: { id: 'x', scene: 'in_game', branded: true } },
+    ),
   )
   rt.apply(
     frame('state', {
@@ -239,6 +244,7 @@ describe('built-in themes', () => {
         const layers = s.layers.filter((l) => l.kind === 'layer')
         expect(deepAll(root, '.fc-w-layer')).toHaveLength(layers.length)
         expect(deepAll(root, '.fc-brand')).toHaveLength(s.layers.filter(isBrandLayer).length)
+        expect(deepText(root)).not.toMatch(/\{(?:link:|socials|next_stream|channel_name)\}|yourname/i)
         for (const l of layers)
           if (l.kind === 'layer' && l.config.type === 'text') {
             if (typeof l.config.countdown === 'number')
@@ -247,7 +253,11 @@ describe('built-in themes', () => {
                   ? /\d+ (minutes?|seconds?)/
                   : /\d{1,2}:\d{2}|\d:\d\d/,
               )
-            else expect(deepText(root)).toContain(l.config.text.slice(0, 12))
+            else {
+              const liveText =
+                resolveLayerItems(l.config.text, l.config.rotate, null, false)[0] ?? ''
+              if (liveText) expect(deepText(root)).toContain(liveText.slice(0, 12))
+            }
           }
         for (const l of s.layers.filter((x) => x.kind !== 'layer'))
           expect(deepAll(root, `.fc-w-${l.kind}`).length, `${l.kind} widget`).toBeGreaterThan(0)
@@ -262,6 +272,13 @@ describe('built-in themes', () => {
             ).toBeGreaterThan(0)
       })
     }
+
+  it('fills tokenized socials and next-stream layers once links arrive', () => {
+    const t = themes.find((d) => d.id === 'builtin.forge') ?? themes[0]!
+    const offline = t.content.scenes.find((s) => s.key === 'offline') ?? t.content.scenes[0]!
+    scenePage(offline.layers, true)
+    expect(deepText(root)).toContain('twitch.tv/novaplays')
+  })
 
   it('the streamer’s copy of a theme has no mark layer', () => {
     for (const t of themes) {

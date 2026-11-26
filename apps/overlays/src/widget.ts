@@ -11,6 +11,7 @@ export interface WidgetContext {
   /** Sends a frame to the server (only acks; an overlay never creates events, R-36). */
   send(data: string): void
   readonly audio: boolean
+  readonly preview?: boolean
   lowMotion(): boolean
   /** The latest merged state from snapshot + `state` frames. */
   readonly state: OverlayState

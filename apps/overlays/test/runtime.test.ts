@@ -1072,4 +1072,128 @@ describe('review fixes', () => {
       vi.useRealTimers()
     }
   })
+
+  it('resolves link and schedule tokens live, drops unconfigured placeholders, preserves hand-edited copy, and truncates long RTL text via textContent', () => {
+    const layerWidget = (id: string, config: Record<string, unknown>) =>
+      ({ id, kind: 'layer', x: 40, y: 40, w: 600, h: 60, config }) as never
+
+    const ov = overlay([
+      layerWidget('soc', { type: 'text', text: '{socials}', rotate: [], rotate_s: 5 }),
+      layerWidget('legacy', { type: 'text', text: 'twitch.tv/yourname' }),
+      layerWidget('sched', { type: 'text', text: 'Next stream: {next_stream}' }),
+      layerWidget('sched_legacy', { type: 'text', text: 'Next stream: Friday, 8 PM' }),
+      layerWidget('manual', { type: 'text', text: 'Just vibing tonight — no socials' }),
+      layerWidget('chan', { type: 'text', text: '{channel_name}' }),
+    ])
+
+    // Live overlay with nothing configured drops tokens/yourname cleanly and keeps hand-edited copy.
+    rt.apply(snapshot({}, ov))
+    const textOf = (i: number) =>
+      (deepAll(root, '.fc-lt')[i] as HTMLElement | undefined)?.textContent ?? ''
+    expect(textOf(0)).toBe('')
+    expect(textOf(1)).toBe('')
+    expect(textOf(2)).toBe('')
+    expect(textOf(3)).toBe('')
+    expect(textOf(4)).toBe('Just vibing tonight — no socials')
+    expect(textOf(5)).toBe('')
+
+    // Live state frame delivers resolved links -> rotator expands & updates live safely (textContent only).
+    const rtlAndLong = `قناة_البث_${'a'.repeat(70)}`
+    const xssPayload = XSS[0] as string
+    rt.apply(
+      frame('state', {
+        links: {
+          twitch: `twitch.tv/${xssPayload}`,
+          youtube: 'youtube.com/@NovaPlays',
+          kick: null,
+          facebook: null,
+          discord: null,
+          instagram: null,
+          x: null,
+          tiktok: null,
+          website: null,
+          custom: [],
+          socials: [`twitch.tv/${xssPayload}`, 'youtube.com/@NovaPlays'],
+          channel_name: rtlAndLong,
+          next_stream: 'Saturday, 9 PM',
+          next_stream_at: null,
+        },
+      }),
+    )
+    expect(textOf(0)).toBe(`twitch.tv/${xssPayload}`)
+    expect(textOf(1)).toBe(`twitch.tv/${xssPayload}`)
+    expect(textOf(2)).toBe('Next stream: Saturday, 9 PM')
+    expect(textOf(3)).toBe('Next stream: Saturday, 9 PM')
+    expect(textOf(4)).toBe('Just vibing tonight — no socials')
+    expect(textOf(5)).toBe(rtlAndLong)
+    expect(dangerous()).toHaveLength(0)
+
+    const chanBox = deepAll(root, '.fc-layer-text')[5] as HTMLElement
+    expect(chanBox.dir).toBe('auto')
+    expect(chanBox.dataset.ellipsis).toBe('1')
+
+    // Rotator cycles through expanded `{socials}` items without wall-clock waits.
+    ;(Element.prototype as unknown as { animate: unknown }).animate = undefined
+    vi.advanceTimersByTime(5000)
+    expect(textOf(0)).toBe('youtube.com/@NovaPlays')
+
+    // Disconnecting links via live state clears resolved entries again without altering manual text.
+    rt.apply(
+      frame('state', {
+        links: {
+          twitch: null,
+          youtube: null,
+          kick: null,
+          facebook: null,
+          discord: null,
+          instagram: null,
+          x: null,
+          tiktok: null,
+          website: null,
+          custom: [],
+          socials: [],
+          channel_name: null,
+          next_stream: null,
+          next_stream_at: null,
+        },
+      }),
+    )
+    expect(textOf(0)).toBe('')
+    expect(textOf(1)).toBe('')
+    expect(textOf(2)).toBe('')
+    expect(textOf(4)).toBe('Just vibing tonight — no socials')
+
+    // Preview runtime falls back to samples ONLY when nothing is configured, and uses real links once any exist.
+    const pRoot = document.createElement('div')
+    document.body.appendChild(pRoot)
+    const prt = createOverlay(pRoot, { audio: false })
+    prt.apply(snapshot({}, ov))
+    const pTextOf = (i: number) =>
+      (deepAll(pRoot, '.fc-lt')[i] as HTMLElement | undefined)?.textContent ?? ''
+    expect(pTextOf(0)).toBe('twitch.tv/novaplays')
+    expect(pTextOf(2)).toBe('Next stream: Friday, 8 PM')
+    prt.apply(
+      frame('state', {
+        links: {
+          twitch: 'twitch.tv/arsh',
+          youtube: null,
+          kick: null,
+          facebook: null,
+          discord: null,
+          instagram: null,
+          x: null,
+          tiktok: null,
+          website: null,
+          custom: [],
+          socials: ['twitch.tv/arsh'],
+          channel_name: 'Arsh',
+          next_stream: null,
+          next_stream_at: null,
+        },
+      }),
+    )
+    expect(pTextOf(0)).toBe('twitch.tv/arsh')
+    expect(pTextOf(2)).toBe('')
+    prt.destroy()
+  })
 })

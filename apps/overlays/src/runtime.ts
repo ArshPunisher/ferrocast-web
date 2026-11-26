@@ -11,6 +11,7 @@ import type {
   PollView,
   GiveawayCard,
   RenderedAlert,
+  ResolvedLinks,
   MusicNow,
   Widget,
 } from '@ferrocast/api/types'
@@ -154,6 +155,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
   const ctx: WidgetContext = {
     send: (d) => opts.send?.(d),
     audio: opts.audio ?? true,
+    preview: !opts.send,
     lowMotion: low,
     get state() {
       return state
@@ -269,6 +271,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         chat_highlight: obj(s?.chat_highlight) ? (s.chat_highlight as ChatHighlight) : null,
         show: { countdown_ends_at: showEnds(s?.show) },
         ...(parseMusic(s?.music) ? { music: parseMusic(s?.music) as MusicNow } : {}),
+        ...(obj(s?.links) ? { links: s.links as unknown as ResolvedLinks } : {}),
       }
       layout(frame.data.overlay, true)
       each((v) => v.onSnapshot?.())
@@ -318,6 +321,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         if ('chat_highlight' in d)
           state.chat_highlight = obj(d.chat_highlight) ? (d.chat_highlight as ChatHighlight) : null
         if ('show' in d) state.show = { countdown_ends_at: showEnds(d.show) }
+        if ('links' in d) state.links = obj(d.links) ? (d.links as unknown as ResolvedLinks) : null
         each((v) => v.onState?.())
         break
       }
