@@ -286,21 +286,23 @@ test.describe('Unified Overlays & Native Preview Hole Registry', () => {
         await expect(panel).toHaveCount(0)
       }
 
-      const audioTab = page.getByRole('tab', { name: 'Audio' })
-      if (await audioTab.isVisible()) await audioTab.click()
+      const audioTab = page
+        .locator('label')
+        .filter({ hasText: /^Audio$/ })
+        .or(page.getByRole('tab', { name: 'Audio' }))
+      if (await audioTab.first().isVisible()) await audioTab.first().click()
       const chBtn = page.getByRole('button', { name: /^More for / }).first()
-      if (await chBtn.isVisible()) {
-        await chBtn.click()
-        const chMenu = page.locator('[role="menu"][data-fc-menu]').first()
-        await assertOverlayFullyVisible(chMenu)
-        const hearRow = chMenu.getByRole('menuitem', { name: 'Hear it' })
-        if (await hearRow.isVisible()) {
-          await hearRow.click()
-          const hearSub = page.getByRole('menu', { name: 'Hear it' })
-          await assertOverlayFullyVisible(hearSub)
-        }
-        await page.keyboard.press('Escape')
+      await chBtn.scrollIntoViewIfNeeded()
+      await chBtn.click({ force: true })
+      const chMenu = page.locator('[role="menu"][data-fc-menu]').first()
+      await assertOverlayFullyVisible(chMenu)
+      const hearRow = chMenu.getByRole('menuitem', { name: 'Hear it' })
+      if (await hearRow.isVisible()) {
+        await hearRow.click()
+        const hearSub = page.getByRole('menu', { name: 'Hear it' })
+        await assertOverlayFullyVisible(hearSub)
       }
+      await page.keyboard.press('Escape')
 
       // Overflow StatusStrip on narrow 375px header if visible.
       const connBtn = page.getByTestId('connections-overflow')
