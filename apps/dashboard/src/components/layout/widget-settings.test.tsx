@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { DEFAULT_THEME, type Widget } from '@ferrocast/api'
 import { Toaster } from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
-import { WidgetSettings } from './widget-settings'
+import { WidgetSettings, newWidget } from './widget-settings'
 
 let root: Root | null = null
 
@@ -177,5 +177,22 @@ describe('LabelSettings (#8 review fixes)', () => {
     expect(onSpyChange.mock.calls.at(-1)?.[0]).toMatchObject({
       config: { train_step_s: 25 },
     })
+  })
+})
+
+describe('newWidget ID uniqueness (Extra bug #5)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('produces distinct IDs when called multiple times in the same millisecond', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'))
+
+    const w1 = newWidget('chat', { width: 1920, height: 1080 }, [])
+    const w2 = newWidget('chat', { width: 1920, height: 1080 }, [], [w1])
+    const w3 = newWidget('alerts', { width: 1920, height: 1080 }, [], [w1, w2])
+
+    expect(new Set([w1.id, w2.id, w3.id]).size).toBe(3)
   })
 })

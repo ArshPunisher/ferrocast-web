@@ -92,6 +92,7 @@ import {
   clampWidget,
   kindInfo,
   newWidget,
+  nextWidgetId,
   snap,
 } from './widget-settings'
 import { useClient } from '../../lib/hooks'
@@ -165,8 +166,9 @@ function newLayer(
   type: Exclude<LayerKind, 'brand'>,
   o: { width: number; height: number },
   media?: string,
+  existing: readonly { id: string }[] = [],
 ): Widget {
-  const id = `l-${Date.now().toString(36)}`
+  const id = nextWidgetId('l', existing)
   const box = (w: number, h: number) => ({
     x: snap((o.width - w) / 2),
     y: snap((o.height - h) / 2),
@@ -1607,48 +1609,48 @@ export function LayoutEditor({
       key: k.kind,
       label: k.label,
       icon: <k.icon size={15} />,
-      onSelect: () => add(newWidget(k.kind, layout, goals)),
+      onSelect: () => add(newWidget(k.kind, layout, goals, layout.widgets)),
     })),
     {
       key: 'shape',
       label: 'Shape',
       icon: <Shapes size={15} />,
-      onSelect: () => add(newLayer('shape', layout)),
+      onSelect: () => add(newLayer('shape', layout, undefined, layout.widgets)),
     },
     {
       key: 'frame',
       label: 'Frame',
       icon: <FrameCorners size={15} />,
-      onSelect: () => add(newLayer('frame', layout)),
+      onSelect: () => add(newLayer('frame', layout, undefined, layout.widgets)),
     },
     {
       key: 'webcam',
       label: 'Webcam frame',
       icon: <VideoCamera size={15} />,
-      onSelect: () => add(newLayer('webcam', layout)),
+      onSelect: () => add(newLayer('webcam', layout, undefined, layout.widgets)),
     },
     {
       key: 'fx',
       label: 'Motion background',
       icon: <Sparkle size={15} />,
-      onSelect: () => add(newLayer('fx', layout), { bottom: true }),
+      onSelect: () => add(newLayer('fx', layout, undefined, layout.widgets), { bottom: true }),
     },
     {
       key: 'music',
       label: 'Music',
       icon: <Waveform size={15} />,
-      onSelect: () => add(newLayer('music', layout)),
+      onSelect: () => add(newLayer('music', layout, undefined, layout.widgets)),
     },
     {
       key: 'sound',
       label: 'Sound',
       icon: <SpeakerHigh size={15} />,
-      onSelect: () => add(newLayer('sound', layout)),
+      onSelect: () => add(newLayer('sound', layout, undefined, layout.widgets)),
     },
   ]
   const addPicture = () => {
     const first = media.find((m) => m.kind === 'image')
-    if (first) add(newLayer('image', layout, first.id))
+    if (first) add(newLayer('image', layout, first.id, layout.widgets))
     else file.current?.click()
   }
   const layers = (
@@ -1719,7 +1721,7 @@ export function LayoutEditor({
               <Button
                 size="sm"
                 icon={<TextT size={15} />}
-                onClick={() => add(newLayer('text', layout))}
+                onClick={() => add(newLayer('text', layout, undefined, layout.widgets))}
               >
                 Text
               </Button>
@@ -1733,7 +1735,7 @@ export function LayoutEditor({
                     key={k}
                     size="sm"
                     icon={<info.icon size={15} />}
-                    onClick={() => add(newWidget(k, layout, goals))}
+                    onClick={() => add(newWidget(k, layout, goals, layout.widgets))}
                   >
                     {info.label}
                   </Button>
@@ -1788,7 +1790,7 @@ export function LayoutEditor({
                 .upload(f, f.name)
                 .then((m) => {
                   onUploaded(m)
-                  add(newLayer('image', layout, m.id))
+                  add(newLayer('image', layout, m.id, layout.widgets))
                 })
                 .catch((err: unknown) => {
                   const d = describeError(err)
@@ -1851,7 +1853,7 @@ export function LayoutEditor({
                     onClick={() =>
                       add({
                         ...sel,
-                        id: `${sel.kind === 'layer' ? 'l' : 'w'}-${Date.now().toString(36)}`,
+                        id: nextWidgetId(sel.kind === 'layer' ? 'l' : 'w', layout.widgets),
                         x: Math.min(sel.x + 24, layout.width - sel.w),
                         y: Math.min(sel.y + 24, layout.height - sel.h),
                         locked: false,

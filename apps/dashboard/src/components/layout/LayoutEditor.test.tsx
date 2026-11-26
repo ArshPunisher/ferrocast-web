@@ -560,3 +560,83 @@ describe('LayoutEditor Backspace/Delete layer removal (Group B)', () => {
     expect(buttons[1]).toContain('Text: Hello stream')
   })
 })
+
+describe('LayoutEditor same-millisecond layer ID uniqueness (Extra bug #5)', () => {
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    HTMLElement.prototype.setPointerCapture = vi.fn()
+  })
+
+  afterEach(async () => {
+    vi.useRealTimers()
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+    useLive.setState({ conn: null })
+  })
+
+  it('assigns distinct IDs when adding and duplicating layers within the same millisecond', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'))
+
+    const hUpdates: Widget[][] = []
+    function ControlledHarness() {
+      const h = useHistory<Widget[]>([])
+      return (
+        <LayoutEditor
+          layout={{ name: 'Main', width: 1920, height: 1080, widgets: h.value }}
+          onWidgets={(next, opts) => {
+            hUpdates.push(next)
+            h.set(next, opts)
+          }}
+          state={EMPTY_STATE}
+          themes={[]}
+          goals={[]}
+          onGoalCreated={vi.fn()}
+          preview={false}
+          media={[]}
+          onUploaded={vi.fn()}
+        />
+      )
+    }
+
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => root!.render(<ControlledHarness />))
+
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Canvas"]')!
+    const textBtn = [...toolbar.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Text',
+    )!
+    await act(async () => {
+      textBtn.click()
+    })
+    await act(async () => {
+      textBtn.click()
+    })
+
+    const dupBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Duplicate"]')!
+    await act(async () => {
+      dupBtn.click()
+    })
+    await act(async () => {
+      dupBtn.click()
+    })
+
+    const latest = hUpdates.at(-1) ?? []
+    expect(latest).toHaveLength(4)
+    expect(new Set(latest.map((w) => w.id)).size).toBe(4)
+
+    // Deleting one added/duplicated layer leaves the other 3 intact.
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Remove layer"]')!.click()
+    })
+    expect(hUpdates.at(-1)).toHaveLength(3)
+  })
+})
