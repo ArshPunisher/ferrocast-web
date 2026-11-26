@@ -658,3 +658,37 @@ describe('the demo with storage that throws', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('demo engine: viewer counts and stream_offline sync', () => {
+  it('clears the offline platform from session stats and overlays without lowering peak', async () => {
+    const [ov] = await client.overlays()
+    const { frames, sock } = await openOverlay(ov!)
+    engine.inject({ type: 'viewer_count', count: 120 }, 'twitch')
+    engine.inject({ type: 'viewer_count', count: 80 }, 'youtube')
+
+    let s = await client.sessionStats()
+    expect(s.viewers.twitch).toBe(120)
+    expect(s.viewers.youtube).toBe(80)
+    expect(s.peak_viewers).toBeGreaterThanOrEqual(200)
+    const peakBefore = s.peak_viewers
+    const kickBefore = s.viewers.kick
+
+    engine.inject({ type: 'stream_offline' }, 'youtube')
+    s = await client.sessionStats()
+    expect(s.viewers.youtube).toBeUndefined()
+    expect(s.viewers.twitch).toBe(120)
+    expect(s.viewers.kick).toBe(kickBefore)
+    expect(s.peak_viewers).toBe(peakBefore)
+
+    const offlineState = [...frames]
+      .reverse()
+      .find(
+        (f) =>
+          f.type === 'state' &&
+          'viewers' in f.data &&
+          (f.data.viewers as Record<string, number | null> | undefined)?.youtube === null,
+      )
+    expect(offlineState).toBeDefined()
+    sock.close()
+  })
+})

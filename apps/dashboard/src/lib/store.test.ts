@@ -492,3 +492,97 @@ describe('what a chat line offers', () => {
     expect(Object.values(lineActions(offline, line('m2', 'kick'))).some(Boolean)).toBe(false)
   })
 })
+
+describe('viewer count and monotonic peak tracking', () => {
+  it('updates live viewers per platform, keeps peak monotonic, and clears offline platforms', () => {
+    useLive.setState({
+      viewers: {},
+      connectors: null,
+      ...({ peakViewers: 0, streamStartedAt: null } as Record<string, unknown>),
+    })
+
+    const baseEvent = (
+      platform: 'twitch' | 'youtube' | 'kick',
+      id: string,
+      seq: number,
+    ): FerroEvent => ({
+      ...chat(id),
+      id,
+      seq,
+      platform,
+      source_id: null,
+      occurred_at: 1000 + seq,
+      received_at: 1000 + seq,
+    })
+
+    const viewerEvent = (
+      platform: 'twitch' | 'youtube' | 'kick',
+      count: number,
+      seq: number,
+    ): FerroEvent => ({
+      ...baseEvent(platform, `v-${seq}`, seq),
+      kind: { type: 'viewer_count', count },
+    })
+    const offlineEvent = (platform: 'twitch' | 'youtube' | 'kick', seq: number): FerroEvent => ({
+      ...baseEvent(platform, `off-${seq}`, seq),
+      kind: { type: 'stream_offline' },
+    })
+
+    useLive
+      .getState()
+      .apply([
+        { v: 1, type: 'event', data: viewerEvent('twitch', 100, 1) } as LiveFrame,
+        { v: 1, type: 'event', data: viewerEvent('youtube', 50, 2) } as LiveFrame,
+      ])
+    expect(useLive.getState().viewers).toEqual({ twitch: 100, youtube: 50 })
+    expect(useLive.getState().peakViewers).toBe(150)
+
+    // Viewer counts fluctuate downward; peak must remain at 150.
+    useLive
+      .getState()
+      .apply([{ v: 1, type: 'event', data: viewerEvent('twitch', 40, 3) } as LiveFrame])
+    expect(useLive.getState().viewers).toEqual({ twitch: 40, youtube: 50 })
+    expect(useLive.getState().peakViewers).toBe(150)
+
+    // Going offline removes that platform from live viewers without lowering peak.
+    useLive
+      .getState()
+      .apply([{ v: 1, type: 'event', data: offlineEvent('youtube', 4) } as LiveFrame])
+    expect(useLive.getState().viewers).toEqual({ twitch: 40 })
+    expect('youtube' in useLive.getState().viewers).toBe(false)
+    expect(useLive.getState().peakViewers).toBe(150)
+
+    // Older periodic sessionStats reloads for the same stream never overwrite peak downward,
+    // while a fresh stream (newer started_at) adopts the new stream's peak.
+    useLive.getState().syncSessionStats({
+      live: true,
+      started_at: 1000,
+      messages: 0,
+      follows: 0,
+      subs: 0,
+      tips: [],
+      bits: 0,
+      peak_viewers: 20,
+      viewers: { twitch: 20 },
+    })
+    expect(useLive.getState().peakViewers).toBe(150)
+    expect(useLive.getState().viewers).toEqual({ twitch: 40 })
+
+    useLive.getState().syncSessionStats(
+      {
+        live: true,
+        started_at: 5000,
+        messages: 0,
+        follows: 0,
+        subs: 0,
+        tips: [],
+        bits: 0,
+        peak_viewers: 12,
+        viewers: { kick: 12 },
+      },
+      { hydrateViewers: true },
+    )
+    expect(useLive.getState().peakViewers).toBe(12)
+    expect(useLive.getState().viewers).toEqual({ kick: 12 })
+  })
+})

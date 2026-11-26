@@ -3607,6 +3607,25 @@ export class DemoEngine {
       this.stats.peak_viewers = Math.max(this.stats.peak_viewers, total)
       this.pushState({ viewers: this.viewers })
     }
+    if (k.type === 'stream_offline') {
+      delete this.viewers[e.platform]
+      delete this.stats.viewers[e.platform as ChatPlatform]
+      if (e.platform === 'twitch' || e.platform === 'youtube' || e.platform === 'kick') {
+        this.liveOverrides[e.platform] = false
+      }
+      this.pushState({
+        viewers: {
+          ...this.viewers,
+          [e.platform]: null,
+        } as unknown as Partial<Record<Platform, number>>,
+      })
+    }
+    if (
+      k.type === 'stream_online' &&
+      (e.platform === 'twitch' || e.platform === 'youtube' || e.platform === 'kick')
+    ) {
+      this.liveOverrides[e.platform] = true
+    }
     if (labelChanged)
       for (const s of this.overlaySubs) {
         const o = this.overlays.find((x) => x.id === s.overlayId)
@@ -4073,8 +4092,11 @@ export class DemoEngine {
     }
   }
 
+  private liveOverrides: Partial<Record<ChatPlatform, boolean>> = {}
+
   private isLiveOn(p: ChatPlatform): boolean {
-    return this.setupDone && this.connectors[p].state === 'connected'
+    if (!this.setupDone || this.connectors[p].state !== 'connected') return false
+    return this.liveOverrides[p] ?? true
   }
 
   private isLive(): boolean {

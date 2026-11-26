@@ -41,12 +41,14 @@ function duration(ms: number): string {
 
 function Stats({ stats, now }: { stats: SessionStats | null; now: number }) {
   const viewers = useLive((s) => s.viewers)
+  const peakViewers = useLive((s) => s.peakViewers)
   const total = (viewers.twitch ?? 0) + (viewers.youtube ?? 0) + (viewers.kick ?? 0)
+  const peak = Math.max(peakViewers, stats?.peak_viewers ?? 0, total)
   // Each number has its own colour and icon, so the eye finds it without reading.
   const tiles: [string, string, Icon, string][] = stats
     ? [
         ['Watching now', formatCount(total), Eye, 'var(--fc-danger)'],
-        ['Peak', formatCount(Math.max(stats.peak_viewers, total)), TrendUp, 'var(--fc-arc)'],
+        ['Peak', formatCount(peak), TrendUp, 'var(--fc-arc)'],
         ['Follows', formatCount(stats.follows), Heart, 'var(--fc-youtube)'],
         ['Subs', formatCount(stats.subs), Star, 'var(--fc-twitch)'],
         [
@@ -110,7 +112,11 @@ export function Home() {
   const held = useLive((s) => s.held)
   const queue = useLive((s) => s.queue)
   const setQueue = useLive((s) => s.setQueue)
+  const resyncs = useLive((s) => s.resyncs)
+  const syncSessionStats = useLive((s) => s.syncSessionStats)
   const stats = useResource((c) => c.sessionStats())
+  const statsData = stats.data
+  const reloadStats = stats.reload
   const overlays = useResource((c) => c.overlays())
   const { run, busy } = useAction()
   const [reply, setReply] = useState<ReplyTarget | null>(null)
@@ -121,9 +127,17 @@ export function Home() {
   const { items: peek, hold } = useFocusHeldTail(chat, 30)
 
   useEffect(() => {
-    const t = setInterval(stats.reload, 20_000)
+    if (statsData) syncSessionStats(statsData)
+  }, [statsData, syncSessionStats])
+
+  useEffect(() => {
+    if (resyncs > 0) void reloadStats()
+  }, [resyncs, reloadStats])
+
+  useEffect(() => {
+    const t = setInterval(reloadStats, 20_000)
     return () => clearInterval(t)
-  }, [stats.reload])
+  }, [reloadStats])
 
   const main = overlays.data?.[0]
   const copyUrl = async () => {

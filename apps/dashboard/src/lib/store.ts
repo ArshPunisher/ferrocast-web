@@ -24,6 +24,7 @@ import {
   type Platform,
   type Queue,
   type SafeModeStatus,
+  type SessionStats,
   type Status,
   type TtsPending,
 } from '@ferrocast/api'
@@ -88,6 +89,9 @@ interface LiveStore {
   notices: NoticeItem[]
   panic: boolean
   viewers: Partial<Record<Platform, number>>
+  peakViewers: number
+  streamStartedAt: number | null
+  syncSessionStats: (stats: SessionStats, opts?: { hydrateViewers?: boolean }) => void
   goals: Goal[] | null
   panicPlan: PanicConfig | null
   /** Event ids the chat filter held for a mod, with the reason. */
@@ -146,6 +150,15 @@ interface LiveStore {
   syncHeld: (list: FerroEvent[]) => void
   /** A held message was approved or removed (here, or by another mod). */
   resolveHeld: (eventId: string, outcome: 'released' | 'dropped') => void
+}
+
+/** Total concurrent live viewers across platforms, ignoring non-numeric entries. */
+export function sumViewers(v: unknown): number {
+  if (typeof v !== 'object' || v === null) return 0
+  return Object.values(v as Record<string, unknown>).reduce<number>(
+    (acc, n) => acc + (typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : 0),
+    0,
+  )
 }
 
 /** Shown when a held message came from the list, not a live `held` frame. */
@@ -242,6 +255,22 @@ export const useLive = create<LiveStore>((set, get) => ({
   notices: [],
   panic: false,
   viewers: {},
+  peakViewers: 0,
+  streamStartedAt: null,
+  syncSessionStats: (stats, opts) =>
+    set((s) => {
+      const nextStarted = stats.started_at ?? null
+      const isNewStream =
+        nextStarted !== null && s.streamStartedAt !== null && nextStarted > s.streamStartedAt
+      const serverPeak = stats.peak_viewers ?? 0
+      const basePeak = isNewStream ? serverPeak : Math.max(s.peakViewers, serverPeak)
+      const viewers = opts?.hydrateViewers ? stats.viewers : s.viewers
+      return {
+        viewers,
+        peakViewers: Math.max(basePeak, sumViewers(viewers)),
+        streamStartedAt: nextStarted ?? s.streamStartedAt,
+      }
+    }),
   goals: null,
   panicPlan: null,
   held: new Map(),
@@ -325,12 +354,14 @@ export const useLive = create<LiveStore>((set, get) => ({
     let events = s.events
     let deleted = s.deleted
     let connectors = s.connectors
+    let status = s.status
     let links = s.links
     let queue = s.queue
     let tts = s.tts
     let notices = s.notices
     let panic = s.panic
     let viewers = s.viewers
+    let peakViewers = s.peakViewers
     let goals = s.goals
     let panicPlan = s.panicPlan
     let held = s.held
@@ -371,7 +402,35 @@ export const useLive = create<LiveStore>((set, get) => ({
             panic = k.enabled ? true : panic
           } else if (k.type === 'viewer_count') {
             viewers = { ...viewers, [e.platform]: k.count }
+            peakViewers = Math.max(peakViewers, sumViewers(viewers))
           } else {
+            if (k.type === 'stream_offline') {
+              if (e.platform in viewers) {
+                const next = { ...viewers }
+                delete next[e.platform]
+                viewers = next
+              }
+              if (
+                status &&
+                (e.platform === 'twitch' || e.platform === 'youtube' || e.platform === 'kick')
+              ) {
+                status = { ...status, live: { ...status.live, [e.platform]: false } }
+              }
+            } else if (k.type === 'stream_online') {
+              const anyLive = status
+                ? Object.values(status.live).some(Boolean)
+                : Object.keys(viewers).length > 0
+              if (!anyLive) {
+                viewers = {}
+                peakViewers = 0
+              }
+              if (
+                status &&
+                (e.platform === 'twitch' || e.platform === 'youtube' || e.platform === 'kick')
+              ) {
+                status = { ...status, live: { ...status.live, [e.platform]: true } }
+              }
+            }
             if (!eventsChanged) events = [...events]
             eventsChanged = true
             events.push(e)
@@ -509,12 +568,14 @@ export const useLive = create<LiveStore>((set, get) => ({
       events,
       deleted,
       connectors,
+      status,
       links,
       queue,
       tts,
       notices,
       panic,
       viewers,
+      peakViewers,
       goals,
       panicPlan,
       held,
@@ -591,7 +652,7 @@ export async function loadFull(conn: Connection): Promise<boolean> {
   live.seed({ chat, events: page.events })
   if (queue) live.setQueue(queue)
   live.setTts(tts)
-  if (stats) useLive.setState({ viewers: stats.viewers })
+  if (stats) useLive.getState().syncSessionStats(stats, { hydrateViewers: true })
   if (linksRes) useLive.getState().setLinks(linksRes.resolved, lkGen)
   if (labelsRes) useLive.getState().setLabels(labelsRes, lbGen)
   return status.setup_done
