@@ -749,9 +749,11 @@ export function DockWorkspace({
     if (ids.length === 0) return null
     const vertical = region !== 'bottom'
     const activeSlot = phone ? ids.find((id) => groupOf(layout, id).includes(cur)) : undefined
+    if (phone && !activeSlot) return null
     const out: ReactNode[] = []
-    ids.forEach((id, i) => {
-      const prev = ids[i - 1]
+    const visibleIds = phone && activeSlot ? [activeSlot] : ids
+    visibleIds.forEach((id, i) => {
+      const prev = visibleIds[i - 1]
       if (prev && !compact) {
         out.push(
           <Divider
@@ -762,13 +764,7 @@ export function DockWorkspace({
           />,
         )
       }
-      const dockVisibleOnPhone = phone && groupOf(layout, id).includes(cur)
-      const renderedDockId = phone
-        ? dockVisibleOnPhone
-          ? cur
-          : activeOf(layout, id)
-        : activeOf(layout, id)
-      const hiddenOnPhone = phone && !dockVisibleOnPhone
+      const renderedDockId = phone ? cur : activeOf(layout, id)
       const noLayoutContain = id === 'scenes' || id === 'sources'
       out.push(
         <div
@@ -777,9 +773,8 @@ export function DockWorkspace({
           className={cx(
             noLayoutContain ? 'fc-contain-style' : 'fc-contain-dock',
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
-            hiddenOnPhone && 'hidden',
             compact && !phone && 'min-h-[200px] sm:min-w-0 sm:flex-1',
-            phone && dockVisibleOnPhone && 'min-h-[320px] flex-1',
+            phone && 'min-h-[320px] flex-1',
             drag?.id === activeOf(layout, id) && 'opacity-40',
           )}
           style={
@@ -790,7 +785,6 @@ export function DockWorkspace({
         </div>,
       )
     })
-    const regionHiddenOnPhone = phone && !activeSlot
     // The size dragged to; when the window is too small for it, the panels give way (they
     // shrink, the picture and its bar keep their minimum) without forgetting it.
     const size: CSSProperties | undefined = compact
@@ -820,8 +814,7 @@ export function DockWorkspace({
               ? 'flex-col'
               : 'flex-row',
           region === 'right' && 'relative',
-          regionHiddenOnPhone && 'hidden',
-          phone && activeSlot && hasFloatingReady && 'pb-14',
+          phone && hasFloatingReady && 'pb-14',
         )}
         style={size}
       >
