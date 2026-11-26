@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { Profiler, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import { OverflowRow, type OverflowItem } from './overflow-row'
 
@@ -51,6 +51,7 @@ describe('OverflowRow', () => {
     act(() => root.unmount())
     host.remove()
     resetPreviewOverlayRegistry()
+    vi.unstubAllGlobals()
     // @ts-expect-error restore jsdom's own accessors
     delete HTMLElement.prototype.clientWidth
     // @ts-expect-error restore jsdom's own accessors
@@ -167,5 +168,82 @@ describe('OverflowRow', () => {
     })
     expect(more.getAttribute('aria-expanded')).toBe('true')
     menu.remove()
+  })
+
+  it('converges in a single pass on mount and coalesces ResizeObserver updates via rAF', async () => {
+    const roCallbacks: Array<() => void> = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        cb: () => void
+        constructor(cb: () => void) {
+          this.cb = cb
+          roCallbacks.push(cb)
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+
+    let itemRenderCount = 0
+    const trackedItems: OverflowItem[] = items.map((item) =>
+      item.spacer
+        ? item
+        : {
+            ...item,
+            render: (inPanel) => {
+              if (item.key === 'fixed') itemRenderCount += 1
+              return item.render(inPanel)
+            },
+          },
+    )
+    const commits: Array<{ phase: string; ovCount: number; itemRenderCount: number }> = []
+    rowWidth = 300
+    root = createRoot(host)
+    await act(async () => {
+      root.render(
+        <Profiler
+          id="overflow"
+          onRender={(_id, phase) =>
+            commits.push({
+              phase,
+              ovCount: host.querySelectorAll('[data-ov]').length,
+              itemRenderCount,
+            })
+          }
+        >
+          <OverflowRow items={trackedItems} />
+        </Profiler>,
+      )
+    })
+
+    // Single-pass collapse: initial mount (n=0) + 1 settled update (n=4), not N incremental steps.
+    expect(commits).toHaveLength(2)
+    expect(host.querySelectorAll('[data-ov]')).toHaveLength(3)
+
+    commits.length = 0
+    itemRenderCount = 0
+    // Repeated ResizeObserver bursts without width change schedule 0 state commits.
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        for (const cb of roCallbacks) cb()
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    expect(commits).toHaveLength(0)
+
+    // Widening to 1280px coalesces burst RO events into 1 rAF and restores all items in 1 commit.
+    rowWidth = 1280
+    await act(async () => {
+      for (let i = 0; i < 4; i++) {
+        for (const cb of roCallbacks) cb()
+      }
+      expect(commits).toHaveLength(0)
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    expect(commits).toEqual([{ phase: 'update', ovCount: 7, itemRenderCount: 1 }])
+    expect(host.querySelectorAll('[data-ov]')).toHaveLength(7)
+
+    vi.unstubAllGlobals()
   })
 })

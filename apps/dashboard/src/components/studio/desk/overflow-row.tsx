@@ -32,6 +32,7 @@ export function OverflowRow({
     .filter((i) => i.rank !== undefined)
     .sort((a, b) => a.rank! - b.rank!)
     .map((i) => i.key)
+  const orderKey = order.join('|')
   const [n, setN] = useState(0)
   const [open, setOpen] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -41,7 +42,10 @@ export function OverflowRow({
   const panelRef = useRef<HTMLElement>(null)
   const pressedInPanelRef = useRef(false)
   const widths = useRef(new Map<string, number>())
+  const moreWidth = useRef(26)
   const blockedAt = useRef(0)
+  const lastOrderKey = useRef<string | null>(null)
+  const verifyFitRef = useRef(false)
   const moved = new Set(order.slice(0, Math.min(n, order.length)))
   const nMoved = moved.size
 
@@ -51,29 +55,89 @@ export function OverflowRow({
     row.querySelectorAll<HTMLElement>(':scope > [data-ov]').forEach((el) => {
       if (el.offsetWidth > 0) widths.current.set(el.dataset.ov!, el.offsetWidth)
     })
-    if (row.scrollWidth > row.clientWidth + 1) {
+    const measuredMore = moreRef.current?.offsetWidth ?? 0
+    if (measuredMore > 0) moreWidth.current = measuredMore
+    const moreW = moreWidth.current
+
+    const overflow = row.scrollWidth - row.clientWidth
+    if (overflow > 1) {
       blockedAt.current = row.clientWidth
-      if (nMoved < order.length) setN(nMoved + 1)
+      if (nMoved >= order.length) return
+      let freed = 0
+      let next = nMoved
+      while (next < order.length && freed < overflow) {
+        const w = widths.current.get(order[next]!) ?? 0
+        // Moving the first item swaps in the More toggle, reducing net horizontal gain.
+        const gain = next === 0 ? w - moreW : w + GAP
+        freed += gain
+        next += 1
+      }
+      if (next !== nMoved) {
+        verifyFitRef.current = true
+        setN(next)
+      }
       return
     }
-    if (nMoved > 0 && row.clientWidth > blockedAt.current) {
-      const w = widths.current.get(order[nMoved - 1]!) ?? 0
-      const more = nMoved === 1 ? (moreRef.current?.offsetWidth ?? 26) + GAP : 0
-      const slack = spacerRef.current?.offsetWidth ?? 0
-      if (slack >= w + GAP + more + 2) setN(nMoved - 1)
-    }
-    // `order` is rebuilt each render; its content only changes with the items' ranks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nMoved, order.join('|')])
 
-  useLayoutEffect(fit)
+    if (nMoved > 0 && row.clientWidth > blockedAt.current) {
+      let slack = spacerRef.current
+        ? spacerRef.current.offsetWidth
+        : Math.max(0, row.clientWidth - row.scrollWidth)
+      let next = nMoved
+      while (next > 0) {
+        const w = widths.current.get(order[next - 1]!) ?? 0
+        if (w <= 0) break
+        const more = next === 1 ? moreW + GAP : 0
+        if (slack < w + GAP + more + 2) break
+        slack -= w + GAP
+        next -= 1
+      }
+      if (next !== nMoved) setN(next)
+    }
+    // `order` is rebuilt each render; its content only changes with item ranks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nMoved, orderKey])
+
+  const fitRef = useRef(fit)
+  fitRef.current = fit
+
+  useLayoutEffect(() => {
+    const orderChanged = lastOrderKey.current !== orderKey
+    if (orderChanged) {
+      lastOrderKey.current = orderKey
+      blockedAt.current = 0
+      if (nMoved > order.length) {
+        setN(order.length)
+        return
+      }
+    }
+    if (orderChanged || verifyFitRef.current || typeof ResizeObserver === 'undefined') {
+      verifyFitRef.current = false
+      fit()
+    }
+  }, [fit, orderKey, items, nMoved, order.length])
+
   useEffect(() => {
     const row = rowRef.current
     if (!row || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => fit())
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        fitRef.current()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        fitRef.current()
+      })
+    })
     ro.observe(row)
-    return () => ro.disconnect()
-  }, [fit])
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [])
   // Track panel activation so opening a child portal menu doesn't treat that menu as outside click.
   useEffect(() => {
     if (!open) {
@@ -103,8 +167,8 @@ export function OverflowRow({
     }
   }, [open])
   useEffect(() => {
-    if (nMoved === 0) setOpen(false)
-  }, [nMoved])
+    if (nMoved === 0 && open) setOpen(false)
+  }, [nMoved, open])
 
   return (
     <div
