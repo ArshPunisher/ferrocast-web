@@ -168,4 +168,37 @@ describe('Overlays rename validation (Extra bug #6)', () => {
     dialog = await openRenameDialog(host)
     expect(dialog.textContent).not.toContain('Give it a name')
   })
+
+  it('ignores duplicate submit events while rename saveOverlay is in flight', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    let resolveSave!: () => void
+    const saveSpy = vi.spyOn(client, 'saveOverlay').mockImplementation(
+      (o) =>
+        new Promise((resolve) => {
+          resolveSave = () => resolve(o)
+        }),
+    )
+    const host = await mountOverlays(client)
+    const dialog = await openRenameDialog(host)
+    const input = dialog.querySelector<HTMLInputElement>('input')!
+    const form = dialog.querySelector('form')!
+
+    await act(async () => {
+      setInputValue(input, 'Renamed Once')
+    })
+
+    // Rapid double-Enter submits the form twice while the first PUT is still pending.
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveSave()
+    })
+    await flushTicks(20, () => !document.body.querySelector('dialog[open]'))
+    expect(document.body.querySelector('dialog[open]')).toBeNull()
+  })
 })

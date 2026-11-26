@@ -109,13 +109,14 @@ export function Overlays() {
   const renameTrimmed = renaming?.name.trim() ?? ''
 
   const submitRename = () => {
-    if (!renaming) return
+    if (!renaming || busy === 'rename') return
     if (!renameTrimmed) {
       setRenameError('Give it a name, like “Starting soon”.')
       return
     }
     setRenameError(null)
     void run('rename', () => client.saveOverlay({ ...renaming.o, name: renameTrimmed }), {
+      once: true,
       success: 'Renamed.',
     }).then((o) => {
       if (o) {
