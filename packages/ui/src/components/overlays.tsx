@@ -33,25 +33,22 @@ export interface DialogProps {
 
 /** Open dialogs; the page under them doesn't scroll while any is open. */
 let scrollLocks = 0
-let savedScroll: { overflow: string; gutter: string } | null = null
 
 /** Stops the page behind a dialog scrolling (wheel and touch scroll chain to it otherwise). */
 function lockPageScroll(): () => void {
   const root = document.documentElement
   if (scrollLocks++ === 0) {
-    savedScroll = { overflow: root.style.overflow, gutter: root.style.scrollbarGutter }
     // Keeps the scrollbar's space, so the page doesn't shift sideways.
-    if (root.scrollHeight > root.clientHeight) root.style.scrollbarGutter = 'stable'
-    root.style.overflow = 'hidden'
+    if (root.scrollHeight > root.clientHeight) root.dataset.scrollGutter = 'stable'
+    root.dataset.scrollLock = 'true'
   }
   let released = false
   return () => {
     if (released) return
     released = true
-    if (--scrollLocks === 0 && savedScroll) {
-      root.style.overflow = savedScroll.overflow
-      root.style.scrollbarGutter = savedScroll.gutter
-      savedScroll = null
+    if (--scrollLocks === 0) {
+      delete root.dataset.scrollLock
+      delete root.dataset.scrollGutter
     }
   }
 }

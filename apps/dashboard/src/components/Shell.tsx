@@ -322,12 +322,16 @@ function useNavFold(folding: boolean): [boolean, () => void] {
   }, [nav.pref])
   // Before paint, so the Studio's status bar never starts at the other width.
   useLayoutEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty('--fc-nav-w', folded ? '60px' : '15rem')
-    return () => {
-      root.style.removeProperty('--fc-nav-w')
-    }
+    document.documentElement.style.setProperty('--fc-nav-w', folded ? '60px' : '15rem')
+    window.dispatchEvent(new CustomEvent('fc:nav-width-change'))
   }, [folded])
+  useLayoutEffect(
+    () => () => {
+      document.documentElement.style.removeProperty('--fc-nav-w')
+      window.dispatchEvent(new CustomEvent('fc:nav-width-change'))
+    },
+    [],
+  )
   const flip = () => setNav((s) => toggleNav(folding ? enterFolding(s) : s))
   return [folded, flip]
 }

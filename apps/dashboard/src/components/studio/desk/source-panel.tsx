@@ -213,11 +213,30 @@ function Panel({
     const el = panel.current
     const root = document.documentElement
     if (!el) return
-    const put = () => root.style.setProperty('--fc-drawer', `${el.offsetWidth}px`)
+    let last = ''
+    let raf = 0
+    const put = () => {
+      const next = `${el.offsetWidth}px`
+      if (next === last) return
+      last = next
+      root.style.setProperty('--fc-drawer', next)
+    }
     put()
-    const o = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(put)
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        put()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        put()
+      })
+    }
+    const o = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
     o?.observe(el)
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       o?.disconnect()
       root.style.removeProperty('--fc-drawer')
     }

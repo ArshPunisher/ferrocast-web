@@ -419,8 +419,17 @@ export function StudioStatusBar() {
   // The rest of the window leaves room for it while it shows.
   useEffect(() => {
     const root = document.documentElement
-    root.style.setProperty('--fc-statusbar', on ? `${STATUS_BAR_PX}px` : '0px')
-    return () => root.style.setProperty('--fc-statusbar', '0px')
+    const next = on ? `${STATUS_BAR_PX}px` : '0px'
+    if (root.style.getPropertyValue('--fc-statusbar') !== next) {
+      root.style.setProperty('--fc-statusbar', next)
+    }
+    window.dispatchEvent(new CustomEvent('fc:statusbar-change'))
+    return () => {
+      if (root.style.getPropertyValue('--fc-statusbar') !== '0px') {
+        root.style.setProperty('--fc-statusbar', '0px')
+        window.dispatchEvent(new CustomEvent('fc:statusbar-change'))
+      }
+    }
   }, [on])
   if (!stats) return null
   const stream = stats.stream
