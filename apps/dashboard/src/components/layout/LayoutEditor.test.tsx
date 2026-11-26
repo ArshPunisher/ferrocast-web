@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { OverlayState, Widget } from '@ferrocast/api'
+import { Toaster } from '@ferrocast/ui'
+import { useHistory, useUndoKeys } from '../../lib/history'
 import { useLive } from '../../lib/store'
 import { LayoutEditor, containSize } from './LayoutEditor'
 
@@ -225,5 +227,336 @@ describe('LayoutEditor steady containSize & single inspector scroller (Group A)'
       '[class*="overflow-y-auto"], [class*="max-h-72"]',
     )
     expect(nestedScrollers).toHaveLength(0)
+  })
+})
+
+describe('LayoutEditor Backspace/Delete layer removal (Group B)', () => {
+  const goalWidget: Widget = {
+    id: 'w-goal',
+    kind: 'goal',
+    x: 100,
+    y: 100,
+    w: 440,
+    h: 112,
+    config: { goal_id: 'g1', theme: 'molten' },
+  }
+  const textLayer: Widget = {
+    id: 'l-text',
+    kind: 'layer',
+    x: 200,
+    y: 300,
+    w: 600,
+    h: 120,
+    config: { type: 'text', text: 'Hello stream' },
+  }
+  const lockedLayer: Widget = {
+    id: 'l-locked',
+    kind: 'layer',
+    x: 300,
+    y: 450,
+    w: 300,
+    h: 80,
+    locked: true,
+    config: { type: 'shape', shape: 'rect', fill: '#16191e' },
+  }
+  const brandLayer: Widget = {
+    id: 'l-brand',
+    kind: 'layer',
+    x: 20,
+    y: 20,
+    w: 64,
+    h: 64,
+    config: { type: 'brand', variant: 'mark' },
+  }
+
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    HTMLElement.prototype.setPointerCapture = vi.fn()
+  })
+
+  afterEach(async () => {
+    await act(async () => root?.unmount())
+    root = null
+    document.body.innerHTML = ''
+    useLive.setState({ conn: null })
+  })
+
+  async function renderEditor(
+    widgets: Widget[],
+    opts: { readOnly?: boolean; brandLocked?: boolean } = {},
+  ) {
+    const onWidgets = vi.fn()
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <>
+          <LayoutEditor
+            layout={{ name: 'Main', width: 1920, height: 1080, widgets }}
+            onWidgets={onWidgets}
+            state={EMPTY_STATE}
+            themes={[]}
+            goals={[]}
+            onGoalCreated={vi.fn()}
+            preview={false}
+            media={[]}
+            onUploaded={vi.fn()}
+            readOnly={opts.readOnly ?? false}
+            brandLocked={opts.brandLocked ?? false}
+          />
+          <Toaster />
+        </>,
+      ),
+    )
+    return { host, onWidgets }
+  }
+
+  async function selectWidget(host: HTMLElement, ariaPrefix: string) {
+    const el = host.querySelector<HTMLElement>(`[role="button"][aria-label^="${ariaPrefix}"]`)!
+    expect(el).toBeTruthy()
+    await act(async () => {
+      el.focus()
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    return el
+  }
+
+  function pressKey(target: EventTarget, key: string, init: KeyboardEventInit = {}) {
+    const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+    target.dispatchEvent(ev)
+    return ev
+  }
+
+  it('Backspace with a canvas layer or widget selected removes it without merge and prevents default', async () => {
+    const { host, onWidgets } = await renderEditor([goalWidget, textLayer])
+    const goalBtn = await selectWidget(host, 'Goal widget')
+
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(goalBtn, 'Backspace')
+    })
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(onWidgets).toHaveBeenCalledTimes(1)
+    expect(onWidgets.mock.calls[0]?.[0]).toEqual([textLayer])
+    expect(onWidgets.mock.calls[0]?.[1]).toBeUndefined()
+  })
+
+  it('Delete with a canvas layer selected removes that layer', async () => {
+    const { host, onWidgets } = await renderEditor([goalWidget, textLayer])
+    const textBtn = await selectWidget(host, 'Text: Hello stream')
+
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(textBtn, 'Delete')
+    })
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(onWidgets).toHaveBeenCalledWith([goalWidget])
+  })
+
+  it('Backspace in the Text field of a selected text layer does not remove the layer or preventDefault', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    await selectWidget(host, 'Text: Hello stream')
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea')!
+    expect(textarea).toBeTruthy()
+    let ev!: KeyboardEvent
+    await act(async () => {
+      textarea.focus()
+      ev = pressKey(textarea, 'Backspace')
+    })
+
+    expect(ev.defaultPrevented).toBe(false)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace in a number input or range/select control does not remove the layer', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    await selectWidget(host, 'Text: Hello stream')
+
+    const numInput = host.querySelector<HTMLInputElement>('input[type="number"]')!
+    expect(numInput).toBeTruthy()
+    let numEv!: KeyboardEvent
+    await act(async () => {
+      numInput.focus()
+      numEv = pressKey(numInput, 'Backspace')
+    })
+    expect(numEv.defaultPrevented).toBe(false)
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    const rangeInput = host.querySelector<HTMLInputElement>('input[type="range"]')!
+    expect(rangeInput).toBeTruthy()
+    let rangeEv!: KeyboardEvent
+    await act(async () => {
+      rangeInput.focus()
+      rangeEv = pressKey(rangeInput, 'Backspace')
+    })
+    expect(rangeEv.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace in a contenteditable element, ARIA textbox, or IME composition does not remove the layer', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    const btn = await selectWidget(host, 'Text: Hello stream')
+
+    const editable = document.createElement('div')
+    editable.setAttribute('contenteditable', 'true')
+    host.appendChild(editable)
+    let ceEv!: KeyboardEvent
+    await act(async () => {
+      editable.focus()
+      ceEv = pressKey(editable, 'Backspace')
+    })
+    expect(ceEv.defaultPrevented).toBe(false)
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    const ariaBox = document.createElement('div')
+    ariaBox.setAttribute('role', 'textbox')
+    ariaBox.tabIndex = 0
+    host.appendChild(ariaBox)
+    let roleEv!: KeyboardEvent
+    await act(async () => {
+      ariaBox.focus()
+      roleEv = pressKey(ariaBox, 'Backspace')
+    })
+    expect(roleEv.defaultPrevented).toBe(false)
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    await act(async () => {
+      btn.focus()
+      pressKey(btn, 'Backspace', { isComposing: true })
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    const imeEv = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(imeEv, 'keyCode', { value: 229 })
+    await act(async () => {
+      btn.dispatchEvent(imeEv)
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace with modifier keys (Cmd/Ctrl/Alt) does not remove the layer', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    const btn = await selectWidget(host, 'Text: Hello stream')
+
+    await act(async () => {
+      pressKey(btn, 'Backspace', { metaKey: true })
+      pressKey(btn, 'Backspace', { ctrlKey: true })
+      pressKey(btn, 'Backspace', { altKey: true })
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace while an open modal dialog exists does not remove the layer', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    const btn = await selectWidget(host, 'Text: Hello stream')
+
+    const dlg = document.createElement('div')
+    dlg.setAttribute('role', 'dialog')
+    host.appendChild(dlg)
+
+    await act(async () => {
+      pressKey(btn, 'Backspace')
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace with a locked layer selected does not remove it and calls preventDefault', async () => {
+    const { host, onWidgets } = await renderEditor([lockedLayer])
+    const btn = await selectWidget(host, 'Box layer')
+
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(btn, 'Backspace')
+    })
+    expect(ev.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace with a brand-locked built-in mark selected does not remove it', async () => {
+    const { host, onWidgets } = await renderEditor([brandLayer], { brandLocked: true })
+    const btn = await selectWidget(host, 'Ferrocast mark layer')
+
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(btn, 'Backspace')
+    })
+    expect(ev.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace with nothing selected calls preventDefault and leaves widgets unchanged', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(host, 'Backspace')
+    })
+    expect(ev.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('ignores Backspace/Delete in readOnly mode', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer], { readOnly: true })
+    const btn = await selectWidget(host, 'Text: Hello stream')
+    let ev!: KeyboardEvent
+    await act(async () => {
+      ev = pressKey(btn, 'Backspace')
+    })
+    expect(ev.defaultPrevented).toBe(false)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Cmd/Ctrl+Z after Backspace deletion restores the removed layer at its original z-order', async () => {
+    const initial: Widget[] = [goalWidget, textLayer, lockedLayer]
+    function HistoryHarness() {
+      const h = useHistory<Widget[]>(initial)
+      useUndoKeys(h)
+      return (
+        <LayoutEditor
+          layout={{ name: 'Main', width: 1920, height: 1080, widgets: h.value }}
+          onWidgets={(next, opts) => {
+            h.set(next, opts)
+          }}
+          state={EMPTY_STATE}
+          themes={[]}
+          goals={[]}
+          onGoalCreated={vi.fn()}
+          preview={false}
+          media={[]}
+          onUploaded={vi.fn()}
+        />
+      )
+    }
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => root!.render(<HistoryHarness />))
+
+    const textBtn = await selectWidget(host, 'Text: Hello stream')
+    await act(async () => {
+      pressKey(textBtn, 'Backspace')
+    })
+    expect(host.querySelector('[role="button"][aria-label^="Text: Hello stream"]')).toBeNull()
+
+    await act(async () => {
+      pressKey(window, 'z', { ctrlKey: true })
+    })
+    const buttons = [...host.querySelectorAll('[role="button"][aria-label*=" at "]')].map((n) =>
+      n.getAttribute('aria-label'),
+    )
+    expect(buttons).toHaveLength(3)
+    expect(buttons[1]).toContain('Text: Hello stream')
   })
 })

@@ -95,6 +95,7 @@ import {
   snap,
 } from './widget-settings'
 import { useClient } from '../../lib/hooks'
+import { hasOpenDialog, isEditableElement, isTextEditingElement } from '../../lib/keys'
 
 export interface Layout {
   name: string
@@ -320,6 +321,7 @@ function Canvas({
   readOnly,
   brandLocked,
   fitViewport = false,
+  canvasRef,
 }: {
   layout: Layout
   selected: string | null
@@ -330,11 +332,13 @@ function Canvas({
   readOnly: boolean
   brandLocked: boolean
   fitViewport?: boolean
+  canvasRef?: React.RefObject<HTMLDivElement | null>
 }) {
   /** The mark of a built-in can't be moved either (it's kept, as placed by the design). */
   const fixed = (w: Widget) => readOnly || !!w.locked || (brandLocked && isBrandLayer(w))
   const stageRef = useRef<HTMLDivElement>(null)
-  const box = useRef<HTMLDivElement>(null)
+  const localBox = useRef<HTMLDivElement>(null)
+  const box = canvasRef ?? localBox
   const lockedDesktop = useViewportLockMedia(fitViewport)
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
   const [measuredScale, setMeasuredScale] = useState(0.5)
@@ -378,7 +382,7 @@ function Canvas({
     const ro = new ResizeObserver(syncScale)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [layout.width, frame?.width, frame?.height])
+  }, [box, layout.width, frame?.width, frame?.height])
 
   const scale = frame ? frame.scale : measuredScale
 
@@ -466,8 +470,9 @@ function Canvas({
     >
       <div
         ref={box}
+        tabIndex={-1}
         className={cx(
-          'relative touch-none overflow-hidden rounded-panel bg-[repeating-conic-gradient(var(--fc-surface-2)_0%_25%,var(--fc-surface-1)_0%_50%)] [background-size:24px_24px] ring-1 ring-line select-none',
+          'relative touch-none overflow-hidden rounded-panel bg-[repeating-conic-gradient(var(--fc-surface-2)_0%_25%,var(--fc-surface-1)_0%_50%)] [background-size:24px_24px] ring-1 ring-line select-none focus:outline-none',
           !frame && 'w-full',
         )}
         style={
@@ -518,7 +523,7 @@ function Canvas({
               role="button"
               tabIndex={0}
               aria-pressed={sel}
-              aria-label={`${w.kind === 'layer' ? name : kindInfo(w.kind).label} ${kind} at ${w.x}, ${w.y}, ${w.w} by ${w.h}.${w.locked ? ' Locked.' : ' Arrow keys move it, Alt with arrows resizes.'}${w.hidden ? ' Hidden on stream.' : ''}`}
+              aria-label={`${w.kind === 'layer' ? name : kindInfo(w.kind).label} ${kind} at ${w.x}, ${w.y}, ${w.w} by ${w.h}.${w.locked ? ' Locked.' : brandLocked && isBrandLayer(w) ? ' Kept on built-in designs.' : ' Arrow keys move it, Alt with arrows resizes, Delete or Backspace removes it.'}${w.hidden ? ' Hidden on stream.' : ''}`}
               onPointerDown={passthrough ? undefined : (e) => onDown(e, w, 'move')}
               onFocus={() => onSelect(w.id)}
               onKeyDown={(e) => {
@@ -1513,6 +1518,7 @@ export function LayoutEditor({
   const client = useClient()
   const [selected, setSelected] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const layersRef = useRef<HTMLElement>(null)
   const sel = layout.widgets.find((w) => w.id === selected) ?? null
   const update = (w: Widget, opts?: { merge?: boolean }) =>
@@ -1537,6 +1543,42 @@ export function LayoutEditor({
     onWidgets(layout.widgets.filter((x) => x.id !== id))
     setSelected(null)
   }
+  useEffect(() => {
+    if (readOnly) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (hasOpenDialog()) return
+      const target = e.target
+      const active = typeof document !== 'undefined' ? document.activeElement : null
+      if (isEditableElement(target) || isEditableElement(active)) {
+        if (
+          e.key === 'Backspace' &&
+          !isTextEditingElement(target) &&
+          !isTextEditingElement(active)
+        ) {
+          e.preventDefault()
+        }
+        return
+      }
+      e.preventDefault()
+      if (!sel) return
+      if (sel.locked) {
+        toast({ tone: 'warn', message: 'Unlock this layer to remove it.' })
+        return
+      }
+      if (brandLocked && isBrandLayer(sel)) {
+        toast({ tone: 'warn', message: 'Built-in designs keep this Ferrocast mark.' })
+        return
+      }
+      remove(sel.id)
+      canvasRef.current?.focus({ preventScroll: true })
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, sel, brandLocked, layout.widgets])
   const align = (how: 'l' | 'c' | 'r' | 't' | 'm' | 'b') => {
     if (!sel) return
     const x =
@@ -1661,6 +1703,7 @@ export function LayoutEditor({
             readOnly={readOnly}
             brandLocked={brandLocked}
             fitViewport={fitViewport}
+            canvasRef={canvasRef}
           />
         </div>
         <div
@@ -1721,12 +1764,13 @@ export function LayoutEditor({
           )}
           <span
             className="inline-flex size-8 items-center justify-center rounded-control text-text-3"
-            title="Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows resize, Shift for bigger steps. Cmd or Ctrl + Z undoes."
+            title="Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z undoes."
           >
             <Keyboard size={17} aria-hidden="true" />
             <span className="sr-only">
               Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
-              resize, Shift for bigger steps. Cmd or Ctrl + Z undoes.
+              resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z
+              undoes.
             </span>
           </span>
           <input
