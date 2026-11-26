@@ -505,6 +505,7 @@ function Running({
   // ⌘Z and ⇧⌘Z (Ctrl on Windows) undo and redo changes to sources, outside text fields.
   const { run: runUndo } = useAction()
   const [undone, setUndone] = useState(0)
+  const bumpUndone = useCallback(() => setUndone((n) => n + 1), [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return
@@ -517,12 +518,12 @@ function Running({
       }).then((r) => {
         if (!r) return
         refresh()
-        setUndone((n) => n + 1)
+        bumpUndone()
       })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [api, refresh, runUndo])
+  }, [api, refresh, runUndo, bumpUndone])
   // A switch made elsewhere (a shortcut, a click in a multiview) shows up in the stats first.
   const setScenes = scenes.set
   const shownScenes = useRef(scenes.data)
@@ -620,6 +621,7 @@ function Running({
       prefs,
       refresh,
       undone,
+      bumpUndone,
       selected,
       select,
       also: picked.also,
@@ -663,6 +665,7 @@ function Running({
       prefs,
       refresh,
       undone,
+      bumpUndone,
       selected,
       select,
       picked.also,

@@ -111,6 +111,8 @@ export interface Desk {
   refresh: () => void
   /** Counts undos and redos: what an open drawer reads again (its filters and settings). */
   undone: number
+  /** Marks an external undo/redo so open drawers re-read their filters and settings. */
+  bumpUndone?: () => void
   selected: number | null
   /** Picks one source (or none), dropping any others picked with it. */
   select: (id: number | null) => void

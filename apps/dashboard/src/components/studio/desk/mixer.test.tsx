@@ -8,13 +8,17 @@ import { useLive } from '../../../lib/store'
 import { createDeskStatsStore, DeskProvider, type Desk } from './common'
 import { AudioDock, removeConfirmCopy, resolveRemoveTarget } from './mixer'
 
+let dockHeaderRenders = 0
 vi.mock('./layout', () => ({
-  DockHeader: ({ title, actions }: { title?: React.ReactNode; actions?: React.ReactNode }) => (
-    <header>
-      <span>{title ?? 'Audio'}</span>
-      {actions}
-    </header>
-  ),
+  DockHeader: ({ title, actions }: { title?: React.ReactNode; actions?: React.ReactNode }) => {
+    dockHeaderRenders += 1
+    return (
+      <header>
+        <span>{title ?? 'Audio'}</span>
+        {actions}
+      </header>
+    )
+  },
 }))
 
 HTMLDialogElement.prototype.showModal = function showModal() {
@@ -213,6 +217,7 @@ describe('AudioDock row and strip Remove', () => {
   }) {
     const edit = vi.fn()
     const refresh = vi.fn()
+    const bumpUndone = vi.fn()
     const api = {
       audio: vi.fn(async () => opts.audioList),
       items: vi.fn(async () => opts.items ?? []),
@@ -246,6 +251,7 @@ describe('AudioDock row and strip Remove', () => {
       prefs: { data: {} },
       refresh,
       undone: 0,
+      bumpUndone,
       selected: null,
       select: vi.fn(),
       also: [],
@@ -266,7 +272,7 @@ describe('AudioDock row and strip Remove', () => {
       screens: { data: [] },
       openSettings: vi.fn(),
     } as unknown as Desk
-    return { desk, api, edit, refresh, statsStore }
+    return { desk, api, edit, refresh, bumpUndone, statsStore }
   }
 
   async function mountAudio(desk: Desk, statsStore: ReturnType<typeof createDeskStatsStore>) {
@@ -293,7 +299,7 @@ describe('AudioDock row and strip Remove', () => {
       }),
     )
     const mic = makeAudio({ name: 'Mic', channel: 3 })
-    const { desk, api, edit, refresh, statsStore } = makeDesk({
+    const { desk, api, edit, refresh, bumpUndone, statsStore } = makeDesk({
       audioList: [mic],
       editing: 'Mic',
       live: true,
@@ -338,6 +344,7 @@ describe('AudioDock row and strip Remove', () => {
     await flush()
     expect(api.undo).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledTimes(2)
+    expect(bumpUndone).toHaveBeenCalledTimes(1)
   })
 
   it('removes a scene video+audio source via editItem with picture warning, and removes from vertical strip', async () => {
@@ -448,5 +455,68 @@ describe('AudioDock row and strip Remove', () => {
     expect(currentToasts().some((t) => t.tone === 'error')).toBe(true)
     expect(currentToasts().some((t) => t.action?.label === 'Undo')).toBe(false)
     expect(api.editItem).not.toHaveBeenCalled()
+    // Failed confirm keeps the dialog open for retry or cancel instead of closing early.
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull()
+  })
+
+  it('guards rapid Remove lookup clicks and avoids 1 Hz re-renders on unrelated EngineStats updates', async () => {
+    let resolveSources!: (v: { name: string; kind: string; scenes: string[] }[]) => void
+    const pendingSources = new Promise<{ name: string; kind: string; scenes: string[] }[]>((r) => {
+      resolveSources = r
+    })
+    const bgm = makeAudio({ name: 'BGM', kind: 'ffmpeg_source', channel: null })
+    const { desk, api, statsStore } = makeDesk({
+      audioList: [bgm],
+      items: [],
+      api: {
+        sources: vi.fn(() => pendingSources),
+      },
+    })
+    dockHeaderRenders = 0
+    await mountAudio(desk, statsStore)
+    const initialRenders = dockHeaderRenders
+
+    // Unrelated 1 Hz stats updates (cpu/fps/bytes) must not re-render AudioDock.
+    await act(async () => {
+      statsStore.set({
+        stream: {
+          active: false,
+          reconnecting: false,
+          bytes: 100,
+          frames: 10,
+          dropped: 0,
+          error: null,
+        },
+        engine: { cpu: 12, fps: 60 },
+      } as unknown as EngineStats)
+    })
+    await act(async () => {
+      statsStore.set({
+        stream: {
+          active: false,
+          reconnecting: false,
+          bytes: 200,
+          frames: 20,
+          dropped: 0,
+          error: null,
+        },
+        engine: { cpu: 18, fps: 60 },
+      } as unknown as EngineStats)
+    })
+    expect(dockHeaderRenders).toBe(initialRenders)
+
+    // Rapid Remove triggers only one api.sources() lookup while in flight.
+    for (let i = 0; i < 2; i++) {
+      const moreBtn = host.querySelector('button[aria-label="More for BGM"]') as HTMLButtonElement
+      await act(async () => moreBtn.click())
+      const menu = document.querySelector('[role="menu"][aria-label="BGM"]') as HTMLElement
+      const rmItem = [...menu.querySelectorAll('[role="menuitem"]')].find((el) =>
+        el.textContent?.includes('Remove'),
+      ) as HTMLElement
+      await act(async () => rmItem.click())
+    }
+    expect(api.sources).toHaveBeenCalledTimes(1)
+    resolveSources([{ name: 'BGM', kind: 'ffmpeg_source', scenes: ['Gameplay', 'BRB'] }])
+    await flush()
   })
 })

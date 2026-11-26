@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { EngineFilter } from '@ferrocast/api'
+import type { EngineFilter, EngineStats } from '@ferrocast/api'
 import { currentToasts, dismissToast } from '@ferrocast/ui'
 import { useLive } from '../../../lib/store'
-import { DeskProvider, type Desk } from './common'
+import { createDeskStatsStore, DeskProvider, type Desk } from './common'
+import * as cleanmicUi from './cleanmic-ui'
 import { SourcePanel } from './source-panel'
 
 let root: Root | null = null
@@ -382,5 +383,109 @@ describe('PositionTab grouped child frame sync', () => {
     expect(setTransform).toHaveBeenCalledTimes(1)
     expect(itemsResource.set).toHaveBeenCalledTimes(1)
     expect(cachedItems[0]!.children[0]!.frame).toEqual([400, 0, 0, 300, 250, 100])
+  })
+})
+
+describe('CleanMic stats selector subscription', () => {
+  it('does not re-render CleanMic on 1 Hz stats ticks when stream.active stays unchanged', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const cleanMicSpy = vi.spyOn(cleanmicUi, 'CleanMicControl')
+    useLive.setState({ conn: { client: {} } as never })
+    const statsStore = createDeskStatsStore()
+    statsStore.set({
+      stream: { active: false, reconnecting: false, bytes: 0, frames: 0, dropped: 0, error: null },
+      engine: { cpu: 5, fps: 60 },
+    } as unknown as EngineStats)
+
+    const desk = {
+      api: {
+        filters: vi.fn(async () => []),
+        levels: vi.fn(async () => ({})),
+        sources: vi.fn(async () => []),
+        audioByName: vi.fn(async () => null),
+        filterSettings: vi.fn(async () => ({})),
+      },
+      audio: {
+        data: [
+          {
+            name: 'Mic',
+            kind: 'coreaudio_input_capture',
+            channel: 3,
+            volume_db: 0,
+            muted: false,
+            monitor: 'off',
+            balance: 0.5,
+            sync_ms: 0,
+            mono: false,
+            tracks: [1],
+            active: true,
+          },
+        ],
+        set: vi.fn(),
+        reload: vi.fn(),
+      },
+      items: { data: [], set: vi.fn(), reload: vi.fn() },
+      scenes: { data: { current: 'Main', scenes: [] }, set: vi.fn(), reload: vi.fn() },
+      pictureScenes: [{ name: 'Main' }],
+      kinds: {
+        data: {
+          inputs: [{ id: 'coreaudio_input_capture', name: 'Microphone' }],
+          filters: [],
+          transitions: [],
+          encoders: [],
+          outputs: [],
+        },
+      },
+      scene: 'Main',
+      canvas: 'main',
+      editing: 'Mic',
+      edit: vi.fn(),
+      editTab: 'sound',
+      refresh: vi.fn(),
+      undone: 0,
+    } as unknown as Desk
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk} statsStore={statsStore}>
+          <SourcePanel />
+        </DeskProvider>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const baseline = cleanMicSpy.mock.calls.length
+
+    await act(async () => {
+      statsStore.set({
+        stream: {
+          active: false,
+          reconnecting: false,
+          bytes: 500,
+          frames: 30,
+          dropped: 0,
+          error: null,
+        },
+        engine: { cpu: 22, fps: 60 },
+      } as unknown as EngineStats)
+    })
+    await act(async () => {
+      statsStore.set({
+        stream: {
+          active: false,
+          reconnecting: false,
+          bytes: 1000,
+          frames: 60,
+          dropped: 0,
+          error: null,
+        },
+        engine: { cpu: 30, fps: 60 },
+      } as unknown as EngineStats)
+    })
+    expect(cleanMicSpy.mock.calls.length).toBe(baseline)
+    cleanMicSpy.mockRestore()
   })
 })

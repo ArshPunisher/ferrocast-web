@@ -1502,7 +1502,7 @@ function CleanMic({
   footer?: ReactNode
 }) {
   const { api, undone } = useDesk()
-  const isLive = Boolean(useDeskStats()?.stream?.active)
+  const isLive = useDeskStats((s) => Boolean(s?.stream?.active))
   return (
     <CleanMicControl
       api={api}

@@ -228,6 +228,8 @@ export interface ConfirmProps {
   cancel?: string
   onConfirm: () => void
   danger?: boolean
+  busy?: boolean
+  closeOnConfirm?: boolean
 }
 
 /**
@@ -244,6 +246,8 @@ export function ConfirmDialog({
   cancel = 'Keep',
   onConfirm,
   danger = true,
+  busy = false,
+  closeOnConfirm = true,
 }: ConfirmProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const reduce = useReducedMotion()
@@ -263,17 +267,17 @@ export function ConfirmDialog({
     if (!d) return
     const onCancel = (e: Event) => {
       e.preventDefault()
-      onClose()
+      if (!busy) onClose()
     }
     d.addEventListener('cancel', onCancel)
     return () => d.removeEventListener('cancel', onCancel)
-  }, [onClose])
+  }, [onClose, busy])
   return (
     <dialog
       ref={ref}
       aria-label={title}
       onClick={(e) => {
-        if (e.target === ref.current) onClose()
+        if (e.target === ref.current && !busy) onClose()
       }}
       className="fc-dialog m-0 h-dvh max-h-none w-screen max-w-none bg-transparent p-0 text-text backdrop:bg-[rgb(4_5_8/0.62)]"
     >
@@ -298,24 +302,28 @@ export function ConfirmDialog({
               <button
                 type="button"
                 data-cancel
+                disabled={busy}
                 onClick={onClose}
-                className="fc-press h-9 rounded-[8px] border border-line-strong bg-surface-1 text-[14px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="fc-press h-9 rounded-[8px] border border-line-strong bg-surface-1 text-[14px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
               >
                 {cancel}
               </button>
               <button
                 type="button"
+                disabled={busy}
+                aria-busy={busy || undefined}
                 onClick={() => {
-                  onClose()
+                  if (closeOnConfirm) onClose()
                   onConfirm()
                 }}
                 className={cx(
-                  'fc-press h-9 rounded-[8px] text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  'fc-press inline-flex h-9 items-center justify-center gap-2 rounded-[8px] text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
                   danger
                     ? 'bg-danger-fill text-white hover:brightness-110'
                     : 'bg-[var(--fc-btn-primary)] text-[var(--fc-on-btn-primary)] hover:bg-[var(--fc-btn-primary-hover)]',
                 )}
               >
+                {busy && <span className="fc-busy" aria-hidden="true" />}
                 {confirm}
               </button>
             </div>

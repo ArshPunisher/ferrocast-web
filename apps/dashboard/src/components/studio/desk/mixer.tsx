@@ -801,8 +801,8 @@ export function removeConfirmCopy(
 export function AudioDock() {
   const desk = useDesk()
   const { api, audio, pictureScenes, setAdding, openSettings, edit, refresh } = desk
-  const live = Boolean(useDeskStats()?.stream?.active)
-  const { run } = useAction()
+  const live = useDeskStats((s) => Boolean(s?.stream?.active))
+  const { run, busy } = useAction()
   const [all, setAll] = useState(false)
   const [prefs, setPrefs] = usePrefs()
   const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
@@ -849,7 +849,7 @@ export function AudioDock() {
   }
 
   const requestRemove = async (a: EngineAudio) => {
-    let target = resolveRemoveTarget({
+    const target = resolveRemoveTarget({
       audio: a,
       scene: desk.scene,
       items: desk.items.data ?? [],
@@ -860,47 +860,50 @@ export function AudioDock() {
       setRemoving(target)
       return
     }
-    let ownerScenes = every.data?.scenesByName[a.name] ?? []
-    try {
-      const srcs = await api.sources()
-      const match = srcs.find((s) => s.name === a.name)
-      if (match?.scenes.length) ownerScenes = match.scenes
-    } catch {
-      // Fall back to All-view scene ownership if sources() fails.
-    }
-    target = resolveRemoveTarget({
-      audio: a,
-      scene: desk.scene,
-      items: desk.items.data ?? [],
-      selected: desk.selected,
-      ownerScenes,
-    })
-    if (target.mode === 'lookup_scene') {
-      const lookupScene = target.scene
-      const otherItems = await run('remove', () => api.items(lookupScene), { once: true })
-      if (!otherItems) return
-      target = resolveRemoveTarget({
-        audio: a,
-        scene: desk.scene,
-        items: desk.items.data ?? [],
-        selected: desk.selected,
-        ownerScenes,
-        otherItems,
-      })
-    }
-    if (target.mode === 'drawer') {
+    const resolved = await run(
+      'remove-lookup',
+      async () => {
+        let ownerScenes = every.data?.scenesByName[a.name] ?? []
+        try {
+          const srcs = await api.sources()
+          const match = srcs.find((s) => s.name === a.name)
+          if (match?.scenes.length) ownerScenes = match.scenes
+        } catch {
+          // Fall back to All-view scene ownership if sources() fails.
+        }
+        const next = resolveRemoveTarget({
+          audio: a,
+          scene: desk.scene,
+          items: desk.items.data ?? [],
+          selected: desk.selected,
+          ownerScenes,
+        })
+        if (next.mode !== 'lookup_scene') return next
+        const otherItems = await api.items(next.scene)
+        return resolveRemoveTarget({
+          audio: a,
+          scene: desk.scene,
+          items: desk.items.data ?? [],
+          selected: desk.selected,
+          ownerScenes,
+          otherItems,
+        })
+      },
+      { once: true },
+    )
+    if (!resolved) return
+    if (resolved.mode === 'drawer') {
       edit(a.name, 'sound')
       return
     }
-    if (target.mode === 'scene') {
-      setRemoving(target)
+    if (resolved.mode === 'scene') {
+      setRemoving(resolved)
     }
   }
 
   const confirmRemove = async () => {
     const target = removing
     if (!target) return
-    setRemoving(null)
     const ok = await run(
       'remove',
       () =>
@@ -910,6 +913,7 @@ export function AudioDock() {
       { once: true },
     )
     if (!ok) return
+    setRemoving(null)
     if (desk.editing === target.audio.name) edit(null)
     refresh()
     if (all) every.reload()
@@ -927,6 +931,7 @@ export function AudioDock() {
               await api.undo()
               refresh()
               if (all) every.reload()
+              desk.bumpUndone?.()
             },
             { once: true },
           ),
@@ -1188,7 +1193,11 @@ export function AudioDock() {
       </Dialog>
       <ConfirmDialog
         open={removing !== null}
-        onClose={() => setRemoving(null)}
+        busy={busy === 'remove'}
+        closeOnConfirm={false}
+        onClose={() => {
+          if (busy !== 'remove') setRemoving(null)
+        }}
         {...(removing ? removeConfirmCopy(removing, live) : { title: '' })}
         confirm="Remove"
         danger
