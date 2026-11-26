@@ -202,6 +202,19 @@ export function formatScheduleTime(ms: number): string {
   return `${day}, ${time}`
 }
 
+function socialDedupKey(url: string): string {
+  let rest = url
+  let scheme = ''
+  const schemeMatch = /^([a-z][a-z0-9+.-]*:\/\/)(.*)$/i.exec(rest)
+  if (schemeMatch) {
+    scheme = schemeMatch[1]!.toLowerCase()
+    rest = schemeMatch[2]!
+  }
+  const splitAt = rest.search(/[/?#]/)
+  if (splitAt === -1) return `${scheme}${rest.toLowerCase()}`
+  return `${scheme}${rest.slice(0, splitAt).toLowerCase()}${rest.slice(splitAt)}`
+}
+
 export function resolveLinks(
   links: CreatorLinks,
   accounts: readonly Pick<Account, 'platform' | 'name' | 'login' | 'url'>[],
@@ -240,7 +253,7 @@ export function resolveLinks(
   const socials: string[] = []
   for (const v of [twitch, youtube, kick, facebook, discord, instagram, x, tiktok, website]) {
     if (!v) continue
-    const key = v.toLowerCase()
+    const key = socialDedupKey(v)
     if (!seenSocials.has(key)) {
       seenSocials.add(key)
       socials.push(v)
@@ -248,7 +261,7 @@ export function resolveLinks(
   }
   for (const c of custom) {
     const entry = `${c.label}: ${c.value}`
-    const key = entry.toLowerCase()
+    const key = `${c.label.toLowerCase()}: ${socialDedupKey(c.value)}`
     if (!seenSocials.has(key)) {
       seenSocials.add(key)
       socials.push(entry)
@@ -322,17 +335,75 @@ function handleFromLink(url: string): string {
   return tail.replace(/^@+/, '')
 }
 
-function inferLegacyKey(before: string): LinkFieldKey | 'channel_name' {
-  const b = before.toLowerCase()
-  if (b.includes('twitch')) return 'twitch'
-  if (b.includes('youtube')) return 'youtube'
-  if (b.includes('kick')) return 'kick'
-  if (b.includes('discord') || b.includes('gg/')) return 'discord'
-  if (b.includes('insta')) return 'instagram'
-  if (b.includes('tiktok')) return 'tiktok'
-  if (b.includes('facebook') || b.includes('fb')) return 'facebook'
-  if (/\bx\b/.test(b) || b.includes('x.com')) return 'x'
+const URL_PREFIX_RE =
+  /(?:^|[\s·|•—–,;([ ])((?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)\/\S*)$/i
+
+const PLATFORM_WORD_RE = /\b(twitch|youtube|kick|discord|instagram|insta|tiktok|facebook|fb|x)\b/gi
+
+const COMBINED_RESOLVE_RE =
+  /\{socials\}|\{next_stream\}|\{channel_name\}|\{link:(twitch|youtube|kick|facebook|discord|instagram|x|tiktok|website)\}|(?:https?:\/\/)?(?:www\.)?discord\.gg\/@?yourname|(?:https?:\/\/)?(?:www\.)?youtube(?:\.com)?\s*(?:\/|\/\/|:)\s*@?yourname|@?yourname/gi
+
+function keyFromHost(host: string): LinkFieldKey | 'channel_name' {
+  if (host === 'twitch.tv' || host.endsWith('.twitch.tv')) return 'twitch'
+  if (host === 'youtube.com' || host === 'youtu.be' || host.endsWith('.youtube.com'))
+    return 'youtube'
+  if (host === 'kick.com' || host.endsWith('.kick.com')) return 'kick'
+  if (host === 'discord.gg' || host === 'discord.com' || host.endsWith('.discord.com'))
+    return 'discord'
+  if (host === 'instagram.com' || host === 'instagr.am' || host.endsWith('.instagram.com'))
+    return 'instagram'
+  if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) return 'tiktok'
+  if (
+    host === 'facebook.com' ||
+    host === 'fb.com' ||
+    host === 'fb.gg' ||
+    host.endsWith('.facebook.com')
+  )
+    return 'facebook'
+  if (host === 'x.com' || host === 'twitter.com') return 'x'
   return 'channel_name'
+}
+
+function keyFromLabelWord(word: string): LinkFieldKey {
+  switch (word.toLowerCase()) {
+    case 'twitch':
+      return 'twitch'
+    case 'youtube':
+      return 'youtube'
+    case 'kick':
+      return 'kick'
+    case 'discord':
+      return 'discord'
+    case 'instagram':
+    case 'insta':
+      return 'instagram'
+    case 'tiktok':
+      return 'tiktok'
+    case 'facebook':
+    case 'fb':
+      return 'facebook'
+    default:
+      return 'x'
+  }
+}
+
+function inferLegacyKey(prefix: string): LinkFieldKey | 'channel_name' {
+  const urlMatch = URL_PREFIX_RE.exec(prefix)
+  if (urlMatch) {
+    return keyFromHost(urlMatch[2]!.toLowerCase())
+  }
+
+  const withoutTrailingAt = prefix.replace(/@\s*$/, '')
+  const clause =
+    withoutTrailingAt.split(/[\r\n·|•,;!?]|\.\s+|(?:\s+[—–-]\s+|\s+\/\/\s+)(?=\S)/).at(-1) ?? ''
+
+  let lastWord: string | null = null
+  PLATFORM_WORD_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = PLATFORM_WORD_RE.exec(clause)) !== null) {
+    lastWord = m[1]!
+  }
+  return lastWord ? keyFromLabelWord(lastWord) : 'channel_name'
 }
 
 function legacyReplacement(urlOrName: string, before: string, upper: boolean): string {
@@ -381,68 +452,72 @@ export function resolveLayerText(
     return /^next stream:/i.test(nextVal) ? nextVal : `${prefix.trimStart()} ${nextVal}`
   }
 
+  // Handle `{next_stream}` token, avoiding "Next stream: " dangling or double-prefixed output.
+  if (/^\s*next stream:\s*\{next_stream\}\s*$/i.test(text)) {
+    if (!nextVal) return ''
+    const colon = text.indexOf(':')
+    const prefix = text.slice(0, colon + 1).trimStart()
+    return /^next stream:/i.test(nextVal) ? nextVal : `${prefix} ${nextVal}`
+  }
+
   // Guaranteed non-colliding printable PUA sentinel for unset tokens before separator cleanup.
   let missing = '\uE000'
   while (text.includes(missing))
     missing = String.fromCodePoint((missing.codePointAt(0) ?? 0xe000) + 1)
-  let out = text
   let resolvedCount = 0
   let missingCount = 0
+  let lastMatchEnd = 0
 
-  // Handle `{next_stream}` token, avoiding "Next stream: " dangling or double-prefixed output.
-  if (/^\s*next stream:\s*\{next_stream\}\s*$/i.test(out)) {
-    if (!nextVal) return ''
-    const colon = out.indexOf(':')
-    const prefix = out.slice(0, colon + 1).trimStart()
-    return /^next stream:/i.test(nextVal) ? nextVal : `${prefix} ${nextVal}`
-  }
+  // Single-pass scan over the original text so resolved values are inserted literally and never re-processed.
+  let out = text.replace(
+    COMBINED_RESOLVE_RE,
+    (match: string, linkKey: string | undefined, offset: number, full: string) => {
+      const prefix = full.slice(lastMatchEnd, offset)
+      lastMatchEnd = offset + match.length
 
-  if (out.includes('{socials}')) {
-    const joined = src.socials.join(' · ')
-    if (!joined) {
-      missingCount++
-      out = out.replaceAll('{socials}', missing)
-    } else {
-      resolvedCount++
-      out = out.replaceAll('{socials}', joined)
-    }
-  }
-
-  out = out.replace(/\{next_stream\}/g, () => {
-    if (!nextVal) {
-      missingCount++
-      return missing
-    }
-    resolvedCount++
-    return nextVal
-  })
-
-  out = out.replace(/\{channel_name\}/g, () => {
-    const name = src.channel_name?.trim() ?? ''
-    if (!name) {
-      missingCount++
-      return missing
-    }
-    resolvedCount++
-    return name
-  })
-
-  out = out.replace(
-    /\{link:(twitch|youtube|kick|facebook|discord|instagram|x|tiktok|website)\}/g,
-    (_, k: LinkFieldKey) => {
-      const v = src[k]?.trim() ?? ''
-      if (!v) {
-        missingCount++
-        return missing
+      if (match === '{socials}') {
+        const joined = src.socials.join(' · ')
+        if (!joined) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        return joined
       }
-      resolvedCount++
-      return v
-    },
-  )
 
-  out = out.replace(
-    /(?:https?:\/\/)?(?:www\.)?discord\.gg\/@?yourname|(?:https?:\/\/)?(?:www\.)?youtube(?:\.com)?\s*(?:\/|\/\/|:)\s*@?yourname|@?yourname/gi,
-    (match, offset: number, full: string) => {
+      if (match === '{next_stream}') {
+        if (!nextVal) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        return nextVal
+      }
+
+      if (match === '{channel_name}') {
+        const name = src.channel_name?.trim() ?? ''
+        if (!name) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        return name
+      }
+
+      if (linkKey) {
+        const expected = `{link:${linkKey.toLowerCase()}}`
+        if (match !== expected) return match
+        const v = src[linkKey as LinkFieldKey]?.trim() ?? ''
+        if (!v) {
+          missingCount++
+          return missing
+        }
+        resolvedCount++
+        return v
+      }
+
+      if (match.startsWith('{')) return match
+
       const lower = match.toLowerCase()
       const idx = lower.lastIndexOf('yourname')
       const tokenPrefix = match.slice(0, idx)
@@ -478,8 +553,8 @@ export function resolveLayerText(
           : `${tokenPrefix}@${formatted}`
       }
 
-      const before = full.slice(0, offset)
-      const key = inferLegacyKey(before)
+      const beforeAll = full.slice(0, offset)
+      const key = inferLegacyKey(prefix)
       const raw =
         key === 'channel_name' ? (src.channel_name ?? src.socials[0] ?? '') : (src[key] ?? '')
       if (!raw) {
@@ -495,17 +570,17 @@ export function resolveLayerText(
             ? !/^youtube\.com\/@[^/]+$/i.test(clean) && clean.includes('/')
             : clean.includes('/channel/') || clean.includes('/c/') || clean.includes('/invite/')
       if (isFullPath) {
-        if (/youtube(?:\.com)?\/@$/i.test(before) && clean.startsWith('youtube.com/')) {
+        if (/youtube(?:\.com)?\/@$/i.test(prefix) && clean.startsWith('youtube.com/')) {
           return clean.slice('youtube.com/'.length)
         }
         return clean
       }
       const handle = legacyReplacement(
         raw,
-        before,
+        beforeAll,
         upper && key !== 'discord' && !clean.includes('/channel/'),
       )
-      if (match.startsWith('@') && !before.endsWith('@')) return `@${handle}`
+      if (match.startsWith('@') && !beforeAll.endsWith('@')) return `@${handle}`
       return handle
     },
   )

@@ -371,4 +371,83 @@ describe('DemoEngine links, labels, and account URLs', () => {
       resolveLayerText('{link:twitch} · {link:discord} · {link:youtube}', deduped, false),
     ).toBe('twitch.tv/arsh · discord.com/invite/xK9mPq2 · youtube.com/c/MyChannel')
   })
+
+  it('preserves URL path casing when deduplicating socials and custom links', () => {
+    const links = resolveLinks(
+      {
+        discord: 'discord.gg/AbCd',
+        website: 'discord.gg/abcd',
+        instagram: 'https://Discord.GG/AbCd',
+        custom: [
+          { label: 'Merch', value: 'shop.gg/AbCd' },
+          { label: 'Merch', value: 'shop.gg/abcd' },
+          { label: 'Merch', value: 'SHOP.GG/AbCd' },
+        ],
+      },
+      [],
+      null,
+    )
+    expect(links.socials).toEqual([
+      'discord.gg/AbCd',
+      'discord.gg/abcd',
+      'Merch: shop.gg/AbCd',
+      'Merch: shop.gg/abcd',
+    ])
+  })
+
+  it('inserts literal $& / $$ tokens, resolves multi-platform legacy lines per prefix, and never re-processes resolved values', () => {
+    const literalDollar = resolveLinks({ website: 'shop.example/$&', custom: [] }, [], null)
+    expect(resolveLayerText('Visit {socials}', literalDollar, false)).toBe('Visit shop.example/$&')
+
+    const multi = resolveLinks(
+      {
+        twitch: 'twitch.tv/nova',
+        kick: 'kick.com/other',
+        x: 'x.com/novax',
+        custom: [],
+      },
+      [{ platform: 'twitch', name: 'NovaMain', login: 'nova', url: 'twitch.tv/nova' }],
+      null,
+    )
+    expect(resolveLayerText('twitch.tv/yourname · kick.com/yourname', multi, false)).toBe(
+      'twitch.tv/nova · kick.com/other',
+    )
+    expect(resolveLayerText('TWITCH // @YOURNAME · KICK // @YOURNAME', multi, false)).toBe(
+      'TWITCH // @NOVA · KICK // @OTHER',
+    )
+    expect(resolveLayerText('Twitch: @yourname | X: @yourname', multi, false)).toBe(
+      'Twitch: @nova | X: @novax',
+    )
+    expect(resolveLayerText('twitch.tv/nova · kick.com/yourname', multi, false)).toBe(
+      'twitch.tv/nova · kick.com/other',
+    )
+    expect(resolveLayerText('twitch.tv/yourname · Follow @yourname', multi, false)).toBe(
+      'twitch.tv/nova · Follow @NovaMain',
+    )
+
+    const yournameHandle = resolveLinks(
+      {
+        twitch: 'twitch.tv/yourname123',
+        website: 'yourname.gg',
+        schedule_text: 'Ask @yourname on {link:twitch}',
+        custom: [{ label: 'Site', value: '{link:twitch}' }],
+      },
+      [
+        {
+          platform: 'twitch',
+          name: 'YourName',
+          login: 'yourname123',
+          url: 'twitch.tv/yourname123',
+        },
+      ],
+      null,
+    )
+    expect(resolveLayerText('{link:twitch}', yournameHandle, false)).toBe('twitch.tv/yourname123')
+    expect(resolveLayerText('Visit {socials}', yournameHandle, false)).toBe(
+      'Visit twitch.tv/yourname123 · yourname.gg · Site: {link:twitch}',
+    )
+    expect(resolveLayerText('{channel_name} · {next_stream}', yournameHandle, false)).toBe(
+      'YourName · Ask @yourname on {link:twitch}',
+    )
+  })
 })
