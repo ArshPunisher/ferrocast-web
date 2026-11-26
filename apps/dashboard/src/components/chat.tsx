@@ -322,9 +322,27 @@ export const ChatLine = memo(function ChatLine({
         )}
       </div>
       {(canHighlight || !dense || (hasMod && actions && !deleted)) && (
-        <div className="relative flex shrink-0 items-start self-start">
+        <div className="relative flex shrink-0 items-start gap-0.5 self-start">
           {actions && !deleted && hasMod && !coarse() && (
-            <LineToolbar actions={actions} event={event} held={!!held} />
+            <>
+              <LineToolbar actions={actions} event={event} held={!!held} />
+              <div className="hidden items-center group-hover:flex group-focus-within:flex">
+                <div className="flex items-center @[360px]:hidden">
+                  <IconButton
+                    size="xs"
+                    label="Message actions"
+                    title="More actions"
+                    className="-my-[2px]"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      actions.sheet(event)
+                    }}
+                  >
+                    <DotsThree size={15} weight="bold" />
+                  </IconButton>
+                </div>
+              </div>
+            </>
           )}
           {(canHighlight || !dense) && (
             <div className="grid items-center justify-items-end [grid-template-areas:'slot']">
@@ -383,59 +401,50 @@ function LineToolbar({
   const hasAny = can.reply || can.remove || can.timeout || can.ban || can.card
   if (!hasAny) return null
   return (
-    <div className="absolute -top-0.5 right-full z-10 mr-1.5 hidden items-center group-hover:flex group-focus-within:flex">
-      <div className="hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-2 @[360px]:flex">
+    <div className="absolute -top-[2px] right-full z-10 mr-1.5 hidden items-center group-hover:flex group-focus-within:flex">
+      <div className="relative hidden items-center gap-0.5 rounded-control border border-line bg-surface-1 px-0.5 py-0 shadow-1 @[360px]:flex">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-full mr-px w-5 bg-gradient-to-r from-transparent to-surface-2"
+        />
         {can.reply && (
           <IconButton
-            size="sm"
+            size="xs"
             label="Reply on the same platform"
             onClick={() => actions.reply(event)}
           >
-            <ArrowBendUpLeft size={15} />
+            <ArrowBendUpLeft size={14} />
           </IconButton>
         )}
         {can.remove && (
-          <IconButton size="sm" label="Delete message" onClick={() => actions.remove(event)}>
-            <Trash size={15} />
+          <IconButton size="xs" label="Delete message" onClick={() => actions.remove(event)}>
+            <Trash size={14} />
           </IconButton>
         )}
         {can.timeout && (
           <IconButton
-            size="sm"
+            size="xs"
             label="Time out for 10 minutes"
             onClick={() => actions.timeout(event, 600)}
           >
-            <Clock size={15} />
+            <Clock size={14} />
           </IconButton>
         )}
         {can.ban && (
           <IconButton
-            size="sm"
+            size="xs"
             label={actions.offline ? `Ban on ${PLATFORM_LABEL[event.platform]}` : 'Ban everywhere'}
             variant="danger-ghost"
             onClick={() => actions.ban(event)}
           >
-            <Prohibit size={15} />
+            <Prohibit size={14} />
           </IconButton>
         )}
         {can.card && (
-          <IconButton size="sm" label="Viewer card" onClick={() => actions.card(a)}>
-            <IdentificationCard size={15} />
+          <IconButton size="xs" label="Viewer card" onClick={() => actions.card(a)}>
+            <IdentificationCard size={14} />
           </IconButton>
         )}
-      </div>
-      <div className="flex items-center rounded-control border border-line bg-surface-1 p-0.5 shadow-2 @[360px]:hidden">
-        <IconButton
-          size="xs"
-          label="Message actions"
-          title="More actions"
-          onClick={(e) => {
-            e.stopPropagation()
-            actions.sheet(event)
-          }}
-        >
-          <DotsThree size={15} weight="bold" />
-        </IconButton>
       </div>
     </div>
   )

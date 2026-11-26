@@ -206,7 +206,24 @@ describe('ChatLine inline pin button', () => {
       'Ban everywhere',
       'Viewer card',
     ]) {
-      expect(li.querySelector(`button[aria-label="${label}"]`)).not.toBeNull()
+      const btn = li.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement
+      expect(btn).not.toBeNull()
+      // Desktop toolbar buttons use compact xs sizing (26px) so they fit normal and dense rows without clipping.
+      expect(btn.className).toContain('size-[26px]')
     }
+
+    // Desktop toolbar provides a left fade gradient over hovered surface so text never hard-clips.
+    expect(li.querySelector('.bg-gradient-to-r')).not.toBeNull()
+
+    // Narrow <360px Message actions trigger sits inline in flex flow (not inside an absolute floating pill).
+    const moreBtn = li.querySelector('button[aria-label="Message actions"]') as HTMLButtonElement
+    expect(moreBtn).not.toBeNull()
+    expect(moreBtn.closest('.absolute')).toBeNull()
+    expect(moreBtn.closest('.shadow-2')).toBeNull()
+    expect(msgDivContains(li, moreBtn)).toBe(false)
   })
 })
+
+function msgDivContains(li: HTMLElement, el: Element): boolean {
+  return (li.children[1] as HTMLElement).contains(el)
+}
