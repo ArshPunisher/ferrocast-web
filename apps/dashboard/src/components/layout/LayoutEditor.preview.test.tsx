@@ -120,5 +120,25 @@ describe('LayoutEditor OverlayPreview prop stability', () => {
     for (const ov of seenOverlays) {
       expect(ov).toBe(firstRef)
     }
+
+    // Changing layout.widgets emits a new previewOverlay reference.
+    const editedWidgets = [w1, { ...w2, x: 240 }]
+    await act(async () =>
+      root!.render(
+        <LayoutEditor
+          layout={{ name: 'Main', width: 1920, height: 1080, widgets: editedWidgets }}
+          onWidgets={vi.fn()}
+          state={EMPTY_STATE}
+          themes={[]}
+          goals={[]}
+          onGoalCreated={vi.fn()}
+          preview={true}
+          media={[]}
+          onUploaded={vi.fn()}
+        />,
+      ),
+    )
+    expect(seenOverlays.at(-1)).not.toBe(firstRef)
+    expect(seenOverlays.at(-1)?.widgets).toBe(editedWidgets)
   })
 })

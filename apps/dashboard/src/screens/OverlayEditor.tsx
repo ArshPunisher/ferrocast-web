@@ -22,6 +22,37 @@ import {
   giveawayCard,
 } from '../components/community/preview'
 
+const SAMPLE_LABELS: Record<string, string> = {
+  latest_follower: 'LunaLagoon',
+  latest_sub: 'rohanbuilds',
+  latest_gifter: 'Devika (5)',
+  latest_tip: 'Asha ₹500',
+  latest_bits: 'Ananya 1,200 bits',
+  latest_raid: 'VikramGG (48)',
+  top_tip_session: 'MeeraDraws ₹2,500',
+  top_supporter_session: 'MeeraDraws (₹2,500, 2 subs)',
+  session_follows: '41',
+  session_subs: '7',
+  session_bits: '4,850',
+  session_tips: '₹3,250',
+  session_raids: '2',
+  monthly_follows: '312',
+  monthly_subs: '58',
+  monthly_bits: '24,500',
+  monthly_tips: '₹18,400',
+  monthly_raids: '9',
+  top_tip_monthly: 'MeeraDraws ₹5,000',
+  top_supporter_monthly: 'Devika (15 subs, ₹3,500)',
+  alltime_follows: '2,840',
+  alltime_subs: '419',
+  alltime_bits: '148,200',
+  alltime_tips: '₹92,150',
+  alltime_raids: '64',
+  top_tip_alltime: 'AriaLive ₹12,000',
+  top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
+  hype_train: 'Lv.2 · 8 events · 01:45',
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => (item === undefined ? 'null' : canonicalJson(item))).join(',')}]`
@@ -177,38 +208,8 @@ export function OverlayEditor({ id }: { id: string }) {
   const hasTrain = (draft?.widgets ?? []).some(
     (w) => w.kind === 'label' && w.config.source === 'hype_train',
   )
-  const lastChat = chat.at(-1)?.id
-  const lastEvent = events.at(-1)?.id
-  const sampleLabels: Record<string, string> = {
-    latest_follower: 'LunaLagoon',
-    latest_sub: 'rohanbuilds',
-    latest_gifter: 'Devika (5)',
-    latest_tip: 'Asha ₹500',
-    latest_bits: 'Ananya 1,200 bits',
-    latest_raid: 'VikramGG (48)',
-    top_tip_session: 'MeeraDraws ₹2,500',
-    top_supporter_session: 'MeeraDraws (₹2,500, 2 subs)',
-    session_follows: '41',
-    session_subs: '7',
-    session_bits: '4,850',
-    session_tips: '₹3,250',
-    session_raids: '2',
-    monthly_follows: '312',
-    monthly_subs: '58',
-    monthly_bits: '24,500',
-    monthly_tips: '₹18,400',
-    monthly_raids: '9',
-    top_tip_monthly: 'MeeraDraws ₹5,000',
-    top_supporter_monthly: 'Devika (15 subs, ₹3,500)',
-    alltime_follows: '2,840',
-    alltime_subs: '419',
-    alltime_bits: '148,200',
-    alltime_tips: '₹92,150',
-    alltime_raids: '64',
-    top_tip_alltime: 'AriaLive ₹12,000',
-    top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
-    hype_train: 'Lv.2 · 8 events · 01:45',
-  }
+  const recentChat = useMemo(() => chat.slice(-30), [chat])
+  const recentEvents = useMemo(() => events.slice(-25), [events])
   const resolvedCredits =
     credits.data &&
     (credits.data.followers.length > 0 ||
@@ -227,7 +228,7 @@ export function OverlayEditor({ id }: { id: string }) {
       goals: goals.data ?? [],
       labels: Object.fromEntries(
         (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, t]) => {
-          const val = sampleLabels[source] ?? 'LunaLagoon'
+          const val = SAMPLE_LABELS[source] ?? 'LunaLagoon'
           return [
             id,
             renderSafeTemplate(
@@ -271,22 +272,21 @@ export function OverlayEditor({ id }: { id: string }) {
           }
         : {}),
       viewers,
-      events: events.slice(-25),
-      chat: chat.slice(-30),
+      events: recentEvents,
+      chat: recentChat,
       // The real poll, giveaway, credits and highlight when present, else samples to place them by.
       poll: livePoll ?? SAMPLE_POLL,
       giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
       credits: resolvedCredits,
       chat_highlight: resolvedHighlight,
     }),
-    // Keyed on the newest item: both lists are capped, so their lengths stop changing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       goals.data,
       labelKey,
       hasTrain,
-      lastChat,
-      lastEvent,
+      viewers,
+      recentChat,
+      recentEvents,
       livePoll,
       liveGiveaway,
       resolvedCredits,

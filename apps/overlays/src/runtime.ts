@@ -199,7 +199,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       const cur = views.get(w.id)
       const kind = viewKind(w)
       let node: HTMLElement
-      let built = false
+      let builtView: WidgetView | null = null
       if (cur && cur.kind === kind) {
         cur.view.update(w)
         dress(cur.view.el, w)
@@ -214,13 +214,13 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         views.set(w.id, { kind, view: v })
         dress(v.el, w)
         node = v.el
-        built = true
+        builtView = v
       }
       const expected = canvas.children[idx] ?? null
       if (node !== expected) {
         canvas.insertBefore(node, expected)
       }
-      if (built && !fresh) views.get(w.id)?.view.onSnapshot?.()
+      if (builtView && !fresh) builtView.onSnapshot?.()
       idx += 1
     }
     fit()
