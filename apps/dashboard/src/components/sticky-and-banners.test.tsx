@@ -229,6 +229,7 @@ describe('Chrome CSS custom property coordination and viewport height/sticky cla
     expect(nav.className).not.toContain('lg:top-20')
     expect(nav.className).toContain('var(--fc-top,56px)')
     expect(nav.className).toContain('var(--fc-banners,0px)')
+    expect(nav.className).toContain('-7.5rem-')
     expect(nav.className).toContain('var(--fc-statusbar,0px)')
   })
 

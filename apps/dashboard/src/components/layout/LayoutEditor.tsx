@@ -1910,7 +1910,7 @@ export function LayoutEditor({
           'fc-scroll fc-scroll-stable flex flex-col gap-4 rounded-panel border border-line bg-surface-1 shadow-1',
           fitViewport
             ? 'fc-overlay-inspector order-3 p-3.5 lg:order-none'
-            : 'self-start p-4 xl:sticky xl:top-[calc(var(--fc-top,56px)+16px)] xl:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-2rem-var(--fc-statusbar,0px))] xl:overflow-y-auto',
+            : 'self-start p-4 xl:sticky xl:top-[calc(var(--fc-top,56px)+16px)] xl:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-6.5rem-var(--fc-statusbar,0px))] xl:overflow-y-auto',
         )}
         aria-label="Inspector"
       >
