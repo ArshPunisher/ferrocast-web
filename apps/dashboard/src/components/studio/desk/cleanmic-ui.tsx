@@ -4,16 +4,43 @@ import type { EngineFilter, EngineLevel, studioEngineApi } from '@ferrocast/api'
 import { Button, InfoTip, cx, toast } from '@ferrocast/ui'
 import { useAction } from '../../../lib/hooks'
 import {
+  CLEAN_EXPANDER,
   cleanMicPlan,
+  dismissCleanMicUpdate,
+  expanderMoveCount,
   freeName,
   micGainDb,
   MIC_LEVEL_FILTER,
+  needsCleanMicUpdate,
+  readCleanMicUpdateSkipped,
   VERDICT_WORDS,
   voiceUsualPeak,
   voiceVerdict,
 } from './cleanmic'
 
 type EngineApi = ReturnType<typeof studioEngineApi>
+
+/** Appends Quiet between words and moves it immediately before an existing compressor, rolling back on failure. */
+export async function insertExpanderBeforeComp(
+  api: EngineApi,
+  sourceName: string,
+  currentFilters: readonly EngineFilter[],
+  extraMoves = 0,
+): Promise<string> {
+  const taken = currentFilters.map((f) => f.name)
+  const expName = freeName(CLEAN_EXPANDER.name, taken)
+  await api.addFilter(sourceName, { ...CLEAN_EXPANDER, name: expName })
+  try {
+    const moves = expanderMoveCount(currentFilters) + extraMoves
+    for (let i = 0; i < moves; i++) {
+      await api.editFilter(sourceName, expName, 'up')
+    }
+    return expName
+  } catch (e) {
+    await api.removeFilter(sourceName, expName).catch(() => undefined)
+    throw e
+  }
+}
 
 /** Evaluates live mic peaks and applies the multi-stage Clean up my mic filter chain in one click. */
 export function CleanMicControl({
@@ -25,6 +52,7 @@ export function CleanMicControl({
   onCleaned,
   footer,
   className,
+  isLive = false,
 }: {
   api: EngineApi
   name: string
@@ -34,10 +62,13 @@ export function CleanMicControl({
   onCleaned?: (() => void) | undefined
   footer?: ReactNode | undefined
   className?: string | undefined
+  isLive?: boolean | undefined
 }) {
   const { run, busy } = useAction()
   const peaks = useRef<number[]>([])
   const [failed, setFailed] = useState<string | null>(null)
+  const [compSettings, setCompSettings] = useState<Record<string, unknown> | null>(null)
+  const [updateSkipped, setUpdateSkipped] = useState(readCleanMicUpdateSkipped)
 
   useEffect(() => {
     peaks.current = []
@@ -53,6 +84,30 @@ export function CleanMicControl({
   const usual = voiceUsualPeak(peaks.current)
   const gainDb = micGainDb(peaks.current)
   const have = filters ?? null
+  const compFilter = have?.find((f) => f.kind === 'compressor_filter') ?? null
+  const compName = compFilter?.name ?? null
+  const compEnabled = compFilter?.enabled ?? false
+  const filterKey = have?.map((f) => `${f.kind}:${f.name}:${f.enabled}`).join('\n') ?? ''
+
+  useEffect(() => {
+    if (!compName || typeof api.filterSettings !== 'function') {
+      setCompSettings(null)
+      return
+    }
+    let cancelled = false
+    void api.filterSettings(name, compName).then(
+      (s) => {
+        if (!cancelled) setCompSettings(s)
+      },
+      () => {
+        if (!cancelled) setCompSettings(null)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [api, name, compName, compEnabled, filterKey])
+
   const plan = have
     ? cleanMicPlan(
         have.map((f) => f.kind),
@@ -60,10 +115,14 @@ export function CleanMicControl({
       )
     : []
   const gainStep = plan.find((f) => f.kind === 'gain_filter')
+  const showUpdateOffer = needsCleanMicUpdate(have, compSettings, updateSkipped)
 
   const clean = async () => {
-    const taken = (have ?? []).map((f) => f.name)
+    const baseFilters = have ?? []
+    const taken = baseFilters.map((f) => f.name)
     const added: string[] = []
+    let appendedBeforeExpander = 0
+    const preComp = expanderMoveCount(baseFilters) > 0
     setFailed(null)
     const ok = await run(
       'clean',
@@ -75,7 +134,19 @@ export function CleanMicControl({
             taken.push(n)
             await api.addFilter(name, { ...f, name: n })
             added.push(n)
-            if (f.kind === 'gain_filter') await api.editFilter(name, n, 'top')
+            if (f.kind === 'gain_filter') {
+              await api.editFilter(name, n, 'top')
+            } else if (f.kind === 'expander_filter') {
+              if (preComp) {
+                const moves = expanderMoveCount(baseFilters) + appendedBeforeExpander
+                for (let i = 0; i < moves; i++) {
+                  await api.editFilter(name, n, 'up')
+                }
+              }
+              appendedBeforeExpander++
+            } else {
+              appendedBeforeExpander++
+            }
           }
           return true
         } catch (e) {
@@ -96,6 +167,35 @@ export function CleanMicControl({
       toast({ tone: 'ok', message: 'Your mic is cleaned up: noise out, level even, no clipping.' })
       onCleaned?.()
     }
+  }
+
+  const updateCleanup = async () => {
+    if (!have) return
+    setFailed(null)
+    const ok = await run(
+      'update-clean',
+      async () => {
+        try {
+          await insertExpanderBeforeComp(api, name, have)
+          return true
+        } catch (e) {
+          setFailed(
+            'Couldn’t update cleanup, so nothing was changed. Check the mic is connected and try again.',
+          )
+          throw e
+        }
+      },
+      { once: true },
+    )
+    if (ok) {
+      onReload()
+      toast({ tone: 'ok', message: 'Cleanup updated: pauses stay quiet now.' })
+    }
+  }
+
+  const dismissUpdate = () => {
+    dismissCleanMicUpdate()
+    setUpdateSkipped(true)
   }
 
   return (
@@ -168,6 +268,28 @@ export function CleanMicControl({
           )}
         </div>
       </div>
+      {showUpdateOffer && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] leading-snug text-text-2">
+          <span>
+            Quiet pauses between words can still get boosted.
+            {isLive ? ' Safe live — applies smoothly.' : ''}
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              size="xs"
+              variant="secondary"
+              disabled={busy !== null}
+              busy={busy === 'update-clean'}
+              onClick={() => void updateCleanup()}
+            >
+              Update cleanup
+            </Button>
+            <Button size="xs" variant="ghost" disabled={busy !== null} onClick={dismissUpdate}>
+              Keep current
+            </Button>
+          </div>
+        </div>
+      )}
       {failed && (
         <p
           role="alert"

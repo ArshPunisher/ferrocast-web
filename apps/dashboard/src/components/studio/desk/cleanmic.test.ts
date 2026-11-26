@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CLEAN_EXPANDER,
+  CLEAN_EXPANDER_FILTER,
   DUCK_FILTER,
   VOICE_STYLES,
   MAX_MIC_GAIN_DB,
@@ -10,24 +12,33 @@ import {
   duckMic,
   freeName,
   micGainDb,
+  needsCleanMicUpdate,
   voiceUsualPeak,
   voiceStyleOf,
   voiceVerdict,
 } from './cleanmic'
 
 describe('clean mic', () => {
-  it('adds the whole chain to a bare mic, in order', () => {
+  it('adds the whole 4-stage chain (with downward expander before boost) to a bare mic', () => {
     expect(cleanMicPlan([]).map((f) => f.kind)).toEqual([
       'noise_suppress_filter_v2',
+      'expander_filter',
       'compressor_filter',
       'limiter_filter',
     ])
   })
 
-  it('builds the measured chain: noise out, 3:1 from -26 dB with +9, a -3 dB ceiling', () => {
+  it('builds the measured chain: noise out, expander for pauses, 3:1 from -26 dB with +9, -3 dB ceiling', () => {
     const plan = cleanMicPlan([])
+    expect(plan.map((f) => f.name)).toEqual([
+      'Remove background noise',
+      CLEAN_EXPANDER_FILTER,
+      'Even out loud moments',
+      'Stop clipping',
+    ])
     expect(plan.map((f) => f.settings)).toEqual([
       { method: 'rnnoise' },
+      CLEAN_EXPANDER.settings,
       { ratio: 3, threshold: -26, attack_time: 8, release_time: 150, output_gain: 9 },
       { threshold: -3, release_time: 60 },
     ])
@@ -38,6 +49,7 @@ describe('clean mic', () => {
     expect(plan.map((f) => f.kind)).toEqual([
       'gain_filter',
       'noise_suppress_filter_v2',
+      'expander_filter',
       'compressor_filter',
       'limiter_filter',
     ])
@@ -52,23 +64,44 @@ describe('clean mic', () => {
     )
   })
 
-  it('counts Strong noise removal as the noise step', () => {
+  it('counts Strong noise removal as the noise step while keeping expander before compressor', () => {
     expect(cleanMicPlan(['ferrocast_deepfilter']).map((f) => f.kind)).toEqual([
+      'expander_filter',
       'compressor_filter',
       'limiter_filter',
     ])
   })
 
-  it('keeps what the mic has and adds only the rest', () => {
+  it('keeps what the mic has and adds only the rest without conflating gate and noise removal', () => {
     expect(cleanMicPlan(['noise_suppress_filter']).map((f) => f.kind)).toEqual([
+      'expander_filter',
+      'compressor_filter',
+      'limiter_filter',
+    ])
+    expect(cleanMicPlan(['noise_gate_filter']).map((f) => f.kind)).toEqual([
+      'noise_suppress_filter_v2',
       'compressor_filter',
       'limiter_filter',
     ])
     expect(cleanMicPlan(['limiter_filter', 'expander_filter']).map((f) => f.kind)).toEqual([
       'noise_suppress_filter_v2',
+      'compressor_filter',
     ])
     expect(
-      cleanMicPlan(['noise_suppress_filter_v2', 'compressor_filter', 'limiter_filter']),
+      cleanMicPlan([
+        'noise_suppress_filter_v2',
+        'expander_filter',
+        'compressor_filter',
+        'limiter_filter',
+      ]),
+    ).toEqual([])
+    expect(
+      cleanMicPlan([
+        'noise_suppress_filter_v2',
+        'noise_gate_filter',
+        'compressor_filter',
+        'limiter_filter',
+      ]),
     ).toEqual([])
   })
 
@@ -76,6 +109,39 @@ describe('clean mic', () => {
     expect(freeName('Stop clipping', [])).toBe('Stop clipping')
     expect(freeName('Stop clipping', ['Stop clipping'])).toBe('Stop clipping 2')
     expect(freeName('Stop clipping', ['Stop clipping', 'Stop clipping 2'])).toBe('Stop clipping 3')
+  })
+
+  it('detects legacy 3-filter chains that need the safe expander update offer', () => {
+    const legacy = [
+      { kind: 'noise_suppress_filter_v2', enabled: true },
+      { kind: 'compressor_filter', enabled: true },
+      { kind: 'limiter_filter', enabled: true },
+    ]
+    expect(needsCleanMicUpdate(legacy, { output_gain: 9 }, false)).toBe(true)
+    expect(needsCleanMicUpdate(legacy, { output_gain: 0 }, false)).toBe(false)
+    expect(needsCleanMicUpdate(legacy, null, false)).toBe(false)
+    expect(needsCleanMicUpdate(legacy, { output_gain: 9 }, true)).toBe(false)
+    expect(
+      needsCleanMicUpdate(
+        [legacy[0]!, { kind: 'expander_filter', enabled: true }, legacy[1]!, legacy[2]!],
+        { output_gain: 9 },
+        false,
+      ),
+    ).toBe(false)
+    expect(
+      needsCleanMicUpdate(
+        [legacy[0]!, { kind: 'noise_gate_filter', enabled: true }, legacy[1]!, legacy[2]!],
+        { output_gain: 9 },
+        false,
+      ),
+    ).toBe(false)
+    expect(
+      needsCleanMicUpdate(
+        [legacy[0]!, { kind: 'compressor_filter', enabled: false }, legacy[2]!],
+        { output_gain: 9 },
+        false,
+      ),
+    ).toBe(false)
   })
 })
 

@@ -32,14 +32,33 @@ export const MIC_KINDS = new Set([
  * strength 40 (what it means) it took 14 dB off a fan, 25 only 10 dB, and neither cost normal
  * speech more than the other; a noise gate after it cut soft words completely.
  */
+export const CLEAN_EXPANDER_FILTER = 'Quiet between words'
+export const CLEAN_MIC_UPDATE_SKIP_KEY = 'fc-cleanmic-v2-skip'
+
+/** Downward expander placed before the compressor so background pauses never get boosted. */
+export const CLEAN_EXPANDER: NewEngineSource = {
+  kind: 'expander_filter',
+  name: CLEAN_EXPANDER_FILTER,
+  settings: {
+    presets: 'expander',
+    ratio: 3.5,
+    threshold: -40,
+    attack_time: 6,
+    release_time: 180,
+    output_gain: 0,
+    detector: 'RMS',
+  },
+}
+
+const NOISE_KINDS = new Set([
+  'noise_suppress_filter_v2',
+  'noise_suppress_filter',
+  'ferrocast_deepfilter',
+])
+
 export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
   {
-    as: [
-      'noise_suppress_filter_v2',
-      'noise_suppress_filter',
-      'noise_gate_filter',
-      'ferrocast_deepfilter',
-    ],
+    as: ['noise_suppress_filter_v2', 'noise_suppress_filter', 'ferrocast_deepfilter'],
     add: {
       kind: 'noise_suppress_filter_v2',
       name: 'Remove background noise',
@@ -47,7 +66,11 @@ export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
     },
   },
   {
-    as: ['compressor_filter', 'expander_filter', 'upward_compressor_filter'],
+    as: ['expander_filter', 'noise_gate_filter'],
+    add: CLEAN_EXPANDER,
+  },
+  {
+    as: ['compressor_filter', 'upward_compressor_filter'],
     add: {
       kind: 'compressor_filter',
       name: 'Even out loud moments',
@@ -101,6 +124,56 @@ export function cleanMicPlan(
     plan.unshift({ kind: 'gain_filter', name: MIC_LEVEL_FILTER, settings: { db: gain } })
   }
   return plan
+}
+
+/** Number of 'up' moves needed to place a newly appended expander directly before the compressor. */
+export function expanderMoveCount(filters: readonly { kind: string }[]): number {
+  if (filters.some((f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter')) {
+    return 0
+  }
+  const compIdx = filters.findIndex(
+    (f) => f.kind === 'compressor_filter' || f.kind === 'upward_compressor_filter',
+  )
+  return compIdx < 0 ? 0 : filters.length - compIdx
+}
+
+/** True when a legacy 3-stage cleanup chain boosts pauses without an expander or gate. */
+export function needsCleanMicUpdate(
+  filters: readonly { kind: string; enabled?: boolean }[] | null | undefined,
+  compSettings: Record<string, unknown> | null | undefined,
+  skipped: boolean,
+): boolean {
+  if (skipped || !filters || !compSettings) return false
+  const hasNoise = filters.some((f) => NOISE_KINDS.has(f.kind))
+  const hasLimiter = filters.some((f) => f.kind === 'limiter_filter')
+  const hasExpanderOrGate = filters.some(
+    (f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter',
+  )
+  const comp = filters.find((f) => f.kind === 'compressor_filter')
+  if (!hasNoise || !hasLimiter || hasExpanderOrGate || !comp || comp.enabled === false) {
+    return false
+  }
+  return Number(compSettings.output_gain ?? 0) > 0
+}
+
+/** Reads whether the user dismissed the safe cleanup expander update offer. */
+export function readCleanMicUpdateSkipped(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Remembers that the user kept their existing cleanup chain without adding the expander. */
+export function dismissCleanMicUpdate(): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CLEAN_MIC_UPDATE_SKIP_KEY, '1')
+    }
+  } catch {
+    // Ignore storage failures in restricted contexts.
+  }
 }
 
 /** A name that isn't taken yet ("Stop clipping 2"). */

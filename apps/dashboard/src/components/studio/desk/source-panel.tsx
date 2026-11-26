@@ -56,6 +56,7 @@ import {
   friendlyKind,
   filterTone,
   useDesk,
+  useDeskStats,
   type DrawerTab,
 } from './common'
 import {
@@ -1501,6 +1502,7 @@ function CleanMic({
   footer?: ReactNode
 }) {
   const { api } = useDesk()
+  const isLive = Boolean(useDeskStats()?.stream?.active)
   return (
     <CleanMicControl
       api={api}
@@ -1509,6 +1511,7 @@ function CleanMic({
       filters={list.data}
       onReload={list.reload}
       footer={footer}
+      isLive={isLive}
     />
   )
 }
