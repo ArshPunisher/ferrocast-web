@@ -532,3 +532,38 @@ Engine side done (`docs/API.md`: Accounts, Go live destinations, Stream schedule
 - `Platform` and `ConnectorName` gain `facebook`; `Account.platform` is `AccountPlatform` (`twitch | youtube | kick | facebook`). `POST /accounts/facebook/connect` → `{ flow: "browser", url }`, or 422 when this build has no Facebook app set up (the owner registers one). Facebook comments arrive as chat events (`platform: "facebook"`); `CHAT_PLATFORMS` is unchanged (no polls, shows or bot sends to Facebook).
 - `POST /golive/destinations` takes `brand?: "x" | "instagram" | "facebook"` (server and key pasted from that platform's own app); `DestinationConfig.brand` (left out when none). 400 `brand: …` for any other value. The key is never returned.
 - `GET /schedule` → `{ streams: ScheduledStream[] }`; `POST /schedule` `{ info, platforms, start_ms, remind_minutes? }` → 201 (400 names `start`, `title`, `platforms` or `remind_minutes`; 409 over 50); `DELETE /schedule/{id}` → 204 / 404. Each `broadcasts[]` row has `id`/`url` when the platform made a scheduled broadcast, else a plain `note`. A reminder is one `notice` frame (key `schedule:{id}`). Planning never goes live.
+
+## Preview overlay registry & native punch-out contract
+
+All floating surfaces rendered above the Studio stage (`PopoverSurface`, `Menu`, `DockMenu`, `LayoutMenu`, Studio context/submenus, `OverflowRow` More panel, `SidebarAccount`, `StatusStrip` overflow popover, `InfoTip`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toaster`, `ProUnlock`, `FloatingDock`, `SourcePanel`, `ReadyCheck`, `FileDrop`, `PausedCard`, drag ghosts, and canvas guide/snap elements) register with `PreviewOverlayRegistry` in `@ferrocast/ui`:
+
+- **Registration API (`packages/ui/src/components/preview-overlay-registry.ts`):**
+  - `usePreviewHole(ref, { active?, kind?: 'overlay' | 'guide', radius?, getRect?, deps? })` / `registerPreviewHole(id, opts)` — declaratively registers active DOM elements (`kind: 'overlay'` or `'guide'`), triggers updates cleanly on open/move/resize/unmount without measuring invisible `display: none` / `visibility: hidden` / `opacity: 0` elements.
+  - `subscribePreviewOverlays(cb)` — synchronous in-page subscription used by Studio `PreviewBoxes` (`apps/dashboard/src/components/studio/desk/preview.tsx`) to recompute and send stage punch-out rects to `PUT /api/v1/studio/engine/preview`.
+  - `notifyPreviewOverlays()` — coalesces changes per animation frame and dispatches a custom window event (`PREVIEW_OVERLAYS_EVENT = 'fc:preview-overlays'`).
+  - `findUnregisteredPreviewOverlays(stageEl?)` — dev/test invariant returning any visible menu/listbox/dialog/tooltip or `[data-over-preview]` element overlapping `[data-stage-bg]` without an active registry entry on itself or an ancestor.
+- **Window event payload (`fc:preview-overlays`, type `PreviewOverlaysEventDetail`):**
+  ```ts
+  interface PreviewOverlaysEventDetail {
+    version: number
+    overlayCount: number
+    guideCount: number
+    overlays: {
+      id: string
+      kind: 'overlay' | 'guide'
+      x: number // viewport-relative CSS px (DOMRect.left)
+      y: number // viewport-relative CSS px (DOMRect.top)
+      w: number // width >= 1
+      h: number // height >= 1
+      r: number // corner radius (0..200)
+    }[]
+  }
+  ```
+- **Guardrails & caps (`collectPreviewHoles`):**
+  - Elements with `display: none`, `visibility: hidden`, `opacity: 0`, `< 1px` dimensions, or `<dialog>` root elements themselves (dialogs register via their inner card panel) are skipped.
+  - A single non-guide overlay covering `> 85%` (`PREVIEW_FULL_COVER_RATIO = 0.85`) of the preview stage collapses to one full-stage hole covering the preview rectangle plus edge padding.
+  - At most `16` non-guide overlays (`PREVIEW_MAX_OVERLAYS`) are punched individually (above `16`, or while `document.body.dataset.dockDrag` is set, `collectPreviewHoles` returns `null` so the native preview hides cleanly). Total holes sent per frame are capped at `64` (`PREVIEW_MAX_HOLES`), prioritizing non-guide overlays before `guide` holes.
+- **Desktop vs web/demo behavior:**
+  - In browser/demo mode, `fc:preview-overlays`, `PreviewOverlayRegistry`, and `collectPreviewHoles` operate normally while `PUT /api/v1/studio/engine/preview` resolves `204` via the demo engine (`packages/api/src/demo/features/studio-engine.ts`).
+  - Native desktop shells consume `PUT /api/v1/studio/engine/preview` holes (macOS punch-out / Windows overlay ordering) and can optionally subscribe directly to `window`'s `fc:preview-overlays` event using viewport coordinates (`x`, `y`, `w`, `h`, `r`) for zero-hop occlusion sync.
+  - Windows-only limitation: `<select>` native OS popup widgets rendered inside `StageBar` when collapsed cannot report popup geometry to HTML/DOM APIs until replaced with a custom popover (`PopoverSurface`) or webview child-window composition.
