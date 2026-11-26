@@ -45,6 +45,7 @@ import { LoadError, PageHeader } from '../components/Panel'
 import { Group, Row, SettingsHead, SwitchRow } from '../components/settings-kit'
 import { AppearanceGroups } from '../components/appearance-settings'
 import { AccountRow, useConnect } from '../components/accounts'
+import { MyLinksCard } from '../components/my-links'
 import { YoutubePrivacyGroup } from '../components/youtube-privacy'
 import { stateCopy } from '../components/StatusStrip'
 import { THEME_EVENT } from '../components/Shell'
@@ -199,6 +200,7 @@ function Accounts() {
         </ul>
       </Group>
       <YoutubePrivacyGroup />
+      <MyLinksCard />
       {dialog}
       <Dialog
         open={leaving !== null}

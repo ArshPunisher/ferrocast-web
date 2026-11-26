@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowArcLeft, ArrowArcRight, CaretLeft, Eye, EyeSlash } from '@phosphor-icons/react'
-import { DEFAULT_THEME, renderSafeTemplate, type Overlay, type OverlayState } from '@ferrocast/api'
+import { DEFAULT_THEME, type Overlay, type OverlayState } from '@ferrocast/api'
 import { Button, Dialog, IconButton, Skeleton } from '@ferrocast/ui'
 import { LoadError } from '../components/Panel'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
@@ -9,10 +9,11 @@ import { TestAlertMenu } from '../components/alerts-live'
 import { useUsesObs } from '../lib/picture'
 import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
 import { LayoutEditor } from '../components/layout/LayoutEditor'
+import { resolvePreviewLabelMap, useCreatorPreview } from '../components/design/previews'
 import { useHistory, useUndoKeys } from '../lib/history'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
-import { useLive } from '../lib/store'
+import { beginLabelsLoad, beginLinksLoad, useLive } from '../lib/store'
 import { useLeaveGuard } from '../lib/unsaved'
 import {
   SAMPLE_CREDITS,
@@ -64,36 +65,30 @@ export function OverlayEditor({ id }: { id: string }) {
   )
   const lastChat = chat.at(-1)?.id
   const lastEvent = events.at(-1)?.id
-  const sampleLabels: Record<string, string> = {
-    latest_follower: 'LunaLagoon',
-    latest_sub: 'rohanbuilds',
-    latest_gifter: 'Devika (5)',
-    latest_tip: 'Asha ₹500',
-    latest_bits: 'Ananya 1,200 bits',
-    latest_raid: 'VikramGG (48)',
-    top_tip_session: 'MeeraDraws ₹2,500',
-    top_supporter_session: 'MeeraDraws (₹2,500, 2 subs)',
-    session_follows: '41',
-    session_subs: '7',
-    session_bits: '4,850',
-    session_tips: '₹3,250',
-    session_raids: '2',
-    monthly_follows: '312',
-    monthly_subs: '58',
-    monthly_bits: '24,500',
-    monthly_tips: '₹18,400',
-    monthly_raids: '9',
-    top_tip_monthly: 'MeeraDraws ₹5,000',
-    top_supporter_monthly: 'Devika (15 subs, ₹3,500)',
-    alltime_follows: '2,840',
-    alltime_subs: '419',
-    alltime_bits: '148,200',
-    alltime_tips: '₹92,150',
-    alltime_raids: '64',
-    top_tip_alltime: 'AriaLive ₹12,000',
-    top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
-    hype_train: 'Lv.2 · 8 events · 01:45',
-  }
+  const creatorPreview = useCreatorPreview()
+  const labelsLoadGenRef = useRef<number | undefined>(undefined)
+  const linksLoadGenRef = useRef<number | undefined>(undefined)
+  const freshLabels = useResource(
+    (c) => {
+      labelsLoadGenRef.current = beginLabelsLoad()
+      return c.labels?.().catch(() => null) ?? Promise.resolve(null)
+    },
+    [lastEvent],
+  )
+  const freshLinks = useResource((c) => {
+    linksLoadGenRef.current = beginLinksLoad()
+    return c.links?.().catch(() => null) ?? Promise.resolve(null)
+  }, [])
+  const effectiveLabels = freshLabels.data ?? creatorPreview.labels
+  const effectiveLinks = creatorPreview.links ?? freshLinks.data?.resolved ?? null
+  useEffect(() => {
+    if (freshLabels.data) useLive.getState().setLabels(freshLabels.data, labelsLoadGenRef.current)
+  }, [freshLabels.data])
+  useEffect(() => {
+    if (freshLinks.data && !useLive.getState().links) {
+      useLive.getState().setLinks(freshLinks.data.resolved, linksLoadGenRef.current)
+    }
+  }, [freshLinks.data])
   const resolvedCredits =
     credits.data &&
     (credits.data.followers.length > 0 ||
@@ -108,62 +103,55 @@ export function OverlayEditor({ id }: { id: string }) {
     (liveHighlight !== undefined ? liveHighlight : initialHighlight.data) ?? SAMPLE_HIGHLIGHT
 
   const state: OverlayState = useMemo(
-    () => ({
-      goals: goals.data ?? [],
-      labels: Object.fromEntries(
-        (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, t]) => {
-          const val = sampleLabels[source] ?? 'LunaLagoon'
-          return [
+    () => {
+      const labelWidgets = (JSON.parse(labelKey) as [string, string, string][]).map(
+        ([id, source, template]) =>
+          ({
             id,
-            renderSafeTemplate(
-              t,
-              source === 'hype_train'
-                ? {
-                    value: val,
-                    name: val,
-                    level: '2',
-                    count: '8',
-                    events: '8',
-                    contributors: '5',
-                    timer: '01:45',
-                    latest: 'NeelaMoth',
-                  }
-                : { value: val, name: val },
-            ),
-          ]
-        }),
-      ),
-      ...(hasTrain
-        ? {
-            label_trains: Object.fromEntries(
-              (JSON.parse(labelKey) as [string, string, string][])
-                .filter(([, source]) => source === 'hype_train')
-                .map(([id]) => [
-                  id,
-                  {
-                    active: true,
-                    level: 2,
-                    events: 8,
-                    contributors: 5,
-                    latest_actor: 'NeelaMoth',
-                    remaining_ms: 105_000,
-                    ends_at: Date.now() + 105_000,
-                    warmup_count: 8,
-                    threshold: 3,
-                  },
-                ]),
-            ),
-          }
-        : {}),
-      viewers,
-      events: events.slice(-25),
-      chat: chat.slice(-30),
-      // The real poll, giveaway, credits and highlight when present, else samples to place them by.
-      poll: livePoll ?? SAMPLE_POLL,
-      giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
-      credits: resolvedCredits,
-      chat_highlight: resolvedHighlight,
-    }),
+            kind: 'label',
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            config: { source, template },
+          }) as Overlay['widgets'][number],
+      )
+      return {
+        goals: goals.data ?? [],
+        labels: resolvePreviewLabelMap(labelWidgets, effectiveLabels),
+        ...(hasTrain
+          ? {
+              label_trains: Object.fromEntries(
+                (JSON.parse(labelKey) as [string, string, string][])
+                  .filter(([, source]) => source === 'hype_train')
+                  .map(([id]) => [
+                    id,
+                    {
+                      active: true,
+                      level: 2,
+                      events: 8,
+                      contributors: 5,
+                      latest_actor: 'NeelaMoth',
+                      remaining_ms: 105_000,
+                      ends_at: Date.now() + 105_000,
+                      warmup_count: 8,
+                      threshold: 3,
+                    },
+                  ]),
+              ),
+            }
+          : {}),
+        viewers,
+        events: events.slice(-25),
+        chat: chat.slice(-30),
+        // The real poll, giveaway, credits and highlight when present, else samples to place them by.
+        poll: livePoll ?? SAMPLE_POLL,
+        giveaway: liveGiveaway ? giveawayCard(liveGiveaway) : SAMPLE_GIVEAWAY,
+        credits: resolvedCredits,
+        chat_highlight: resolvedHighlight,
+        links: effectiveLinks,
+      }
+    },
     // Keyed on the newest item: both lists are capped, so their lengths stop changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -176,6 +164,8 @@ export function OverlayEditor({ id }: { id: string }) {
       liveGiveaway,
       resolvedCredits,
       resolvedHighlight,
+      effectiveLabels,
+      effectiveLinks,
     ],
   )
 

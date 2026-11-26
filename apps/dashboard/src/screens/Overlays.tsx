@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowsClockwise,
   DotsThree,
@@ -15,6 +15,7 @@ import { Menu } from '../components/Menu'
 import { ObsIcon, SecretUrl, useAddToObs } from '../components/obs'
 import { done, useAction, useClient, useResource } from '../lib/hooks'
 import { go, href } from '../lib/router'
+import { beginLabelsLoad, beginLinksLoad, useLive } from '../lib/store'
 import { useUsesObs } from '../lib/picture'
 import { useWidePage } from '../lib/wide'
 import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
@@ -70,6 +71,17 @@ export function Overlays() {
   const client = useClient()
   const overlays = useResource((c) => c.overlays())
   const { run, busy } = useAction()
+  useEffect(() => {
+    const lkGen = beginLinksLoad()
+    const lbGen = beginLabelsLoad()
+    void Promise.all([
+      client.links?.().catch(() => null) ?? Promise.resolve(null),
+      client.labels?.().catch(() => null) ?? Promise.resolve(null),
+    ]).then(([lk, lb]) => {
+      if (lk) useLive.getState().setLinks(lk.resolved, lkGen)
+      if (lb) useLive.getState().setLabels(lb, lbGen)
+    })
+  }, [client])
   const { add, busy: adding, guide } = useAddToObs()
   // With Ferrocast's Studio an overlay goes into one of its scenes; OBS stays in the menu.
   const usesObs = useUsesObs()

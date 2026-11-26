@@ -50,15 +50,20 @@ import {
   PATTERN_LABEL,
   TEXT_EFFECT_LABEL,
   describeError,
+  hasConfiguredLinks,
+  hasLinkToken,
   isBrandLayer,
+  resolveLayerItems,
   type DesignRef,
   type Goal,
   type LayerConfig,
   type Media,
   type OverlayState,
+  type ResolvedLinks,
   type Theme,
   type Widget,
 } from '@ferrocast/api'
+import { href } from '../../lib/router'
 import {
   DESIGN_FONTS,
   FX_PALETTE,
@@ -735,10 +740,12 @@ function LayerSettings({
   w,
   onChange,
   media,
+  links,
 }: {
   w: Widget & { kind: 'layer' }
   onChange: (w: Widget, opts?: { merge?: boolean }) => void
   media: Media[]
+  links: ResolvedLinks | null
 }) {
   const c = w.config
   const set = (p: Partial<LayerConfig>, merge = false) =>
@@ -750,7 +757,10 @@ function LayerSettings({
     else next[key] = value
     onChange({ ...w, config: next as unknown as LayerConfig }, { merge })
   }
-  if (c.type === 'text')
+  if (c.type === 'text') {
+    const showLinkHint = hasLinkToken([c.text, ...(c.rotate ?? [])].join('\n'))
+    const livePreview = showLinkHint ? resolveLayerItems(c.text, c.rotate, links, true) : []
+    const configured = hasConfiguredLinks(links)
     return (
       <div className="flex flex-col gap-3">
         <Field label="Text">
@@ -764,6 +774,26 @@ function LayerSettings({
             />
           )}
         </Field>
+        {showLinkHint && (
+          <div className="rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-[13.5px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-text-3">
+                {configured ? 'Live links preview' : 'Sample links preview'}
+              </span>
+              <a
+                href={href({ name: 'settings', section: 'accounts' })}
+                className="font-semibold text-molten-text hover:underline"
+              >
+                Edit my links
+              </a>
+            </div>
+            <p dir="auto" className="mt-1 truncate text-text">
+              {livePreview.length > 0
+                ? livePreview.join(' · ')
+                : 'No matching links set yet. Unset links stay hidden on stream.'}
+            </p>
+          </div>
+        )}
         <Field label="Font">
           {(p) => (
             <Select
@@ -939,6 +969,7 @@ function LayerSettings({
         ) : null}
       </div>
     )
+  }
   if (c.type === 'fx') {
     const d = FX_PALETTE[c.preset] ?? FX_PALETTE.hex
     return (
@@ -1683,7 +1714,12 @@ export function LayoutEditor({
             )}
             {sel.kind === 'layer' ? (
               !lockedSel ? (
-                <LayerSettings w={sel} onChange={update} media={media} />
+                <LayerSettings
+                  w={sel}
+                  onChange={update}
+                  media={media}
+                  links={state.links ?? null}
+                />
               ) : (
                 <p className="text-[14.5px] text-text-2">
                   Built-in designs keep this mark. Duplicate the design to remove it.

@@ -18,6 +18,7 @@ import {
   type PanicConfig,
   type PollView,
   type GiveawayView,
+  type ResolvedLinks,
   type UpdateInfo,
   type ChatterMark,
   type Platform,
@@ -104,6 +105,12 @@ interface LiveStore {
   /** The currently pinned `chat_highlight` frame; `undefined` until loaded or pushed. */
   chatHighlight: ChatHighlight | null | undefined
   setChatHighlight: (h: ChatHighlight | null) => void
+  /** Resolved creator links & next stream text (populated at boot and on My links / account saves). */
+  links: ResolvedLinks | null
+  setLinks: (l: ResolvedLinks | null, gen?: number) => void
+  /** Real overlay labels map from `GET /api/v1/labels`. */
+  labels: Record<string, string> | null
+  setLabels: (l: Record<string, string> | null, gen?: number) => void
   /** App updates (`GET /updates` and the live `update` frame); `null` until loaded. */
   update: UpdateInfo | null
   /** `update` frames so far: a GET that started before the latest frame is older than it. */
@@ -165,6 +172,19 @@ function resolved(
 
 let noticeId = 1
 
+let linksGen = 0
+let labelsGen = 0
+
+/** Begins a links fetch and returns its freshness token so older GETs cannot overwrite newer writes. */
+export function beginLinksLoad(): number {
+  return ++linksGen
+}
+
+/** Begins a labels fetch and returns its freshness token so out-of-order refreshes cannot regress state. */
+export function beginLabelsLoad(): number {
+  return ++labelsGen
+}
+
 const MAX_NOTICES = 3
 
 /** Panic notices (keyed `panic`; older engines only say it in the message). */
@@ -221,6 +241,18 @@ export const useLive = create<LiveStore>((set, get) => ({
   giveaway: undefined,
   chatHighlight: undefined,
   setChatHighlight: (chatHighlight) => set({ chatHighlight }),
+  links: null,
+  setLinks: (links, gen) => {
+    if (gen !== undefined && gen !== linksGen) return
+    if (gen === undefined) linksGen += 1
+    set({ links })
+  },
+  labels: null,
+  setLabels: (labels, gen) => {
+    if (gen !== undefined && gen !== labelsGen) return
+    if (gen === undefined) labelsGen += 1
+    set({ labels })
+  },
   update: null,
   updateFrames: 0,
   updateLoadError: null,
@@ -330,11 +362,46 @@ export const useLive = create<LiveStore>((set, get) => ({
             if (!eventsChanged) events = [...events]
             eventsChanged = true
             events.push(e)
+            if (
+              s.conn?.client.labels &&
+              (k.type === 'follow' ||
+                k.type === 'subscription' ||
+                k.type === 'gift_batch' ||
+                k.type === 'tip' ||
+                k.type === 'paid_message' ||
+                k.type === 'platform_gift' ||
+                k.type === 'raid')
+            ) {
+              const clientRef = s.conn.client
+              const lbGen = beginLabelsLoad()
+              queueMicrotask(() => {
+                void clientRef
+                  .labels()
+                  .then((lb) => {
+                    if (useLive.getState().conn?.client === clientRef)
+                      useLive.getState().setLabels(lb, lbGen)
+                  })
+                  .catch(() => {})
+              })
+            }
           }
           break
         }
         case 'status':
           connectors = f.data.connectors
+          if (s.conn?.client.links) {
+            const clientRef = s.conn.client
+            const lkGen = beginLinksLoad()
+            queueMicrotask(() => {
+              void clientRef
+                .links()
+                .then((r) => {
+                  if (useLive.getState().conn?.client === clientRef)
+                    useLive.getState().setLinks(r.resolved, lkGen)
+                })
+                .catch(() => {})
+            })
+          }
           break
         case 'queue':
           queue = f.data
@@ -481,7 +548,9 @@ export async function loadFull(conn: Connection): Promise<boolean> {
   const live = useLive.getState()
   const status = await conn.client.status()
   live.setStatus(status)
-  const [chat, page, queue, tts, stats] = await Promise.all([
+  const lkGen = beginLinksLoad()
+  const lbGen = beginLabelsLoad()
+  const [chat, page, queue, tts, stats, linksRes, labelsRes] = await Promise.all([
     conn.client.chat(200).catch(() => [] as FerroEvent[]),
     conn.client
       .events({ limit: 60 })
@@ -489,11 +558,15 @@ export async function loadFull(conn: Connection): Promise<boolean> {
     conn.client.queue().catch(() => null),
     conn.client.ttsPending().catch(() => []),
     conn.client.sessionStats().catch(() => null),
+    conn.client.links?.().catch(() => null) ?? Promise.resolve(null),
+    conn.client.labels?.().catch(() => null) ?? Promise.resolve(null),
   ])
   live.seed({ chat, events: page.events })
   if (queue) live.setQueue(queue)
   live.setTts(tts)
   if (stats) useLive.setState({ viewers: stats.viewers })
+  if (linksRes) useLive.getState().setLinks(linksRes.resolved, lkGen)
+  if (labelsRes) useLive.getState().setLabels(labelsRes, lbGen)
   return status.setup_done
 }
 

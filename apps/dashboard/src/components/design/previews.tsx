@@ -5,13 +5,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   anySample,
   namedActor,
+  renderSafeTemplate,
   type Design,
   type FerroEvent,
   type Goal,
   type Overlay,
   type OverlayState,
+  type ResolvedLinks,
   type Widget,
 } from '@ferrocast/api'
+import { beginLabelsLoad, beginLinksLoad, useLive } from '../../lib/store'
 import { OverlayPreview } from '../AlertStage'
 import { SAMPLE_CREDITS, SAMPLE_HIGHLIGHT } from '../community/preview'
 
@@ -26,7 +29,7 @@ const GOAL: Goal = {
   current: 32,
 }
 
-const LABEL_TEXT: Record<string, string> = {
+export const SAMPLE_LABELS: Record<string, string> = {
   latest_follower: 'NeelaMoth',
   latest_sub: 'rohanbuilds',
   latest_gifter: 'Devika (5)',
@@ -55,6 +58,66 @@ const LABEL_TEXT: Record<string, string> = {
   top_tip_alltime: 'AriaLive ₹12,000',
   top_supporter_alltime: 'Devika (45 subs, ₹8,000)',
   hype_train: 'Lv.2 · 8 events · 01:45',
+}
+
+/** Resolves overlay label values using real `/api/v1/labels` data and per-key sample fallbacks. */
+export function resolvePreviewLabelMap(
+  widgets: readonly Widget[],
+  realLabels?: Record<string, string> | null,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const w of widgets) {
+    if (w.kind !== 'label') continue
+    const source = w.config.source
+    const real = realLabels?.[source]?.trim()
+    const val = real || SAMPLE_LABELS[source] || 'NeelaMoth'
+    out[w.id] = renderSafeTemplate(
+      w.config.template,
+      source === 'hype_train'
+        ? {
+            value: val,
+            name: val,
+            level: '2',
+            count: '8',
+            events: '8',
+            contributors: '5',
+            timer: '01:45',
+            latest: 'NeelaMoth',
+          }
+        : { value: val, name: val },
+    )
+  }
+  return out
+}
+
+const fetchedForClient = new WeakSet<object>()
+
+/** Shared cached loader for creator links and real labels across gallery and grid previews. */
+export function useCreatorPreview(): {
+  links: ResolvedLinks | null
+  labels: Record<string, string> | null
+} {
+  const links = useLive((s) => s.links)
+  const labels = useLive((s) => s.labels)
+  const conn = useLive((s) => s.conn)
+  useEffect(() => {
+    if (!conn) return
+    const client = conn.client
+    if (links !== null && labels !== null) return
+    if (fetchedForClient.has(client)) return
+    fetchedForClient.add(client)
+    const lkGen = beginLinksLoad()
+    const lbGen = beginLabelsLoad()
+    void Promise.all([
+      client.links?.().catch(() => null) ?? Promise.resolve(null),
+      client.labels?.().catch(() => null) ?? Promise.resolve(null),
+    ]).then(([lk, lb]) => {
+      if (useLive.getState().conn?.client !== client) return
+      if (lk) useLive.getState().setLinks(lk.resolved, lkGen)
+      if (lb) useLive.getState().setLabels(lb, lbGen)
+    })
+  }, [conn, links, labels])
+  return { links, labels }
 }
 
 function sampleEvents(): FerroEvent[] {
@@ -95,30 +158,35 @@ function sampleChat(): FerroEvent[] {
   }))
 }
 
-/** Snapshot state that fills every widget in `widgets` (labels by their source, a goal, events, chat). */
-export function useSampleState(widgets: Widget[]): OverlayState {
+/** Snapshot state that fills every widget in `widgets`, preferring real creator links and labels. */
+export function useSampleState(
+  widgets: Widget[],
+  overrides?: { links?: ResolvedLinks | null; labels?: Record<string, string> | null },
+): OverlayState {
+  const creator = useCreatorPreview()
+  const realLabels = overrides?.labels !== undefined ? overrides.labels : creator.labels
+  const realLinks = overrides?.links !== undefined ? overrides.links : creator.links
   const labelKey = JSON.stringify(
     widgets.flatMap((w) =>
       w.kind === 'label' ? [[w.id, w.config.source, w.config.template]] : [],
     ),
   )
   return useMemo(() => {
-    const labels = Object.fromEntries(
-      (JSON.parse(labelKey) as [string, string, string][]).map(([id, source, tpl]) => [
-        id,
-        tpl.replace(/\{(value|name)\}/g, LABEL_TEXT[source] ?? 'NeelaMoth'),
-      ]),
+    const labelWidgets = (JSON.parse(labelKey) as [string, string, string][]).map(
+      ([id, source, template]) =>
+        ({ id, kind: 'label', x: 0, y: 0, w: 1, h: 1, config: { source, template } }) as Widget,
     )
     return {
       goals: [GOAL],
-      labels,
+      labels: resolvePreviewLabelMap(labelWidgets, realLabels),
       viewers: { twitch: 412, youtube: 188 },
       events: sampleEvents(),
       chat: sampleChat(),
       credits: SAMPLE_CREDITS,
       chat_highlight: SAMPLE_HIGHLIGHT,
+      links: realLinks ?? null,
     }
-  }, [labelKey])
+  }, [labelKey, realLabels, realLinks])
 }
 
 /**
