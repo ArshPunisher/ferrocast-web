@@ -82,17 +82,29 @@ test.describe('Clean mic expander, safe update, and Auto boost (#2, #3)', () => 
     await drawer.getByRole('button', { name: 'More settings for Even out loud moments' }).click()
     await expect(drawer.getByRole('slider', { name: 'Boost after' })).toHaveValue('9')
 
-    // Simulate legacy 3-filter user by deleting Quiet between words -> Sound shows safe Update cleanup prompt.
+    // Simulate legacy 3-filter user by deleting Quiet between words -> Sound shows safe Update cleanup prompt without duplicate Clean up my mic button.
     await drawer.getByRole('button', { name: 'Remove Quiet between words' }).click()
     await expect(drawer.getByText('Quiet between words', { exact: true })).toHaveCount(0)
 
     await drawer.getByRole('tab', { name: 'Sound' }).click()
     await expect(tile.getByRole('button', { name: 'Update cleanup' })).toBeVisible()
     await expect(tile.getByRole('button', { name: 'Keep current' })).toBeVisible()
+    await expect(tile.getByRole('button', { name: /Clean up my mic/ })).toHaveCount(0)
     await snap(page, 'cleanmic-update-offer-1280.png')
 
+    // Keep current resolves cleanly to Mic cleaned up without leaving Clean up my mic stuck.
+    await tile.getByRole('button', { name: 'Keep current' }).click()
+    await expect(tile.getByRole('button', { name: 'Update cleanup' })).toHaveCount(0)
+    await expect(tile.getByText('Mic cleaned up')).toBeVisible()
+
+    // Clear skip state so we also exercise the Update cleanup path.
+    await page.evaluate(() => localStorage.removeItem('fc-cleanmic-v2-skip'))
+    await drawer.getByRole('tab', { name: 'Filters' }).click()
+    await drawer.getByRole('tab', { name: 'Sound' }).click()
+    await expect(tile.getByRole('button', { name: 'Update cleanup' })).toBeVisible()
     await tile.getByRole('button', { name: 'Update cleanup' }).click()
     await expect(tile.getByRole('button', { name: 'Update cleanup' })).toHaveCount(0)
+    await expect(tile.getByText('Mic cleaned up')).toBeVisible()
 
     await drawer.getByRole('tab', { name: 'Filters' }).click()
     await expect(drawer.getByText('Quiet between words', { exact: true })).toBeVisible()

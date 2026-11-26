@@ -33,6 +33,7 @@ export const MIC_KINDS = new Set([
  * speech more than the other; a noise gate after it cut soft words completely.
  */
 export const CLEAN_EXPANDER_FILTER = 'Quiet between words'
+export const CLEAN_COMPRESSOR_FILTER = 'Even out loud moments'
 export const CLEAN_MIC_UPDATE_SKIP_KEY = 'fc-cleanmic-v2-skip'
 
 /** Downward expander placed before the compressor so background pauses never get boosted. */
@@ -50,7 +51,7 @@ export const CLEAN_EXPANDER: NewEngineSource = {
   },
 }
 
-const NOISE_KINDS = new Set([
+export const NOISE_KINDS = new Set([
   'noise_suppress_filter_v2',
   'noise_suppress_filter',
   'ferrocast_deepfilter',
@@ -73,7 +74,7 @@ export const CLEAN_MIC: { as: string[]; add: NewEngineSource }[] = [
     as: ['compressor_filter', 'upward_compressor_filter'],
     add: {
       kind: 'compressor_filter',
-      name: 'Even out loud moments',
+      name: CLEAN_COMPRESSOR_FILTER,
       // 3:1 from -26 dB (it acts on speech at a normal level), quick to catch a shout, 150 ms
       // back up for the next word, and +9 dB to bring the evened voice to about -16 LUFS.
       settings: { ratio: 3, threshold: -26, attack_time: 8, release_time: 150, output_gain: 9 },
@@ -134,53 +135,99 @@ export function cleanMicPlan(
   return plan
 }
 
-/** Number of 'up' moves needed to place a newly appended expander directly before the compressor. */
-export function expanderMoveCount(filters: readonly { kind: string }[]): number {
-  if (filters.some((f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter')) {
-    return 0
-  }
-  const compIdx = filters.findIndex(
-    (f) => f.kind === 'compressor_filter' || f.kind === 'upward_compressor_filter',
+/** Selects the cleanup compressor, preferring 'Even out loud moments', then first enabled, then first. */
+export function pickCleanupCompressor<T extends { kind: string; name?: string; enabled?: boolean }>(
+  filters: readonly T[],
+): T | null {
+  const named = filters.find(
+    (f) => f.kind === 'compressor_filter' && f.name === CLEAN_COMPRESSOR_FILTER,
   )
-  return compIdx < 0 ? 0 : filters.length - compIdx
+  if (named) return named
+  const enabled = filters.find((f) => f.kind === 'compressor_filter' && f.enabled !== false)
+  if (enabled) return enabled
+  return filters.find((f) => f.kind === 'compressor_filter') ?? null
 }
 
-/** True when a legacy 3-stage cleanup chain boosts pauses without an expander or gate. */
-export function needsCleanMicUpdate(
-  filters: readonly { kind: string; enabled?: boolean }[] | null | undefined,
-  compSettings: Record<string, unknown> | null | undefined,
-  skipped: boolean,
+/** True when a mic has the legacy 3-stage cleanup chain (noise + compressor + limiter, no expander/gate). */
+export function isLegacyCleanMic(
+  filters: readonly { kind: string; name?: string; enabled?: boolean }[] | null | undefined,
 ): boolean {
-  if (skipped || !filters || !compSettings) return false
+  if (!filters) return false
   const hasNoise = filters.some((f) => NOISE_KINDS.has(f.kind))
   const hasLimiter = filters.some((f) => f.kind === 'limiter_filter')
   const hasExpanderOrGate = filters.some(
     (f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter',
   )
-  const comp = filters.find((f) => f.kind === 'compressor_filter')
-  if (!hasNoise || !hasLimiter || hasExpanderOrGate || !comp || comp.enabled === false) {
-    return false
+  return hasNoise && hasLimiter && !hasExpanderOrGate && pickCleanupCompressor(filters) !== null
+}
+
+/** Number of 'up' moves needed to place a newly appended expander directly before the compressor. */
+export function expanderMoveCount(
+  filters: readonly { kind: string; name?: string; enabled?: boolean }[],
+): number {
+  if (filters.some((f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter')) {
+    return 0
   }
+  const comp = pickCleanupCompressor(filters)
+  const compIdx = comp
+    ? filters.indexOf(comp)
+    : filters.findIndex((f) => f.kind === 'upward_compressor_filter')
+  return compIdx < 0 ? 0 : filters.length - compIdx
+}
+
+/** Number of 'up' moves needed to place newly added pre-compressor stages before any existing expander/compressor. */
+export function preCompMoveCount(
+  filters: readonly { kind: string; name?: string; enabled?: boolean }[],
+): number {
+  const comp = pickCleanupCompressor(filters)
+  const compIdx = comp
+    ? filters.indexOf(comp)
+    : filters.findIndex((f) => f.kind === 'upward_compressor_filter')
+  const expIdx = filters.findIndex(
+    (f) => f.kind === 'expander_filter' || f.kind === 'noise_gate_filter',
+  )
+  const indices = [compIdx, expIdx].filter((i) => i >= 0)
+  if (indices.length === 0) return 0
+  return filters.length - Math.min(...indices)
+}
+
+/** True when a legacy 3-stage cleanup chain boosts pauses without an expander or gate. */
+export function needsCleanMicUpdate(
+  filters: readonly { kind: string; name?: string; enabled?: boolean }[] | null | undefined,
+  compSettings: Record<string, unknown> | null | undefined,
+  skipped: boolean,
+): boolean {
+  if (skipped || !filters || !compSettings) return false
+  if (!isLegacyCleanMic(filters)) return false
+  const comp = pickCleanupCompressor(filters)
+  if (!comp || comp.enabled === false) return false
   return Number(compSettings.output_gain ?? 0) > 0
 }
 
-/** Reads whether the user dismissed the safe cleanup expander update offer. */
-export function readCleanMicUpdateSkipped(): boolean {
+function readSkippedNames(): string[] {
   try {
-    return (
-      typeof localStorage !== 'undefined' && localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY) === '1'
-    )
+    if (typeof localStorage === 'undefined') return []
+    const raw = localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
   } catch {
-    return false
+    return []
   }
 }
 
-/** Remembers that the user kept their existing cleanup chain without adding the expander. */
-export function dismissCleanMicUpdate(): void {
+/** Reads whether the user dismissed the safe cleanup expander update offer for this mic source. */
+export function readCleanMicUpdateSkipped(name: string): boolean {
+  return readSkippedNames().includes(name)
+}
+
+/** Remembers per mic source that the user kept their existing cleanup chain without adding the expander. */
+export function dismissCleanMicUpdate(name: string): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(CLEAN_MIC_UPDATE_SKIP_KEY, '1')
-    }
+    if (typeof localStorage === 'undefined') return
+    const names = readSkippedNames()
+    if (!names.includes(name)) names.push(name)
+    localStorage.setItem(CLEAN_MIC_UPDATE_SKIP_KEY, JSON.stringify(names))
   } catch {
     // Ignore storage failures in restricted contexts.
   }

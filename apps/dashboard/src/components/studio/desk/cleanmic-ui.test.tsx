@@ -330,11 +330,118 @@ describe('Clean up my mic', () => {
     expect(api.removeFilter).not.toHaveBeenCalled()
     expect(onReload).toHaveBeenCalled()
 
-    // Dismissing hides the offer and persists skip key.
+    // Dismissing hides the offer and persists skip per mic without hiding it for a second mic.
     await mount(api, { filters: legacy })
     await flush()
     await press(/Keep current/)
-    expect(localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY)).toBe('1')
+    expect(JSON.parse(localStorage.getItem(CLEAN_MIC_UPDATE_SKIP_KEY) ?? '[]')).toContain('Mic')
     expect(host.textContent).not.toContain('Update cleanup')
+    expect(host.textContent).toContain('Mic cleaned up')
+    expect(host.textContent).not.toContain('Clean up my mic')
+
+    // Switching to another mic still shows the update offer (per-mic skip) and omits duplicate Clean up my mic button.
+    await act(async () =>
+      root.render(
+        <CleanMicControl
+          api={api as never}
+          name="Mic 2"
+          level={undefined}
+          filters={legacy}
+          onReload={() => undefined}
+        />,
+      ),
+    )
+    await flush()
+    expect(host.textContent).toContain('Update cleanup')
+    expect(host.textContent).not.toContain('Clean up my mic')
+  })
+
+  it('disables Auto boost without flashing ON while filterSettings loads, always reads fresh settings on toggle, and orders noise + expander before an existing compressor', async () => {
+    let resolveSettings!: (v: Record<string, unknown>) => void
+    const firstSettings = new Promise<Record<string, unknown>>((r) => {
+      resolveSettings = r
+    })
+    let calls = 0
+    const api = {
+      addFilter: vi.fn(async () => undefined),
+      editFilter: vi.fn(async () => undefined),
+      removeFilter: vi.fn(async () => undefined),
+      filterSettings: vi.fn(() => {
+        calls += 1
+        if (calls === 1) return firstSettings
+        return Promise.resolve({ ratio: 5, threshold: -20, output_gain: 0 })
+      }),
+      updateFilter: vi.fn(async () => undefined),
+    }
+    const existing = [
+      { kind: 'noise_suppress_filter_v2', name: 'Remove background noise', enabled: true },
+      { kind: 'expander_filter', name: CLEAN_EXPANDER_FILTER, enabled: true },
+      { kind: 'compressor_filter', name: 'Even out loud moments', enabled: true },
+      { kind: 'limiter_filter', name: 'Stop clipping', enabled: true },
+    ]
+    await mount(api, { filters: existing })
+
+    const sw = host.querySelector('[role="switch"]') as HTMLButtonElement
+    expect(sw.disabled).toBe(true)
+    expect(sw.getAttribute('aria-checked')).toBe('false')
+
+    resolveSettings({ ratio: 3, threshold: -26, output_gain: 0 })
+    await flush()
+    expect(sw.disabled).toBe(false)
+    expect(sw.getAttribute('aria-checked')).toBe('false')
+
+    // Toggling ON fetches fresh filterSettings (ratio: 5, threshold: -20) instead of stale cached settings (ratio: 3).
+    await act(async () => sw.click())
+    await flush()
+    expect(api.filterSettings).toHaveBeenCalledTimes(2)
+    expect(api.updateFilter).toHaveBeenCalledWith('Mic', 'Even out loud moments', {
+      ratio: 5,
+      threshold: -20,
+      output_gain: 9,
+    })
+
+    // On an OBS import with [EQ, Compressor], clean() moves BOTH Noise and Expander above Compressor.
+    const chain = ['EQ', 'Comp']
+    const obsApi = {
+      addFilter: vi.fn(async (_src: string, spec: { name: string }) => {
+        chain.push(spec.name)
+      }),
+      editFilter: vi.fn(async (_src: string, filterName: string, actName: string) => {
+        const idx = chain.indexOf(filterName)
+        if (actName === 'top' && idx > 0) {
+          chain.splice(idx, 1)
+          chain.unshift(filterName)
+        } else if (actName === 'up' && idx > 0) {
+          chain.splice(idx, 1)
+          chain.splice(idx - 1, 0, filterName)
+        }
+      }),
+      removeFilter: vi.fn(async () => undefined),
+      filterSettings: vi.fn(async () => ({ output_gain: 9 })),
+    }
+    const obsFilters = [
+      { kind: 'basic_eq_filter', name: 'EQ', enabled: true },
+      { kind: 'compressor_filter', name: 'Comp', enabled: true },
+    ]
+    await act(async () =>
+      root.render(
+        <CleanMicControl
+          api={obsApi as never}
+          name="OBS Mic"
+          level={undefined}
+          filters={obsFilters}
+          onReload={() => undefined}
+        />,
+      ),
+    )
+    await flush()
+    await press(/Clean up my mic/)
+    expect(chain).toEqual([
+      'EQ',
+      'Remove background noise',
+      CLEAN_EXPANDER_FILTER,
+      'Comp',
+      'Stop clipping',
+    ])
   })
 })

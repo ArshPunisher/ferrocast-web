@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest'
 import {
   CLEAN_EXPANDER,
   CLEAN_EXPANDER_FILTER,
+  CLEAN_MIC_UPDATE_SKIP_KEY,
   DUCK_FILTER,
   VOICE_STYLES,
   MAX_MIC_GAIN_DB,
   MIC_LEVEL_FILTER,
   VOICE_TARGET_DB,
   cleanMicPlan,
+  dismissCleanMicUpdate,
   duckFilter,
   duckMic,
+  expanderMoveCount,
   freeName,
   micGainDb,
   needsCleanMicUpdate,
+  pickCleanupCompressor,
+  readCleanMicUpdateSkipped,
   voiceUsualPeak,
   voiceStyleOf,
   voiceVerdict,
@@ -154,6 +159,32 @@ describe('clean mic', () => {
         false,
       ),
     ).toBe(false)
+  })
+
+  it('tracks update dismissal per mic name and targets Even out loud moments ahead of upward or disabled compressors', () => {
+    localStorage.removeItem(CLEAN_MIC_UPDATE_SKIP_KEY)
+    ;(dismissCleanMicUpdate as (name: string) => void)('Mic 1')
+    expect((readCleanMicUpdateSkipped as (name: string) => boolean)('Mic 1')).toBe(true)
+    expect((readCleanMicUpdateSkipped as (name: string) => boolean)('Mic 2')).toBe(false)
+    localStorage.removeItem(CLEAN_MIC_UPDATE_SKIP_KEY)
+
+    const withDisabledAndUpward = [
+      { kind: 'noise_suppress_filter_v2', name: 'Remove background noise', enabled: true },
+      { kind: 'upward_compressor_filter', name: 'Lift quiet sounds', enabled: true },
+      { kind: 'compressor_filter', name: 'Custom disabled', enabled: false },
+      { kind: 'compressor_filter', name: 'Even out loud moments', enabled: true },
+      { kind: 'limiter_filter', name: 'Stop clipping', enabled: true },
+    ]
+    expect(needsCleanMicUpdate(withDisabledAndUpward, { output_gain: 9 }, false)).toBe(true)
+    expect(pickCleanupCompressor(withDisabledAndUpward)?.name).toBe('Even out loud moments')
+    expect(
+      pickCleanupCompressor([
+        { kind: 'compressor_filter', name: 'Disabled', enabled: false },
+        { kind: 'compressor_filter', name: 'Enabled', enabled: true },
+      ])?.name,
+    ).toBe('Enabled')
+    // Moves newly appended expander directly above 'Even out loud moments' (2 steps: over Limiter and Even out loud moments).
+    expect(expanderMoveCount(withDisabledAndUpward)).toBe(2)
   })
 })
 

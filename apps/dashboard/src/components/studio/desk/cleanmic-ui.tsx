@@ -9,9 +9,13 @@ import {
   dismissCleanMicUpdate,
   expanderMoveCount,
   freeName,
+  isLegacyCleanMic,
   micGainDb,
   MIC_LEVEL_FILTER,
   needsCleanMicUpdate,
+  NOISE_KINDS,
+  pickCleanupCompressor,
+  preCompMoveCount,
   readCleanMicUpdateSkipped,
   VERDICT_WORDS,
   voiceUsualPeak,
@@ -71,12 +75,16 @@ export function CleanMicControl({
   const lastGainRef = useRef(9)
   const [failed, setFailed] = useState<string | null>(null)
   const [preBoost, setPreBoost] = useState(true)
-  const [compSettings, setCompSettings] = useState<Record<string, unknown> | null>(null)
-  const [updateSkipped, setUpdateSkipped] = useState(readCleanMicUpdateSkipped)
+  const [compRead, setCompRead] = useState<{
+    key: string
+    settings: Record<string, unknown>
+  } | null>(null)
+  const [updateSkipped, setUpdateSkipped] = useState(() => readCleanMicUpdateSkipped(name))
 
   useEffect(() => {
     peaks.current = []
     lastGainRef.current = 9
+    setUpdateSkipped(readCleanMicUpdateSkipped(name))
   }, [name])
 
   useEffect(() => {
@@ -89,45 +97,50 @@ export function CleanMicControl({
   const usual = voiceUsualPeak(peaks.current)
   const gainDb = micGainDb(peaks.current)
   const have = filters ?? null
-  const compFilter = have?.find((f) => f.kind === 'compressor_filter') ?? null
+  const compFilter = have ? pickCleanupCompressor(have) : null
   const compName = compFilter?.name ?? null
   const compEnabled = compFilter?.enabled ?? false
+  const compKey = compName ? `${name}\0${compName}` : ''
   const filterKey = have?.map((f) => `${f.kind}:${f.name}:${f.enabled}`).join('\n') ?? ''
 
   useEffect(() => {
     if (!compName || typeof api.filterSettings !== 'function') {
-      setCompSettings(null)
+      setCompRead(null)
       return
     }
     let cancelled = false
     void api.filterSettings(name, compName).then(
       (s) => {
         if (cancelled) return
-        setCompSettings(s)
+        setCompRead({ key: compKey, settings: s })
         const gain = Number(s.output_gain ?? 0)
         if (gain > 0) lastGainRef.current = gain
       },
       () => {
-        if (!cancelled) setCompSettings(null)
+        if (!cancelled) setCompRead(null)
       },
     )
     return () => {
       cancelled = true
     }
-  }, [api, name, compName, compEnabled, filterKey, undone])
+  }, [api, name, compName, compKey, compEnabled, filterKey, undone])
 
+  const compSettings = compRead && compRead.key === compKey ? compRead.settings : null
+  const compLoading =
+    compFilter !== null && typeof api.filterSettings === 'function' && compSettings === null
   const autoBoostOn = compFilter
     ? compSettings === null
-      ? compFilter.enabled && preBoost
+      ? false
       : compFilter.enabled && Number(compSettings.output_gain ?? 0) > 0
     : preBoost
 
-  const plan = have
-    ? cleanMicPlan(
-        have.map((f) => f.kind),
-        { gainDb, autoBoost: preBoost },
-      )
-    : []
+  const legacyCleaned = isLegacyCleanMic(have)
+  const planKinds = have
+    ? legacyCleaned && updateSkipped
+      ? [...have.map((f) => f.kind), 'expander_filter']
+      : have.map((f) => f.kind)
+    : null
+  const plan = planKinds ? cleanMicPlan(planKinds, { gainDb, autoBoost: preBoost }) : []
   const gainStep = plan.find((f) => f.kind === 'gain_filter')
   const showUpdateOffer = needsCleanMicUpdate(have, compSettings, updateSkipped)
 
@@ -135,14 +148,13 @@ export function CleanMicControl({
     const baseFilters = have ?? []
     const taken = baseFilters.map((f) => f.name)
     const added: string[] = []
-    let appendedBeforeExpander = 0
-    const preComp = expanderMoveCount(baseFilters) > 0
+    const moveBeforeComp = preCompMoveCount(baseFilters)
     setFailed(null)
     const ok = await run(
       'clean',
       async () => {
         try {
-          // Apply one at a time in chain order; gain moves to top so later stages hear the boosted voice.
+          // Apply one at a time in chain order; gain moves to top and noise/expander move before any existing compressor.
           for (const f of plan) {
             const n = freeName(f.name, taken)
             taken.push(n)
@@ -150,16 +162,13 @@ export function CleanMicControl({
             added.push(n)
             if (f.kind === 'gain_filter') {
               await api.editFilter(name, n, 'top')
-            } else if (f.kind === 'expander_filter') {
-              if (preComp) {
-                const moves = expanderMoveCount(baseFilters) + appendedBeforeExpander
-                for (let i = 0; i < moves; i++) {
-                  await api.editFilter(name, n, 'up')
-                }
+            } else if (
+              moveBeforeComp > 0 &&
+              (f.kind === 'expander_filter' || NOISE_KINDS.has(f.kind))
+            ) {
+              for (let i = 0; i < moveBeforeComp; i++) {
+                await api.editFilter(name, n, 'up')
               }
-              appendedBeforeExpander++
-            } else {
-              appendedBeforeExpander++
             }
           }
           return true
@@ -208,7 +217,7 @@ export function CleanMicControl({
   }
 
   const dismissUpdate = () => {
-    dismissCleanMicUpdate()
+    dismissCleanMicUpdate(name)
     setUpdateSkipped(true)
   }
 
@@ -222,10 +231,9 @@ export function CleanMicControl({
       'auto-boost',
       async () => {
         const current =
-          compSettings ??
-          (typeof api.filterSettings === 'function'
+          typeof api.filterSettings === 'function'
             ? await api.filterSettings(name, compFilter.name)
-            : {})
+            : {}
         if (!next) {
           const curGain = Number(current.output_gain ?? 0)
           if (curGain > 0) lastGainRef.current = curGain
@@ -256,7 +264,7 @@ export function CleanMicControl({
       { once: true },
     )
     if (res) {
-      setCompSettings(res.nextSettings)
+      setCompRead({ key: compKey, settings: res.nextSettings })
       onReload()
       toast({ tone: 'ok', message: res.message })
     }
@@ -314,7 +322,7 @@ export function CleanMicControl({
             <Button size="sm" variant="secondary" onClick={onReload} className="w-full sm:w-auto">
               Try again
             </Button>
-          ) : plan.length > 0 ? (
+          ) : showUpdateOffer ? null : plan.length > 0 ? (
             <Button
               size="sm"
               variant="secondary"
@@ -336,7 +344,7 @@ export function CleanMicControl({
         <Switch
           checked={autoBoostOn}
           onChange={(next) => void toggleAutoBoost(next)}
-          disabled={busy !== null || !have}
+          disabled={busy !== null || !have || compLoading}
           label="Auto boost"
           description="Raises uneven speech after cleanup (+9 dB by default). Turn off before or after cleanup to leave gain at 0 dB."
         />
@@ -345,7 +353,7 @@ export function CleanMicControl({
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] leading-snug text-text-2">
           <span>
             Quiet pauses between words can still get boosted.
-            {isLive ? ' Safe live — applies smoothly.' : ''}
+            {isLive ? ' Safe live: applies smoothly.' : ''}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
