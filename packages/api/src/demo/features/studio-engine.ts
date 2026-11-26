@@ -1279,13 +1279,40 @@ export class DemoStudioEngine {
     const live = {
       currentScene: this.currentScene,
       previewScene: this.previewScene,
+      verticalOn: this.verticalOn,
+      verticalScenes: [...this.verticalScenes],
       verticalCurrent: this.verticalCurrent,
+      nextItemId: this.nextItemId,
       audio: new Map(
         [...this.sources].map(([k, v]) => [
           k,
           { muted: v.muted, volume_db: v.volume_db, monitor: v.monitor },
         ]),
       ),
+    }
+    const liveVerticalItems = new Map<string, EngineItem[]>()
+    const liveVerticalTransforms = new Map<number, EngineTransform>()
+    const liveVerticalItemFilters = new Map<number, ItemFilterState>()
+    const liveVerticalSources = new Map<string, StoredSource>()
+    if (keepLive) {
+      const collectRefs = (list: EngineItem[]) => {
+        for (const it of list) {
+          const tr = this.transforms.get(it.id)
+          if (tr) liveVerticalTransforms.set(it.id, clone(tr))
+          const flt = this.itemFilters.get(it.id)
+          if (flt) liveVerticalItemFilters.set(it.id, clone(flt))
+          if (!it.group) {
+            const src = this.sources.get(it.name)
+            if (src) liveVerticalSources.set(it.name, clone(src))
+          }
+          collectRefs(it.children)
+        }
+      }
+      for (const vScene of live.verticalScenes) {
+        const items = clone(this.sceneItems.get(vScene) ?? [])
+        liveVerticalItems.set(vScene, items)
+        collectRefs(items)
+      }
     }
     this.activeScenes = [...snap.activeScenes]
     this.currentScene = snap.currentScene
@@ -1295,17 +1322,6 @@ export class DemoStudioEngine {
     this.verticalCurrent = snap.verticalCurrent
     this.sceneItems = new Map(Object.entries(clone(snap.sceneItems)))
     this.sources = new Map(Object.entries(clone(snap.sources)))
-    if (keepLive) {
-      if (this.activeScenes.includes(live.currentScene)) this.currentScene = live.currentScene
-      if (live.previewScene === null || this.activeScenes.includes(live.previewScene))
-        this.previewScene = live.previewScene
-      if (this.verticalOn && this.verticalScenes.includes(live.verticalCurrent))
-        this.verticalCurrent = live.verticalCurrent
-      for (const [name, a] of live.audio) {
-        const src = this.sources.get(name)
-        if (src) Object.assign(src, a)
-      }
-    }
     this.transforms = new Map(
       Object.entries(clone(snap.transforms)).map(([k, v]) => [Number(k), v]),
     )
@@ -1313,6 +1329,41 @@ export class DemoStudioEngine {
       Object.entries(clone(snap.itemFilters)).map(([k, v]) => [Number(k), v]),
     )
     this.nextItemId = snap.nextItemId
+    if (keepLive) {
+      if (this.activeScenes.includes(live.currentScene)) this.currentScene = live.currentScene
+      if (live.previewScene === null || this.activeScenes.includes(live.previewScene))
+        this.previewScene = live.previewScene
+      // Vertical mode toggling is not an undo step: keep the live on/off toggle and preserve an
+      // already-initialized vertical canvas when restoring a pre-vertical snapshot.
+      this.verticalOn = live.verticalOn
+      if (snap.verticalScenes.length === 0 && live.verticalScenes.length > 0) {
+        this.verticalScenes = [...live.verticalScenes]
+        this.verticalCurrent = live.verticalCurrent
+        for (const [vScene, items] of liveVerticalItems) {
+          if (!this.sceneItems.has(vScene)) this.sceneItems.set(vScene, items)
+        }
+        for (const [id, tr] of liveVerticalTransforms) {
+          if (!this.transforms.has(id)) this.transforms.set(id, tr)
+        }
+        for (const [id, flt] of liveVerticalItemFilters) {
+          if (!this.itemFilters.has(id)) this.itemFilters.set(id, flt)
+        }
+        for (const [name, src] of liveVerticalSources) {
+          if (!this.sources.has(name)) this.sources.set(name, src)
+        }
+        this.nextItemId = Math.max(this.nextItemId, live.nextItemId)
+      } else {
+        this.verticalCurrent = this.verticalScenes.includes(live.verticalCurrent)
+          ? live.verticalCurrent
+          : this.verticalScenes.includes(snap.verticalCurrent)
+            ? snap.verticalCurrent
+            : (this.verticalScenes[0] ?? '')
+      }
+      for (const [name, a] of live.audio) {
+        const src = this.sources.get(name)
+        if (src) Object.assign(src, a)
+      }
+    }
     this.namedTransitions = clone(snap.namedTransitions)
     this.transitionMatrix = clone(snap.transitionMatrix)
     this.legacySceneTransitions = new Map(Object.entries(clone(snap.legacySceneTransitions)))

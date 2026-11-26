@@ -1875,5 +1875,69 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('keeps vertical mode unchanged and preserves initial vertical scene across unrelated undo/redo while isolating collections', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+
+        // 1. Main-canvas edit before first startVertical, then startVertical, then undo main edit.
+        await api.addScene('Main Extra')
+        await api.startVertical('Tall 1')
+        await api.undo()
+        const afterMainUndo = await api.scenes()
+        expect(afterMainUndo.scenes.some((s) => s.name === 'Main Extra')).toBe(false)
+        expect(afterMainUndo.vertical).not.toBeNull()
+        expect(afterMainUndo.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+        expect(afterMainUndo.vertical?.current).toBe('Tall 1')
+
+        // Redo restores Main Extra without dropping Tall 1 or toggling Vertical off.
+        await api.redo()
+        const afterMainRedo = await api.scenes()
+        expect(afterMainRedo.scenes.some((s) => s.name === 'Main Extra')).toBe(true)
+        expect(afterMainRedo.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+
+        // 2. Add Tall 2, select it, stop Vertical, then undo the add: Vertical must stay off.
+        await api.addScene('Tall 2', true)
+        await api.setCurrent('Tall 2')
+        await api.stopVertical()
+        expect((await api.scenes()).vertical).toBeNull()
+
+        await api.undo()
+        expect((await api.scenes()).vertical).toBeNull()
+
+        // Re-enabling Vertical shows Tall 2 was undone and current fell back safely to Tall 1.
+        await api.startVertical('Ignored')
+        const reEnabled = await api.scenes()
+        expect(reEnabled.vertical?.scenes.map((s) => s.name)).toEqual(['Tall 1'])
+        expect(reEnabled.vertical?.current).toBe('Tall 1')
+
+        // Stopping Vertical then redoing Add Tall 2 keeps Vertical off and restores Tall 2.
+        await api.stopVertical()
+        await api.redo()
+        expect((await api.scenes()).vertical).toBeNull()
+        await api.startVertical('Ignored')
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+        ])
+
+        // 3. Collection switching still restores each collection's own vertical state.
+        const colA = (await api.shelf('collections')).current
+        const { id: colB } = await api.newShelf('collections', 'Collection B', false)
+        expect((await api.scenes()).vertical).toBeNull()
+        await api.switchShelf('collections', colA)
+        expect((await api.scenes()).vertical?.scenes.map((s) => s.name)).toEqual([
+          'Tall 1',
+          'Tall 2',
+        ])
+        await api.switchShelf('collections', colB)
+        expect((await api.scenes()).vertical).toBeNull()
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })
