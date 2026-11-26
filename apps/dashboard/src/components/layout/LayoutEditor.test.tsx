@@ -462,6 +462,50 @@ describe('LayoutEditor Backspace/Delete layer removal (Group B)', () => {
     })
     expect(rangeEv.defaultPrevented).toBe(true)
     expect(onWidgets).not.toHaveBeenCalled()
+
+    const selectEl = host.querySelector<HTMLSelectElement>('select')!
+    expect(selectEl).toBeTruthy()
+    let selectEv!: KeyboardEvent
+    await act(async () => {
+      selectEl.focus()
+      selectEv = pressKey(selectEl, 'Backspace')
+    })
+    expect(selectEv.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+  })
+
+  it('Backspace on an inspector Switch, slider, or listbox does not remove the layer and calls preventDefault', async () => {
+    const { host, onWidgets } = await renderEditor([textLayer])
+    await selectWidget(host, 'Text: Hello stream')
+
+    const switchBtn = host.querySelector<HTMLButtonElement>('[role="switch"]')!
+    expect(switchBtn).toBeTruthy()
+    let switchEv!: KeyboardEvent
+    await act(async () => {
+      switchBtn.focus()
+      switchEv = pressKey(switchBtn, 'Backspace')
+    })
+    expect(switchEv.defaultPrevented).toBe(true)
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    await act(async () => {
+      pressKey(switchBtn, 'Delete')
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+
+    for (const role of ['slider', 'listbox']) {
+      const ctrl = document.createElement('div')
+      ctrl.setAttribute('role', role)
+      ctrl.tabIndex = 0
+      host.appendChild(ctrl)
+      let roleEv!: KeyboardEvent
+      await act(async () => {
+        ctrl.focus()
+        roleEv = pressKey(ctrl, 'Backspace')
+      })
+      expect(roleEv.defaultPrevented).toBe(true)
+      expect(onWidgets).not.toHaveBeenCalled()
+    }
   })
 
   it('Backspace in a contenteditable element, ARIA textbox, or IME composition does not remove the layer', async () => {
@@ -521,16 +565,45 @@ describe('LayoutEditor Backspace/Delete layer removal (Group B)', () => {
     expect(onWidgets).not.toHaveBeenCalled()
   })
 
-  it('Backspace while an open modal dialog exists does not remove the layer', async () => {
+  it('Backspace while an open modal dialog, alertdialog, or dropdown Menu exists does not remove the layer', async () => {
     const { host, onWidgets } = await renderEditor([textLayer])
     const btn = await selectWidget(host, 'Text: Hello stream')
 
     const dlg = document.createElement('div')
     dlg.setAttribute('role', 'dialog')
     host.appendChild(dlg)
-
     await act(async () => {
       pressKey(btn, 'Backspace')
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+    dlg.remove()
+
+    const nativeDlg = document.createElement('dialog')
+    nativeDlg.setAttribute('open', '')
+    host.appendChild(nativeDlg)
+    await act(async () => {
+      pressKey(btn, 'Backspace')
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+    nativeDlg.remove()
+
+    const alertDlg = document.createElement('div')
+    alertDlg.setAttribute('role', 'alertdialog')
+    host.appendChild(alertDlg)
+    await act(async () => {
+      pressKey(btn, 'Backspace')
+    })
+    expect(onWidgets).not.toHaveBeenCalled()
+    alertDlg.remove()
+
+    // Real dropdown menu ("More to add") opens [role="menu"].
+    const moreBtn = host.querySelector<HTMLButtonElement>('button[aria-label="More to add"]')!
+    await act(async () => {
+      moreBtn.click()
+    })
+    expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
+    await act(async () => {
+      pressKey(document.body.querySelector('[role="menu"]')!, 'Backspace')
     })
     expect(onWidgets).not.toHaveBeenCalled()
   })
@@ -620,6 +693,119 @@ describe('LayoutEditor Backspace/Delete layer removal (Group B)', () => {
     )
     expect(buttons).toHaveLength(3)
     expect(buttons[1]).toContain('Text: Hello stream')
+  })
+
+  it('clicking another same-kind layer in Layers moves focus from textarea so Backspace deletes it, and adding blurs textarea', async () => {
+    const textTwo: Widget = {
+      id: 'l-text-2',
+      kind: 'layer',
+      x: 200,
+      y: 460,
+      w: 600,
+      h: 120,
+      config: { type: 'text', text: 'Second text' },
+    }
+    const { host, onWidgets } = await renderEditor([textLayer, textTwo])
+    await selectWidget(host, 'Text: Hello stream')
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea')!
+    await act(async () => {
+      textarea.focus()
+    })
+    expect(document.activeElement).toBe(textarea)
+
+    // Clicking the second text layer in Layers (even in webviews that don't focus buttons on click)
+    // moves focus onto that row button so Backspace deletes Second text instead of editing textarea.
+    const layersSection = host.querySelector('section[aria-label="Layers"]')!
+    const rowBtn = [...layersSection.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Text: Second text'),
+    )!
+    await act(async () => {
+      rowBtn.click()
+    })
+    expect(document.activeElement).toBe(rowBtn)
+
+    await act(async () => {
+      pressKey(rowBtn, 'Backspace')
+    })
+    expect(onWidgets).toHaveBeenCalledWith([textLayer])
+
+    // Re-focus textarea and click toolbar Text button: textarea blurs so Backspace won't edit text.
+    await act(async () => {
+      textarea.focus()
+    })
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Canvas"]')!
+    const addTextBtn = [...toolbar.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Text',
+    )!
+    await act(async () => {
+      addTextBtn.click()
+    })
+    expect(document.activeElement).not.toBe(textarea)
+  })
+
+  it('Trash removal and keyboard delete restore focus to canvas, announce politely, use latest onWidgets, and clean up listener on unmount', async () => {
+    const latestWidgets = vi.fn()
+    const firstWidgets = vi.fn()
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    const renderWith = (cb: (w: Widget[]) => void, widgets: Widget[]) =>
+      act(async () =>
+        root!.render(
+          <>
+            <LayoutEditor
+              layout={{ name: 'Main', width: 1920, height: 1080, widgets }}
+              onWidgets={cb}
+              state={EMPTY_STATE}
+              themes={[]}
+              goals={[]}
+              onGoalCreated={vi.fn()}
+              preview={false}
+              media={[]}
+              onUploaded={vi.fn()}
+            />
+            <Toaster />
+          </>,
+        ),
+      )
+
+    await renderWith(firstWidgets, [goalWidget, textLayer])
+    await renderWith(latestWidgets, [goalWidget, textLayer])
+
+    // Keyboard shortcuts trigger is a focusable InfoTip button.
+    expect(host.querySelector('button[aria-label="Keyboard shortcuts"]')).toBeTruthy()
+
+    // Select text layer and remove via Trash button: canvas gets focus + polite live announcement.
+    await selectWidget(host, 'Text: Hello stream')
+    const trashBtn = host.querySelector<HTMLButtonElement>('button[aria-label="Remove layer"]')!
+    await act(async () => {
+      trashBtn.click()
+    })
+    expect(latestWidgets).toHaveBeenCalledWith([goalWidget])
+    expect(firstWidgets).not.toHaveBeenCalled()
+    const canvasEl = host.querySelector('[role="group"][aria-label="Main layout, 1920 by 1080"]')
+    expect(document.activeElement).toBe(canvasEl)
+    expect(host.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Removed Text: Hello stream. Press Cmd or Ctrl + Z to undo.',
+    )
+
+    // Keyboard delete after onWidgets swap calls latestWidgets, not stale firstWidgets.
+    const goalBtn = await selectWidget(host, 'Goal widget')
+    await act(async () => {
+      pressKey(goalBtn, 'Delete')
+    })
+    expect(latestWidgets).toHaveBeenCalledTimes(2)
+    expect(firstWidgets).not.toHaveBeenCalled()
+
+    // Unmount cleans up the window keydown listener so Backspace is no longer intercepted.
+    await act(async () => root?.unmount())
+    root = null
+    let afterEv!: KeyboardEvent
+    await act(async () => {
+      afterEv = pressKey(document.body, 'Backspace')
+    })
+    expect(afterEv.defaultPrevented).toBe(false)
   })
 })
 

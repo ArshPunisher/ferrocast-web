@@ -27,7 +27,6 @@ import {
   EyeSlash,
   FrameCorners,
   ImageSquare,
-  Keyboard,
   Lock,
   LockOpen,
   Play,
@@ -74,6 +73,7 @@ import {
   Button,
   Field,
   IconButton,
+  InfoTip,
   Input,
   Segmented,
   Select,
@@ -703,7 +703,12 @@ function LayersPanel({
           >
             <button
               type="button"
-              onClick={() => onSelect(w.id)}
+              onClick={(e) => {
+                // In macOS WKWebView / Safari, clicking a button does not move focus off an active
+                // inspector textarea; move focus explicitly so Backspace removes the picked layer.
+                e.currentTarget.focus({ preventScroll: true })
+                onSelect(w.id)
+              }}
               aria-pressed={w.id === selected}
               className={cx(
                 'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-[15px] font-semibold',
@@ -1519,13 +1524,16 @@ export function LayoutEditor({
 }) {
   const client = useClient()
   const [selected, setSelected] = useState<string | null>(null)
+  const [announcement, setAnnouncement] = useState<{ seq: number; text: string } | null>(null)
   const file = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const layersRef = useRef<HTMLElement>(null)
   const layersHeadingRef = useRef<HTMLHeadingElement>(null)
+  const onWidgetsRef = useRef(onWidgets)
+  onWidgetsRef.current = onWidgets
   const sel = layout.widgets.find((w) => w.id === selected) ?? null
   const update = (w: Widget, opts?: { merge?: boolean }) =>
-    onWidgets(
+    onWidgetsRef.current(
       layout.widgets.map((x) => (x.id === w.id ? clampWidget(w, layout) : x)),
       opts,
     )
@@ -1539,13 +1547,30 @@ export function LayoutEditor({
       })
       return
     }
-    onWidgets(opts.bottom ? [w, ...layout.widgets] : [...layout.widgets, w])
+    if (
+      typeof document !== 'undefined' &&
+      isEditableElement(document.activeElement) &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      document.activeElement.blur()
+    }
+    onWidgetsRef.current(opts.bottom ? [w, ...layout.widgets] : [...layout.widgets, w])
     setSelected(w.id)
   }
   const remove = (id: string) => {
-    onWidgets(layout.widgets.filter((x) => x.id !== id))
+    const target = layout.widgets.find((x) => x.id === id)
+    onWidgetsRef.current(layout.widgets.filter((x) => x.id !== id))
     setSelected(null)
+    if (target) {
+      setAnnouncement((prev) => ({
+        seq: (prev?.seq ?? 0) + 1,
+        text: `Removed ${layerName(target)}. Press Cmd or Ctrl + Z to undo.`,
+      }))
+    }
+    canvasRef.current?.focus({ preventScroll: true })
   }
+  const keyActionRef = useRef({ sel, brandLocked, remove })
+  keyActionRef.current = { sel, brandLocked, remove }
   useEffect(() => {
     if (readOnly) return
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1566,22 +1591,21 @@ export function LayoutEditor({
         return
       }
       e.preventDefault()
-      if (!sel) return
-      if (sel.locked) {
+      const { sel: current, brandLocked: lockedBrand, remove: removeLayer } = keyActionRef.current
+      if (!current) return
+      if (current.locked) {
         toast({ tone: 'warn', message: 'Unlock this layer to remove it.' })
         return
       }
-      if (brandLocked && isBrandLayer(sel)) {
+      if (lockedBrand && isBrandLayer(current)) {
         toast({ tone: 'warn', message: 'Built-in designs keep this Ferrocast mark.' })
         return
       }
-      remove(sel.id)
-      canvasRef.current?.focus({ preventScroll: true })
+      removeLayer(current.id)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, sel, brandLocked, layout.widgets])
+  }, [readOnly])
   const align = (how: 'l' | 'c' | 'r' | 't' | 'm' | 'b') => {
     if (!sel) return
     const x =
@@ -1700,12 +1724,15 @@ export function LayoutEditor({
       >
         <div
           className={cx(
-            'flex flex-col rounded-panel bg-[#0d0f13] bg-[radial-gradient(rgb(255_255_255/0.06)_1px,transparent_1px)] [background-size:18px_18px]',
+            'relative flex flex-col rounded-panel bg-[#0d0f13] bg-[radial-gradient(rgb(255_255_255/0.06)_1px,transparent_1px)] [background-size:18px_18px]',
             fitViewport
               ? 'fc-overlay-stage order-1 items-center justify-center overflow-hidden p-2.5 sm:p-4 lg:order-none'
               : 'p-2.5 sm:p-5',
           )}
         >
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {announcement ? <span key={announcement.seq}>{announcement.text}</span> : null}
+          </div>
           <Canvas
             layout={layout}
             selected={selected}
@@ -1721,7 +1748,7 @@ export function LayoutEditor({
         </div>
         <div
           className={cx(
-            'flex flex-wrap items-center gap-1.5',
+            'relative flex flex-wrap items-center gap-1.5',
             fitViewport && 'order-2 shrink-0 lg:order-none',
           )}
           role="toolbar"
@@ -1775,17 +1802,10 @@ export function LayoutEditor({
               {preview ? <Pause size={16} /> : <Play size={16} />}
             </IconButton>
           )}
-          <span
-            className="inline-flex size-8 items-center justify-center rounded-control text-text-3"
-            title="Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z undoes."
-          >
-            <Keyboard size={17} aria-hidden="true" />
-            <span className="sr-only">
-              Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
-              resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z
-              undoes.
-            </span>
-          </span>
+          <InfoTip label="Keyboard shortcuts" above>
+            Drag to move, drag the corner to resize. Tab to a layer, arrows move it, Alt + arrows
+            resize, Shift for bigger steps, Delete or Backspace removes it. Cmd or Ctrl + Z undoes.
+          </InfoTip>
           <input
             ref={file}
             type="file"
