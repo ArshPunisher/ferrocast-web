@@ -81,7 +81,7 @@ describe('OverlayEditor save preserves undo stack (Extra bug #9)', () => {
     engine?.dispose()
     engine = null
     document.body.innerHTML = ''
-    useLive.setState({ conn: null, connectors: null })
+    useLive.setState({ conn: null, connectors: null, links: null, labels: null })
     currentToasts().forEach((t) => dismissToast(t.id))
   })
 
@@ -499,5 +499,53 @@ describe('OverlayEditor save preserves undo stack (Extra bug #9)', () => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: origInnerW })
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: origInnerH })
     }
+  })
+
+  it('updates stale useLive.links when fresh /api/v1/links resolves on mount', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const list = await client.overlays()
+    const base: Overlay = {
+      ...list[0]!,
+      widgets: [
+        {
+          id: 'w-soc',
+          kind: 'layer',
+          x: 40,
+          y: 900,
+          w: 600,
+          h: 60,
+          config: { type: 'text', text: '{socials}', color: '#ffffff' },
+        },
+      ],
+    }
+    vi.spyOn(client, 'overlay').mockResolvedValue(structuredClone(base))
+    await client.saveLinks({ twitch: 'twitch.tv/freshmount', custom: [] })
+
+    // Pre-populate stale links in store before OverlayEditor mounts.
+    useLive.setState({
+      links: {
+        twitch: 'twitch.tv/staleprev',
+        youtube: null,
+        kick: null,
+        facebook: null,
+        discord: null,
+        instagram: null,
+        x: null,
+        tiktok: null,
+        website: null,
+        custom: [],
+        socials: ['twitch.tv/staleprev'],
+        channel_name: 'Stale',
+        next_stream: null,
+        next_stream_at: null,
+      },
+    })
+
+    const host = await mountEditor(base.id, client)
+    await flushTicks(20, () => useLive.getState().links?.twitch === 'twitch.tv/freshmount')
+    expect(useLive.getState().links?.twitch).toBe('twitch.tv/freshmount')
+    const shadow = host.querySelector('[data-overlay-preview] > div')?.shadowRoot
+    expect(shadow?.textContent).toContain('twitch.tv/freshmount')
   })
 })

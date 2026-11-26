@@ -336,8 +336,9 @@ export class FerroClient {
   connect = (p: AccountPlatform) => this.post<ConnectFlow>(`/api/v1/accounts/${p}/connect`)
   disconnect = (p: AccountPlatform) => this.del(`/api/v1/accounts/${p}`)
   links = () => this.get<LinksResponse>('/api/v1/links')
-  saveLinks = (l: CreatorLinks) => this.put<LinksResponse>('/api/v1/links', l)
-  labels = () => this.get<LabelsMap>('/api/v1/labels')
+  saveLinks = (l: Partial<CreatorLinks>) => this.put<LinksResponse>('/api/v1/links', l)
+  labels = (tzOffsetMin = Math.max(-720, Math.min(840, -new Date().getTimezoneOffset()))) =>
+    this.get<LabelsMap>(`/api/v1/labels?tz_offset_min=${Math.trunc(tzOffsetMin)}`)
 
   // Overlays
   overlays = () => this.get<Overlay[]>('/api/v1/overlays')

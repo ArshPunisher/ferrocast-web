@@ -5,6 +5,7 @@ import {
   accountUrl,
   formatScheduleTime,
   normalizeDisplayLink,
+  parseLiveFrame,
   resolveLayerItems,
   resolveLayerText,
   resolveLinks,
@@ -214,6 +215,54 @@ describe('DemoEngine links, labels, and account URLs', () => {
       }
       expect(dcFrame.data.links?.youtube).toBeNull()
       sock.close()
+    } finally {
+      engine.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('parses live links frames and broadcasts them on DemoEngine live socket', async () => {
+    vi.useFakeTimers()
+    const valid = parseLiveFrame(
+      JSON.stringify({
+        v: 1,
+        type: 'links',
+        data: {
+          custom: [],
+          resolved: {
+            twitch: 'twitch.tv/nova',
+            custom: [],
+            socials: ['twitch.tv/nova'],
+          },
+        },
+      }),
+    )
+    expect(valid?.type).toBe('links')
+    expect(parseLiveFrame(JSON.stringify({ v: 1, type: 'links', data: {} }))).toBeNull()
+    expect(
+      parseLiveFrame(
+        JSON.stringify({
+          v: 1,
+          type: 'links',
+          data: { resolved: { custom: 'bad', socials: [] } },
+        }),
+      ),
+    ).toBeNull()
+
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    try {
+      const liveSock = engine.socket(`ws://127.0.0.1:47820/api/v1/live?session=${DEMO_TOKEN}`)
+      const liveFrames: Record<string, unknown>[] = []
+      liveSock.onmessage = (ev) =>
+        liveFrames.push(JSON.parse(String(ev.data)) as Record<string, unknown>)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await client.saveLinks({ discord: 'https://discord.gg/liveframe' })
+      const linkLive = liveFrames.find((f) => f.type === 'links') as
+        { data?: { resolved?: { discord?: string } } } | undefined
+      expect(linkLive?.data?.resolved?.discord).toBe('discord.gg/liveframe')
+      liveSock.close()
     } finally {
       engine.dispose()
       vi.useRealTimers()

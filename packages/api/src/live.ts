@@ -40,6 +40,8 @@ const LIVE_TYPES = new Set([
   'golive',
   // The live watch (studio.ts LiveAlert)
   'live_alert',
+  // Creator links & resolved overlay link/schedule values.
+  'links',
 ])
 
 const UPDATE_PHASES = new Set(['idle', 'downloading', 'installing', 'ready', 'failed'])
@@ -130,6 +132,11 @@ export function parseLiveFrame(raw: unknown): LiveFrame | null {
     (typeof d.id !== 'string' || typeof d.message !== 'string' || typeof d.cleared !== 'boolean')
   )
     return null
+  if (f.type === 'links') {
+    const r = d.resolved as Record<string, unknown> | undefined
+    if (typeof r !== 'object' || r === null || Array.isArray(r)) return null
+    if (!Array.isArray(r.socials) || !Array.isArray(r.custom)) return null
+  }
   return f as LiveFrame
 }
 

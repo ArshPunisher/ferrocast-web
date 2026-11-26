@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
+import { parseLiveFrame, sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
 import { currentToasts } from '@ferrocast/ui'
-import { cloudModerationKey, isLimited, mergeChat, selectFeed, useLive } from './store'
+import {
+  beginLinksLoad,
+  cloudModerationKey,
+  isLimited,
+  mergeChat,
+  selectFeed,
+  useLive,
+} from './store'
 import type { Connection } from './boot'
 import { href, parseRoute } from './router'
 import { lineActions, readableColors } from '../components/chat'
@@ -38,6 +45,11 @@ const ev = (data: FerroEvent): LiveFrame => ({ v: 1, type: 'event', data })
 
 beforeEach(() => {
   useLive.setState({
+    conn: null,
+    remote: null,
+    connectors: null,
+    links: null,
+    labels: null,
     chat: [],
     events: [],
     deleted: new Set(),
@@ -195,6 +207,123 @@ describe('live store', () => {
     const r = sample('raid', 'twitch', 2) as FerroEvent
     const feed = selectFeed([{ ...f, seq: 1 }, chat('c9'), { ...r, seq: 2 }])
     expect(feed.map((e) => e.kind.type)).toEqual(['raid', 'follow'])
+  })
+
+  it('applies parsed links live frames and advances linksGen over stale fetches', () => {
+    const staleGen = beginLinksLoad()
+    const parsed = parseLiveFrame(
+      JSON.stringify({
+        v: 1,
+        type: 'links',
+        data: {
+          custom: [],
+          resolved: {
+            twitch: 'twitch.tv/liveupdated',
+            youtube: null,
+            kick: null,
+            facebook: null,
+            discord: 'discord.gg/live',
+            instagram: null,
+            x: null,
+            tiktok: null,
+            website: null,
+            custom: [],
+            socials: ['twitch.tv/liveupdated', 'discord.gg/live'],
+            channel_name: 'LiveUpdated',
+            next_stream: null,
+            next_stream_at: null,
+          },
+        },
+      }),
+    )
+    expect(parsed?.type).toBe('links')
+    useLive.getState().apply([parsed!])
+    expect(useLive.getState().links?.discord).toBe('discord.gg/live')
+
+    useLive.getState().setLinks(
+      {
+        custom: [],
+        socials: ['twitch.tv/stale'],
+        twitch: 'twitch.tv/stale',
+      },
+      staleGen,
+    )
+    expect(useLive.getState().links?.discord).toBe('discord.gg/live')
+  })
+
+  it('coalesces label refreshes on bursts, handles reversal, and skips links/labels for mod sessions', async () => {
+    const labelsSpy = vi.fn().mockResolvedValue({ latest_follower: 'BurstWinner' })
+    const linksSpy = vi
+      .fn()
+      .mockResolvedValue({ custom: [], resolved: { custom: [], socials: [] } })
+    const client = { labels: labelsSpy, links: linksSpy }
+    useLive.setState({ conn: { client } as never, remote: null, connectors: null })
+
+    const f = sample('follow', 'twitch', 1) as FerroEvent
+    const burst = Array.from({ length: 50 }, (_, i) => ev({ ...f, id: `b-${i}`, seq: i + 1 }))
+    useLive.getState().apply(burst)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(labelsSpy).toHaveBeenCalledTimes(1)
+
+    labelsSpy.mockClear()
+    const rev: FerroEvent = {
+      ...f,
+      id: 'rev-1',
+      seq: 99,
+      kind: { type: 'reversal', original_source_id: 'p1', reason: 'refund' },
+    }
+    useLive.getState().apply([ev(rev)])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(labelsSpy).toHaveBeenCalledTimes(1)
+
+    // Unchanged account identity in status does not re-fetch /links, and mod role never fetches /links or /labels.
+    const sameConn = {
+      twitch: {
+        state: 'connected',
+        account: { name: 'A', login: 'a', url: 'twitch.tv/a', avatar_url: null },
+        detail: null,
+        last_event_at: null,
+      },
+      youtube: { state: 'off', account: null, detail: null, last_event_at: null },
+      kick: { state: 'off', account: null, detail: null, last_event_at: null },
+      facebook: { state: 'off', account: null, detail: null, last_event_at: null },
+      obs: { state: 'off', account: null, detail: null, last_event_at: null },
+    } as never
+    useLive.setState({ connectors: sameConn })
+    useLive.getState().apply([
+      {
+        v: 1,
+        type: 'status',
+        data: {
+          connectors: {
+            ...(sameConn as object),
+            twitch: {
+              ...(sameConn as Record<string, object>).twitch,
+              state: 'reconnecting',
+            },
+          },
+        },
+      } as LiveFrame,
+    ])
+    await Promise.resolve()
+    expect(linksSpy).not.toHaveBeenCalled()
+
+    labelsSpy.mockClear()
+    linksSpy.mockClear()
+    useLive.setState({ remote: { role: 'mod', name: 'Mod', pcOnline: true } })
+    useLive.getState().apply([
+      ev({ ...f, id: 'mod-ev', seq: 100 }),
+      {
+        v: 1,
+        type: 'status',
+        data: { connectors: sameConn },
+      } as LiveFrame,
+    ])
+    await Promise.resolve()
+    expect(labelsSpy).not.toHaveBeenCalled()
+    expect(linksSpy).not.toHaveBeenCalled()
   })
 })
 

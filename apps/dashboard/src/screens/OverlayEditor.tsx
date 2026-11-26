@@ -8,7 +8,7 @@ import { TestAlertMenu } from '../components/alerts-live'
 import { useUsesObs } from '../lib/picture'
 import { AddToStudioDialog } from '../components/studio/desk/add-to-studio'
 import { LayoutEditor } from '../components/layout/LayoutEditor'
-import { resolvePreviewLabelMap, useCreatorPreview } from '../components/design/previews'
+import { resolvePreviewLabelMap } from '../components/design/previews'
 import { useHistory, useUndoKeys } from '../lib/history'
 import { useAction, useClient, useResource } from '../lib/hooks'
 import { href } from '../lib/router'
@@ -178,33 +178,26 @@ export function OverlayEditor({ id }: { id: string }) {
   const hasTrain = (draft?.widgets ?? []).some(
     (w) => w.kind === 'label' && w.config.source === 'hype_train',
   )
-  const lastEvent = events.at(-1)?.id
   const recentChat = useMemo(() => chat.slice(-30), [chat])
   const recentEvents = useMemo(() => events.slice(-25), [events])
-  const creatorPreview = useCreatorPreview()
-  const labelsLoadGenRef = useRef<number | undefined>(undefined)
-  const linksLoadGenRef = useRef<number | undefined>(undefined)
-  const freshLabels = useResource(
-    (c) => {
-      labelsLoadGenRef.current = beginLabelsLoad()
-      return c.labels?.().catch(() => null) ?? Promise.resolve(null)
-    },
-    [lastEvent],
-  )
-  const freshLinks = useResource((c) => {
-    linksLoadGenRef.current = beginLinksLoad()
-    return c.links?.().catch(() => null) ?? Promise.resolve(null)
-  }, [])
-  const effectiveLabels = freshLabels.data ?? creatorPreview.labels
-  const effectiveLinks = creatorPreview.links ?? freshLinks.data?.resolved ?? null
+  const effectiveLabels = useLive((s) => s.labels)
+  const effectiveLinks = useLive((s) => s.links)
   useEffect(() => {
-    if (freshLabels.data) useLive.getState().setLabels(freshLabels.data, labelsLoadGenRef.current)
-  }, [freshLabels.data])
-  useEffect(() => {
-    if (freshLinks.data && !useLive.getState().links) {
-      useLive.getState().setLinks(freshLinks.data.resolved, linksLoadGenRef.current)
+    let active = true
+    const lkGen = beginLinksLoad()
+    const lbGen = beginLabelsLoad()
+    void Promise.all([
+      client.links?.().catch(() => null) ?? Promise.resolve(null),
+      client.labels?.().catch(() => null) ?? Promise.resolve(null),
+    ]).then(([lk, lb]) => {
+      if (!active) return
+      if (lk) useLive.getState().setLinks(lk.resolved, lkGen)
+      if (lb) useLive.getState().setLabels(lb, lbGen)
+    })
+    return () => {
+      active = false
     }
-  }, [freshLinks.data])
+  }, [client])
   const resolvedCredits =
     credits.data &&
     (credits.data.followers.length > 0 ||

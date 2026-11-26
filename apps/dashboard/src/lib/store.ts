@@ -216,6 +216,16 @@ function panicToast(n: Notice): void {
   })
 }
 
+function accountSig(c: Connectors | null): string {
+  if (!c) return ''
+  return (['twitch', 'youtube', 'kick', 'facebook'] as const)
+    .map((p) => {
+      const a = c[p]?.account
+      return a ? `${p}:${a.login ?? ''}:${a.url ?? ''}` : `${p}:`
+    })
+    .join('|')
+}
+
 export const useLive = create<LiveStore>((set, get) => ({
   conn: null,
   remote: null,
@@ -315,6 +325,7 @@ export const useLive = create<LiveStore>((set, get) => ({
     let events = s.events
     let deleted = s.deleted
     let connectors = s.connectors
+    let links = s.links
     let queue = s.queue
     let tts = s.tts
     let notices = s.notices
@@ -336,6 +347,8 @@ export const useLive = create<LiveStore>((set, get) => ({
     let remote = s.remote
     let chatChanged = false
     let eventsChanged = false
+    let needLabelsRefresh = false
+    let needLinksRefresh = false
     for (const f of frames) {
       if (isStudioFrame(f)) {
         studio = reduceStudio(studio, f)
@@ -363,45 +376,30 @@ export const useLive = create<LiveStore>((set, get) => ({
             eventsChanged = true
             events.push(e)
             if (
-              s.conn?.client.labels &&
-              (k.type === 'follow' ||
-                k.type === 'subscription' ||
-                k.type === 'gift_batch' ||
-                k.type === 'tip' ||
-                k.type === 'paid_message' ||
-                k.type === 'platform_gift' ||
-                k.type === 'raid')
+              k.type === 'follow' ||
+              k.type === 'subscription' ||
+              k.type === 'gift_batch' ||
+              k.type === 'tip' ||
+              k.type === 'paid_message' ||
+              k.type === 'platform_gift' ||
+              k.type === 'raid' ||
+              k.type === 'reversal'
             ) {
-              const clientRef = s.conn.client
-              const lbGen = beginLabelsLoad()
-              queueMicrotask(() => {
-                void clientRef
-                  .labels()
-                  .then((lb) => {
-                    if (useLive.getState().conn?.client === clientRef)
-                      useLive.getState().setLabels(lb, lbGen)
-                  })
-                  .catch(() => {})
-              })
+              needLabelsRefresh = true
             }
           }
           break
         }
         case 'status':
-          connectors = f.data.connectors
-          if (s.conn?.client.links) {
-            const clientRef = s.conn.client
-            const lkGen = beginLinksLoad()
-            queueMicrotask(() => {
-              void clientRef
-                .links()
-                .then((r) => {
-                  if (useLive.getState().conn?.client === clientRef)
-                    useLive.getState().setLinks(r.resolved, lkGen)
-                })
-                .catch(() => {})
-            })
+          if (accountSig(f.data.connectors) !== accountSig(connectors)) {
+            needLinksRefresh = true
           }
+          connectors = f.data.connectors
+          break
+        case 'links':
+          links = f.data.resolved
+          linksGen += 1
+          needLinksRefresh = false
           break
         case 'queue':
           queue = f.data
@@ -511,6 +509,7 @@ export const useLive = create<LiveStore>((set, get) => ({
       events,
       deleted,
       connectors,
+      links,
       queue,
       tts,
       notices,
@@ -531,6 +530,33 @@ export const useLive = create<LiveStore>((set, get) => ({
       goliveFrameAt,
       remote,
     })
+    const clientRef = s.conn?.client
+    if (clientRef && remote?.role !== 'mod') {
+      if (needLabelsRefresh && clientRef.labels) {
+        const lbGen = beginLabelsLoad()
+        queueMicrotask(() => {
+          void clientRef
+            .labels()
+            .then((lb) => {
+              if (useLive.getState().conn?.client === clientRef)
+                useLive.getState().setLabels(lb, lbGen)
+            })
+            .catch(() => {})
+        })
+      }
+      if (needLinksRefresh && clientRef.links) {
+        const lkGen = beginLinksLoad()
+        queueMicrotask(() => {
+          void clientRef
+            .links()
+            .then((r) => {
+              if (useLive.getState().conn?.client === clientRef)
+                useLive.getState().setLinks(r.resolved, lkGen)
+            })
+            .catch(() => {})
+        })
+      }
+    }
   },
 }))
 
@@ -550,6 +576,7 @@ export async function loadFull(conn: Connection): Promise<boolean> {
   live.setStatus(status)
   const lkGen = beginLinksLoad()
   const lbGen = beginLabelsLoad()
+  const canLinksLabels = conn.remote?.role !== 'mod'
   const [chat, page, queue, tts, stats, linksRes, labelsRes] = await Promise.all([
     conn.client.chat(200).catch(() => [] as FerroEvent[]),
     conn.client
@@ -558,8 +585,8 @@ export async function loadFull(conn: Connection): Promise<boolean> {
     conn.client.queue().catch(() => null),
     conn.client.ttsPending().catch(() => []),
     conn.client.sessionStats().catch(() => null),
-    conn.client.links?.().catch(() => null) ?? Promise.resolve(null),
-    conn.client.labels?.().catch(() => null) ?? Promise.resolve(null),
+    canLinksLabels ? (conn.client.links?.().catch(() => null) ?? Promise.resolve(null)) : null,
+    canLinksLabels ? (conn.client.labels?.().catch(() => null) ?? Promise.resolve(null)) : null,
   ])
   live.seed({ chat, events: page.events })
   if (queue) live.setQueue(queue)

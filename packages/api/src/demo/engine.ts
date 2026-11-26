@@ -2176,6 +2176,7 @@ export class DemoEngine {
 
   private pushOverlayLinks(): void {
     this.pushState({ links: this.resolvedLinks() })
+    this.broadcastLive({ v: 1, type: 'links', data: this.linksView() })
   }
 
   private saveLinks(body: unknown): LinksResponse {
