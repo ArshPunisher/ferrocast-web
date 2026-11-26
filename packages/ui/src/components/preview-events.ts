@@ -1,0 +1,60 @@
+export const PREVIEW_LIVE_RESIZE_EVENT = 'fc://preview-live-resize'
+export const SCALE_CHANGED_EVENT = 'fc://scale-changed'
+export const DIVIDER_DRAG_EVENT = 'fc:divider-drag'
+
+export type PreviewResizeReason = 'window' | 'divider' | 'programmatic'
+
+export interface PreviewLiveResizeStillHints {
+  main?: string
+  program?: string
+  vertical?: string
+}
+
+export interface PreviewLiveResizePayload {
+  active: boolean
+  reason?: PreviewResizeReason
+  seq?: number
+  scale?: number
+  width?: number
+  height?: number
+  still?: PreviewLiveResizeStillHints
+}
+
+export interface ScaleChangedPayload {
+  scale: number
+  previousScale?: number
+  display?: string | number
+}
+
+export interface DividerDragPayload {
+  active: boolean
+  axis?: 'x' | 'y'
+}
+
+export function isValidScaleChangedPayload(value: unknown): value is ScaleChangedPayload {
+  if (!value || typeof value !== 'object') return false
+  const scale = (value as { scale?: unknown }).scale
+  return typeof scale === 'number' && Number.isFinite(scale) && scale > 0
+}
+
+export function isValidPreviewLiveResizePayload(
+  value: unknown,
+): value is PreviewLiveResizePayload {
+  if (!value || typeof value !== 'object') return false
+  return typeof (value as { active?: unknown }).active === 'boolean'
+}
+
+export function dispatchPreviewLiveResize(detail: PreviewLiveResizePayload) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<PreviewLiveResizePayload>(PREVIEW_LIVE_RESIZE_EVENT, { detail }))
+}
+
+export function dispatchScaleChanged(detail: ScaleChangedPayload) {
+  if (typeof window === 'undefined' || !isValidScaleChangedPayload(detail)) return
+  window.dispatchEvent(new CustomEvent<ScaleChangedPayload>(SCALE_CHANGED_EVENT, { detail }))
+}
+
+export function dispatchDividerDrag(detail: DividerDragPayload) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<DividerDragPayload>(DIVIDER_DRAG_EVENT, { detail }))
+}

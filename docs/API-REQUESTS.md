@@ -567,3 +567,53 @@ All floating surfaces rendered above the Studio stage (`PopoverSurface`, `Menu`,
   - In browser/demo mode, `fc:preview-overlays`, `PreviewOverlayRegistry`, and `collectPreviewHoles` operate normally while `PUT /api/v1/studio/engine/preview` resolves `204` via the demo engine (`packages/api/src/demo/features/studio-engine.ts`).
   - Native desktop shells consume `PUT /api/v1/studio/engine/preview` holes (macOS punch-out / Windows overlay ordering) and can optionally subscribe directly to `window`'s `fc:preview-overlays` event using viewport coordinates (`x`, `y`, `w`, `h`, `r`) for zero-hop occlusion sync.
   - Windows-only limitation: `<select>` native OS popup widgets rendered inside `StageBar` when collapsed cannot report popup geometry to HTML/DOM APIs until replaced with a custom popover (`PopoverSurface`) or webview child-window composition.
+
+### Window events: `fc://preview-live-resize` & `fc://scale-changed`
+
+Two custom `window` events coordinate smooth desktop OS live-resize and multi-monitor DPI transitions without per-frame IPC chatter (`fc://preview-live-resize` and `fc://scale-changed`). Both are optional at runtime so the browser demo works normally when no desktop host dispatches them.
+
+- **`fc://preview-live-resize` (`PreviewLiveResizePayload`):**
+  - Dispatched on `window` as a `CustomEvent` by the desktop shell when an OS live-resize loop starts (`NSWindowWillStartLiveResizeNotification` / `WM_ENTERSIZEMOVE`) and finishes (`NSWindowDidEndLiveResizeNotification` / `WM_EXITSIZEMOVE`).
+  - Payload:
+    ```ts
+    interface PreviewLiveResizePayload {
+      /** `true` when OS live-resize starts; `false` when live-resize settles. */
+      active: boolean
+      /** Optional origin of the resize transition (`'window'` default from desktop host). */
+      reason?: 'window' | 'divider' | 'programmatic'
+      /** Optional monotonically increasing event sequence number for stale-event rejection. */
+      seq?: number
+      /** Optional active monitor backing scale factor (`devicePixelRatio`). */
+      scale?: number
+      /** Optional viewport logical dimensions `[width, height]` reported by host. */
+      width?: number
+      height?: number
+      /** Optional host-supplied still image URLs / data URIs keyed by preview slot. */
+      still?: {
+        main?: string
+        program?: string
+        vertical?: string
+      }
+    }
+    ```
+  - **Contract:**
+    - On `{ active: true }`: the web preview immediately displays its pre-decoded cached still frame across macOS and Windows equally (falling back to a one-shot thumbnail fetch only if no cached frame exists yet) and emits **zero** `PUT /api/v1/studio/engine/preview` calls for any `ResizeObserver` or `window.resize` churn while `active === true`.
+    - On `{ active: false }`: on the next animation frame (`requestAnimationFrame`), the web preview re-measures the settled stage rectangle and occlusion holes, dispatches **one** atomic `PUT /api/v1/studio/engine/preview` update, and switches cleanly back to live compositing.
+
+- **`fc://scale-changed` (`ScaleChangedPayload`):**
+  - Dispatched on `window` as a `CustomEvent` when the window moves between monitors with different backing scale factors (`WM_DPICHANGED` / `NSWindowDidChangeBackingPropertiesNotification`).
+  - Payload:
+    ```ts
+    interface ScaleChangedPayload {
+      /** New backing scale factor (for example `1`, `1.25`, `1.5`, `2`). */
+      scale: number
+      /** Previous backing scale factor, if known. */
+      previousScale?: number
+      /** Optional display or monitor identifier. */
+      display?: string | number
+    }
+    ```
+  - **Contract:**
+    - Validates `Number.isFinite(detail.scale) && detail.scale > 0`.
+    - Updates the active display scale, invalidates cached still frames captured under the prior DPI, and (unless an `fc://preview-live-resize` gesture is still `active`) schedules **one** `requestAnimationFrame` `PUT /api/v1/studio/engine/preview` sync so native placement matches the new scale cleanly.
+    - **Browser demo fallback:** When neither native event is emitted, `PreviewBoxes` falls back to coalesced `window.resize` freeze/settle handling and a `window.matchMedia('(resolution: <dpr>dppx)')` scale-change listener.
