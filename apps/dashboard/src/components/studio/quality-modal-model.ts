@@ -70,8 +70,51 @@ export interface ModalModel {
     auto_fitted: boolean
     note: string | null
     shares_encoder_with: string[]
+    allowed?: boolean
   } | null
   lockedReason: string | null
+}
+
+export interface MatchMainEndpoint {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec?: string
+  resFps: string
+  rate: string
+  dims: string
+}
+
+export interface MatchMainSoftTip {
+  text: string
+  actionLabel: string
+  targetDraft: ModalDraft
+}
+
+export interface MatchMainSharedCap {
+  maxSessions: number
+  summary: string
+  detail: string
+}
+
+export interface MatchMainComparison {
+  switchMatchLabel: string
+  baseLabel: string
+  base: MatchMainEndpoint
+  fitted: MatchMainEndpoint
+  resCut: boolean
+  fpsCut: boolean
+  rateCut: boolean
+  anyCut: boolean
+  sharedCap: MatchMainSharedCap | null
+  reasons: string[]
+  softTip: MatchMainSoftTip | null
+}
+
+export interface EditorHeaderStatus {
+  text: string
+  tone: 'live' | 'work' | 'warn' | 'bad' | 'muted'
 }
 
 export interface HardLimitIssue {
@@ -119,7 +162,7 @@ export interface ApiQualityErrorInfo {
 }
 
 const LANDSCAPE_TIERS = [2160, 1440, 1080, 720, 540, 480] as const
-const PORTRAIT_TIERS = [1440, 1080, 720, 540, 480] as const
+const PORTRAIT_TIERS = [1440, 1080, 720, 540] as const
 
 const BITRATE_LADDER = [
   800, 1500, 2500, 3000, 4000, 4500, 6000, 8000, 9000, 12000, 15000, 18000, 24000, 32000, 40000,
@@ -137,13 +180,22 @@ export function formatModalResFps(width: number, height: number, fps: number): s
   return `${short}p${fps}`
 }
 
+export interface ResolvedQualitySummary {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  auto_fitted?: boolean
+}
+
 export function buildQualitySummaryText(
   dest: DestinationView,
   usesObs: boolean,
   _peerNamesById?: Record<string, string>,
+  fallbackResolved?: ResolvedQualitySummary | null,
 ): string {
   if (usesObs) return 'Same as OBS'
-  const r = dest.resolved_quality
+  const r = dest.resolved_quality ?? fallbackResolved ?? null
   if (!r) {
     if (dest.quality?.mode === 'custom') {
       return `${formatModalResFps(dest.quality.width, dest.quality.height, dest.quality.fps)} · ${formatModalRate(dest.quality.kbps)}`
@@ -158,6 +210,33 @@ export function buildQualitySummaryText(
     return `${resRate} · auto`
   }
   return 'Same as main'
+}
+
+export function formatEditorHeaderStatus(
+  dest: DestinationView,
+  canvasLive: boolean,
+): EditorHeaderStatus {
+  if (canvasLive && dest.enabled && !dest.blocked && !dest.standby_for && dest.connected) {
+    if (dest.health?.state === 'live') return { text: 'Live now', tone: 'live' }
+    if (dest.health?.state === 'reconnecting') return { text: 'Reconnecting', tone: 'work' }
+    if (dest.health?.state === 'paused') return { text: 'Paused', tone: 'warn' }
+    if (dest.health?.state === 'failed') return { text: 'Failed', tone: 'bad' }
+    return { text: 'Not live', tone: 'muted' }
+  }
+  if (!dest.enabled) return { text: 'Off', tone: 'muted' }
+  return { text: 'Not live', tone: 'muted' }
+}
+
+function fitDimensionsPreservingAspect(
+  srcW: number,
+  srcH: number,
+  maxW: number,
+  maxH: number,
+): { width: number; height: number } {
+  if (srcW <= maxW && srcH <= maxH) return { width: srcW, height: srcH }
+  const scale = Math.min(maxW / Math.max(1, srcW), maxH / Math.max(1, srcH))
+  const even = (n: number) => Math.max(2, Math.round((n * scale) / 2) * 2)
+  return { width: even(srcW), height: even(srcH) }
 }
 
 function dimensionsForShortEdge(
@@ -218,11 +297,30 @@ export function buildModalModel({
   destOpts: DestinationQualityOptions | null
   response: GoLiveQualityOptionsResponse | null
 }): ModalModel {
+  const resolvedFallback = destOpts?.resolved ?? dest.resolved_quality ?? null
   const canvasMain =
     dest.canvas === 'vertical'
-      ? (response?.vertical ?? response?.main ?? null)
+      ? (response?.vertical ??
+        (resolvedFallback && resolvedFallback.height > resolvedFallback.width
+          ? {
+              width: resolvedFallback.width,
+              height: resolvedFallback.height,
+              fps: resolvedFallback.fps,
+              kbps: resolvedFallback.kbps,
+              codec: resolvedFallback.codec,
+              audio_kbps: 160,
+            }
+          : response?.main
+            ? {
+                width: 1080,
+                height: 1920,
+                fps: response.main.fps,
+                kbps: Math.min(response.main.kbps, 6000),
+                codec: response.main.codec,
+                audio_kbps: response.main.audio_kbps,
+              }
+            : null))
       : (response?.main ?? null)
-  const resolvedFallback = destOpts?.resolved ?? dest.resolved_quality ?? null
   const canvasW =
     canvasMain?.width ?? resolvedFallback?.width ?? (dest.canvas === 'vertical' ? 1080 : 1920)
   const canvasH =
@@ -356,21 +454,33 @@ export function buildModalModel({
         auto_fitted: sameOpt.auto_fitted,
         note: sameOpt.note,
         shares_encoder_with: sameOpt.shares_encoder_with,
+        allowed: sameOpt.allowed,
       }
     : canvasMain
-      ? {
-          width: Math.min(canvasMain.width, limits.max_width),
-          height: Math.min(canvasMain.height, limits.max_height),
-          fps: Math.min(canvasMain.fps, maxAllowedFps),
-          kbps: Math.min(canvasMain.kbps, bitrateHardMaxKbps),
-          codec: limits.codecs[0] ?? 'h264',
-          auto_fitted:
-            canvasMain.width > limits.max_width ||
-            canvasMain.height > limits.max_height ||
-            canvasMain.kbps > bitrateHardMaxKbps,
-          note: null,
-          shares_encoder_with: [],
-        }
+      ? (() => {
+          const fit = fitDimensionsPreservingAspect(
+            canvasMain.width,
+            canvasMain.height,
+            limits.max_width,
+            limits.max_height,
+          )
+          const fitFps = Math.min(canvasMain.fps, maxAllowedFps)
+          const fitKbps = Math.min(canvasMain.kbps, bitrateHardMaxKbps)
+          return {
+            width: fit.width,
+            height: fit.height,
+            fps: fitFps,
+            kbps: fitKbps,
+            codec: limits.codecs[0] ?? 'h264',
+            auto_fitted:
+              fit.width < canvasMain.width ||
+              fit.height < canvasMain.height ||
+              fitFps < canvasMain.fps ||
+              fitKbps < canvasMain.kbps,
+            note: null,
+            shares_encoder_with: [],
+          }
+        })()
       : resolvedFallback
         ? {
             width: resolvedFallback.width,
@@ -747,6 +857,178 @@ export function toDestinationQualityPayload(draft: ModalDraft): DestinationQuali
     fps: draft.fps,
     kbps: draft.kbps,
     codec: null,
+  }
+}
+
+export function buildMatchMainComparison(
+  model: ModalModel,
+  ignoreServiceLimits = false,
+): MatchMainComparison {
+  const isVertical = model.dest.canvas === 'vertical'
+  const switchMatchLabel = isVertical ? 'Match vertical picture' : 'Match main stream'
+  const baseLabel = isVertical ? 'Vertical picture' : 'Main stream'
+
+  const baseRaw = model.canvasMain ??
+    model.sameAsMainResolved ?? {
+      width: isVertical ? 1080 : 1920,
+      height: isVertical ? 1920 : 1080,
+      fps: 60,
+      kbps: 6000,
+      codec: 'h264',
+    }
+
+  const hasSharedDetail = Boolean(
+    model.dest.capped &&
+    !model.dest.capped.separate_encode &&
+    (model.dest.capped.detail.includes('Your PC can run') ||
+      model.dest.capped.summary.startsWith('Shared cap:') ||
+      model.budget?.status === 'over'),
+  )
+  const overBudgetShared =
+    hasSharedDetail ||
+    Boolean(model.sameAsMainResolved?.allowed === false && model.budget?.status === 'over') ||
+    Boolean(
+      model.budget?.status === 'over' &&
+      model.budget.max_sessions === 1 &&
+      model.sameAsMainResolved?.shares_encoder_with.length,
+    )
+
+  const cappedFallback =
+    overBudgetShared && model.dest.resolved_quality
+      ? {
+          width: model.dest.resolved_quality.width,
+          height: model.dest.resolved_quality.height,
+          fps: model.dest.resolved_quality.fps,
+          kbps: Math.min(
+            model.dest.resolved_quality.kbps,
+            model.dest.capped?.kbps && model.dest.capped.kbps > 0
+              ? model.dest.capped.kbps
+              : model.dest.resolved_quality.kbps,
+          ),
+          codec: model.dest.resolved_quality.codec,
+        }
+      : overBudgetShared && model.dest.capped && model.dest.capped.kbps > 0
+        ? {
+            width: model.dest.capped.resolution?.[0] ?? baseRaw.width,
+            height: model.dest.capped.resolution?.[1] ?? baseRaw.height,
+            fps: model.dest.capped.fps ?? baseRaw.fps,
+            kbps: model.dest.capped.kbps,
+            codec: baseRaw.codec,
+          }
+        : null
+
+  const fittedRaw =
+    cappedFallback &&
+    (cappedFallback.kbps < (model.sameAsMainResolved?.kbps ?? baseRaw.kbps) ||
+      cappedFallback.width < (model.sameAsMainResolved?.width ?? baseRaw.width))
+      ? cappedFallback
+      : (model.sameAsMainResolved ?? baseRaw)
+
+  const base: MatchMainEndpoint = {
+    width: baseRaw.width,
+    height: baseRaw.height,
+    fps: baseRaw.fps,
+    kbps: baseRaw.kbps,
+    codec: baseRaw.codec,
+    resFps: formatModalResFps(baseRaw.width, baseRaw.height, baseRaw.fps),
+    rate: formatModalRate(baseRaw.kbps),
+    dims: `${baseRaw.width} × ${baseRaw.height}`,
+  }
+  const fitted: MatchMainEndpoint = {
+    width: fittedRaw.width,
+    height: fittedRaw.height,
+    fps: fittedRaw.fps,
+    kbps: fittedRaw.kbps,
+    codec: fittedRaw.codec,
+    resFps: formatModalResFps(fittedRaw.width, fittedRaw.height, fittedRaw.fps),
+    rate: formatModalRate(fittedRaw.kbps),
+    dims: `${fittedRaw.width} × ${fittedRaw.height}`,
+  }
+
+  const resCut = fitted.width < base.width || fitted.height < base.height
+  const fpsCut = fitted.fps < base.fps
+  const rateCut = fitted.kbps < base.kbps
+  const anyCut = resCut || fpsCut || rateCut
+
+  let sharedCap: MatchMainSharedCap | null = null
+  if (overBudgetShared) {
+    const maxSessions = model.budget?.max_sessions ?? 1
+    const fallbackDetail = `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`
+    sharedCap = {
+      maxSessions,
+      summary: model.dest.capped?.summary ?? `Shared cap: ${fitted.resFps} · ${fitted.rate}`,
+      detail: model.dest.capped?.detail?.includes('Your PC can run')
+        ? model.dest.capped.detail
+        : fallbackDetail,
+    }
+  }
+
+  const reasons: string[] = []
+  if (sharedCap) {
+    reasons.push(sharedCap.detail)
+  } else if (!anyCut) {
+    reasons.push('Exactly the same picture, no extra work for your PC.')
+  } else {
+    if (resCut) {
+      reasons.push(
+        `Size lowered to ${Math.min(fitted.width, fitted.height)}p, ${model.dest.name}’s limit.`,
+      )
+    }
+    if (fpsCut) {
+      reasons.push(`Frame rate lowered to ${fitted.fps} fps, ${model.dest.name}’s limit.`)
+    }
+    if (rateCut) {
+      reasons.push(`Bitrate capped at ${fitted.rate}, ${model.dest.name}’s limit.`)
+    }
+    const baseKeep = isVertical
+      ? `Your vertical picture keeps ${base.resFps}.`
+      : `Your recording keeps ${base.resFps}.`
+    reasons.push(`Runs as its own encode. ${baseKeep}`)
+  }
+
+  let softTip: MatchMainSoftTip | null = null
+  const fittedShort = Math.min(fitted.width, fitted.height)
+  const hasSoftWarning =
+    !ignoreServiceLimits &&
+    !sharedCap &&
+    fittedShort > 1080 &&
+    (Boolean(model.sameAsMainResolved?.note) ||
+      (model.softNoteThresholdShort !== null && fittedShort >= model.softNoteThresholdShort))
+  if (hasSoftWarning) {
+    const portrait = isVertical || fitted.height > fitted.width
+    const targetWidth = Math.min(model.limits.max_width, portrait ? 1080 : 1920)
+    const targetHeight = Math.min(model.limits.max_height, portrait ? 1920 : 1080)
+    const allowedFps = model.fpsOptions.filter(
+      (f) => !f.locked && f.fps <= Math.min(fitted.fps, 60),
+    )
+    const targetFps = allowedFps[allowedFps.length - 1]?.fps ?? Math.min(fitted.fps, 60)
+    const targetKbps = Math.min(model.bitrateHardMaxKbps, Math.max(model.bitrateMinKbps, base.kbps))
+    const targetResFps = formatModalResFps(targetWidth, targetHeight, targetFps)
+    softTip = {
+      text: `${fitted.resFps} at ${fitted.rate} can look soft on ${model.dest.name}. ${targetResFps} is sharper at this bitrate.`,
+      actionLabel: `Use ${targetResFps}`,
+      targetDraft: {
+        matchMain: false,
+        width: targetWidth,
+        height: targetHeight,
+        fps: targetFps,
+        kbps: targetKbps,
+      },
+    }
+  }
+
+  return {
+    switchMatchLabel,
+    baseLabel,
+    base,
+    fitted,
+    resCut,
+    fpsCut,
+    rateCut,
+    anyCut,
+    sharedCap,
+    reasons,
+    softTip,
   }
 }
 

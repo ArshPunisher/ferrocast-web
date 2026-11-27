@@ -1051,7 +1051,33 @@ export function planEncodes(input: {
           'WebRTC streams cannot use B-frames, so Ferrocast encodes this output without B-frames.',
       }
     } else if (s.active && !ignoreLimits) {
-      if (obsMode || usedSharedFallback) {
+      if (usedSharedFallback && !obsMode) {
+        const sharedLim = sharedLimiterByCanvas.get(s.canvas)
+        if (
+          sharedLim &&
+          s.kbps === sharedLim.kbps &&
+          (sharedLim.kbps < s.canvasProfile.kbps ||
+            sharedLim.w < s.canvasProfile.width ||
+            sharedLim.h < s.canvasProfile.height ||
+            sharedLim.fps < s.canvasProfile.fps)
+        ) {
+          const maxSessions = budgetConfig.max_sessions ?? 1
+          const resFps = `${Math.min(sharedLim.w, sharedLim.h)}p${sharedLim.fps}`
+          const m = sharedLim.kbps / 1000
+          const rateLabel = Number.isInteger(m) ? `${m} Mbps` : `${m.toFixed(1)} Mbps`
+          const dimChanged =
+            sharedLim.w !== s.canvasProfile.width || sharedLim.h !== s.canvasProfile.height
+          const fpsChanged = sharedLim.fps !== s.canvasProfile.fps
+          capped = {
+            kbps: sharedLim.kbps,
+            ...(dimChanged ? { resolution: [sharedLim.w, sharedLim.h] as [number, number] } : {}),
+            ...(fpsChanged ? { fps: sharedLim.fps } : {}),
+            separate_encode: false,
+            summary: `Shared cap: ${resFps} · ${rateLabel}`,
+            detail: `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`,
+          }
+        }
+      } else if (obsMode) {
         const sharedLim = sharedLimiterByCanvas.get(s.canvas)
         if (
           sharedLim &&
