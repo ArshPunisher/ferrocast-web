@@ -1121,115 +1121,6 @@ export function buildQualityOptionsResponse(input: {
     const limit = platformLimitFor(d.cfg.kind, canvas, d.cfg.brand)
     const locked = baseDest.lockedReason !== null
 
-    const candidateSpecs: Array<{
-      id: string
-      label: string
-      quality: DestinationQuality
-    }> = [{ id: 'same_as_main', label: 'Same as main', quality: { mode: 'same_as_main' } }]
-
-    if (!locked) {
-      const pushTier = (
-        id: string,
-        label: string,
-        longEdge: number,
-        shortEdge: number,
-        fps: number,
-        kbps: number,
-      ) => {
-        const isVerticalCanvas = canvasProfile.height > canvasProfile.width
-        const w = isVerticalCanvas ? shortEdge : longEdge
-        const h = isVerticalCanvas ? longEdge : shortEdge
-        if (w > canvasProfile.width || h > canvasProfile.height) return
-        const alignedFps = largestFpsDivisor(canvasProfile.fps, fps)
-        if (alignedFps <= 0 || canvasProfile.fps % alignedFps !== 0) return
-        if (!input.ignoreLimits) {
-          if (
-            limit.maxLongEdge != null &&
-            limit.maxShortEdge != null &&
-            (Math.max(w, h) > limit.maxLongEdge || Math.min(w, h) > limit.maxShortEdge)
-          ) {
-            return
-          }
-          if (limit.maxFps != null && alignedFps > limit.maxFps) return
-        }
-        const maxK = input.ignoreLimits ? 60000 : effectiveMaxKbps(limit, w, h, alignedFps)
-        const finalKbps = Math.min(kbps, maxK)
-        candidateSpecs.push({
-          id,
-          label,
-          quality: {
-            mode: 'custom',
-            width: w,
-            height: h,
-            fps: alignedFps,
-            kbps: finalKbps,
-            codec: limit.codecs.includes(canvasProfile.codec) ? null : (limit.codecs[0] ?? 'h264'),
-          },
-        })
-      }
-
-      pushTier('1080p60', '1080p60', 1920, 1080, 60, Math.min(canvasProfile.kbps, limit.recKbps))
-      pushTier('720p60', '720p60', 1280, 720, 60, Math.min(canvasProfile.kbps, 4500))
-      pushTier('720p30', '720p30', 1280, 720, 30, Math.min(canvasProfile.kbps, 3000))
-      pushTier('480p30', '480p30', 854, 480, 30, Math.min(canvasProfile.kbps, 1500))
-    }
-
-    const seenResolved = new Set<string>()
-    const options: QualityOption[] = []
-
-    for (const spec of candidateSpecs) {
-      const simDests = input.destinations.map((other) =>
-        other.cfg.id === d.cfg.id
-          ? {
-              ...other,
-              cfg: { ...other.cfg, quality: spec.quality, light: false, enabled: true },
-            }
-          : other,
-      )
-      const sim = planEncodes({
-        ...input,
-        destinations: simDests,
-        preserveCustomOnFallback: true,
-      })
-      const simDest = sim.perDest.get(d.cfg.id)!
-      const r = simDest.resolved
-      const sig = `${r.width}x${r.height}@${r.fps}:${r.kbps}:${r.codec}`
-      if (spec.id !== 'same_as_main' && seenResolved.has(sig)) continue
-      seenResolved.add(sig)
-
-      const note = simDest.qualityNote
-      const recommended =
-        note === null &&
-        (!simDest.resolved.auto_fitted || spec.id === '1080p60') &&
-        r.kbps >= Math.min(limit.recKbps, canvasProfile.kbps) * 0.5 &&
-        (spec.id === 'same_as_main'
-          ? !note && !simDest.resolved.auto_fitted
-          : spec.id === '1080p60')
-      const overBudget = sim.budget.status === 'over'
-
-      options.push({
-        id: spec.id,
-        label: spec.label,
-        quality: spec.quality,
-        resolved: {
-          width: r.width,
-          height: r.height,
-          fps: r.fps,
-          kbps: r.kbps,
-          codec: r.codec,
-        },
-        auto_fitted: r.auto_fitted,
-        recommended,
-        note,
-        shares_encoder_with: r.shared_with,
-        allowed: spec.id === 'same_as_main' || !overBudget,
-        disabled_reason:
-          spec.id !== 'same_as_main' && overBudget
-            ? 'Not enough encode headroom on this PC.'
-            : null,
-      })
-    }
-
     const [maxW, maxH] = input.ignoreLimits
       ? [canvasProfile.width, canvasProfile.height]
       : fitDimensions(
@@ -1255,6 +1146,171 @@ export function buildQualityOptionsResponse(input: {
     )
     const recFps = largestFpsDivisor(maxFps, limit.recFps)
     const maxKbps = input.ignoreLimits ? 60000 : effectiveMaxKbps(limit, maxW, maxH, maxFps)
+
+    const candidateSpecs: Array<{
+      id: string
+      label: string
+      quality: DestinationQuality
+    }> = [{ id: 'same_as_main', label: 'Same as main', quality: { mode: 'same_as_main' } }]
+
+    if (!locked) {
+      const pushTier = (
+        id: string,
+        label: string,
+        longEdge: number,
+        shortEdge: number,
+        fps: number,
+        kbps: number,
+      ) => {
+        const isVerticalCanvas = canvas === 'vertical' || canvasProfile.height > canvasProfile.width
+        const w = isVerticalCanvas ? shortEdge : longEdge
+        const h = isVerticalCanvas ? longEdge : shortEdge
+        if (w > canvasProfile.width || h > canvasProfile.height) return
+        const alignedFps = largestFpsDivisor(canvasProfile.fps, fps)
+        if (alignedFps <= 0 || canvasProfile.fps % alignedFps !== 0) return
+        if (!input.ignoreLimits) {
+          if (
+            limit.maxLongEdge != null &&
+            limit.maxShortEdge != null &&
+            (Math.max(w, h) > limit.maxLongEdge || Math.min(w, h) > limit.maxShortEdge)
+          ) {
+            return
+          }
+          if (limit.maxFps != null && alignedFps > limit.maxFps) return
+        }
+        const maxK = input.ignoreLimits ? 60000 : effectiveMaxKbps(limit, w, h, alignedFps)
+        const finalKbps = Math.max(500, Math.min(kbps, maxK))
+        candidateSpecs.push({
+          id,
+          label,
+          quality: {
+            mode: 'custom',
+            width: w,
+            height: h,
+            fps: alignedFps,
+            kbps: finalKbps,
+            codec: limit.codecs.includes(canvasProfile.codec) ? null : (limit.codecs[0] ?? 'h264'),
+          },
+        })
+      }
+
+      const isVertical = canvas === 'vertical' || canvasProfile.height > canvasProfile.width
+      if (isVertical) {
+        pushTier('1080p60', '1080p60', 1920, 1080, 60, Math.min(canvasProfile.kbps, limit.recKbps))
+        pushTier('1080p30', '1080p30', 1920, 1080, 30, Math.min(canvasProfile.kbps, 6000))
+        pushTier('720p60', '720p60', 1280, 720, 60, Math.min(canvasProfile.kbps, 4500))
+        pushTier('720p30', '720p30', 1280, 720, 30, Math.min(canvasProfile.kbps, 3000))
+        pushTier('540p30', '540p30', 960, 540, 30, Math.min(canvasProfile.kbps, 1500))
+      } else {
+        pushTier('2160p60', '2160p60', 3840, 2160, 60, Math.min(canvasProfile.kbps, 25000))
+        pushTier('1440p60', '1440p60', 2560, 1440, 60, Math.min(canvasProfile.kbps, 18000))
+        pushTier('1080p60', '1080p60', 1920, 1080, 60, Math.min(canvasProfile.kbps, limit.recKbps))
+        pushTier('1080p30', '1080p30', 1920, 1080, 30, Math.min(canvasProfile.kbps, 6000))
+        pushTier('720p60', '720p60', 1280, 720, 60, Math.min(canvasProfile.kbps, 4500))
+        pushTier('720p30', '720p30', 1280, 720, 30, Math.min(canvasProfile.kbps, 3000))
+        pushTier('480p30', '480p30', 854, 480, 30, Math.min(canvasProfile.kbps, 1500))
+      }
+
+      // Surface active same-canvas encode group shapes so zero-cost shared options stay visible.
+      for (const grp of basePlan.groups) {
+        if (grp.canvas !== canvas) continue
+        if (grp.members.every((m) => m === d.cfg.id)) continue
+        if (!input.ignoreLimits && !limit.codecs.includes(grp.codec)) continue
+        if (!input.hostCodecs.includes(grp.codec)) continue
+        if (grp.width > canvasProfile.width || grp.height > canvasProfile.height) continue
+        if (grp.fps <= 0 || canvasProfile.fps % grp.fps !== 0) continue
+        if (!input.ignoreLimits) {
+          if (
+            limit.maxLongEdge != null &&
+            limit.maxShortEdge != null &&
+            (Math.max(grp.width, grp.height) > limit.maxLongEdge ||
+              Math.min(grp.width, grp.height) > limit.maxShortEdge)
+          ) {
+            continue
+          }
+          if (limit.maxFps != null && grp.fps > limit.maxFps) continue
+          if (grp.kbps > effectiveMaxKbps(limit, grp.width, grp.height, grp.fps)) continue
+        }
+        candidateSpecs.push({
+          id: `${grp.height}p${grp.fps}_${grp.kbps}`,
+          label: `${grp.height}p${grp.fps}`,
+          quality: {
+            mode: 'custom',
+            width: grp.width,
+            height: grp.height,
+            fps: grp.fps,
+            kbps: grp.kbps,
+            codec: grp.codec,
+          },
+        })
+      }
+    }
+
+    const seenResolved = new Set<string>()
+    const options: QualityOption[] = []
+    let recMarked = false
+
+    for (const spec of candidateSpecs) {
+      const simDests = input.destinations.map((other) =>
+        other.cfg.id === d.cfg.id
+          ? {
+              ...other,
+              blocked: false,
+              standby: false,
+              cfg: { ...other.cfg, quality: spec.quality, light: false, enabled: true },
+            }
+          : other,
+      )
+      const sim = planEncodes({
+        ...input,
+        destinations: simDests,
+        preserveCustomOnFallback: true,
+      })
+      const simDest = sim.perDest.get(d.cfg.id)!
+      const r = simDest.resolved
+      const sig = `${r.width}x${r.height}@${r.fps}:${r.kbps}:${r.codec}`
+      if (spec.id !== 'same_as_main' && seenResolved.has(sig)) continue
+      seenResolved.add(sig)
+
+      const note = simDest.qualityNote
+      let recommended = false
+      if (spec.id === 'same_as_main') {
+        recommended = note === null
+        if (recommended) recMarked = true
+      } else if (
+        !recMarked &&
+        note === null &&
+        r.width === recW &&
+        r.height === recH &&
+        r.fps === recFps
+      ) {
+        recommended = true
+        recMarked = true
+      }
+      const overBudget = sim.budget.status === 'over'
+
+      options.push({
+        id: spec.id,
+        label: spec.label,
+        quality: spec.quality,
+        resolved: {
+          width: r.width,
+          height: r.height,
+          fps: r.fps,
+          kbps: r.kbps,
+          codec: r.codec,
+        },
+        auto_fitted: r.auto_fitted,
+        recommended,
+        note,
+        shares_encoder_with: r.shared_with,
+        allowed: spec.id === 'same_as_main' || !overBudget,
+        disabled_reason:
+          spec.id !== 'same_as_main' && overBudget
+            ? 'Not enough encode headroom on this PC.'
+            : null,
+      })
+    }
 
     const customLimits: CustomQualityLimits | null = locked
       ? null

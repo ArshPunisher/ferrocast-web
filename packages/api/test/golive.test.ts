@@ -941,6 +941,12 @@ describe('DemoGoLive per-destination quality parity', () => {
         resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000 },
       })
 
+      // 1440p60 studio: Kick auto-fits to 1080p60 (recommended) and Twitch/YouTube include 1080p30.
+      expect(
+        opts.destinations.kick!.options.find((o) => o.id === 'same_as_main')?.recommended,
+      ).toBe(true)
+      expect(opts.destinations.youtube!.options.some((o) => o.id === '1080p30')).toBe(true)
+
       // Direct SRT destination and Twitch Enhanced Broadcasting report locked_reason + no custom_limits.
       await api.addCustom('Studio SRT', 'srt://127.0.0.1:9001', '')
       await api.setEnhanced('twitch', true)
@@ -1274,6 +1280,87 @@ describe('DemoGoLive per-destination quality parity', () => {
           }),
         ),
       ).resolves.toMatchObject({ status: 422, code: 'golive_needs_new_encode' })
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('surfaces active shared-encoder rungs under tight budget and clears switching_quality when stream stops', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 1920,
+        height: 1080,
+        scale: null,
+        fps: 60,
+        video_kbps: 12000,
+      })
+
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch',
+        })),
+      )
+
+      // Generous budget: Kick gets both its own 8M auto-fit and Twitch's active 6M shared option.
+      const generousOpts = await api.qualityOptions()
+      const kickGenerousShared = generousOpts.destinations.kick!.options.find(
+        (o) =>
+          o.quality.mode === 'custom' &&
+          o.resolved.width === 1920 &&
+          o.resolved.height === 1080 &&
+          o.resolved.fps === 60 &&
+          o.resolved.kbps === 6000,
+      )
+      expect(kickGenerousShared).toMatchObject({
+        allowed: true,
+        shares_encoder_with: ['Twitch'],
+      })
+
+      // 2-session budget filled by YouTube (12M) + Twitch (6M): Kick's same_as_main coalesces onto
+      // Twitch's 6M encode while new extra-encode rungs fail budget.
+      engine.setGoLive({ encode_budget: { max_sessions: 2, limit_mpx_s: 300 } })
+      const opts = await api.qualityOptions()
+      const kickOpts = opts.destinations.kick!.options
+      const sameOpt = kickOpts.find((o) => o.id === 'same_as_main')
+      expect(sameOpt).toMatchObject({
+        allowed: true,
+        resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000 },
+        shares_encoder_with: ['Twitch'],
+      })
+      const extraOpt = kickOpts.find((o) => o.id === '720p30')
+      expect(extraOpt).toMatchObject({
+        allowed: false,
+        disabled_reason: 'Not enough encode headroom on this PC.',
+      })
+
+      // Stopping the stream mid-switch clears switching_quality cleanly.
+      engine.setGoLive({
+        encode_budget: { max_sessions: 8, limit_mpx_s: 995 },
+        switch_delay_ms: 5000,
+      })
+      await studioEng.start()
+      await studioEng.stream(true)
+      const switching = await api.setQuality('twitch', {
+        mode: 'custom',
+        width: 1280,
+        height: 720,
+        fps: 30,
+        kbps: 3000,
+      })
+      expect(switching.destinations.find((d) => d.id === 'twitch')?.switching_quality).toBe(true)
+
+      await studioEng.stream(false)
+      const stopped = await api.view()
+      expect(stopped.destinations.find((d) => d.id === 'twitch')?.switching_quality).toBe(false)
     } finally {
       engine.dispose()
     }

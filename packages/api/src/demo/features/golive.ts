@@ -757,9 +757,17 @@ export class DemoGoLive {
   private tick(): void {
     const live = this.live() || this.verticalLive()
     if (!this.live())
-      for (const d of this.cfg) if (d.canvas !== 'vertical') this.started.delete(d.id)
+      for (const d of this.cfg)
+        if (d.canvas !== 'vertical') {
+          this.started.delete(d.id)
+          this.switchingIds.delete(d.id)
+        }
     if (!this.verticalLive())
-      for (const d of this.cfg) if (d.canvas === 'vertical') this.started.delete(d.id)
+      for (const d of this.cfg)
+        if (d.canvas === 'vertical') {
+          this.started.delete(d.id)
+          this.switchingIds.delete(d.id)
+        }
     if (!live) this.resetProtect()
     if (live || live !== this.wasLive) {
       this.wasLive = live
