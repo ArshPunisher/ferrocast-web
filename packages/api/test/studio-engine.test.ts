@@ -1033,9 +1033,7 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         expect(svgPic).not.toContain('Banner <1>')
 
         const thumb = await api.thumbnail('S & <Live>')
-        const svgThumb = decodeURIComponent(thumb.image.split(',')[1] ?? '')
-        expect(svgThumb).toContain('S &amp; &lt;Live&gt;')
-        expect(svgThumb).not.toContain('S & <Live>')
+        expect(thumb.image).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/)
 
         await api.setItemFilterScope('S & <Live>', created.item.id, true)
         await api.addItemFilter('S & <Live>', created.item.id, {

@@ -541,6 +541,11 @@ function svgDataUrl(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
+const DEMO_SCENE_PNG_16X9 =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAAE0lEQVR4nGMQkVQiCTGMahgUGgBCiyxx4s/4wQAAAABJRU5ErkJggg=='
+const DEMO_SCENE_PNG_9X16 =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAQCAIAAABLKsIUAAAAE0lEQVR4nGMQkVTChRhG5Qa9HADeGixxZCcfLwAAAABJRU5ErkJggg=='
+
 function escapeXml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -2821,18 +2826,10 @@ export class DemoStudioEngine {
     }
     if (method === 'GET' && rest[2] === 'scenes' && rest[4] === 'thumbnail' && rest.length === 5) {
       const scene = decodeURIComponent(rest[3]!)
-      const list = this.requireScene(scene)
+      this.requireScene(scene)
       const isVertical = this.verticalOn && this.verticalScenes.includes(scene)
-      const w = Math.max(64, Math.min(640, Number(url?.searchParams.get('w') ?? 256) || 256))
-      const h = isVertical ? Math.round((w * 16) / 9) : Math.round((w * 9) / 16)
       return {
-        image: svgDataUrl(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
-            `<rect width="${w}" height="${h}" fill="#141922"/>` +
-            `<text x="12" y="24" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="13" font-weight="600">${escapeXml(scene)}</text>` +
-            `<text x="12" y="42" fill="#9fb0c7" font-family="system-ui,sans-serif" font-size="11">${list.length} source${list.length === 1 ? '' : 's'}</text>` +
-            `</svg>`,
-        ),
+        image: isVertical ? DEMO_SCENE_PNG_9X16 : DEMO_SCENE_PNG_16X9,
       }
     }
     if (rest[2] === 'scenes' && rest[4] === 'items') {
