@@ -659,8 +659,9 @@ body[data-scene-drag] iframe {
 .fc-desk [data-icon-button].fc-picked {
   box-shadow: none;
 }
-/* A switch's picked option in the Studio keeps the solid fill used everywhere else. */
-.fc-desk [role='radiogroup'] .fc-picked {
+/* Switches and pressed toggle pills in the Studio keep crisp solid pill fills with no row stripe. */
+.fc-desk [role='radiogroup'] .fc-picked,
+.fc-desk [aria-pressed='true'].fc-picked:not([data-icon-button]) {
   background-color: var(--fc-pick);
   color: var(--fc-on-pick);
   box-shadow: var(--fc-shadow-1);

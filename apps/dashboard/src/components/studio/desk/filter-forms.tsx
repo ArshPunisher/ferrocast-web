@@ -252,7 +252,7 @@ export function CaptureForm({ opts, values, onChange, name }: FormIn & { name?: 
             <div
               role="radiogroup"
               aria-label="What to show"
-              className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+              className="flex h-7 gap-1 rounded-[6px] border border-line bg-surface-2 p-0.5"
             >
               {METHODS.map((m) => {
                 const on = m.value === method.value

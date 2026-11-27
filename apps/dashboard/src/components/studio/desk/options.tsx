@@ -679,7 +679,7 @@ function OptionField({
                   className="h-7! min-w-0 flex-1 rounded-[5px]! px-2! text-[12.5px]!"
                   onChange={(e) => set({ ...font, face: e.target.value })}
                 />
-                <span role="group" aria-label={`${label}: style`} className="flex shrink-0 gap-0.5">
+                <span role="group" aria-label={`${label}: style`} className="flex shrink-0 gap-1">
                   {(
                     [
                       [1, 'B', 'Bold', 'font-bold'],

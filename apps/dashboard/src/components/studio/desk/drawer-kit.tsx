@@ -109,7 +109,7 @@ export function Seg<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="flex h-7 w-full min-w-0 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+      className="flex h-7 w-full min-w-0 gap-1 rounded-[6px] border border-line bg-surface-2 p-0.5"
     >
       {options.map((o) => {
         const on = o.value === value
@@ -510,7 +510,11 @@ export function PositionTab({ scene, item }: { scene: string; item: EngineItem }
         />
       </Prop>
       <Prop label="Flip">
-        <div className="flex h-7 w-full gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5">
+        <div
+          role="group"
+          aria-label="Flip"
+          className="flex h-7 w-full gap-1 rounded-[6px] border border-line bg-surface-2 p-0.5"
+        >
           {(
             [
               { key: 'scale_x', label: 'Across', icon: FlipHorizontal },

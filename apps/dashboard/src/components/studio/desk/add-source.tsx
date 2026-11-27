@@ -863,7 +863,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
             <div
               role="group"
               aria-label="Show devices as"
-              className="inline-flex rounded-control border border-line bg-inset p-0.5"
+              className="inline-flex gap-1 rounded-control border border-line bg-inset p-0.5"
             >
               {(
                 [

@@ -258,7 +258,7 @@ export function OverflowRow({
           <span
             key={it.key}
             data-ov={it.key}
-            className={cx('flex flex-none items-center empty:hidden', it.wrap)}
+            className={cx('flex flex-none items-center gap-1.5 empty:hidden', it.wrap)}
           >
             {it.render(false)}
           </span>

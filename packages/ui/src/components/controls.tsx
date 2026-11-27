@@ -322,7 +322,7 @@ export function Segmented<T extends string>({
       aria-label={label}
       className={cx(
         even ? 'grid w-full min-w-0 auto-cols-fr grid-flow-col' : 'inline-flex max-w-full',
-        'rounded-control border border-line bg-inset p-0.5',
+        'gap-x-1 gap-y-0.5 rounded-control border border-line bg-inset p-0.5',
         className,
       )}
     >
