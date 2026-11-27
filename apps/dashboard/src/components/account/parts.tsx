@@ -303,7 +303,7 @@ function Menu({
   return (
     <PopoverSurface
       open={open}
-      onClose={(reason) => onClose(reason === 'escape')}
+      onClose={(reason) => onClose(reason === 'escape' || reason === 'tab')}
       anchorRef={anchorRef}
       surfaceRef={ref}
       placement="top"

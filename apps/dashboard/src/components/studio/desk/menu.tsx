@@ -178,7 +178,20 @@ function MenuList({
     itemRect: RectBox
     parentRect: RectBox
   } | null>(null)
+  const subRef = useRef(sub)
+  subRef.current = sub
   const timer = useRef(0)
+
+  const closeSub = useCallback(
+    (index: number) => {
+      setSub(null)
+      const rows = ref.current?.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"]')
+      rows?.[items.slice(0, index).filter((m) => !isSep(m)).length]?.focus({
+        preventScroll: true,
+      })
+    },
+    [items],
+  )
 
   useEffect(() => {
     const focusFirst = () =>
@@ -247,11 +260,13 @@ function MenuList({
     } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
+      e.nativeEvent.stopImmediatePropagation()
       if (onBack) onBack()
       else onClose()
     } else if (e.key === 'ArrowLeft' && onBack) {
       e.preventDefault()
       e.stopPropagation()
+      e.nativeEvent.stopImmediatePropagation()
       onBack()
     } else if (e.key === 'Tab') {
       e.preventDefault()
@@ -262,7 +277,13 @@ function MenuList({
   return (
     <PopoverSurface
       open
-      onClose={onClose}
+      onClose={(reason) => {
+        if (reason === 'escape' && subRef.current) {
+          closeSub(subRef.current.i)
+          return
+        }
+        onClose()
+      }}
       anchorEl={anchorEl}
       anchorRect={anchorRect}
       parentMenuRect={parentMenuRect}
@@ -273,7 +294,7 @@ function MenuList({
       edgePadding={6}
       dismissible={!!root}
       ignoreOutsideSelector="[data-fc-menu]"
-      closeOnEscape={false}
+      closeOnEscape={!!root}
       closeOnTab={false}
       role="menu"
       aria-label={label}
@@ -425,14 +446,7 @@ function MenuList({
           gap={-4}
           focusSeq={sub.focusSeq}
           onClose={onClose}
-          onBack={() => {
-            const i = sub.i
-            setSub(null)
-            const rows = ref.current?.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"]')
-            rows?.[items.slice(0, i).filter((m) => !isSep(m)).length]?.focus({
-              preventScroll: true,
-            })
-          }}
+          onBack={() => closeSub(sub.i)}
         />
       )}
     </PopoverSurface>

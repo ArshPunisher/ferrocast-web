@@ -435,7 +435,7 @@ export function StatusStrip({
 
       <PopoverSurface
         open={open && layout.overflowItems.length > 0}
-        onClose={(reason) => closePopover(reason === 'escape')}
+        onClose={(reason) => closePopover(reason === 'escape' || reason === 'tab')}
         anchorRef={triggerRef}
         surfaceRef={popRef}
         placement="bottom"

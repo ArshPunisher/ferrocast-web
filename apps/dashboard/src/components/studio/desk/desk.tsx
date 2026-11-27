@@ -1421,7 +1421,7 @@ export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => 
         open={open}
         onClose={(reason) => {
           setOpen(false)
-          if (reason === 'escape') btn.current?.focus()
+          if (reason === 'escape' || reason === 'tab') btn.current?.focus()
         }}
         anchorRef={btn}
         surfaceRef={menu}

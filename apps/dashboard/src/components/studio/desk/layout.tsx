@@ -1385,7 +1385,7 @@ function DockMenu({ id }: { id: DockId }) {
         open={open}
         onClose={(reason) => {
           setOpen(false)
-          if (reason === 'escape') btn.current?.focus()
+          if (reason === 'escape' || reason === 'tab') btn.current?.focus()
         }}
         anchorRef={btn}
         surfaceRef={menu}

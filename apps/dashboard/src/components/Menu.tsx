@@ -96,6 +96,7 @@ export function Menu({
         onClose={(reason) => {
           if (
             reason === 'escape' ||
+            reason === 'tab' ||
             ((reason === 'scroll' || reason === 'resize') &&
               list.current?.contains(document.activeElement))
           ) {

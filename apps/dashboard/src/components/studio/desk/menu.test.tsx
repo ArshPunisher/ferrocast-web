@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, type MouseEvent as ReactMouseEvent } from 'react'
+import { act, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
+import { PopoverSurface, getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import { useContextMenu, type MenuItem } from './menu'
 
 // A menu taller than the window scrolls instead of being cut off (12 Nov); scrolling it keeps it
@@ -234,5 +234,85 @@ describe('submenu flipping, safe bounds, and button anchoring (M4)', () => {
     })
     expect(menus().length).toBe(1)
     expect(document.activeElement).toBe(row)
+  })
+
+  it('closes root MenuList on Escape over another PopoverSurface even when items are disabled, and closes submenu first', async () => {
+    const closePanel = vi.fn()
+    function LayeredHost() {
+      const [menuItems, setMenuItems] = useState<MenuItem[] | null>(null)
+      const panelBtnRef = useRef<HTMLButtonElement>(null)
+      const { open, menu } = useContextMenu()
+      return (
+        <div>
+          <PopoverSurface
+            open
+            onClose={closePanel}
+            anchorRef={panelBtnRef}
+            anchorRect={{ left: 100, top: 100, right: 140, bottom: 130, width: 40, height: 30 }}
+            role="group"
+            aria-label="More tools"
+          >
+            <button
+              ref={panelBtnRef}
+              type="button"
+              onClick={(e) =>
+                open(
+                  e,
+                  'History',
+                  menuItems ?? [{ label: 'Nothing to undo yet', disabled: true }],
+                )
+              }
+            >
+              History
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                setMenuItems([{ label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] }])
+                open(e, 'Guides', [{ label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] }])
+              }}
+            >
+              Guides
+            </button>
+          </PopoverSurface>
+          {menu}
+        </div>
+      )
+    }
+
+    const el = document.body.appendChild(document.createElement('div'))
+    root = createRoot(el)
+    await act(async () => root!.render(<LayeredHost />))
+
+    // Open History with only a disabled item (focus stays outside menu items): Escape must still close MenuList!
+    const historyBtn = document.body.querySelector('button')!
+    await act(async () => historyBtn.click())
+    expect(menus().length).toBe(1)
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(menus().length).toBe(0)
+    expect(closePanel).not.toHaveBeenCalled()
+
+    // Open menu with submenu whose item is disabled -> Escape closes submenu first, then root menu, then panel.
+    const guidesBtn = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Guides',
+    )!
+    await act(async () => guidesBtn.click())
+    const row = menus()[0]!.querySelector('[role="menuitem"]') as HTMLElement
+    await act(async () => row.click())
+    expect(menus().length).toBe(2)
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(menus().length).toBe(1)
+    expect(closePanel).not.toHaveBeenCalled()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(menus().length).toBe(0)
+    expect(closePanel).not.toHaveBeenCalled()
   })
 })
