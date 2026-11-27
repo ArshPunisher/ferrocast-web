@@ -197,9 +197,11 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
       const conn = useLive.getState().conn
       if (conn) {
         const askedAt = Date.now()
-        void goliveApi(conn.client)
-          .view()
-          .then((v) => useLive.getState().setGoLiveView(v, askedAt))
+        void Promise.resolve()
+          .then(() => goliveApi(conn.client).view())
+          .then((v) => {
+            if (v) useLive.getState().setGoLiveView(v, askedAt)
+          })
           .catch(() => undefined)
       }
       toast(
@@ -670,11 +672,12 @@ export function StreamPage({
     )
       return
     let alive = true
-    void goliveApi(conn.client)
-      .view()
+    void Promise.resolve()
+      .then(() => goliveApi(conn.client).view())
       .then(
         (v) =>
           alive &&
+          v &&
           setFetched({
             conn,
             rev: fetchRev,
