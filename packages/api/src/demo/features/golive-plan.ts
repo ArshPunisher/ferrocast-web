@@ -739,6 +739,14 @@ function makeCapSummary(
   }
 }
 
+/** The engine's wording for a PC that cannot run another separate encode. */
+function sharedCapText(maxSessions: number | null): string {
+  if (maxSessions === null) {
+    return "Your PC's video encoder is at capacity for separate encodes; lower main quality or turn off a platform."
+  }
+  return `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`
+}
+
 export function planEncodes(input: {
   destinations: DestPlanMeta[]
   main: StudioStreamProfile
@@ -750,7 +758,6 @@ export function planEncodes(input: {
   hostCodecs: VideoCodec[]
   live: boolean
   liveStats?: { fps: number; kbps: number }
-  preserveCustomOnFallback?: boolean
 }): EncodePlanResult {
   const {
     destinations,
@@ -896,6 +903,8 @@ export function planEncodes(input: {
   )
 
   let usedSharedFallback = false
+  // Destinations the shared-cap pass moved onto one picture (only ones following the main stream).
+  const sharedCapIds = new Set<string>()
   if (source === 'studio' && evalResult.budget.status === 'over') {
     // Pass-1: coalesce auto-fitted separate groups onto a lower compatible group on the same canvas.
     let progress = true
@@ -953,16 +962,21 @@ export function planEncodes(input: {
     }
 
     // Pass-2: shared-cap fallback when still over PC budget (e.g. 1-session NVENC/CPU).
-    if (evalResult.budget.status === 'over' && !input.preserveCustomOnFallback) {
+    if (evalResult.budget.status === 'over') {
       usedSharedFallback = true
       for (const canvas of ['main', 'vertical'] as const) {
-        const onCanvas = states.filter((s) => s.active && s.canvas === canvas && !s.direct)
+        // An explicit custom quality is never rewritten; only destinations that follow the
+        // picture share its cap.
+        const onCanvas = states.filter(
+          (s) => s.active && s.canvas === canvas && !s.direct && !s.isCustom,
+        )
         if (onCanvas.length <= 1) continue
         const sharedKbps = Math.min(...onCanvas.map((s) => s.kbps))
         const sharedW = Math.min(...onCanvas.map((s) => s.width))
         const sharedH = Math.min(...onCanvas.map((s) => s.height))
         const sharedFps = Math.min(...onCanvas.map((s) => s.fps))
         for (const s of onCanvas) {
+          sharedCapIds.add(s.id)
           s.width = sharedW
           s.height = sharedH
           s.fps = sharedFps
@@ -991,7 +1005,7 @@ export function planEncodes(input: {
     Canvas,
     { names: string[]; kbps: number; w: number; h: number; fps: number }
   >()
-  if (obsMode || usedSharedFallback) {
+  if (obsMode) {
     for (const canvas of ['main', 'vertical'] as const) {
       const limiters = states
         .filter((s) => s.active && s.canvas === canvas && !s.direct && !ignoreLimits)
@@ -1052,29 +1066,17 @@ export function planEncodes(input: {
       }
     } else if (s.active && !ignoreLimits) {
       if (usedSharedFallback && !obsMode) {
-        const sharedLim = sharedLimiterByCanvas.get(s.canvas)
-        if (
-          sharedLim &&
-          s.kbps === sharedLim.kbps &&
-          (sharedLim.kbps < s.canvasProfile.kbps ||
-            sharedLim.w < s.canvasProfile.width ||
-            sharedLim.h < s.canvasProfile.height ||
-            sharedLim.fps < s.canvasProfile.fps)
-        ) {
-          const maxSessions = budgetConfig.max_sessions ?? 1
-          const resFps = `${Math.min(sharedLim.w, sharedLim.h)}p${sharedLim.fps}`
-          const m = sharedLim.kbps / 1000
+        if (sharedCapIds.has(s.id) && s.autoFitted) {
+          const resFps = `${Math.min(s.width, s.height)}p${s.fps}`
+          const m = s.kbps / 1000
           const rateLabel = Number.isInteger(m) ? `${m} Mbps` : `${m.toFixed(1)} Mbps`
-          const dimChanged =
-            sharedLim.w !== s.canvasProfile.width || sharedLim.h !== s.canvasProfile.height
-          const fpsChanged = sharedLim.fps !== s.canvasProfile.fps
           capped = {
-            kbps: sharedLim.kbps,
-            ...(dimChanged ? { resolution: [sharedLim.w, sharedLim.h] as [number, number] } : {}),
-            ...(fpsChanged ? { fps: sharedLim.fps } : {}),
+            kbps: s.kbps,
+            resolution: [s.width, s.height],
+            fps: s.fps,
             separate_encode: false,
             summary: `Shared cap: ${resFps} · ${rateLabel}`,
-            detail: `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`,
+            detail: sharedCapText(budgetConfig.max_sessions ?? null),
           }
         }
       } else if (obsMode) {
@@ -1290,7 +1292,6 @@ export function buildQualityOptionsResponse(input: {
       const sim = planEncodes({
         ...input,
         destinations: simDests,
-        preserveCustomOnFallback: true,
       })
       const simDest = sim.perDest.get(d.cfg.id)!
       const r = simDest.resolved

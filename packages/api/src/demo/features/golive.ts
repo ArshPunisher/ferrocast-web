@@ -334,7 +334,7 @@ export class DemoGoLive {
     const vertical: StudioStreamProfile | null = ctx?.vertical
       ? ctx.vertical
       : hasVertical
-        ? { ...main, width: 1080, height: 1920, kbps: Math.min(main.kbps, 6000) }
+        ? { ...main, width: 1080, height: 1920 }
         : null
     const budgetConfig: DemoEncodeBudgetConfig = this.customBudget ??
       ctx?.budget ?? { source: 'apple_silicon', limit_mpx_s: 995, max_sessions: 8 }
@@ -637,7 +637,6 @@ export class DemoGoLive {
     const simPlan = planEncodes({
       ...inputs,
       destinations: simDests,
-      preserveCustomOnFallback: true,
     })
     if (nextQuality.mode === 'custom' && simPlan.budget.status === 'over') {
       throw new HttpError(

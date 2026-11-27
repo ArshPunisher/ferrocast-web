@@ -1328,7 +1328,7 @@ export class DemoStudioEngine {
       b_frames,
     }
     const vertical: StudioStreamProfile | null = this.verticalOn
-      ? { ...main, width: 1080, height: 1920, kbps: Math.min(kbps, 6000) }
+      ? { ...main, width: 1080, height: 1920 }
       : null
     const prof = this.opts.benchProfile
     const budget: DemoEncodeBudgetConfig =

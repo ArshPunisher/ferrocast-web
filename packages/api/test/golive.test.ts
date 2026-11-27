@@ -1139,6 +1139,90 @@ describe('DemoGoLive per-destination quality parity', () => {
     }
   })
 
+  it('keeps explicit custom qualities out of the shared cap and agrees with the quality options', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 2560,
+        height: 1440,
+        scale: null,
+        fps: 60,
+        video_kbps: 18000,
+      })
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch' || d.id === 'kick',
+        })),
+      )
+      engine.setGoLive({ encode_budget: { max_sessions: 8, limit_mpx_s: 995 } })
+      await api.setQuality('youtube', {
+        mode: 'custom',
+        width: 1280,
+        height: 720,
+        fps: 30,
+        kbps: 3000,
+      })
+
+      engine.setGoLive({ encode_budget: { max_sessions: 1, limit_mpx_s: 200 } })
+      const view = await api.view()
+      const yt = view.destinations.find((d) => d.id === 'youtube')!
+      const twitch = view.destinations.find((d) => d.id === 'twitch')!
+      const kick = view.destinations.find((d) => d.id === 'kick')!
+      // The custom choice stays as asked; only the destinations that follow the picture share a cap.
+      expect(yt.resolved_quality).toMatchObject({ width: 1280, height: 720, fps: 30, kbps: 3000 })
+      expect(yt.capped).toBeUndefined()
+      // Twitch and Kick share one picture: Kick's 1080p size cap and Twitch's 6 Mbps, both applied.
+      expect(kick.resolved_quality).toMatchObject({ width: 1920, height: 1080, kbps: 6000 })
+      expect(twitch.resolved_quality).toMatchObject({ width: 1920, height: 1080, kbps: 6000 })
+      // The note names exactly what the destination gets.
+      expect(kick.capped).toMatchObject({
+        kbps: 6000,
+        resolution: [1920, 1080],
+        separate_encode: false,
+        summary: 'Shared cap: 1080p60 · 6 Mbps',
+      })
+
+      // The options feed answers with the same picture the list shows.
+      const opts = await api.qualityOptions()
+      for (const d of [twitch, kick]) {
+        const same = opts.destinations[d.id]!.options.find((o) => o.id === 'same_as_main')!
+        expect(same.resolved).toMatchObject({
+          width: d.resolved_quality!.width,
+          height: d.resolved_quality!.height,
+          kbps: d.resolved_quality!.kbps,
+        })
+      }
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('gives the vertical picture the main bitrate, as the engine does', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({ ...s, video_kbps: 12000 })
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({ id: d.id, enabled: d.id === 'youtube_vertical' })),
+      )
+      const opts = await api.qualityOptions()
+      expect(opts.vertical?.kbps).toBe(12000)
+    } finally {
+      engine.dispose()
+    }
+  })
+
   it('coalesces under 2-session budget, falls back to shared cap under 1-session, and switches live without disturbing others', async () => {
     const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
     try {
@@ -1325,8 +1409,16 @@ describe('DemoGoLive per-destination quality parity', () => {
         shares_encoder_with: ['Twitch'],
       })
 
-      // 2-session budget filled by YouTube (12M) + Twitch (6M): Kick's same_as_main coalesces onto
-      // Twitch's 6M encode while new extra-encode rungs fail budget.
+      // 2-session budget filled by YouTube (12M) + Twitch's own 6M choice: Kick's same_as_main
+      // coalesces onto Twitch's 6M encode while new extra-encode rungs fail budget (an explicit
+      // choice is never rewritten to make room).
+      await api.setQuality('twitch', {
+        mode: 'custom',
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 6000,
+      })
       engine.setGoLive({ encode_budget: { max_sessions: 2, limit_mpx_s: 300 } })
       const opts = await api.qualityOptions()
       const kickOpts = opts.destinations.kick!.options
