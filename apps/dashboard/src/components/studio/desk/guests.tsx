@@ -115,7 +115,10 @@ export function GuestLists({
                 className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-2 py-1.5 pr-1.5 pl-3"
               >
                 <LinkSimple size={18} className="shrink-0 text-accent-text" aria-hidden />
-                <span className="min-w-0 flex-1 truncate font-mono text-[14px] text-text-2">
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-[14px] text-text-2"
+                  title={i.url}
+                >
                   {i.url}
                 </span>
                 {asking === i.id ? (
@@ -194,7 +197,9 @@ export function GuestLists({
                 key={g.source}
                 className="flex items-center gap-3 rounded-control border border-line bg-surface-2 py-1.5 pr-1.5 pl-3"
               >
-                <span className="min-w-0 flex-1 truncate font-semibold text-text">{g.name}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-text" title={g.name}>
+                  {g.name}
+                </span>
                 <span className={g.connected ? 'text-[14px] text-ok' : 'text-[14px] text-text-3'}>
                   {g.connected ? (g.video ? 'Connected' : 'No picture yet') : 'Connecting'}
                 </span>

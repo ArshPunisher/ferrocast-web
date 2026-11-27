@@ -1696,7 +1696,9 @@ export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => 
               ) : (
                 <Square size={17} className="text-text-3" aria-hidden />
               )}
-              <span className="truncate">{dockName(layout, id)}</span>
+              <span className="truncate" title={dockName(layout, id)}>
+                {dockName(layout, id)}
+              </span>
             </button>
           )
         })}

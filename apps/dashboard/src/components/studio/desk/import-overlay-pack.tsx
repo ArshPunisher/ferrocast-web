@@ -40,19 +40,19 @@ function fontStatusBadge(status: FontStatus, skipped = false): { label: string; 
     case 'installed':
       return { label: 'Installed on PC', tone: 'bg-surface-3 text-text-2' }
     case 'bundled':
-      return { label: 'Included in pack', tone: 'bg-arc/15 text-arc-text' }
+      return { label: 'Included in pack', tone: 'bg-arc/15 text-text' }
     case 'cached':
-      return { label: 'In Ferrocast cache', tone: 'bg-arc/15 text-arc-text' }
+      return { label: 'In Ferrocast cache', tone: 'bg-arc/15 text-text' }
     case 'downloaded':
-      return { label: 'Downloaded (Google Fonts)', tone: 'bg-arc/15 text-arc-text' }
+      return { label: 'Downloaded (Google Fonts)', tone: 'bg-arc/15 text-text' }
     case 'missing':
       return skipped
-        ? { label: 'Skipped (fallback font)', tone: 'bg-warn/15 text-warn-text' }
-        : { label: 'Will fetch from Google Fonts', tone: 'bg-molten/15 text-molten-text' }
+        ? { label: 'Skipped (fallback font)', tone: 'bg-warn/15 text-warn' }
+        : { label: 'Will fetch from Google Fonts', tone: 'bg-accent/15 text-molten-text' }
     case 'not_found':
-      return { label: 'Not on Google Fonts (fallback)', tone: 'bg-warn/15 text-warn-text' }
+      return { label: 'Not on Google Fonts (fallback)', tone: 'bg-warn/15 text-warn' }
     case 'offline_fallback':
-      return { label: 'Offline (using fallback font)', tone: 'bg-warn/15 text-warn-text' }
+      return { label: 'Offline (using fallback font)', tone: 'bg-warn/15 text-warn' }
   }
 }
 
@@ -307,7 +307,9 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-[7px] border border-line bg-surface-2 px-3 py-2">
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-text">{step.fileName}</p>
+                <p className="truncate text-[13px] font-semibold text-text" title={step.fileName}>
+                  {step.fileName}
+                </p>
                 <p className="text-[12px] text-text-2">
                   {step.preview.canvas.width}x{step.preview.canvas.height} canvas
                 </p>
@@ -355,7 +357,9 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
                     key={sc.name}
                     className="flex items-center justify-between gap-2 rounded-[5px] bg-surface-1 px-2.5 py-1.5"
                   >
-                    <span className="min-w-0 truncate font-medium text-text">{sc.name}</span>
+                    <span className="min-w-0 truncate font-medium text-text" title={sc.name}>
+                      {sc.name}
+                    </span>
                     <span className="shrink-0 tabular-nums text-[12px] text-text-2">
                       {sc.mapped} ready
                       {sc.widgets > 0
@@ -389,7 +393,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
                       <span
                         className={cx(
                           'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                          w.supported ? 'bg-arc/15 text-arc-text' : 'bg-warn/15 text-warn-text',
+                          w.supported ? 'bg-arc/15 text-text' : 'bg-warn/15 text-warn',
                         )}
                       >
                         {w.overlay_widget_name}
@@ -484,7 +488,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
                   : 'border-arc/35 bg-arc/10 text-text',
               )}
             >
-              <CheckCircle size={18} className="mt-0.5 shrink-0 text-arc-text" aria-hidden="true" />
+              <CheckCircle size={18} className="mt-0.5 shrink-0 text-ok" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="font-semibold">
                   {step.undone
@@ -586,7 +590,10 @@ function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-[7px] border border-line bg-surface-2 px-2.5 py-2">
       <div className="text-[11px] font-medium text-text-2">{label}</div>
-      <div className="mt-0.5 truncate text-[13px] font-semibold tabular-nums text-text">
+      <div
+        className="mt-0.5 truncate text-[13px] font-semibold tabular-nums text-text"
+        title={value}
+      >
         {value}
       </div>
     </div>

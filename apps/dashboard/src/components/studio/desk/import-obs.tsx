@@ -131,7 +131,9 @@ function Picker({ onDone }: { onDone: () => void }) {
                 <CardsThree size={22} weight="bold" />
               </span>
               <span className="min-w-0 flex-1">
-                <b className="block truncate text-[15px] text-text">{c.name}</b>
+                <b className="block truncate text-[15px] text-text" title={c.name}>
+                  {c.name}
+                </b>
                 <span className="block text-[13.5px] font-medium text-text-2">
                   {c.scenes} scenes · {c.sources} sources
                 </span>

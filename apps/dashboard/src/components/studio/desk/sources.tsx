@@ -1000,6 +1000,7 @@ export function SourcesDock() {
               'min-w-0 truncate font-semibold',
               item.visible ? 'text-text' : 'text-text-3 line-through decoration-1',
             )}
+            title={item.name}
           >
             {item.name}
           </span>
@@ -1073,7 +1074,9 @@ export function SourcesDock() {
             return it ? (
               <>
                 <KindGlyph kind={it.group ? 'group' : it.kind} size={20} />
-                <span className="truncate">{it.name}</span>
+                <span className="truncate" title={it.name}>
+                  {it.name}
+                </span>
               </>
             ) : null
           })()}
@@ -1083,7 +1086,10 @@ export function SourcesDock() {
         id="sources"
         info={
           // The scene's name only where the panel has room for it (owner's pick N1).
-          <span className="hidden truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text @[280px]:inline">
+          <span
+            className="hidden truncate rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-bold text-accent-text @[280px]:inline"
+            title={scene}
+          >
             {scene}
           </span>
         }

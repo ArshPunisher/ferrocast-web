@@ -328,7 +328,7 @@ export function DeskStandby({
               {profileName && (
                 <span
                   title={profileName}
-                  className="hidden max-w-[150px] truncate rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[12px] font-medium text-text-2 sm:inline-flex"
+                  className="hidden max-w-[150px] truncate rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[12px] font-medium text-text-2 sm:inline-block"
                 >
                   {profileName}
                 </span>
@@ -423,7 +423,14 @@ export function DeskStandby({
                     <ShieldWarning size={13} weight="fill" aria-hidden />
                     Safe Mode
                   </Badge>
-                  <span className="truncate text-[13px] text-text-2">
+                  <span
+                    className="truncate text-[13px] text-text-2"
+                    title={
+                      safeMode.collection_pending
+                        ? 'Plugins, VSTs, and saved scenes are held back.'
+                        : 'Plugins, VSTs, and auto-start are off.'
+                    }
+                  >
                     {safeMode.collection_pending
                       ? 'Plugins, VSTs, and saved scenes are held back.'
                       : 'Plugins, VSTs, and auto-start are off.'}
@@ -478,7 +485,16 @@ export function DeskStandby({
             ) : (
               <>
                 <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-text-2">
-                  <span className="truncate">
+                  <span
+                    className="truncate"
+                    title={
+                      !status.available
+                        ? 'Studio runtime is required before starting.'
+                        : phase === 'starting'
+                          ? 'Opening scenes and mixer...'
+                          : 'Desk ready in standby'
+                    }
+                  >
                     {!status.available
                       ? 'Studio runtime is required before starting.'
                       : phase === 'starting'
@@ -569,7 +585,10 @@ export function DeskStandby({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <Logo kind={d.kind} size={16} />
-                        <span className="truncate text-[13px] font-semibold text-text">
+                        <span
+                          className="truncate text-[13px] font-semibold text-text"
+                          title={d.name}
+                        >
                           {d.name}
                         </span>
                       </div>
@@ -616,7 +635,9 @@ export function DeskStandby({
                     <div className="flex items-center justify-between gap-1">
                       <span className="flex min-w-0 items-center gap-1 text-[11.5px] font-semibold text-text-2">
                         <Icon size={13} weight="bold" aria-hidden />
-                        <span className="truncate">{check.label}</span>
+                        <span className="truncate" title={check.label}>
+                          {check.label}
+                        </span>
                       </span>
                       <InfoTip label={`About ${check.label}`}>{check.detail}</InfoTip>
                     </div>
@@ -627,6 +648,7 @@ export function DeskStandby({
                       />
                       <span
                         className={cx('truncate text-[12px] font-semibold', VALUE_CLS[check.tone])}
+                        title={check.value}
                       >
                         {check.value}
                       </span>
@@ -765,7 +787,9 @@ function RecentClipCard({
         <Thumb state={thumb} vertical={clip.kind === 'vertical'} className="rounded-[7px]!" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold text-text">{clip.name}</span>
+        <span className="block truncate text-[13px] font-semibold text-text" title={clip.name}>
+          {clip.name}
+        </span>
         <span className="mt-0.5 block truncate text-[12px] text-text-2">
           {KIND_LABEL[clip.kind]} · {clipSize(clip.size)} · {whenText}
         </span>

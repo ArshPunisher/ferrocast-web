@@ -129,7 +129,9 @@ function Fixer({
             className="flex flex-col gap-2 rounded-[10px] border border-line p-3 sm:flex-row sm:items-center"
           >
             <div className="min-w-0 flex-1">
-              <b className="block truncate text-[14.5px]">{fileName(m.path)}</b>
+              <b className="block truncate text-[14.5px]" title={fileName(m.path)}>
+                {fileName(m.path)}
+              </b>
               <span className="block truncate text-[13.5px] text-text-3" title={m.path}>
                 {ownerText(m)} · {m.path}
               </span>

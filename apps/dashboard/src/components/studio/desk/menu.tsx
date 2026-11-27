@@ -413,7 +413,9 @@ function MenuList({
                 />
               ) : null}
             </span>
-            <span className="min-w-0 flex-1 truncate">{e.label}</span>
+            <span className="min-w-0 flex-1 truncate" title={e.label}>
+              {e.label}
+            </span>
             {e.here && (
               <Check
                 size={14}

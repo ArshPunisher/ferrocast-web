@@ -1040,7 +1040,7 @@ function DropPad({ rect, ways, lit }: Target['pad']) {
             className={cx(
               'grid place-items-center rounded-[10px] border shadow-pop',
               w === lit
-                ? 'border-transparent bg-arc text-white'
+                ? 'border-transparent bg-pick text-on-pick'
                 : 'border-line-strong bg-surface-1 text-text-2',
             )}
             style={{ gridColumn: col + 1, gridRow: row + 1 }}
@@ -1462,7 +1462,7 @@ export function DockHeader({
         if (movable) grab(id, e)
       }}
       className={cx(
-        'fc-dock-bar @container flex h-[34px] min-w-0 flex-none items-center gap-1 border-b border-line-strong bg-dock-head pr-1 select-none',
+        'fc-dock-bar fc-focus-inset @container flex h-[34px] min-w-0 flex-none items-center gap-1 border-b border-line-strong bg-dock-head pr-1 select-none',
         movable ? 'cursor-grab pl-1 active:cursor-grabbing' : 'pl-3',
       )}
     >
@@ -1499,7 +1499,10 @@ export function DockHeader({
           ))}
         </div>
       ) : (
-        <h2 className="max-w-[65%] shrink-0 truncate font-display text-[13.5px] font-bold tracking-tight text-text">
+        <h2
+          title={typeof title === 'string' ? title : dockName(layout, id)}
+          className="max-w-[65%] shrink-0 truncate font-display text-[13.5px] font-bold tracking-tight text-text"
+        >
           {title ?? dockName(layout, id)}
         </h2>
       )}

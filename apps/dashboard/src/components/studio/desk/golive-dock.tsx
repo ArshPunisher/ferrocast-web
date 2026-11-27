@@ -390,7 +390,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         key={d.id}
         data-golive-row={d.id}
         className={cx(
-          'min-h-[62px] grid grid-cols-[auto_minmax(0,1fr)_36px_auto] items-center gap-2.5 border-b border-line px-3 py-2 transition-colors',
+          'grid min-h-[62px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-line px-3 py-2 transition-colors @[230px]:grid-cols-[auto_minmax(0,1fr)_36px_auto]',
           r.rowTint === 'warn' && 'bg-[color-mix(in_oklab,var(--fc-warn-soft)_42%,transparent)]',
           r.rowTint === 'error' && 'bg-[color-mix(in_oklab,var(--fc-danger-soft)_38%,transparent)]',
         )}
@@ -404,9 +404,14 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           />
         </div>
 
-        <div className="min-w-0 flex flex-col gap-0.5">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <b className="truncate text-[14px] leading-tight font-bold text-text">{d.name}</b>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <b
+              className="max-w-full min-w-0 truncate text-[14px] leading-tight font-bold text-text"
+              title={d.name}
+            >
+              {d.name}
+            </b>
             <span
               data-golive-tag={d.id}
               className={cx(
@@ -432,9 +437,11 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 setNeedsLookOpen(false)
                 openPlatformModal({ mode: 'row', destId: d.id, triggerEl: e.currentTarget })
               }}
-              className="inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-medium text-text-2 hover:text-text disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]"
+              className="inline-flex h-[20px] max-w-full min-w-0 items-center gap-1 text-left text-[12px] font-medium text-text-2 hover:text-text disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]"
             >
-              <span className="truncate">{r.line2.text}</span>
+              <span className="truncate" title={r.line2.text}>
+                {r.line2.text}
+              </span>
               {!r.line2.disabled && (
                 <CaretDown size={11} weight="bold" className="shrink-0 opacity-75" aria-hidden />
               )}
@@ -453,7 +460,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 )
               }}
               className={cx(
-                'inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
+                'inline-flex h-[20px] max-w-full min-w-0 items-center gap-1 text-left text-[12px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
                 r.line2.tone === 'error' && 'text-[var(--fc-danger)]',
                 r.line2.tone === 'warn' && 'text-[var(--fc-warn)]',
                 r.line2.tone === 'work' && 'text-[var(--fc-accent-text)]',
@@ -471,7 +478,9 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               {r.line2.icon === 'warn' && (
                 <Warning size={12} weight="bold" className="shrink-0" aria-hidden />
               )}
-              <span className="truncate">{r.line2.text}</span>
+              <span className="truncate" title={r.line2.text}>
+                {r.line2.text}
+              </span>
               <CaretRight size={11} weight="bold" className="shrink-0 opacity-75" aria-hidden />
             </button>
           )}
@@ -482,7 +491,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           aria-label={r.barLabel}
           title={r.barLabel}
           className={cx(
-            'h-[5px] w-full overflow-hidden rounded-full bg-surface-3',
+            'hidden h-[5px] w-full overflow-hidden rounded-full bg-surface-3 @[230px]:block',
             r.barDimmed && 'opacity-45',
           )}
         >
@@ -524,7 +533,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   return (
     <section
       aria-label="Go live to"
-      className={cx('flex min-h-0 flex-1 flex-col', hasFloatingReady && 'pb-12')}
+      className={cx('@container flex min-h-0 flex-1 flex-col', hasFloatingReady && 'pb-12')}
     >
       {desk.prefs.data && (
         <AutoConfigDialog
@@ -626,7 +635,9 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         >
           <span className="flex min-w-0 items-center gap-1.5 font-semibold text-[var(--fc-danger)]">
             <Warning size={14} weight="bold" className="shrink-0" aria-hidden />
-            <span className="truncate">{footerStrip.text}</span>
+            <span className="truncate" title={footerStrip.text}>
+              {footerStrip.text}
+            </span>
           </span>
           <Button
             size="xs"
@@ -644,8 +655,10 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           data-golive-encode-summary=""
           className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
         >
-          <div className="flex min-w-0 items-center gap-1.5 truncate">
-            <span className="truncate">{footerSummary.summaryText}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate" title={footerSummary.summaryText}>
+              {footerSummary.summaryText}
+            </span>
             {footerSummary.problemLinkText && (
               <button
                 ref={needsLookAnchorRef}
@@ -798,12 +811,15 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                     className="flex items-center justify-between gap-2.5 text-[12.5px]"
                   >
                     <div className="min-w-0">
-                      <p className="m-0 truncate font-bold text-text">{p.destName}</p>
+                      <p className="m-0 truncate font-bold text-text" title={p.destName}>
+                        {p.destName}
+                      </p>
                       <p
                         className={cx(
                           'm-0 truncate font-medium',
                           p.tone === 'error' ? 'text-[var(--fc-danger)]' : 'text-[var(--fc-warn)]',
                         )}
+                        title={p.reason}
                       >
                         {p.reason}
                       </p>

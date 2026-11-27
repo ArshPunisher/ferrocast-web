@@ -863,7 +863,7 @@ export function ScenesDock() {
           <ul
             className={cx(
               grid
-                ? 'grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-1.5'
+                ? 'grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-1.5'
                 : // Narrow (owner's pick N1): the extras go first, the name keeps its room.
                   '@container flex flex-col',
             )}
@@ -987,7 +987,7 @@ export function ScenesDock() {
                         }
                       }}
                       className={cx(
-                        'group w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150',
+                        'group w-full text-left font-semibold text-text transition-[background-color,box-shadow,transform] duration-150 focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none',
                         grid
                           ? 'grid gap-1 rounded-control border border-line bg-surface-2 p-1 text-[13.5px] hover:border-line-strong active:scale-[0.98]'
                           : cx(
@@ -1031,6 +1031,12 @@ export function ScenesDock() {
                                 <KindTile kind="scene" size={26} />
                               </span>
                             )}
+                            {keys[`scene:${s.name}`] && (
+                              // On the picture, so the name keeps the whole line below it.
+                              <kbd className="absolute right-1.5 bottom-1.5 rounded-[5px] border border-white/30 bg-black/60 px-1 py-px font-mono text-[11px] font-bold text-white">
+                                {pretty(keys[`scene:${s.name}`] as string)}
+                              </kbd>
+                            )}
                             {(s.current || s.preview) && (
                               <span
                                 className={cx(
@@ -1052,13 +1058,10 @@ export function ScenesDock() {
                                 <DotsSixVertical size={13} weight="bold" />
                               </span>
                             )}
-                            <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                            <span className="min-w-0 flex-1 truncate" title={s.name}>
+                              {s.name}
+                            </span>
                             {overrideBadge(s, true)}
-                            {keys[`scene:${s.name}`] && (
-                              <kbd className="shrink-0 rounded-[5px] border border-current/25 px-1 py-px font-mono text-[11px] font-bold opacity-80">
-                                {pretty(keys[`scene:${s.name}`] as string)}
-                              </kbd>
-                            )}
                           </span>
                         </>
                       ) : (
@@ -1077,7 +1080,9 @@ export function ScenesDock() {
                             size={20}
                             tone={s.current ? 'var(--fc-danger)' : undefined}
                           />
-                          <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                          <span className="min-w-0 flex-1 truncate" title={s.name}>
+                            {s.name}
+                          </span>
                           {overrideBadge(s, false)}
                           {top === s.name && (
                             <span
