@@ -538,10 +538,10 @@ Engine side done (`docs/API.md`: Accounts, Go live destinations, Stream schedule
 All floating surfaces rendered above the Studio stage (`PopoverSurface`, `Menu`, `DockMenu`, `LayoutMenu`, Studio context/submenus, `OverflowRow` More panel, `SidebarAccount`, `StatusStrip` overflow popover, `InfoTip`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toaster`, `ProUnlock`, `FloatingDock`, `SourcePanel`, `ReadyCheck`, `FileDrop`, `PausedCard`, drag ghosts, and canvas guide/snap elements) register with `PreviewOverlayRegistry` in `@ferrocast/ui`:
 
 - **Registration API (`packages/ui/src/components/preview-overlay-registry.ts`):**
-  - `usePreviewHole(ref, { active?, kind?: 'overlay' | 'guide', radius?, getRect?, deps? })` / `registerPreviewHole(id, opts)` — declaratively registers active DOM elements (`kind: 'overlay'` or `'guide'`), triggers updates cleanly on open/move/resize/unmount without measuring invisible `display: none` / `visibility: hidden` / `opacity: 0` elements.
+  - `usePreviewHole(ref, { active?, kind?: 'overlay' | 'guide', radius?, getRect?, deps? })` / `registerPreviewHole(id, opts)` — declaratively registers active DOM elements (`kind: 'overlay'` or `'guide'`), triggers updates cleanly on open/move/resize/unmount without measuring invisible `display: none` / `visibility: hidden` / `< 1px` elements (`opacity: 0` fade-in elements stay registered so holes punch on frame 1).
   - `subscribePreviewOverlays(cb)` — synchronous in-page subscription used by Studio `PreviewBoxes` (`apps/dashboard/src/components/studio/desk/preview.tsx`) to recompute and send stage punch-out rects to `PUT /api/v1/studio/engine/preview`.
   - `notifyPreviewOverlays()` — coalesces changes per animation frame and dispatches a custom window event (`PREVIEW_OVERLAYS_EVENT = 'fc:preview-overlays'`).
-  - `findUnregisteredPreviewOverlays(stageEl?)` — dev/test invariant returning any visible menu/listbox/dialog/tooltip or `[data-over-preview]` element overlapping `[data-stage-bg]` without an active registry entry on itself or an ancestor.
+  - `findUnregisteredPreviewOverlays(stageEl?)` — dev/test invariant returning any visible menu/listbox/dialog/tooltip or `[data-over-preview]` element overlapping `[data-stage-bg]` (or `stageEl`) without an active registry entry on itself or an ancestor.
 - **Window event payload (`fc:preview-overlays`, type `PreviewOverlaysEventDetail`):**
   ```ts
   interface PreviewOverlaysEventDetail {
@@ -560,12 +560,12 @@ All floating surfaces rendered above the Studio stage (`PopoverSurface`, `Menu`,
   }
   ```
 - **Guardrails & caps (`collectPreviewHoles`):**
-  - Elements with `display: none`, `visibility: hidden`, `opacity: 0`, `< 1px` dimensions, or `<dialog>` root elements themselves (dialogs register via their inner card panel) are skipped.
-  - A single non-guide overlay covering `> 85%` (`PREVIEW_FULL_COVER_RATIO = 0.85`) of the preview stage collapses to one full-stage hole covering the preview rectangle plus edge padding.
-  - At most `16` non-guide overlays (`PREVIEW_MAX_OVERLAYS`) are punched individually (above `16`, or while `document.body.dataset.dockDrag` is set, `collectPreviewHoles` returns `null` so the native preview hides cleanly). Total holes sent per frame are capped at `64` (`PREVIEW_MAX_HOLES`), prioritizing non-guide overlays before `guide` holes.
+  - Elements with `display: none`, `visibility: hidden`, `< 1px` dimensions, or `<dialog>` root elements themselves (dialogs register via their inner card panel) are skipped. Elements at `opacity: 0` remain included while mounted and active so fade-in transitions open directly over punched holes.
+  - A single non-guide overlay covering `> 85%` (`PREVIEW_FULL_COVER_RATIO = 0.85`) of the preview stage collapses to one full-stage hole covering the preview rectangle plus edge padding (respecting `maxHoles >= 1`).
+  - At most `16` non-guide overlays (`PREVIEW_MAX_OVERLAYS`) are punched individually (above `16`, above `maxHoles`, or while `document.body.dataset.dockDrag` is set, `collectPreviewHoles` returns `null` so the native preview hides cleanly). Total holes sent per frame are capped at `64` (`PREVIEW_MAX_HOLES`), prioritizing non-guide overlays before `guide` holes.
 - **Desktop vs web/demo behavior:**
+  - `PUT /api/v1/studio/engine/preview` is the single source of truth for native desktop shells (it carries `dockDrag`, dialog `shade`, `>85%` full-cover collapse, `>16` / `maxHoles` hide-all, and `viewBand` scroll clips). `fc:preview-overlays` on `window` is diagnostic / web-only (used for web overlays and verification) and does not include `dockDrag`, `shade`, or stage clipping.
   - In browser/demo mode, `fc:preview-overlays`, `PreviewOverlayRegistry`, and `collectPreviewHoles` operate normally while `PUT /api/v1/studio/engine/preview` resolves `204` via the demo engine (`packages/api/src/demo/features/studio-engine.ts`).
-  - Native desktop shells consume `PUT /api/v1/studio/engine/preview` holes (macOS punch-out / Windows overlay ordering) and can optionally subscribe directly to `window`'s `fc:preview-overlays` event using viewport coordinates (`x`, `y`, `w`, `h`, `r`) for zero-hop occlusion sync.
   - Windows-only limitation: `<select>` native OS popup widgets rendered inside `StageBar` when collapsed cannot report popup geometry to HTML/DOM APIs until replaced with a custom popover (`PopoverSurface`) or webview child-window composition.
 
 ### Window events: `fc://preview-live-resize` & `fc://scale-changed`
@@ -573,7 +573,7 @@ All floating surfaces rendered above the Studio stage (`PopoverSurface`, `Menu`,
 Two custom `window` events coordinate smooth desktop OS live-resize and multi-monitor DPI transitions without per-frame IPC chatter (`fc://preview-live-resize` and `fc://scale-changed`). Both are optional at runtime so the browser demo works normally when no desktop host dispatches them.
 
 - **`fc://preview-live-resize` (`PreviewLiveResizePayload`):**
-  - Dispatched on `window` as a `CustomEvent` by the desktop shell when an OS live-resize loop starts (`NSWindowWillStartLiveResizeNotification` / `WM_ENTERSIZEMOVE`) and finishes (`NSWindowDidEndLiveResizeNotification` / `WM_EXITSIZEMOVE`).
+  - Dispatched on `window` as a `CustomEvent` via `webview.eval("window.dispatchEvent(new CustomEvent(...))")` (matching Tauri webview listeners) when an OS live-resize loop starts (`NSWindowWillStartLiveResizeNotification` / `WM_ENTERSIZEMOVE`) and finishes (`NSWindowDidEndLiveResizeNotification` / `WM_EXITSIZEMOVE`). Host sequence numbers (`seq`) should increase strictly monotonically across start and end transitions (the web listener also accepts equal-`seq` `{ active: false }` while a resize is active).
   - Payload:
     ```ts
     interface PreviewLiveResizePayload {
@@ -597,8 +597,8 @@ Two custom `window` events coordinate smooth desktop OS live-resize and multi-mo
     }
     ```
   - **Contract:**
-    - On `{ active: true }`: the web preview immediately displays its pre-decoded cached still frame across macOS and Windows equally (falling back to a one-shot thumbnail fetch only if no cached frame exists yet) and emits **zero** `PUT /api/v1/studio/engine/preview` calls for any `ResizeObserver` or `window.resize` churn while `active === true`.
-    - On `{ active: false }`: on the next animation frame (`requestAnimationFrame`), the web preview re-measures the settled stage rectangle and occlusion holes, dispatches **one** atomic `PUT /api/v1/studio/engine/preview` update, and switches cleanly back to live compositing.
+    - On `{ active: true }`: the web preview validates any supplied `still` URL, displays its pre-decoded cached still frame across macOS and Windows equally (falling back to a one-shot thumbnail fetch only if no cached frame exists yet), and emits **zero** `PUT /api/v1/studio/engine/preview` calls for any `ResizeObserver` or `window.resize` churn while `active === true`.
+    - On `{ active: false }`: on the next animation frame (`requestAnimationFrame`), the web preview re-measures the settled stage rectangle and occlusion holes, dispatches **one** atomic `PUT /api/v1/studio/engine/preview` update, absorbs trailing `window.resize` noise within a short grace window, and switches cleanly back to live compositing. Any post-resize or post-hide `PUT` restores native view visibility (`opacity: 1`) even if `(x, y, w, h)` match pre-drag bounds; native hosts must treat omitted `opacity` (or explicit `opacity: 1`) as `1.0`.
 
 - **`fc://scale-changed` (`ScaleChangedPayload`):**
   - Dispatched on `window` as a `CustomEvent` when the window moves between monitors with different backing scale factors (`WM_DPICHANGED` / `NSWindowDidChangeBackingPropertiesNotification`).

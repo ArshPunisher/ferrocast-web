@@ -67,6 +67,7 @@ import {
   collectPreviewHoles,
   cx,
   findUnregisteredPreviewOverlays,
+  isSafeStillUrl,
   isValidPreviewLiveResizePayload,
   isValidScaleChangedPayload,
   subscribePreviewOverlays,
@@ -455,7 +456,9 @@ export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
 
 /** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
 function viewBand(): { top: number; bottom: number } {
-  const top = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
+  const headerEl =
+    document.querySelector('header[data-app-header]') ?? document.querySelector('header')
+  const top = headerEl?.getBoundingClientRect().bottom ?? 0
   const tabs = document.querySelector('[data-tab-bar]')?.getBoundingClientRect()
   const bottom =
     tabs && tabs.height > 0 ? Math.min(tabs.top, window.innerHeight) : window.innerHeight
@@ -542,10 +545,50 @@ function PreviewBoxes({ running }: { running: boolean }) {
     }
     measure()
     if (typeof ResizeObserver === 'undefined') return () => setStageSize(null)
-    const ro = new ResizeObserver(measure)
+    let roRaf = 0
+    let livePaused = false
+    let dividerPaused = false
+    let pendingMeasure = false
+    const flushMeasure = () => {
+      if (livePaused || dividerPaused || document.body.dataset.dockDrag) {
+        pendingMeasure = true
+        return
+      }
+      pendingMeasure = false
+      measure()
+    }
+    const scheduleMeasure = () => {
+      if (roRaf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        flushMeasure()
+        return
+      }
+      roRaf = requestAnimationFrame(() => {
+        roRaf = 0
+        flushMeasure()
+      })
+    }
+    const onLivePause = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidPreviewLiveResizePayload(detail)) return
+      livePaused = detail.active
+      if (!livePaused && !dividerPaused && pendingMeasure) scheduleMeasure()
+    }
+    const onDividerPause = (e: Event) => {
+      const detail = (e as CustomEvent<DividerDragPayload | undefined>).detail
+      if (!detail) return
+      dividerPaused = Boolean(detail.active)
+      if (!livePaused && !dividerPaused && pendingMeasure) scheduleMeasure()
+    }
+    const ro = new ResizeObserver(scheduleMeasure)
     ro.observe(el)
+    window.addEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLivePause)
+    window.addEventListener(DIVIDER_DRAG_EVENT, onDividerPause)
     return () => {
+      if (roRaf) cancelAnimationFrame(roRaf)
       ro.disconnect()
+      window.removeEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLivePause)
+      window.removeEventListener(DIVIDER_DRAG_EVENT, onDividerPause)
       setStageSize(null)
     }
   }, [studio, tall, pv.view])
@@ -583,12 +626,19 @@ function PreviewBoxes({ running }: { running: boolean }) {
   }, [studio, tall])
   // The scenes shown, for the still during a window resize (read there, not a reason to
   // place the picture again).
+  const currentScene = scenes.data?.current ?? ''
+  const previewScene = scenes.data?.preview ?? ''
+  const verticalScene = vertical?.current ?? ''
   const shown = useRef({ current: '', preview: '', vertical: '' })
   shown.current = {
-    current: scenes.data?.current ?? '',
-    preview: scenes.data?.preview ?? '',
-    vertical: vertical?.current ?? '',
+    current: currentScene,
+    preview: previewScene,
+    vertical: verticalScene,
   }
+  const warmStillRef = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    if (currentScene || previewScene || verticalScene) warmStillRef.current?.()
+  }, [currentScene, previewScene, verticalScene])
   // One placement at a time, in the order asked, the newest waiting one winning: sent many a
   // frame (a menu sliding, a dialog opening), they could land out of order, and an older one
   // without the dialog's shade left the picture bright under it (owner's recording, 11 Nov).
@@ -674,7 +724,12 @@ function PreviewBoxes({ running }: { running: boolean }) {
           }
         : null
     }
+    const STILL_TTL_MS = 10_000
+    const LIVE_RESIZE_GRACE_MS = 350
+    const LIVE_RESIZE_WATCHDOG_MS = 3000
     let again = 0
+    let thawTimer = 0
+    let watchdogTimer = 0
     let alive = true
     let frozen = 0
     let freezeSeq = 0
@@ -684,12 +739,13 @@ function PreviewBoxes({ running }: { running: boolean }) {
     let dividerResize = false
     let dockDragging = false
     let windowFallbackUntil = 0
+    let liveResizeGraceUntil = 0
     let scale =
       typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
         ? window.devicePixelRatio
         : 1
     let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
-    const stillCache = new Map<string, string>()
+    const stillCache = new Map<string, { url: string; ts: number; scene: string; width: number }>()
     const stillInFlight = new Set<string>()
     const boxes = () =>
       [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
@@ -700,11 +756,21 @@ function PreviewBoxes({ running }: { running: boolean }) {
     const targetWidth = (b: HTMLElement) =>
       Math.min(640, Math.max(64, Math.round(b.clientWidth * scale)))
     const stillKey = (name: string, w: number) => `${name}:${w}:${Math.round(scale * 100)}`
-    const paintStill = (b: HTMLElement, image: string) => {
+    const setCacheEntry = (key: string, scene: string, width: number, url: string) => {
+      stillCache.delete(key)
+      if (stillCache.size >= 8) {
+        const first = stillCache.keys().next().value
+        if (first !== undefined) stillCache.delete(first)
+      }
+      stillCache.set(key, { url, ts: Date.now(), scene, width })
+    }
+    const paintStill = (b: HTMLElement, image: string): boolean => {
+      if (!isSafeStillUrl(image)) return false
       // Paint cached or fresh still immediately in the box so native/CSS resize stays synchronized.
       b.style.backgroundColor = '#000'
       b.style.backgroundImage = `url("${image}")`
       b.style.backgroundSize = '100% 100%'
+      return true
     }
     const decodeImage = async (image: string) => {
       if (typeof Image === 'undefined') return
@@ -715,29 +781,32 @@ function PreviewBoxes({ running }: { running: boolean }) {
     const warmStill = () => {
       if (!alive || nativeResize || dividerResize || dockDragging) return
       const names = slotNames()
+      const now = Date.now()
       boxes().forEach((b, i) => {
         const name = names[i]
         if (!b || !name || typeof apiRef.current.thumbnail !== 'function') return
         const w = targetWidth(b)
         const key = stillKey(name, w)
-        if (stillCache.has(key) || stillInFlight.has(key)) return
+        const existing = stillCache.get(key)
+        if ((existing && now - existing.ts <= STILL_TTL_MS) || stillInFlight.has(key)) return
         stillInFlight.add(key)
         void Promise.resolve(apiRef.current.thumbnail(name, w))
           .then(async (res) => {
-            if (!res || typeof res.image !== 'string' || !alive) return
+            if (!res || !isSafeStillUrl(res.image) || !alive) return
             await decodeImage(res.image)
             if (!alive) return
-            if (stillCache.size >= 8) {
-              const first = stillCache.keys().next().value
-              if (first !== undefined) stillCache.delete(first)
-            }
-            stillCache.set(key, res.image)
+            setCacheEntry(key, name, w, res.image)
           })
           .catch(() => undefined)
           .finally(() => stillInFlight.delete(key))
       })
     }
+    warmStillRef.current = warmStill
     const unfreeze = () => {
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
       frozen = 0
       hidNative = false
       for (const b of boxes()) {
@@ -749,50 +818,70 @@ function PreviewBoxes({ running }: { running: boolean }) {
       }
     }
     const freeze = (hideNative: boolean, hints?: PreviewLiveResizePayload['still']) => {
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
       const token = (frozen = ++freezeSeq)
       const names = slotNames()
       const hintFor = (index: number) =>
         index === 0 ? hints?.main : index === 1 ? hints?.program : hints?.vertical
+      const now = Date.now()
 
-      if (hideNative && !hidNative) {
+      const hideNativeNow = () => {
+        if (!alive || frozen !== token || !hideNative || hidNative) return
         hidNative = true
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
         void put(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
       }
 
+      let pendingInitial = 0
       boxes().forEach((b, i) => {
         if (!b) return
         const hint = hintFor(i)
+        if (hint && paintStill(b, hint)) return
         const name = names[i]
-        if (hint) {
-          paintStill(b, hint)
-          return
-        }
         if (!name) return
         const w = targetWidth(b)
-        const cached = stillCache.get(stillKey(name, w))
-        if (cached) {
-          paintStill(b, cached)
-          return
-        }
-        for (const [k, url] of stillCache) {
-          if (k.startsWith(`${name}:`)) {
-            paintStill(b, url)
-            return
+        const exact = stillCache.get(stillKey(name, w))
+        let matched = exact
+        if (!matched) {
+          for (const entry of stillCache.values()) {
+            if (entry.scene === name) matched = entry
           }
         }
-        if (typeof apiRef.current.thumbnail !== 'function') return
+        const paintedSync = matched ? paintStill(b, matched.url) : false
+        const staleOrMiss = !paintedSync || !matched || now - matched.ts > STILL_TTL_MS
+        if (!staleOrMiss || typeof apiRef.current.thumbnail !== 'function') return
+        if (!paintedSync) pendingInitial += 1
         void Promise.resolve(apiRef.current.thumbnail(name, w))
           .then(async (res) => {
-            if (!res || typeof res.image !== 'string' || !alive || frozen !== token) return
+            if (!alive || frozen !== token || !res || !isSafeStillUrl(res.image)) {
+              if (!paintedSync) {
+                pendingInitial -= 1
+                if (pendingInitial <= 0) hideNativeNow()
+              }
+              return
+            }
             await decodeImage(res.image)
             if (!alive || frozen !== token) return
-            stillCache.set(stillKey(name, w), res.image)
+            setCacheEntry(stillKey(name, w), name, w, res.image)
             paintStill(b, res.image)
+            if (!paintedSync) {
+              pendingInitial -= 1
+              if (pendingInitial <= 0) hideNativeNow()
+            }
           })
-          .catch(() => undefined)
+          .catch(() => {
+            if (!paintedSync) {
+              pendingInitial -= 1
+              if (pendingInitial <= 0) hideNativeNow()
+            }
+          })
       })
+
+      if (pendingInitial === 0) hideNativeNow()
     }
     const send = () => {
       raf = 0
@@ -842,7 +931,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
         schedule()
       }
       if (import.meta.env.DEV) {
-        const missing = findUnregisteredPreviewOverlays(stageRef.current ?? el)
+        const missing = findUnregisteredPreviewOverlays()
         for (const node of missing) {
           if (!warned.has(node)) {
             warned.add(node)
@@ -859,13 +948,24 @@ function PreviewBoxes({ running }: { running: boolean }) {
         return
       }
       last = key
+      const restoringFromHidden = hidNative
+      const withVisibleOpacity = (r: PreviewRect | null) =>
+        r && restoringFromHidden && r.opacity === undefined ? { ...r, opacity: 1 } : r
       const thawing = frozen
-      void put(rect, program, tallRect)
+      void put(
+        withVisibleOpacity(rect),
+        withVisibleOpacity(program),
+        withVisibleOpacity(tallRect),
+      )
         .then((placed) => {
+          if (!alive) return
+          if (placed) hidNative = false
           warmStill()
           // Keep the still briefly underneath until the live frame takes over cleanly.
           if (placed && thawing && frozen === thawing) {
-            window.setTimeout(() => {
+            if (thawTimer) window.clearTimeout(thawTimer)
+            thawTimer = window.setTimeout(() => {
+              thawTimer = 0
               if (frozen === thawing) unfreeze()
             }, 120)
           }
@@ -894,7 +994,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
       ro.observe(ws)
       if (ws.parentElement) ro.observe(ws.parentElement)
     }
-    const appHeader = document.querySelector('header')
+    const appHeader =
+      document.querySelector('header[data-app-header]') ?? document.querySelector('header')
     if (appHeader) ro.observe(appHeader)
     const appBanners = document.querySelector('[data-banners-wrap]')
     if (appBanners) ro.observe(appBanners)
@@ -933,11 +1034,29 @@ function PreviewBoxes({ running }: { running: boolean }) {
     })
     dockWatch.observe(document.body, { attributes: true, attributeFilter: ['data-dock-drag'] })
 
+    const clearWatchdog = () => {
+      if (watchdogTimer) {
+        window.clearTimeout(watchdogTimer)
+        watchdogTimer = 0
+      }
+    }
+    const recoverNativeResize = () => {
+      if (!nativeResize) return
+      clearWatchdog()
+      nativeResize = false
+      windowFallbackUntil = 0
+      liveResizeGraceUntil = performance.now() + LIVE_RESIZE_GRACE_MS
+      window.clearTimeout(again)
+      last = ''
+      schedule()
+    }
+
     const onLiveResize = (e: Event) => {
       const detail = (e as CustomEvent<unknown>).detail
       if (!isValidPreviewLiveResizePayload(detail)) return
       if (typeof detail.seq === 'number' && Number.isFinite(detail.seq)) {
-        if (detail.seq <= lastResizeSeq) return
+        if (detail.seq < lastResizeSeq) return
+        if (detail.seq === lastResizeSeq && (detail.active || !nativeResize)) return
         lastResizeSeq = detail.seq
       }
       if (typeof detail.scale === 'number' && Number.isFinite(detail.scale) && detail.scale > 0) {
@@ -949,6 +1068,9 @@ function PreviewBoxes({ running }: { running: boolean }) {
       if (detail.active) {
         nativeResize = true
         windowFallbackUntil = 0
+        liveResizeGraceUntil = 0
+        clearWatchdog()
+        watchdogTimer = window.setTimeout(recoverNativeResize, LIVE_RESIZE_WATCHDOG_MS)
         window.clearTimeout(again)
         if (raf) {
           cancelAnimationFrame(raf)
@@ -957,8 +1079,10 @@ function PreviewBoxes({ running }: { running: boolean }) {
         freeze(false, detail.still)
         return
       }
+      clearWatchdog()
       nativeResize = false
       windowFallbackUntil = 0
+      liveResizeGraceUntil = performance.now() + LIVE_RESIZE_GRACE_MS
       window.clearTimeout(again)
       last = ''
       schedule()
@@ -994,9 +1118,18 @@ function PreviewBoxes({ running }: { running: boolean }) {
 
     const onResize = () => {
       if (nativeResize || dividerResize || dockDragging) return
-      if (!frozen) freeze(true)
+      if (performance.now() < liveResizeGraceUntil) {
+        schedule()
+        return
+      }
+      if (!frozen || thawTimer !== 0) freeze(true)
       windowFallbackUntil = performance.now() + 180
       schedule()
+    }
+
+    const stageTargets = [...new Set([stageRef.current, vStageRef.current, el, vRef.current, programRef.current].filter((n): n is HTMLDivElement => Boolean(n)))]
+    for (const node of stageTargets) {
+      node.addEventListener('pointerdown', recoverNativeResize, { capture: true })
     }
 
     let cleanupDpr: (() => void) | undefined
@@ -1036,8 +1169,14 @@ function PreviewBoxes({ running }: { running: boolean }) {
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
+      warmStillRef.current = null
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
+      window.clearTimeout(thawTimer)
+      clearWatchdog()
+      for (const node of stageTargets) {
+        node.removeEventListener('pointerdown', recoverNativeResize, { capture: true })
+      }
       dockWatch.disconnect()
       ro.disconnect()
       themeMo.disconnect()
@@ -1188,13 +1327,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
   // two, 12 to the label above and to the bar below (owner's recording, 11 Nov: the picture
   // ran over the bar and each other). Widths take off the 24 of padding and the 24 between;
   // heights the padding, the label (18), its gap and the bar (40).
-  const half = 'w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
+  const half =
+    'w-[min(calc(100cqw-24px),calc((100cqh-140px)/2*16/9))] sm:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
   return (
     <div
       data-stage-bg
+      data-studio-stage
       className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:size]"
     >
-      <div className="flex min-h-0 flex-1 items-center justify-center gap-6 p-3">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:flex-row sm:gap-6">
         <figure className="m-0 flex flex-col gap-3">
           <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-text-2">
             <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
@@ -1406,13 +1547,13 @@ function SwitchBar() {
   // side, as the pictures above.
   return (
     <div
-      className="relative flex h-10 flex-none items-center gap-2 px-2.5 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-[linear-gradient(90deg,var(--fc-arc),var(--fc-danger))] before:content-['']"
+      className="relative flex min-h-10 flex-none flex-wrap items-center gap-x-2 gap-y-1.5 px-2.5 py-1.5 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-[linear-gradient(90deg,var(--fc-arc),var(--fc-danger))] before:content-['']"
       style={{
         background:
           'linear-gradient(90deg, var(--fc-accent-soft) 0%, transparent 45%, transparent 55%, var(--fc-danger-soft) 100%), var(--fc-surface-1)',
       }}
     >
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] sm:flex-initial">
         {quick.map((q, i) => (
           <Button
             key={`${q.kind}-${q.ms}-${i}`}
