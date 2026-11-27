@@ -77,8 +77,17 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
       .locator('li')
       .filter({ has: page.locator('b', { hasText: /^YouTube$/ }) })
     await expect(platYt.getByText('12 Mbps', { exact: true })).toBeVisible()
-    await expect(platforms.getByText('Capped at 6,000 kbps for Twitch')).toBeVisible()
-    await expect(platforms.getByText('Capped at 8,000 kbps for Kick')).toBeVisible()
+    await expect(platforms.locator('[data-quality-trigger="twitch"]')).toContainText(
+      '1080p60 · 6 Mbps · auto',
+    )
+    await expect(platforms.locator('[data-quality-trigger="kick"]')).toContainText(
+      '1080p60 · 8 Mbps · auto',
+    )
+    await expect(platYt.locator('[data-quality-trigger="youtube"]')).toContainText('Same as main')
+    await platforms.getByRole('button', { name: 'Quality details for Twitch' }).click()
+    await expect(platforms.locator('div.fixed[data-over-preview="true"]')).toContainText(
+      /Adjusted automatically to 1080p60 at 6 Mbps to fit Twitch/,
+    )
     await expect(
       platforms.getByText(/^6\.2 Mbps \+ 12 Mbps \+ 8\.2 Mbps = 26\.4 Mbps upload$/),
     ).toBeVisible()
@@ -143,7 +152,9 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     await page.getByRole('button', { name: 'Manage platforms' }).click()
     const platforms = page.getByRole('dialog', { name: 'Your platforms' })
     await expect(platforms).toBeVisible()
-    await expect(platforms.getByText('Capped at 6,000 kbps for Twitch')).toBeVisible()
+    await expect(platforms.locator('[data-quality-trigger="twitch"]')).toContainText(
+      '1080p60 · 6 Mbps · auto',
+    )
     await expect(
       platforms.getByText('6.2 Mbps + 12 Mbps = 18.2 Mbps upload', { exact: true }),
     ).toBeVisible()
