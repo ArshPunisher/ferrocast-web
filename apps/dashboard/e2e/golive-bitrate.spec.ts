@@ -40,7 +40,7 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     await bitrateInfo.scrollIntoViewIfNeeded()
     await settled(page)
     await bitrateInfo.click()
-    await expect(settingsDialog.locator('div.fixed[data-over-preview="true"]')).toContainText(
+    await expect(settingsDialog.locator('[role="tooltip"][data-over-preview]')).toContainText(
       /Twitch takes at most 6 Mbps/,
     )
 
@@ -85,14 +85,14 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     )
     await expect(platYt.locator('[data-quality-trigger="youtube"]')).toContainText('Same as main')
     await platforms.getByRole('button', { name: 'Quality details for Twitch' }).click()
-    await expect(platforms.locator('div.fixed[data-over-preview="true"]')).toContainText(
+    await expect(platforms.locator('[role="tooltip"][data-over-preview]')).toContainText(
       /Adjusted automatically to 1080p60 at 6 Mbps to fit Twitch/,
     )
     await expect(
       platforms.getByText(/^6\.2 Mbps \+ 12 Mbps \+ 8\.2 Mbps = 26\.4 Mbps upload$/),
     ).toBeVisible()
     await platforms.getByRole('button', { name: 'Why upload adds up' }).click()
-    await expect(platforms.locator('div.fixed[data-over-preview="true"]')).toContainText(
+    await expect(platforms.locator('[role="tooltip"][data-over-preview]')).toContainText(
       /Ferrocast sends each ticked platform its own stream rate/,
     )
 
