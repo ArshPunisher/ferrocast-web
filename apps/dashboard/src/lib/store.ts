@@ -476,13 +476,24 @@ export const useLive = create<LiveStore>((set, get) => ({
           }
           break
         }
-        case 'status':
+        case 'status': {
           if (accountSig(f.data.connectors) !== accountSig(connectors)) {
             needLinksRefresh = true
           }
           connectors = f.data.connectors
-          viewers = pruneDisconnectedViewers(viewers, connectors)
+          if (f.data.viewers && typeof f.data.viewers === 'object') {
+            const nextViewers: Partial<Record<Platform, number>> = { ...viewers }
+            for (const [k, v] of Object.entries(f.data.viewers)) {
+              const p = k as Platform
+              if (typeof v === 'number' && Number.isFinite(v)) nextViewers[p] = v
+              else if (v === null) delete nextViewers[p]
+            }
+            viewers = pruneDisconnectedViewers(nextViewers, connectors)
+          } else {
+            viewers = pruneDisconnectedViewers(viewers, connectors)
+          }
           break
+        }
         case 'links':
           links = f.data.resolved
           linksGen += 1

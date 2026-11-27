@@ -2,7 +2,13 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MotionConfig } from 'motion/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FerroClient, type Connectors, type PollsCapabilities, type PollView } from '@ferrocast/api'
+import {
+  FerroClient,
+  type Connectors,
+  type PlatformPollCapability,
+  type PollsCapabilities,
+  type PollView,
+} from '@ferrocast/api'
 import { DEMO_TOKEN, DemoEngine } from '@ferrocast/api/demo'
 import { PollPanel } from './polls'
 import { useLive } from '../../lib/store'
@@ -275,5 +281,133 @@ describe('PollPanel', () => {
     expect(host2.textContent).toContain('1.')
     expect(host2.textContent).not.toContain('!vote 1')
     expect(host2.querySelector('input[type="checkbox"]')).toBeNull()
+  })
+
+  it('reveals !vote fallback when all-native limits are exceeded, discloses Twitch 30m limit, hides Reconnect on remote, and formats chip notes safely', async () => {
+    const twitchNativeCap: PlatformPollCapability = {
+      platform: 'twitch',
+      mode: 'native',
+      limits: {
+        min_options: 2,
+        max_options: 5,
+        min_duration_s: 15,
+        max_duration_s: 1800,
+        supports_no_timer: true,
+        question_chars: 60,
+        option_chars: 25,
+      },
+    }
+    const client = {
+      poll: vi.fn(async (): Promise<PollView | null> => null),
+      pollCapabilities: vi.fn(async (): Promise<PollsCapabilities> => ({
+        platforms: [twitchNativeCap],
+      })),
+    } as unknown as FerroClient
+    setStore(client)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MotionConfig reducedMotion="always">
+          <PollPanel />
+        </MotionConfig>,
+      )
+    })
+    await flushUi()
+
+    // Selecting "No timer" discloses Twitch's 30-min cap.
+    const noTimerRadio =
+      [...host.querySelectorAll<HTMLLabelElement>('[role="radiogroup"] label')]
+        .find((l) => l.textContent?.includes('No timer'))
+        ?.querySelector('input') ?? null
+    expect(noTimerRadio).toBeTruthy()
+    await act(async () => {
+      noTimerRadio?.click()
+    })
+    await flushUi()
+    expect(host.textContent).toContain('30 min')
+
+    // Exceeding Twitch's 60-char question limit reveals the !vote fallback toggle even though allNative is true.
+    const qInput = host.querySelector<HTMLInputElement>('input[placeholder*="Which map next"]')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(
+        qInput,
+        'This question exceeds Twitch native character limits by being over sixty chars',
+      )
+      qInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushUi()
+    expect(host.querySelector('input[type="checkbox"]')).not.toBeNull()
+
+    // On a paired remote phone, Reconnect CTA is hidden and incompatible forms disable Start poll when fallback is off.
+    const reconnectClient = {
+      poll: vi.fn(async (): Promise<PollView | null> => null),
+      pollCapabilities: vi.fn(async (): Promise<PollsCapabilities> => ({
+        platforms: [{ ...twitchNativeCap, mode: 'reconnect_needed', reason: 'needs_scope' }],
+      })),
+    } as unknown as FerroClient
+    await act(async () => {
+      root!.unmount()
+    })
+    document.body.innerHTML = ''
+    setStore(reconnectClient)
+    await act(async () => {
+      useLive.setState({
+        remote: { role: 'owner', name: 'Phone', pcOnline: true },
+      })
+    })
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <MotionConfig reducedMotion="always">
+          <PollPanel />
+        </MotionConfig>,
+      )
+    })
+    await flushUi()
+    expect(
+      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Reconnect'),
+    ).toBeUndefined()
+    const cb = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    await act(async () => cb.click())
+    const startBtn = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Start poll'),
+    )!
+    expect(startBtn.disabled).toBe(true)
+
+    // Active poll delivery chips format notes cleanly without raw snake_case `title`.
+    await act(async () => {
+      useLive.setState({
+        remote: null,
+        poll: {
+          id: 'p-raw',
+          question: 'Pick one',
+          options: [
+            { text: 'A', votes: 1 },
+            { text: 'B', votes: 0 },
+          ],
+          total: 1,
+          started_at: 1000,
+          ends_at: null,
+          closed: false,
+          leaders: [0],
+          platforms: [
+            {
+              platform: 'twitch',
+              mode: 'chat',
+              state: 'failed_fallback',
+              note: 'text_too_long_for_native',
+            },
+          ],
+        },
+      })
+    })
+    await flushUi()
+    expect(host.innerHTML).not.toContain('title="text_too_long_for_native"')
+    expect(host.textContent).toContain('Text exceeded native character limits')
+    expect(host.querySelector('button[aria-label="Twitch poll delivery note"]')).not.toBeNull()
   })
 })

@@ -628,6 +628,7 @@ describe('viewer count and monotonic peak tracking', () => {
             kick: { state: 'off', account: null, detail: null, last_event_at: null },
             facebook: { state: 'off', account: null, detail: null, last_event_at: null },
             obs: { state: 'off', account: null, detail: null, last_event_at: null },
+            relay: { state: 'connected', account: null, detail: null, last_event_at: null },
           },
         },
       } as LiveFrame,
@@ -679,5 +680,27 @@ describe('viewer count and monotonic peak tracking', () => {
     })
     useLive.getState().apply([{ v: 1, type: 'resync', data: { missed: 2 } } as LiveFrame])
     await vi.waitFor(() => expect(useLive.getState().viewers).toEqual({}))
+
+    // Status frame with viewers clears stopped GoLive platform without adding Activity events.
+    useLive.setState({ viewers: { twitch: 5, youtube: 42 }, peakViewers: 42, events: [] })
+    useLive.getState().apply([
+      {
+        v: 1,
+        type: 'status',
+        data: {
+          connectors: {
+            twitch: { state: 'connected', account: null, detail: null, last_event_at: 1 },
+            youtube: { state: 'connected', account: null, detail: null, last_event_at: 1 },
+            kick: { state: 'off', account: null, detail: null, last_event_at: null },
+            facebook: { state: 'off', account: null, detail: null, last_event_at: null },
+            obs: { state: 'off', account: null, detail: null, last_event_at: null },
+            relay: { state: 'connected', account: null, detail: null, last_event_at: null },
+          },
+          viewers: { twitch: 5, youtube: null },
+        },
+      } as LiveFrame,
+    ])
+    expect(useLive.getState().viewers).toEqual({ twitch: 5 })
+    expect(useLive.getState().events).toEqual([])
   })
 })

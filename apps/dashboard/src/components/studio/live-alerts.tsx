@@ -27,6 +27,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 export function alertFix(
   alert: LiveAlert,
   client: FerroClient,
+  onSilence?: (id: string) => void,
 ): { label: string; run: () => Promise<string> } | undefined {
   const name = alert.source
   if (!name) return undefined
@@ -90,6 +91,7 @@ export function alertFix(
         const gainCapLeft = Math.max(0, MAX_MIC_GAIN_DB - oldGainDb)
         const add = Math.min(6, Math.floor(headroom), Math.floor(gainCapLeft))
         if (add < 1) {
+          onSilence?.(alert.id)
           await api.silenceLiveAlert(alert.id)
           return `${name} already has +${Math.round(existingBoost)} dB of boost. Raise your mic's hardware gain or move closer.`
         }
@@ -199,12 +201,12 @@ export function LiveAlertToasts() {
       if (r.shown.fixed) return
     }
     const shownAlert = r.shown.alert
-    const fix = shownAlert && client ? alertFix(shownAlert, client) : undefined
-    const dismiss = shownAlert && client ? alertDismiss(shownAlert, client) : undefined
     const silenceFromUser = (id: string) => {
       silencedByUser.current.add(id)
       active.current = active.current.filter((a) => a.id !== id)
     }
+    const fix = shownAlert && client ? alertFix(shownAlert, client, silenceFromUser) : undefined
+    const dismiss = shownAlert && client ? alertDismiss(shownAlert, client) : undefined
     const runAction = (run: () => Promise<string>, markSilencedId?: string) => () => {
       if (markSilencedId) silenceFromUser(markSilencedId)
       run().then(

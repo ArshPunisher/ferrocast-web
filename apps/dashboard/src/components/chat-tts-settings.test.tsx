@@ -137,4 +137,26 @@ describe('ChatTtsGroup', () => {
       expect.objectContaining({ command: '!speak', cooldown_s: 30 }),
     )
   })
+
+  it('lets the user turn Read chat messages OFF even when unsaved draft inputs are invalid', async () => {
+    const onSave = vi.fn()
+    const { host } = await renderChatTts({
+      value: { ...DEFAULT_CHAT_TTS, enabled: true, mode: 'command', command: '!tts' },
+      hasAlertsOverlay: true,
+      onSave,
+    })
+
+    const cmd = findInputByLabel(host, 'Command')!
+    await act(async () => {
+      setInput(cmd, 'badcmd')
+    })
+
+    const toggle = host.querySelector<HTMLButtonElement>('button[role="switch"]')!
+    await act(async () => {
+      toggle.click()
+    })
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, command: '!tts' }),
+    )
+  })
 })

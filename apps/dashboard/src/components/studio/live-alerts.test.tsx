@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { LiveAlert } from '@ferrocast/api'
+import type { LiveAlert, SocketLike } from '@ferrocast/api'
 import { Toaster, dismissToast } from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
 import type { FerroClient } from '@ferrocast/api'
@@ -458,6 +458,75 @@ describe('alertDismiss: "quiet_ok" and toast close', () => {
       path: '/api/v1/studio/engine/live-alerts/silence',
       body: { id: 'mic:quiet:KREO' },
     })
+
+    await act(async () => root.unmount())
+    useLive.setState((st) => ({ conn: null, studio: { ...st.studio, alert: null } }))
+    for (let i = 1; i < 80; i++) dismissToast(i)
+  })
+
+  it('does not show cleared toast after boost-cap click auto-silences quiet mic warning', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const capped = fakeClient(20, {
+      filters: [{ name: 'Raise a quiet mic', kind: 'gain_filter', enabled: true }],
+      filterSettings: { 'Raise a quiet mic': { db: 15 } },
+    })
+    const socket = (): SocketLike => ({
+      readyState: 1,
+      onopen: null,
+      onclose: null,
+      onerror: null,
+      onmessage: null,
+      send() {},
+      close() {},
+    })
+    useLive.setState((s) => ({
+      conn: { mode: 'desktop', client: capped.client, socket },
+      studio: { ...s.studio, alert: null },
+    }))
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(
+        <>
+          <LiveAlertToasts />
+          <Toaster />
+        </>,
+      )
+    })
+
+    const quiet: LiveAlert = {
+      id: 'mic:quiet:KREO',
+      level: 'warn',
+      message: 'KREO sounds quiet.',
+      source: 'KREO',
+      action: 'gain_up',
+      dismiss: 'quiet_ok',
+      cleared: false,
+    }
+    await act(async () => useLive.setState((s) => ({ studio: { ...s.studio, alert: quiet } })))
+    const boostBtn = [
+      ...document.querySelectorAll<HTMLButtonElement>('section[aria-label="Notifications"] button'),
+    ].find((b) => b.textContent === '+6 dB')!
+    await act(async () => boostBtn.click())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    await act(async () =>
+      useLive.setState((s) => ({
+        studio: {
+          ...s.studio,
+          alert: {
+            id: 'mic:quiet:KREO',
+            level: 'warn',
+            message: 'Your voice is loud enough now.',
+            cleared: true,
+          },
+        },
+      })),
+    )
+    expect(document.body.textContent).not.toContain('Your voice is loud enough now.')
 
     await act(async () => root.unmount())
     useLive.setState((st) => ({ conn: null, studio: { ...st.studio, alert: null } }))

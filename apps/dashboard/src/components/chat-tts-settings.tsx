@@ -58,7 +58,16 @@ export function ChatTtsGroup({ value, hasAlertsOverlay = true, onSave }: ChatTts
     <Group title="Chat messages">
       <SwitchRow
         checked={draft.enabled}
-        onChange={(enabled) => commit({ ...draft, enabled })}
+        onChange={(enabled) => {
+          if (!enabled) {
+            const next = { ...saved, enabled: false }
+            setDraft(next)
+            setErrors({})
+            onSave(next)
+            return
+          }
+          commit({ ...draft, enabled })
+        }}
         label="Read chat messages"
         description="Read live chat aloud using this computer’s voice."
       />

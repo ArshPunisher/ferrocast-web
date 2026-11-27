@@ -70,18 +70,25 @@ function nativeFallbackNote(
   caps: PlatformPollCapability[],
   question: string,
   options: string[],
+  duration: string,
   chatFallback: boolean,
 ): string | null {
   const cleanOpts = options.map((o) => o.trim()).filter(Boolean)
   const qLen = [...question.trim()].length
   const maxOptLen = cleanOpts.reduce((m, o) => Math.max(m, [...o].length), 0)
+  const durationSec = duration === 'none' ? null : Number(duration)
   const affected: string[] = []
   for (const c of caps) {
     if (c.mode !== 'native') continue
+    const durationOutOfRange =
+      durationSec === null
+        ? !c.limits.supports_no_timer
+        : durationSec < c.limits.min_duration_s || durationSec > c.limits.max_duration_s
     if (
       qLen > c.limits.question_chars ||
       maxOptLen > c.limits.option_chars ||
-      cleanOpts.length > c.limits.max_options
+      cleanOpts.length > c.limits.max_options ||
+      durationOutOfRange
     ) {
       affected.push(PLATFORM_LABEL[c.platform])
     }
@@ -90,6 +97,47 @@ function nativeFallbackNote(
   return chatFallback
     ? `${affected.join(' and ')} will use !vote in chat for these answers.`
     : `${affected.join(' and ')} native limits exceeded (shorten text or enable !vote fallback).`
+}
+
+function nativeFits(
+  c: PlatformPollCapability,
+  question: string,
+  options: string[],
+  duration: string,
+): boolean {
+  if (c.mode !== 'native') return false
+  const cleanOpts = options.map((o) => o.trim()).filter(Boolean)
+  const qLen = [...question.trim()].length
+  const maxOptLen = cleanOpts.reduce((m, o) => Math.max(m, [...o].length), 0)
+  if (qLen > c.limits.question_chars || maxOptLen > c.limits.option_chars) return false
+  if (cleanOpts.length > c.limits.max_options) return false
+  if (duration === 'none') return c.limits.supports_no_timer
+  const sec = Number(duration)
+  return sec >= c.limits.min_duration_s && sec <= c.limits.max_duration_s
+}
+
+const DELIVERY_NOTE_LABELS: Record<string, string> = {
+  text_too_long_for_native: 'Text exceeded native character limits, so viewers vote with !vote.',
+  options_count_unsupported_for_native:
+    'Option count exceeded native limits, so viewers vote with !vote.',
+  duration_too_short_for_native: 'Duration was shorter than native minimum; used !vote in chat.',
+  duration_too_long_for_native: 'Duration exceeded native limit; used !vote in chat.',
+  not_live: 'Stream was offline; used !vote in chat.',
+  needs_scope: 'Platform poll permission missing; used !vote in chat.',
+  requires_affiliate: 'Native polls require Affiliate or Partner status; used !vote in chat.',
+  platform_unsupported: 'Native polls unavailable on this platform; used !vote in chat.',
+}
+
+function formatDeliveryNote(note: string | null | undefined): string | undefined {
+  if (!note) return undefined
+  const trimmed = note.trim()
+  if (!trimmed) return undefined
+  if (DELIVERY_NOTE_LABELS[trimmed]) return DELIVERY_NOTE_LABELS[trimmed]
+  if (/^[a-z0-9_]+$/.test(trimmed)) {
+    const clean = trimmed.replace(/_/g, ' ')
+    return `${clean.charAt(0).toUpperCase()}${clean.slice(1)}.`
+  }
+  return trimmed
 }
 
 function NewPoll({
@@ -107,6 +155,7 @@ function NewPoll({
 }) {
   const client = useClient()
   const cloud = isCloud(useLive((s) => s.conn))
+  const remote = useLive((s) => s.remote !== null)
   const [question, setQuestion] = useState(last?.question ?? '')
   const [options, setOptions] = useState<string[]>(last?.options ?? ['', ''])
   const [duration, setDuration] = useState<string>(
@@ -117,8 +166,16 @@ function NewPoll({
   const [busy, setBusy] = useState(false)
   const platforms = caps?.platforms ?? []
   const allNative = platforms.length > 0 && platforms.every((p) => p.mode === 'native')
-  const needsFallbackToggle = platforms.length > 0 && !allNative
-  const limitNote = nativeFallbackNote(platforms, question, options, chatFallback)
+  const limitNote = nativeFallbackNote(platforms, question, options, duration, chatFallback)
+  const needsFallbackToggle = platforms.length > 0 && (!allNative || Boolean(limitNote))
+  const twitchNoTimerNote =
+    duration === 'none' && platforms.some((c) => c.platform === 'twitch' && c.mode === 'native')
+      ? 'Twitch caps native polls at 30 min even with No timer selected.'
+      : null
+  const canStartPoll =
+    platforms.length === 0 ||
+    chatFallback ||
+    platforms.some((c) => nativeFits(c, question, options, duration))
   const start = async () => {
     setBusy(true)
     setErr(null)
@@ -171,7 +228,7 @@ function NewPoll({
                 <span className="font-medium text-text">
                   {cap.mode === 'native' ? 'Native' : '!vote'}
                 </span>
-                {cap.mode === 'reconnect_needed' && cap.platform === 'twitch' && (
+                {cap.mode === 'reconnect_needed' && cap.platform === 'twitch' && !remote && (
                   <Button
                     type="button"
                     size="xs"
@@ -270,6 +327,7 @@ function NewPoll({
           </Button>
         )}
       </fieldset>
+      {twitchNoTimerNote && <p className="text-[13px] text-text-3">{twitchNoTimerNote}</p>}
       {limitNote && <p className="text-[13px] text-text-3">{limitNote}</p>}
       {needsFallbackToggle && (
         <label className="inline-flex cursor-pointer items-center gap-2 text-[13.5px] text-text-2 select-none">
@@ -298,7 +356,7 @@ function NewPoll({
           options={DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
         />
         <span className="flex-1" />
-        <Button type="submit" variant="primary" busy={busy}>
+        <Button type="submit" variant="primary" busy={busy} disabled={!canStartPoll}>
           Start poll
         </Button>
       </div>
@@ -433,16 +491,20 @@ export function PollPanel() {
           </p>
           {poll.platforms && poll.platforms.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-text-2">
-              {poll.platforms.map((s) => (
-                <span
-                  key={s.platform}
-                  title={s.note ?? undefined}
-                  className="inline-flex items-center gap-1"
-                >
-                  <PlatformMark platform={s.platform} size={13} />
-                  <span>{deliveryLabel(s.mode, s.state)}</span>
-                </span>
-              ))}
+              {poll.platforms.map((s) => {
+                const note = formatDeliveryNote(s.note)
+                return (
+                  <span key={s.platform} className="inline-flex items-center gap-1">
+                    <PlatformMark platform={s.platform} size={13} />
+                    <span>{deliveryLabel(s.mode, s.state)}</span>
+                    {note && (
+                      <InfoTip label={`${PLATFORM_LABEL[s.platform]} poll delivery note`}>
+                        {note}
+                      </InfoTip>
+                    )}
+                  </span>
+                )
+              })}
             </div>
           )}
           <Results poll={poll} />

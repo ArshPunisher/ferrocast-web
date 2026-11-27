@@ -103,7 +103,18 @@ describe('useConnect', () => {
 
     expect(document.body.textContent).toContain('FRRO-4821')
 
-    // Even after >900ms while connectors state still says `connected`, the dialog must NOT auto-close.
+    // Even after >900ms while connectors state still says `connected`, incoming chat events
+    // bumping `last_event_at` must NOT auto-close the dialog before leaving `connected`.
+    await act(async () => {
+      useLive.setState({
+        connectors: makeConnectors({
+          state: 'connected',
+          account: { name: 'NovaPlays', avatar_url: null },
+          detail: null,
+          last_event_at: 2500,
+        }),
+      })
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500)
     })
