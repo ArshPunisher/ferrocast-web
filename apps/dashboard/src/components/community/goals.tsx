@@ -13,7 +13,7 @@ import {
   type Goal,
   type GoalKind,
 } from '@ferrocast/api'
-import { Button, Dialog, Field, IconButton, Input, Select, Sheet, Skeleton } from '@ferrocast/ui'
+import { Button, Field, IconButton, InfoTip, Input, Select, Sheet, Skeleton } from '@ferrocast/ui'
 import { LoadError, Panel } from '../Panel'
 import { useAction, useClient, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
@@ -83,7 +83,11 @@ function NewGoal({ onCreated, onCancel }: { onCreated: (g: Goal) => void; onCanc
           />
         )}
       </Field>
-      <div className={kind === 'tips' ? 'grid grid-cols-3 gap-3' : 'grid grid-cols-2 gap-3'}>
+      <div
+        className={
+          kind === 'tips' ? 'grid grid-cols-1 gap-3 sm:grid-cols-3' : 'grid grid-cols-2 gap-3'
+        }
+      >
         <Field label="Counts" hint={KINDS.find((k) => k.value === kind)?.counts}>
           {(p) => (
             <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as GoalKind)}>
@@ -141,12 +145,19 @@ function NewGoal({ onCreated, onCancel }: { onCreated: (g: Goal) => void; onCanc
 function GoalRow({
   g,
   busy,
+  asking,
   onNudge,
+  onAsk,
+  onKeep,
   onDelete,
 }: {
   g: Goal
   busy: string | null
+  /** Asking whether to delete this one: asked in the row, not in a dialog over the panel. */
+  asking: boolean
   onNudge: (delta: number) => void
+  onAsk: () => void
+  onKeep: () => void
   onDelete: () => void
 }) {
   const id = useId()
@@ -180,30 +191,51 @@ function GoalRow({
       >
         <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex items-center gap-1">
-        <IconButton
-          size="sm"
-          variant="ghost"
-          label={`Take ${amount(g, step)} off ${g.title}`}
-          disabled={busy !== null}
-          onClick={() => onNudge(-step)}
+      {asking ? (
+        <div
+          role="group"
+          aria-label={`Delete ${g.title}?`}
+          className="flex flex-wrap items-center gap-2 rounded-control bg-danger-soft px-2.5 py-2"
         >
-          <Minus size={15} />
-        </IconButton>
-        <IconButton
-          size="sm"
-          variant="ghost"
-          label={`Add ${amount(g, step)} to ${g.title}`}
-          disabled={busy !== null}
-          onClick={() => onNudge(step)}
-        >
-          <Plus size={15} />
-        </IconButton>
-        <span className="flex-1" />
-        <IconButton size="sm" variant="danger-ghost" label={`Delete ${g.title}`} onClick={onDelete}>
-          <Trash size={15} />
-        </IconButton>
-      </div>
+          <span className="flex min-w-0 flex-1 basis-32 items-center gap-1 text-[14px] font-semibold text-text">
+            Delete this goal?
+            <InfoTip label="What happens">
+              Its progress goes with it. Goal widgets showing it go blank.
+            </InfoTip>
+          </span>
+          <Button size="sm" variant="ghost" onClick={onKeep}>
+            Keep it
+          </Button>
+          <Button size="sm" variant="danger" busy={busy === 'delete'} onClick={onDelete}>
+            Delete goal
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <IconButton
+            size="sm"
+            variant="ghost"
+            label={`Take ${amount(g, step)} off ${g.title}`}
+            disabled={busy !== null}
+            onClick={() => onNudge(-step)}
+          >
+            <Minus size={15} />
+          </IconButton>
+          <IconButton
+            size="sm"
+            variant="ghost"
+            label={`Add ${amount(g, step)} to ${g.title}`}
+            disabled={busy !== null}
+            onClick={() => onNudge(step)}
+          >
+            <Plus size={15} />
+          </IconButton>
+          <span className="flex-1" />
+          <IconButton size="sm" variant="danger-ghost" label={`Delete ${g.title}`} onClick={onAsk}>
+            <Trash size={15} />
+          </IconButton>
+        </div>
+      )}
     </li>
   )
 }
@@ -260,6 +292,14 @@ export function GoalsPanel() {
   }, [live])
   const goals = res.data
   const put = (g: Goal) => res.set((prev) => (prev ?? []).map((x) => (x.id === g.id ? g : x)))
+  const deleteGoal = (g: Goal) =>
+    void run('delete', () => client.deleteGoal(g.id).then(() => true), {
+      success: 'Goal deleted.',
+    }).then((ok) => {
+      if (!ok) return
+      res.set((prev) => (prev ?? []).filter((x) => x.id !== g.id))
+      setLeaving(null)
+    })
   return (
     <Panel
       title="Goals"
@@ -362,46 +402,16 @@ export function GoalsPanel() {
                       (v) => v && put(v),
                     )
                   }
-                  onDelete={() => setLeaving(g)}
+                  asking={leaving?.id === g.id}
+                  onAsk={() => setLeaving(g)}
+                  onKeep={() => setLeaving(null)}
+                  onDelete={() => deleteGoal(g)}
                 />
               ))}
             </ul>
           )}
         </div>
       </Sheet>
-      <Dialog
-        open={leaving !== null}
-        onClose={() => setLeaving(null)}
-        size="sm"
-        title={leaving ? `Delete “${leaving.title}”?` : ''}
-        description="Its progress goes with it. Goal widgets showing it go blank."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setLeaving(null)}>
-              Keep it
-            </Button>
-            <Button
-              variant="danger"
-              busy={busy === 'delete'}
-              onClick={() => {
-                const g = leaving
-                if (!g) return
-                void run('delete', () => client.deleteGoal(g.id).then(() => true), {
-                  success: 'Goal deleted.',
-                }).then((ok) => {
-                  if (!ok) return
-                  res.set((prev) => (prev ?? []).filter((x) => x.id !== g.id))
-                  setLeaving(null)
-                })
-              }}
-            >
-              Delete goal
-            </Button>
-          </>
-        }
-      >
-        {null}
-      </Dialog>
     </Panel>
   )
 }

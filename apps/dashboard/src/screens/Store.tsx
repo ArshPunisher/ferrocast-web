@@ -200,7 +200,7 @@ function CreatorPage({
             </span>
             <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1 tabular-nums">
-              <Star size={14} weight="fill" className="text-molten" aria-hidden="true" />
+              <Star size={14} weight="fill" className="text-molten-text" aria-hidden="true" />
               {avgRating}
             </span>
           </div>
@@ -300,7 +300,12 @@ function StoreItemCard({
             </button>
             <span className="shrink-0 font-mono text-[12px] text-text-3">v{item.version}</span>
           </div>
-          <p className="mt-1 line-clamp-2 text-[13.5px] leading-snug text-text-2">{item.summary}</p>
+          <p
+            className="mt-1 line-clamp-2 text-[13.5px] leading-snug text-text-2"
+            title={item.summary}
+          >
+            {item.summary}
+          </p>
         </div>
       </div>
 
@@ -320,7 +325,7 @@ function StoreItemCard({
           )}
           <span className="inline-flex items-center gap-2 tabular-nums">
             <span className="inline-flex items-center gap-0.5">
-              <Star size={13} weight="fill" className="text-molten" aria-hidden="true" />
+              <Star size={13} weight="fill" className="text-molten-text" aria-hidden="true" />
               {item.stats.rating_avg.toFixed(1)} ({item.stats.rating_count})
             </span>
             <span aria-hidden="true">·</span>
@@ -733,9 +738,9 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         <div
           role="status"
           data-testid="store-stale-banner"
-          className="flex items-start gap-2.5 rounded-panel border border-molten/40 bg-molten/10 px-4 py-3 text-[13.5px] text-text"
+          className="flex items-start gap-2.5 rounded-panel border border-accent-line bg-accent-soft px-4 py-3 text-[13.5px] text-text"
         >
-          <Warning size={18} className="mt-0.5 shrink-0 text-molten" aria-hidden="true" />
+          <Warning size={18} className="mt-0.5 shrink-0 text-molten-text" aria-hidden="true" />
           <div>
             <p className="font-semibold">This catalog snapshot is older than 7 days.</p>
             <p className="text-text-2">
@@ -1012,7 +1017,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
 
             {/* Local Performance Score Panel */}
             {selectedItemPerf && (
-              <div className="rounded-ctrl border border-line bg-surface-2 p-3.5 space-y-2">
+              <div className="rounded-control border border-line bg-surface-2 p-3.5 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[13.5px] font-bold text-text">
@@ -1029,7 +1034,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
             )}
 
             {/* Security & Verification Breakdown */}
-            <div className="rounded-ctrl border border-line bg-surface-2 p-3.5 space-y-1.5 text-[13px] text-text-2">
+            <div className="rounded-control border border-line bg-surface-2 p-3.5 space-y-1.5 text-[13px] text-text-2">
               <p className="font-semibold text-text">Verified on this PC</p>
               <p className="font-mono text-[12px] text-text-3 break-all">
                 Fingerprint: {selectedItem.package.sha256} ·{' '}
@@ -1143,7 +1148,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
             )}
 
             {linkPreview && (
-              <div className="rounded-ctrl border border-accent-line bg-surface-2 p-4 space-y-3">
+              <div className="rounded-control border border-accent-line bg-surface-2 p-4 space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <h3 className="font-display text-[17px] font-extrabold text-text">

@@ -253,7 +253,11 @@ function BanList() {
                 <PlatformMark platform={b.platform} size={15} />
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm">
-                    <span dir="auto" className="truncate font-semibold text-text">
+                    <span
+                      dir="auto"
+                      className="truncate font-semibold text-text"
+                      title={tameText(b.display_name)}
+                    >
                       {tameText(b.display_name)}
                     </span>
                     {b.everywhere && <Badge tone="accent">Every platform</Badge>}

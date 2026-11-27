@@ -461,7 +461,10 @@ export function Bot() {
                         <Badge tone="warn">Add your links</Badge>
                       )}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[14.5px] break-words text-text-3">
+                    <p
+                      className="mt-0.5 line-clamp-2 text-[14.5px] break-words text-text-3"
+                      title={c.response}
+                    >
                       {c.response}
                     </p>
                   </div>
@@ -558,7 +561,7 @@ export function Bot() {
                     className="min-w-0 flex-1 text-left"
                     onClick={() => setEditTimer(t)}
                   >
-                    <span className="block text-sm font-semibold text-text">
+                    <span className="block text-sm font-semibold break-words [overflow-wrap:anywhere] text-text">
                       {t.name || 'Timer'}
                     </span>
                     <span className="mt-0.5 block text-[14px] text-text-3">

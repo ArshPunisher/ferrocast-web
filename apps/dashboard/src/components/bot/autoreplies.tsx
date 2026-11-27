@@ -604,7 +604,12 @@ export function AutoRepliesPanel() {
                 <p className="mt-0.5 font-mono text-[13.5px] break-all text-text-3">
                   {matchSummary(r)}
                 </p>
-                <p className="mt-1 line-clamp-2 text-[15px] break-words text-text-2">{r.reply}</p>
+                <p
+                  className="mt-1 line-clamp-2 text-[15px] break-words text-text-2"
+                  title={r.reply}
+                >
+                  {r.reply}
+                </p>
               </div>
               <div className="order-3 -ml-2 flex w-full shrink-0 items-center gap-0.5 sm:order-2 sm:ml-0 sm:w-auto">
                 <IconButton

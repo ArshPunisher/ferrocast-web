@@ -37,7 +37,7 @@ function Who({ platform, name }: { platform: Platform; name: string }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <PlatformMark platform={platform} size={13} />
-      <span dir="auto" className="truncate text-sm font-medium text-text">
+      <span dir="auto" className="truncate text-sm font-medium text-text" title={tameText(name)}>
         {tameText(name)}
       </span>
     </span>

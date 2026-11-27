@@ -233,7 +233,7 @@ export function Chat() {
     >
       <header
         data-testid="chat-pane-header"
-        className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 @[520px]:h-11 @[520px]:flex-nowrap @[520px]:py-0"
+        className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 @[640px]:min-h-11 @[640px]:flex-nowrap @[640px]:py-0"
       >
         <h1
           id="chat-title"
@@ -252,7 +252,7 @@ export function Chat() {
               label: (
                 <span className="inline-flex items-center gap-1.5">
                   <span>All</span>
-                  <span className="hidden font-mono text-[12px] tabular-nums opacity-85 @[580px]:inline">
+                  <span className="hidden font-mono text-[12px] tabular-nums opacity-85 @[720px]:inline">
                     {counts.total}
                   </span>
                 </span>
@@ -430,7 +430,9 @@ export function Chat() {
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <span aria-hidden="true" className={cx('size-2 shrink-0 rounded-full', queueDotTone)} />
-          <span className="truncate">{queueFooterText}</span>
+          <span className="truncate" title={queueFooterText}>
+            {queueFooterText}
+          </span>
         </span>
         <span className="shrink-0 font-mono text-[12px] text-text-2 tabular-nums">
           {waiting} waiting

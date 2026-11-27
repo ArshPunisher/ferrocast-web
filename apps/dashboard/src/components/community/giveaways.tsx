@@ -168,7 +168,11 @@ function WinnerCard({ g }: { g: GiveawayView }) {
             </p>
             <p className="flex min-w-0 items-center gap-2">
               <PlatformMark platform={w.platform} size={15} />
-              <span dir="auto" className="truncate font-display text-xl font-bold text-text">
+              <span
+                dir="auto"
+                className="truncate font-display text-xl font-bold text-text"
+                title={tameText(w.display_name)}
+              >
                 {tameText(w.display_name)}
               </span>
             </p>
@@ -195,8 +199,13 @@ function Face({
   return (
     <span
       aria-hidden="true"
-      className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-surface-1 font-display text-[13px] font-extrabold text-white"
-      style={{ background: `var(--fc-${platform})` }}
+      className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-surface-1 font-display text-[13px] font-extrabold text-text"
+      style={{
+        ['--fc-av' as string]: `var(--fc-${platform})`,
+        // A tint of the platform, never its raw colour: white on neon green is unreadable.
+        background: 'color-mix(in srgb, var(--fc-av) 24%, var(--fc-surface-3))',
+        boxShadow: 'inset 0 0 0 1px var(--fc-av)',
+      }}
     >
       {letter}
     </span>
@@ -254,7 +263,11 @@ function EntriesSheet({
               title={PLATFORM_LABEL[e.platform]}
             >
               <Face name={e.display_name} platform={e.platform} />
-              <span dir="auto" className="min-w-0 flex-1 truncate font-bold text-text">
+              <span
+                dir="auto"
+                className="min-w-0 flex-1 truncate font-bold text-text"
+                title={tameText(e.display_name)}
+              >
                 {tameText(e.display_name)}
               </span>
               <span className="text-[14px] font-semibold text-text-3">

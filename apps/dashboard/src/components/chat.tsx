@@ -1097,6 +1097,99 @@ export function useChatActions(
   return { actions, dialogs }
 }
 
+/** What a ban asks: where, and why. Shared by the ban dialog and the viewer card's own step. */
+function useBanForm(open: boolean, onlyHere: boolean) {
+  const [reason, setReason] = useState('')
+  const [everywhere, setEverywhere] = useState(!onlyHere)
+  useEffect(() => {
+    if (open) {
+      setReason('')
+      setEverywhere(!onlyHere)
+    }
+  }, [open, onlyHere])
+  return { reason, setReason, everywhere, setEverywhere }
+}
+type BanForm = ReturnType<typeof useBanForm>
+
+function BanFields({
+  form,
+  platform,
+  onlyHere,
+}: {
+  form: BanForm
+  platform: Platform | null
+  onlyHere: boolean
+}) {
+  const reasonId = useId()
+  const { reason, setReason, everywhere, setEverywhere } = form
+  return (
+    <div className="flex flex-col gap-4">
+      {onlyHere ? (
+        <p className="text-[15px] text-text-2">
+          Your PC is off, so this bans on {platform ? PLATFORM_LABEL[platform] : 'this platform'}{' '}
+          only.
+        </p>
+      ) : (
+        <Segmented
+          label="Where"
+          value={everywhere ? 'all' : 'one'}
+          onChange={(v) => setEverywhere(v === 'all')}
+          options={[
+            { value: 'all', label: 'Twitch, YouTube and Kick' },
+            { value: 'one', label: platform ? `Only ${PLATFORM_LABEL[platform]}` : 'Only here' },
+          ]}
+        />
+      )}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={reasonId} className="text-[14.5px] font-semibold text-text">
+          Reason <span className="font-normal text-text-2">(optional, only mods see it)</span>
+        </label>
+        <input
+          id={reasonId}
+          value={reason}
+          maxLength={200}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Spam, hate raid, scam link…"
+          className="h-10 rounded-control border border-line-strong bg-inset px-3 text-sm text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none"
+        />
+      </div>
+    </div>
+  )
+}
+
+function BanActions({
+  form,
+  platform,
+  busy,
+  onCancel,
+  onBan,
+}: {
+  form: BanForm
+  platform: Platform | null
+  busy: boolean
+  onCancel: () => void
+  onBan: (everywhere: boolean, reason: string) => void
+}) {
+  return (
+    <>
+      <Button variant="ghost" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button
+        variant="danger"
+        busy={busy}
+        onClick={() => onBan(form.everywhere, form.reason.trim())}
+      >
+        {form.everywhere
+          ? 'Ban everywhere'
+          : `Ban on ${platform ? PLATFORM_LABEL[platform] : 'this platform'}`}
+      </Button>
+    </>
+  )
+}
+
+const BAN_NOTE = "They can't chat with this account. Unban any time in Moderation."
+
 export function BanDialog({
   actor,
   platform,
@@ -1113,65 +1206,19 @@ export function BanDialog({
   onClose: () => void
   onBan: (everywhere: boolean, reason: string) => void
 }) {
-  const [reason, setReason] = useState('')
-  const [everywhere, setEverywhere] = useState(!onlyHere)
-  useEffect(() => {
-    if (actor) {
-      setReason('')
-      setEverywhere(!onlyHere)
-    }
-  }, [actor, onlyHere])
+  const form = useBanForm(actor !== null, onlyHere)
   return (
     <Dialog
       open={actor !== null}
       onClose={onClose}
       size="sm"
       title={actor ? `Ban ${tameText(actor.display_name)}?` : 'Ban'}
-      description="They can't chat with this account. Unban any time in Moderation."
+      description={BAN_NOTE}
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="danger" busy={busy} onClick={() => onBan(everywhere, reason.trim())}>
-            {everywhere
-              ? 'Ban everywhere'
-              : `Ban on ${platform ? PLATFORM_LABEL[platform] : 'this platform'}`}
-          </Button>
-        </>
+        <BanActions form={form} platform={platform} busy={busy} onCancel={onClose} onBan={onBan} />
       }
     >
-      <div className="flex flex-col gap-4">
-        {onlyHere ? (
-          <p className="text-[15px] text-text-2">
-            Your PC is off, so this bans on {platform ? PLATFORM_LABEL[platform] : 'this platform'}{' '}
-            only.
-          </p>
-        ) : (
-          <Segmented
-            label="Where"
-            value={everywhere ? 'all' : 'one'}
-            onChange={(v) => setEverywhere(v === 'all')}
-            options={[
-              { value: 'all', label: 'Twitch, YouTube and Kick' },
-              { value: 'one', label: platform ? `Only ${PLATFORM_LABEL[platform]}` : 'Only here' },
-            ]}
-          />
-        )}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="ban-reason" className="text-[14.5px] font-semibold text-text">
-            Reason <span className="font-normal text-text-2">(optional, only mods see it)</span>
-          </label>
-          <input
-            id="ban-reason"
-            value={reason}
-            maxLength={200}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Spam, hate raid, scam link…"
-            className="h-10 rounded-control border border-line-strong bg-inset px-3 text-sm text-text placeholder:text-text-3 focus:border-accent-text focus:outline-none"
-          />
-        </div>
-      </div>
+      <BanFields form={form} platform={platform} onlyHere={onlyHere} />
     </Dialog>
   )
 }
@@ -1184,10 +1231,7 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
   const [note, setNote] = useState('')
   const [saved, setSaved] = useState<string | null>(null)
   const [banning, setBanning] = useState(false)
-  const banTarget = useMemo(
-    () => (banning && card ? { display_name: card.display_name } : null),
-    [banning, card],
-  )
+  const banForm = useBanForm(banning && card !== null, false)
   useEffect(() => {
     setBanning(false)
     if (!actor?.id) return
@@ -1221,6 +1265,28 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
       success: 'Note saved.',
     }).then((r) => r && setSaved(r.text))
   }
+  const banNow = (everywhere: boolean, reason: string) => {
+    if (!card) return
+    void run(
+      'ban',
+      () =>
+        client.ban(
+          { platform: card.platform, user_id: card.user_id, login: card.login },
+          everywhere,
+          reason || undefined,
+        ),
+      {
+        success: (r) =>
+          r.failed.length
+            ? `Banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}. Not on ${r.failed.map((f) => PLATFORM_LABEL[f.platform]).join(', ')}.`
+            : `${tameText(card.display_name)} is banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}.`,
+      },
+    ).then((r) => {
+      if (!r) return
+      setBanning(false)
+      onClose()
+    })
+  }
   const fmtDate = (t: number | null) =>
     t
       ? new Date(t).toLocaleDateString(undefined, {
@@ -1233,13 +1299,37 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
     <Dialog
       open={actor !== null}
       onClose={() => {
+        if (banning) {
+          setBanning(false)
+          return
+        }
         saveNote()
         onClose()
       }}
       size="sm"
-      title={actor ? tameText(actor.display_name) : 'Viewer'}
+      // The ban is a step inside this dialog, not a second dialog on top of it.
+      title={
+        banning && card
+          ? `Ban ${tameText(card.display_name)}?`
+          : actor
+            ? tameText(actor.display_name)
+            : 'Viewer'
+      }
+      footer={
+        banning && card ? (
+          <BanActions
+            form={banForm}
+            platform={card.platform}
+            busy={busy === 'ban'}
+            onCancel={() => setBanning(false)}
+            onBan={banNow}
+          />
+        ) : undefined
+      }
       description={
-        actor ? (
+        banning && card ? (
+          BAN_NOTE
+        ) : actor ? (
           <span className="inline-flex items-center gap-1.5">
             <PlatformMark platform={actor.platform} size={13} />
             {PLATFORM_LABEL[actor.platform]}
@@ -1252,6 +1342,8 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
         <p role="alert" className="text-sm text-danger">
           {error}
         </p>
+      ) : banning && card ? (
+        <BanFields form={banForm} platform={card.platform} onlyHere={false} />
       ) : !card ? (
         <div className="grid grid-cols-2 gap-3" aria-busy="true">
           <Skeleton className="h-14" />
@@ -1358,35 +1450,6 @@ export function ViewerCardDialog({ actor, onClose }: { actor: Actor | null; onCl
           </div>
         </div>
       )}
-      {/* The same "Ban X?" check as the message toolbar: a ban is hard to take back live. */}
-      <BanDialog
-        actor={banTarget}
-        platform={card?.platform ?? null}
-        busy={busy === 'ban'}
-        onClose={() => setBanning(false)}
-        onBan={(everywhere, reason) => {
-          if (!card) return
-          void run(
-            'ban',
-            () =>
-              client.ban(
-                { platform: card.platform, user_id: card.user_id, login: card.login },
-                everywhere,
-                reason || undefined,
-              ),
-            {
-              success: (r) =>
-                r.failed.length
-                  ? `Banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}. Not on ${r.failed.map((f) => PLATFORM_LABEL[f.platform]).join(', ')}.`
-                  : `${tameText(card.display_name)} is banned on ${r.banned.map((p) => PLATFORM_LABEL[p]).join(', ')}.`,
-            },
-          ).then((r) => {
-            if (!r) return
-            setBanning(false)
-            onClose()
-          })
-        }}
-      />
     </Dialog>
   )
 }

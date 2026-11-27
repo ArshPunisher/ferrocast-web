@@ -470,9 +470,6 @@ test('goals: nudge one by hand, make one, delete one', async ({ page }) => {
   await expect(made).toBeVisible()
 
   await made.getByRole('button', { name: 'Delete 100 followers' }).click()
-  await page
-    .getByRole('dialog', { name: /Delete/ })
-    .getByRole('button', { name: 'Delete goal' })
-    .click()
+  await made.getByRole('button', { name: 'Delete goal' }).click()
   await expect(made).toHaveCount(0)
 })

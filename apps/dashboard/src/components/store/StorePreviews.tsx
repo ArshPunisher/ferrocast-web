@@ -86,11 +86,16 @@ export function StoreCardPreview({ item }: { item: StoreItem }) {
         </span>
       </div>
       <div className="space-y-1">
-        <p className="truncate font-display text-[17px] font-extrabold text-white">
+        <p
+          className="truncate font-display text-[17px] font-extrabold text-white"
+          title={item.preview.headline || item.title}
+        >
           {item.preview.headline || item.title}
         </p>
         {item.preview.subline && (
-          <p className="truncate text-[12.5px] text-white/75">{item.preview.subline}</p>
+          <p className="truncate text-[12.5px] text-white/75" title={item.preview.subline}>
+            {item.preview.subline}
+          </p>
         )}
       </div>
     </div>
@@ -179,7 +184,7 @@ export function StoreDetailPreview({ item }: { item: StoreItem }) {
           </div>
         </div>
         {ca.fields.length > 0 && (
-          <div className="rounded-ctrl border border-line bg-surface-2 p-3">
+          <div className="rounded-control border border-line bg-surface-2 p-3">
             <p className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-text-3">
               Try custom fields before installing
             </p>

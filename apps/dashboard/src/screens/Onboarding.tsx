@@ -246,7 +246,7 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
                   i === step
                     ? 'bg-btn-primary text-on-btn-primary'
                     : stepDone(i)
-                      ? 'bg-ok text-white'
+                      ? 'bg-ok-fill text-white'
                       : 'bg-surface-3 text-text-3',
                 )}
               >

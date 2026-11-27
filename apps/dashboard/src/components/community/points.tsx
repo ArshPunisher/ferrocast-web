@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   ArrowRight,
+  CaretLeft,
   ChatCircleDots,
   Coins,
   Crown,
@@ -168,8 +169,11 @@ function Row({ e, onPick, name }: { e: LeaderboardEntry; onPick: () => void; nam
         <span className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden="true"
-            className="grid size-8 shrink-0 place-items-center rounded-full font-display text-[13px] font-extrabold text-white"
-            style={{ background: `var(--fc-${e.platform})` }}
+            className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--fc-av)] font-display text-[13px] font-extrabold text-text"
+            style={{
+              ['--fc-av' as string]: `var(--fc-${e.platform})`,
+              background: 'color-mix(in srgb, var(--fc-av) 24%, var(--fc-surface-3))',
+            }}
           >
             {letter}
           </span>
@@ -204,30 +208,48 @@ function Adjust({
       onClose={() => setEditing(null)}
       size="sm"
       title={editing ? tameText(editing.display_name) : 'Points'}
-      description={
-        editing ? (
-          <span className="inline-flex items-center gap-1.5">
-            <PlatformMark platform={editing.platform} size={13} />
-            {PLATFORM_LABEL[editing.platform]} · {pointsLabel(editing.points, name)}
-          </span>
-        ) : null
-      }
+      description={editing ? <WhoLine editing={editing} name={name} /> : null}
     >
       {editing && (
-        <div className="pb-2">
-          <PointsAdjuster
-            platform={editing.platform}
-            userId={editing.user_id}
-            name={name}
-            points={editing.points}
-            onChange={(points) => {
-              setEditing({ ...editing, points })
-              onChanged()
-            }}
-          />
-        </div>
+        <AdjustBody editing={editing} setEditing={setEditing} name={name} onChanged={onChanged} />
       )}
     </Dialog>
+  )
+}
+
+function WhoLine({ editing, name }: { editing: LeaderboardEntry; name: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <PlatformMark platform={editing.platform} size={13} />
+      {PLATFORM_LABEL[editing.platform]} · {pointsLabel(editing.points, name)}
+    </span>
+  )
+}
+
+function AdjustBody({
+  editing,
+  setEditing,
+  name,
+  onChanged,
+}: {
+  editing: LeaderboardEntry
+  setEditing: (e: LeaderboardEntry | null) => void
+  name: string
+  onChanged: () => void
+}) {
+  return (
+    <div className="pb-2">
+      <PointsAdjuster
+        platform={editing.platform}
+        userId={editing.user_id}
+        name={name}
+        points={editing.points}
+        onChange={(points) => {
+          setEditing({ ...editing, points })
+          onChanged()
+        }}
+      />
+    </div>
   )
 }
 
@@ -244,27 +266,44 @@ function AllViewers({ open, onClose, name }: { open: boolean; onClose: () => voi
   return (
     <Sheet
       open={open}
-      onClose={onClose}
-      title="Top 100 viewers"
+      // Adjusting one person is a step inside this panel, not a dialog over it.
+      onClose={() => (editing ? setEditing(null) : onClose())}
+      title={editing ? tameText(editing.display_name) : 'Top 100 viewers'}
       tools={
-        <label className="relative block">
-          <MagnifyingGlass
-            size={17}
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-text-3"
-          />
-          <Input
-            aria-label="Find a viewer"
-            data-keep-placeholder
-            placeholder="Find a viewer…"
-            className="pl-10"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </label>
+        editing ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+              <CaretLeft size={14} weight="bold" /> All viewers
+            </Button>
+            <WhoLine editing={editing} name={name} />
+          </div>
+        ) : (
+          <label className="relative block">
+            <MagnifyingGlass
+              size={17}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-text-3"
+            />
+            <Input
+              aria-label="Find a viewer"
+              data-keep-placeholder
+              placeholder="Find a viewer…"
+              className="pl-10"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </label>
+        )
       }
     >
-      {board.error ? (
+      {editing ? (
+        <AdjustBody
+          editing={editing}
+          setEditing={setEditing}
+          name={name}
+          onChanged={board.reload}
+        />
+      ) : board.error ? (
         <LoadError error={board.error} onRetry={board.reload} />
       ) : !board.data ? (
         <Skeleton className="h-80" />
@@ -282,7 +321,6 @@ function AllViewers({ open, onClose, name }: { open: boolean; onClose: () => voi
           ))}
         </ol>
       )}
-      <Adjust editing={editing} setEditing={setEditing} name={name} onChanged={board.reload} />
     </Sheet>
   )
 }

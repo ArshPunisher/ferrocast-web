@@ -697,6 +697,7 @@ export function ImportStep({
                               <span
                                 key={scene}
                                 className="max-w-full truncate rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[12.5px] text-text"
+                                title={scene}
                               >
                                 {scene}
                               </span>

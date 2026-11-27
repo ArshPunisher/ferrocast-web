@@ -472,7 +472,13 @@ function PlatformRow({
               {platform === 'youtube' && <Badge tone="neutral">Beta</Badge>}
               {badge}
             </div>
-            <p className="truncate text-[15px] text-text-2" translate="no">
+            <p
+              className="truncate text-[15px] text-text-2"
+              translate="no"
+              title={
+                c ? who(c) : available ? 'Not connected' : 'Not set up on Ferrocast’s servers yet'
+              }
+            >
               {c ? who(c) : available ? 'Not connected' : 'Not set up on Ferrocast’s servers yet'}
             </p>
             {c?.state === 'ready' && (
