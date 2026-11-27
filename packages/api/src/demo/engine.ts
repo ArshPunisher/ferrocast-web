@@ -14,6 +14,7 @@ import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { DEFAULT_CHAT_TTS, validateChatTts } from '../tts-voices'
+import { containsSevereSlur, hasAnyLink, isEmailToken } from './chat-tts-guard'
 import { AlertQueue, type QueueAction } from '../queue'
 import { accountUrl, resolveLinks, validateCreatorLinks } from '../links'
 import { anySample, namedActor, sample } from '../samples'
@@ -390,6 +391,20 @@ export class DemoEngine {
   private ttsPending: TtsPending[] = []
   private chatTtsUserLast = new Map<string, number>()
   private chatTtsGlobalLast = 0
+  private chatTtsQueue: {
+    id: string
+    text: string
+    platform: Platform
+    sourceId: string | null
+    userId: string | null
+  }[] = []
+  private chatTtsTimer: ReturnType<typeof setTimeout> | null = null
+  private chatTtsDispatched: {
+    id: string
+    platform: Platform
+    sourceId: string | null
+    userId: string | null
+  }[] = []
   private tips: TipSettings = clone(TIPS)
   /** Webhook secrets as the relay keeps them. Never sent back. */
   private tipSecrets: Partial<Record<TipProviderKey, string>> = {
@@ -1115,6 +1130,9 @@ export class DemoEngine {
     for (const t of this.timers) clearTimeout(t)
     this.timers.clear()
     if (this.queueTimer) clearTimeout(this.queueTimer)
+    if (this.chatTtsTimer) clearTimeout(this.chatTtsTimer)
+    this.chatTtsTimer = null
+    this.chatTtsQueue = []
     for (const s of this.liveSubs) s.sock.close()
     for (const s of this.overlaySubs) s.sock.close()
     for (const m of this.media) revokeBlobUrl(m.url)
@@ -1678,7 +1696,8 @@ export class DemoEngine {
       const firstErr = Object.entries(chatErrors)[0]
       if (firstErr) throw new HttpError(400, 'invalid', `chat.${firstErr[0]}: ${firstErr[1]}`)
       this.tts = { ...this.tts, ...t, chat: nextChat }
-      if (!this.tts.enabled || !nextChat.enabled) this.emitAlertsTtsStop()
+      if (!this.tts.enabled || !nextChat.enabled) this.stopAllChatTts()
+      else this.pumpChatTts()
       return { ...clone(this.tts), currency: this.settings.currency }
     }
     if (is('GET', 'tts', 'voices')) return clone(VOICES)
@@ -2488,7 +2507,7 @@ export class DemoEngine {
         break
       case 'mute':
         this.queue.setMuted(true)
-        this.emitAlertsTtsStop()
+        this.stopAllChatTts()
         break
       case 'unmute':
         this.queue.setMuted(false)
@@ -2765,7 +2784,8 @@ export class DemoEngine {
       }))
     if (on && this.panicCfg.pause_alerts) this.queue.pause()
     if (!on && this.panicCfg.pause_alerts) this.applyQueue(this.queue.resume(Date.now()))
-    if (on && this.panicCfg.pause_tts) this.emitAlertsTtsStop()
+    if (on && this.panicCfg.pause_tts) this.stopAllChatTts()
+    if (!on) this.pumpChatTts()
     this.saveQueueFlags()
     this.broadcastQueue()
     for (const a of applied) {
@@ -3033,10 +3053,14 @@ export class DemoEngine {
           this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
         }
       }
-      this.emitAlertsTtsStop()
+      this.purgeChatTts((item) => item.platform === e.platform && item.sourceId === kind.message_id)
     } else if (kind.type === 'ban' || kind.type === 'user_messages_cleared') {
-      if (kind.target.id) this.purgeUserPendingTts(e.platform, kind.target.id)
-      this.emitAlertsTtsStop()
+      if (kind.target.id) {
+        this.purgeUserPendingTts(e.platform, kind.target.id)
+        this.purgeChatTts((item) => item.platform === e.platform && item.userId === kind.target.id)
+      } else {
+        this.emitAlertsTtsStop()
+      }
     } else if (kind.type === 'chat_message' && !opts.held && origin === 'live') {
       this.maybeSpeakDemoChat(e, now)
     }
@@ -3073,12 +3097,79 @@ export class DemoEngine {
     return e
   }
 
-  private emitAlertsTtsStop(): void {
+  private emitAlertsTtsStop(ids?: string[]): void {
+    const payload = ids && ids.length > 0 ? { ids } : {}
     for (const s of this.overlaySubs) {
       if (
         this.overlays.find((o) => o.id === s.overlayId)?.widgets.some((w) => w.kind === 'alerts')
       ) {
-        this.sendOverlay(s, 'tts_stop', {})
+        this.sendOverlay(s, 'tts_stop', payload)
+      }
+    }
+  }
+
+  private stopAllChatTts(): void {
+    if (this.chatTtsTimer) clearTimeout(this.chatTtsTimer)
+    this.chatTtsTimer = null
+    this.chatTtsQueue = []
+    this.emitAlertsTtsStop()
+  }
+
+  private purgeChatTts(
+    match: (item: {
+      id: string
+      platform: Platform
+      sourceId: string | null
+      userId: string | null
+    }) => boolean,
+  ): void {
+    this.chatTtsQueue = this.chatTtsQueue.filter((item) => !match(item))
+    const stopIds: string[] = []
+    this.chatTtsDispatched = this.chatTtsDispatched.filter((item) => {
+      if (match(item)) {
+        stopIds.push(item.id)
+        return false
+      }
+      return true
+    })
+    this.emitAlertsTtsStop(stopIds.length > 0 ? stopIds : undefined)
+  }
+
+  private pumpChatTts(): void {
+    if (!this.tts.enabled || !(this.tts.chat ?? DEFAULT_CHAT_TTS).enabled) return
+    if (this.panicOn && this.panicCfg.pause_tts) return
+    if (this.queue.snapshot().muted) return
+    const chat = this.tts.chat ?? DEFAULT_CHAT_TTS
+    const globalMs = chat.global_cooldown_s * 1000
+    while (this.chatTtsQueue.length > 0) {
+      const elapsed = Date.now() - this.chatTtsGlobalLast
+      if (globalMs > 0 && this.chatTtsGlobalLast > 0 && elapsed < globalMs) {
+        if (!this.chatTtsTimer) {
+          this.chatTtsTimer = setTimeout(
+            () => {
+              this.chatTtsTimer = null
+              this.pumpChatTts()
+            },
+            Math.max(1, globalMs - elapsed),
+          )
+        }
+        return
+      }
+      const next = this.chatTtsQueue.shift()!
+      this.chatTtsGlobalLast = Date.now()
+      this.chatTtsDispatched.push({
+        id: next.id,
+        platform: next.platform,
+        sourceId: next.sourceId,
+        userId: next.userId,
+      })
+      if (this.chatTtsDispatched.length > 24) this.chatTtsDispatched.shift()
+      for (const s of this.overlaySubs) {
+        if (
+          this.overlays.find((o) => o.id === s.overlayId)?.widgets.some((w) => w.kind === 'alerts')
+        ) {
+          this.sendOverlay(s, 'tts', { id: next.id, text: next.text, audio: null })
+        }
       }
     }
   }
@@ -3134,33 +3225,35 @@ export class DemoEngine {
           Roles.VIP |
           Roles.SUBSCRIBER |
           Roles.MEMBER |
-          Roles.FOUNDER |
-          Roles.STAFF
+          Roles.FOUNDER
         if ((actor.roles & allowed) === 0) return
       }
     }
 
-    if (
-      chat.skip_links &&
-      /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|gg|tv|io|co)\b)/i.test(raw)
-    ) {
+    if (chat.skip_links && hasAnyLink(raw)) {
       return
     }
     const words = raw.split(/\s+/).filter(Boolean)
     if (chat.skip_emote_spam && (emoteCount > 5 || (emoteCount >= 3 && words.length < 2))) return
 
-    const lowerWords = raw.toLowerCase()
-    for (const bw of this.filters.words.list) {
-      const needle = bw.trim().toLowerCase()
-      if (needle && lowerWords.includes(needle)) return
+    if (containsSevereSlur(raw) || containsSevereSlur(actor.display_name)) return
+    if (this.filters.words.enabled) {
+      const lowerWords = raw.toLowerCase()
+      for (const bw of this.filters.words.list) {
+        const needle = bw.trim().toLowerCase()
+        if (needle && lowerWords.includes(needle)) return
+      }
     }
 
-    let cleaned = raw
-      .split(/\s+/)
-      .filter((w) => !w.includes('@'))
-      .map((w) => ((w.match(/\d/g)?.length ?? 0) >= 5 ? 'number' : w))
-      .join(' ')
+    let cleaned = [
+      ...raw
+        .split(/\s+/)
+        .filter((w) => !w.startsWith('@') && !isEmailToken(w))
+        .map((w) => ((w.match(/\d/g)?.length ?? 0) >= 5 ? 'number' : w))
+        .join(' '),
+    ]
       .slice(0, chat.max_chars)
+      .join('')
       .trim()
     if (!cleaned) return
     if (this.tts.read_names) cleaned = `${actor.display_name} says: ${cleaned}`
@@ -3190,18 +3283,16 @@ export class DemoEngine {
       return
     }
 
-    const globalMs = chat.global_cooldown_s * 1000
-    if (globalMs > 0 && this.chatTtsGlobalLast > 0 && now - this.chatTtsGlobalLast < globalMs)
-      return
+    if (this.chatTtsQueue.length >= Math.max(1, chat.queue_limit)) return
     this.chatTtsUserLast.set(userKey, now)
-    this.chatTtsGlobalLast = now
-    for (const s of this.overlaySubs) {
-      if (
-        this.overlays.find((o) => o.id === s.overlayId)?.widgets.some((w) => w.kind === 'alerts')
-      ) {
-        this.sendOverlay(s, 'tts', { id: `chat-tts-${e.id}`, text: cleaned, audio: null })
-      }
-    }
+    this.chatTtsQueue.push({
+      id: `chat-tts-${e.id}`,
+      text: cleaned,
+      platform: e.platform,
+      sourceId: e.source_id,
+      userId: actor.id,
+    })
+    this.pumpChatTts()
   }
 
   private applyQueue(actions: QueueAction[]): void {

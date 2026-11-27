@@ -107,6 +107,8 @@ export function parseOverlayFrame(raw: unknown): OverlayServerFrame | null {
       if (!(d.audio === undefined || d.audio === null || str(d.audio))) return null
       break
     case 'tts_stop':
+      if (d.ids !== undefined && (!Array.isArray(d.ids) || !d.ids.every(str))) return null
+      break
     case 'state':
     case 'revoked':
       break

@@ -1727,7 +1727,11 @@ export interface Notice {
 export type LiveFrame =
   | { v: 1; type: 'hello'; data: { seq: number } }
   | { v: 1; type: 'event'; data: FerroEvent }
-  | { v: 1; type: 'status'; data: { connectors: Connectors } }
+  | {
+      v: 1
+      type: 'status'
+      data: { connectors: Connectors; viewers?: Record<string, number | null> }
+    }
   | { v: 1; type: 'queue'; data: Queue }
   | { v: 1; type: 'tts_pending'; data: TtsPending[] }
   | { v: 1; type: 'notice'; data: Notice }
@@ -1981,7 +1985,7 @@ export type OverlayServerFrame =
   | { v: 1; seq: number; type: 'delete_user'; data: { platform: Platform; user_id: string } }
   | { v: 1; seq: number; type: 'clear_chat'; data: { platform: Platform | null } }
   | { v: 1; seq: number; type: 'tts'; data: { id: string; text: string; audio: string | null } }
-  | { v: 1; seq: number; type: 'tts_stop'; data: Record<string, never> }
+  | { v: 1; seq: number; type: 'tts_stop'; data: { ids?: string[] } }
   | { v: 1; seq: number; type: 'revoked'; data: Record<string, never> }
 
 export type AckPhase = 'started' | 'finished' | 'failed'

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Roles } from '../src'
 import { FerroClient } from '../src/client'
 import { DEMO_TOKEN, DemoEngine } from '../src/demo'
@@ -42,6 +42,7 @@ function chatMsg(uid: string, text: string, opts?: { roles?: number; emotes?: nu
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   demo?.dispose()
   demo = null
 })
@@ -135,6 +136,68 @@ describe('DemoEngine Chat TTS', () => {
     const beforeStops = frames.filter((f) => f.type === 'tts_stop').length
     ingest({ type: 'message_deleted', message_id: 'src-x' })
     expect(frames.filter((f) => f.type === 'tts_stop').length).toBe(beforeStops + 1)
+
+    sock.close()
+  })
+
+  it('matches engine rules on STAFF under subs_mods, disabled word filters, @ URLs, slur splits, and global queue', async () => {
+    const { demo: d, client, ingest } = setup()
+    const overlays = await client.overlays()
+    const alertsOverlay = overlays.find((o) => o.widgets.some((w) => w.kind === 'alerts'))!
+    const token = /\/o\/([^/]+)\//.exec(alertsOverlay.url)![1]!
+    const frames: { type: string; data: Record<string, unknown> }[] = []
+    const sock = d.socket(`ws://127.0.0.1:47820/o/${token}/ws`)
+    sock.onmessage = (ev: { data: unknown }) => {
+      frames.push(JSON.parse(String(ev.data)) as { type: string; data: Record<string, unknown> })
+    }
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Enable filters with a blocked word, then disable word filter toggling.
+    const filter = await client.filters()
+    await client.saveFilters({
+      ...filter,
+      words: { ...filter.words, enabled: false, list: ['spoiler'] },
+    })
+    const base = await client.tts()
+    await client.saveTts({
+      ...base,
+      enabled: true,
+      hold_for_approval: false,
+      chat: {
+        ...base.chat!,
+        enabled: true,
+        mode: 'subs_mods',
+        cooldown_s: 0,
+        global_cooldown_s: 1,
+        queue_limit: 5,
+      },
+    })
+
+    // STAFF is not admitted under subs_mods.
+    ingest(chatMsg('staff1', 'hello from staff', { roles: Roles.STAFF }))
+    expect(frames.filter((f) => f.type === 'tts')).toHaveLength(0)
+
+    // @ inside URL and split severe slurs are skipped.
+    ingest(chatMsg('sub1', 'check evil.com/@promo now', { roles: Roles.SUBSCRIBER }))
+    ingest(
+      chatMsg('sub1b', ['n', 'i', 'g', ' ', 'g', 'e', 'r'].join(''), { roles: Roles.SUBSCRIBER }),
+    )
+    expect(frames.filter((f) => f.type === 'tts')).toHaveLength(0)
+
+    // Disabled word filter does NOT block the word.
+    ingest(chatMsg('sub2', 'minor spoiler here', { roles: Roles.SUBSCRIBER }))
+    expect(frames.filter((f) => f.type === 'tts')).toHaveLength(1)
+
+    // Queues next eligible line while global_cooldown_s is active rather than dropping it.
+    vi.useFakeTimers()
+    try {
+      ingest(chatMsg('sub3', 'queued second line', { roles: Roles.SUBSCRIBER }))
+      expect(frames.filter((f) => f.type === 'tts')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(frames.filter((f) => f.type === 'tts')).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
 
     sock.close()
   })
