@@ -22,7 +22,7 @@ export function ImportObsDialog({ open, onClose }: { open: boolean; onClose: () 
 }
 
 function Picker({ onDone }: { onDone: () => void }) {
-  const { api, refresh, bumpLibrary } = useDesk()
+  const { api, refresh, bumpLibrary, onCollectionChange } = useDesk()
   const [from, setFrom] = useState<From>('obs')
   const list = useResource(
     () => (from === 'obs' ? api.obsCollections() : api.streamlabsCollections()),
@@ -49,7 +49,8 @@ function Picker({ onDone }: { onDone: () => void }) {
       if (caught !== null) showShelfError(caught)
       return
     }
-    refresh()
+    if (onCollectionChange) onCollectionChange(r.id)
+    else refresh()
     bumpLibrary()
     onDone()
     const extra = [

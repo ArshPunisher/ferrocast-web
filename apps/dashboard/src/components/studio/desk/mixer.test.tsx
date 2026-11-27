@@ -519,4 +519,49 @@ describe('AudioDock row and strip Remove', () => {
     resolveSources([{ name: 'BGM', kind: 'ffmpeg_source', scenes: ['Gameplay', 'BRB'] }])
     await flush()
   })
+
+  it('scopes locked/hidden mixer preferences per collectionId and keeps a gap between Mute and Hear in Strip mode', async () => {
+    const mic = makeAudio({ name: 'Mic' })
+    const { desk: deskA, statsStore: statsA } = makeDesk({ audioList: [mic] })
+    Object.assign(deskA as unknown as Record<string, unknown>, {
+      collectionId: 'col-a',
+      collectionKey: 1,
+    })
+    localStorage.setItem(
+      'fc-studio-mixer:col-a',
+      JSON.stringify({
+        vertical: true,
+        locked: ['Mic'],
+        hidden: [],
+        decay: 'fast',
+        activeOnly: false,
+      }),
+    )
+    await mountAudio(deskA, statsA)
+
+    const lockSliderA = host.querySelector('[role="slider"][aria-label="Mic volume"]')
+    expect(lockSliderA?.getAttribute('aria-disabled')).toBe('true')
+
+    // Mute and Hear buttons in vertical Strip mode sit in a spaced container (gap-1, never fused).
+    const muteBtn = host.querySelector('button[aria-label="Mute Mic"]')
+    expect(muteBtn?.parentElement?.className).toMatch(/\bgap-(1|1\.5|2)\b/)
+
+    // Switching to Collection B must NOT inherit Collection A's locked/hidden channels.
+    const { desk: deskB, statsStore: statsB } = makeDesk({ audioList: [mic] })
+    Object.assign(deskB as unknown as Record<string, unknown>, {
+      collectionId: 'col-b',
+      collectionKey: 2,
+    })
+    await act(async () =>
+      root!.render(
+        <DeskProvider value={deskB} statsStore={statsB}>
+          <AudioDock />
+        </DeskProvider>,
+      ),
+    )
+    await flush()
+
+    const sliderB = host.querySelector('[role="slider"][aria-label="Mic volume"]')
+    expect(sliderB?.getAttribute('aria-disabled')).not.toBe('true')
+  })
 })

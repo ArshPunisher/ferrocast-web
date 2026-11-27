@@ -2,7 +2,7 @@
 // computer (moved, renamed, or a collection from another computer). Pick each again, clear
 // it, or search a folder: everything found there by name is fixed in one go.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FolderOpen, WarningCircle } from '@phosphor-icons/react'
 import { describeError, type EngineMissingFile } from '@ferrocast/api'
 import { Button, Dialog, Skeleton, toast } from '@ferrocast/ui'
@@ -24,11 +24,13 @@ export function fileName(path: string): string {
 
 /** The notice in the Studio when files are missing, and the dialog to fix them. */
 export function MissingFiles() {
-  const { api, allScenes } = useDesk()
+  const { api, allScenes, collectionKey: rawCollectionKey } = useDesk()
+  const collectionKey = typeof rawCollectionKey === 'number' ? rawCollectionKey : 0
   const [open, setOpen] = useState(false)
-  // Checked when the Studio opens and whenever the scenes change (a collection switch).
+  useEffect(() => setOpen(false), [collectionKey])
+  // Checked when the Studio opens and whenever the scenes or collection change.
   const sceneKey = allScenes.map((s) => s.name).join('\n')
-  const list = useResource(() => api.missingFiles(), [api, sceneKey])
+  const list = useResource(() => api.missingFiles(), [api, sceneKey, collectionKey])
   const n = list.data?.length ?? 0
   if (n === 0 && !open) return null
   return (

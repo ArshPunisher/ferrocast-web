@@ -147,6 +147,18 @@ export interface Desk {
   /** Bumped when the scene collections or profiles change (the library bar reads again). */
   library: number
   bumpLibrary: () => void
+  /** Active scene collection id, when known, so panel state stays scoped per collection. */
+  collectionId?: string | null
+  /** Monotonic epoch incremented whenever the active collection changes. */
+  collectionKey?: number
+  /** Synchronous ref mirroring `collectionKey`, checked during panel unmounts on switch. */
+  collectionKeyRef?: { current: number }
+  /** True while scenes are reloading after a collection switch (holds per-scene item/audio fetches). */
+  scenesSettling?: boolean
+  /** Resets collection-scoped state and reloads scenes, sources, audio, and Go Live cleanly. */
+  onCollectionChange?: (nextId?: string) => void
+  /** Reloads profile-scoped settings and Go Live readiness after a profile change. */
+  onProfileChange?: () => void
   /** The item whose Edit Transform is open. */
   transforming: { scene: string; id: number; name: string } | null
   setTransforming: (t: { scene: string; id: number; name: string } | null) => void

@@ -19,6 +19,7 @@ import {
   formatResolutionSummary,
   pickNextPlan,
   resolveStandbyPhase,
+  resolveStandbyPreview,
   safeThumbUrl,
 } from './standby-model'
 
@@ -684,5 +685,20 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     expect(headings).toHaveLength(1)
     const platformsRoot = dialog!.querySelector('#golive-platforms')
     expect(platformsRoot?.tagName).toBe('DIV')
+  })
+
+  it('drops cached standby preview artwork when active collection changes even with matching scene name', () => {
+    const out = resolveStandbyPreview({
+      targetScene: 'Main',
+      fetchedThumb: null,
+      cached: {
+        scene: 'Main',
+        collection: 'Stream Setup',
+        image: 'data:image/png;base64,oldthumb',
+        updatedAt: 1000,
+      },
+      activeCollection: 'Podcast Setup',
+    })
+    expect(out).toEqual({ scene: 'Main', image: null })
   })
 })

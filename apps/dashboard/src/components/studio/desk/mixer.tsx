@@ -464,9 +464,29 @@ interface Prefs {
   activeOnly: boolean
 }
 const PREFS_KEY = 'fc-studio-mixer'
-function loadPrefs(): Prefs {
+function prefsKey(collectionId?: string | null): string {
+  return collectionId ? `${PREFS_KEY}:${collectionId}` : PREFS_KEY
+}
+function loadPrefs(collectionId?: string | null): Prefs {
   try {
-    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as Partial<Prefs> | null
+    const key = prefsKey(collectionId)
+    const raw = localStorage.getItem(key)
+    const v = JSON.parse(raw ?? 'null') as Partial<Prefs> | null
+    if (!v && collectionId) {
+      const globalPrefs = JSON.parse(
+        localStorage.getItem(PREFS_KEY) ?? 'null',
+      ) as Partial<Prefs> | null
+      return {
+        vertical: !!globalPrefs?.vertical,
+        locked: [],
+        hidden: [],
+        decay:
+          globalPrefs?.decay === 'medium' || globalPrefs?.decay === 'slow'
+            ? globalPrefs.decay
+            : 'fast',
+        activeOnly: !!globalPrefs?.activeOnly,
+      }
+    }
     return {
       vertical: !!v?.vertical,
       locked: Array.isArray(v?.locked) ? v.locked : [],
@@ -478,13 +498,16 @@ function loadPrefs(): Prefs {
     return { vertical: false, locked: [], hidden: [], decay: 'fast', activeOnly: false }
   }
 }
-function usePrefs(): [Prefs, (f: (p: Prefs) => Prefs) => void] {
-  const [p, setP] = useState(loadPrefs)
+function usePrefs(collectionId?: string | null): [Prefs, (f: (p: Prefs) => Prefs) => void] {
+  const [p, setP] = useState(() => loadPrefs(collectionId))
+  useEffect(() => {
+    setP(loadPrefs(collectionId))
+  }, [collectionId])
   const set = (f: (p: Prefs) => Prefs) =>
     setP((old) => {
       const n = f(old)
       try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify(n))
+        localStorage.setItem(prefsKey(collectionId), JSON.stringify(n))
       } catch {
         // Private mode: kept for this visit.
       }
@@ -686,7 +709,7 @@ function Strip({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
         decay={decay}
         onVolume={(volume_db) => onAudio({ volume_db: Math.round(volume_db * 10) / 10 })}
       />
-      <div className="flex h-8 items-center">
+      <div className="flex h-8 items-center gap-1">
         <MuteButton a={a} onAudio={onAudio} />
         <HearButton a={a} onAudio={onAudio} />
       </div>
@@ -800,11 +823,25 @@ export function removeConfirmCopy(
 
 export function AudioDock() {
   const desk = useDesk()
-  const { api, audio, pictureScenes, setAdding, openSettings, edit, refresh } = desk
+  const {
+    api,
+    audio,
+    pictureScenes,
+    setAdding,
+    openSettings,
+    edit,
+    refresh,
+    collectionId: rawCollectionId,
+    collectionKey: rawCollectionKey,
+    scenesSettling: rawSettling,
+  } = desk
+  const collectionId = typeof rawCollectionId === 'string' ? rawCollectionId : null
+  const collectionKey = typeof rawCollectionKey === 'number' ? rawCollectionKey : 0
+  const scenesSettling = rawSettling === true
   const live = useDeskStats((s) => Boolean(s?.stream?.active))
   const { run, busy } = useAction()
   const [all, setAll] = useState(false)
-  const [prefs, setPrefs] = usePrefs()
+  const [prefs, setPrefs] = usePrefs(collectionId)
   const [naming, setNaming] = useState<{ from: string; value: string } | null>(null)
   const [removing, setRemoving] = useState<ConfirmRemoveTarget | null>(null)
   // Advanced audio: open on one sound's name, or '' for all.
@@ -813,7 +850,7 @@ export function AudioDock() {
   const names = pictureScenes.map((x) => x.name).join('\n')
   // Every scene's sounds, each once, plus which scenes contain each sound for All-view removal.
   const every = useResource(async () => {
-    if (!all || !names) return null
+    if (!all || !names || scenesSettling) return null
     const sceneNames = names.split('\n')
     const lists = await Promise.all(sceneNames.map(async (n) => [n, await api.audio(n)] as const))
     const scenesByName: Record<string, string[]> = {}
@@ -830,7 +867,7 @@ export function AudioDock() {
       }
     }
     return { list, scenesByName }
-  }, [api, all, names, audio.data])
+  }, [api, all, names, audio.data, collectionKey, scenesSettling])
   const list = all ? (every.data?.list ?? null) : audio.data
   const shown = list?.filter(
     (a) => !prefs.hidden.includes(a.name) && (!prefs.activeOnly || a.active !== false),

@@ -62,7 +62,7 @@ type Step =
   | { kind: 'result'; report: OverlayPackImportReport; undone: boolean }
 
 export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { api, refresh, bumpLibrary } = useDesk()
+  const { api, refresh, bumpLibrary, onCollectionChange } = useDesk()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>({ kind: 'pick' })
@@ -127,7 +127,8 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
         create_overlays: createOverlays,
         fetch_fonts: fetchFonts,
       })
-      refresh()
+      if (onCollectionChange) onCollectionChange()
+      else refresh()
       bumpLibrary()
       setStep({ kind: 'result', report, undone: false })
     } catch (e) {
@@ -144,7 +145,8 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
     setBusy('undo')
     try {
       const undone = await api.undoOverlayPack(step.report.undo_token)
-      refresh()
+      if (onCollectionChange) onCollectionChange()
+      else refresh()
       bumpLibrary()
       setStep({ kind: 'result', report: step.report, undone: true })
       toast({

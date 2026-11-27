@@ -488,4 +488,140 @@ describe('CleanMic stats selector subscription', () => {
     expect(cleanMicSpy.mock.calls.length).toBe(baseline)
     cleanMicSpy.mockRestore()
   })
+
+  it('drops buffered unmount edits when collectionKeyRef advances on collection switch and separates Plays in pills with gap-1', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    useLive.setState({ conn: { client: {} } as never })
+    const update = vi.fn(async () => ({}))
+    const collectionKeyRef = { current: 1 }
+    const desk = {
+      api: {
+        sourceOptions: vi.fn(async () => [
+          {
+            key: 'text',
+            label: 'Text',
+            kind: 'text',
+            help: '',
+            visible: true,
+            enabled: true,
+            min: null,
+            max: null,
+            step: null,
+            slider: false,
+            suffix: '',
+            choices: [],
+            values: [],
+            group: [],
+            text_type: '',
+          },
+        ]),
+        settings: vi.fn(async () => ({ text: 'Old Collection Text' })),
+        update,
+        filters: vi.fn(async () => []),
+        levels: vi.fn(async () => ({})),
+        sources: vi.fn(async () => [{ name: 'Banner', kind: 'ferrocast_text', scenes: ['Main'] }]),
+      },
+      scenes: { data: { scenes: [{ name: 'Main' }, { name: 'Outro' }] } },
+      allScenes: [{ name: 'Main' }, { name: 'Outro' }],
+      pictureScenes: [{ name: 'Main' }, { name: 'Outro' }],
+      pictureCurrent: 'Main',
+      scene: 'Main',
+      canvas: 'main',
+      audio: {
+        data: [
+          {
+            name: 'Banner',
+            kind: 'ferrocast_text',
+            channel: null,
+            volume_db: 0,
+            muted: false,
+            monitor: 'off',
+          },
+        ],
+        set: vi.fn(),
+        reload: vi.fn(),
+      },
+      items: {
+        data: [
+          {
+            id: 5,
+            name: 'Banner',
+            kind: 'ferrocast_text',
+            visible: true,
+            locked: false,
+            audio: true,
+            group: false,
+            blend: 'normal',
+            scale_filter: 'off',
+            children: [],
+          },
+        ],
+        set: vi.fn(),
+        reload: vi.fn(),
+      },
+      kinds: {
+        data: {
+          inputs: [
+            {
+              id: 'ferrocast_text',
+              name: 'Text',
+              fields: [{ key: 'text', kind: 'text', label: 'Text' }],
+            },
+          ],
+          filters: [],
+          transitions: [],
+          encoders: [],
+          outputs: [],
+        },
+      },
+      editing: 'Banner',
+      edit: vi.fn(),
+      editTab: 'sound',
+      selected: 5,
+      size: { width: 1920, height: 1080 },
+      refresh: vi.fn(),
+      undone: 0,
+      collectionKey: 1,
+      collectionKeyRef,
+    } as unknown as Desk
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <DeskProvider value={desk}>
+          <SourcePanel />
+        </DeskProvider>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+
+    const rg = host.querySelector('[role="radiogroup"][aria-labelledby="plays-in"]')
+    expect(rg?.className).toMatch(/\bgap-1\b/)
+
+    // Switch to Settings tab, type pending change, then bump collectionKeyRef before unmount.
+    const settingsTab = host.querySelector('#tab-settings') as HTMLButtonElement | null
+    expect(settingsTab).not.toBeNull()
+    await act(async () => settingsTab!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const input = host.querySelector('input[type="text"], textarea') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')!.set!
+      set.call(input, 'Unsaved Old Collection Edit')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    // Simulate closing SourcePanel specifically due to a collection change.
+    collectionKeyRef.current = 2
+    await act(async () => {
+      root!.unmount()
+    })
+    root = null
+    expect(update).not.toHaveBeenCalled()
+  })
 })

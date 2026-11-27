@@ -273,6 +273,7 @@ function itemsSame(a: EngineItem[] | null | undefined, b: EngineItem[]): boolean
 function scenesSame(a: EngineScenes | null | undefined, b: EngineScenes): boolean {
   if (!a) return false
   if (
+    a.collection_id !== b.collection_id ||
     a.current !== b.current ||
     a.preview !== b.preview ||
     a.scenes.length !== b.scenes.length ||
@@ -340,24 +341,68 @@ function scenesSame(a: EngineScenes | null | undefined, b: EngineScenes): boolea
 function DeskStatsSync({
   api,
   shownOnAir,
+  collectionId,
+  profileId,
   statsStore,
   onSceneMismatch,
+  onCollectionMismatch,
+  onProfileMismatch,
   onCanvasSize,
 }: {
   api: EngineApi
   shownOnAir: string | undefined
+  collectionId: string | null
+  profileId: string | null
   statsStore: DeskStatsStore
   onSceneMismatch: () => void
+  onCollectionMismatch: (nextId: string) => void
+  onProfileMismatch: (nextId: string) => void
   onCanvasSize: (w: number, h: number) => void
 }) {
   const reading = useEngineReading(api.stats)
   const s = reading.stats
+  const seenCollection = useRef<string | null>(null)
+  const seenProfile = useRef<string | null>(null)
   useEffect(() => {
     if (!s) return
     statsStore.set(s)
     onCanvasSize(s.canvas.width, s.canvas.height)
+    if (s.collection_id) {
+      if (
+        seenCollection.current !== null &&
+        s.collection_id !== seenCollection.current &&
+        s.collection_id !== collectionId
+      ) {
+        seenCollection.current = s.collection_id
+        onCollectionMismatch(s.collection_id)
+      } else {
+        seenCollection.current = s.collection_id
+      }
+    }
+    if (s.profile_id) {
+      if (
+        seenProfile.current !== null &&
+        s.profile_id !== seenProfile.current &&
+        s.profile_id !== profileId
+      ) {
+        seenProfile.current = s.profile_id
+        onProfileMismatch(s.profile_id)
+      } else {
+        seenProfile.current = s.profile_id
+      }
+    }
     if (s.scene && shownOnAir && s.scene !== shownOnAir) onSceneMismatch()
-  }, [s, statsStore, onCanvasSize, shownOnAir, onSceneMismatch])
+  }, [
+    s,
+    statsStore,
+    onCanvasSize,
+    shownOnAir,
+    collectionId,
+    profileId,
+    onSceneMismatch,
+    onCollectionMismatch,
+    onProfileMismatch,
+  ])
   return null
 }
 
@@ -375,6 +420,14 @@ function Running({
   readyCorner?: React.ReactNode
 }) {
   const api = useEngine()
+  const [collectionId, setCollectionId] = useState<string | null>(null)
+  const [profileId, setProfileId] = useState<string | null>(null)
+  const [collectionKey, setCollectionKey] = useState(0)
+  const collectionKeyRef = useRef(0)
+  const [settledKey, setSettledKey] = useState(0)
+  const awaitingScenesRef = useRef<number | null>(null)
+  const seenScenesRef = useRef<EngineScenes | null>(null)
+  const seenScenesCollectionRef = useRef<string | null>(null)
   const scenes = useResource(() => api.scenes(), [api])
   // The picture the panels edit: the vertical one only while it's on (and not in Studio Mode,
   // which is the main picture's).
@@ -387,8 +440,14 @@ function Running({
     canvas === 'vertical'
       ? (vertical?.current ?? '')
       : (scenes.data?.preview ?? scenes.data?.current ?? '')
-  const items = useResource(() => (scene ? api.items(scene) : Promise.resolve([])), [api, scene])
-  const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
+  const items = useResource(
+    () => (!scene || awaitingScenesRef.current !== null ? Promise.resolve([]) : api.items(scene)),
+    [api, scene, settledKey],
+  )
+  const audio = useResource(
+    () => (!scene || awaitingScenesRef.current !== null ? Promise.resolve([]) : api.audio(scene)),
+    [api, scene, settledKey],
+  )
   const kinds = useResource(() => api.kinds(), [api])
   const prefs = useResource(() => api.studioSettings(), [api])
   const reloadGoLive = res.reload
@@ -475,6 +534,15 @@ function Running({
       prev && prev.width === width && prev.height === height ? prev : { width, height },
     )
   }, [])
+  const seenPrefSize = useRef<string | null>(null)
+  useEffect(() => {
+    if (!prefs.data) return
+    const nextSig = `${prefs.data.width}x${prefs.data.height}`
+    if (nextSig !== seenPrefSize.current) {
+      seenPrefSize.current = nextSig
+      handleCanvasSize(prefs.data.width, prefs.data.height)
+    }
+  }, [prefs.data, handleCanvasSize])
   const [settingsAt, setSettingsAt] = useState<Page | null>(null)
   const [transitionsAt, setTransitionsAt] = useState<TransitionsDialogState | null>(null)
   const [clip, setClip] = useState<string | null>(null)
@@ -527,6 +595,9 @@ function Running({
   const reloadScenes = scenes.reload
   const reloadItems = items.reload
   const reloadAudio = audio.reload
+  const setItemsList = items.set
+  const setAudioList = audio.set
+  const reloadPrefs = prefs.reload
   // Bumped by every read made here, so a poll already on its way drops its older answer.
   const scenesRead = useRef(0)
   const refresh = useCallback(() => {
@@ -535,6 +606,88 @@ function Running({
     reloadItems()
     reloadAudio()
   }, [reloadScenes, reloadItems, reloadAudio])
+  const bumpLibrary = useCallback(() => setLibrary((n) => n + 1), [])
+  const onCollectionChange = useCallback(
+    (nextId?: string) => {
+      const nextKey = collectionKeyRef.current + 1
+      collectionKeyRef.current = nextKey
+      awaitingScenesRef.current = nextKey
+      setCollectionKey(nextKey)
+      if (nextId !== undefined) {
+        setCollectionId(nextId)
+        seenScenesCollectionRef.current = nextId
+      }
+      scenesRead.current++
+      select(null)
+      edit(null)
+      setAdding(null)
+      setClip(null)
+      setFilterClip(null)
+      setTransformClip(null)
+      setCanvas('main')
+      setItemsList([])
+      setAudioList([])
+      reloadScenes()
+      reloadGoLive()
+    },
+    [select, edit, setItemsList, setAudioList, reloadScenes, reloadGoLive],
+  )
+  const handleCollectionMismatch = useCallback(
+    (nextId: string) => {
+      onCollectionChange(nextId)
+      bumpLibrary()
+    },
+    [onCollectionChange, bumpLibrary],
+  )
+  const onProfileChange = useCallback(
+    (nextId?: string) => {
+      if (nextId !== undefined) setProfileId(nextId)
+      reloadPrefs()
+      reloadGoLive()
+      bumpLibrary()
+    },
+    [reloadPrefs, reloadGoLive, bumpLibrary],
+  )
+  useEffect(() => {
+    const d = scenes.data
+    if (!d || d === seenScenesRef.current) return
+    seenScenesRef.current = d
+    const wasAwaiting = awaitingScenesRef.current !== null
+    let externalSwitch = false
+    if (d.collection_id) {
+      if (
+        !wasAwaiting &&
+        seenScenesCollectionRef.current !== null &&
+        seenScenesCollectionRef.current !== d.collection_id
+      ) {
+        externalSwitch = true
+        const nextKey = collectionKeyRef.current + 1
+        collectionKeyRef.current = nextKey
+        setCollectionKey(nextKey)
+        select(null)
+        edit(null)
+        setAdding(null)
+        setClip(null)
+        setFilterClip(null)
+        setTransformClip(null)
+        setCanvas('main')
+        bumpLibrary()
+        reloadGoLive()
+      }
+      seenScenesCollectionRef.current = d.collection_id
+      setCollectionId(d.collection_id)
+    }
+    awaitingScenesRef.current = null
+    if (wasAwaiting || externalSwitch) {
+      setSettledKey((k) => k + 1)
+    }
+  }, [scenes.data, select, edit, bumpLibrary, reloadGoLive])
+  useEffect(() => {
+    if (awaitingScenesRef.current !== null && !scenes.loading && scenes.error) {
+      awaitingScenesRef.current = null
+      setSettledKey((k) => k + 1)
+    }
+  }, [scenes.loading, scenes.error])
   // Another scene: nothing picked in it yet.
   useEffect(() => select(null), [scene, select])
   // ⌘Z and ⇧⌘Z (Ctrl on Windows) undo and redo changes to sources, outside text fields.
@@ -603,17 +756,16 @@ function Running({
   const pictureScenes = canvas === 'vertical' ? tallScenes : wide
   const pictureCurrent =
     (canvas === 'vertical' ? scenes.data?.vertical?.current : scenes.data?.current) ?? ''
-  const bumpLibrary = useCallback(() => setLibrary((n) => n + 1), [])
   // Loading saved scenes from the Safe Mode banner replaces the blank canvas immediately.
   const collectionPending = useLive((s) => s.status?.safe_mode?.collection_pending ?? false)
   const wasCollectionPending = useRef(collectionPending)
   useEffect(() => {
     if (wasCollectionPending.current && !collectionPending) {
-      refresh()
+      onCollectionChange()
       bumpLibrary()
     }
     wasCollectionPending.current = collectionPending
-  }, [collectionPending, refresh, bumpLibrary])
+  }, [collectionPending, onCollectionChange, bumpLibrary])
   const openSettings = useCallback(
     (page?: string) => setSettingsAt((page as Page | undefined) ?? 'stream'),
     [],
@@ -639,6 +791,7 @@ function Running({
     window.addEventListener('ferrocast:open-settings', onAsk)
     return () => window.removeEventListener('ferrocast:open-settings', onAsk)
   }, [openSettings])
+  const scenesSettling = awaitingScenesRef.current !== null
   const desk: Desk = useMemo(
     () => ({
       api,
@@ -679,6 +832,12 @@ function Running({
       setTransforming,
       library,
       bumpLibrary,
+      collectionId,
+      collectionKey,
+      collectionKeyRef,
+      scenesSettling,
+      onCollectionChange,
+      onProfileChange,
       transformClip,
       setTransformClip,
       openSettings,
@@ -718,6 +877,11 @@ function Running({
       setTransforming,
       library,
       bumpLibrary,
+      collectionId,
+      collectionKey,
+      scenesSettling,
+      onCollectionChange,
+      onProfileChange,
       transformClip,
       openSettings,
       openTransitions,
@@ -740,8 +904,12 @@ function Running({
         <DeskStatsSync
           api={api}
           shownOnAir={scenes.data?.current}
+          collectionId={collectionId}
+          profileId={profileId}
           statsStore={statsStore}
           onSceneMismatch={refresh}
+          onCollectionMismatch={handleCollectionMismatch}
+          onProfileMismatch={onProfileChange}
           onCanvasSize={handleCanvasSize}
         />
         <DockWorkspace

@@ -92,6 +92,12 @@ function useApplied(
   fresh: unknown,
   live = false,
 ) {
+  const { collectionKeyRef } = useDesk()
+  const safeKeyRef =
+    collectionKeyRef && typeof collectionKeyRef.current === 'number' ? collectionKeyRef : undefined
+  const mountedCollection = useRef(safeKeyRef?.current ?? 0)
+  const colRef = useRef(safeKeyRef)
+  colRef.current = safeKeyRef
   const [edits, setEdits] = useState<EngineSettings>({})
   // Sent and taken, until the settings are read again.
   const [taken, setTaken] = useState<EngineSettings>({})
@@ -114,9 +120,12 @@ function useApplied(
     // Set here too: React's StrictMode (dev builds) runs this cleanup once at mount, which
     // left it false for the drawer's whole life (review, 17 Nov).
     open.current = true
+    const startCollection = mountedCollection.current
     return () => {
       open.current = false
       window.clearTimeout(settle.current)
+      // Collection switched cleanly: don't flush old source edits into the next collection.
+      if ((colRef.current?.current ?? 0) !== startCollection) return
       const left = waiting.current
       if (Object.keys(left).length === 0) return
       void applyRef.current(left).catch((err: unknown) => {
@@ -646,7 +655,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
       <div
         role="radiogroup"
         aria-labelledby="plays-in-all"
-        className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+        className="flex h-7 gap-1 rounded-[6px] border border-line bg-surface-2 p-0.5"
       >
         {option(!choosing, 'Every scene', () => {
           setChoosing(false)
@@ -669,7 +678,7 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
                   className={cx(
                     'flex h-7 min-w-0 items-center gap-1.5 rounded-[5px] border px-2 text-left text-[12px] transition-colors',
                     on
-                      ? 'fc-picked border-transparent font-extrabold'
+                      ? 'border-[var(--fc-accent)] bg-[color-mix(in_srgb,var(--fc-accent)_9%,transparent)] font-extrabold text-text'
                       : 'border-line font-semibold text-text-2 hover:bg-surface-2',
                   )}
                 >
@@ -767,7 +776,7 @@ function PlaysIn({ name }: { name: string }) {
       <div
         role="radiogroup"
         aria-labelledby="plays-in"
-        className="flex h-7 gap-0.5 rounded-[6px] border border-line bg-surface-2 p-0.5"
+        className="flex h-7 gap-1 rounded-[6px] border border-line bg-surface-2 p-0.5"
       >
         {option(everywhere && !choosing, 'Every scene', () => void addEverywhere())}
         {option(

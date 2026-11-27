@@ -111,21 +111,29 @@ export function resolveStandbyPreview({
   targetScene,
   fetchedThumb,
   cached,
+  activeCollection = null,
 }: {
   targetScene: string | null
-  fetchedThumb: { scene: string; image: string } | null
+  fetchedThumb: { scene: string; collection?: string | null; image: string } | null
   cached: StandbySnapshot | null
+  activeCollection?: string | null
 }): { scene: string | null; image: string | null } {
+  const collectionMatches = (found: string | null | undefined) =>
+    activeCollection === null || found === undefined || found === null || found === activeCollection
   if (targetScene) {
-    if (fetchedThumb && fetchedThumb.scene === targetScene) {
+    if (
+      fetchedThumb &&
+      fetchedThumb.scene === targetScene &&
+      collectionMatches(fetchedThumb.collection)
+    ) {
       return { scene: targetScene, image: safeThumbUrl(fetchedThumb.image) }
     }
-    if (cached && cached.scene === targetScene) {
+    if (cached && cached.scene === targetScene && collectionMatches(cached.collection)) {
       return { scene: targetScene, image: safeThumbUrl(cached.image) }
     }
     return { scene: targetScene, image: null }
   }
-  if (cached && (cached.scene || cached.image)) {
+  if (cached && (cached.scene || cached.image) && collectionMatches(cached.collection)) {
     return { scene: cached.scene, image: safeThumbUrl(cached.image) }
   }
   return { scene: null, image: null }
