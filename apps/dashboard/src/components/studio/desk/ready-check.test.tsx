@@ -88,8 +88,8 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
   })
 
   it('can be dismissed from the collapsed pill, and stays away until a different problem turns up', async () => {
-    const mic = { id: 'mic:Mic', label: 'Mic', status: 'fail' as const, detail: 'Muted.' }
-    const cam = { id: 'cam:Webcam', label: 'Webcam', status: 'warn' as const, detail: 'Hidden.' }
+    const mic = { id: 'mic:Mic', label: 'Mic', status: 'fail' as const, detail: 'Muted.', fix: null }
+    const cam = { id: 'cam:Webcam', label: 'Webcam', status: 'warn' as const, detail: 'Hidden.', fix: null }
     setupApi({ preflight: { ready: false, checks: [mic] } })
     const host = document.body.appendChild(document.createElement('div'))
     root = createRoot(host)
