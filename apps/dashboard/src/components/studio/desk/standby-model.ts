@@ -39,8 +39,7 @@ export interface StandbySnapshot {
 
 const STANDBY_STORAGE_KEY = 'fc-studio-standby-scene'
 
-const SAFE_IMAGE_RE =
-  /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml);(?:base64,|utf8,|charset=utf-8,)/i
+const SAFE_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|webp|gif|avif);base64,[A-Za-z0-9+/=_-]+$/i
 
 /** Allow only validated data:image URIs so cached scene artwork cannot inject unsafe URLs. */
 export function safeThumbUrl(raw: unknown): string | null {

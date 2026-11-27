@@ -181,11 +181,12 @@ describe('Studio S3 standby model', () => {
     )
   })
 
-  it('allows only validated data:image URLs for standby thumbnails', () => {
+  it('allows only validated base64 raster data:image URLs for standby thumbnails', () => {
     expect(safeThumbUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
-    expect(safeThumbUrl('data:image/svg+xml;utf8,%3Csvg/%3E')).toBe(
-      'data:image/svg+xml;utf8,%3Csvg/%3E',
-    )
+    expect(safeThumbUrl('data:image/webp;base64,UklGRg==')).toBe('data:image/webp;base64,UklGRg==')
+    expect(safeThumbUrl('data:image/svg+xml;utf8,%3Csvg/%3E')).toBeNull()
+    expect(safeThumbUrl('data:image/svg+xml;base64,PHN2Zy8+')).toBeNull()
+    expect(safeThumbUrl('data:image/png;base64,AAAA" onload="alert(1)')).toBeNull()
     expect(safeThumbUrl('javascript:alert(1)')).toBeNull()
     expect(safeThumbUrl('https://example.com/x.png')).toBeNull()
     expect(safeThumbUrl('')).toBeNull()
