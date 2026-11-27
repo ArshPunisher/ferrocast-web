@@ -838,6 +838,7 @@ export function Platforms({
         {...(onProtect ? { onProtect } : {})}
         initialDestId={qualityModal?.destId ?? null}
         canvasFilter={canvas}
+        addCanvas={canvas === 'vertical' ? 'vertical' : 'main'}
         triggerEl={qualityModal?.triggerEl ?? null}
         usesObs={ctrl.usesObs}
         isRemote={isRemote}

@@ -1559,6 +1559,18 @@ export function PlatformsQualityModal({
                                     )
                                   })}
                                 </div>
+                                {!ignoreLimits &&
+                                  model.resolutions.find((r) => r.state === 'hard')?.hardReason && (
+                                    <p
+                                      data-chip-reason="resolution"
+                                      className="m-0 text-[11.5px] text-text-3"
+                                    >
+                                      {
+                                        model.resolutions.find((r) => r.state === 'hard')
+                                          ?.hardReason
+                                      }
+                                    </p>
+                                  )}
                               </div>
 
                               {/* Frame rate */}
@@ -1604,6 +1616,15 @@ export function PlatformsQualityModal({
                                     )
                                   })}
                                 </div>
+                                {!ignoreLimits &&
+                                  model.fpsOptions.find((f) => f.locked)?.reason && (
+                                    <p
+                                      data-chip-reason="fps"
+                                      className="m-0 text-[11.5px] text-text-3"
+                                    >
+                                      {model.fpsOptions.find((f) => f.locked)?.reason}
+                                    </p>
+                                  )}
                               </div>
 
                               {/* Bitrate input + ceiling slider */}

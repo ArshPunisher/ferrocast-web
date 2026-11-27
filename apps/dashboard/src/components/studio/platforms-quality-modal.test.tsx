@@ -1007,6 +1007,14 @@ describe('One Modal B PlatformsQualityModal component', () => {
       expect(dialog.textContent).not.toContain(onlyMain)
     })
 
+    it('says in words why a resolution or frame rate is out of reach, not only in a hover tip', async () => {
+      const dialog = await show({ initialDestId: 'kick' })
+      await setOwn(dialog)
+      expect(dialog.querySelector('[data-chip-reason="resolution"]')?.textContent).toContain(
+        'Kick takes up to 1080p',
+      )
+    })
+
     it('gives the bitrate slider a spoken value in Mbps and keeps one radio in the tab order', async () => {
       const dialog = await show({ initialDestId: 'twitch' })
       await setOwn(dialog)
