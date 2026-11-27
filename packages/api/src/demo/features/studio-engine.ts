@@ -30,7 +30,6 @@ import {
   type EngineShelf,
   type EngineShow,
   type EngineSourceUse,
-  type EngineStats,
   type EngineStudioOptions,
   type EngineStreamStats,
   type EngineTransform,
@@ -834,6 +833,95 @@ function streamlabsFixtures(preset: DemoCollectionPreset): StoredCollection[] {
   ]
 }
 
+function defaultDemoStudioSettings(): Record<string, unknown> {
+  return {
+    encoder: 'hardware',
+    video_kbps: 6000,
+    vbr: true,
+    keyframe_s: 2,
+    profile: 'high',
+    b_frames: false,
+    scale: null,
+    scale_filter: 'bicubic',
+    audio_kbps: 160,
+    width: 1920,
+    height: 1080,
+    fps: 60,
+    fps_ntsc: false,
+    record_folder: null,
+    record_folder_default: '/Users/demo/Movies/Ferrocast',
+    record_format: 'mp4',
+    record_quality: 'high',
+    reconnect: true,
+    reconnect_every_s: 10,
+    reconnect_tries: 25,
+    delay_s: 0,
+    delay_max_mb: 256,
+    twitch_vod_track: 0,
+    sample_rate: 48000,
+    audio_track_names: [],
+    stereo: true,
+    monitoring: null,
+    hotkeys: {},
+    video_encoder: null,
+    encoder_settings: {},
+    record_encoder: null,
+    record_encoder_settings: {},
+    record_name: '%CCYY-%MM-%DD %hh-%mm-%ss',
+    record_spaces: true,
+    record_overwrite: false,
+    record_split_minutes: 0,
+    record_split_mb: 0,
+    record_tracks: [1],
+    record_remux: true,
+    record_muxer: '',
+    replay_seconds: 30,
+    replay_mb: 512,
+    replay_format: 'mp4',
+    speakers: null,
+    true_peak: false,
+    low_latency_audio: false,
+    own_encoder: false,
+    own_drawing: false,
+    renderer: 'metal',
+    multiview_layout: 'top',
+    multiview_labels: true,
+    multiview_safe_areas: false,
+    snapping: true,
+    snap_px: 10,
+    snap_screen: true,
+    snap_sources: true,
+    snap_center: true,
+    confirm_go_live: false,
+    confirm_end_stream: true,
+    confirm_stop_record: false,
+    record_when_streaming: false,
+    keep_recording: false,
+    replay_when_streaming: false,
+    keep_replay: false,
+    projector_on_top: false,
+    projector_one_per_screen: false,
+    projector_restore: false,
+    projector_hide_cursor: false,
+  }
+}
+
+function profileRestartNote(
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
+): string | undefined {
+  const rateChanged = (prev.sample_rate ?? 48000) !== (next.sample_rate ?? 48000)
+  const wantNtsc = (s: Record<string, unknown>) =>
+    s.fps_ntsc === true && [24, 30, 60].includes(Number(s.fps ?? 60))
+  const ntscChanged = wantNtsc(prev) !== wantNtsc(next)
+  if (rateChanged && ntscChanged) {
+    return 'The sound rate and broadcast timing apply after Ferrocast restarts.'
+  }
+  if (rateChanged) return 'The sound rate applies after Ferrocast restarts.'
+  if (ntscChanged) return 'Broadcast timing applies after Ferrocast restarts.'
+  return undefined
+}
+
 export class DemoStudioEngine {
   private opts: Required<DemoStudioEngineOptions>
   private readonly host: DemoHost | null
@@ -945,31 +1033,7 @@ export class DemoStudioEngine {
   private baselineLagged = 0
   private baselineSkipped = 0
   private autoConfigState: AutoConfigState = emptyAutoConfigState()
-  private studioSettingsData: Record<string, unknown> = {
-    encoder: 'hardware',
-    video_kbps: 6000,
-    vbr: true,
-    keyframe_s: 2,
-    profile: 'high',
-    scale: null,
-    scale_filter: 'bicubic',
-    audio_kbps: 160,
-    width: 1920,
-    height: 1080,
-    fps: 60,
-    record_folder: null,
-    record_folder_default: '/Users/demo/Movies/Ferrocast',
-    record_format: 'mp4',
-    record_quality: 'high',
-    reconnect: true,
-    reconnect_every_s: 10,
-    reconnect_tries: 25,
-    delay_s: 0,
-    sample_rate: 48000,
-    stereo: true,
-    monitoring: null,
-    hotkeys: {},
-  }
+  private studioSettingsData: Record<string, unknown> = defaultDemoStudioSettings()
 
   constructor(
     opts: DemoStudioEngineOptions = {},
@@ -2269,6 +2333,7 @@ export class DemoStudioEngine {
       return clone(this.requireObs(id).preview)
     }
     if (is('POST', 'studio/engine/obs-collections/import')) {
+      this.ensureShelfMutationIdle('scene collections')
       const id = String(requireObj(body).id ?? '')
       return clone(this.applyImport(this.requireObs(id)))
     }
@@ -2280,8 +2345,29 @@ export class DemoStudioEngine {
       return clone(this.requireStreamlabs(id).preview)
     }
     if (is('POST', 'studio/engine/streamlabs-collections/import')) {
+      this.ensureShelfMutationIdle('scene collections')
       const id = String(requireObj(body).id ?? '')
       return clone(this.applyImport(this.requireStreamlabs(id)))
+    }
+    if (is('POST', 'studio/engine/restart')) {
+      if (this.autoConfigState.state === 'running') {
+        throw new HttpError(
+          409,
+          'benchmark_running',
+          'An encoder benchmark is running.',
+          'Wait for the benchmark to finish or cancel it first.',
+        )
+      }
+      if (this.isBusyLive()) {
+        throw new HttpError(
+          409,
+          'studio_busy',
+          'Stop streaming and recording before restarting Ferrocast.',
+          'Stop every active output first.',
+        )
+      }
+      this.clearHistory()
+      return undefined
     }
 
     if (rest[2] === 'library' && (rest[3] === 'collections' || rest[3] === 'profiles')) {
@@ -2290,34 +2376,64 @@ export class DemoStudioEngine {
       const shelf = isCol ? this.shelfCollections : this.shelfProfiles
       if (method === 'GET' && rest.length === 4) return clone(shelf)
       if (method === 'POST' && isCol && rest.length === 5 && rest[4] === 'import') {
-        if (this.isBusyLive()) {
-          throw new HttpError(
-            409,
-            'studio_busy',
-            `Stop streaming and recording before changing ${noun}.`,
-            'Stop every active output first.',
-          )
-        }
+        this.ensureShelfMutationIdle(noun)
         const b = requireObj(body)
         const raw = String(b.name ?? '').trim()
         if (!raw || [...raw].length > 100) {
           throw new HttpError(400, 'invalid', 'Name must be 1 to 100 characters.')
         }
-        const doc = b.doc && typeof b.doc === 'object' ? (b.doc as Record<string, unknown>) : {}
-        const rawScenes = Array.isArray(doc.scenes)
-          ? (doc.scenes as unknown[])
+        const doc = b.doc && typeof b.doc === 'object' ? (b.doc as Record<string, unknown>) : null
+        if (!doc || !Array.isArray(doc.sources)) {
+          throw new HttpError(
+            400,
+            'invalid',
+            "doc: a scene collection file (OBS's, with a sources list).",
+          )
+        }
+        const sourceList = doc.sources as unknown[]
+        const obsScenes = sourceList
+          .filter(
+            (s): s is { id: string; name: string } =>
+              !!s &&
+              typeof s === 'object' &&
+              (s as { id?: unknown }).id === 'scene' &&
+              typeof (s as { name?: unknown }).name === 'string',
+          )
+          .map((s) => s.name.trim())
+          .filter(Boolean)
+        const orderScenes = Array.isArray(doc.scene_order)
+          ? (doc.scene_order as unknown[])
               .map((s) =>
-                typeof s === 'string'
-                  ? s.trim()
-                  : s && typeof s === 'object' && typeof (s as { name?: unknown }).name === 'string'
-                    ? (s as { name: string }).name.trim()
-                    : '',
+                s && typeof s === 'object' && typeof (s as { name?: unknown }).name === 'string'
+                  ? (s as { name: string }).name.trim()
+                  : '',
               )
               .filter(Boolean)
-          : ['Main']
+          : []
+        const rawScenes =
+          obsScenes.length > 0
+            ? obsScenes
+            : orderScenes.length > 0
+              ? orderScenes
+              : Array.isArray(doc.scenes)
+                ? (doc.scenes as unknown[])
+                    .map((s) =>
+                      typeof s === 'string'
+                        ? s.trim()
+                        : s &&
+                            typeof s === 'object' &&
+                            typeof (s as { name?: unknown }).name === 'string'
+                          ? (s as { name: string }).name.trim()
+                          : '',
+                    )
+                    .filter(Boolean)
+                : []
         const scenes = rawScenes.length > 0 ? rawScenes : ['Main']
+        const nonSceneSources = sourceList.filter(
+          (s) => !s || typeof s !== 'object' || (s as { id?: unknown }).id !== 'scene',
+        ).length
         return this.applyImport({
-          list: { id: 'imported', name: raw, scenes: scenes.length, sources: 1 },
+          list: { id: 'imported', name: raw, scenes: scenes.length, sources: nonSceneSources },
           scenes,
           preview: {
             source: 'obs',
@@ -2326,7 +2442,7 @@ export class DemoStudioEngine {
             scenes: scenes.length,
             scene_names: scenes,
             truncated_scenes: 0,
-            sources: 1,
+            sources: nonSceneSources,
             web_pages: 0,
             missing: [],
             device_resets: [],
@@ -2336,14 +2452,7 @@ export class DemoStudioEngine {
         })
       }
       if (method === 'POST' && rest.length === 4) {
-        if (this.isBusyLive()) {
-          throw new HttpError(
-            409,
-            'studio_busy',
-            `Stop streaming and recording before changing ${noun}.`,
-            'Stop every active output first.',
-          )
-        }
+        this.ensureShelfMutationIdle(noun)
         const b = requireObj(body)
         const raw = String(b.name ?? '').trim()
         if (!raw || [...raw].length > 100) {
@@ -2352,9 +2461,10 @@ export class DemoStudioEngine {
         const name = raw
         if (shelf.list.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
           throw new HttpError(
-            400,
-            'invalid',
+            409,
+            'studio_name_taken',
             `There's already a ${isCol ? 'scene collection' : 'profile'} called "${name}".`,
+            'Pick another name.',
           )
         }
         const base =
@@ -2373,33 +2483,25 @@ export class DemoStudioEngine {
             this.clearHistory()
           }
           this.collections.set(id, this.captureSnapshot())
-        } else {
-          this.profiles.set(shelf.current, clone(this.studioSettingsData))
-          if (!b.copy) {
-            this.studioSettingsData = {
-              ...this.studioSettingsData,
-              width: 1920,
-              height: 1080,
-              fps: 60,
-              video_kbps: 6000,
-              scale: null,
-            }
-          }
-          this.profiles.set(id, clone(this.studioSettingsData))
+          shelf.list.push({ id, name })
+          shelf.current = id
+          return { id }
         }
+        const prev = clone(this.studioSettingsData)
+        this.profiles.set(shelf.current, prev)
+        if (!b.copy) {
+          this.studioSettingsData = defaultDemoStudioSettings()
+        }
+        this.profiles.set(id, clone(this.studioSettingsData))
         shelf.list.push({ id, name })
         shelf.current = id
-        return { id }
+        this.disarmAutoConfig()
+        this.onStreamChange?.(this.streamActive)
+        const note = profileRestartNote(prev, this.studioSettingsData)
+        return note ? { id, note } : { id }
       }
       if (method === 'PUT' && rest.length === 5 && rest[4] === 'current') {
-        if (this.isBusyLive()) {
-          throw new HttpError(
-            409,
-            'studio_busy',
-            `Stop streaming and recording before changing ${noun}.`,
-            'Stop every active output first.',
-          )
-        }
+        this.ensureShelfMutationIdle(noun)
         const id = String(requireObj(body).id ?? '')
         if (!shelf.list.some((x) => x.id === id)) {
           throw new HttpError(
@@ -2427,22 +2529,18 @@ export class DemoStudioEngine {
             } else {
               this.profiles.set(id, clone(this.studioSettingsData))
             }
-            this.onStreamChange?.(this.streamActive)
             shelf.current = id
-            const rateChanged = prev.sample_rate !== this.studioSettingsData.sample_rate
-            return rateChanged
-              ? {
-                  id,
-                  restart: 'Audio sample rate applies after Ferrocast restarts.',
-                  restart_detail: 'Restart Ferrocast to apply the new profile audio rate.',
-                }
-              : { id }
+            this.disarmAutoConfig()
+            this.onStreamChange?.(this.streamActive)
+            const note = profileRestartNote(prev, this.studioSettingsData)
+            return note ? { id, note } : { id }
           }
         }
         shelf.current = id
         return { id }
       }
       if (method === 'POST' && rest.length === 6 && rest[5] === 'rename') {
+        this.ensureShelfMutationIdle(noun)
         const id = decodeURIComponent(rest[4]!)
         const name = String(requireObj(body).name ?? '').trim()
         const entry = shelf.list.find((x) => x.id === id)
@@ -2454,6 +2552,14 @@ export class DemoStudioEngine {
           )
         if (!name || [...name].length > 100) {
           throw new HttpError(400, 'invalid', 'name: 1 to 100 letters.')
+        }
+        if (shelf.list.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) {
+          throw new HttpError(
+            409,
+            'studio_name_taken',
+            `There's already a ${isCol ? 'scene collection' : 'profile'} called "${name}".`,
+            'Pick another name.',
+          )
         }
         entry.name = name
         return undefined
@@ -2480,6 +2586,7 @@ export class DemoStudioEngine {
         }
       }
       if (method === 'DELETE' && rest.length === 5) {
+        this.ensureShelfMutationIdle(noun)
         const id = decodeURIComponent(rest[4]!)
         const entry = shelf.list.find((x) => x.id === id)
         if (!entry)
@@ -3387,6 +3494,8 @@ export class DemoStudioEngine {
         file,
       }))
       return {
+        collection_id: this.shelfCollections.current,
+        profile_id: this.shelfProfiles.current,
         engine: {
           cpu: 4.2,
           fps: 60,
@@ -3683,13 +3792,7 @@ export class DemoStudioEngine {
             JSON.stringify(prev[k] ?? null) !== JSON.stringify(this.studioSettingsData[k] ?? null),
         )
         if (outputChanged) {
-          this.applyWatchToken++
-          this.snapshot = null
-          this.wasLive = false
-          this.watchStarted = false
-          this.pendingOffer = null
-          this.autoConfigState = emptyAutoConfigState()
-          this.broadcastAutoConfig()
+          this.disarmAutoConfig()
         }
       }
       return { settings: clone(this.studioSettingsData), restart: null }
@@ -4747,46 +4850,34 @@ export class DemoStudioEngine {
     return { image: cameraFrameSvg(device ?? CAMERA_SVGS[0].id) }
   }
 
-  private engineStatsSnapshot(): EngineStats {
-    const fps = Number(this.studioSettingsData.fps ?? 60)
-    const width = Number(this.studioSettingsData.width ?? 1920)
-    const height = Number(this.studioSettingsData.height ?? 1080)
-    return {
-      collection_id: this.shelfCollections.current,
-      profile_id: this.shelfProfiles.current,
-      engine: {
-        cpu: 14.2,
-        fps,
-        frame_ms: 3.1,
-        lagged: this.simLagged,
-        skipped: this.simSkipped,
-        frames: 3600,
-        memory_mb: 310,
-      },
-      canvas: { width, height, fps },
-      scene: this.currentScene,
-      stream: this.streamActive
-        ? {
-            active: true,
-            reconnecting: false,
-            bytes: 4_800_000,
-            frames: 3600,
-            dropped: this.simDropped,
-            error: null,
-          }
-        : null,
-      record: this.recordActive
-        ? {
-            active: true,
-            paused: false,
-            bytes: 2_400_000,
-            frames: 1800,
-            file: '/Users/demo/Movies/Ferrocast/demo.mp4',
-            seconds: 30,
-            error: null,
-          }
-        : null,
+  private ensureShelfMutationIdle(noun: string): void {
+    if (this.autoConfigState.state === 'running') {
+      throw new HttpError(
+        409,
+        'benchmark_running',
+        'An encoder benchmark is running.',
+        'Wait for the benchmark to finish or cancel it first.',
+      )
     }
+    if (this.isBusyLive()) {
+      throw new HttpError(
+        409,
+        'studio_busy',
+        `Stop streaming and recording before changing ${noun}.`,
+        'Stop every active output first.',
+      )
+    }
+  }
+
+  private disarmAutoConfig(): void {
+    if (this.autoConfigState.state !== 'applied') return
+    this.applyWatchToken++
+    this.snapshot = null
+    this.wasLive = false
+    this.watchStarted = false
+    this.pendingOffer = null
+    this.autoConfigState = emptyAutoConfigState()
+    this.broadcastAutoConfig()
   }
 
   private isBusyLive(): boolean {

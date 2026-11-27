@@ -2144,5 +2144,112 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         active.dispose()
       }
     })
+
+    it('reports active collection_id/profile_id in stats, imports real OBS sources JSON, and uses engine { id, note } + restart route', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.start()
+
+        const initialStats = await api.stats()
+        expect(initialStats.collection_id).toBe('untitled')
+        expect(initialStats.profile_id).toBe('default')
+
+        // Doc without a `sources` array is rejected (400), matching real engine validation.
+        const missingSourcesErr = await api
+          .importCollection('Bad Doc', { name: 'Bad Doc', scenes: [{ name: 'Main' }] })
+          .catch((e: unknown) => e)
+        expect((missingSourcesErr as ApiError).status).toBe(400)
+
+        // Real OBS collection JSON stores scenes inside `sources` with `id: "scene"` and no top-level `scenes`.
+        const imported = await api.importCollection('OBS Export', {
+          name: 'OBS Export',
+          sources: [
+            { id: 'scene', name: 'Intro Scene' },
+            { id: 'scene', name: 'Live Scene' },
+            { id: 'color_source_v3', name: 'Backdrop' },
+          ],
+        })
+        expect(imported.scenes).toBe(2)
+        expect(imported.sources).toBe(1)
+        const scenesAfter = await api.scenes()
+        expect(scenesAfter.scenes.map((s) => s.name)).toEqual(['Intro Scene', 'Live Scene'])
+        expect((await api.stats()).collection_id).toBe(imported.id)
+
+        // Profile switch with sample_rate change returns `{ id, note }` (never `restart` field),
+        // and `POST /studio/engine/restart` succeeds cleanly instead of 404ing.
+        const profB = await api.newShelf('profiles', 'Broadcast 44k', false)
+        await api.setStudioSettings({
+          ...(await api.studioSettings()),
+          sample_rate: 44100,
+          encoder: 'software',
+          hotkeys: { go_live: 'F9' },
+        })
+        const switchedBack = (await api.switchShelf('profiles', 'default')) as Record<
+          string,
+          unknown
+        >
+        expect(switchedBack.id).toBe('default')
+        expect(switchedBack.note).toBe('The sound rate applies after Ferrocast restarts.')
+        expect(switchedBack.restart).toBeUndefined()
+        expect((await api.stats()).profile_id).toBe('default')
+
+        // Restart route succeeds while idle and refuses 409 studio_busy while recording.
+        await expect(api.restart()).resolves.toBeUndefined()
+        engine.studioEngine!.setRecordActive(true)
+        await expect(api.restart()).rejects.toMatchObject({ status: 409, code: 'studio_busy' })
+        engine.studioEngine!.setRecordActive(false)
+
+        // New profile (copy=false) resets settings from defaults instead of leaking previous profile fields,
+        // and disarms pending Auto-Config trial state.
+        await api.switchShelf('profiles', profB.id)
+        await api.applyAutoConfig({ encoder: 'hardware', fps: 60, video_kbps: 5000 })
+        expect((await api.autoConfig()).state).toBe('applied')
+        const fresh = await api.newShelf('profiles', 'Fresh Defaults', false)
+        expect(fresh.note).toBe('The sound rate applies after Ferrocast restarts.')
+        const freshSettings = await api.studioSettings()
+        expect(freshSettings.sample_rate).toBe(48000)
+        expect(freshSettings.encoder).toBe('hardware')
+        expect(freshSettings.hotkeys).toEqual({})
+        expect((await api.autoConfig()).state).toBe('idle')
+
+        // Duplicate name in newShelf or renameShelf returns 409 studio_name_taken.
+        await expect(api.newShelf('profiles', 'Fresh Defaults', false)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_name_taken',
+        })
+        await expect(
+          api.renameShelf('profiles', 'default', 'Fresh Defaults'),
+        ).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_name_taken',
+        })
+
+        // Rename/remove refuse 409 studio_busy while recording, and 409 benchmark_running during benchmark.
+        engine.studioEngine!.setRecordActive(true)
+        await expect(api.renameShelf('profiles', profB.id, 'Blocked Rename')).rejects.toMatchObject(
+          {
+            status: 409,
+            code: 'studio_busy',
+          },
+        )
+        await expect(api.removeShelf('profiles', profB.id)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        engine.studioEngine!.setRecordActive(false)
+
+        await api.startAutoConfigBenchmark({ mode: 'record', fps_preference: 60 })
+        await expect(api.switchShelf('profiles', profB.id)).rejects.toMatchObject({
+          status: 409,
+          code: 'benchmark_running',
+        })
+        await api.cancelAutoConfigBenchmark()
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })
