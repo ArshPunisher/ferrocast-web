@@ -1582,15 +1582,11 @@ export function studioEngineApi(c: FerroClient) {
       c.request<{
         id: string
         note?: string | null
-        restart?: string | null
-        restart_detail?: string | null
       }>('POST', `/api/v1/studio/engine/library/${kind}`, { name, copy }),
     switchShelf: (kind: EngineShelfKind, id: string) =>
       c.request<{
         id: string
         note?: string | null
-        restart?: string | null
-        restart_detail?: string | null
       }>('PUT', `/api/v1/studio/engine/library/${kind}/current`, { id }),
     renameShelf: (kind: EngineShelfKind, id: string, name: string) =>
       c.request<void>('POST', `/api/v1/studio/engine/library/${kind}/${enc(id)}/rename`, { name }),

@@ -127,7 +127,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
         create_overlays: createOverlays,
         fetch_fonts: fetchFonts,
       })
-      if (onCollectionChange) onCollectionChange()
+      if (onCollectionChange) onCollectionChange(report.id)
       else refresh()
       bumpLibrary()
       setStep({ kind: 'result', report, undone: false })
@@ -145,7 +145,7 @@ export function ImportOverlayPackDialog({ open, onClose }: { open: boolean; onCl
     setBusy('undo')
     try {
       const undone = await api.undoOverlayPack(step.report.undo_token)
-      if (onCollectionChange) onCollectionChange()
+      if (onCollectionChange) onCollectionChange(undone.restored_collection_id ?? undefined)
       else refresh()
       bumpLibrary()
       setStep({ kind: 'result', report: step.report, undone: true })

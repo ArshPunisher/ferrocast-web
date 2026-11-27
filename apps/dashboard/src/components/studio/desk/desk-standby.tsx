@@ -119,7 +119,9 @@ export function DeskStandby({
     return c?.list.find((item) => item.id === c.current)?.name ?? null
   }, [collections.data])
 
-  const collectionName = activeCollection ?? cached?.collection ?? 'Default collection'
+  const collectionName =
+    activeCollection ??
+    (collections.loading ? 'Default collection' : (cached?.collection ?? 'Default collection'))
 
   const profileName = useMemo(() => {
     const p = profiles.data
@@ -131,12 +133,13 @@ export function DeskStandby({
 
   const [fetchedThumb, setFetchedThumb] = useState<{
     scene: string
-    collection: string
+    collection: string | null
     image: string
   } | null>(null)
   useEffect(() => {
     setFetchedThumb(null)
-    if (!targetScene) return
+    if (!targetScene || collections.loading) return
+    const snapshotCollection = activeCollection
     let alive = true
     void engine
       .thumbnail(targetScene, 640)
@@ -144,19 +147,32 @@ export function DeskStandby({
         if (!alive) return
         const clean = safeThumbUrl(r.image)
         if (clean) {
-          setFetchedThumb({ scene: targetScene, collection: collectionName, image: clean })
-          writeStandbySnapshot({ scene: targetScene, collection: collectionName, image: clean })
+          setFetchedThumb({ scene: targetScene, collection: snapshotCollection, image: clean })
+          if (snapshotCollection !== null) {
+            writeStandbySnapshot({
+              scene: targetScene,
+              collection: snapshotCollection,
+              image: clean,
+            })
+          }
         }
       })
       .catch(() => undefined)
     return () => {
       alive = false
     }
-  }, [engine, targetScene, collectionName])
+  }, [engine, targetScene, collections.loading, activeCollection])
 
   const preview = useMemo(
-    () => resolveStandbyPreview({ targetScene, fetchedThumb, cached, activeCollection }),
-    [targetScene, fetchedThumb, cached, activeCollection],
+    () =>
+      resolveStandbyPreview({
+        targetScene,
+        fetchedThumb,
+        cached,
+        activeCollection,
+        collectionsLoading: collections.loading,
+      }),
+    [targetScene, fetchedThumb, cached, activeCollection, collections.loading],
   )
   const resolutionLabel = formatResolutionSummary(studioSettings.data)
   const phase = resolveStandbyPhase({

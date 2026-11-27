@@ -112,14 +112,18 @@ export function resolveStandbyPreview({
   fetchedThumb,
   cached,
   activeCollection = null,
+  collectionsLoading = false,
 }: {
   targetScene: string | null
   fetchedThumb: { scene: string; collection?: string | null; image: string } | null
   cached: StandbySnapshot | null
   activeCollection?: string | null
+  collectionsLoading?: boolean
 }): { scene: string | null; image: string | null } {
   const collectionMatches = (found: string | null | undefined) =>
     activeCollection === null || found === undefined || found === null || found === activeCollection
+  const cacheMatches = (found: string | null | undefined) =>
+    !(collectionsLoading && Boolean(found)) && collectionMatches(found)
   if (targetScene) {
     if (
       fetchedThumb &&
@@ -128,12 +132,12 @@ export function resolveStandbyPreview({
     ) {
       return { scene: targetScene, image: safeThumbUrl(fetchedThumb.image) }
     }
-    if (cached && cached.scene === targetScene && collectionMatches(cached.collection)) {
+    if (cached && cached.scene === targetScene && cacheMatches(cached.collection)) {
       return { scene: targetScene, image: safeThumbUrl(cached.image) }
     }
     return { scene: targetScene, image: null }
   }
-  if (cached && (cached.scene || cached.image) && collectionMatches(cached.collection)) {
+  if (cached && (cached.scene || cached.image) && cacheMatches(cached.collection)) {
     return { scene: cached.scene, image: safeThumbUrl(cached.image) }
   }
   return { scene: null, image: null }

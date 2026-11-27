@@ -158,7 +158,7 @@ export interface Desk {
   /** Resets collection-scoped state and reloads scenes, sources, audio, and Go Live cleanly. */
   onCollectionChange?: (nextId?: string) => void
   /** Reloads profile-scoped settings and Go Live readiness after a profile change. */
-  onProfileChange?: () => void
+  onProfileChange?: (nextId?: string) => void
   /** The item whose Edit Transform is open. */
   transforming: { scene: string; id: number; name: string } | null
   setTransforming: (t: { scene: string; id: number; name: string } | null) => void
@@ -274,6 +274,15 @@ export function useSetDeskStats(): (next: EngineStats) => void {
     },
     [store, desk],
   )
+}
+
+/** Reads the latest stats snapshot on demand without subscribing to 1 Hz telemetry updates. */
+export function useGetDeskStats(): () => EngineStats | null {
+  const store = useContext(StatsCtx)
+  const desk = useContext(Ctx)
+  const deskStatsRef = useRef(desk?.stats ?? null)
+  deskStatsRef.current = desk?.stats ?? null
+  return useCallback(() => (store ? store.get() : deskStatsRef.current), [store])
 }
 
 /** One entry in "Add a source": a friendly name for an OBS kind (macOS or Windows id). */

@@ -565,6 +565,7 @@ function Running({
   itemsNow.current = items.data
   useEffect(() => {
     if (!scene) return
+    let alive = true
     let held = false
     let busy = false
     const down = () => (held = true)
@@ -573,12 +574,21 @@ function Running({
     window.addEventListener('pointerup', up, true)
     window.addEventListener('pointercancel', up, true)
     const t = setInterval(() => {
-      if (document.hidden || held || busy) return
+      if (document.hidden || held || busy || awaitingScenesRef.current !== null) return
       busy = true
+      const atCollection = collectionKeyRef.current
       void api
         .items(scene)
         .then((v) => {
-          if (!held && !itemsSame(itemsNow.current, v)) setItems(v)
+          if (
+            !alive ||
+            held ||
+            awaitingScenesRef.current !== null ||
+            collectionKeyRef.current !== atCollection
+          ) {
+            return
+          }
+          if (!itemsSame(itemsNow.current, v)) setItems(v)
         })
         .catch(() => undefined)
         .finally(() => {
@@ -586,6 +596,7 @@ function Running({
         })
     }, 2500)
     return () => {
+      alive = false
       clearInterval(t)
       window.removeEventListener('pointerdown', down, true)
       window.removeEventListener('pointerup', up, true)
@@ -644,9 +655,15 @@ function Running({
       if (nextId !== undefined) setProfileId(nextId)
       reloadPrefs()
       reloadGoLive()
+    },
+    [reloadPrefs, reloadGoLive],
+  )
+  const handleProfileMismatch = useCallback(
+    (nextId: string) => {
+      onProfileChange(nextId)
       bumpLibrary()
     },
-    [reloadPrefs, reloadGoLive, bumpLibrary],
+    [onProfileChange, bumpLibrary],
   )
   useEffect(() => {
     const d = scenes.data
@@ -909,7 +926,7 @@ function Running({
           statsStore={statsStore}
           onSceneMismatch={refresh}
           onCollectionMismatch={handleCollectionMismatch}
-          onProfileMismatch={onProfileChange}
+          onProfileMismatch={handleProfileMismatch}
           onCanvasSize={handleCanvasSize}
         />
         <DockWorkspace

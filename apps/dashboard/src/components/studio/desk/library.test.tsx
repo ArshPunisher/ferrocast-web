@@ -20,24 +20,105 @@ afterEach(async () => {
 })
 
 describe('409 studio_busy on collection/profile switch while live', () => {
-  it('showShelfError produces a calm one-line "Stop the stream to switch" toast with detail behind (i)', () => {
-    const err = new ApiError(
+  it('showShelfError derives exact active-output headlines from live stats and 409 codes', () => {
+    const genericBusy = new ApiError(
       409,
       'studio_busy',
       'Stop streaming and recording before changing scene collections.',
       'Stop every active output first.',
     )
-    showShelfError(err)
+
+    // Streaming only
+    showShelfError(genericBusy, {
+      stream: { active: true, reconnecting: false, bytes: 0, frames: 0, dropped: 0, error: null },
+      record: null,
+    } as unknown as EngineStats)
     const t = currentToasts().find((x) => x.key === 'studio:busy-switch')
-    expect(t).toBeDefined()
     expect(t?.tone).toBe('warn')
     expect(t?.message).toBe('Stop the stream to switch')
     expect(t?.hint).toBeUndefined()
     expect(t?.detail).toContain('Stop streaming and recording')
-    expect(t?.detail).toContain('Stop every active output first.')
+    dismissToast(t!.id)
+
+    // Recording only (engine still sends generic "Stop streaming and recording..." message)
+    showShelfError(genericBusy, {
+      stream: null,
+      record: {
+        active: true,
+        paused: false,
+        bytes: 0,
+        frames: 0,
+        file: '/a.mp4',
+        seconds: 1,
+        error: null,
+      },
+    } as unknown as EngineStats)
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Stop recording to switch',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // Replay buffer only
+    showShelfError(genericBusy, {
+      stream: null,
+      record: null,
+      replay: { active: true, last: null, error: null },
+    } as unknown as EngineStats)
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Stop the replay buffer to switch',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // Virtual Camera only
+    showShelfError(genericBusy, {
+      stream: null,
+      record: null,
+      virtualcam: { active: true },
+    } as unknown as EngineStats)
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Stop Virtual Camera to switch',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // NDI only
+    showShelfError(genericBusy, {
+      stream: null,
+      record: null,
+      ndi: { name: 'Ferrocast' },
+    } as unknown as EngineStats)
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Stop NDI to switch',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // Multiple or unknown outputs
+    showShelfError(genericBusy, null)
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Stop active outputs to switch',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // Benchmark running (409 benchmark_running)
+    showShelfError(new ApiError(409, 'benchmark_running', 'An encoder benchmark is running.'))
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      'Wait for the benchmark to finish',
+    )
+    currentToasts().forEach((x) => dismissToast(x.id))
+
+    // Fail-closed status probe error
+    showShelfError(
+      new ApiError(
+        409,
+        'studio_busy',
+        "Couldn't check stream status before changing profiles: timeout",
+      ),
+    )
+    expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(
+      "Couldn't check active outputs",
+    )
   })
 
-  it('switching a scene collection in LibraryBar when engine returns 409 studio_busy shows the one-line notice', async () => {
+  it('switching a scene collection in LibraryBar when engine returns 409 studio_busy shows the active output notice', async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const switchShelf = vi.fn(async () => {
       throw new ApiError(
@@ -48,6 +129,18 @@ describe('409 studio_busy on collection/profile switch while live', () => {
       )
     })
     const desk = {
+      stats: {
+        stream: null,
+        record: {
+          active: true,
+          paused: false,
+          bytes: 0,
+          frames: 0,
+          file: '/a.mp4',
+          seconds: 3,
+          error: null,
+        },
+      },
       api: {
         shelf: async (kind: string) =>
           kind === 'collections'
@@ -94,7 +187,7 @@ describe('409 studio_busy on collection/profile switch while live', () => {
     })
 
     expect(switchShelf).toHaveBeenCalledWith('collections', 'podcast')
-    const t = currentToasts().find((x) => x.message === 'Stop the stream to switch')
+    const t = currentToasts().find((x) => x.message === 'Stop recording to switch')
     expect(t).toBeDefined()
     expect(t?.detail).toContain('Stop streaming and recording')
   })
@@ -278,14 +371,35 @@ describe('Collection & profile switch resilience', () => {
     }
   }
 
-  it('reloads prefs on profile switch, New, and Duplicate and surfaces note/restart notice', async () => {
-    const { desk, reloadPrefs, switchShelf, newShelf } = makeShelfDesk({
-      switchShelf: vi.fn(async (_kind: string, id: string) => ({
-        id,
-        note: 'Video canvas changed for this profile.',
-        restart: 'Sample rate change takes effect after restart.',
-        restart_detail: 'Restart Ferrocast to use 48 kHz audio.',
-      })),
+  it('passes nextId to onProfileChange on switch/New and offers Restart only for restart notes', async () => {
+    let currentProfile = 'default'
+    const { desk, reloadPrefs, onProfileChange, switchShelf, newShelf } = makeShelfDesk({
+      shelf: async (kind: string) =>
+        kind === 'collections'
+          ? { current: 'main', list: [{ id: 'main', name: 'Main' }] }
+          : {
+              current: currentProfile,
+              list: [
+                { id: 'default', name: 'Default' },
+                { id: 'hd', name: 'HD 1080p' },
+              ],
+            },
+      switchShelf: vi
+        .fn()
+        .mockImplementationOnce(async (_kind: string, id: string) => {
+          currentProfile = id
+          return {
+            id,
+            note: 'The sound rate applies after Ferrocast restarts.',
+          }
+        })
+        .mockImplementationOnce(async (_kind: string, id: string) => {
+          currentProfile = id
+          return {
+            id,
+            note: "Headphones can't play sound; the system's device is used.",
+          }
+        }),
     })
     const host = document.body.appendChild(document.createElement('div'))
     root = createRoot(host)
@@ -307,15 +421,29 @@ describe('Collection & profile switch resilience', () => {
     await flushMicro()
 
     expect(switchShelf).toHaveBeenCalledWith('profiles', 'hd')
-    expect(reloadPrefs).toHaveBeenCalledTimes(1)
-    // Single clear toast carries the restart/note info instead of swallowing it or duplicating.
+    expect(onProfileChange).toHaveBeenCalledWith('hd')
+    expect(reloadPrefs).not.toHaveBeenCalled()
+    // Single warn toast carries the restart note + Restart button directly from `res.note`.
     const toasts = currentToasts()
     expect(toasts).toHaveLength(1)
-    expect(toasts[0]?.hint ?? toasts[0]?.message).toMatch(/restart|HD 1080p/i)
+    expect(toasts[0]?.tone).toBe('warn')
+    expect(toasts[0]?.hint).toBe('The sound rate applies after Ferrocast restarts.')
     expect(toasts[0]?.action?.label).toBe('Restart')
     dismissToast(toasts[0]!.id)
 
-    // Profile New reloads prefs AND shows a confirmation toast.
+    // Non-restart `note` stays a calm info toast without a Restart button.
+    await act(async () => profBtn.click())
+    const defItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
+      el.textContent?.includes('Default'),
+    ) as HTMLButtonElement
+    await act(async () => defItem.click())
+    await flushMicro()
+    const nonRestartToast = currentToasts()[0]
+    expect(nonRestartToast?.tone).toBe('info')
+    expect(nonRestartToast?.action).toBeUndefined()
+    dismissToast(nonRestartToast!.id)
+
+    // Profile New passes new id to onProfileChange AND shows a confirmation toast.
     await act(async () => profBtn.click())
     const newItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
       el.textContent?.includes('New profile'),
@@ -334,17 +462,24 @@ describe('Collection & profile switch resilience', () => {
     await flushMicro()
 
     expect(newShelf).toHaveBeenCalledWith('profiles', 'Clean 720p', false)
-    expect(reloadPrefs).toHaveBeenCalledTimes(2)
+    expect(onProfileChange).toHaveBeenCalledWith('clean-720p')
     expect(currentToasts().some((t) => /Clean 720p/i.test(t.message))).toBe(true)
   })
 
-  it('shows confirmation toasts for collection Duplicate and Rename and blocks rapid double submits', async () => {
+  it('shows confirmation toasts for collection Duplicate and Rename, prevents dialog close while submitting, and preserves trigger focus during switch', async () => {
     let resolveSwitch!: (v: { id: string }) => void
     const pendingSwitch = new Promise<{ id: string }>((r) => {
       resolveSwitch = r
     })
+    let resolveNew!: (v: { id: string }) => void
+    const pendingNew = new Promise<{ id: string }>((r) => {
+      resolveNew = r
+    })
     const { desk, newShelf, renameShelf, switchShelf } = makeShelfDesk({
       switchShelf: vi.fn(() => pendingSwitch),
+      newShelf: vi.fn((_k: string, name: string) =>
+        name === 'Slow New' ? pendingNew : Promise.resolve({ id: 'main-backup' }),
+      ),
     })
     const host = document.body.appendChild(document.createElement('div'))
     root = createRoot(host)
@@ -362,17 +497,10 @@ describe('Collection & profile switch resilience', () => {
       'button[aria-label="scene collection: Main"]',
     ) as HTMLButtonElement
     await act(async () => colBtn.click())
-    const renameItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
-      el.getAttribute('aria-label')?.includes('Rename'),
-    ) as HTMLButtonElement | undefined
-    if (renameItem) {
-      await act(async () => renameItem.click())
-    } else {
-      const rowMenuBtn = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
-        el.textContent?.includes('Rename'),
-      ) as HTMLButtonElement
-      await act(async () => rowMenuBtn.click())
-    }
+    const rowMenuBtn = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
+      el.textContent?.includes('Rename'),
+    ) as HTMLButtonElement
+    await act(async () => rowMenuBtn.click())
     const renameInput = document.querySelector('dialog[open] input') as HTMLInputElement
     await act(async () => {
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -389,6 +517,38 @@ describe('Collection & profile switch resilience', () => {
     await flushMicro()
     expect(renameShelf).toHaveBeenCalledTimes(1)
     expect(currentToasts().some((t) => /Studio Main/i.test(t.message))).toBe(true)
+
+    // Mid-submit naming dialog ignores cancel/Escape close so user input isn't lost.
+    await act(async () => colBtn.click())
+    const newItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
+      el.textContent?.includes('New scene collection'),
+    ) as HTMLButtonElement
+    await act(async () => newItem.click())
+    const slowInput = document.querySelector('dialog[open] input') as HTMLInputElement
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      set.call(slowInput, 'Slow New')
+      slowInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const slowSubmit = Array.from(document.querySelectorAll('dialog[open] button')).find((b) =>
+      b.textContent?.includes('Make it'),
+    ) as HTMLButtonElement
+    await act(async () => {
+      slowSubmit.click()
+    })
+    const closeBtn = document.querySelector(
+      'dialog[open] button[aria-label="Close"]',
+    ) as HTMLButtonElement | null
+    await act(async () => {
+      document
+        .querySelector('dialog[open]')
+        ?.dispatchEvent(new Event('cancel', { cancelable: true }))
+      closeBtn?.click()
+    })
+    expect(document.querySelector('dialog[open]')).not.toBeNull()
+    resolveNew({ id: 'slow-new' })
+    await flushMicro()
+    expect(document.querySelector('dialog[open]')).toBeNull()
 
     // Duplicate produces confirmation toast.
     await act(async () => colBtn.click())
@@ -410,7 +570,7 @@ describe('Collection & profile switch resilience', () => {
     expect(newShelf).toHaveBeenCalledWith('collections', 'Main Backup', true)
     expect(currentToasts().some((t) => /Main Backup/i.test(t.message))).toBe(true)
 
-    // Switch while in-flight disables both pills and ignores rapid second clicks.
+    // Switch while in-flight marks both pills aria-disabled, blocks rapid clicks, and preserves trigger focus.
     await act(async () => colBtn.click())
     const podcastItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
       el.textContent?.includes('Podcast'),
@@ -420,26 +580,16 @@ describe('Collection & profile switch resilience', () => {
       podcastItem.click()
     })
     const profBtn = host.querySelector('button[aria-label="profile: Default"]') as HTMLButtonElement
-    expect(colBtn.disabled).toBe(true)
-    expect(profBtn.disabled).toBe(true)
+    expect(colBtn.getAttribute('aria-disabled')).toBe('true')
+    expect(profBtn.getAttribute('aria-disabled')).toBe('true')
+    expect(colBtn.disabled).toBe(false)
+    expect(document.activeElement).toBe(colBtn)
     expect(switchShelf).toHaveBeenCalledTimes(1)
     resolveSwitch({ id: 'podcast' })
     await flushMicro()
   })
 
-  it('derives accurate busy headlines, retries shelf load errors, and clamps >100 char import names', async () => {
-    for (const [msg, expected] of [
-      ['Stop recording before changing scene collections.', 'Stop recording to switch'],
-      ['Stop the virtual camera before changing profiles.', 'Stop Virtual Camera to switch'],
-      ['Stop NDI before changing scene collections.', 'Stop NDI to switch'],
-      ['Stop the replay buffer before changing profiles.', 'Stop the replay buffer to switch'],
-      ['Stop the show before changing scene collections.', 'Stop the show to switch'],
-    ] as const) {
-      currentToasts().forEach((t) => dismissToast(t.id))
-      showShelfError(new ApiError(409, 'studio_busy', msg))
-      expect(currentToasts().find((x) => x.key === 'studio:busy-switch')?.message).toBe(expected)
-    }
-
+  it('retries shelf load errors with accessible visible Retry chip and clamps >100 char import names', async () => {
     let failLoad = true
     const shelfSpy = vi.fn(async (kind: string) => {
       if (kind === 'collections' && failLoad)
@@ -464,10 +614,13 @@ describe('Collection & profile switch resilience', () => {
       currentToasts().some((t) => t.tone === 'error' && /Disk read error/.test(t.message)),
     ).toBe(true)
     const retryBtn = host.querySelector(
-      'button[aria-label*="scene collection"]',
+      'button[aria-label="Retry loading scene collections"]',
     ) as HTMLButtonElement
     expect(retryBtn).not.toBeNull()
     expect(retryBtn.disabled).toBe(false)
+    const retryLabel = retryBtn.querySelector('span.truncate')
+    expect(retryLabel?.textContent).toBe('Retry')
+    expect(retryLabel?.className).not.toContain('hidden')
     failLoad = false
     await act(async () => retryBtn.click())
     await flushMicro()

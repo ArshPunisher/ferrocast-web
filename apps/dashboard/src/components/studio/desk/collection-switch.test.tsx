@@ -118,6 +118,9 @@ describe('StudioDesk full collection switch reset', () => {
     }
     const itemsCalls: string[] = []
     const missingCalls: string[] = []
+    let settingsGetCount = 0
+    let profilesGetCount = 0
+    let collectionsGetCount = 0
     let statsCol = 'col-a'
     let statsProfile = 'prof-a'
     const settingsSpy = vi.fn(async (patch?: Record<string, unknown>) => {
@@ -137,6 +140,7 @@ describe('StudioDesk full collection switch reset', () => {
         }
       }
       if (path === '/api/v1/studio/engine/library/collections') {
+        collectionsGetCount++
         return {
           current: currentCol,
           list: [
@@ -146,6 +150,7 @@ describe('StudioDesk full collection switch reset', () => {
         }
       }
       if (path === '/api/v1/studio/engine/library/profiles') {
+        profilesGetCount++
         return {
           current: statsProfile,
           list: [
@@ -233,6 +238,7 @@ describe('StudioDesk full collection switch reset', () => {
       }
       if (path === '/api/v1/studio/engine/settings') {
         if (method === 'PUT') return await settingsSpy(body as Record<string, unknown>)
+        settingsGetCount++
         return {
           width: statsProfile === 'prof-a' ? 1920 : 1280,
           height: statsProfile === 'prof-a' ? 1080 : 960,
@@ -357,7 +363,10 @@ describe('StudioDesk full collection switch reset', () => {
     expect(itemsCalls).not.toContain('col-a:Outro')
     expect(host.textContent).toContain('Cam A')
 
-    // Switch profile Default (1920x1080) -> Small 720p (1280x960 = 4:3) reloads prefs & updates preview aspect.
+    // Switch profile Default (1920x1080) -> Small 720p (1280x960) reloads prefs ONCE without reloading collections, while preview stays 16:9.
+    const settingsBefore = settingsGetCount
+    const collectionsBefore = collectionsGetCount
+    const profilesBefore = profilesGetCount
     const profBtn = host.querySelector('button[aria-label="profile: Default"]') as HTMLButtonElement
     await act(async () => profBtn.click())
     const smallItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
@@ -366,6 +375,190 @@ describe('StudioDesk full collection switch reset', () => {
     await act(async () => smallItem.click())
     await flush(60)
     const box = host.querySelector<HTMLElement>('[data-canvas-box]')
-    expect(box?.style.aspectRatio).toBe('1280 / 960')
+    expect(box?.className).toContain('aspect-video')
+    expect(settingsGetCount - settingsBefore).toBe(1)
+    expect(profilesGetCount - profilesBefore).toBe(1)
+    expect(collectionsGetCount - collectionsBefore).toBe(0)
+  })
+
+  it('drops in-flight 2.5s items poller responses across collection switches without resurrecting stale items', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    window.matchMedia = ((q: string) => ({
+      matches: false,
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia
+    vi.useFakeTimers()
+    try {
+      let currentCol = 'col-a'
+      let holdNextColAItems = false
+      let resolveStaleItems: ((v: unknown[]) => void) | null = null
+      const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+        if (path === '/api/v1/studio/engine') {
+          return {
+            installed: true,
+            running: true,
+            starting: false,
+            available: true,
+            install_hint: null,
+            safe_mode: null,
+          }
+        }
+        if (path === '/api/v1/studio/engine/library/collections') {
+          return {
+            current: currentCol,
+            list: [
+              { id: 'col-a', name: 'Gaming Pack' },
+              { id: 'col-b', name: 'Podcast Pack' },
+            ],
+          }
+        }
+        if (path === '/api/v1/studio/engine/library/profiles') {
+          return { current: 'prof-a', list: [{ id: 'prof-a', name: 'Default' }] }
+        }
+        if (path === '/api/v1/studio/engine/library/collections/current' && method === 'PUT') {
+          currentCol = (body as { id: string }).id
+          return { id: currentCol }
+        }
+        if (path === '/api/v1/studio/engine/scenes') {
+          return {
+            collection_id: currentCol,
+            current: 'Main',
+            preview: null,
+            transition: { kind: 'fade', ms: 300 },
+            top_layer: null,
+            vertical: null,
+            scenes: [{ name: 'Main', current: true, preview: false, items: 1, transition: null }],
+          }
+        }
+        if (path === '/api/v1/studio/engine/scenes/Main/items') {
+          if (holdNextColAItems && currentCol === 'col-a') {
+            holdNextColAItems = false
+            return new Promise<unknown[]>((resolve) => {
+              resolveStaleItems = resolve
+            })
+          }
+          return [
+            {
+              id: currentCol === 'col-a' ? 1 : 2,
+              name: currentCol === 'col-a' ? 'Cam A' : 'Mic B',
+              kind: 'av_capture_input_v2',
+              visible: true,
+              locked: false,
+              audio: false,
+              group: false,
+              blend: 'normal',
+              scale_filter: 'off',
+              children: [],
+            },
+          ]
+        }
+        if (path === '/api/v1/studio/engine/scenes/Main/audio') return []
+        if (path === '/api/v1/studio/engine/kinds')
+          return { inputs: [], filters: [], transitions: [], encoders: [], outputs: [] }
+        if (path === '/api/v1/studio/engine/settings') return { width: 1920, height: 1080, fps: 60 }
+        if (path === '/api/v1/studio/engine/missing-files') return []
+        if (path === '/api/v1/studio/engine/stats') {
+          return {
+            collection_id: currentCol,
+            profile_id: 'prof-a',
+            engine: { cpu: 5, fps: 60, frame_ms: 4, lagged: 0, frames: 10, memory_mb: 100 },
+            stream: null,
+            record: null,
+            canvas: { width: 1920, height: 1080, fps: 60 },
+          }
+        }
+        if (path === '/api/v1/studio/engine/history') return { undo: null, redo: null, entries: [] }
+        if (path === '/api/v1/studio/engine/sources') return []
+        if (path.endsWith('/show/config'))
+          return { start_stream: false, stop_stream: true, stop_delay_s: 0 }
+        if (path.endsWith('/show')) return { show: null }
+        if (path.includes('/stream-info')) return { last: null, history: [], presets: [] }
+        return {}
+      })
+      useLive.setState({
+        conn: { client: { request } } as never,
+        status: {
+          engine: {
+            installed: true,
+            running: true,
+            starting: false,
+            available: true,
+            install_hint: null,
+            safe_mode: null,
+          },
+        } as never,
+      })
+      const res = {
+        data: makeView(),
+        error: null,
+        loading: false,
+        reload: vi.fn(),
+        set: vi.fn(),
+      }
+      const host = document.body.appendChild(document.createElement('div'))
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(<StudioDesk res={res as never} view={res.data} />)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(host.textContent).toContain('Cam A')
+
+      // Arm hold on next 2.5s items poll while still in col-a.
+      holdNextColAItems = true
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2550)
+      })
+      expect(resolveStaleItems).not.toBeNull()
+
+      // Switch to Podcast Pack (col-b) while col-a poll is still pending.
+      const colBtn = host.querySelector(
+        'button[aria-label="scene collection: Gaming Pack"]',
+      ) as HTMLButtonElement
+      await act(async () => colBtn.click())
+      const podItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
+        el.textContent?.includes('Podcast Pack'),
+      ) as HTMLButtonElement
+      await act(async () => podItem.click())
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(host.textContent).toContain('Mic B')
+
+      // Resolve stale col-a poll AFTER switch -> Stale Ghost Cam must NOT resurrect.
+      await act(async () => {
+        resolveStaleItems!([
+          {
+            id: 99,
+            name: 'Stale Ghost Cam',
+            kind: 'av_capture_input_v2',
+            visible: true,
+            locked: false,
+            audio: false,
+            group: false,
+            blend: 'normal',
+            scale_filter: 'off',
+            children: [],
+          },
+        ])
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(host.textContent).toContain('Mic B')
+      expect(host.textContent).not.toContain('Stale Ghost Cam')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

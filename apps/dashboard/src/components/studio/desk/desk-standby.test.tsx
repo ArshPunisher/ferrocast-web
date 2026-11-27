@@ -701,4 +701,94 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     })
     expect(out).toEqual({ scene: 'Main', image: null })
   })
+
+  it('waits for collections shelf before showing cached preview or writing standby localStorage snapshot', async () => {
+    localStorage.setItem(
+      'fc-studio-standby-scene',
+      JSON.stringify({
+        scene: 'Main',
+        collection: 'Gaming',
+        image: 'data:image/png;base64,OLDGAMING',
+        updatedAt: Date.now(),
+      }),
+    )
+
+    let resolveCollections!: (v: unknown) => void
+    const collectionsPromise = new Promise((r) => {
+      resolveCollections = r
+    })
+    const thumbSpy = vi.fn(async () => ({
+      image: 'data:image/png;base64,NEWPODCAST',
+    }))
+
+    installClient(async (_method, path) => {
+      if (path === '/api/v1/studio/engine/library/collections') {
+        return collectionsPromise
+      }
+      if (path === '/api/v1/studio/engine/scenes') {
+        return {
+          current: 'Main',
+          scenes: [{ name: 'Main', items: 1, current: true, transition: null }],
+          transition: { kind: 'fade_transition', ms: 300 },
+        }
+      }
+      if (path.includes('/thumbnail')) {
+        return thumbSpy()
+      }
+      if (path === '/api/v1/schedule') return { streams: [] }
+      if (path === '/api/v1/clips')
+        return { folder: '', ffmpeg_ready: false, youtube_connected: false, clips: [] }
+      throw new ApiError(422, 'studio_not_running', 'Off')
+    })
+
+    function Harness() {
+      const res = useResource(() => Promise.resolve(seedView()), [])
+      return (
+        <DeskStandby
+          status={standbyStatus()}
+          view={res.data}
+          res={res}
+          starting={null}
+          startError={null}
+          onStart={async () => undefined}
+          onRetryStatus={() => undefined}
+        />
+      )
+    }
+
+    await act(async () => root.render(<Harness />))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // While collections is still loading, cached Gaming preview MUST NOT flash and thumbnail MUST NOT run.
+    const frameWhileLoading = host.querySelector('[data-testid="standby-stage-frame"]')!
+    expect(frameWhileLoading.querySelector('img')).toBeNull()
+    expect(thumbSpy).not.toHaveBeenCalled()
+    expect(localStorage.getItem('fc-studio-standby-scene')).toContain('OLDGAMING')
+
+    // Now resolve collections as "Podcast" -> thumbnail fetches ONCE and writes under "Podcast".
+    await act(async () => {
+      resolveCollections({
+        current: 'podcast',
+        list: [
+          { id: 'gaming', name: 'Gaming' },
+          { id: 'podcast', name: 'Podcast' },
+        ],
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(thumbSpy).toHaveBeenCalledTimes(1)
+    const saved = JSON.parse(localStorage.getItem('fc-studio-standby-scene')!) as {
+      scene: string
+      collection: string
+      image: string
+    }
+    expect(saved.collection).toBe('Podcast')
+    expect(saved.image).toBe('data:image/png;base64,NEWPODCAST')
+  })
 })

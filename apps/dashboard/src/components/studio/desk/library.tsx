@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  ArrowClockwise,
   CaretDown,
   CardsThree,
   Check,
@@ -17,11 +18,17 @@ import {
   UploadSimple,
   UserGear,
 } from '@phosphor-icons/react'
-import { ApiError, describeError, type EngineShelf, type EngineShelfKind } from '@ferrocast/api'
+import {
+  ApiError,
+  describeError,
+  type EngineShelf,
+  type EngineShelfKind,
+  type EngineStats,
+} from '@ferrocast/api'
 import { Field, Button, Dialog, Input, cx, toast } from '@ferrocast/ui'
 import { done, useAction, useResource } from '../../../lib/hooks'
 import { saveBlob } from '../common'
-import { useDesk } from './common'
+import { useDesk, useGetDeskStats } from './common'
 import { ImportOverlayPackDialog } from './import-overlay-pack'
 import { useContextMenu, type MenuItem } from './menu'
 
@@ -45,30 +52,65 @@ export function fileName(name: string): string {
 type ShelfSwitchResponse = {
   id: string
   note?: string | null
-  restart?: string | null
-  restart_detail?: string | null
 }
 
-function busyHeadline(message: string): string {
+function activeOutputKind(stats: EngineStats | null | undefined): string | null {
+  if (!stats) return null
+  const active: string[] = []
+  if (stats.stream?.active || stats.stream?.reconnecting || stats.delay?.draining) {
+    active.push('stream')
+  }
+  if (stats.record?.active || (stats.source_records && stats.source_records.length > 0)) {
+    active.push('record')
+  }
+  if (stats.replay?.active) active.push('replay')
+  if (stats.virtualcam?.active) active.push('virtualcam')
+  if (stats.ndi) active.push('ndi')
+  return active.length === 1 ? active[0]! : active.length > 1 ? 'multiple' : null
+}
+
+function busyHeadline(err: ApiError, stats?: EngineStats | null): string {
+  const message = err.message
+  if (err.code === 'benchmark_running' || /benchmark/i.test(message)) {
+    return 'Wait for the benchmark to finish'
+  }
   if (/\bshow\b/i.test(message)) return 'Stop the show to switch'
-  if (/benchmark/i.test(message)) return 'Wait for the benchmark to finish'
+  if (/couldn['’]t check/i.test(message)) return "Couldn't check active outputs"
   if (!/stream/i.test(message)) {
     if (/record/i.test(message)) return 'Stop recording to switch'
     if (/replay/i.test(message)) return 'Stop the replay buffer to switch'
     if (/virtual/i.test(message)) return 'Stop Virtual Camera to switch'
     if (/\bndi\b/i.test(message)) return 'Stop NDI to switch'
+    return 'Stop active outputs to switch'
   }
-  return 'Stop the stream to switch'
+  switch (activeOutputKind(stats)) {
+    case 'stream':
+      return 'Stop the stream to switch'
+    case 'record':
+      return 'Stop recording to switch'
+    case 'replay':
+      return 'Stop the replay buffer to switch'
+    case 'virtualcam':
+      return 'Stop Virtual Camera to switch'
+    case 'ndi':
+      return 'Stop NDI to switch'
+    default:
+      return 'Stop active outputs to switch'
+  }
 }
 
 /** Calm one-line toast when switching collections or profiles while live (M9-01). */
-export function showShelfError(err: unknown): void {
-  if (err instanceof ApiError && err.status === 409 && err.code === 'studio_busy') {
+export function showShelfError(err: unknown, stats?: EngineStats | null): void {
+  if (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    (err.code === 'studio_busy' || err.code === 'benchmark_running')
+  ) {
     const detail = [err.message, err.hint].filter(Boolean).join(' ')
     toast({
       key: 'studio:busy-switch',
       tone: 'warn',
-      message: busyHeadline(err.message),
+      message: busyHeadline(err, stats),
       ...(detail ? { detail } : {}),
     })
     return
@@ -81,8 +123,11 @@ type Naming = { kind: EngineShelfKind; mode: 'new' | 'copy' | 'rename'; id?: str
 
 export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
   const { api, refresh, prefs, onCollectionChange, onProfileChange, library } = useDesk()
+  const getStats = useGetDeskStats()
   const collections = useResource(() => api.shelf('collections'), [api, library])
   const profiles = useResource(() => api.shelf('profiles'), [api, library])
+  const { error: colErr, reload: reloadCol } = collections
+  const { error: profErr, reload: reloadProf } = profiles
   const { run, busy } = useAction()
   const { open, menu } = useContextMenu()
   const [naming, setNaming] = useState<Naming | null>(null)
@@ -95,26 +140,26 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
   })
 
   useEffect(() => {
-    for (const [kind, res] of [
-      ['collections', collections],
-      ['profiles', profiles],
+    for (const [kind, err, retry] of [
+      ['collections', colErr, reloadCol],
+      ['profiles', profErr, reloadProf],
     ] as const) {
-      if (!res.error) {
+      if (!err) {
         reportedLoadErr.current[kind] = null
         continue
       }
-      if (reportedLoadErr.current[kind] === res.error) continue
-      reportedLoadErr.current[kind] = res.error
-      const d = describeError(res.error)
+      if (reportedLoadErr.current[kind] === err) continue
+      reportedLoadErr.current[kind] = err
+      const d = describeError(err)
       toast({
         key: `studio:shelf-load:${kind}`,
         tone: 'error',
         message: d.message,
         ...(d.hint ? { hint: d.hint } : {}),
-        action: { label: 'Retry', run: () => res.reload() },
+        action: { label: 'Retry', run: retry },
       })
     }
-  }, [collections, collections.error, profiles, profiles.error])
+  }, [colErr, reloadCol, profErr, reloadProf])
 
   const runShelf = async <T,>(
     key: string,
@@ -137,7 +182,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
         },
         { once: true, quiet: true, ...(success ? { success } : {}) },
       )
-      if (res === undefined && caught !== null) showShelfError(caught)
+      if (res === undefined && caught !== null) showShelfError(caught, getStats())
       return res
     } finally {
       flightRef.current = false
@@ -145,32 +190,29 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
   }
 
   const notifySwitchNotice = (res: ShelfSwitchResponse, fallbackMsg: string) => {
-    if (res.restart) {
-      toast({
-        tone: 'warn',
-        message: fallbackMsg,
-        hint: res.restart,
-        ...(res.restart_detail ? { detail: res.restart_detail } : {}),
-        ...(typeof api.restart === 'function'
-          ? {
-              action: {
-                label: 'Restart',
-                run: () =>
-                  void api.restart().catch((err: unknown) => {
-                    const d = describeError(err)
-                    toast({
-                      tone: 'error',
-                      message: d.message,
-                      ...(d.hint ? { hint: d.hint } : {}),
-                    })
-                  }),
-              },
-            }
-          : {}),
-      })
-    } else if (res.note) {
-      toast({ tone: 'info', message: fallbackMsg, hint: res.note })
-    }
+    if (!res.note) return
+    const needsRestart = /restart/i.test(res.note)
+    toast({
+      tone: needsRestart ? 'warn' : 'info',
+      message: fallbackMsg,
+      hint: res.note,
+      ...(needsRestart && typeof api.restart === 'function'
+        ? {
+            action: {
+              label: 'Restart',
+              run: () =>
+                void api.restart().catch((err: unknown) => {
+                  const d = describeError(err)
+                  toast({
+                    tone: 'error',
+                    message: d.message,
+                    ...(d.hint ? { hint: d.hint } : {}),
+                  })
+                }),
+            },
+          }
+        : {}),
+    })
   }
 
   const reload = (kind: EngineShelfKind, nextId?: string, reloadDesk = true) => {
@@ -183,8 +225,8 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
     } else {
       profiles.reload()
       if (reloadDesk) {
-        prefs?.reload()
-        onProfileChange?.()
+        if (onProfileChange) onProfileChange(nextId)
+        else prefs?.reload()
       }
     }
   }
@@ -206,7 +248,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
           void runShelf(
             `switch:${kind}`,
             () => api.switchShelf(kind, e.id),
-            (r) => (r.restart || r.note ? null : msg),
+            (r) => (r.note ? null : msg),
           ).then((res) => {
             if (!res) return
             notifySwitchNotice(res, msg)
@@ -340,7 +382,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
     const res = await runShelf(
       'name',
       () => api.newShelf(kind, value, mode === 'copy'),
-      (r) => (r.restart || r.note ? null : okMsg),
+      (r) => (r.note ? null : okMsg),
     )
     if (res) {
       notifySwitchNotice(res, okMsg)
@@ -355,8 +397,9 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
         const res = shelfResOf(kind)
         const shelf = shelfOf(kind)
         const loadErr = res.error
+        const isRetry = !shelf && Boolean(loadErr)
         const name =
-          shelf?.list.find((e) => e.id === shelf.current)?.name ?? (loadErr ? 'Retry' : '…')
+          shelf?.list.find((e) => e.id === shelf.current)?.name ?? (isRetry ? 'Retry' : '…')
         const Icon = WORDS[kind].icon
         return (
           // Outlined, told apart by a blue or teal icon tile, not words (owner's pick P1).
@@ -364,11 +407,21 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
             key={kind}
             type="button"
             aria-haspopup={shelf ? 'menu' : undefined}
-            aria-label={`${WORDS[kind].one}: ${name}`}
+            aria-label={
+              isRetry
+                ? `Retry loading ${WORDS[kind].many.toLowerCase()}`
+                : `${WORDS[kind].one}: ${name}`
+            }
             aria-busy={busy === `switch:${kind}` || undefined}
-            title={`${WORDS[kind].one[0]?.toUpperCase()}${WORDS[kind].one.slice(1)}: ${name}`}
-            disabled={(!shelf && !loadErr) || busy !== null}
+            aria-disabled={busy !== null || undefined}
+            title={
+              isRetry
+                ? `Couldn’t load ${WORDS[kind].many.toLowerCase()}. Click to retry.`
+                : `${WORDS[kind].one[0]?.toUpperCase()}${WORDS[kind].one.slice(1)}: ${name}`
+            }
+            disabled={!shelf && !loadErr}
             onClick={(e) => {
+              if (busy !== null) return
               if (!shelf) {
                 if (loadErr) res.reload()
                 return
@@ -380,7 +433,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
               })
             }}
             className={cx(
-              'fc-press inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-control bg-surface-1 pr-2.5 pl-1.5 text-[13.5px] font-semibold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 2xl:max-w-[260px]',
+              'fc-press inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-control bg-surface-1 pr-2.5 pl-1.5 text-[13.5px] font-semibold text-text shadow-[inset_0_0_0_1px_var(--fc-line-strong)] transition-shadow outline-none hover:shadow-[inset_0_0_0_1px_var(--fc-text-3)] focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50 aria-disabled:opacity-50 2xl:max-w-[260px]',
               busy === `switch:${kind}` && 'opacity-60',
             )}
           >
@@ -397,10 +450,24 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
             </span>
             {/* The name shows on wide screens; compact (while live/recording) waits for 2xl so
                 1280 px stays on one row without hiding the selectors (U3). */}
-            <span className={cx('hidden min-w-0 truncate', compact ? '2xl:inline' : 'xl:inline')}>
+            <span
+              className={cx(
+                'min-w-0 truncate',
+                isRetry ? 'inline text-danger' : cx('hidden', compact ? '2xl:inline' : 'xl:inline'),
+              )}
+            >
               {name}
             </span>
-            <CaretDown size={13} weight="bold" className="shrink-0 text-text-3" aria-hidden />
+            {isRetry ? (
+              <ArrowClockwise
+                size={13}
+                weight="bold"
+                className="shrink-0 text-danger"
+                aria-hidden
+              />
+            ) : (
+              <CaretDown size={13} weight="bold" className="shrink-0 text-text-3" aria-hidden />
+            )}
           </button>
         )
       })}
@@ -422,7 +489,9 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
       <Dialog
         compact
         open={naming !== null}
-        onClose={() => setNaming(null)}
+        onClose={() => {
+          if (busy !== 'name') setNaming(null)
+        }}
         size="sm"
         title={
           naming
