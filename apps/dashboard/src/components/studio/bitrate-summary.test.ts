@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { DestinationView } from '@ferrocast/api'
+import type { DestinationView, EncodeBudgetCheck } from '@ferrocast/api'
 import {
   describeDestinationRate,
+  describeSettingsBitrates,
   describeStreamCap,
   describeStreamCapFromView,
   describeUploadNeed,
@@ -321,5 +322,247 @@ describe('U2 bitrate cap wording and math', () => {
     expect(first.ownCapNote?.summary).toBe('Capped at 6,000 kbps for Twitch')
     expect(second.ownCapNote?.summary).toBe('Capped at 6,000 kbps for Twitch Alt')
     expect(second.heldBackNote).toBeNull()
+  })
+})
+
+describe('v3.8 resolved_quality, separate encodes, and settings breakdown', () => {
+  const studioBudget: EncodeBudgetCheck = {
+    status: 'ok',
+    source: 'apple_silicon',
+    used_mpx_s: 373.25,
+    limit_mpx_s: 995,
+    used_sessions: 3,
+    max_sessions: 8,
+  }
+
+  const youtube12 = dest({
+    id: 'youtube',
+    kind: 'youtube',
+    name: 'YouTube',
+    enabled: true,
+    quality: { mode: 'same_as_main' },
+    resolved_quality: {
+      width: 1920,
+      height: 1080,
+      fps: 60,
+      kbps: 12000,
+      codec: 'h264',
+      audio_kbps: 160,
+      auto_fitted: false,
+      separate_encode: false,
+      group_id: 'main',
+      shared_with: [],
+    },
+  })
+
+  const twitch6Sep = dest({
+    id: 'twitch',
+    kind: 'twitch',
+    name: 'Twitch',
+    enabled: true,
+    quality: { mode: 'same_as_main' },
+    resolved_quality: {
+      width: 1920,
+      height: 1080,
+      fps: 60,
+      kbps: 6000,
+      codec: 'h264',
+      audio_kbps: 160,
+      auto_fitted: true,
+      separate_encode: true,
+      group_id: 'g_1',
+      shared_with: [],
+    },
+    capped: {
+      kbps: 6000,
+      separate_encode: true,
+      summary: 'Capped at 6,000 kbps for Twitch',
+      detail: 'Twitch gets its own 6,000 kbps stream while YouTube keeps 12,000 kbps.',
+    },
+  })
+
+  const kick8Sep = dest({
+    id: 'kick',
+    kind: 'kick',
+    name: 'Kick',
+    enabled: true,
+    quality: { mode: 'same_as_main' },
+    resolved_quality: {
+      width: 1920,
+      height: 1080,
+      fps: 60,
+      kbps: 8000,
+      codec: 'h264',
+      audio_kbps: 160,
+      auto_fitted: true,
+      separate_encode: true,
+      group_id: 'g_2',
+      shared_with: [],
+    },
+    capped: {
+      kbps: 8000,
+      separate_encode: true,
+      summary: 'Capped at 8,000 kbps for Kick',
+      detail: 'Kick gets its own 8,000 kbps stream.',
+    },
+  })
+
+  it('keeps YouTube uncapped and sums real separate-encode upload rates', () => {
+    const cap = describeStreamCapFromView([youtube12, twitch6Sep, kick8Sep], 12000, {
+      encodeBudget: studioBudget,
+      source: 'studio',
+    })
+    expect(cap.capped).toBe(false)
+    expect(cap.effectiveVideoKbps).toBe(12000)
+    expect(cap.heldBackIds).toEqual([])
+
+    const ytRate = describeDestinationRate(youtube12, cap, { videoKbps: 12000, audioKbps: 160 })
+    const twRate = describeDestinationRate(twitch6Sep, cap, { videoKbps: 12000, audioKbps: 160 })
+    const kickRate = describeDestinationRate(kick8Sep, cap, { videoKbps: 12000, audioKbps: 160 })
+    expect(ytRate).toMatchObject({ kbps: 12160, rateLabel: '12 Mbps', heldBackNote: null })
+    expect(twRate.rateLabel).toBe('6.2 Mbps')
+    expect(kickRate.rateLabel).toBe('8.2 Mbps')
+
+    const need = describeUploadNeed([youtube12, twitch6Sep, kick8Sep], {
+      planKbps: 12160,
+      vertical: false,
+    })
+    expect(need?.line).toBe('12 Mbps + 6.2 Mbps + 8.2 Mbps = 26.4 Mbps upload')
+  })
+
+  it('explains Pass-1 coalesced group sharing without holding back YouTube', () => {
+    const twitchCoalesced = {
+      ...twitch6Sep,
+      resolved_quality: { ...twitch6Sep.resolved_quality!, shared_with: ['Kick'] },
+    }
+    const kickCoalesced = dest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      enabled: true,
+      quality: { mode: 'same_as_main' },
+      resolved_quality: {
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 6000,
+        codec: 'h264',
+        audio_kbps: 160,
+        auto_fitted: true,
+        separate_encode: true,
+        group_id: 'g_1',
+        shared_with: ['Twitch'],
+      },
+    })
+    const cap = describeStreamCapFromView([youtube12, twitchCoalesced, kickCoalesced], 12000, {
+      source: 'studio',
+    })
+    expect(cap.capped).toBe(false)
+    expect(describeDestinationRate(youtube12, cap, { videoKbps: 12000 }).heldBackNote).toBeNull()
+    const kickRate = describeDestinationRate(kickCoalesced, cap, { videoKbps: 12000 })
+    expect(kickRate.rateLabel).toBe('6.2 Mbps')
+    expect(kickRate.heldBackNote?.summary).toBe('Same stream as Twitch: 6.2 Mbps')
+  })
+
+  it('honors Pass-2 shared-cap fallback when encode budget collapses to 1 session', () => {
+    const ytFallback = {
+      ...youtube12,
+      resolved_quality: {
+        ...youtube12.resolved_quality!,
+        kbps: 6000,
+        auto_fitted: true,
+        shared_with: ['Twitch'],
+      },
+    }
+    const twFallback = {
+      ...twitch6Sep,
+      resolved_quality: {
+        ...twitch6Sep.resolved_quality!,
+        separate_encode: false,
+        group_id: 'main',
+        shared_with: ['YouTube'],
+      },
+      capped: {
+        kbps: 6000,
+        separate_encode: false,
+        summary: 'Capped at 6,000 kbps for Twitch',
+        detail: 'Shared fallback.',
+      },
+    }
+    const cap = describeStreamCapFromView([ytFallback, twFallback], 12000, {
+      encodeBudget: { ...studioBudget, max_sessions: 1, used_sessions: 1 },
+      source: 'studio',
+    })
+    expect(cap.capped).toBe(true)
+    expect(cap.effectiveVideoKbps).toBe(6000)
+    expect(cap.settingsNote).toContain('Will send 6.0 Mbps.')
+    expect(describeDestinationRate(ytFallback, cap, { videoKbps: 12000 }).heldBackNote?.summary).toBe(
+      'Same stream as Twitch: 6.2 Mbps',
+    )
+  })
+
+  it('formats concise one-line Settings platform bitrates across caps, resolutions, custom, and empty states', () => {
+    const draft1080 = { videoKbps: 12000, width: 1920, height: 1080, fps: 60 }
+
+    expect(
+      describeSettingsBitrates(draft1080, [], { encodeBudget: studioBudget, source: 'studio' }),
+    ).toMatchObject({ line: null, differsFromMain: false, items: [] })
+
+    expect(
+      describeSettingsBitrates(draft1080, [twitch6Sep], {
+        encodeBudget: studioBudget,
+        source: 'studio',
+      }),
+    ).toMatchObject({ line: 'Twitch 6 Mbps (max)', differsFromMain: true })
+
+    expect(
+      describeSettingsBitrates(
+        { videoKbps: 6000, width: 1920, height: 1080, fps: 60 },
+        [youtube12, twitch6Sep],
+        { encodeBudget: studioBudget, source: 'studio' },
+      ),
+    ).toMatchObject({ line: 'YouTube, Twitch 6 Mbps', differsFromMain: false })
+
+    const multi1080 = describeSettingsBitrates(draft1080, [youtube12, twitch6Sep, kick8Sep], {
+      encodeBudget: studioBudget,
+      source: 'studio',
+    })
+    expect(multi1080.differsFromMain).toBe(true)
+    expect(multi1080.line).toBe('YouTube 12 · Twitch 6 · Kick 8 Mbps')
+    expect(multi1080.detail).toContain('Twitch takes at most 6 Mbps')
+
+    const multi1440 = describeSettingsBitrates(
+      { videoKbps: 18000, width: 2560, height: 1440, fps: 60 },
+      [youtube12, twitch6Sep, kick8Sep],
+      { encodeBudget: studioBudget, source: 'studio' },
+    )
+    expect(multi1440.line).toBe('YouTube 18 · Twitch 6 · Kick 8 (1080p)')
+
+    const withCustom = describeSettingsBitrates(
+      draft1080,
+      [
+        youtube12,
+        {
+          ...twitch6Sep,
+          quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000 },
+        },
+      ],
+      { encodeBudget: studioBudget, source: 'studio' },
+    )
+    expect(withCustom.line).toBe('YouTube 12 · Twitch 3 (720p)')
+
+    const fallbackOne = describeSettingsBitrates(draft1080, [youtube12, twitch6Sep, kick8Sep], {
+      encodeBudget: { ...studioBudget, max_sessions: 1 },
+      source: 'studio',
+    })
+    expect(fallbackOne.line).toBe('Shared 6 Mbps (Twitch max)')
+
+    const ignored = describeSettingsBitrates(draft1080, [youtube12, twitch6Sep, kick8Sep], {
+      encodeBudget: studioBudget,
+      source: 'studio',
+      ignoreServiceLimits: true,
+    })
+    expect(ignored.line).toBe('YouTube, Twitch, Kick 12 Mbps')
+    expect(ignored.differsFromMain).toBe(false)
   })
 })
