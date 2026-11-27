@@ -361,34 +361,26 @@ function DeskStatsSync({
 }) {
   const reading = useEngineReading(api.stats)
   const s = reading.stats
+  const lastStats = useRef<EngineStats | null>(null)
   const seenCollection = useRef<string | null>(null)
   const seenProfile = useRef<string | null>(null)
   useEffect(() => {
-    if (!s) return
+    if (!s || s === lastStats.current) return
+    lastStats.current = s
     statsStore.set(s)
     onCanvasSize(s.canvas.width, s.canvas.height)
     if (s.collection_id) {
-      if (
-        seenCollection.current !== null &&
-        s.collection_id !== seenCollection.current &&
-        s.collection_id !== collectionId
-      ) {
-        seenCollection.current = s.collection_id
+      const expectedCollection = collectionId ?? seenCollection.current
+      seenCollection.current = s.collection_id
+      if (expectedCollection !== null && s.collection_id !== expectedCollection) {
         onCollectionMismatch(s.collection_id)
-      } else {
-        seenCollection.current = s.collection_id
       }
     }
     if (s.profile_id) {
-      if (
-        seenProfile.current !== null &&
-        s.profile_id !== seenProfile.current &&
-        s.profile_id !== profileId
-      ) {
-        seenProfile.current = s.profile_id
+      const expectedProfile = profileId ?? seenProfile.current
+      seenProfile.current = s.profile_id
+      if (expectedProfile !== null && s.profile_id !== expectedProfile) {
         onProfileMismatch(s.profile_id)
-      } else {
-        seenProfile.current = s.profile_id
       }
     }
     if (s.scene && shownOnAir && s.scene !== shownOnAir) onSceneMismatch()

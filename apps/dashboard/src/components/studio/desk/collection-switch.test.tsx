@@ -561,4 +561,188 @@ describe('StudioDesk full collection switch reset', () => {
       vi.useRealTimers()
     }
   })
+
+  it('reconciles fresh profile telemetry back to A after local switch A -> B without reprocessing cached telemetry', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    window.matchMedia = ((q: string) => ({
+      matches: false,
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia
+    vi.useFakeTimers()
+    try {
+      let statsProfile = 'prof-a'
+      let settingsGetCount = 0
+      let profilesGetCount = 0
+      let statsGetCount = 0
+      const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+        if (path === '/api/v1/studio/engine') {
+          return {
+            installed: true,
+            running: true,
+            starting: false,
+            available: true,
+            install_hint: null,
+            safe_mode: null,
+          }
+        }
+        if (path === '/api/v1/studio/engine/library/collections') {
+          return { current: 'col-a', list: [{ id: 'col-a', name: 'Gaming Pack' }] }
+        }
+        if (path === '/api/v1/studio/engine/library/profiles') {
+          profilesGetCount++
+          return {
+            current: statsProfile,
+            list: [
+              { id: 'prof-a', name: 'Default' },
+              { id: 'prof-b', name: 'Small 720p' },
+            ],
+          }
+        }
+        if (path === '/api/v1/studio/engine/library/profiles/current' && method === 'PUT') {
+          statsProfile = (body as { id: string }).id
+          return { id: statsProfile }
+        }
+        if (path === '/api/v1/studio/engine/scenes') {
+          return {
+            collection_id: 'col-a',
+            current: 'Main',
+            preview: null,
+            transition: { kind: 'fade', ms: 300 },
+            top_layer: null,
+            vertical: null,
+            scenes: [{ name: 'Main', current: true, preview: false, items: 0, transition: null }],
+          }
+        }
+        if (path === '/api/v1/studio/engine/scenes/Main/items') return []
+        if (path === '/api/v1/studio/engine/scenes/Main/audio') return []
+        if (path === '/api/v1/studio/engine/kinds') {
+          return { inputs: [], filters: [], transitions: [], encoders: [], outputs: [] }
+        }
+        if (path === '/api/v1/studio/engine/settings') {
+          settingsGetCount++
+          return {
+            width: statsProfile === 'prof-a' ? 1920 : 1280,
+            height: statsProfile === 'prof-a' ? 1080 : 960,
+            fps: 60,
+          }
+        }
+        if (path === '/api/v1/studio/engine/missing-files') return []
+        if (path === '/api/v1/studio/engine/stats') {
+          statsGetCount++
+          return {
+            collection_id: 'col-a',
+            profile_id: statsProfile,
+            engine: { cpu: 5, fps: 60, frame_ms: 4, lagged: 0, frames: 10, memory_mb: 100 },
+            stream: null,
+            record: null,
+            canvas: {
+              width: statsProfile === 'prof-a' ? 1920 : 1280,
+              height: statsProfile === 'prof-a' ? 1080 : 960,
+              fps: 60,
+            },
+          }
+        }
+        if (path === '/api/v1/studio/engine/history') return { undo: null, redo: null, entries: [] }
+        if (path === '/api/v1/studio/engine/sources') return []
+        if (path.endsWith('/show/config')) {
+          return { start_stream: false, stop_stream: true, stop_delay_s: 0 }
+        }
+        if (path.endsWith('/show')) return { show: null }
+        if (path.includes('/stream-info')) return { last: null, history: [], presets: [] }
+        return {}
+      })
+
+      useLive.setState({
+        conn: { client: { request } } as never,
+        status: {
+          engine: {
+            installed: true,
+            running: true,
+            starting: false,
+            available: true,
+            install_hint: null,
+            safe_mode: null,
+          },
+        } as never,
+      })
+      const reloadGoLive = vi.fn()
+      const res = {
+        data: makeView(),
+        error: null,
+        loading: false,
+        reload: reloadGoLive,
+        set: vi.fn(),
+      }
+      const host = document.body.appendChild(document.createElement('div'))
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(<StudioDesk res={res as never} view={res.data} />)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(statsGetCount).toBe(1)
+      expect(host.querySelector('button[aria-label="profile: Default"]')).not.toBeNull()
+
+      // Switch locally A -> B while telemetry last reported A.
+      const settingsBeforeSwitch = settingsGetCount
+      const profilesBeforeSwitch = profilesGetCount
+      const goLiveBeforeSwitch = reloadGoLive.mock.calls.length
+      const profBtn = host.querySelector(
+        'button[aria-label="profile: Default"]',
+      ) as HTMLButtonElement
+      await act(async () => profBtn.click())
+      const smallItem = Array.from(document.querySelectorAll('[role^="menuitem"]')).find((el) =>
+        el.textContent?.includes('Small 720p'),
+      ) as HTMLButtonElement
+      await act(async () => smallItem.click())
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      // Cached A telemetry must NOT revert the local switch to B before the next sample arrives.
+      expect(statsGetCount).toBe(1)
+      expect(settingsGetCount - settingsBeforeSwitch).toBe(1)
+      expect(profilesGetCount - profilesBeforeSwitch).toBe(1)
+      const goLiveAfterSwitch = reloadGoLive.mock.calls.length
+      expect(goLiveAfterSwitch).toBeGreaterThan(goLiveBeforeSwitch)
+      expect(host.querySelector('button[aria-label="profile: Small 720p"]')).not.toBeNull()
+
+      // Another client switches back to A before the next telemetry sample arrives.
+      statsProfile = 'prof-a'
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(900)
+      })
+      expect(statsGetCount).toBe(2)
+      expect(host.querySelector('button[aria-label="profile: Default"]')).not.toBeNull()
+      expect(settingsGetCount - settingsBeforeSwitch).toBe(2)
+      expect(profilesGetCount - profilesBeforeSwitch).toBe(2)
+      expect(reloadGoLive.mock.calls.length).toBeGreaterThan(goLiveAfterSwitch)
+
+      // Subsequent A samples reconcile cleanly without repeating mismatch reloads.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1050)
+      })
+      expect(statsGetCount).toBe(3)
+      expect(settingsGetCount - settingsBeforeSwitch).toBe(2)
+      expect(profilesGetCount - profilesBeforeSwitch).toBe(2)
+    } finally {
+      await act(async () => root?.unmount())
+      root = null
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10)
+      })
+      vi.useRealTimers()
+    }
+  })
 })
