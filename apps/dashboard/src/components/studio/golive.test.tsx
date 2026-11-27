@@ -1658,6 +1658,101 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
     }
   })
 
+  it('Retry all tries every destination and reloads even when one refuses', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    setPictureSource('ferrocast')
+    const failed = (since: number) => ({
+      state: 'failed' as const,
+      attempts: 3,
+      reason: "Couldn't connect",
+      detail: 'Ingest closed.',
+      kbps: 0,
+      dropped: 0,
+      since_ms: since,
+    })
+    const view = mkView({
+      live: true,
+      destinations: mkView().destinations.map((d) => ({ ...d, health: failed(1000) })),
+    })
+    const ids = view.destinations.filter((d) => d.enabled).map((d) => d.id)
+    expect(ids.length).toBeGreaterThan(1)
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path.includes(`/golive/resume/${ids[0]}`)) throw new Error('Refused')
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    const res = { data: view, error: null, loading: false, reload: vi.fn(), set: vi.fn() }
+    const desk = {
+      scenes: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      preflight: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      prefs: {
+        data: { video_kbps: 12000, audio_kbps: 160 },
+        error: null,
+        loading: false,
+        reload: vi.fn(),
+        set: vi.fn(),
+      },
+    } as unknown as Desk
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk}>
+            <DockWorkspace
+              stage={null}
+              docks={(id) =>
+                id === 'golive' ? <GoLiveDock res={res as never} view={view} /> : null
+              }
+            />
+          </DeskProvider>,
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      res.reload.mockClear()
+      const retry = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Retry all',
+      )!
+      await act(async () => {
+        retry.click()
+        for (let i = 0; i < 8; i++) await Promise.resolve()
+      })
+      for (const id of ids) {
+        expect(request.mock.calls.some((c) => String(c[1]).includes(`/golive/resume/${id}`))).toBe(
+          true,
+        )
+      }
+      expect(res.reload).toHaveBeenCalled()
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      vi.unstubAllGlobals()
+      useLive.setState({ conn: null })
+    }
+  })
+
   it('renders quality triggers inside Platforms dialog tiles and locks to Same as OBS when OBS is selected', async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const view = mkView()

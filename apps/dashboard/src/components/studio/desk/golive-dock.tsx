@@ -109,6 +109,14 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     Record<string, { ok: boolean; message: string } | undefined>
   >({})
   const [needsLookOpen, setNeedsLookOpen] = useState(false)
+  // Opening the platforms dialog closes any other popover first, so only one dialog is ever open.
+  const openPlatformModal = (next: NonNullable<typeof platformModal>) => {
+    setStatusPop(null)
+    setNeedsLookOpen(false)
+    setPlatformModal(next)
+  }
+  // When an optimistic "Switching to ..." label was set and whether a frame showed the switch yet.
+  const switchSeenRef = useRef<Record<string, { setAt: number; seen: boolean }>>({})
   const needsLookAnchorRef = useRef<HTMLButtonElement>(null)
   const statusPopRef = useRef<HTMLDivElement>(null)
   const needsLookPopRef = useRef<HTMLDivElement>(null)
@@ -140,7 +148,8 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     }
   }, [onAir, reload])
 
-  // Clear finished optimistic switching labels once backend clears switching_quality.
+  // Clear an optimistic switching label once the engine has shown the switch and then finished it.
+  // A frame that arrives before the engine marks the switch must not wipe it.
   useEffect(() => {
     if (!view) return
     setSwitchingTargets((prev) => {
@@ -150,9 +159,15 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       let changed = false
       for (const k of keys) {
         const match = view.destinations.find((d) => d.id === k)
+        const track = switchSeenRef.current[k] ?? { setAt: Date.now(), seen: false }
+        switchSeenRef.current[k] = track
         if (match?.switching_quality) {
+          track.seen = true
+          next[k] = prev[k]!
+        } else if (!track.seen && Date.now() - track.setAt < 15_000) {
           next[k] = prev[k]!
         } else {
+          delete switchSeenRef.current[k]
           changed = true
         }
       }
@@ -239,7 +254,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   reloadOptsRef.current = qualityOpts.reload
 
   const prefsSig = desk.prefs.data
-    ? `${desk.prefs.data.video_kbps}:${desk.prefs.data.width}x${desk.prefs.data.height}@${desk.prefs.data.fps}:${desk.prefs.data.scale?.join('x') ?? ''}:${desk.prefs.data.encoder}`
+    ? `${desk.prefs.data.video_kbps}:${desk.prefs.data.width}x${desk.prefs.data.height}@${desk.prefs.data.fps}:${desk.prefs.data.scale?.join('x') ?? ''}:${desk.prefs.data.encoder}:${desk.prefs.data.vbr}:${desk.prefs.data.keyframe_s}:${desk.prefs.data.profile}:${desk.prefs.data.b_frames}`
     : null
   const seenPrefsSig = useRef<string | null>(null)
   useEffect(() => {
@@ -276,7 +291,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       case 'manage':
         setStatusPop(null)
         setNeedsLookOpen(false)
-        setPlatformModal({
+        openPlatformModal({
           mode: 'gear',
           destId: d.id,
           triggerEl: sourceEl ?? statusAnchorRef.current ?? needsLookAnchorRef.current,
@@ -285,7 +300,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       case 'open_quality':
         setStatusPop(null)
         setNeedsLookOpen(false)
-        setPlatformModal({
+        openPlatformModal({
           mode: 'row',
           destId: d.id,
           triggerEl: sourceEl ?? statusAnchorRef.current ?? needsLookAnchorRef.current,
@@ -330,15 +345,29 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         return
       case 'retry_all':
         void run('retry-all', async () => {
+          // Each destination gets its own try; one refusing does not stop the others.
+          const failed: string[] = []
           for (const id of action.destIds) {
-            await api.resume(id)
+            try {
+              await api.resume(id)
+            } catch {
+              failed.push(view?.destinations.find((x) => x.id === id)?.name ?? id)
+            }
           }
           res.reload()
+          if (failed.length > 0) {
+            toast({
+              tone: 'warn',
+              message: `Couldn’t restart ${failed.join(' and ')}.`,
+              hint: 'The others were tried. Check the connection and try again.',
+            })
+            return false
+          }
           return true
         })
         return
       case 'manage':
-        setPlatformModal({ mode: 'gear', destId: null, triggerEl: null })
+        openPlatformModal({ mode: 'gear', destId: null, triggerEl: null })
         return
     }
   }
@@ -401,7 +430,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 if (r.line2.kind !== 'quality' || r.line2.disabled) return
                 setStatusPop(null)
                 setNeedsLookOpen(false)
-                setPlatformModal({ mode: 'row', destId: d.id, triggerEl: e.currentTarget })
+                openPlatformModal({ mode: 'row', destId: d.id, triggerEl: e.currentTarget })
               }}
               className="inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-medium text-text-2 hover:text-text disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]"
             >
@@ -523,7 +552,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               variant="ghost"
               label="Manage platforms"
               onClick={(e) =>
-                setPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
+                openPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
               }
             >
               <GearSix size={15} />
@@ -548,7 +577,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                   size="sm"
                   variant="primary"
                   onClick={(e) =>
-                    setPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
+                    openPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
                   }
                 >
                   Add a platform
@@ -572,7 +601,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               <button
                 type="button"
                 onClick={(e) =>
-                  setPlatformModal({
+                  openPlatformModal({
                     mode: 'add_vertical',
                     destId: null,
                     triggerEl: e.currentTarget,
@@ -805,7 +834,9 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           view={view}
           onSaved={res.reload}
           onUpdated={handleQualityUpdated}
-          onOptimisticSwitch={(destId, label) =>
+          onOptimisticSwitch={(destId, label) => {
+            if (label === null) delete switchSeenRef.current[destId]
+            else switchSeenRef.current[destId] = { setAt: Date.now(), seen: false }
             setSwitchingTargets((prev) => {
               if (label === null) {
                 const copy = { ...prev }
@@ -814,7 +845,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               }
               return { ...prev, [destId]: label }
             })
-          }
+          }}
           initialDestId={platformModal?.destId ?? null}
           initialMode={platformModal?.mode === 'add_vertical' ? 'add' : 'editor'}
           addCanvas={platformModal?.mode === 'add_vertical' ? 'vertical' : 'main'}
