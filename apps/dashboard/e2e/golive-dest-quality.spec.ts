@@ -1,10 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { fault, settled } from './helpers'
 
-const SHOT_DIR = process.env.FC_Q7_SHOTS
+const SHOT_DIR = process.env.FC_GOLIVE_SHOTS
 const DEMO_TOKEN = 'demo-session'
 
 async function snap(page: Page, name: string) {
@@ -13,8 +13,16 @@ async function snap(page: Page, name: string) {
   await page.screenshot({ path: path.join(SHOT_DIR, name), fullPage: false })
 }
 
-async function setupStandbyDemo(
+function viewportForTest(testInfo: TestInfo, explicit?: { width: number; height: number }) {
+  if (explicit) return explicit
+  return testInfo.project.name === 'mobile'
+    ? { width: 375, height: 812 }
+    : { width: 1280, height: 800 }
+}
+
+async function setupStudioDock(
   page: Page,
+  testInfo: TestInfo,
   opts: {
     theme?: 'slate' | 'daylight'
     viewport?: { width: number; height: number }
@@ -26,21 +34,18 @@ async function setupStandbyDemo(
       scale?: [number, number] | null
     }
     enableKick?: boolean
-    goLiveConfig?: {
-      encode_budget?: { max_sessions?: number; limit_mpx_s?: number }
-      switch_delay_ms?: number
-      host_codecs?: string[]
-    }
+    goLiveConfig?: Record<string, unknown>
   } = {},
 ) {
   const theme = opts.theme ?? 'slate'
-  const viewport = opts.viewport ?? { width: 1440, height: 900 }
+  const viewport = viewportForTest(testInfo, opts.viewport)
   await page.setViewportSize(viewport)
   await page.addInitScript((t) => {
     localStorage.setItem('fc-theme', t)
     localStorage.setItem('fc-golive-picture', 'ferrocast')
     localStorage.removeItem('fc-studio-standby-scene')
   }, theme)
+
   await page.goto('./?autoplay=0&latency=0&studioEngine=1#/studio')
   const startBtn = page.getByRole('button', { name: 'Start the Studio' })
   await expect(startBtn).toBeVisible({ timeout: 10_000 })
@@ -84,7 +89,7 @@ async function setupStandbyDemo(
       .getByText('Go live to', { exact: true })
       .click()
   }
-  await expect(page.locator('[data-quality-trigger="twitch"]')).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('[data-golive-row="twitch"]')).toBeVisible({ timeout: 10_000 })
   if (opts.enableKick) {
     const kickSwitch = page.getByRole('switch', { name: 'Go live on Kick' })
     if (!(await kickSwitch.isChecked())) {
@@ -93,98 +98,154 @@ async function setupStandbyDemo(
     }
   }
   await settled(page)
+  return viewport
 }
 
-test.describe('Per-destination stream quality picker', () => {
-  test('shows auto-fit chips, Twitch 1440p soft limit (i), Kick 1080p hard max Custom dropdowns, and keyboard nav', async ({
+test.describe('Go live List 3b and Modal A quality picker', () => {
+  test('List 3b fixed rows, Modal A resolution/fps/bitrate + Match main, keyboard trap, and Escape focus return', async ({
     page,
-  }) => {
-    await setupStandbyDemo(page, {
+  }, testInfo) => {
+    const viewport = await setupStudioDock(page, testInfo, {
       theme: 'slate',
-      viewport: { width: 1440, height: 900 },
       settings: { width: 2560, height: 1440, fps: 60, video_kbps: 18000 },
       enableKick: true,
     })
 
-    const twitchTrigger = page.locator('[data-quality-trigger="twitch"]')
-    const kickTrigger = page.locator('[data-quality-trigger="kick"]')
-    const ytTrigger = page.locator('[data-quality-trigger="youtube"]')
-
-    await expect(ytTrigger).toContainText('Same as main')
-    await expect(twitchTrigger).toContainText('1440p60 · 6 Mbps · auto')
-    await expect(kickTrigger).toContainText('1080p60 · 8 Mbps · auto')
+    // List 3b tags, 2-line uniform row heights, and footer summary.
+    await expect(page.locator('[data-golive-tag="twitch"]')).toHaveText('OFF')
+    await expect(page.locator('[data-golive-tag="youtube"]')).toHaveText('OFF')
+    await expect(page.locator('[data-golive-tag="kick"]')).toHaveText('OFF')
+    await expect(page.locator('[data-quality-trigger="youtube"]')).toContainText('Same as main')
+    await expect(page.locator('[data-quality-trigger="twitch"]')).toContainText(
+      '1440p60 · 6 Mbps · auto',
+    )
+    await expect(page.locator('[data-quality-trigger="kick"]')).toContainText(
+      '1080p60 · 8 Mbps · auto',
+    )
     await expect(page.locator('[data-golive-encode-summary]')).toContainText('3 places')
     await expect(page.locator('[data-golive-encode-summary]')).toContainText('3 encodes')
 
-    await twitchTrigger.click()
-    const twitchPop = page.locator('[data-quality-popover="twitch"]')
-    await expect(twitchPop).toBeVisible()
-    await expect(twitchPop).toHaveAttribute('data-over-preview', '')
-    await expect(twitchPop.getByRole('option', { name: /Same as main/ })).toBeVisible()
-    await expect(twitchPop.getByRole('option', { name: /Best for Twitch/ })).toBeVisible()
-    await expect(twitchPop.getByRole('option', { name: /Same as main/ })).toContainText(
-      "Above Twitch's recommended 1080p",
+    const heights = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>('[data-golive-row]')).map(
+        (el) => el.getBoundingClientRect().height,
+      ),
     )
-    await snap(page, '01-dock-twitch-popover-dark.png')
+    expect(heights.length).toBeGreaterThanOrEqual(3)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(2)
 
-    const firstOpt = twitchPop.getByRole('option').first()
-    await firstOpt.focus()
-    await page.keyboard.press('ArrowDown')
-    await expect(twitchPop.getByRole('option').nth(1)).toBeFocused()
-    await page.keyboard.press('Escape')
-    await expect(twitchPop).toBeHidden()
-    await expect(twitchTrigger).toBeFocused()
-
-    // Kick custom dropdowns must never offer 1440p above its 1080p hard ceiling.
-    await kickTrigger.click()
-    const kickPop = page.locator('[data-quality-popover="kick"]')
-    await expect(kickPop).toBeVisible()
-    await kickPop.getByRole('button', { name: /Custom/ }).click()
-    const resValues = await kickPop.getByLabel('Resolution').locator('option').allTextContents()
-    expect(resValues.some((t) => t.includes('1440p') || t.includes('2160p'))).toBe(false)
-    await snap(page, '02-kick-custom-dropdowns-dark.png')
-
-    await kickPop.getByLabel('Resolution').selectOption('1280x720')
-    await kickPop.getByLabel('Frame rate').selectOption('30')
-    await kickPop.getByLabel('Bitrate').selectOption('3000')
-    await kickPop.getByRole('button', { name: 'Apply' }).click()
-    await expect(kickTrigger).toContainText('720p30 · 3 Mbps')
-  })
-
-  test('highlights encoder sharing and enforces tight PC encode budget', async ({ page }) => {
-    await setupStandbyDemo(page, {
-      theme: 'slate',
-      viewport: { width: 1440, height: 900 },
-      settings: { width: 1920, height: 1080, fps: 60, video_kbps: 12000 },
-      enableKick: true,
-      goLiveConfig: { encode_budget: { max_sessions: 2, limit_mpx_s: 300 } },
-    })
-
-    // Under a 2-session limit, Pass 2 coalesces Twitch & Kick onto one shared 6M encode.
-    await expect(page.locator('[data-golive-encode-summary]')).toContainText('3 places')
-    await expect(page.locator('[data-golive-encode-summary]')).toContainText('2 encodes')
-    await expect(
-      page
-        .getByRole('list', { name: 'Platforms' })
-        .getByRole('listitem')
-        .filter({ has: page.locator('[data-quality-trigger="kick"]') }),
-    ).toContainText('shared with Twitch')
+    // Open Modal A from Kick row: desktop centered dialog vs mobile bottom sheet.
     const kickTrigger = page.locator('[data-quality-trigger="kick"]')
     await kickTrigger.click()
-    const kickPop = page.locator('[data-quality-popover="kick"]')
-    await expect(kickPop).toBeVisible()
-    await expect(kickPop.getByRole('option', { name: /shared with Twitch/i })).toBeVisible()
-    await expect(kickPop.locator('[role="option"][aria-disabled="true"]').first()).toBeVisible()
-    await snap(page, '03-over-budget-shared-encode.png')
+    const kickModal = page.locator('[data-quality-modal="kick"]')
+    await expect(kickModal).toBeVisible()
+    await expect(kickModal).toHaveAttribute('data-over-preview', '')
+
+    const modalBox = await kickModal.boundingBox()
+    expect(modalBox).not.toBeNull()
+    if (viewport.width <= 560) {
+      expect(modalBox!.width).toBeGreaterThanOrEqual(viewport.width - 2)
+      expect(modalBox!.y + modalBox!.height).toBeGreaterThanOrEqual(viewport.height - 2)
+    } else {
+      expect(modalBox!.width).toBeLessThanOrEqual(460)
+    }
+
+    // 1440p exceeds Kick's 1080p ceiling -> locked disabled chip.
+    const kick1440 = kickModal.getByRole('button', { name: /1440p/ })
+    await expect(kick1440).toBeDisabled()
+    await snap(
+      page,
+      `modal-A-kick-locked-${testInfo.project.name === 'mobile' ? '375' : '1280'}-slate.png`,
+    )
+
+    // Turn off Match main stream, pick 720p30 · 3 Mbps, verify result line & apply.
+    const matchSwitch = kickModal.getByRole('switch', { name: 'Match main stream' })
+    await matchSwitch.click()
+    await expect(matchSwitch).toHaveAttribute('aria-checked', 'false')
+    await kickModal.getByRole('button', { name: '720p', exact: true }).click()
+    await kickModal.getByRole('button', { name: '30', exact: true }).click()
+    const kbpsInput = kickModal.getByLabel('Bitrate in Mbps')
+    await kbpsInput.fill('3')
+    await expect(kickModal.locator('[data-quality-result]')).toContainText(
+      'Kick gets 720p30 at 3 Mbps',
+    )
+    await kickModal.getByRole('button', { name: 'Apply' }).click()
+    await expect(kickModal).toBeHidden()
+    await expect(kickTrigger).toContainText('720p30 · 3 Mbps')
+
+    // Match main switch back ON resets to Same as main (auto-fitted).
+    await kickTrigger.click()
+    await expect(kickModal).toBeVisible()
+    await kickModal.getByRole('switch', { name: 'Match main stream' }).click()
+    await expect(kickModal.getByRole('switch', { name: 'Match main stream' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect(kickModal.locator('[data-quality-result]')).toContainText('Fitted to Kick')
+
+    // Focus trap cycles Tab inside Modal A, and Escape closes & restores focus to trigger.
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Shift+Tab')
+    const focusInside = await page.evaluate(() => {
+      const m = document.querySelector('[data-quality-modal="kick"]')
+      return Boolean(m && document.activeElement && m.contains(document.activeElement))
+    })
+    expect(focusInside).toBe(true)
+
     await page.keyboard.press('Escape')
+    await expect(kickModal).toBeHidden()
+    await expect(kickTrigger).toBeFocused()
   })
 
-  test('switches live mid-stream with Switching state, isolates Escape inside Your platforms dialog, and shows dismissible 422 alert', async ({
+  test('Modal A enforces hard limit overrun + one-tap fix and soft recommendation note', async ({
     page,
-  }) => {
-    await setupStandbyDemo(page, {
+  }, testInfo) => {
+    const suffix = testInfo.project.name === 'mobile' ? '375' : '1280'
+    await setupStudioDock(page, testInfo, {
+      theme: 'daylight',
+      settings: { width: 2560, height: 1440, fps: 60, video_kbps: 18000 },
+    })
+
+    const twitchTrigger = page.locator('[data-quality-trigger="twitch"]')
+    await twitchTrigger.click()
+    const modal = page.locator('[data-quality-modal="twitch"]')
+    await expect(modal).toBeVisible()
+
+    // Turn off Match main stream and enter 8 Mbps (> Twitch 6 Mbps hard ceiling).
+    await modal.getByRole('switch', { name: 'Match main stream' }).click()
+    await modal.getByRole('button', { name: '1080p', exact: true }).click()
+    await modal.getByLabel('Bitrate in Mbps').fill('8')
+
+    await expect(modal.getByRole('alert')).toContainText('Twitch closes streams above 6 Mbps.')
+    await expect(modal.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    await snap(page, `modal-A-hard-${suffix}-light.png`)
+
+    // One-tap fix restores valid 6 Mbps and enables Apply.
+    await modal.getByRole('button', { name: /Use 1080p60 · 6 Mbps/ }).click()
+    await expect(modal.getByRole('alert')).toHaveCount(0)
+    await expect(modal.getByLabel('Bitrate in Mbps')).toHaveValue('6')
+    await expect(modal.getByRole('button', { name: 'Apply' })).toBeEnabled()
+
+    // Pick 1440p -> soft warning stays allowed and shows warning status + Open quality popover in List 3b.
+    await modal.getByRole('button', { name: /1440p/ }).click()
+    await expect(modal.getByRole('status')).toContainText("Above Twitch's recommended 1080p")
+    await expect(modal.getByRole('button', { name: 'Apply' })).toBeEnabled()
+    await modal.getByRole('button', { name: 'Apply' }).click()
+    await expect(modal).toBeHidden()
+
+    const statusTrigger = page.locator('[data-status-trigger="twitch"]')
+    await expect(statusTrigger).toContainText("Above Twitch's recommended 1080p")
+    await statusTrigger.click()
+    const statusPop = page.locator('[data-golive-status-popover="twitch"]')
+    await expect(statusPop).toContainText('Not recommended')
+    await statusPop.getByRole('button', { name: 'Open quality' }).click()
+    await expect(modal).toBeVisible()
+  })
+
+  test('applies live with SWITCHING state, isolates Escape in Your platforms, and surfaces 422 API errors', async ({
+    page,
+  }, testInfo) => {
+    await setupStudioDock(page, testInfo, {
       theme: 'slate',
-      viewport: { width: 1440, height: 900 },
       goLiveConfig: { switch_delay_ms: 450 },
     })
 
@@ -193,108 +254,227 @@ test.describe('Per-destination stream quality picker', () => {
     if (await goLiveAnyway.isVisible({ timeout: 1500 }).catch(() => false)) {
       await goLiveAnyway.click()
     }
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('[data-golive-tag="twitch"]')).toHaveText('LIVE', { timeout: 10_000 })
+    await snap(page, `dock-live-${testInfo.project.name === 'mobile' ? '375' : '1280'}-slate.png`)
 
+    // Live apply transitions through SWITCHING and returns to LIVE.
     const twitchTrigger = page.locator('[data-quality-trigger="twitch"]')
     await twitchTrigger.click()
-    const pop = page.locator('[data-quality-popover="twitch"]')
-    await expect(pop).toBeVisible()
-    await pop.getByRole('option', { name: /720p30/ }).click()
-    await expect(twitchTrigger).toContainText('Switching…')
-    await expect(twitchTrigger).toContainText('720p30 · 3 Mbps', { timeout: 5_000 })
+    const modal = page.locator('[data-quality-modal="twitch"]')
+    await expect(modal).toContainText('Switches only Twitch. Your stream keeps going.')
+    await modal.getByRole('switch', { name: 'Match main stream' }).click()
+    await modal.getByRole('button', { name: '720p', exact: true }).click()
+    await modal.getByRole('button', { name: '30', exact: true }).click()
+    await modal.getByLabel('Bitrate in Mbps').fill('3')
+    await modal.getByRole('button', { name: 'Apply' }).click()
 
-    // Open Your platforms modal: Escape closes only quality popover, keeping modal open.
+    await expect(page.locator('[data-golive-tag="twitch"]')).toHaveText('SWITCHING')
+    await expect(page.locator('[data-golive-tag="twitch"]')).toHaveText('LIVE', { timeout: 5_000 })
+    await expect(twitchTrigger).toContainText('720p30 · 3 Mbps')
+
+    // Your platforms dialog: Escape closes only Modal A, keeping Your platforms open.
     await page.getByRole('button', { name: 'Manage platforms' }).click()
-    const modal = page.getByRole('dialog', { name: 'Your platforms' })
+    const platformsDialog = page.getByRole('dialog', { name: 'Your platforms' })
+    await expect(platformsDialog).toBeVisible()
+    await platformsDialog.locator('[data-quality-trigger="twitch"]').click()
     await expect(modal).toBeVisible()
-    await modal.locator('[data-quality-trigger="twitch"]').click()
-    const modalPop = page.locator('[data-quality-popover="twitch"]')
-    await expect(modalPop).toBeVisible()
-    await snap(page, '04-platforms-dialog-popover-dark.png')
-
     await page.keyboard.press('Escape')
-    await expect(modalPop).toBeHidden()
-    await expect(modal).toBeVisible()
+    await expect(modal).toBeHidden()
+    await expect(platformsDialog).toBeVisible()
 
-    // Failing PUT returns 422 inline alert without losing previous selection.
-    await fault(page, {
-      path: '/api/v1/golive/destinations/twitch/quality',
-      status: 422,
-      code: 'encode_budget_exceeded',
-      message: 'Not enough GPU headroom to add another encode.',
-      hint: 'Keep a shared preset or stop another encode.',
-      times: 1,
+    // Test 422 golive_switch_timeout, encode_budget_exceeded, platform_limit_exceeded, golive_quality_locked.
+    const errors: Array<{ code: string; message: string; expectText: RegExp; hasRetry?: boolean }> =
+      [
+        {
+          code: 'golive_switch_timeout',
+          message: 'No keyframe arrived in time.',
+          expectText: /Couldn't switch Twitch/,
+          hasRetry: true,
+        },
+        {
+          code: 'encode_budget_exceeded',
+          message: 'Not enough GPU headroom to add another encode.',
+          expectText: /Not enough GPU headroom/,
+        },
+        {
+          code: 'platform_limit_exceeded',
+          message: 'Twitch cannot use that bitrate.',
+          expectText: /Twitch cannot use that bitrate/,
+        },
+        {
+          code: 'golive_quality_locked',
+          message: 'Quality is locked while switching picture source.',
+          expectText: /Quality is locked/,
+        },
+      ]
+
+    for (const err of errors) {
+      await fault(page, {
+        path: '/api/v1/golive/destinations/twitch/quality',
+        status: 422,
+        code: err.code,
+        message: err.message,
+        times: 1,
+      })
+      await platformsDialog.locator('[data-quality-trigger="twitch"]').click()
+      await modal.getByRole('switch', { name: 'Match main stream' }).click()
+      await modal.getByRole('button', { name: 'Apply' }).click()
+      const alert = modal.getByRole('alert')
+      await expect(alert).toContainText(err.expectText)
+      if (err.hasRetry) {
+        await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible()
+      }
+      await page.keyboard.press('Escape')
+      await expect(modal).toBeHidden()
+    }
+  })
+
+  test('List 3b shows reconnecting/error tags, status popovers, Needs a look popover, and compact footer strip without top banner', async ({
+    page,
+  }, testInfo) => {
+    await setupStudioDock(page, testInfo, {
+      theme: 'slate',
+      enableKick: true,
+      goLiveConfig: {
+        failed: {
+          twitch: {
+            attempts: 3,
+            reason: 'Stream key was rejected.',
+            detail: 'Check your Twitch stream key.',
+            refused: true,
+          },
+        },
+      },
     })
-    await modal.locator('[data-quality-trigger="twitch"]').click()
-    await page
-      .locator('[data-quality-popover="twitch"]')
-      .getByRole('option', { name: /Same as main/ })
-      .click()
-    const alert = page.locator('[data-quality-popover="twitch"] [role="alert"]')
-    await expect(alert).toContainText('Not enough GPU headroom')
-    await page
-      .locator('[data-quality-popover="twitch"]')
-      .getByRole('button', { name: 'Dismiss error' })
-      .click()
-    await expect(alert).toBeHidden()
+
+    await page.getByRole('button', { name: 'Go live', exact: true }).click()
+    const goLiveAnyway = page.getByRole('button', { name: 'Go live anyway' })
+    if (await goLiveAnyway.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await goLiveAnyway.click()
+    }
+
+    // Wait for Twitch ERROR and Kick RECONNECTING while YouTube is LIVE.
+    await expect(page.locator('[data-golive-tag="twitch"]')).toHaveText('ERROR', {
+      timeout: 10_000,
+    })
+    await expect(page.locator('[data-golive-tag="kick"]')).toHaveText('RECONNECTING', {
+      timeout: 10_000,
+    })
+    await expect(page.locator('[data-golive-tag="youtube"]')).toHaveText('LIVE', {
+      timeout: 10_000,
+    })
+
+    // No top AllFailedBanner inside GoLiveDock.
+    const dock = page.getByRole('region', { name: 'Go live to' })
+    await expect(dock.getByText(/Stream stopped: every platform refused/)).toHaveCount(0)
+
+    // Pin Twitch and Kick as failed so "Needs a look" deterministically shows both without racing auto-reconnect.
+    await page.evaluate(() => {
+      window.__ferrocastDemo?.setGoLive({
+        failed: {
+          twitch: { attempts: 3, reason: 'Stream key was rejected.', refused: true },
+          kick: { attempts: 3, reason: 'Kick refused multistreaming.', refused: true },
+        },
+      })
+    })
+    await expect(page.locator('[data-golive-tag="kick"]')).toHaveText('ERROR', {
+      timeout: 8_000,
+    })
+    const probsTrigger = dock.locator('[data-golive-problems-trigger]')
+    await probsTrigger.scrollIntoViewIfNeeded()
+    await expect(probsTrigger).toContainText(/2 problems/)
+    await probsTrigger.click()
+    const needsLook = page.locator('[data-golive-needs-look]')
+    await expect(needsLook).toContainText('Twitch')
+    await expect(needsLook).toContainText('Kick')
+    await snap(
+      page,
+      `dock-problems-popover-${testInfo.project.name === 'mobile' ? '375' : '1280'}-slate.png`,
+    )
     await page.keyboard.press('Escape')
-    await expect(modal.locator('[data-quality-trigger="twitch"]')).toContainText('720p30 · 3 Mbps')
+
+    // All platforms down turns footer into compact danger strip ("Nothing is sending" + "Retry all").
+    await page.evaluate(() => {
+      window.__ferrocastDemo?.setGoLive({
+        failed: {
+          twitch: { attempts: 3, reason: 'Closed', refused: true },
+          youtube: { attempts: 3, reason: 'Closed', refused: true },
+          kick: { attempts: 3, reason: 'Closed', refused: true },
+        },
+      })
+    })
+    const strip = dock.locator('[data-golive-footer-strip]')
+    await expect(strip).toContainText('Nothing is sending', { timeout: 8_000 })
+    await expect(strip.getByRole('button', { name: 'Retry all' })).toBeVisible()
+    await expect(dock.getByText(/Stream stopped: every platform refused/)).toHaveCount(0)
+    await snap(
+      page,
+      `dock-alldown-strip-${testInfo.project.name === 'mobile' ? '375' : '1280'}-slate.png`,
+    )
   })
 
   for (const theme of ['slate', 'daylight'] as const) {
-    for (const [label, viewport] of [
-      ['1440', { width: 1440, height: 900 }],
-      ['375', { width: 375, height: 812 }],
-    ] as const) {
-      test(`${label}px ${theme}: zero overflow and zero critical/serious axe violations`, async ({
-        page,
-      }) => {
-        await setupStandbyDemo(page, {
-          theme,
-          viewport,
-          settings: { width: 2560, height: 1440, fps: 60, video_kbps: 18000 },
-        })
-
-        const trigger = page.locator('[data-quality-trigger="twitch"]')
-        await trigger.click()
-        const pop = page.locator('[data-quality-popover="twitch"]')
-        await expect(pop).toBeVisible()
-        await pop.getByRole('button', { name: /Custom/ }).click()
-        await settled(page)
-
-        if (label === '375' && theme === 'daylight') {
-          await snap(page, '05-mobile-375-custom-light.png')
-        } else if (label === '1440' && theme === 'daylight') {
-          await snap(page, '06-desktop-1440-custom-light.png')
-        }
-
-        const metrics = await page.evaluate(() => {
-          const doc = document.documentElement
-          const popEl = document.querySelector<HTMLElement>('[data-quality-popover="twitch"]')
-          const rect = popEl?.getBoundingClientRect()
-          return {
-            innerWidth: window.innerWidth,
-            scrollWidth: doc.scrollWidth,
-            popLeft: rect?.left ?? 0,
-            popRight: rect?.right ?? 0,
-          }
-        })
-        expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.innerWidth + 1)
-        expect(metrics.popLeft).toBeGreaterThanOrEqual(0)
-        expect(metrics.popRight).toBeLessThanOrEqual(metrics.innerWidth + 1)
-
-        const axe = new AxeBuilder({ page })
-          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-          .include('[data-quality-popover="twitch"]')
-          .include('[data-quality-trigger="twitch"]')
-          .include('[data-golive-encode-summary]')
-          .analyze()
-        const r = await axe
-        const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
-        expect(
-          bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
-        ).toEqual([])
+    test(`${theme}: List 3b and Modal A have zero overflow and zero critical/serious axe violations`, async ({
+      page,
+    }, testInfo) => {
+      const vpLabel = testInfo.project.name === 'mobile' ? '375' : '1280'
+      await setupStudioDock(page, testInfo, {
+        theme,
+        settings: { width: 2560, height: 1440, fps: 60, video_kbps: 18000 },
+        enableKick: true,
       })
-    }
+
+      await snap(page, `dock-list3b-${vpLabel}-${theme}.png`)
+
+      const dockOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+      )
+      expect(dockOverflow).toBe(true)
+
+      const dockAxe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .include('[aria-label="Go live to"]')
+        .analyze()
+      const dockBad = dockAxe.violations.filter(
+        (v) => v.impact === 'serious' || v.impact === 'critical',
+      )
+      expect(
+        dockBad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+      ).toEqual([])
+
+      await page.locator('[data-quality-trigger="twitch"]').click()
+      const modal = page.locator('[data-quality-modal="twitch"]')
+      await expect(modal).toBeVisible()
+      await modal.getByRole('switch', { name: 'Match main stream' }).click()
+      await settled(page)
+
+      await snap(page, `modal-A-edit-${vpLabel}-${theme}.png`)
+
+      const modalMetrics = await page.evaluate(() => {
+        const doc = document.documentElement
+        const el = document.querySelector<HTMLElement>('[data-quality-modal="twitch"]')
+        const rect = el?.getBoundingClientRect()
+        return {
+          innerWidth: window.innerWidth,
+          scrollWidth: doc.scrollWidth,
+          left: rect?.left ?? 0,
+          right: rect?.right ?? 0,
+        }
+      })
+      expect(modalMetrics.scrollWidth).toBeLessThanOrEqual(modalMetrics.innerWidth + 1)
+      expect(modalMetrics.left).toBeGreaterThanOrEqual(-1)
+      expect(modalMetrics.right).toBeLessThanOrEqual(modalMetrics.innerWidth + 1)
+
+      const modalAxe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .include('[data-quality-modal="twitch"]')
+        .analyze()
+      const modalBad = modalAxe.violations.filter(
+        (v) => v.impact === 'serious' || v.impact === 'critical',
+      )
+      expect(
+        modalBad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+      ).toEqual([])
+    })
   }
 })

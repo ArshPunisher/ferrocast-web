@@ -57,17 +57,25 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     await settingsDialog.getByRole('button', { name: 'Save' }).click()
     await expect(settingsDialog).toBeHidden()
 
-    // Go live to dock shows YouTube keeping 12 Mbps while Twitch/Kick get their own capped rates.
+    // Go live to dock (List 3b) shows YouTube keeping Same as main while Twitch/Kick auto-fit to their caps.
     const dock = page.getByRole('region', { name: 'Go live to' })
-    const dockTwitch = dock
-      .locator('li')
-      .filter({ has: page.locator('b', { hasText: /^Twitch$/ }) })
-    const dockYt = dock.locator('li').filter({ has: page.locator('b', { hasText: /^YouTube$/ }) })
-    const dockKick = dock.locator('li').filter({ has: page.locator('b', { hasText: /^Kick$/ }) })
-    await expect(dockYt.getByText('12 Mbps', { exact: true })).toBeVisible()
+    const dockTwitch = dock.locator('[data-golive-row="twitch"]')
+    const dockYt = dock.locator('[data-golive-row="youtube"]')
+    const dockKick = dock.locator('[data-golive-row="kick"]')
+    await expect(dockYt.locator('[data-quality-trigger="youtube"]')).toContainText('Same as main')
+    await expect(dockYt.getByRole('img', { name: '12.2 Mbps upload share' })).toBeVisible()
     await expect(dockYt.getByText(/Same stream as Twitch/)).toHaveCount(0)
-    await expect(dockTwitch.getByText('6.2 Mbps', { exact: true })).toBeVisible()
-    await expect(dockKick.getByText('8.2 Mbps', { exact: true })).toBeVisible()
+    await expect(dockTwitch.locator('[data-quality-trigger="twitch"]')).toContainText(
+      '1080p60 · 6 Mbps · auto',
+    )
+    await expect(dockTwitch.getByRole('img', { name: '6.2 Mbps upload share' })).toBeVisible()
+    await expect(dockKick.locator('[data-quality-trigger="kick"]')).toContainText(
+      '1080p60 · 8 Mbps · auto',
+    )
+    await expect(dockKick.getByRole('img', { name: '8.2 Mbps upload share' })).toBeVisible()
+    await expect(dock.locator('[data-golive-encode-summary]')).toContainText(
+      '3 places · 26.5 Mbps · 3 encodes',
+    )
 
     // Your platforms modal shows individual rates and exact separate-encode upload sum.
     await page.getByRole('button', { name: 'Manage platforms' }).click()
