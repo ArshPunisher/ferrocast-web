@@ -597,6 +597,7 @@ function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
             'min-w-0 flex-1 truncate font-semibold',
             a.muted ? 'text-text-3' : 'text-text',
           )}
+          title={a.name}
         >
           {a.name}
         </span>
@@ -747,7 +748,9 @@ function Strip({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
         {a.channel !== null && (
           <Globe size={11} weight="bold" className="shrink-0 text-accent-text" aria-hidden />
         )}
-        <span className="min-w-0 truncate">{a.name}</span>
+        <span className="min-w-0 truncate" title={a.name}>
+          {a.name}
+        </span>
       </button>
     </div>
   )
@@ -1140,7 +1143,7 @@ export function AudioDock() {
         className={cx(
           'min-h-0 flex-1',
           prefs.vertical && 'p-1.5',
-          prefs.vertical ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto',
+          prefs.vertical ? 'overflow-auto' : 'overflow-y-auto',
         )}
         onContextMenu={(e) =>
           open(e, 'Audio', [
@@ -1173,7 +1176,8 @@ export function AudioDock() {
             {list.length > 0 ? 'Every sound here is hidden.' : 'No sound here yet.'}
           </p>
         ) : prefs.vertical ? (
-          <div className="flex h-full gap-1.5">
+          // Short of room the desk scrolls, so Mute, Hear and the name stay reachable.
+          <div className="flex h-full min-h-[200px] gap-1.5">
             <DeskScale />
             {shown.map((a) => (
               <Strip key={a.name} {...props(a)} />

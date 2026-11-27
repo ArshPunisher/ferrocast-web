@@ -223,7 +223,8 @@ function Cell({
   tone?: 'live' | 'warn' | 'danger' | undefined
 }) {
   return (
-    <span className="inline-flex h-full items-center gap-1.5 border-l border-line px-2.5 whitespace-nowrap">
+    // Tighter on a narrow window so every reading fits beside the message.
+    <span className="inline-flex h-full items-center gap-1.5 border-l border-line px-1.5 whitespace-nowrap xl:px-2.5">
       <span className={tone === 'live' ? 'font-bold text-danger' : 'text-text-3'}>{label}</span>
       <span
         className={cx(
@@ -487,9 +488,9 @@ export function StudioStatusBar() {
       <span
         aria-live="polite"
         title={note && 'detail' in note && note.detail ? `${note.text} ${note.detail}` : note?.text}
-        className={cx('flex min-w-0 flex-1 items-center truncate px-3 font-semibold', note?.tone)}
+        className={cx('flex min-w-0 flex-1 items-center px-3 font-semibold', note?.tone)}
       >
-        {note?.text}
+        <span className="min-w-0 truncate">{note?.text}</span>
       </span>
       {/* Only for the strain warnings (not reconnecting, errors or remuxing). */}
       {!strain && capture?.problem === 'permission' && note?.text === captureWords(capture) && (
@@ -544,7 +545,7 @@ export function StudioStatusBar() {
         onClick={() => setOpen(true)}
         title="Open Stats"
         aria-label="Studio status: open Stats"
-        className="flex h-full items-stretch transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none focus-visible:ring-inset"
+        className="flex h-full shrink-0 items-stretch transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none focus-visible:ring-inset"
       >
         <Cell label={live ? 'LIVE' : 'Live'} tone={live ? 'live' : undefined}>
           {streamTime(stream, target)}

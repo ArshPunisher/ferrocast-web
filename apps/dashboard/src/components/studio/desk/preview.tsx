@@ -1412,9 +1412,12 @@ function PreviewBoxes({ running }: { running: boolean }) {
     >
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:flex-row sm:gap-6">
         <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
-          <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-text-2">
-            <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
-            Preview: {scenes.data?.preview}
+          {/* w-0 min-w-full: a long scene name never makes the picture's column wider. */}
+          <figcaption className="flex w-0 min-w-full items-center gap-1.5 text-[12.5px] font-bold text-text-2">
+            <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-accent-text" />
+            <span className="min-w-0 truncate" title={`Preview: ${scenes.data?.preview ?? ''}`}>
+              Preview: {scenes.data?.preview}
+            </span>
           </figcaption>
           <div
             ref={ref}
@@ -1428,9 +1431,11 @@ function PreviewBoxes({ running }: { running: boolean }) {
           </div>
         </figure>
         <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
-          <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-danger">
-            <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
-            On air: {scenes.data?.current}
+          <figcaption className="flex w-0 min-w-full items-center gap-1.5 text-[12.5px] font-bold text-danger">
+            <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-danger-fill" />
+            <span className="min-w-0 truncate" title={`On air: ${scenes.data?.current ?? ''}`}>
+              On air: {scenes.data?.current}
+            </span>
           </figcaption>
           <div ref={programRef} aria-label="What's on air" className={cx(screen, half)}>
             <PausedCard compact />
@@ -3486,7 +3491,7 @@ export function StageBar() {
           min={0}
           max={20000}
           step={50}
-          className="h-7! w-16! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
+          className="h-7! w-20! rounded-[5px]! px-2! py-0! text-right text-[13px]! tabular-nums"
           value={ms ?? t.ms}
           onChange={(e) =>
             setDraftMs(

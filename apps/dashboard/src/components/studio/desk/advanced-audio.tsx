@@ -83,10 +83,10 @@ export function AdvancedAudio({ focus, onClose }: { focus: string | null; onClos
       ) : list.data.length === 0 ? (
         <p className="m-0 text-[14.5px] font-medium text-text-2">No sound here yet.</p>
       ) : (
-        <div className="flex flex-col gap-2 lg:gap-0">
+        <div className="flex flex-col gap-2 min-[1100px]:gap-0">
           <div
             aria-hidden
-            className="hidden h-8 grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] items-center gap-3 border-b border-line-strong bg-dock-head px-2 text-[11px] font-bold tracking-[0.06em] text-text-3 uppercase lg:grid"
+            className="hidden h-8 grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] items-center gap-3 border-b border-line-strong bg-dock-head px-2 text-[11px] font-bold tracking-[0.06em] text-text-3 uppercase min-[1100px]:grid"
           >
             <span>Sound</span>
             <span>Volume</span>
@@ -137,18 +137,19 @@ function SoundRow({
     if (Number.isFinite(v) && v !== (a.sync_ms ?? 0)) onChange({ sync_ms: v })
     else setSync(String(a.sync_ms ?? 0))
   }
-  const cell = 'flex items-center gap-2 lg:block'
-  const small = 'w-[72px] shrink-0 whitespace-nowrap text-[13px] font-bold text-text-3 lg:hidden'
+  const cell = 'flex items-center gap-2 min-[1100px]:block'
+  const small =
+    'w-[72px] shrink-0 whitespace-nowrap text-[13px] font-bold text-text-3 min-[1100px]:hidden'
   return (
     <div
       id={rowId(a.name)}
       className={cx(
-        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 lg:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] lg:min-h-10 lg:items-center lg:gap-x-3 lg:gap-y-1 lg:rounded-none lg:border-0 lg:border-b lg:px-2 lg:py-1',
+        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 min-[1100px]:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] min-[1100px]:min-h-10 min-[1100px]:items-center min-[1100px]:gap-x-3 min-[1100px]:gap-y-1 min-[1100px]:rounded-none min-[1100px]:border-0 min-[1100px]:border-b min-[1100px]:px-2 min-[1100px]:py-1',
         focused && 'bg-accent/8',
       )}
     >
       <span
-        className="truncate text-[13px] font-semibold text-text sm:col-span-2 lg:col-span-1"
+        className="truncate text-[13px] font-semibold text-text sm:col-span-2 min-[1100px]:col-span-1"
         title={a.name}
       >
         {a.name}
@@ -243,7 +244,7 @@ function SoundRow({
                 aria-pressed={on}
                 aria-label={`Track ${t}`}
                 className={cx(
-                  'grid size-9 touch-manipulation place-items-center rounded-[5px] border font-mono text-[11.5px] font-semibold tabular-nums transition-colors active:scale-[0.96] lg:size-6',
+                  'grid size-9 touch-manipulation place-items-center rounded-[5px] border font-mono text-[11.5px] font-semibold tabular-nums transition-colors active:scale-[0.96] min-[1100px]:size-6',
                   on
                     ? 'border-accent-line bg-accent-soft text-accent-text'
                     : 'border-line bg-surface-2 text-text-3 hover:border-line-strong',
@@ -280,7 +281,7 @@ function PushRows({ a, onChange }: { a: EngineAudio; onChange: (p: EngineAudioCh
     return (
       <div
         key={label}
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 lg:col-span-full lg:pl-1"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 min-[1100px]:col-span-full min-[1100px]:pl-1"
       >
         <span className="flex items-center gap-2 text-[13px] font-semibold text-text">
           <Switch
@@ -329,7 +330,7 @@ function PushRows({ a, onChange }: { a: EngineAudio; onChange: (p: EngineAudioCh
     <>
       {row(true)}
       {row(false)}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 lg:col-span-full lg:pl-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-span-2 min-[1100px]:col-span-full min-[1100px]:pl-1">
         <span className="flex items-center gap-2 text-[13px] font-semibold text-text">
           <Switch
             hideLabel

@@ -171,7 +171,7 @@ describe('the meter while a push key holds the sound muted', () => {
     await mountAdvanced()
     const row = document.querySelector('[id^="adv-audio-"]') as HTMLElement
     // A fixed row height made Push to talk, Push to mute and the rest spill onto the next sound.
-    expect(row.className).not.toMatch(/(^|\s)lg:h-10(\s|$)/)
-    expect(row.className).toContain('lg:min-h-10')
+    expect(row.className).not.toMatch(/(^|\s)min-\[1100px\]:h-10(\s|$)/)
+    expect(row.className).toContain('min-[1100px]:min-h-10')
   })
 })
