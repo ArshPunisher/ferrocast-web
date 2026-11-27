@@ -77,25 +77,19 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
       '3 places · 26.5 Mbps · 3 encodes',
     )
 
-    // Your platforms modal shows individual rates and exact separate-encode upload sum.
+    // Your platforms One Modal B shows individual row summaries and exact upload sum.
     await page.getByRole('button', { name: 'Manage platforms' }).click()
     const platforms = page.getByRole('dialog', { name: 'Your platforms' })
     await expect(platforms).toBeVisible()
-    const platYt = platforms
-      .locator('li')
-      .filter({ has: page.locator('b', { hasText: /^YouTube$/ }) })
-    await expect(platYt.getByText('12 Mbps', { exact: true })).toBeVisible()
-    await expect(platforms.locator('[data-quality-trigger="twitch"]')).toContainText(
+    await expect(page.locator('dialog[open], [role="dialog"]')).toHaveCount(1)
+    await expect(platforms.locator('[data-row-quality="twitch"]')).toContainText(
       '1080p60 · 6 Mbps · auto',
     )
-    await expect(platforms.locator('[data-quality-trigger="kick"]')).toContainText(
+    await expect(platforms.locator('[data-row-quality="kick"]')).toContainText(
       '1080p60 · 8 Mbps · auto',
     )
-    await expect(platYt.locator('[data-quality-trigger="youtube"]')).toContainText('Same as main')
-    await platforms.getByRole('button', { name: 'Quality details for Twitch' }).click()
-    await expect(platforms.locator('[role="tooltip"][data-over-preview]')).toContainText(
-      /Adjusted automatically to 1080p60 at 6 Mbps to fit Twitch/,
-    )
+    await expect(platforms.locator('[data-row-quality="youtube"]')).toContainText('Same as main')
+    await expect(platforms.getByText('Bitrate capped at 6 Mbps, Twitch’s limit.')).toBeVisible()
     await expect(
       platforms.getByText(/^6\.2 Mbps \+ 12 Mbps \+ 8\.2 Mbps = 26\.4 Mbps upload$/),
     ).toBeVisible()
@@ -113,9 +107,8 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     const darkAxe = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(darkAxe.violations).toEqual([])
 
-    // Turning Twitch off removes Twitch from upload without disturbing YouTube's 12 Mbps.
+    // Turning Twitch off removes Twitch from upload without disturbing YouTube's setup.
     await platforms.getByRole('switch', { name: 'Stream to Twitch' }).click()
-    await expect(platYt.getByText('12 Mbps', { exact: true })).toBeVisible()
     await expect(platforms.getByText(/^12 Mbps \+ 8\.2 Mbps = 20\.2 Mbps upload$/)).toBeVisible()
   })
 
@@ -160,7 +153,7 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     await page.getByRole('button', { name: 'Manage platforms' }).click()
     const platforms = page.getByRole('dialog', { name: 'Your platforms' })
     await expect(platforms).toBeVisible()
-    await expect(platforms.locator('[data-quality-trigger="twitch"]')).toContainText(
+    await expect(platforms.locator('[data-row-quality="twitch"]')).toContainText(
       '1080p60 · 6 Mbps · auto',
     )
     await expect(

@@ -55,7 +55,7 @@ test.describe('Start show & Your platforms tile redesign (U3)', () => {
     await expect(dialog.getByRole('heading', { name: 'Your platforms' })).toHaveCount(1)
 
     const tiles = dialog.locator('[data-platform-tile]')
-    await expect(tiles).toHaveCount(3)
+    await expect(tiles).toHaveCount(4)
     await expect(
       dialog.getByRole('button', { name: 'Move Twitch: arrow up or down' }),
     ).toBeVisible()
@@ -88,7 +88,7 @@ test.describe('Start show & Your platforms tile redesign (U3)', () => {
       .click()
     await page.getByRole('button', { name: 'Manage platforms' }).click()
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Test connection to YouTube' }).click()
+    await dialog.getByRole('button', { name: 'Test connection to YouTube', exact: true }).click()
     const reachStatus = dialog.locator('[data-platform-tile]').first().locator('[role="status"]')
     await expect(reachStatus).toBeVisible()
     const reachPadLeft = await reachStatus.evaluate((el) =>
