@@ -26,7 +26,12 @@ test('sidebar update: notes, progress, restart; blocked while live', async ({ pa
   await expect(card).toContainText('Last checked just now')
   await card.getByRole('button', { name: 'See what’s new' }).click()
   // The page behind the dialog can't scroll (the app's WebKit scrolls it otherwise).
-  expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('hidden')
+  expect(
+    await page.evaluate(() => ({
+      lock: document.documentElement.dataset.scrollLock,
+      overflow: getComputedStyle(document.documentElement).overflow,
+    })),
+  ).toEqual({ lock: 'true', overflow: 'hidden' })
   await page.getByRole('button', { name: 'Update now' }).click()
   await expect(page.getByRole('progressbar', { name: 'Download' })).toBeVisible()
   await expect(page.locator('aside').getByTestId('update-nav')).toContainText('Downloading')
@@ -36,7 +41,14 @@ test('sidebar update: notes, progress, restart; blocked while live', async ({ pa
   await expect(page.locator('aside').getByTestId('update-nav')).toHaveCount(0, { timeout: 5_000 })
   // Closing the dialog gives the page its scrolling back.
   await page.keyboard.press('Escape')
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.overflow)).toBe('')
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        lock: document.documentElement.dataset.scrollLock ?? '',
+        lockedOverflow: getComputedStyle(document.documentElement).overflow === 'hidden',
+      })),
+    )
+    .toEqual({ lock: '', lockedOverflow: false })
 })
 
 test('phone: the update is in More, and the dialog fits 375 px', async ({ page }) => {
