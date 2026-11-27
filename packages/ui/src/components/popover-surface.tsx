@@ -573,6 +573,7 @@ export function PopoverSurface({
       if (t instanceof Node && localRef.current?.contains(t)) return
       if (ignoreOutsideSelector && t instanceof Element && t.closest(ignoreOutsideSelector)) return
       if (t instanceof Element) {
+        if (ancestorScrolls.size > 0 && !ancestorScrolls.has(t)) return
         const prev = ancestorScrolls.get(t)
         if (prev && prev.top === t.scrollTop && prev.left === t.scrollLeft) return
       }

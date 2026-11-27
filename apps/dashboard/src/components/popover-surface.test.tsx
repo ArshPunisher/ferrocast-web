@@ -406,4 +406,54 @@ describe('PopoverSurface', () => {
     const bounds = safeViewportBounds(8, false)
     expect(bounds.top).toBe(64)
   })
+
+  it('ignores scroll events on unrelated sibling elements while closing when an anchor ancestor actually scrolls', async () => {
+    const onClose = vi.fn()
+    function Host() {
+      const ancestor = useRef<HTMLDivElement>(null)
+      const btn = useRef<HTMLButtonElement>(null)
+      const sibling = useRef<HTMLTextAreaElement>(null)
+      return (
+        <div>
+          <textarea ref={sibling} defaultValue="scrollable sibling" />
+          <div ref={ancestor} data-anchor-ancestor>
+            <button ref={btn} type="button">
+              Anchor
+            </button>
+          </div>
+          <PopoverSurface
+            open
+            onClose={onClose}
+            anchorRef={btn}
+            anchorRect={rect(100, 100, 80, 32)}
+            role="group"
+            aria-label="Tokens"
+          >
+            <button type="button">First</button>
+          </PopoverSurface>
+        </div>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host />))
+
+    const sibling = container.querySelector('textarea')!
+    const ancestor = container.querySelector<HTMLElement>('[data-anchor-ancestor]')!
+
+    // Scrolling an unrelated sibling element must NOT close the popover.
+    await act(async () => {
+      sibling.scrollTop = 40
+      sibling.dispatchEvent(new Event('scroll'))
+    })
+    expect(onClose).not.toHaveBeenCalled()
+
+    // Scrolling an actual ancestor whose scrollTop changed MUST close the popover.
+    await act(async () => {
+      ancestor.scrollTop = 24
+      ancestor.dispatchEvent(new Event('scroll'))
+    })
+    expect(onClose).toHaveBeenCalledWith('scroll')
+  })
 })
