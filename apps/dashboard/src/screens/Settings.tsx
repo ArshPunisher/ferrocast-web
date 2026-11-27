@@ -366,7 +366,7 @@ function Obs() {
             </Field>
             <Field
               label="Password"
-              className="sm:col-span-2"
+              className="@md:col-span-2"
               hint={
                 auto && saved
                   ? 'Read from OBS. Type one only to use a different password.'
@@ -387,7 +387,7 @@ function Obs() {
                 />
               )}
             </Field>
-            <div className="sm:col-span-2">
+            <div className="@md:col-span-2">
               <Button type="submit" variant="primary" busy={busy}>
                 Connect OBS
               </Button>
@@ -693,9 +693,9 @@ function Data() {
             <>
               <a
                 href={href({ name: 'import' })}
-                className="fc-press inline-flex h-10 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface-1 px-4 text-sm font-semibold whitespace-nowrap text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                className="fc-press inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface-1 px-4 py-1 text-center text-sm font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
-                <ArrowSquareIn size={16} aria-hidden="true" />
+                <ArrowSquareIn size={16} aria-hidden="true" className="shrink-0" />
                 From StreamElements or Streamlabs
               </a>
               <input
@@ -1101,7 +1101,10 @@ function Advanced({ settings, save }: { settings: SettingsData; save: (s: Settin
           {link && (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
-                <code className="flex h-10 min-w-0 flex-1 items-center truncate rounded-control border border-line bg-inset px-3 font-mono text-[14.5px] text-text-2">
+                <code
+                  title={link.url}
+                  className="block h-10 min-w-0 flex-1 truncate rounded-control border border-line bg-inset px-3 font-mono text-[14.5px] leading-10 text-text-2"
+                >
                   {link.url}
                 </code>
                 <Button
@@ -1168,7 +1171,7 @@ export function Settings({ section }: { section?: string | undefined }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)]">
         <nav
           aria-label="Settings sections"
-          className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:mx-0 lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
+          className="fc-focus-inset -mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:mx-0 lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
         >
           {GROUPS.map((g, gi) => {
             const items = g.items.filter(([id]) => visible(id))

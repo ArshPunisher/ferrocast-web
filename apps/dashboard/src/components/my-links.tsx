@@ -448,6 +448,7 @@ export function MyLinksCard() {
                 <p
                   dir="auto"
                   data-testid="my-links-preview"
+                  title={liveResolved.socials.join(' · ') || undefined}
                   className={cx(
                     'mt-1 truncate text-[14.5px] font-medium',
                     liveResolved.socials.length > 0 ? 'text-text' : 'text-text-3',
@@ -458,7 +459,11 @@ export function MyLinksCard() {
                     : 'No links configured yet. Stream overlays hide social slots.'}
                 </p>
                 {liveResolved.next_stream && (
-                  <p dir="auto" className="mt-0.5 truncate text-[13.5px] text-text-2">
+                  <p
+                    dir="auto"
+                    className="mt-0.5 truncate text-[13.5px] text-text-2"
+                    title={liveResolved.next_stream}
+                  >
                     {/^next stream:/i.test(liveResolved.next_stream)
                       ? liveResolved.next_stream
                       : `Next stream: ${liveResolved.next_stream}`}

@@ -128,7 +128,11 @@ function SuggestionRow({
     >
       <div className="flex min-w-0 items-center gap-2">
         <PlatformMark platform={s.platform} size={14} />
-        <b className="min-w-0 truncate text-[15px] font-semibold text-text" dir="auto">
+        <b
+          className="min-w-0 truncate text-[15px] font-semibold text-text"
+          dir="auto"
+          title={tameText(s.name)}
+        >
           {tameText(s.name)}
         </b>
         <span className="shrink-0 text-[13.5px] text-text-3">{ago(s.at)}</span>
@@ -428,7 +432,11 @@ function SmartRepliesBody() {
               >
                 <span className="flex min-w-0 items-center gap-2 text-[14px] text-text-3">
                   <PlatformMark platform={r.platform} size={13} />
-                  <span className="truncate" dir="auto">
+                  <span
+                    className="truncate"
+                    dir="auto"
+                    title={`${tameText(r.name)}: ${tameText(r.question)}`}
+                  >
                     {tameText(r.name)}: {tameText(r.question)}
                   </span>
                   <span className="ml-auto shrink-0">{ago(r.at)}</span>

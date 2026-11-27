@@ -75,7 +75,7 @@ export function ChatTtsGroup({ value, hasAlertsOverlay = true, onSave }: ChatTts
         <>
           {!hasAlertsOverlay && (
             <Row>
-              <p className="text-[13.5px] font-medium text-warning">
+              <p className="text-[13.5px] font-medium text-warn">
                 Needs an Alerts overlay in your scene to play on stream.{' '}
                 <a className="underline hover:text-text" href="#/overlays">
                   Open Overlays

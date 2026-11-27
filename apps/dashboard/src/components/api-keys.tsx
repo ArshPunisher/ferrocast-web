@@ -142,7 +142,10 @@ export function ApiKeysSection() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Key size={18} className="shrink-0 text-text-3" aria-hidden="true" />
-                        <span className="truncate text-[16px] font-semibold text-text">
+                        <span
+                          className="truncate text-[16px] font-semibold text-text"
+                          title={k.name}
+                        >
                           {k.name}
                         </span>
                         <Badge tone={status.tone}>{status.label}</Badge>

@@ -364,7 +364,7 @@ function StepFields({
       )
     case 'filter':
       return (
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <NameInput
             label="Source"
             value={step.source}
@@ -648,7 +648,11 @@ function RuleRow({
   const [sure, setSure] = useState(false)
   return (
     <Row
-      label={<span className="truncate">{r.name}</span>}
+      label={
+        <span className="truncate" title={r.name}>
+          {r.name}
+        </span>
+      }
       description={
         <span className={cx(!r.on && 'opacity-70')}>
           <span className="font-medium text-text-2">{whenWords(r.when)}</span>

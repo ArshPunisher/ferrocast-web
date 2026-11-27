@@ -227,6 +227,7 @@ function Connected({
               className="truncate font-display text-[20px] leading-tight font-bold tracking-tight text-text"
               data-testid="discord-guild"
               translate="no"
+              title={v.guild?.name ?? 'Your server'}
             >
               {v.guild?.name ?? 'Your server'}
             </p>
@@ -428,7 +429,9 @@ function RoleName({ role }: { role: DiscordRole | undefined }) {
         className="size-2.5 shrink-0 rounded-full border border-line-strong"
         style={color ? { background: color, borderColor: color } : undefined}
       />
-      <span className="truncate">@{role?.name ?? 'deleted role'}</span>
+      <span className="truncate" title={`@${role?.name ?? 'deleted role'}`}>
+        @{role?.name ?? 'deleted role'}
+      </span>
     </span>
   )
 }

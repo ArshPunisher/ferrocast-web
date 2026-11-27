@@ -437,7 +437,7 @@ function Usage({ s }: { s: CloudSummary }) {
             Up to {cloudBytes(s.limits.file_bytes)} a file: pictures, sounds and short videos.
           </p>
         </div>
-        <dl className="grid grid-cols-3 gap-3">
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {counts.map(([label, n, max]) => (
             <div key={label} className="rounded-control bg-surface-2 px-3 py-2">
               <dt className="text-[13px] text-text-3">{label}</dt>

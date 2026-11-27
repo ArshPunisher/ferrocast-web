@@ -178,7 +178,9 @@ function PluginRow({
       icon={<Tile kind={p.kind} />}
       label={
         <span className="flex items-baseline gap-2">
-          <span className="truncate">{p.name}</span>
+          <span className="truncate" title={p.name}>
+            {p.name}
+          </span>
           <span className="shrink-0 font-mono text-[12.5px] font-medium text-text-3">
             {p.version}
           </span>
@@ -323,7 +325,9 @@ function CatalogGroup({
             icon={<Tile kind={p.kind} />}
             label={
               <span className="flex items-baseline gap-2">
-                <span className="truncate">{p.name}</span>
+                <span className="truncate" title={p.name}>
+                  {p.name}
+                </span>
                 <span className="shrink-0 font-mono text-[12.5px] font-medium text-text-3">
                   {p.version}
                 </span>
