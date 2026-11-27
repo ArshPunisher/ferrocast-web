@@ -25,7 +25,6 @@ import {
 import {
   Badge,
   Button,
-  ConfirmDialog,
   Dialog,
   IconButton,
   InfoTip,
@@ -343,7 +342,7 @@ export function TransitionsDialog({
                 type="button"
                 aria-label="Dismiss error"
                 onClick={() => setInlineErr(null)}
-                className="rounded p-0.5 hover:bg-black/15"
+                className="rounded p-0.5 hover:bg-danger/15"
               >
                 <X size={14} weight="bold" />
               </button>
@@ -592,7 +591,7 @@ function NamedTransitionsTab({
 
         <ul
           aria-label="Saved transitions list"
-          className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
+          className="fc-focus-inset flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
         >
           {named.map((t) => {
             const active = selected?.name === t.name
@@ -638,16 +637,55 @@ function NamedTransitionsTab({
                       Cancel
                     </Button>
                   </form>
+                ) : confirmDelete === t.name ? (
+                  // Asked in the row, not in a second dialog on top of this one.
+                  <div
+                    role="group"
+                    aria-label={`Delete ${t.name}?`}
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5"
+                  >
+                    <span className="flex min-w-0 flex-1 basis-32 items-center gap-1 text-sm font-semibold text-text">
+                      <span className="min-w-0 truncate" title={`Delete ${t.name}?`}>
+                        Delete {t.name}?
+                      </span>
+                      <InfoTip label="What happens">
+                        Any scene matrix rules using this transition will be cleared and fall back
+                        to wildcard or default rules.
+                      </InfoTip>
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="danger"
+                      busy={busy === 'del-tr'}
+                      onClick={() => {
+                        setConfirmDelete(null)
+                        void run('del-tr', () =>
+                          mutate(
+                            'del-tr',
+                            () => api.deleteNamedTransition(t.name),
+                            `Deleted ${t.name}.`,
+                          ),
+                        )
+                      }}
+                    >
+                      Delete transition
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setConfirmDelete(null)}>
+                      Keep
+                    </Button>
+                  </div>
                 ) : (
                   <>
                     <button
                       type="button"
                       aria-pressed={active}
                       onClick={() => onSelect(t.name)}
-                      className="flex min-w-0 flex-1 flex-col text-left outline-none focus-visible:shadow-[var(--fc-focus)]"
+                      className="flex min-w-0 flex-1 flex-col text-left outline-none focus-visible:shadow-[var(--fc-focus-inset)]"
                     >
                       <span className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold text-text">{t.name}</span>
+                        <span className="truncate text-sm font-semibold text-text" title={t.name}>
+                          {t.name}
+                        </span>
                         {t.default && <Badge tone="accent">Default</Badge>}
                       </span>
                       <span className="text-xs text-text-3 tabular-nums">
@@ -727,7 +765,9 @@ function NamedTransitionsTab({
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
               <div className="min-w-0">
-                <h4 className="m-0 truncate text-sm font-bold text-text">{selected.name}</h4>
+                <h4 className="m-0 truncate text-sm font-bold text-text" title={selected.name}>
+                  {selected.name}
+                </h4>
                 <p className="m-0 text-xs text-text-3 tabular-nums">
                   {transitionSummary(selected)}
                 </p>
@@ -833,21 +873,6 @@ function NamedTransitionsTab({
           <p className="m-0 text-xs text-text-3">Select a transition to edit its properties.</p>
         )}
       </div>
-
-      <ConfirmDialog
-        open={confirmDelete !== null}
-        onClose={() => setConfirmDelete(null)}
-        title={`Delete ${confirmDelete ?? 'transition'}?`}
-        description="Any scene matrix rules using this transition will be cleared and fall back to wildcard or default rules."
-        confirm="Delete transition"
-        onConfirm={() => {
-          const target = confirmDelete
-          if (!target) return
-          void run('del-tr', () =>
-            mutate('del-tr', () => api.deleteNamedTransition(target), `Deleted ${target}.`),
-          )
-        }}
-      />
     </div>
   )
 }
@@ -1212,7 +1237,9 @@ function TransitionMatrixTab({
                               ? 'Default transition: '
                               : `From ${fromLabel} to ${toLabel}: `}
                           </span>
-                          <span className="truncate">{info.effectiveName}</span>{' '}
+                          <span className="truncate" title={info.effectiveName}>
+                            {info.effectiveName}
+                          </span>{' '}
                           <span className="text-[10.5px] font-normal opacity-80">{subLabel}</span>
                           {info.directRule && !isAnyAny && (
                             <span className="sr-only"> (override)</span>
@@ -1307,7 +1334,7 @@ function TransitionMatrixTab({
         {rules.length > 0 && (
           <ul
             aria-label="Matrix rules list"
-            className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
+            className="fc-focus-inset flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-surface-1"
           >
             {rules.map((r) => {
               const label = `${r.from ?? 'Any'} to ${r.to ?? 'Any'}`
@@ -1324,9 +1351,13 @@ function TransitionMatrixTab({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-sm font-semibold text-text">
-                      <span className="truncate">{r.from ?? 'Any'}</span>
+                      <span className="truncate" title={r.from ?? 'Any'}>
+                        {r.from ?? 'Any'}
+                      </span>
                       <ArrowsLeftRight size={12} className="shrink-0 text-text-3" aria-hidden />
-                      <span className="truncate">{r.to ?? 'Any'}</span>
+                      <span className="truncate" title={r.to ?? 'Any'}>
+                        {r.to ?? 'Any'}
+                      </span>
                     </div>
                     <div className="text-[11px] text-text-3">{scope}</div>
                   </div>

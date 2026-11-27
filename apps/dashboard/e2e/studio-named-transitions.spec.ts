@@ -573,9 +573,10 @@ test.describe('named transitions and matrix', () => {
     await expect(dialog.getByRole('heading', { name: 'Hero Swipe' })).toBeVisible()
     await dialog.getByLabel('Direction').selectOption({ label: 'Right' })
 
-    // Delete copy with confirm dialog.
+    // Delete copy: asked in the row, never in a second dialog on top.
     await dialog.getByRole('button', { name: 'Delete Intro Swipe 2', exact: true }).click()
-    const confirm = page.getByRole('dialog', { name: /Delete Intro Swipe 2/i })
+    const confirm = dialog.getByRole('group', { name: /Delete Intro Swipe 2/i })
+    await expect(page.locator('dialog[open]')).toHaveCount(1)
     await confirm.getByRole('button', { name: 'Delete transition' }).click()
 
     // Server error state on create handles gracefully with inline alert.
