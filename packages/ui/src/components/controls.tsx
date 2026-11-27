@@ -321,7 +321,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={label}
       className={cx(
-        even ? 'grid w-full min-w-0 auto-cols-fr grid-flow-col' : 'inline-flex max-w-full',
+        even ? 'grid w-full min-w-0 auto-cols-fr grid-flow-col' : 'inline-flex max-w-full flex-wrap',
         'gap-x-1 gap-y-0.5 rounded-control border border-line bg-inset p-0.5',
         className,
       )}

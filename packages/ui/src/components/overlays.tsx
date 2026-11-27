@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -259,6 +260,7 @@ export function ConfirmDialog({
   const ref = useRef<HTMLDialogElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
+  const titleId = useId()
   usePreviewHole(panel, open)
   useEffect(() => {
     const d = ref.current
@@ -296,7 +298,7 @@ export function ConfirmDialog({
             ref={panel}
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="fc-confirm-title"
+            aria-labelledby={titleId}
             // The Studio's live picture leaves itself out under this card.
             data-over-preview
             initial={reduce ? false : { opacity: 0 }}
@@ -305,7 +307,7 @@ export function ConfirmDialog({
             onAnimationComplete={() => notifyPreviewOverlays()}
             className="pointer-events-auto w-full max-w-[300px] rounded-[12px] border border-line-strong bg-surface-1 p-4 shadow-pop"
           >
-            <h2 id="fc-confirm-title" className="text-[15px] font-bold text-balance text-text">
+            <h2 id={titleId} className="text-[15px] font-bold text-balance text-text">
               {title}
             </h2>
             {description && <p className="mt-1 text-[13.5px] text-text-3">{description}</p>}
@@ -315,7 +317,7 @@ export function ConfirmDialog({
                 data-cancel
                 disabled={busy}
                 onClick={onClose}
-                className="fc-press h-9 rounded-[8px] border border-line-strong bg-surface-1 text-[14px] font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
+                className="fc-press min-h-9 rounded-[8px] border border-line-strong bg-surface-1 px-3 py-1.5 text-[14px] leading-snug font-semibold text-text hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-50"
               >
                 {cancel}
               </button>
@@ -328,7 +330,7 @@ export function ConfirmDialog({
                   onConfirm()
                 }}
                 className={cx(
-                  'fc-press inline-flex h-9 items-center justify-center gap-2 rounded-[8px] text-[14px] font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
+                  'fc-press inline-flex min-h-9 items-center justify-center gap-2 rounded-[8px] px-3 py-1.5 text-[14px] leading-snug font-semibold focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
                   danger
                     ? 'bg-danger-fill text-white hover:brightness-110'
                     : 'bg-[var(--fc-btn-primary)] text-[var(--fc-on-btn-primary)] hover:bg-[var(--fc-btn-primary-hover)]',
@@ -364,6 +366,7 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
   const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   usePreviewHole(panel, open)
+  useEffect(() => (open ? lockPageScroll() : undefined), [open])
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -409,7 +412,10 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
             className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop outline-none"
           >
             <div className="flex items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
-              <h2 className="min-w-0 flex-1 truncate font-display text-xl font-extrabold tracking-tight text-text">
+              <h2
+                title={title}
+                className="min-w-0 flex-1 truncate font-display text-xl font-extrabold tracking-tight text-text"
+              >
                 {title}
               </h2>
               <button
