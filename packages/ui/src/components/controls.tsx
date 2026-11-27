@@ -166,7 +166,7 @@ export function Switch({
         id={sid}
         type="button"
         role="switch"
-        aria-checked={checked}
+        aria-checked={Boolean(checked)}
         aria-label={hideLabel ? label : undefined}
         disabled={disabled}
         onClick={() => onChange(!checked)}
