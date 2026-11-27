@@ -42,6 +42,28 @@ export function isValidPreviewLiveResizePayload(value: unknown): value is Previe
   return typeof (value as { active?: unknown }).active === 'boolean'
 }
 
+const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|webp|avif);base64,[A-Za-z0-9+/=_-]+$/i
+
+function hasUnsafeCssUrlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x20 || code === 0x7f) return true
+  }
+  return /["'\\()]/.test(value)
+}
+
+/** Validates still image URLs or data URIs before inserting them into CSS `url("...")`. */
+export function isSafeStillUrl(url: unknown): url is string {
+  if (typeof url !== 'string' || url.length === 0 || hasUnsafeCssUrlChar(url)) return false
+  if (SAFE_DATA_IMAGE_RE.test(url)) return true
+  if (url.startsWith('blob:') && url.length > 5 && !/^blob:(?:javascript|vbscript|data):/i.test(url)) {
+    return true
+  }
+  if (/^https?:\/\/[^/]/i.test(url)) return true
+  if (url.startsWith('/') && !url.startsWith('//')) return true
+  return false
+}
+
 export function dispatchPreviewLiveResize(detail: PreviewLiveResizePayload) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(

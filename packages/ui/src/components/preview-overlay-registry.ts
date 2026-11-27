@@ -79,14 +79,14 @@ function ensureSharedObserver(): ResizeObserver | null {
 function observeOverlayResize(el: Element): void {
   const count = observedEls.get(el) ?? 0
   observedEls.set(el, count + 1)
-  if (count === 0) ensureSharedObserver()?.observe(el)
+  if (count === 0) ensureSharedObserver()?.observe?.(el)
 }
 
 function unobserveOverlayResize(el: Element): void {
   const count = observedEls.get(el) ?? 0
   if (count <= 1) {
     observedEls.delete(el)
-    sharedRo?.unobserve(el)
+    sharedRo?.unobserve?.(el)
   } else {
     observedEls.set(el, count - 1)
   }
