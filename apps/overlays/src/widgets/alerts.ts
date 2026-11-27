@@ -211,6 +211,7 @@ interface Playing {
   host: HTMLElement
   timers: ReturnType<typeof setTimeout>[]
   audio: HTMLAudioElement[]
+  activeAudio: number
   leaving: boolean
   /** The hold timer, frozen while OBS hides the source. */
   hold: ReturnType<typeof setTimeout> | null
@@ -428,6 +429,7 @@ export class AlertsWidget implements WidgetView {
   constructor(
     w: Widget & { kind: 'alerts' },
     private readonly ctx: WidgetContext,
+    private readonly onAudioIdle?: () => void,
   ) {
     this.el = el('section', 'fc-w fc-w-alerts')
     this.el.setAttribute('aria-live', 'polite')
@@ -579,6 +581,7 @@ export class AlertsWidget implements WidgetView {
       host,
       timers: [],
       audio: [],
+      activeAudio: 0,
       leaving: false,
       hold: null,
       holdEndsAt: 0,
@@ -589,6 +592,11 @@ export class AlertsWidget implements WidgetView {
     if (primary) this.ctx.send(ackFrame(alert.alert_id, 'started'))
     this.playSound(p)
     this.startHold(p, hold)
+  }
+
+  /** Whether an alert sound or alert TTS audio element is actively playing right now. */
+  isAudioBusy(): boolean {
+    return (this.playing?.activeAudio ?? 0) > 0
   }
 
   private playSound(p: Playing): void {
@@ -609,26 +617,25 @@ export class AlertsWidget implements WidgetView {
     const play = (url: string, next?: () => void, volume = vol) => {
       // 'ended', 'error' and a rejected play() can all fire: run the follow-up once.
       let done = false
-      const after = next
-        ? () => {
-            if (done) return
-            done = true
-            next()
-          }
-        : undefined
+      const after = () => {
+        if (done) return
+        done = true
+        if (next) next()
+        p.activeAudio = Math.max(0, p.activeAudio - 1)
+        if (p.activeAudio === 0) this.onAudioIdle?.()
+      }
       let a: HTMLAudioElement
       try {
         a = new Audio(url)
       } catch {
-        after?.()
+        next?.()
         return
       }
+      p.activeAudio += 1
       a.volume = volume
       p.audio.push(a)
-      if (after) {
-        a.addEventListener('ended', after, { once: true })
-        a.addEventListener('error', after, { once: true })
-      }
+      a.addEventListener('ended', after, { once: true })
+      a.addEventListener('error', after, { once: true })
       this.tryPlay(a, after)
     }
     const playTts = () => {
@@ -658,6 +665,8 @@ export class AlertsWidget implements WidgetView {
     // end had already begun (its voice would otherwise talk over the next alert).
     if (stop) {
       for (const a of p.audio) a.pause()
+      p.activeAudio = 0
+      this.onAudioIdle?.()
       globalThis.speechSynthesis?.cancel()
     }
     if (p.leaving) return
@@ -708,6 +717,10 @@ export class AlertsWidget implements WidgetView {
       for (const q of this.queue) if (q.primary) this.ctx.send(ackFrame(q.alert.alert_id, 'failed'))
     this.playing = null
     this.queue = []
+    if (p && p.activeAudio > 0) {
+      p.activeAudio = 0
+      this.onAudioIdle?.()
+    }
     this.el.remove()
   }
 }

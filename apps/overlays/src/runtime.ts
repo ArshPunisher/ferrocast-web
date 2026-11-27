@@ -89,10 +89,15 @@ function dress(node: HTMLElement, w: Widget): void {
   }
 }
 
-function build(w: Widget, ctx: WidgetContext, preview: boolean): WidgetView | null {
+function build(
+  w: Widget,
+  ctx: WidgetContext,
+  preview: boolean,
+  onAlertAudioIdle?: () => void,
+): WidgetView | null {
   switch (w.kind) {
     case 'alerts':
-      return new AlertsWidget(w, ctx)
+      return new AlertsWidget(w, ctx, onAlertAudioIdle)
     case 'chat':
       return new ChatWidget(w, ctx)
     case 'events':
@@ -208,7 +213,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         node = cur.view.el
       } else {
         cur?.view.destroy()
-        const v = build(w, ctx, !opts.send)
+        const v = build(w, ctx, !opts.send, () => pumpTts())
         if (!v) {
           views.delete(w.id)
           continue
@@ -228,12 +233,41 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     fit()
   }
 
-  function revoke(): void {
-    // The URL was regenerated or the overlay deleted: show nothing, for good.
-    revoked = true
-    for (const { view } of views.values()) view.destroy(true)
-    views.clear()
-    canvas.replaceChildren()
+  const MAX_TTS_QUEUE = 8
+  const TTS_SAFETY_MS = 25_000
+  let ttsQueue: { id: string; text: string; audio: unknown }[] = []
+  let ttsActive = false
+  let ttsPlaying: HTMLAudioElement | null = null
+  let ttsTimer: ReturnType<typeof setTimeout> | null = null
+  let ttsGen = 0
+
+  function isAlertAudioBusy(): boolean {
+    for (const { view } of views.values()) {
+      if (view instanceof AlertsWidget && view.isAudioBusy()) return true
+    }
+    return false
+  }
+
+  function clearTtsTimer(): void {
+    if (ttsTimer) {
+      clearTimeout(ttsTimer)
+      ttsTimer = null
+    }
+  }
+
+  function stopTts(): void {
+    ttsGen += 1
+    ttsQueue = []
+    ttsActive = false
+    clearTtsTimer()
+    if (ttsPlaying) {
+      try {
+        ttsPlaying.pause()
+      } catch {
+        /* nothing to stop */
+      }
+      ttsPlaying = null
+    }
     try {
       globalThis.speechSynthesis?.cancel()
     } catch {
@@ -241,24 +275,65 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     }
   }
 
-  function speak(id: string, text: string, audio: unknown): void {
-    // An approved TTS message (R-48). Never while OBS hides the source, never twice.
-    if (spoken.has(id) || opts.audio === false || !visible) return
-    spoken.add(id)
-    if (spoken.size > 200) spoken.delete(spoken.values().next().value as string)
-    // Prefer the WAV the engine rendered with the computer's voices (OBS captures it);
-    // fall back to the browser's voice when there is none (API.md §6 `tts`).
-    const url = mediaRef(audio)
+  function pumpTts(): void {
+    if (revoked || !visible || opts.audio === false || ttsActive || isAlertAudioBusy()) return
+    const next = ttsQueue.shift()
+    if (!next) return
+    ttsActive = true
+    const gen = ++ttsGen
+    let finished = false
+    const done = () => {
+      if (finished) return
+      finished = true
+      if (ttsGen !== gen) return
+      ttsActive = false
+      ttsPlaying = null
+      clearTtsTimer()
+      pumpTts()
+    }
+    const url = mediaRef(next.audio)
     if (url) {
       try {
         const a = new Audio(url)
-        void a.play().catch(() => speakText(text))
+        ttsPlaying = a
+        ttsTimer = setTimeout(done, TTS_SAFETY_MS)
+        a.addEventListener('ended', done, { once: true })
+        a.addEventListener('error', done, { once: true })
+        const r = a.play() as Promise<void> | undefined
+        if (r && typeof r.catch === 'function') {
+          void r.catch(() => {
+            if (ttsGen !== gen || finished) return
+            if (ttsPlaying === a) ttsPlaying = null
+            speakText(next.text, done)
+          })
+        }
         return
       } catch {
-        // fall through to speech
+        ttsPlaying = null
+        clearTtsTimer()
       }
     }
-    speakText(text)
+    ttsTimer = setTimeout(done, TTS_SAFETY_MS)
+    speakText(next.text, done)
+  }
+
+  function revoke(): void {
+    // The URL was regenerated or the overlay deleted: show nothing, for good.
+    revoked = true
+    stopTts()
+    for (const { view } of views.values()) view.destroy(true)
+    views.clear()
+    canvas.replaceChildren()
+  }
+
+  function speak(id: string, text: string, audio: unknown): void {
+    // An approved or live-chat TTS message. Never while OBS hides the source, never twice.
+    if (spoken.has(id) || opts.audio === false || !visible) return
+    spoken.add(id)
+    if (spoken.size > 200) spoken.delete(spoken.values().next().value as string)
+    if (ttsQueue.length >= MAX_TTS_QUEUE) return
+    ttsQueue.push({ id, text, audio })
+    pumpTts()
   }
 
   function apply(frame: OverlayServerFrame): void {
@@ -381,6 +456,9 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
         if (typeof frame.data.id === 'string' && typeof frame.data.text === 'string')
           speak(frame.data.id, frame.data.text, (frame.data as { audio?: unknown }).audio)
         break
+      case 'tts_stop':
+        stopTts()
+        break
       default:
         warnOnce(`ignored frame type ${String((frame as { type: unknown }).type)}`)
     }
@@ -399,17 +477,13 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     },
     setVisible(v) {
       visible = v
-      if (!v) {
-        try {
-          globalThis.speechSynthesis?.cancel()
-        } catch {
-          /* nothing to stop */
-        }
-      }
+      if (!v) stopTts()
+      else pumpTts()
       shell.classList.toggle('is-hidden', !v)
       each((w) => w.onVisibility?.(v))
     },
     destroy() {
+      stopTts()
       for (const { view } of views.values()) view.destroy()
       views.clear()
       ro?.disconnect()

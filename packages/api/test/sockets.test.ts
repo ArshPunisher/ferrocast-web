@@ -270,6 +270,7 @@ describe('overlay frames', () => {
       { type: 'delete_user', data: { platform: 'twitch', user_id: 'u' } },
       { type: 'clear_chat', data: { platform: null } },
       { type: 'tts', data: { id: 't', text: 'hello' } },
+      { type: 'tts_stop', data: {} },
       { type: 'revoked', data: {} },
     ]
     for (const g of good)

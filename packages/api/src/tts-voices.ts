@@ -3,7 +3,51 @@
 // whenever a Ferrocast voice can't (Pro lapsed, relay down or slow, month used up).
 
 import type { FerroClient } from './client'
-import type { TtsVoice } from './types'
+import type { ChatTtsConfig, TtsVoice } from './types'
+
+export const DEFAULT_CHAT_TTS: ChatTtsConfig = {
+  enabled: false,
+  mode: 'subs_mods',
+  command: '!tts',
+  cooldown_s: 15,
+  global_cooldown_s: 3,
+  queue_limit: 5,
+  max_chars: 160,
+  skip_links: true,
+  skip_emote_spam: true,
+}
+
+export const CHAT_TTS_LIMITS = {
+  cooldown_s: [0, 300] as const,
+  global_cooldown_s: [0, 60] as const,
+  queue_limit: [1, 20] as const,
+  max_chars: [10, 300] as const,
+}
+
+export function validateChatTts(cfg: ChatTtsConfig): Partial<Record<keyof ChatTtsConfig, string>> {
+  const err: Partial<Record<keyof ChatTtsConfig, string>> = {}
+  const cmd = cfg.command.trim()
+  if (!/^![a-zA-Z0-9_-]{1,19}$/.test(cmd)) {
+    err.command = 'Start with ! followed by 1 to 19 letters, numbers, - or _.'
+  }
+  if (!Number.isInteger(cfg.cooldown_s) || cfg.cooldown_s < 0 || cfg.cooldown_s > 300) {
+    err.cooldown_s = 'Enter 0 to 300 seconds.'
+  }
+  if (
+    !Number.isInteger(cfg.global_cooldown_s) ||
+    cfg.global_cooldown_s < 0 ||
+    cfg.global_cooldown_s > 60
+  ) {
+    err.global_cooldown_s = 'Enter 0 to 60 seconds.'
+  }
+  if (!Number.isInteger(cfg.queue_limit) || cfg.queue_limit < 1 || cfg.queue_limit > 20) {
+    err.queue_limit = 'Enter 1 to 20 messages.'
+  }
+  if (!Number.isInteger(cfg.max_chars) || cfg.max_chars < 10 || cfg.max_chars > 300) {
+    err.max_chars = 'Enter 10 to 300 characters.'
+  }
+  return err
+}
 
 /** Ferrocast voice ids start with their provider. */
 export const CLOUD_VOICE_PREFIX = 'google:'

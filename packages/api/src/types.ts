@@ -1246,6 +1246,20 @@ export interface Timer {
   enabled: boolean
 }
 
+export type ChatTtsMode = 'everyone' | 'subs_mods' | 'command'
+
+export interface ChatTtsConfig {
+  enabled: boolean
+  mode: ChatTtsMode
+  command: string
+  cooldown_s: number
+  global_cooldown_s: number
+  queue_limit: number
+  max_chars: number
+  skip_links: boolean
+  skip_emote_spam: boolean
+}
+
 export interface TtsSettings {
   enabled: boolean
   voice: string
@@ -1255,6 +1269,7 @@ export interface TtsSettings {
   read_names: boolean
   /** Read-only echo of Settings.currency: `min_amount` is in it. */
   currency?: string
+  chat?: ChatTtsConfig
 }
 export interface TtsVoice {
   id: string
@@ -1928,6 +1943,7 @@ export type OverlayServerFrame =
   | { v: 1; seq: number; type: 'delete_user'; data: { platform: Platform; user_id: string } }
   | { v: 1; seq: number; type: 'clear_chat'; data: { platform: Platform | null } }
   | { v: 1; seq: number; type: 'tts'; data: { id: string; text: string; audio: string | null } }
+  | { v: 1; seq: number; type: 'tts_stop'; data: Record<string, never> }
   | { v: 1; seq: number; type: 'revoked'; data: Record<string, never> }
 
 export type AckPhase = 'started' | 'finished' | 'failed'

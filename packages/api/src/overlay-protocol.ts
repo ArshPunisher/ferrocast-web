@@ -15,6 +15,7 @@ export const OVERLAY_FRAME_TYPES = [
   'delete_user',
   'clear_chat',
   'tts',
+  'tts_stop',
   'revoked',
 ] as const
 
@@ -105,6 +106,7 @@ export function parseOverlayFrame(raw: unknown): OverlayServerFrame | null {
       if (!str(d.id) || !str(d.text)) return null
       if (!(d.audio === undefined || d.audio === null || str(d.audio))) return null
       break
+    case 'tts_stop':
     case 'state':
     case 'revoked':
       break

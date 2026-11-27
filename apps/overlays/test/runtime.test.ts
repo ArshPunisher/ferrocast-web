@@ -625,6 +625,88 @@ describe('tts and revoked frames', () => {
     expect(() => rt.apply(frame('tts', { id: 'n', text: 'hello', audio: null }))).not.toThrow()
   })
 
+  it('plays standalone TTS lines sequentially, caps queue at 8, and stops on tts_stop', () => {
+    const started: string[] = []
+    const paused: string[] = []
+    const endedByUrl = new Map<string, () => void>()
+    const g = globalThis as unknown as {
+      speechSynthesis?: unknown
+    }
+    const prevSynth = g.speechSynthesis
+    const cancel = vi.fn()
+    g.speechSynthesis = { cancel }
+    const OrigAudio = globalThis.Audio
+    globalThis.Audio = vi.fn(function (
+      this: { addEventListener: unknown; play: unknown; pause: unknown },
+      url: string,
+    ) {
+      started.push(url)
+      this.addEventListener = (evt: string, fn: () => void) => {
+        if (evt === 'ended') endedByUrl.set(url, fn)
+      }
+      this.play = () => Promise.resolve()
+      this.pause = () => {
+        paused.push(url)
+      }
+    }) as unknown as typeof Audio
+
+    const box = createOverlay(document.createElement('div'), { audio: true })
+    box.apply(snapshot())
+    for (let i = 1; i <= 11; i++) {
+      box.apply(frame('tts', { id: `q-${i}`, text: `line ${i}`, audio: `m-${i}` }))
+    }
+    expect(started).toEqual(['media/m-1'])
+    endedByUrl.get('media/m-1')?.()
+    expect(started).toEqual(['media/m-1', 'media/m-2'])
+
+    // tts_stop pauses the playing element, clears the remaining queued items (2..9) and cancels speech.
+    box.apply(frame('tts_stop', {}))
+    expect(paused).toEqual(['media/m-2'])
+    expect(cancel).toHaveBeenCalledTimes(1)
+    endedByUrl.get('media/m-2')?.()
+    expect(started).toEqual(['media/m-1', 'media/m-2'])
+
+    // Next arriving TTS plays fresh, and total queued cap was 8 waiting after m-1 (m-10/m-11 dropped).
+    box.apply(frame('tts', { id: 'q-after', text: 'fresh', audio: 'm-after' }))
+    expect(started).toEqual(['media/m-1', 'media/m-2', 'media/m-after'])
+
+    box.destroy()
+    globalThis.Audio = OrigAudio
+    g.speechSynthesis = prevSynth
+  })
+
+  it('defers standalone TTS audio until an active alert sound finishes', () => {
+    const started: string[] = []
+    const endedByUrl = new Map<string, () => void>()
+    const OrigAudio = globalThis.Audio
+    globalThis.Audio = vi.fn(function (
+      this: { addEventListener: unknown; play: unknown; pause: unknown; volume: number },
+      url: string,
+    ) {
+      started.push(url)
+      this.volume = 1
+      this.addEventListener = (evt: string, fn: () => void) => {
+        if (evt === 'ended') endedByUrl.set(url, fn)
+      }
+      this.play = () => Promise.resolve()
+      this.pause = () => {}
+    }) as unknown as typeof Audio
+
+    const box = createOverlay(document.createElement('div'), { audio: true })
+    box.apply(snapshot())
+    box.apply(frame('alert', alert('a1', { sound: 'alert-sfx', tts_audio: null, tts_text: null })))
+    expect(started).toEqual(['media/alert-sfx'])
+
+    box.apply(frame('tts', { id: 'c1', text: 'queued behind alert', audio: 'chat-wav' }))
+    expect(started).toEqual(['media/alert-sfx'])
+
+    endedByUrl.get('media/alert-sfx')?.()
+    expect(started).toEqual(['media/alert-sfx', 'media/chat-wav'])
+
+    box.destroy()
+    globalThis.Audio = OrigAudio
+  })
+
   it('revoked clears the page for good and sends nothing more', () => {
     rt.apply(snapshot({ chat: [chat('a', 'visible before')] }))
     rt.apply(frame('alert', alert('rv', { duration_ms: 20_000 })))
@@ -832,9 +914,11 @@ describe('review fixes', () => {
     loud.apply(frame('tts', { id: 'w1', text: 'read me', audio: 'tts-42' }))
     expect(urls.at(-1)).toBe('media/tts-42')
     expect(spoken).toEqual(['Keep it up!'])
-    // A hostile audio value is refused and the text is spoken instead.
+    // A hostile audio value waits behind w1, then falls back cleanly when w1 ends.
     loud.apply(frame('tts', { id: 'w2', text: 'fallback', audio: 'javascript:alert(1)' }))
     expect(urls).not.toContain('javascript:alert(1)')
+    expect(spoken).toEqual(['Keep it up!'])
+    for (let i = 0; i < 4; i++) await Promise.resolve()
     expect(spoken).toContain('fallback')
     // A new install's rule names a built-in sound: the overlay plays its own file, then reads.
     loud.destroy()

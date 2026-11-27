@@ -86,14 +86,31 @@ export function mediaRef(v: unknown): string | null {
 }
 
 /** Speaks text with the browser's own voice; quietly does nothing where unsupported. */
-export function speakText(text: string): void {
+export function speakText(text: string, onEnd?: () => void): void {
   const synth = globalThis.speechSynthesis
   const Utter = globalThis.SpeechSynthesisUtterance
-  if (!synth || typeof Utter !== 'function') return
+  if (!synth || typeof Utter !== 'function') {
+    onEnd?.()
+    return
+  }
   try {
-    synth.speak(new Utter(safeText(text, 500)))
+    const u = new Utter(safeText(text, 500))
+    const canListen = typeof (u as { addEventListener?: unknown }).addEventListener === 'function'
+    if (onEnd && canListen) {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        onEnd()
+      }
+      u.addEventListener('end', finish, { once: true })
+      u.addEventListener('error', finish, { once: true })
+    }
+    synth.speak(u)
+    if (onEnd && !canListen) onEnd()
   } catch (e) {
     warnOnce('text to speech is not available here', e)
+    onEnd?.()
   }
 }
 
