@@ -702,6 +702,12 @@
                 "properties": {
                   "connectors": {
                     "type": "object"
+                  },
+                  "viewers": {
+                    "additionalProperties": {
+                      "type": ["integer", "null"]
+                    },
+                    "type": "object"
                   }
                 },
                 "type": "object"
@@ -1127,6 +1133,14 @@
           "payload": {
             "properties": {
               "data": {
+                "properties": {
+                  "ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
                 "type": "object"
               },
               "seq": {
@@ -1144,7 +1158,7 @@
             "required": ["v", "seq", "type", "data"],
             "type": "object"
           },
-          "summary": "Stop active overlay TTS playback and clear queued lines."
+          "summary": "Stop active overlay TTS playback and clear queued lines (optionally scoped to `ids`)."
         }
       },
       "parameters": {
@@ -1565,7 +1579,7 @@
     "description": "Clients authenticate on `/api/v1/live` using `Authorization: Bearer fc_key_...` (recommended), `?key=...`, or `?session=...`. Reconnecting with `?since=<seq>` replays buffered frames in order. Overlay browser sources connect to `/o/{token}/ws`.",
     "summary": "Real-time event, queue, status, studio telemetry, and browser-source overlay streams.",
     "title": "Ferrocast Live & Overlay WebSocket API",
-    "version": "3.6.1"
+    "version": "3.7.0"
   },
   "operations": {
     "receiveLiveFrames": {
