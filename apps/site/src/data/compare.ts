@@ -75,7 +75,7 @@ export const COMPARE: Group[] = [
       },
       {
         topic: 'Paid plan',
-        ferrocast: c('info', 'Pro: ₹199 a month, cloud extras only'),
+        ferrocast: c('info', 'Pro: ₹399 a month, cloud extras only'),
         streamelements: c('info', 'None; future fees not announced'),
         streamlabs: c('info', 'Ultra: US$27 a month or US$189 a year'),
       },

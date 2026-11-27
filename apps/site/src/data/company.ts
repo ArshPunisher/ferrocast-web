@@ -52,8 +52,8 @@ export const COMPANY = {
   github: 'https://github.com/ArshPunisher/ferrocast',
   githubWeb: 'https://github.com/ArshPunisher/ferrocast-web',
   /** Date the legal pages were last changed. */
-  legalUpdated: '27 October 2026',
-  legalUpdatedIso: '2026-10-27',
+  legalUpdated: '27 November 2026',
+  legalUpdatedIso: '2026-11-27',
 } as const
 
 export type CompanyField = keyof typeof COMPANY
@@ -96,8 +96,8 @@ export const inr = (n: number): string =>
 
 /** Pro pricing (R-68: India first, billed in INR). USD values are approximate. */
 export const PRO = {
-  monthlyInr: 199,
-  yearlyInr: 1999,
-  monthlyUsdApprox: '2.40',
-  yearlyUsdApprox: '24',
+  monthlyInr: 399,
+  yearlyInr: 3999,
+  monthlyUsdApprox: '4.80',
+  yearlyUsdApprox: '48',
 } as const

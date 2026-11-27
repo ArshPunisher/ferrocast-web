@@ -76,12 +76,12 @@ const promises = [
   {
     icon: 'calendar-check',
     t: 'Your price is locked',
-    d: 'You keep your price for at least 12 months from the day you subscribe.',
+    d: 'Once you subscribe, you keep your price for at least 12 months, even if prices change for new buyers.',
   },
   {
     icon: 'bell-simple',
     t: '60 days’ notice',
-    d: 'Any price change is announced at least 60 days ahead.',
+    d: 'A change to an existing subscriber’s price is announced at least 60 days before it applies.',
   },
   {
     icon: 'chat-slash',
@@ -136,7 +136,10 @@ const promises = [
     <article class="plan plan-pro">
       <header>
         <h2>
-          Pro <span class="chip">On sale now</span>
+          Pro{' '}
+          <span class="chip" data-live-chip hidden>
+            On sale now
+          </span>
         </h2>
         <p class="sale-note" data-live-sale hidden></p>
         <p class="price">
@@ -281,6 +284,8 @@ const promises = [
       const usd = document.querySelector<HTMLElement>('[data-live-usd]')
       if (changed && usd) usd.hidden = true
       const note = document.querySelector<HTMLElement>('[data-live-sale]')
+      const chip = document.querySelector<HTMLElement>('[data-live-chip]')
+      if (chip && v.sale?.headline) chip.hidden = false
       if (note && v.sale?.headline) {
         const ends = v.sale.ends_at
           ? ` Ends ${new Date(v.sale.ends_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}.`
