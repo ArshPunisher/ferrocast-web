@@ -121,6 +121,8 @@
   --fc-shadow-2: 0 1px 0 rgb(255 255 255 / 0.05) inset, 0 12px 32px -12px rgb(2 4 10 / 0.7);
   --fc-shadow-pop: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 24px 60px -20px rgb(2 4 12 / 0.85);
   --fc-focus: 0 0 0 2px var(--fc-bg), 0 0 0 4px var(--fc-accent-text);
+  /* For a control inside a box that clips (a scroller, a tile): the ring sits inside its edge. */
+  --fc-focus-inset: inset 0 0 0 2px var(--fc-accent-text);
 
   --fc-radius-control: 10px;
   --fc-radius-panel: 16px;
@@ -392,7 +394,7 @@
   --fc-ok: #0a6b46;
   --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
   --fc-ok-soft: rgb(17 160 100 / 0.13);
-  --fc-warn: #946200;
+  --fc-warn: #8a5b00;
   --fc-warn-soft: rgb(255 176 32 / 0.18);
   --fc-danger: #c42339;
   --fc-danger-fill: #c42339;
@@ -577,7 +579,7 @@
     --fc-ok: #0a6b46;
     --fc-ok-fill: #13865a; /* a solid green white reads on (3:1+, for icons), both themes */
     --fc-ok-soft: rgb(17 160 100 / 0.13);
-    --fc-warn: #946200;
+    --fc-warn: #8a5b00;
     --fc-warn-soft: rgb(255 176 32 / 0.18);
     --fc-danger: #c42339;
     --fc-danger-fill: #c42339;

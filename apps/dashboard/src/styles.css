@@ -340,6 +340,12 @@ input[type='range'] {
   background: var(--fc-text);
   border: 2px solid var(--fc-surface-1);
 }
+/* Controls inside a box that clips them (a sideways scroller, a bar of fixed height): the
+   focus ring sits inside each control's edge, so it is never cut off. */
+.fc-focus-inset
+  :is(a, button, input, select, textarea, summary, [role='tab'], [role='radio']):focus-visible {
+  box-shadow: var(--fc-focus-inset) !important;
+}
 .fc-fader:focus-visible {
   outline: none;
 }

@@ -29,6 +29,7 @@
   --color-arc: var(--fc-arc);
   --color-ok: var(--fc-ok);
   --color-ok-soft: var(--fc-ok-soft);
+  --color-ok-fill: var(--fc-ok-fill);
   --color-warn: var(--fc-warn);
   --color-warn-soft: var(--fc-warn-soft);
   --color-danger: var(--fc-danger);
